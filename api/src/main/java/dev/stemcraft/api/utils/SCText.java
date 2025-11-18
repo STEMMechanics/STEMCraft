@@ -219,4 +219,16 @@ public final class SCText {
 
         return sb.toString();
     }
+
+    /**
+     * Convert a camelCase or PascalCase string to snake_case
+     *
+     * @param string The string to convert
+     * @return The converted string
+     */
+    public static String toSnakeCase(String string) {
+        return string
+                .replaceAll("([a-z])([A-Z])", "$1_$2")
+                .toLowerCase();
+    }
 }
