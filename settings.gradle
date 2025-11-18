@@ -1,1 +1,3 @@
 rootProject.name = 'STEMCraft'
+
+include("api", "plugin")
