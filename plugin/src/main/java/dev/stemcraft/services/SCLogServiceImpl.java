@@ -32,27 +32,27 @@ public class SCLogServiceImpl implements SCLogService {
 
     @Override
     public void log(String message) {
-        plugin.getLogger().info(SCText.stripColour(prefixLog + message));
+        plugin.getComponentLogger().info(SCText.stripColour(prefixLog + message));
     }
 
     @Override
     public void info(String message) {
-        plugin.getLogger().info(SCText.stripColour(prefixInfo + message));
+        plugin.getComponentLogger().info(SCText.stripColour(prefixInfo + message));
     }
 
     @Override
     public void warn(String message) {
-        plugin.getLogger().warning(SCText.stripColour(prefixWarn + message));
+        plugin.getComponentLogger().warn(SCText.stripColour(prefixWarn + message));
     }
 
     @Override
     public void error(String message) {
-        plugin.getLogger().severe(SCText.stripColour(prefixError + message));
+        plugin.getComponentLogger().error(SCText.stripColour(prefixError + message));
     }
 
     @Override
     public void success(String message) {
-        plugin.getLogger().info(SCText.stripColour(prefixSuccess + message));
+        plugin.getComponentLogger().info(SCText.stripColour(prefixSuccess + message));
     }
 
     // send to CommandSender
