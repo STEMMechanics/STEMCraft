@@ -1,12 +1,12 @@
 package dev.stemcraft.services;
 
-import dev.stemcraft.api.services.SCLogService;
+import dev.stemcraft.api.services.LogService;
 import dev.stemcraft.api.utils.SCText;
 import net.kyori.adventure.text.Component;
 import org.bukkit.command.CommandSender;
 import org.bukkit.plugin.java.JavaPlugin;
 
-public class SCLogServiceImpl implements SCLogService {
+public class LogServiceImpl implements LogService {
 
     private final JavaPlugin plugin;
 
@@ -16,7 +16,7 @@ public class SCLogServiceImpl implements SCLogService {
     private final Component prefixError;
     private final Component prefixSuccess;
 
-    public SCLogServiceImpl(JavaPlugin plugin) {
+    public LogServiceImpl(JavaPlugin plugin) {
         this.plugin = plugin;
 
         var cfg = plugin.getConfig();
@@ -32,7 +32,7 @@ public class SCLogServiceImpl implements SCLogService {
 
     @Override
     public void log(String message) {
-        plugin.getComponentLogger().info(message);
+        plugin.getComponentLogger().info(SCText.colourise(message));
     }
 
     @Override

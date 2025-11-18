@@ -3,7 +3,7 @@ package dev.stemcraft.api.services;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
-public interface SCLogService {
+public interface LogService {
 
     // console only
 
