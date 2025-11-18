@@ -17,6 +17,7 @@ tasks {
 // name the plugin jar
 tasks.named("jar") {
     archiveBaseName.set("STEMCraft")
+    from project(":api").sourceSets.main.get().output
 }
 
 // expand version into plugin.yml
