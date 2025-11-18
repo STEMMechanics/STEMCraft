@@ -17,7 +17,7 @@ You can visit the [Wiki](https://github.com/STEMCraft/STEMCraftLib/wiki) for det
 
 ## Builds
 
-We provide up-to-date plugin and API builds over on our [Jenkins server](https://jenkins.stemmechanics.com.au/).
+We provide up-to-date plugin and API builds over on our [Jenkins server](https://jenkins.stemmechanics.com.au/job/STEMCraft/).
 
 ## Get in touch!
 
