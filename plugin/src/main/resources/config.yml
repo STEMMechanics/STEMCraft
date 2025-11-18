@@ -1,0 +1,7 @@
+logging:
+  prefixes:
+    log: "&7[STEM]&r "
+    info: "&9[INFO]&r "
+    warn: "&e[WARN]&r "
+    error: "&c[ERROR]&r "
+    success: "&a[SUCCESS]&r "
