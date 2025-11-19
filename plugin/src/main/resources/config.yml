@@ -54,6 +54,8 @@ player_logs:
 features:
   deny_spawn_eggs:
     enabled: true
+  drop_player_heads:
+    enabled: true
   no_anvil_repair_cost:
       enabled: true
   rebalance_iron_golem:
