@@ -25,7 +25,7 @@ public class DenySpawnEggs implements Listener {
 
             if(!player.hasPermission(DenySpawnEggs.PERMISSION)) {
                 event.setCancelled(true);
-                logService.error(player, localeService.get(player, "DENY_SPAWN_EGG"));
+                logService.error(player, localeService.getComponent(player, "DENY_SPAWN_EGG"));
             }
         }
     }
