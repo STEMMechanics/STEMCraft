@@ -42,7 +42,7 @@ public class LocaleServiceImpl implements LocaleService {
         return defaultLocale;
     }
 
-    private Component translate(String lang, String key, String... args) {
+    private String translateString(String lang, String key, String... args) {
         if(lang == null || lang.isEmpty()) {
             lang = defaultLocale;
         }
@@ -61,31 +61,60 @@ public class LocaleServiceImpl implements LocaleService {
             raw = SCText.placeholders(raw, args);
         }
 
-        return SCText.colourise(raw);
+        return raw;
     }
 
-    public Component get(CommandSender sender, String key, String... args) {
-        return translate(getLocale(sender), key, args);
+    private Component translateComponent(String lang, String key, String... args) {
+        return SCText.colourise(translateString(lang, key, args));
     }
 
-    public Component get(CommandSender sender, String key) {
-        return translate(getLocale(sender), key);
+    public String getString(CommandSender sender, String key, String... args) {
+        return translateString(getLocale(sender), key, args);
     }
 
-    public Component get(Player player, String key, String... args) {
-        return translate(getLocale(player), key, args);
+    public String getString(CommandSender sender, String key) {
+        return translateString(getLocale(sender), key);
     }
 
-    public Component get(Player player, String key) {
-        return translate(getLocale(player), key);
+    public String getString(Player player, String key, String... args) {
+        return translateString(getLocale(player), key, args);
     }
 
-    public Component get(String key, String... args) {
-        return translate(defaultLocale, key, args);
+    public String getString(Player player, String key) {
+        return translateString(getLocale(player), key);
     }
 
-    public Component get(String key) {
-        return translate(defaultLocale, key);
+    public String getString(String key, String... args) {
+        return translateString(defaultLocale, key, args);
+    }
+
+    public String getString(String key) {
+        return translateString(defaultLocale, key);
+    }
+
+
+    public Component getComponent(CommandSender sender, String key, String... args) {
+        return translateComponent(getLocale(sender), key, args);
+    }
+
+    public Component getComponent(CommandSender sender, String key) {
+        return translateComponent(getLocale(sender), key);
+    }
+
+    public Component getComponent(Player player, String key, String... args) {
+        return translateComponent(getLocale(player), key, args);
+    }
+
+    public Component getComponent(Player player, String key) {
+        return translateComponent(getLocale(player), key);
+    }
+
+    public Component getComponent(String key, String... args) {
+        return translateComponent(defaultLocale, key, args);
+    }
+
+    public Component getComponent(String key) {
+        return translateComponent(defaultLocale, key);
     }
 
     public void reload() {

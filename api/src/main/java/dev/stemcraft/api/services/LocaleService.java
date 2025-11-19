@@ -5,12 +5,18 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
 public interface LocaleService extends STEMCraftService {
-    Component get(CommandSender sender, String key, String... args);
-    Component get(CommandSender sender, String key);
-    Component get(Player player, String key, String... args);
-    Component get(Player player, String key);
-    Component get(String key, String... args);
-    Component get(String key);
+    Component getComponent(CommandSender sender, String key, String... args);
+    String getString(CommandSender sender, String key, String... args);
+    Component getComponent(CommandSender sender, String key);
+    String getString(CommandSender sender, String key);
+    Component getComponent(Player player, String key, String... args);
+    String getString(Player player, String key, String... args);
+    Component getComponent(Player player, String key);
+    String getString(Player player, String key);
+    Component getComponent(String key, String... args);
+    String getString(String key, String... args);
+    Component getComponent(String key);
+    String getString(String key);
 
     /**
      * Reload locale files from disk.
