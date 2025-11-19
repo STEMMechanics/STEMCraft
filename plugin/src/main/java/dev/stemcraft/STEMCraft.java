@@ -2,6 +2,7 @@ package dev.stemcraft;
 
 import dev.stemcraft.api.services.LocaleService;
 import dev.stemcraft.api.services.LogService;
+import dev.stemcraft.api.services.PlayerLogService;
 import dev.stemcraft.api.services.WorldService;
 import dev.stemcraft.api.utils.SCChatMenu;
 import dev.stemcraft.api.utils.SCPlayer;
@@ -11,6 +12,7 @@ import dev.stemcraft.chunkgen.FlatGenerator;
 import dev.stemcraft.chunkgen.VoidGenerator;
 import dev.stemcraft.services.LocaleServiceImpl;
 import dev.stemcraft.services.LogServiceImpl;
+import dev.stemcraft.services.PlayerLogServiceImpl;
 import dev.stemcraft.services.WorldServiceImpl;
 import lombok.Getter;
 import org.bukkit.Bukkit;
@@ -34,6 +36,8 @@ public final class STEMCraft extends JavaPlugin {
     private static LocaleService localeService;
     @Getter
     private static LogService logService;
+    @Getter
+    private static PlayerLogService playerLogService;
     @Getter
     private static WorldService worldService;
 
@@ -65,16 +69,19 @@ public final class STEMCraft extends JavaPlugin {
         // Load services
         localeService = new LocaleServiceImpl(this);
         logService = new LogServiceImpl(this);
+        playerLogService = new PlayerLogServiceImpl(this);
         worldService = new WorldServiceImpl(this);
 
         getServer().getServicesManager().register(LocaleService.class, localeService, this, org.bukkit.plugin.ServicePriority.Normal);
         getServer().getServicesManager().register(LogService.class, logService, this, org.bukkit.plugin.ServicePriority.Normal);
+        getServer().getServicesManager().register(PlayerLogService.class, playerLogService, this, org.bukkit.plugin.ServicePriority.Normal);
         getServer().getServicesManager().register(WorldService.class, worldService, this, org.bukkit.plugin.ServicePriority.Normal);
 
         logService.info("STEMCraft enabled");
 
         localeService.onEnable();
         logService.onEnable();
+        playerLogService.onEnable();
         worldService.onEnable();
 
         worldService.registerGenerator("void", (options) -> new VoidGenerator());

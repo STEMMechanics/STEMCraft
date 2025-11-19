@@ -15,6 +15,42 @@ web_server:
     port: 8080
     path: www
 
+player_logs:
+    enabled: true
+    max_days: 30
+    tps_threshold: 15
+    memory_threshold: 5MB
+    blocks:
+      place:
+        - ".*SHULKER_BOX"
+        - ".*COMMAND_BLOCK"
+        - "BARRIER"
+        - "LIGHT"
+        - ".*ANVIL"
+        - ".*_ORE"
+        - ".*DIAMOND_(BLOCK|ORE)"
+        - "STRUCTURE_BLOCK"
+        - "JIGSAW"
+        - ".*CHEST"
+        - "BARREL"
+        - ".*_TABLE"
+        - "BREWING_STAND"
+        - "GRINDSTONE"
+        - "RESPAWN_ANCHOR"
+        - "TNT.*"
+        - "ANCIENT_DEBRIS"
+        - ".*EMERALD_(BLOCK|ORE)"
+      break:
+        - "ANVIL"
+        - ".*_TABLE"
+        - "TNT"
+        - ".*CHEST"
+        - ".*SHULKER_BOX"
+        - ".*COMMAND_BLOCK"
+        - ".*BED"
+        - ".*_ORE"
+        - "ANCIENT_DEBRIS"
+
 features:
   deny_spawn_eggs:
     enabled: true
