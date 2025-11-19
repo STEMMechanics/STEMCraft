@@ -2,6 +2,7 @@ package dev.stemcraft.services;
 
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.ChunkGeneratorFactory;
+import dev.stemcraft.api.services.WorldService;
 import dev.stemcraft.api.utils.SCText;
 import org.bukkit.*;
 import org.bukkit.configuration.ConfigurationSection;
@@ -15,14 +16,15 @@ import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class WorldServiceImpl implements dev.stemcraft.api.services.WorldService {
+public class WorldServiceImpl implements WorldService {
     private final Plugin plugin;
     private final Map<String, ChunkGeneratorFactory> registry = new ConcurrentHashMap<>();
 
     public WorldServiceImpl(Plugin plugin) {
         this.plugin = plugin;
+    }
 
-
+    public void onEnable() {
         // Load worlds
         ConfigurationSection worldsSection = STEMCraft.getPluginConfig().getConfigurationSection("worlds");
         Set<String> configuredWorlds = new HashSet<>();
@@ -53,6 +55,7 @@ public class WorldServiceImpl implements dev.stemcraft.api.services.WorldService
             }
         }
     }
+    public void onDisable() { }
 
     // -------- status
     @Override public boolean isWorldLoaded(String name) { return Bukkit.getWorld(name) != null; }

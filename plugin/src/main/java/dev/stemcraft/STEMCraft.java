@@ -54,7 +54,6 @@ public final class STEMCraft extends JavaPlugin {
         debugging = pluginConfig.getBoolean("debug", false);
 
         localeService = new LocaleServiceImpl(this);
-        localeService.reload();
         logService = new LogServiceImpl(this);
         worldService = new WorldServiceImpl(this);
 
@@ -63,6 +62,10 @@ public final class STEMCraft extends JavaPlugin {
         getServer().getServicesManager().register(WorldService.class, worldService, this, org.bukkit.plugin.ServicePriority.Normal);
 
         logService.info("STEMCraft enabled");
+
+        localeService.onEnable();
+        logService.onEnable();
+        worldService.onEnable();
 
         worldService.registerGenerator("void", (options) -> new VoidGenerator());
         worldService.registerGenerator("flat",   FlatGenerator::fromOptions);       // e.g., "grass_block;dirt:3;bedrock"

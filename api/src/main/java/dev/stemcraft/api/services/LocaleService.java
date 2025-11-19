@@ -4,7 +4,7 @@ import net.kyori.adventure.text.Component;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
-public interface LocaleService {
+public interface LocaleService extends STEMCraftService {
     Component get(CommandSender sender, String key, String... args);
     Component get(CommandSender sender, String key);
     Component get(Player player, String key, String... args);

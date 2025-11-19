@@ -28,6 +28,9 @@ public class LogServiceImpl implements LogService {
         this.prefixSuccess = SCText.colourise(cfg.getString("logging.prefixes.success", "&a[SUCCESS]&r "));
     }
 
+    public void onEnable() { }
+    public void onDisable() { }
+
     // console only
 
     @Override

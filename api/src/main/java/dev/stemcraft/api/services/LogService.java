@@ -4,7 +4,7 @@ import net.kyori.adventure.text.Component;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
-public interface LogService {
+public interface LogService extends STEMCraftService {
 
     // console only
 

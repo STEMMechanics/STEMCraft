@@ -23,7 +23,15 @@ public class LocaleServiceImpl implements LocaleService {
 
     public LocaleServiceImpl(STEMCraft plugin) {
         this.plugin = plugin;
+
+    }
+
+    public void onEnable() {
         reload();
+    }
+
+    public void onDisable() {
+        locales.clear();
     }
 
     private String getLocale(CommandSender sender) {

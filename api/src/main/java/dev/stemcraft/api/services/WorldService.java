@@ -8,7 +8,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 
-public interface WorldService {
+public interface WorldService extends STEMCraftService {
     boolean worldExists(String  worldName);
     boolean isWorldLoaded(String worldName);
 
