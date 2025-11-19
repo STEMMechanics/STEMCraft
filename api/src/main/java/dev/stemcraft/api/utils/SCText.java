@@ -231,4 +231,29 @@ public final class SCText extends STEMCraftUtil {
                 .replaceAll("([a-z])([A-Z])", "$1_$2")
                 .toLowerCase();
     }
+
+
+    /**
+     * Convert a byte value into a human-readable string
+     * (Bytes, KB, MB, GB, TB)
+     *
+     * @param bytes the number of bytes
+     * @return formatted string such as "512 B", "1.24 KB", "3.8 MB"
+     */
+    public static String formatBytes(long bytes) {
+        if (bytes < 1024) {
+            return bytes + " B";
+        }
+
+        final String[] units = {"KB", "MB", "GB", "TB", "PB"};
+        double value = bytes;
+        int unitIndex = -1;
+
+        while (value >= 1024 && unitIndex < units.length - 1) {
+            value /= 1024;
+            unitIndex++;
+        }
+
+        return String.format("%.2f %s", value, units[unitIndex]);
+    }
 }
