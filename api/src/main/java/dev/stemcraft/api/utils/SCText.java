@@ -14,7 +14,7 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public final class SCText {
+public final class SCText extends STEMCraftUtil {
     private static final MiniMessage MM = MiniMessage.miniMessage();
     private static final LegacyComponentSerializer LEGACY = LegacyComponentSerializer.legacyAmpersand();
     private static final int DEFAULT_WIDTH = 6; // Default width for unknown characters

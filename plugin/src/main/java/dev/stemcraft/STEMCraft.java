@@ -3,7 +3,10 @@ package dev.stemcraft;
 import dev.stemcraft.api.services.LocaleService;
 import dev.stemcraft.api.services.LogService;
 import dev.stemcraft.api.services.WorldService;
+import dev.stemcraft.api.utils.SCChatMenu;
+import dev.stemcraft.api.utils.SCPlayer;
 import dev.stemcraft.api.utils.SCText;
+import dev.stemcraft.api.utils.SCTime;
 import dev.stemcraft.chunkgen.FlatGenerator;
 import dev.stemcraft.chunkgen.VoidGenerator;
 import dev.stemcraft.services.LocaleServiceImpl;
@@ -53,6 +56,13 @@ public final class STEMCraft extends JavaPlugin {
         pluginConfig = YamlConfiguration.loadConfiguration(configFile);
         debugging = pluginConfig.getBoolean("debug", false);
 
+        // Load utilities
+        SCChatMenu.onLoad(this);
+        SCPlayer.onLoad(this);
+        SCText.onLoad(this);;
+        SCTime.onLoad(this);
+
+        // Load services
         localeService = new LocaleServiceImpl(this);
         logService = new LogServiceImpl(this);
         worldService = new WorldServiceImpl(this);

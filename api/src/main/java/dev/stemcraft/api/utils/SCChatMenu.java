@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.function.BiFunction;
 
 
-public class SCChatMenu {
+public class SCChatMenu extends STEMCraftUtil {
     private final static int ITEMS_PER_PAGE = 8;
     private static LogService logger = null;
 

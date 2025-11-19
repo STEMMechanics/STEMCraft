@@ -1,6 +1,6 @@
 package dev.stemcraft.api.utils;
 
-public class SCTime {
+public class SCTime extends STEMCraftUtil {
     public static String formatDuration(long totalSeconds) {
         long days = totalSeconds / 86400;
         long hours = (totalSeconds % 86400) / 3600;
