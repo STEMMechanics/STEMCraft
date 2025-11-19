@@ -167,4 +167,11 @@ public final class STEMCraft extends JavaPlugin {
             error("Failed to scan features in plugin jar");
         }
     }
+
+    /**
+     * Get the plugin version.
+     */
+    public static String getVersion() {
+        return instance.getDescription().getVersion();
+    }
 }

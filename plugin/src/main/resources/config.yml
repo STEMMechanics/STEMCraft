@@ -6,6 +6,10 @@ logging:
     error: "&c[ERROR]&r "
     success: "&a[SUCCESS]&r "
 
+motd:
+  title: "§9■§d■§9■§d■§9■§d■§9■§d■§9■§d■§9■§d■§9■§d■§9■§d■ §e§lSTEMCRAFT §9■§d■§9■§d■§9■§d■§9■§d■§9■§d■§9■§d■§9■§d■"
+  text: "                   §e★ §bEnjoy your stay! §e★"
+
 web_server:
     enabled: true
     port: 8080
