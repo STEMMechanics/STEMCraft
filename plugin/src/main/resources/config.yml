@@ -5,3 +5,18 @@ logging:
     warn: "&e[WARN]&r "
     error: "&c[ERROR]&r "
     success: "&a[SUCCESS]&r "
+
+web_server:
+    enabled: true
+    port: 8080
+    path: www
+
+features:
+  deny_spawn_eggs:
+    enabled: true
+  no_anvil_repair_cost:
+      enabled: true
+  rebalance_iron_golem:
+      enabled: true
+      min_drops: 3
+      max_drops: 5
