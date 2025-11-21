@@ -22,6 +22,9 @@ tasks {
 tasks.named("jar") {
     archiveBaseName.set("STEMCraft")
 
+    def buildNumber = System.env.BUILD_NUMBER ?: "local"
+    archiveVersion.set("${project.version}-${buildNumber}")
+
     // include API classes inside the plugin jar
     from(project(":api").sourceSets.main.output)
 }
