@@ -1,5 +1,6 @@
 plugins {
     id 'java-library'
+    id 'maven-publish'
 }
 
 repositories {
@@ -15,6 +16,22 @@ dependencies {
     compileOnly('org.geysermc.geyser:api:2.9.0-SNAPSHOT')
 }
 
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            artifactId = "stemcraft-api"
+            version = project.version
+        }
+    }
+    repositories {
+        maven { url = uri("file:/repos/maven") }
+    }
+}
+
 tasks.named("jar") {
     archiveBaseName.set("STEMCraft-API")
+    
+    def buildNumber = System.env.BUILD_NUMBER ?: "local"
+    archiveVersion.set("${project.version}-${buildNumber}")
 }
