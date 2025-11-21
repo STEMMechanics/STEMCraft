@@ -1,13 +1,11 @@
-package dev.stemcraft.services;
+package dev.stemcraft.managers;
 
 import dev.stemcraft.STEMCraft;
-import dev.stemcraft.api.ChunkGeneratorFactory;
+import dev.stemcraft.api.factories.ChunkGeneratorFactory;
 import dev.stemcraft.api.services.WorldService;
-import dev.stemcraft.api.utils.SCText;
 import org.bukkit.*;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.generator.ChunkGenerator;
-import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
@@ -16,24 +14,24 @@ import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class WorldServiceImpl implements WorldService {
-    private final Plugin plugin;
+public class WorldManager implements WorldService {
+    private final STEMCraft plugin;
     private final Map<String, ChunkGeneratorFactory> registry = new ConcurrentHashMap<>();
 
-    public WorldServiceImpl(Plugin plugin) {
+    public WorldManager(STEMCraft plugin) {
         this.plugin = plugin;
     }
 
     public void onEnable() {
         // Load worlds
-        ConfigurationSection worldsSection = STEMCraft.getPluginConfig().getConfigurationSection("worlds");
+        ConfigurationSection worldsSection = plugin.config().getConfigurationSection("worlds");
         Set<String> configuredWorlds = new HashSet<>();
         if (worldsSection != null) {
             for (String worldName : worldsSection.getKeys(false)) {
                 if(worldExists(worldName)) {
                     configuredWorlds.add(worldName);
                 } else {
-                    STEMCraft.warn("Configuration contains the world {name} however it does not exist", "name", worldName);
+                    plugin.warn("Configuration contains the world {name} however it does not exist", "name", worldName);
                 }
             }
         }
@@ -41,16 +39,16 @@ public class WorldServiceImpl implements WorldService {
         List<String> discoveredWorlds = listWorlds();
         for (String worldName : discoveredWorlds) {
             if(Bukkit.getWorld(worldName) != null) {
-                STEMCraft.log("World {name}: <aqua>Loaded by Server</aqua>", "name", worldName);
+                plugin.log("World {name}: <aqua>Loaded by Server</aqua>", "name", worldName);
             } else {
                 if (configuredWorlds.contains(worldName)) {
                     boolean load = worldsSection.getBoolean(worldName + ".load", false);
                     if (load) {
                         loadWorld(worldName);
-                        STEMCraft.log("World {name}: <green>Loaded</green>", "name", worldName);
+                        plugin.log("World {name}: <green>Loaded</green>", "name", worldName);
                     }
                 } else {
-                    STEMCraft.log("World {name}: <red>Unloaded</red>", "name", worldName);
+                    plugin.log("World {name}: <red>Unloaded</red>", "name", worldName);
                 }
             }
         }
@@ -154,7 +152,7 @@ public class WorldServiceImpl implements WorldService {
     // -------- registry
     @Override public void registerGenerator(String key, ChunkGeneratorFactory factory) {
         registry.put(key.toLowerCase(Locale.ROOT), factory);
-        STEMCraft.log("Registered chunk generator {key}", "key", key);
+        plugin.log("Registered chunk generator {key}", "key", key);
     }
     @Override public Optional<ChunkGeneratorFactory> findGenerator(String key) {
         return Optional.ofNullable(registry.get(key.toLowerCase(Locale.ROOT)));

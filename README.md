@@ -15,9 +15,37 @@ This is the core STEMCraft plugin that provides the core functionality and helpe
 
 You can visit the [Wiki](https://github.com/STEMCraft/STEMCraftLib/wiki) for details on the plugin commands, classes, and using as a dependency.
 
-## Builds
+## Builds & API
 
-We provide up-to-date plugin and API builds over on our [Jenkins server](https://jenkins.stemmechanics.com.au/job/STEMCraft/).
+We provide an up-to-date plugin build over on our [Jenkins server](https://jenkins.stemmechanics.com.au/job/STEMCraft/).
+
+To include the API in your project, add the repository to your project:
+
+```
+repositories {
+    maven {
+        url = uri("https://repo.stemmechanics.com.au/maven-public/")
+    }
+} 
+```
+
+Add STEMCraft API codebase as a dependency:
+
+```
+dependencies {
+    compileOnly("dev.stemcraft:stemcraft-api:1.0.0-SNAPSHOT")
+}
+```
+
+To access the API in your code:
+
+```
+STEMCraftAPI.api(); 
+```
+
+`STEMCraftAPI.api();` may be null until after the STEMCraft plugin enables.
+
+
 
 ## Get in touch!
 

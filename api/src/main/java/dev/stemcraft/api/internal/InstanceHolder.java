@@ -17,17 +17,20 @@
  * @author STEMMechanics
  * @link https://github.com/STEMMechanics/STEMCraft
  */
-package dev.stemcraft.api.services;
+package dev.stemcraft.api.internal;
 
-public interface STEMCraftService {
+import dev.stemcraft.api.STEMCraftAPI;
+import org.bukkit.plugin.Plugin;
 
-    /**
-     * Called when the service is enabled
-     */
-    default void onEnable() {}
+public class InstanceHolder {
+    private static STEMCraftAPI api;
+    private static Plugin plugin;
 
-    /**
-     * Called when the service is disabled
-     */
-    default void onDisable() {}
+    public static STEMCraftAPI api() { return api; }
+    public static Plugin plugin() { return plugin; }
+
+    public static void set(STEMCraftAPI api, Plugin plugin) {
+        InstanceHolder.api = api;
+        InstanceHolder.plugin = plugin;
+    }
 }

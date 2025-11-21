@@ -1,28 +1,35 @@
 package dev.stemcraft.features;
 
-import dev.stemcraft.STEMCraft;
-import org.bukkit.event.Listener;
-import org.bukkit.event.EventHandler;
+import dev.stemcraft.api.STEMCraftAPI;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.entity.EntityType;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.Material;
-import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
 
-public final class RebalanceIronGolem implements Listener {
-    private int minDrops = 3;
-    private int maxDrops = 5;
+public final class RebalanceIronGolem implements STEMCraftFeature {
+    private static final int DEFAULT_MIN_DROPS = 3;
+    private static final int DEFAULT_MAX_DROPS = 5;
 
-    public void onEnable(STEMCraft plugin) {
-        minDrops = plugin.getConfig().getInt("features.rebalance_iron_golem.min_drops", 3);
-        maxDrops = plugin.getConfig().getInt("features.rebalance_iron_golem.max_drops", 5);
-    }
+    @Override
+    public void onEnable(STEMCraftAPI api) {
+        String base = getConfigBase(); // e.g. features.rebalance_iron_golem
 
-    @EventHandler
-    public void onIronGolemDeath(EntityDeathEvent event) {
-        if (event.getEntityType() == EntityType.IRON_GOLEM) {
+        int min = Math.max(0, api.config().getInt(base + ".min_drops", DEFAULT_MIN_DROPS));
+        int max = Math.max(0, api.config().getInt(base + ".max_drops", DEFAULT_MAX_DROPS));
+
+        final int minDrops = Math.min(min, max);
+        final int maxDrops = Math.max(min, max);
+
+        api.registerEvent(EntityDeathEvent.class, event -> {
+            if (event.getEntityType() != EntityType.IRON_GOLEM) return;
+
             event.getDrops().clear();
-            event.getDrops().add(new ItemStack(Material.IRON_NUGGET, minDrops + new Random().nextInt(maxDrops)));
-        }
+
+            int amount = ThreadLocalRandom.current()
+                    .nextInt(minDrops, maxDrops + 1); // inclusive range [min, max]
+
+            event.getDrops().add(new ItemStack(Material.IRON_NUGGET, amount));
+        });
     }
 }

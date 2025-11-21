@@ -1,4 +1,23 @@
-package dev.stemcraft.services;
+/*
+ * STEMCraft - Minecraft Plugin
+ * Copyright (C) 2025 James Collins
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, version 3.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ *
+ * @author STEMMechanics
+ * @link https://github.com/STEMMechanics/STEMCraft
+ */
+package dev.stemcraft.managers;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -15,23 +34,21 @@ import java.nio.file.Files;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-public class WebServiceImpl implements WebService {
+public class WebManager implements WebService {
     private STEMCraft plugin;
     private File wwwRoot;
     private HttpServer httpServer;
     private final Map<String, WebServiceEndpointHandler> endpointHandlers = new LinkedHashMap<>();
 
-    public WebServiceImpl(STEMCraft plugin) {
+    public WebManager(STEMCraft plugin) {
         this.plugin = plugin;
     }
 
     public void onEnable() {
-        if(plugin.getConfig().getBoolean("web_server.enabled", false)) {
+        if(plugin.config().getBoolean("web_server.enabled", false)) {
             start();
         }
     }
-
-    public void onDisable() { }
 
     public void start() {
         String wwwPath = plugin.getConfig().getString("web_server.path", "www");
@@ -46,29 +63,29 @@ public class WebServiceImpl implements WebService {
 
         if (!wwwRoot.exists()) {
             if (!wwwRoot.mkdirs()) {
-                STEMCraft.error("Failed to create web server directory");
+                plugin.error("Failed to create web server directory");
                 wwwRoot = null;
                 return;
             }
 
             if(!wwwRoot.isDirectory()) {
-                STEMCraft.error("Web server path is not a directory");
+                plugin.error("Web server path is not a directory");
                 wwwRoot = null;
                 return;
             }
         }
 
-        int port = plugin.getConfig().getInt("web_server.port", 8950);
-        String ip = plugin.getConfig().getString("web_server.ip", "127.0.0.1");
+        int port = plugin.config().getInt("web_server.port", 8950);
+        String ip = plugin.config().getString("web_server.ip", "127.0.0.1");
 
         try {
             httpServer = HttpServer.create(new InetSocketAddress(ip, port), 0);
             httpServer.createContext("/", new WebServiceHandler());
             httpServer.setExecutor(null);
             httpServer.start();
-            STEMCraft.info("Web server started on http://" + ip + ":" + port);
+            plugin.info("Web server started on http://" + ip + ":" + port);
         } catch (IOException e) {
-            STEMCraft.error("Failed to start web server: " + e.getMessage());
+            plugin.error("Failed to start web server: " + e.getMessage());
             httpServer = null;
         }
     }
@@ -77,7 +94,7 @@ public class WebServiceImpl implements WebService {
         if (httpServer != null) {
             httpServer.stop(0);
             httpServer = null;
-            STEMCraft.info("Web server stopped");
+            plugin.info("Web server stopped");
         }
     }
 

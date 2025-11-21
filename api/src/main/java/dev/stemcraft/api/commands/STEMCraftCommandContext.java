@@ -17,17 +17,21 @@
  * @author STEMMechanics
  * @link https://github.com/STEMMechanics/STEMCraft
  */
-package dev.stemcraft.api.services;
+package dev.stemcraft.api.commands;
 
-public interface STEMCraftService {
+import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
 
-    /**
-     * Called when the service is enabled
-     */
-    default void onEnable() {}
+import java.util.List;
 
-    /**
-     * Called when the service is disabled
-     */
-    default void onDisable() {}
+public interface STEMCraftCommandContext {
+    CommandSender getSender();
+    List<String> args();
+    boolean isConsole();
+    boolean isPlayer();
+    boolean hasPermission(String permission);
+    String getArg(int index, String def);
+    Player getArgAsPlayer(int index, CommandSender def);
+
+    default String getArg(int index) { return getArg(index, null); }
 }

@@ -17,17 +17,11 @@
  * @author STEMMechanics
  * @link https://github.com/STEMMechanics/STEMCraft
  */
-package dev.stemcraft.api.services;
+package dev.stemcraft.api.factories;
 
-public interface STEMCraftService {
+import org.bukkit.generator.ChunkGenerator;
 
-    /**
-     * Called when the service is enabled
-     */
-    default void onEnable() {}
-
-    /**
-     * Called when the service is disabled
-     */
-    default void onDisable() {}
+@FunctionalInterface
+public interface ChunkGeneratorFactory {
+    ChunkGenerator create(String options);
 }

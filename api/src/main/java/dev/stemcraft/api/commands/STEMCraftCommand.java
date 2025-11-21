@@ -17,27 +17,41 @@
  * @author STEMMechanics
  * @link https://github.com/STEMMechanics/STEMCraft
  */
-package dev.stemcraft.api.services;
+package dev.stemcraft.api.commands;
 
-public interface MOTDService extends STEMCraftService {
+import dev.stemcraft.api.services.MessengerService;
+import org.bukkit.command.CommandSender;
+import org.bukkit.plugin.java.JavaPlugin;
 
-    /**
-     * Get the current MOTD
-     */
-    public String current();
-
-    /**
-     * Get the MOTD based on key
-     */
-    public String get(String key);
+public interface STEMCraftCommand extends MessengerService {
 
     /**
-     * Set the key MOTD. This will become the current MOTD.
+     * Set the command aliases
      */
-    public void set(String key, String motd);
+    STEMCraftCommand setAlias(String... aliases);
 
     /**
-     * Clear a MOTD based on key. The next MOTD will become current.
+     * Set the command description
      */
-    public void clear(String key);
+    STEMCraftCommand setDescription(String description);
+
+    /**
+     * Set the command usage string
+     */
+    STEMCraftCommand setUsage(String description);
+
+    /**
+     * Add a tab completion track
+     */
+    STEMCraftCommand addTabCompletion(String... completions);
+
+    /**
+     * Set the command executor
+     */
+    STEMCraftCommand setExecutor(STEMCraftCommandExecutor processor);
+
+    /**
+     * Register the command on the server
+     */
+    void register(JavaPlugin plugin);
 }

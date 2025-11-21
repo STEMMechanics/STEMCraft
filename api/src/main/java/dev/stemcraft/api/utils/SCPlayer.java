@@ -1,5 +1,7 @@
 package dev.stemcraft.api.utils;
 
+import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.api.internal.InstanceHolder;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -26,15 +28,14 @@ public class SCPlayer extends STEMCraftUtil {
     private static File configFile;
     private static YamlConfiguration config;
 
-
-
-    public static void onEnable() {
-        configFile = new File(plugin.getDataFolder(), "players.yml");
+    @Override
+    public void onLoad() {
+        configFile = new File(STEMCraftAPI.api().dataFolder(), "players.yml");
         if (!configFile.exists()) {
             try {
                 configFile.createNewFile();
             } catch (IOException e) {
-                getLogger().error("Could not create the players.yml configuration file", e);
+                error("Could not create the players.yml configuration file", e);
             }
         }
 
@@ -97,7 +98,7 @@ public class SCPlayer extends STEMCraftUtil {
      */
     public static CompletableFuture<Void> teleport(Player player, Location location) {
         CompletableFuture<Void> future = new CompletableFuture<>();
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+        Bukkit.getScheduler().runTaskLater(InstanceHolder.plugin(), () -> {
             player.teleport(location);
             future.complete(null); // Mark the task as complete
         }, 1L);
@@ -111,7 +112,7 @@ public class SCPlayer extends STEMCraftUtil {
      * @param callback Callback once the teleport is complete
      */
     public static void teleport(Player player, Location location, Runnable callback) {
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+        Bukkit.getScheduler().runTaskLater(InstanceHolder.plugin(), () -> {
             player.teleport(location);
             if(callback != null) {
                 callback.run();
@@ -126,7 +127,7 @@ public class SCPlayer extends STEMCraftUtil {
         try {
             config.save(configFile);
         } catch (IOException e) {
-            getLogger().error("Failed to save the players configuration file", e);
+            error("Failed to save the players configuration file", e);
         }
     }
 
@@ -161,7 +162,7 @@ public class SCPlayer extends STEMCraftUtil {
             }
             return name;
         } catch (Exception e) {
-            getLogger().error("Lookup player name for UUID " + id + " failed", e);
+            error("Lookup player name for UUID " + id + " failed", e);
             return null; // Return null if lookup fails
         }
     }

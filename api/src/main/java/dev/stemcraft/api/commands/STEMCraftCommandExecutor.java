@@ -17,17 +17,11 @@
  * @author STEMMechanics
  * @link https://github.com/STEMMechanics/STEMCraft
  */
-package dev.stemcraft.api.services;
+package dev.stemcraft.api.commands;
 
-public interface STEMCraftService {
+import dev.stemcraft.api.STEMCraftAPI;
 
-    /**
-     * Called when the service is enabled
-     */
-    default void onEnable() {}
-
-    /**
-     * Called when the service is disabled
-     */
-    default void onDisable() {}
+@FunctionalInterface
+public interface STEMCraftCommandExecutor {
+    void execute(STEMCraftAPI api, String label, STEMCraftCommandContext context);
 }

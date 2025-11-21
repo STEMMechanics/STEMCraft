@@ -1,29 +1,30 @@
 package dev.stemcraft.api.utils;
 
-import dev.stemcraft.api.services.LogService;
-import org.bukkit.Bukkit;
-import org.bukkit.plugin.RegisteredServiceProvider;
-import org.bukkit.plugin.java.JavaPlugin;
+import dev.stemcraft.api.STEMCraftAPI;
+import org.bukkit.command.CommandSender;
 
 public class STEMCraftUtil {
-    protected static JavaPlugin plugin;
-    protected static LogService logger = null;
+    public void onLoad() { }
 
-    public static void onLoad(JavaPlugin p) {
-        plugin = p;
-    }
+    static void log(CommandSender sender, String message, Throwable ex, String... placeholders) { STEMCraftAPI.api().messenger().log(sender, message, ex, placeholders); }
+    static void info(CommandSender sender, String message, Throwable ex, String... placeholders) { STEMCraftAPI.api().messenger().info(sender, message, ex, placeholders); }
+    static void warn(CommandSender sender, String message, Throwable ex, String... placeholders) { STEMCraftAPI.api().messenger().warn(sender, message, ex, placeholders); }
+    static void error(CommandSender sender, String message, Throwable ex, String... placeholders) { STEMCraftAPI.api().messenger().error(sender, message, ex, placeholders); }
+    static void success(CommandSender sender, String message, Throwable ex, String... placeholders) { STEMCraftAPI.api().messenger().log(sender, message, ex, placeholders); }
 
-    public static LogService getLogger() {
-        if(logger != null) {
-            return logger;
-        }
-
-        RegisteredServiceProvider<LogService> rsp = Bukkit.getServicesManager().getRegistration(LogService.class);
-        if (rsp == null) {
-            throw new IllegalStateException("LogService not found");
-        }
-
-        logger = rsp.getProvider();
-        return logger;
-    }
+    static void log(String message, String... placeholders) { log(null, message, null, placeholders); }
+    static void log(String message, Throwable ex, String... placeholders) { log(null, message, ex, placeholders); }
+    static void log(CommandSender sender, String message, String... placeholders) { log(sender, message, null, placeholders); }
+    static void info(String message, String... placeholders) { info(null, message, null, placeholders); }
+    static void info(String message, Throwable ex, String... placeholders) { info(null, message, ex, placeholders); }
+    static void info(CommandSender sender, String message, String... placeholders) { info(sender, message, null, placeholders); }
+    static void warn(String message, String... placeholders) { warn(null, message, null, placeholders); }
+    static void warn(String message, Throwable ex, String... placeholders) { warn(null, message, ex, placeholders); }
+    static void warn(CommandSender sender, String message, String... placeholders) { warn(sender, message, null, placeholders); }
+    static void error(String message, String... placeholders) { error(null, message, null, placeholders); }
+    static void error(String message, Throwable ex, String... placeholders) { error(null, message, ex, placeholders); }
+    static void error(CommandSender sender, String message, String... placeholders) { error(sender, message, null, placeholders); }
+    static void success(String message, String... placeholders) { success(null, message, null, placeholders); }
+    static void success(String message, Throwable ex, String... placeholders) { success(null, message, ex, placeholders); }
+    static void success(CommandSender sender, String message, String... placeholders) { success(sender, message, null, placeholders); }
 }

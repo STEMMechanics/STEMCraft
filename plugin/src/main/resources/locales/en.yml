@@ -1,1 +1,12 @@
+PLAYER_NOT_FOUND: "Player {player} not found."
+CONSOLE_NAME: "Console"
+
 DENY_SPAWN_EGG: "You do not have permission to use spawn eggs."
+
+HUB_TELEPORT_OTHER_DENY: "You do not have permission to teleport others to the hub."
+HUB_CONSOLE_NO_PLAYER: "You must specify a player when using this command from the console."
+HUB_TELEPORT_FAILED: "Failed to teleport to the hub."
+HUB_TELEPORT_SUCCESS: "You have been teleported to the hub."
+HUB_TELEPORT_OTHER_SUCCESS_SENDER: "{player} has been teleported to the hub."
+HUB_TELEPORT_OTHER_SUCCESS_PLAYER: "You have been teleported to the hub by {playere}."
+

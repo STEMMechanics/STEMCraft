@@ -1,6 +1,7 @@
 package dev.stemcraft.api.utils;
 
-import dev.stemcraft.api.services.LogService;
+import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.api.services.MessengerService;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
@@ -15,7 +16,6 @@ import java.util.function.BiFunction;
 
 public class SCChatMenu extends STEMCraftUtil {
     private final static int ITEMS_PER_PAGE = 8;
-    private static LogService logger = null;
 
     /**
      * Render a Chat Menu for the player
@@ -33,16 +33,7 @@ public class SCChatMenu extends STEMCraftUtil {
         List<Component> lines = func.apply(start, ITEMS_PER_PAGE);
 
         if(lines.isEmpty()) {
-            if(logger == null) {
-                RegisteredServiceProvider<LogService> rsp = Bukkit.getServicesManager().getRegistration(LogService.class);
-                if (rsp == null) {
-                    return;
-                }
-
-                logger = rsp.getProvider();
-            }
-
-            logger.error(sender, noneText);
+            error(sender, noneText);
             return;
         }
 

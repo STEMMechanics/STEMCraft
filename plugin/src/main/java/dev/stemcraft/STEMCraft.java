@@ -1,94 +1,108 @@
 package dev.stemcraft;
 
-import dev.stemcraft.api.services.LocaleService;
-import dev.stemcraft.api.services.LogService;
-import dev.stemcraft.api.services.PlayerLogService;
-import dev.stemcraft.api.services.WorldService;
-import dev.stemcraft.api.utils.SCChatMenu;
-import dev.stemcraft.api.utils.SCPlayer;
-import dev.stemcraft.api.utils.SCText;
-import dev.stemcraft.api.utils.SCTime;
+import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.api.events.STEMCraftEventHandler;
+import dev.stemcraft.api.services.web.WebService;
+import dev.stemcraft.api.utils.STEMCraftUtil;
+import dev.stemcraft.commands.STEMCraftCommandImpl;
+import dev.stemcraft.managers.*;
+import dev.stemcraft.api.internal.InstanceHolder;
+import dev.stemcraft.api.services.*;
 import dev.stemcraft.chunkgen.FlatGenerator;
 import dev.stemcraft.chunkgen.VoidGenerator;
-import dev.stemcraft.services.LocaleServiceImpl;
-import dev.stemcraft.services.LogServiceImpl;
-import dev.stemcraft.services.PlayerLogServiceImpl;
-import dev.stemcraft.services.WorldServiceImpl;
+import dev.stemcraft.features.STEMCraftFeature;
 import lombok.Getter;
-import org.bukkit.Bukkit;
+import lombok.Setter;
+import lombok.experimental.Accessors;
+import org.bukkit.command.*;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.event.Cancellable;
+import org.bukkit.event.Event;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Enumeration;
+import java.util.List;
+import java.util.function.Consumer;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
+@Getter
+@Accessors(fluent = true)
 public final class STEMCraft extends JavaPlugin {
-    @Getter
     private static STEMCraft instance;
+    private static STEMCraftAPI api;
 
-    @Getter
-    private static LocaleService localeService;
-    @Getter
-    private static LogService logService;
-    @Getter
-    private static PlayerLogService playerLogService;
-    @Getter
-    private static WorldService worldService;
+    private LocaleService localeService;
+    private MessengerService messengerService;
+    private PlayerLogService playerLogService;
+    private WorldService worldService;
+    private MOTDService motdService;
+    private WebService webService;
 
-    @Getter
-    private static YamlConfiguration pluginConfig;
+    private YamlConfiguration config;
 
-    @Getter
-    private static boolean debugging = false;
+    private boolean debugging = false;
+
 
     @Override
     public void onEnable() {
         instance = this;
-        saveDefaultConfig();
 
+        // Check dependencies
+        Plugin we = getServer().getPluginManager().getPlugin("WorldEdit");
+        if(we == null || !we.isEnabled()) {
+            error("WorldEdit plugin not found or not enabled! STEMCraft requires WorldEdit to function.");
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
+
+        // Load configuration
         File configFile = new File(instance.getDataFolder(), "config.yml");
         if (!configFile.exists()) {
             saveResource("config.yml", false);
         }
+        config = YamlConfiguration.loadConfiguration(configFile);
 
-        pluginConfig = YamlConfiguration.loadConfiguration(configFile);
-        debugging = pluginConfig.getBoolean("debug", false);
+        // Setup API
+        api = new STEMCraftApiManager(this);
+        InstanceHolder.set(api, this);
 
-        // Load utilities
-        SCChatMenu.onLoad(this);
-        SCPlayer.onLoad(this);
-        SCText.onLoad(this);;
-        SCTime.onLoad(this);
+        debugging = config.getBoolean("debug", false);
 
-        // Load services
-        localeService = new LocaleServiceImpl(this);
-        logService = new LogServiceImpl(this);
-        playerLogService = new PlayerLogServiceImpl(this);
-        worldService = new WorldServiceImpl(this);
+        loadUtilities();
 
-        getServer().getServicesManager().register(LocaleService.class, localeService, this, org.bukkit.plugin.ServicePriority.Normal);
-        getServer().getServicesManager().register(LogService.class, logService, this, org.bukkit.plugin.ServicePriority.Normal);
-        getServer().getServicesManager().register(PlayerLogService.class, playerLogService, this, org.bukkit.plugin.ServicePriority.Normal);
-        getServer().getServicesManager().register(WorldService.class, worldService, this, org.bukkit.plugin.ServicePriority.Normal);
 
-        logService.info("STEMCraft enabled");
+        // Load managers
+        messengerService = new MessengerManager(this);
+        localeService = new LocaleManager(this);
+        playerLogService = new PlayerLogManager(this);
+        worldService = new WorldManager(this);
+        motdService = new MOTDManager(this);
+        webService = new WebManager(this);
 
+        messengerService.onEnable();
         localeService.onEnable();
-        logService.onEnable();
         playerLogService.onEnable();
         worldService.onEnable();
+        motdService.onEnable();
+        webService.onEnable();
+
+        info("STEMCraft enabled");
 
         worldService.registerGenerator("void", (options) -> new VoidGenerator());
         worldService.registerGenerator("flat",   FlatGenerator::fromOptions);       // e.g., "grass_block;dirt:3;bedrock"
         worldService.registerGenerator("normal", cfg -> null);               // null => vanilla normal
 
         loadFeatures();
+        registerCommands();
     }
 
     @Override
@@ -96,28 +110,84 @@ public final class STEMCraft extends JavaPlugin {
         getServer().getServicesManager().unregisterAll(this);
     }
 
-    public static void debug(String message) { if(debugging) { logService.log(message); } }
-    public static void debug(String message, String ...placeholders) { debug(SCText.placeholders(message, placeholders)); }
-    public static void log(String message) { logService.log(message); }
-    public static void log(String message, String ...placeholders) { log(SCText.placeholders(message, placeholders)); }
-    public static void info(String message) { logService.info(message); }
-    public static void info(String message, String ...placeholders) { info(SCText.placeholders(message, placeholders)); }
-    public static void warn(String message) { logService.warn(message); }
-    public static void warn(String message, String ...placeholders) { warn(SCText.placeholders(message, placeholders)); }
-    public static void error(String message) { logService.error(message); }
-    public static void error(String message, String ...placeholders) { error(SCText.placeholders(message, placeholders)); }
+    private static class STEMCraftCommand extends Command implements PluginIdentifiableCommand {
+        private final Plugin plugin;
+        private final CommandExecutor executor;
+        @Setter
+        private TabCompleter completer;
 
+        public STEMCraftCommand(String name, Plugin plugin, CommandExecutor executor) {
+            super(name);
+            this.plugin = plugin;
+            this.executor = executor;
+        }
+
+        @Override
+        public boolean execute(CommandSender sender, String label, String[] args) {
+            if (!testPermission(sender)) {
+                return true;
+            }
+            return executor.onCommand(sender, this, label, args);
+        }
+
+        @Override
+        public List<String> tabComplete(CommandSender sender, String alias, String[] args) {
+            if (completer != null) {
+                return completer.onTabComplete(sender, this, alias, args);
+            }
+            return super.tabComplete(sender, alias, args);
+        }
+
+        @Override
+        public @NotNull Plugin getPlugin() {
+            return plugin;
+        }
+    }
+
+    /**
+     * Load STEMCraft Features within dev.stemcraft.features
+     */
     private void loadFeatures() {
-        YamlConfiguration config = pluginConfig;
-        var pm = Bukkit.getPluginManager();
+        iterateClasses("dev/stemcraft/features/", STEMCraftFeature.class, instance -> {
+            String featureConfigBase = instance.getConfigBase();
 
+            if (!config.getBoolean(featureConfigBase + ".enabled", true)) {
+                info("Feature {name} disabled in config", "name", instance.getName());
+                return;
+            }
+
+            instance.onEnable(api);
+            info("Feature {name} loaded", "name", instance.getName());
+        });
+    }
+
+    /**
+     * Load STEMCraft Utilities within dev.stemcraft.api.utils
+     */
+    private void loadUtilities() {
+        iterateClasses("dev/stemcraft/api/utils", STEMCraftUtil.class, STEMCraftUtil::onLoad);
+    }
+
+    private void loadCommands() {
+        iterateClasses("dev/stemcraft/commands", STEMCraftCommandImpl.class, instance -> {
+            onLoad();
+        });
+    }
+
+
+
+
+
+
+
+    private void registerCommands() {
         try (JarFile jar = new JarFile(getFile())) {
             Enumeration<JarEntry> entries = jar.entries();
 
             while (entries.hasMoreElements()) {
                 JarEntry entry = entries.nextElement();
 
-                if (!entry.getName().startsWith("dev/stemcraft/features/")
+                if (!entry.getName().startsWith("dev/stemcraft/commands/")
                         || !entry.getName().endsWith(".class")) {
                     continue;
                 }
@@ -129,49 +199,19 @@ public final class STEMCraft extends JavaPlugin {
                 try {
                     Class<?> clazz = Class.forName(className);
 
-                    if (!Listener.class.isAssignableFrom(clazz)) continue;
+                    if (!dev.stemcraft.api.commands.STEMCraftCommand.class.isAssignableFrom(clazz)) continue;
                     if (Modifier.isAbstract(clazz.getModifiers())) continue;
 
-                    String simple = SCText.toSnakeCase(clazz.getSimpleName()).toLowerCase();
-                    String key = "features." + simple + ".enabled";
-
-                    if (!config.getBoolean(key, true)) {
-                        STEMCraft.info("Feature {name} disabled in config", "name", clazz.getSimpleName());
-                        continue;
-                    }
-
                     Object instance = clazz.getDeclaredConstructor().newInstance();
-
-                    try {
-                        Method onEnableMethod = clazz.getMethod("onEnable", STEMCraft.class);
-
-                        Object result = onEnableMethod.invoke(instance, this);
-
-                        // If method returns a boolean, use it.
-                        if (onEnableMethod.getReturnType() == boolean.class || onEnableMethod.getReturnType() == Boolean.class) {
-                            if(!(Boolean) result) {
-                                STEMCraft.warn("Feature {name} could not be loaded");
-                                continue;
-                            }
-                        }
-
-                    } catch (NoSuchMethodException ignored) {
-                        // No enable() method = consider it enabled
-                    }
-
-                    // Load as event listener if applicable
-                    if (instance instanceof Listener listener) {
-                        pm.registerEvents(listener, this);
-                    }
-
-                    STEMCraft.info("Feature {name} loaded", "name", clazz.getSimpleName());
+                    Method onRegisterMethod = clazz.getMethod("onRegister", STEMCraft.class);
+                    onRegisterMethod.invoke(instance, this);
 
                 } catch (ReflectiveOperationException ex) {
-                    error("Failed to load feature class " + className);
+                    error("Failed to load command " + className);
                 }
             }
         } catch (IOException ex) {
-            error("Failed to scan features in plugin jar");
+            error("Failed to scan commands in plugin jar");
         }
     }
 
@@ -180,5 +220,92 @@ public final class STEMCraft extends JavaPlugin {
      */
     public static String getVersion() {
         return instance.getDescription().getVersion();
+    }
+
+    private <T> void iterateClasses(String path,
+                                    Class<T> typeFilter,
+                                    Consumer<T> callback) {
+        try (JarFile jar = new JarFile(getFile())) {
+            Enumeration<JarEntry> entries = jar.entries();
+
+            while (entries.hasMoreElements()) {
+                JarEntry entry = entries.nextElement();
+                String name = entry.getName();
+
+                if (!name.startsWith(path) || !name.endsWith(".class")) {
+                    continue;
+                }
+
+                String className = name
+                        .substring(0, name.length() - ".class".length())
+                        .replace('/', '.');
+
+                try {
+                    Class<?> rawClass = Class.forName(className, true, getClassLoader());
+
+                    if (!typeFilter.isAssignableFrom(rawClass)) {
+                        continue;
+                    }
+                    if (Modifier.isAbstract(rawClass.getModifiers())) {
+                        continue;
+                    }
+
+                    @SuppressWarnings("unchecked")
+                    Class<? extends T> castClass = (Class<? extends T>) rawClass;
+
+                    T instance = castClass.getDeclaredConstructor().newInstance();
+
+                    callback.accept(instance);
+
+                } catch (ReflectiveOperationException ex) {
+                    error("Failed to load class " + className + ": " + ex.getMessage(), ex);
+                }
+            }
+        } catch (IOException ex) {
+            error("Failed to scan classes in plugin jar: " + ex.getMessage(), ex);
+        }
+    }
+
+    public <T extends Event> Listener registerEvent(Class<T> event, STEMCraftEventHandler<T> callback, EventPriority priority, boolean ignoreCancelled) {
+        Listener listener = new Listener() {};
+
+        instance.getServer().getPluginManager().registerEvent(event, listener, priority, (ignored, rawEvent) -> {
+            if(event.isInstance(rawEvent)) {
+                T castedEvent = event.cast(rawEvent);
+                if (ignoreCancelled && rawEvent instanceof Cancellable c && c.isCancelled()) {
+                    return;
+                }
+
+                callback.handle(castedEvent);
+            }
+        }, instance, ignoreCancelled);
+
+        return listener;
+    }
+
+    public <T extends Event> Listener registerEvent(Class<T> event, STEMCraftEventHandler<T> callback) { return registerEvent(event, callback, EventPriority.NORMAL, false); }
+
+    public void log(String message, String... placeholders) {
+        messengerService.log(message, placeholders);
+    }
+
+    public void info(String message, String... placeholders) {
+        messengerService.info(message, placeholders);
+    }
+
+    public void warn(String message, String... placeholders) {
+        messengerService.warn(message, placeholders);
+    }
+
+    public void error(String message, String... placeholders) {
+        messengerService.error(message, placeholders);
+    }
+
+    public void error(String message, Throwable ex, String... placeholders) {
+        messengerService.error(message, ex, placeholders);
+    }
+
+    public void success(String message, String... placeholders) {
+        messengerService.success(message, placeholders);
     }
 }

@@ -1,4 +1,23 @@
-package dev.stemcraft.services;
+/*
+ * STEMCraft - Minecraft Plugin
+ * Copyright (C) 2025 James Collins
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, version 3.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ *
+ * @author STEMMechanics
+ * @link https://github.com/STEMMechanics/STEMCraft
+ */
+package dev.stemcraft.managers;
 
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.services.PlayerLogService;
@@ -47,7 +66,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
-public class PlayerLogServiceImpl implements PlayerLogService, Listener {
+public class PlayerLogManager implements PlayerLogService, Listener {
     private final STEMCraft plugin;
     private File logDirectory;
     private int maxDays = 28;
@@ -61,7 +80,7 @@ public class PlayerLogServiceImpl implements PlayerLogService, Listener {
     private final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
             .withZone(ZoneId.systemDefault());
 
-    public PlayerLogServiceImpl(STEMCraft plugin) {
+    public PlayerLogManager(STEMCraft plugin) {
         this.plugin = plugin;
     }
 
@@ -130,7 +149,7 @@ public class PlayerLogServiceImpl implements PlayerLogService, Listener {
     }
 
     @Override
-    public void logPlayerAction(Player player, String action) {
+    public void logPlayerAction(Player player, String action, String... placeholders) {
         UUID id;
         String name;
 
@@ -147,7 +166,7 @@ public class PlayerLogServiceImpl implements PlayerLogService, Listener {
                 x -> new ArrayDeque<>()
         );
 
-        deque.addFirst(new PlayerLogEntry(Instant.now(), action, name));
+        deque.addFirst(new PlayerLogEntry(Instant.now(), SCText.placeholders(action, placeholders), name));
     }
 
     private void flushAll() {

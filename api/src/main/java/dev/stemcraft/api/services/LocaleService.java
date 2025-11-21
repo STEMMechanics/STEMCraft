@@ -1,25 +1,51 @@
+/*
+ * STEMCraft - Minecraft Plugin
+ * Copyright (C) 2025 James Collins
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, version 3.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ *
+ * @author STEMMechanics
+ * @link https://github.com/STEMMechanics/STEMCraft
+ */
 package dev.stemcraft.api.services;
 
-import net.kyori.adventure.text.Component;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
 public interface LocaleService extends STEMCraftService {
-    Component getComponent(CommandSender sender, String key, String... args);
-    String getString(CommandSender sender, String key, String... args);
-    Component getComponent(CommandSender sender, String key);
-    String getString(CommandSender sender, String key);
-    Component getComponent(Player player, String key, String... args);
-    String getString(Player player, String key, String... args);
-    Component getComponent(Player player, String key);
-    String getString(Player player, String key);
-    Component getComponent(String key, String... args);
-    String getString(String key, String... args);
-    Component getComponent(String key);
-    String getString(String key);
 
     /**
-     * Reload locale files from disk.
+     * Get the default locale of the server
      */
-    void reload();
+    String getDefaultLocale();
+
+    /**
+     * Get a locale string based on the lang and key and fill placeholders.
+     * If key is a string, then it will be used in place of the key.
+     */
+    String get(String lang, String key, String... placeholders);
+
+    default String get(String key, String... placeholders) { return get(getDefaultLocale(), key, placeholders); }
+
+    default String get(CommandSender sender, String key, String... placeholders) {
+        String lang;
+
+        if (sender instanceof Player p) {
+            lang = p.locale().toLanguageTag();
+        } else {
+            lang = getDefaultLocale();
+        }
+
+        return get(lang, key, placeholders);
+    }
 }
