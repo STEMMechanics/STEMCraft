@@ -4,7 +4,7 @@ plugins {
 
 subprojects {
     group = 'dev.stemcraft'
-    version = "1.0.0-SNAPSHOT-${System.env.BUILD_NUMBER ?: 'local'}"
+    version = "1.0.0-SNAPSHOT"
 
     repositories {
         mavenCentral()
