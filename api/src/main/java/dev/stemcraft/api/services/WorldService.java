@@ -48,9 +48,9 @@ public interface WorldService extends STEMCraftService {
     void registerGenerator(String name, ChunkGeneratorFactory factory);
     Optional<ChunkGeneratorFactory> findGenerator(String name);
 
-//    boolean isRecordingChanges(String worldName);
-//    void startRecordingChanges(String worldName);
-//    void stopRecordingChanges(String worldName);
-//    void resetWorldChanges(String worldName);
-//    void ignoreWorldChanges(String worldName);
+    boolean isRecordingChanges(World world);
+    void startRecordingChanges(World world);
+    void stopRecordingChanges(World world);
+    void resetWorldChanges(World world);
+    void clearWorldChanges(World world);
 }

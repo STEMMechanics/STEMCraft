@@ -16,6 +16,7 @@ import lombok.Getter;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
@@ -223,6 +224,36 @@ public class SCRegion {
             if (!region.contains(pos)) continue; // works for cuboid and polygon
 
             return new Location(world, x + 0.5, y + 0.5, z + 0.5);
+        }
+
+        return null;
+    }
+
+    public Location getRandomGroundLocation() {
+        for (int i = 0; i < 200; i++) {
+            Location base = getRandomLocation();
+            if (base == null) continue;
+
+            World w = base.getWorld();
+            int x = base.getBlockX();
+            int z = base.getBlockZ();
+
+            // start from highest valid Y inside region
+            int y = base.getBlockY();
+
+            // walk downward until we hit something
+            for (int dy = y; dy > w.getMinHeight(); dy--) {
+                Block ground = w.getBlockAt(x, dy - 1, z);
+                Block feet = w.getBlockAt(x, dy, z);
+                Block head = w.getBlockAt(x, dy + 1, z);
+
+                if (ground.getType().isSolid()
+                        && feet.getType().isAir()
+                        && head.getType().isAir()) {
+
+                    return new Location(w, x + 0.5, dy, z + 0.5);
+                }
+            }
         }
 
         return null;

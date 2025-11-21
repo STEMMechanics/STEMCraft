@@ -4,8 +4,21 @@ import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.factories.ChunkGeneratorFactory;
 import dev.stemcraft.api.services.WorldService;
 import org.bukkit.*;
+import org.bukkit.block.Block;
+import org.bukkit.block.BlockState;
+import org.bukkit.block.data.BlockData;
+import org.bukkit.block.data.Openable;
 import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.entity.EntityType;
+import org.bukkit.event.block.*;
+import org.bukkit.event.entity.EntityChangeBlockEvent;
+import org.bukkit.event.entity.EntityExplodeEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.world.StructureGrowEvent;
 import org.bukkit.generator.ChunkGenerator;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.BlockDataMeta;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
@@ -17,6 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class WorldManager implements WorldService {
     private final STEMCraft plugin;
     private final Map<String, ChunkGeneratorFactory> registry = new ConcurrentHashMap<>();
+    private Map<World,RecordedWorldState> recordState = new HashMap<>();
 
     public WorldManager(STEMCraft plugin) {
         this.plugin = plugin;
@@ -52,7 +66,86 @@ public class WorldManager implements WorldService {
                 }
             }
         }
+
+        // World State Recording
+        plugin.registerEvent(BlockBreakEvent.class, event -> {
+            recordBlockChange(event.getBlock());
+        });
+
+        plugin.registerEvent(BlockPlaceEvent.class, event -> {
+            recordBlockChange(event.getBlock());
+        });
+
+        plugin.registerEvent(BlockBurnEvent.class, event -> {
+            recordBlockChange(event.getBlock());
+        });
+
+        plugin.registerEvent(BlockIgniteEvent.class, event -> {
+            recordBlockChange(event.getBlock());
+        });
+
+        plugin.registerEvent(BlockExplodeEvent.class, event -> {
+            for (Block block : event.blockList()) {
+                recordBlockChange(block);
+            }
+        });
+
+        plugin.registerEvent(EntityExplodeEvent.class, event -> {
+            for (Block block : event.blockList()) {
+                recordBlockChange(block);
+            }
+        });
+
+        plugin.registerEvent(BlockFromToEvent.class, event -> {
+            recordBlockChange(event.getToBlock());
+        });
+
+        plugin.registerEvent(BlockFadeEvent.class, event -> {
+            recordBlockChange(event.getBlock());
+        });
+
+        plugin.registerEvent(BlockFormEvent.class, event -> {
+            // Snow, ice, etc
+            recordBlockChange(event.getBlock());
+        });
+
+        plugin.registerEvent(BlockSpreadEvent.class, event -> {
+            recordBlockChange(event.getBlock());
+        });
+
+        plugin.registerEvent(LeavesDecayEvent.class, event -> {
+            recordBlockChange(event.getBlock());
+        });
+
+        plugin.registerEvent(StructureGrowEvent.class, event -> {
+            // Trees etc
+            for (org.bukkit.block.BlockState state : event.getBlocks()) {
+                recordBlockChange(state.getBlock());
+            }
+        });
+
+        plugin.registerEvent(EntityChangeBlockEvent.class, event -> {
+            if (event.getEntityType() == EntityType.ENDERMAN
+                    || event.getEntityType() == EntityType.FALLING_BLOCK
+                    || event.getEntityType() == EntityType.SILVERFISH) {
+                recordBlockChange(event.getBlock());
+            }
+        });
+
+        plugin.registerEvent(PlayerInteractEvent.class, event -> {
+            if (event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
+            Block block = event.getClickedBlock();
+            if (block == null) return;
+
+            BlockData data = block.getBlockData();
+
+            // Doors, trapdoors, fence gates
+            if (data instanceof Openable) {
+                recordBlockChange(block);
+            }
+        });
     }
+
     public void onDisable() { }
 
     // -------- status
@@ -164,4 +257,95 @@ public class WorldManager implements WorldService {
     }
     private Path worldRoot(String name) { return plugin.getServer().getWorldContainer().toPath().resolve(name); }
     private Path levelDat(String name)  { return worldRoot(name).resolve("level.dat"); }
+
+    static class RecordedWorldState {
+        Map<String,RecordedBlockState> blockStateMap = new HashMap<String, RecordedBlockState>();
+
+        public void recordBlock(Block block) {
+            String locString = block.getX() + "," + block.getY() + "," + block.getZ();
+            if(!blockStateMap.containsKey(locString)) {
+                blockStateMap.put(locString, new RecordedBlockState(block));
+            }
+        }
+
+        public void restore(World world) {
+            blockStateMap.forEach((locString, state) -> {
+                String[] locParts = locString.split(",");
+                if(locParts.length == 3) {
+                    Location location = new Location(world, Integer.parseInt(locParts[0]), Integer.parseInt(locParts[1]), Integer.parseInt(locParts[2]));
+                    state.restore(location, false);
+                }
+            });
+        }
+    }
+
+    static class RecordedBlockState {
+        Material type;
+        String data;
+        ItemStack[] inventoryContents;
+
+        RecordedBlockState(Block block) {
+            type = block.getType();
+            data = block.getBlockData().getAsString();
+        }
+
+        RecordedBlockState(Block block, ItemStack[] inventoryContents) {
+            type = block.getType();
+            data = block.getBlockData().getAsString();
+            this.inventoryContents = inventoryContents;
+        }
+
+        public void restore(Location location, boolean applyPhysics) {
+            Block block = location.getBlock();
+
+            block.setType(type, applyPhysics);
+            BlockData data = Bukkit.createBlockData(this.data);
+            block.setBlockData(data, applyPhysics);
+
+            if (inventoryContents != null) {
+                org.bukkit.block.BlockState state = block.getState();
+                if (state instanceof org.bukkit.block.Container container) {
+                    container.getInventory().setContents(inventoryContents);
+                    container.update(true, applyPhysics);
+                }
+            }
+        }
+    }
+
+    @Override
+    public boolean isRecordingChanges(World world) {
+        return recordState.containsKey(world);
+    }
+
+    @Override
+    public void startRecordingChanges(World world) {
+        if(!isRecordingChanges(world)) {
+            recordState.put(world, new RecordedWorldState());
+        }
+    }
+
+    @Override
+    public void stopRecordingChanges(World world) {
+        recordState.remove(world);
+    }
+
+    @Override
+    public void resetWorldChanges(World world) {
+        if(isRecordingChanges(world)) {
+            // @TODO - implement
+        }
+    }
+
+    @Override
+    public void clearWorldChanges(World world) {
+        if(isRecordingChanges(world)) {
+            recordState.put(world, new RecordedWorldState());
+        }
+    }
+
+    private void recordBlockChange(Block block) {
+        if(isRecordingChanges(block.getWorld())) {
+            recordState.get(block.getWorld()).recordBlock(block);
+        }
+    }
 }
