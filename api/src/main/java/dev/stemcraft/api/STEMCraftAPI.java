@@ -25,6 +25,7 @@ import dev.stemcraft.api.internal.InstanceHolder;
 import dev.stemcraft.api.services.LocaleService;
 import dev.stemcraft.api.services.MessengerService;
 import dev.stemcraft.api.services.PlayerLogService;
+import dev.stemcraft.api.services.WorldService;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.event.Event;
 import org.bukkit.event.EventPriority;
@@ -76,6 +77,11 @@ public interface STEMCraftAPI extends MessengerService {
      * Get the locale service.
      */
     LocaleService locale();
+
+    /**
+     * Get the world service.
+     */
+    WorldService worlds();
 
     default <T extends Event> Listener registerEvent(Class<T> event, STEMCraftEventHandler<T> callback) { return registerEvent(event, callback, EventPriority.NORMAL, false); }
 }

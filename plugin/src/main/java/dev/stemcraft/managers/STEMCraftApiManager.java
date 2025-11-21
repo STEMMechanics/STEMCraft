@@ -27,6 +27,7 @@ import dev.stemcraft.api.events.STEMCraftEventHandler;
 import dev.stemcraft.api.services.LocaleService;
 import dev.stemcraft.api.services.MessengerService;
 import dev.stemcraft.api.services.PlayerLogService;
+import dev.stemcraft.api.services.WorldService;
 import dev.stemcraft.commands.STEMCraftCommandImpl;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.event.Event;
@@ -69,4 +70,6 @@ public class STEMCraftApiManager extends STEMCraftMessenger implements STEMCraft
     }
 
     public LocaleService locale() { return plugin.localeService(); }
+
+    public WorldService worlds() { return plugin.worldService(); }
 }
