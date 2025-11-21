@@ -25,7 +25,7 @@ publishing {
         }
     }
     repositories {
-        maven { url = uri("file:/repos/maven") }
+        maven { url = uri("file:/repos/maven/maven-public") }
     }
 }
 
