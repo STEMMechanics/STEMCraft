@@ -129,6 +129,7 @@ public class STEMCraftCommandImpl extends STEMCraftMessenger implements STEMCraf
             });
 
             getCommandMap().register(label, "stemcraft", pluginCommand);
+            info("Command /{label} registered", "label", label);
         }
     }
 
