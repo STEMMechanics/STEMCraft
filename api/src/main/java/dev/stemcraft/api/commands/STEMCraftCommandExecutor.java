@@ -23,5 +23,5 @@ import dev.stemcraft.api.STEMCraftAPI;
 
 @FunctionalInterface
 public interface STEMCraftCommandExecutor {
-    void execute(STEMCraftAPI api, String label, STEMCraftCommandContext context);
+    void execute(STEMCraftAPI api, STEMCraftCommand command, STEMCraftCommandContext context);
 }

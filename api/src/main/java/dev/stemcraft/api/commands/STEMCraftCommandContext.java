@@ -25,6 +25,7 @@ import org.bukkit.entity.Player;
 import java.util.List;
 
 public interface STEMCraftCommandContext {
+    STEMCraftCommand getCommand();
     CommandSender getSender();
     List<String> args();
     boolean isConsole();

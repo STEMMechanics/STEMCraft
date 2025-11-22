@@ -1,5 +1,6 @@
 package dev.stemcraft.commands;
 
+import dev.stemcraft.api.commands.STEMCraftCommand;
 import dev.stemcraft.api.commands.STEMCraftCommandContext;
 import lombok.Getter;
 import org.bukkit.Bukkit;
@@ -10,16 +11,18 @@ import java.util.List;
 
 public class STEMCraftCommandContextImpl implements STEMCraftCommandContext {
     @Getter
-    private String label;
+    private STEMCraftCommand command;
     @Getter
     private CommandSender sender;
     private List<String> args;
 
-    public STEMCraftCommandContextImpl(String label, CommandSender sender, List<String> args) {
-        this.label = label;
+    public STEMCraftCommandContextImpl(STEMCraftCommand command, CommandSender sender, List<String> args) {
+        this.command = command;
         this.sender = sender;
         this.args = args;
     }
+
+    public String getLabel() { return command.getLabel(); }
 
     public List<String> args() {
         return args;

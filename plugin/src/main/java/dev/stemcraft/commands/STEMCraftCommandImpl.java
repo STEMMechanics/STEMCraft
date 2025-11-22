@@ -51,7 +51,7 @@ public class STEMCraftCommandImpl extends STEMCraftMessenger implements STEMCraf
     public STEMCraftCommandImpl(String label) { this.label = label; }
 
     public void onLoad(STEMCraft plugin) { }
-    protected void onExecute(STEMCraftAPI api, String label, STEMCraftCommandContext ctx) { }
+    protected void onExecute(STEMCraftAPI api, STEMCraftCommand cmd, STEMCraftCommandContext ctx) { }
 
     protected STEMCraftCommandImpl setLabel(String label) {
         this.label = label;
@@ -68,6 +68,11 @@ public class STEMCraftCommandImpl extends STEMCraftMessenger implements STEMCraf
     public STEMCraftCommand setDescription(String description) {
         this.description = description;
         return this;
+    }
+
+    @Override
+    public String getUsage() {
+        return this.usage;
     }
 
     @Override
@@ -108,7 +113,7 @@ public class STEMCraftCommandImpl extends STEMCraftMessenger implements STEMCraf
             }
 
             pluginCommand.setExecutor((sender, command, label, args) -> {
-                STEMCraftCommandContext context = new STEMCraftCommandContextImpl(label, sender, Arrays.stream(args).toList());
+                STEMCraftCommandContext context = new STEMCraftCommandContextImpl(this, sender, Arrays.stream(args).toList());
 
                 if (!permission.isEmpty() && !sender.hasPermission(permission)) {
                     STEMCraftAPI.api().messenger().error(sender, "COMMAND_NO_PERMISSION");
@@ -116,9 +121,9 @@ public class STEMCraftCommandImpl extends STEMCraftMessenger implements STEMCraf
                 }
 
                 if(executor != null) {
-                    executor.execute(STEMCraftAPI.api(), label, context);
+                    executor.execute(STEMCraftAPI.api(), this, context);
                 } else {
-                    onExecute(STEMCraftAPI.api(), label, context);
+                    onExecute(STEMCraftAPI.api(), this, context);
                 }
                 return true;
             });

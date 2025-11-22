@@ -40,6 +40,11 @@ public interface STEMCraftCommand extends MessengerService {
     STEMCraftCommand setDescription(String description);
 
     /**
+     * Get the command usage string
+     */
+    String getUsage();
+
+    /**
      * Set the command usage string
      */
     STEMCraftCommand setUsage(String description);
