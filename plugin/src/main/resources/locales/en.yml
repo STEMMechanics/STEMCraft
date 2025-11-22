@@ -1,3 +1,4 @@
+CONSOLE_PLAYER_REQUIRED: "A player is required when using this command from the console"
 PLAYER_NOT_FOUND: "Player {player} not found."
 CONSOLE_NAME: "Console"
 

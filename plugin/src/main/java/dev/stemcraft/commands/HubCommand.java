@@ -22,7 +22,7 @@ public class HubCommand extends STEMCraftCommandImpl {
     public void onExecute(STEMCraftAPI api, String label, STEMCraftCommandContext ctx) {
         // check if console called without args
         if(ctx.isConsole() && ctx.args().isEmpty()) {
-            error("HUB_CONSOLE_NO_PLAYER");
+            error("CONSOLE_PLAYER_REQUIRED");
             return;
         }
 
