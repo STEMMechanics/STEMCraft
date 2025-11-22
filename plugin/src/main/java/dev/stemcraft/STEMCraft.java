@@ -56,6 +56,19 @@ public final class STEMCraft extends JavaPlugin {
     public void onEnable() {
         instance = this;
 
+        // Load configuration
+        File configFile = new File(instance.getDataFolder(), "config.yml");
+        if (!configFile.exists()) {
+            saveResource("config.yml", false);
+        }
+        config = YamlConfiguration.loadConfiguration(configFile);
+
+        // Load early managers
+        messengerService = new MessengerManager(this);
+        localeService = new LocaleManager(this);
+        messengerService.onEnable();
+        localeService.onEnable();
+
         // Check dependencies
         Plugin we = getServer().getPluginManager().getPlugin("WorldEdit");
         if(we == null || !we.isEnabled()) {
@@ -63,13 +76,6 @@ public final class STEMCraft extends JavaPlugin {
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
-
-        // Load configuration
-        File configFile = new File(instance.getDataFolder(), "config.yml");
-        if (!configFile.exists()) {
-            saveResource("config.yml", false);
-        }
-        config = YamlConfiguration.loadConfiguration(configFile);
 
         // Setup API
         api = new STEMCraftApiManager(this);
@@ -81,15 +87,11 @@ public final class STEMCraft extends JavaPlugin {
 
 
         // Load managers
-        messengerService = new MessengerManager(this);
-        localeService = new LocaleManager(this);
         playerLogService = new PlayerLogManager(this);
         worldService = new WorldManager(this);
         motdService = new MOTDManager(this);
         webService = new WebManager(this);
 
-        messengerService.onEnable();
-        localeService.onEnable();
         playerLogService.onEnable();
         worldService.onEnable();
         motdService.onEnable();
