@@ -1,6 +1,6 @@
 logging:
   prefixes:
-    log: "&7[STEM]&r "
+    log: "[STEMCraft] "
     info: "&9[INFO]&r "
     warn: "&e[WARN]&r "
     error: "&c[ERROR]&r "
