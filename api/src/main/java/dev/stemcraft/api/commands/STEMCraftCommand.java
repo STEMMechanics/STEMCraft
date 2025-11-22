@@ -20,10 +20,14 @@
 package dev.stemcraft.api.commands;
 
 import dev.stemcraft.api.services.MessengerService;
-import org.bukkit.command.CommandSender;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public interface STEMCraftCommand extends MessengerService {
+
+    /**
+     * Get the command aliases
+     */
+    String getLabel();
 
     /**
      * Set the command aliases

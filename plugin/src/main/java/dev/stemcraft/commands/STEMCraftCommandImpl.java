@@ -27,7 +27,6 @@ import dev.stemcraft.api.commands.STEMCraftCommandContext;
 import dev.stemcraft.api.commands.STEMCraftCommandExecutor;
 import dev.stemcraft.api.tabcomplete.STEMCraftTabComplete;
 import lombok.Getter;
-import lombok.Setter;
 import org.bukkit.Bukkit;
 import org.bukkit.command.*;
 import org.bukkit.plugin.Plugin;
@@ -38,6 +37,7 @@ import java.lang.reflect.Field;
 import java.util.*;
 
 public class STEMCraftCommandImpl extends STEMCraftMessenger implements STEMCraftCommand, TabCompleter {
+    @Getter
     private String label;
     private String description;
     private String usage;
@@ -50,7 +50,7 @@ public class STEMCraftCommandImpl extends STEMCraftMessenger implements STEMCraf
     public STEMCraftCommandImpl() { }
     public STEMCraftCommandImpl(String label) { this.label = label; }
 
-    protected void onLoad(STEMCraft plugin) { }
+    public void onLoad(STEMCraft plugin) { }
     protected void onExecute(STEMCraftAPI api, String label, STEMCraftCommandContext ctx) { }
 
     protected STEMCraftCommandImpl setLabel(String label) {
@@ -97,7 +97,7 @@ public class STEMCraftCommandImpl extends STEMCraftMessenger implements STEMCraf
 
             pluginCommand = c.newInstance(label, plugin);
         } catch (Exception e) {
-            e.printStackTrace();
+            STEMCraftAPI.api().messenger().error("Error creating PluginCommand class " + e.getMessage(), e);
         }
 
         if (pluginCommand != null) {
