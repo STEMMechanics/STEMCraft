@@ -7,6 +7,8 @@ import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.ItemStack;
 
 import java.util.Arrays;
 import java.util.HashSet;
@@ -291,5 +293,21 @@ public final class SCText extends STEMCraftUtil {
             case "PB" -> (long) (value * 1024L * 1024L * 1024L * 1024L * 1024L);
             default -> throw new IllegalArgumentException("Unknown byte unit: " + unit);
         };
+    }
+
+    public static String toString(Inventory inv) {
+        ItemStack[] contents = inv.getContents();
+        StringBuilder out = new StringBuilder();
+
+        for (ItemStack item : contents) {
+            if (item == null) continue;
+            out.append(item.getType().name())
+                    .append(" x")
+                    .append(item.getAmount())
+                    .append(", ");
+        }
+
+        if (out.isEmpty()) return "(empty)";
+        return out.substring(0, out.length() - 2);
     }
 }
