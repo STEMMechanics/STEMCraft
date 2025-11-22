@@ -39,9 +39,12 @@ import java.util.*;
 public class STEMCraftCommandImpl extends STEMCraftMessenger implements STEMCraftCommand, TabCompleter {
     @Getter
     private String label;
+    @Getter
     private String description;
+    @Getter
     private String usage;
     private List<String> aliases = new ArrayList<>();
+    @Getter
     private String permission = "";
     private STEMCraftCommandExecutor executor;
     private List<String[]> tabCompletionList = new ArrayList<>();
@@ -66,18 +69,19 @@ public class STEMCraftCommandImpl extends STEMCraftMessenger implements STEMCraf
 
     @Override
     public STEMCraftCommand setDescription(String description) {
-        this.description = description;
+        this.description = STEMCraft.getInstance().localeService().get(description);
         return this;
-    }
-
-    @Override
-    public String getUsage() {
-        return this.usage;
     }
 
     @Override
     public STEMCraftCommand setUsage(String usage) {
         this.usage = usage;
+        return this;
+    }
+
+    @Override
+    public STEMCraftCommand setPermission(String permission) {
+        this.permission = permission;
         return this;
     }
 

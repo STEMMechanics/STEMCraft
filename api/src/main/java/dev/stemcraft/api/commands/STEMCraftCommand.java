@@ -50,6 +50,11 @@ public interface STEMCraftCommand extends MessengerService {
     STEMCraftCommand setUsage(String description);
 
     /**
+     * Set the command permission
+     */
+    STEMCraftCommand setPermission(String permission);
+
+    /**
      * Add a tab completion track
      */
     STEMCraftCommand addTabCompletion(String... completions);
