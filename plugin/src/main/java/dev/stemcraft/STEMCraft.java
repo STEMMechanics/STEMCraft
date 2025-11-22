@@ -147,7 +147,6 @@ public final class STEMCraft extends JavaPlugin {
     private void loadCommands() {
         iterateClasses("dev/stemcraft/commands", STEMCraftCommandImpl.class, instance -> {
             instance.onLoad(STEMCraft.instance);
-            info("Command /{label} registered", "label", instance.getLabel());
         });
     }
 
