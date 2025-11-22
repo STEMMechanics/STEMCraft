@@ -57,8 +57,24 @@ public class LocaleManager implements LocaleService {
 
     @Override
     public String get(String lang, String key, String... placeholders) {
+        String str = processKey(lang, key);
+
+        if (placeholders != null && placeholders.length > 1) {
+            String[] processed = placeholders.clone();
+
+            for (int i = 1; i < processed.length; i += 2) {
+                processed[i] = processKey(lang, processed[i]);
+            }
+
+            return SCText.placeholders(str, processed);
+        }
+
+        return str;
+    }
+
+    private String processKey(String lang, String key) {
         if (!LOCALE_KEY_PATTERN.matcher(key).matches()) {
-            return SCText.placeholders(key, placeholders);
+            return key;
         }
 
         if (lang == null || lang.isEmpty()) {
@@ -75,7 +91,7 @@ public class LocaleManager implements LocaleService {
             return key;
         }
 
-        return SCText.placeholders(raw, placeholders);
+        return raw;
     }
 
     private void loadLocales() {
