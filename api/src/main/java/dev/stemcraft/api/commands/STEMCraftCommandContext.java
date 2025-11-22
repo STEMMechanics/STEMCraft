@@ -27,6 +27,8 @@ import java.util.List;
 public interface STEMCraftCommandContext {
     STEMCraftCommand getCommand();
     CommandSender getSender();
+    String getLabelUsed();
+    String getLabel();
     List<String> args();
     boolean isConsole();
     boolean isPlayer();

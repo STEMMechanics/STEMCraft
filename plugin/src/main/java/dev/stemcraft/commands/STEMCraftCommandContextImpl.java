@@ -8,17 +8,20 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
 import java.util.List;
+import java.util.Locale;
 
 public class STEMCraftCommandContextImpl implements STEMCraftCommandContext {
     @Getter
     private STEMCraftCommand command;
     @Getter
     private CommandSender sender;
+    @Getter String labelUsed;
     private List<String> args;
 
-    public STEMCraftCommandContextImpl(STEMCraftCommand command, CommandSender sender, List<String> args) {
+    public STEMCraftCommandContextImpl(STEMCraftCommand command, CommandSender sender, String labelUsed, List<String> args) {
         this.command = command;
         this.sender = sender;
+        this.labelUsed = labelUsed.toLowerCase(Locale.ROOT);
         this.args = args;
     }
 

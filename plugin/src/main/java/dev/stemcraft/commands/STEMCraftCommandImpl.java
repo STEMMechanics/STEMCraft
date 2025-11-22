@@ -117,7 +117,7 @@ public class STEMCraftCommandImpl extends STEMCraftMessenger implements STEMCraf
             }
 
             pluginCommand.setExecutor((sender, command, label, args) -> {
-                STEMCraftCommandContext context = new STEMCraftCommandContextImpl(this, sender, Arrays.stream(args).toList());
+                STEMCraftCommandContext context = new STEMCraftCommandContextImpl(this, sender, label, Arrays.stream(args).toList());
 
                 if (!permission.isEmpty() && !sender.hasPermission(permission)) {
                     STEMCraftAPI.api().messenger().error(sender, "COMMAND_NO_PERMISSION");
