@@ -52,6 +52,11 @@ public class WebManager implements WebService {
         }
 
         plugin.registerCommand("webserver")
+                .addTabCompletion("start")
+                .addTabCompletion("enable")
+                .addTabCompletion("disable")
+                .addTabCompletion("enable")
+                .addTabCompletion("status")
                 .setUsage("webserver <start|stop|enable|disable>")
                 .setExecutor((api, cmd, ctx) -> {
                     if (ctx.args().isEmpty()) {
@@ -62,7 +67,7 @@ public class WebManager implements WebService {
                 switch (ctx.args().getFirst().toLowerCase(Locale.ROOT)) {
                     case "start" -> {
                         if(isRunning()) {
-                            api.error(ctx.getSender(), "WEBSERVER_ALREADY_RUNNING");
+                            api.error(ctx.getSender(), "WEB_SERVER_ALREADY_RUNNING");
                         } else {
                             start();
                         }
@@ -71,20 +76,27 @@ public class WebManager implements WebService {
                         if(isRunning()) {
                             stop();
                         } else {
-                            api.error(ctx.getSender(), "WEBSERVER_NOT_RUNNING");
+                            api.error(ctx.getSender(), "WEB_SERVER_NOT_RUNNING");
                         }
                     }
                     case "enable" -> {
                         plugin.config().set("web_server.enabled", true);
                         plugin.configSave();
 
-                        api.error(ctx.getSender(), "WEBSERVER_ENABLED", "state", isRunning() ? "WEBSERVER_STATE_RUNNING" : "WEBSERVER_STATE_NOT_RUNNING");
+                        api.info(ctx.getSender(), "WEB_SERVER_ENABLED", "state", isRunning() ? "WEB_SERVER_STATE_RUNNING" : "WEB_SERVER_STATE_NOT_RUNNING");
                     }
                     case "disable" -> {
                         plugin.config().set("web_server.enabled", false);
                         plugin.configSave();
 
-                        api.error(ctx.getSender(), "WEBSERVER_DISABLED", "state", isRunning() ? "WEBSERVER_STATE_RUNNING" : "WEBSERVER_STATE_NOT_RUNNING");
+                        api.info(ctx.getSender(), "WEB_SERVER_DISABLED", "state", isRunning() ? "WEB_SERVER_STATE_RUNNING" : "WEB_SERVER_STATE_NOT_RUNNING");
+                    }
+                    case "", "status" -> {
+                        api.info(ctx.getSender(), "WEB_SERVER_STATUS",
+                                "enabled_disabled",
+                                plugin.config().getBoolean("web_server.enabled", false) ? "WEB_SERVER_STATE_ENABLED" : "WEB_SERVER_STATE_DISABLED",
+                                "running_not",
+                                isRunning() ? "WEB_SERVER_STATE_RUNNING" : "WEB_SERVER_STATE_NOT_RUNNING");
                     }
                     default -> api.info(ctx.getSender(), cmd.getUsage());
                 }
@@ -115,7 +127,7 @@ public class WebManager implements WebService {
             }
 
             if(!wwwRoot.isDirectory()) {
-                plugin.error("WEBSERVER_PATH_NOT_DIR");
+                plugin.error("WEB_SERVER_PATH_NOT_DIR");
                 wwwRoot = null;
                 return;
             }
@@ -129,9 +141,9 @@ public class WebManager implements WebService {
             httpServer.createContext("/", new WebServiceHandler());
             httpServer.setExecutor(null);
             httpServer.start();
-            plugin.info("WEBSERVER_STARTED_ON", "ip", ip, "port", String.valueOf(port));
+            plugin.info("WEB_SERVER_STARTED_ON", "ip", ip, "port", String.valueOf(port));
         } catch (IOException e) {
-            plugin.error("WEBSERVER_START_FAILED", "error", e.getMessage());
+            plugin.error("WEB_SERVER_START_FAILED", "error", e.getMessage());
             httpServer = null;
         }
     }
@@ -140,7 +152,7 @@ public class WebManager implements WebService {
         if (httpServer != null) {
             httpServer.stop(0);
             httpServer = null;
-            plugin.info("WEBSERVER_STOPPED");
+            plugin.info("WEB_SERVER_STOPPED");
         }
     }
 
