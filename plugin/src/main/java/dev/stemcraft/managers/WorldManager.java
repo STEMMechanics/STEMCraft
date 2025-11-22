@@ -37,7 +37,8 @@ public class WorldManager implements WorldService {
     private final STEMCraft plugin;
     private final Map<String, ChunkGeneratorFactory> registry = new ConcurrentHashMap<>();
 
-    private Map<World,RecordedWorldState> recordState = new HashMap<>();
+    private final List<World> recordActive = new ArrayList<>();
+    private final Map<World,RecordedWorldState> recordState = new HashMap<>();
 
     public WorldManager(STEMCraft plugin) {
         this.plugin = plugin;
@@ -92,22 +93,30 @@ public class WorldManager implements WorldService {
                             Player player = (Player)ctx.getSender();
                             World world = player.getWorld();
 
-                            startRecordingChanges(world);
+                            captureStart(world);
                             api.info(player, "Started recording");
                         }
                         case "stop" -> {
                             Player player = (Player)ctx.getSender();
                             World world = player.getWorld();
 
-                            stopRecordingChanges(world, false);
-                            api.info(player, "Stopped recording and cleared data");
+                            captureStop(world);
+                            api.info(player, "Stopped recording");
                         }
                         case "rollback" -> {
                             Player player = (Player)ctx.getSender();
                             World world = player.getWorld();
 
-                            stopRecordingChanges(world, true);
-                            api.info(player, "Stopped recording and rolled back data");
+                            captureStop(world);
+                            captureRollback(world);
+                            api.info(player, "Rolled back data");
+                        }
+                        case "reset" -> {
+                            Player player = (Player)ctx.getSender();
+                            World world = player.getWorld();
+
+                            captureReset(world);
+                            api.info(player, "Reset world data");
                         }
                         default -> api.info(ctx.getSender(), cmd.getUsage());
                     }
@@ -116,19 +125,19 @@ public class WorldManager implements WorldService {
 
         // World State Recording
         plugin.registerEvent(BlockBreakEvent.class, event -> {
-            recordBlockChange(event.getBlock());
+            capture(event.getBlock());
         });
 
         plugin.registerEvent(BlockPlaceEvent.class, event -> {
             World world = event.getBlock().getWorld();
-            if (!isRecordingChanges(world)) return;
+            if (!isCapturing(world)) return;
 
             if (event instanceof BlockMultiPlaceEvent multi) {
                 for (BlockState replaced : multi.getReplacedBlockStates()) {
-                    recordBlockChange(replaced);
+                    capture(replaced);
                 }
             } else {
-                recordBlockChange(event.getBlockReplacedState());
+                capture(event.getBlockReplacedState());
             }
 
             // Crude fix for Aikar's hopper patch on Paper
@@ -138,56 +147,56 @@ public class WorldManager implements WorldService {
                 BlockState aboveState = above.getState();
                 if (aboveState instanceof Container || aboveState instanceof Campfire) {
                     // This captures the real contents before any hopper tick
-                    recordBlockChange(aboveState);
+                    capture(aboveState);
                 }
             }
         });
 
         plugin.registerEvent(BlockBurnEvent.class, event -> {
-            recordBlockChange(event.getBlock());
+            capture(event.getBlock());
         });
 
         plugin.registerEvent(BlockIgniteEvent.class, event -> {
-            recordBlockChange(event.getBlock());
+            capture(event.getBlock());
         });
 
         plugin.registerEvent(BlockExplodeEvent.class, event -> {
             for (Block block : event.blockList()) {
-                recordBlockChange(block);
+                capture(block);
             }
         });
 
         plugin.registerEvent(EntityExplodeEvent.class, event -> {
             for (Block block : event.blockList()) {
-                recordBlockChange(block);
+                capture(block);
             }
         });
 
         plugin.registerEvent(BlockFromToEvent.class, event -> {
-            recordBlockChange(event.getToBlock());
+            capture(event.getToBlock());
         });
 
         plugin.registerEvent(BlockFadeEvent.class, event -> {
-            recordBlockChange(event.getBlock());
+            capture(event.getBlock());
         });
 
         plugin.registerEvent(BlockFormEvent.class, event -> {
             // Snow, ice, etc
-            recordBlockChange(event.getBlock());
+            capture(event.getBlock());
         });
 
         plugin.registerEvent(BlockSpreadEvent.class, event -> {
-            recordBlockChange(event.getBlock());
+            capture(event.getBlock());
         });
 
         plugin.registerEvent(LeavesDecayEvent.class, event -> {
-            recordBlockChange(event.getBlock());
+            capture(event.getBlock());
         });
 
         plugin.registerEvent(StructureGrowEvent.class, event -> {
             // Trees etc
             for (org.bukkit.block.BlockState state : event.getBlocks()) {
-                recordBlockChange(state.getBlock());
+                capture(state.getBlock());
             }
         });
 
@@ -195,7 +204,7 @@ public class WorldManager implements WorldService {
             if (event.getEntityType() == EntityType.ENDERMAN
                     || event.getEntityType() == EntityType.FALLING_BLOCK
                     || event.getEntityType() == EntityType.SILVERFISH) {
-                recordBlockChange(event.getBlock());
+                capture(event.getBlock());
             }
         });
 
@@ -208,53 +217,53 @@ public class WorldManager implements WorldService {
 
             // Doors, trapdoors, fence gates
             if (data instanceof Openable || data instanceof Campfire) {
-                recordBlockChange(block);
+                capture(block);
             }
         });
 
         plugin.registerEvent(PlayerBucketEmptyEvent.class, event -> {
-            recordBlockChange(event.getBlockClicked().getRelative(event.getBlockFace()));
+            capture(event.getBlockClicked().getRelative(event.getBlockFace()));
         });
 
         plugin.registerEvent(ItemSpawnEvent.class, event -> {
             World world = event.getLocation().getWorld();
-            if (!isRecordingChanges(world)) return;
+            if (!isCapturing(world)) return;
 
-            recordState.get(world).recordEntity(event.getEntity());
+            capture(event.getEntity());
         });
 
         plugin.registerEvent(EntitySpawnEvent.class, event -> {
             World world = event.getLocation().getWorld();
-            if (!isRecordingChanges(world)) return;
+            if (!isCapturing(world)) return;
 
             if (isTemporaryEntity(event.getEntityType())) {
-                recordState.get(world).recordEntity(event.getEntity());
+                capture(event.getEntity());
             }
         });
 
         plugin.registerEvent(EntityPlaceEvent.class, event -> {
             World world = event.getEntity().getWorld();
-            if (!isRecordingChanges(world)) return;
+            if (!isCapturing(world)) return;
 
             if (isTemporaryEntity(event.getEntityType())) {
-                recordState.get(world).recordEntity(event.getEntity());
+                capture(event.getEntity());
             }
         });
 
         plugin.registerEvent(SpongeAbsorbEvent.class, event -> {
-            if (!isRecordingChanges(event.getBlock().getWorld())) return;
+            if (!isCapturing(event.getBlock().getWorld())) return;
 
             World world = event.getBlock().getWorld();
 
             for (BlockState pending : event.getBlocks()) {
                 // World is still in previous state here, so this is the *water* snapshot
                 Block liveBlock = world.getBlockAt(pending.getX(), pending.getY(), pending.getZ());
-                recordBlockChange(liveBlock.getState());
+                capture(liveBlock.getState());
             }
         });
 
         plugin.registerEvent(InventoryOpenEvent.class, event -> {
-            if (!isRecordingChanges(event.getPlayer().getWorld())) return;
+            if (!isCapturing(event.getPlayer().getWorld())) return;
 
             // snapshot the top inventory's container if it is block-based (chest, barrel, etc)
             recordInventoryContainer(event.getView().getTopInventory());
@@ -262,7 +271,7 @@ public class WorldManager implements WorldService {
 
         plugin.registerEvent(InventoryMoveItemEvent.class, event -> {
             // hopper world
-            if (!isRecordingChanges(event.getSource().getLocation().getWorld())) return;
+            if (!isCapturing(event.getSource().getLocation().getWorld())) return;
 
             // record source container (if block-backed)
             recordInventoryContainer(event.getSource());
@@ -271,57 +280,57 @@ public class WorldManager implements WorldService {
         });
 
         plugin.registerEvent(InventoryClickEvent.class, event -> {
-            if (!isRecordingChanges(event.getWhoClicked().getWorld())) return;
+            if (!isCapturing(event.getWhoClicked().getWorld())) return;
 
             // top inventory is the container UI (chest, barrel, etc)
             recordInventoryContainer(event.getView().getTopInventory());
         });
 
         plugin.registerEvent(InventoryDragEvent.class, event -> {
-            if (!isRecordingChanges(event.getWhoClicked().getWorld())) return;
+            if (!isCapturing(event.getWhoClicked().getWorld())) return;
 
             recordInventoryContainer(event.getView().getTopInventory());
         });
 
         plugin.registerEvent(BlockCookEvent.class, event -> {
-            if (!isRecordingChanges(event.getBlock().getWorld())) return;
+            if (!isCapturing(event.getBlock().getWorld())) return;
 
             // First cook tick after recording starts will snapshot this campfire/furnace
-            recordBlockChange(event.getBlock().getState());
+            capture(event.getBlock().getState());
         });
 
         plugin.registerEvent(BlockPistonExtendEvent.class, event -> {
             World world = event.getBlock().getWorld();
-            if (!isRecordingChanges(world)) return;
+            if (!isCapturing(world)) return;
 
             // Record the piston base before it changes state
-            recordBlockChange(event.getBlock());
+            capture(event.getBlock());
 
             // Record all blocks that are about to be moved by the piston
             for (Block moved : event.getBlocks()) {
-                recordBlockChange(moved);
+                capture(moved);
             }
 
             // Record the block in front where the piston head will appear
             Block front = event.getBlock().getRelative(event.getDirection(), event.getBlocks().size() + 1);
-            recordBlockChange(front);
+            capture(front);
         });
 
         plugin.registerEvent(BlockPistonRetractEvent.class, event -> {
             World world = event.getBlock().getWorld();
-            if (!isRecordingChanges(world)) return;
+            if (!isCapturing(world)) return;
 
             // Record the piston base before it retracts
-            recordBlockChange(event.getBlock());
+            capture(event.getBlock());
 
             // Record all blocks that are about to be moved back by the piston (sticky)
             for (Block moved : event.getBlocks()) {
-                recordBlockChange(moved);
+                capture(moved);
             }
 
             // Record the block directly in front of the piston where the head will disappear from
             Block front = event.getBlock().getRelative(event.getDirection(), 1);
-            recordBlockChange(front);
+            capture(front);
         });
 
     }
@@ -606,41 +615,41 @@ public class WorldManager implements WorldService {
     }
 
     @Override
-    public boolean isRecordingChanges(World world) {
-        return recordState.containsKey(world);
+    public boolean isCapturing(World world) {
+        return recordActive.contains(world);
     }
 
     @Override
-    public void startRecordingChanges(World world) {
-        if(!isRecordingChanges(world)) {
-            recordState.put(world, new RecordedWorldState());
+    public void captureStart(World world) {
+        if(!isCapturing(world)) {
+            recordActive.add(world);
+            recordState.putIfAbsent(world, new RecordedWorldState());
         }
     }
 
     @Override
-    public void stopRecordingChanges(World world, boolean rollback) {
-        if(rollback) rollbackWorldChanges(world);
-        recordState.remove(world);
+    public void captureStop(World world) {
+        recordActive.remove(world);
     }
 
     @Override
-    public void rollbackWorldChanges(World world) {
-        if(isRecordingChanges(world)) {
+    public void captureRollback(World world) {
+        if(isCapturing(world)) {
             recordState.get(world).rollback(world);
         }
     }
 
     @Override
-    public void clearWorldChanges(World world) {
-        if(isRecordingChanges(world)) {
+    public void captureReset(World world) {
+        if(isCapturing(world)) {
             recordState.put(world, new RecordedWorldState());
         }
     }
 
     @Override
-    public void recordBlockChange(BlockState state) {
+    public void capture(BlockState state) {
         World world = state.getWorld();
-        if (!isRecordingChanges(world)) return;
+        if (!isCapturing(world)) return;
 
         RecordedWorldState worldState = recordState.get(world);
 
@@ -681,6 +690,14 @@ public class WorldManager implements WorldService {
                 worldState.recordBlock(other.getState());
             }
         }
+    }
+
+    @Override
+    public void capture(Entity entity) {
+        World world = entity.getWorld();
+        if (!isCapturing(world)) return;
+
+        recordState.get(world).recordEntity(entity);
     }
 
     private boolean isTemporaryEntity(EntityType type) {
@@ -731,7 +748,7 @@ public class WorldManager implements WorldService {
 
         // Single chest / barrel / etc
         if (holder instanceof BlockState state) {
-            recordBlockChange(state); // snapshots once per location
+            capture(state); // snapshots once per location
             return;
         }
 
@@ -741,10 +758,10 @@ public class WorldManager implements WorldService {
             InventoryHolder right = dc.getRightSide();
 
             if (left instanceof BlockState ls) {
-                recordBlockChange(ls);
+                capture(ls);
             }
             if (right instanceof BlockState rs) {
-                recordBlockChange(rs);
+                capture(rs);
             }
         }
     }

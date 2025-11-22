@@ -23,6 +23,7 @@ import dev.stemcraft.api.factories.ChunkGeneratorFactory;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
+import org.bukkit.entity.Entity;
 import org.bukkit.generator.ChunkGenerator;
 
 import java.nio.file.Path;
@@ -58,17 +59,40 @@ public interface WorldService extends STEMCraftService {
 
     Optional<ChunkGeneratorFactory> findGenerator(String name);
 
-    boolean isRecordingChanges(World world);
+    /**
+     * Returns true if block/entity changes in this world are currently being captured.
+     */
+    boolean isCapturing(World world);
 
-    void startRecordingChanges(World world);
+    /**
+     * Begin capturing all changes in the given world.
+     */
+    void captureStart(World world);
 
-    void stopRecordingChanges(World world, boolean rollback);
+    /**
+     * Stop capturing and discard all captured changes.
+     */
+    void captureStop(World world);
 
-    void rollbackWorldChanges(World world);
+    /**
+     * Roll back all captured changes in the given world and stop capturing.
+     */
+    void captureRollback(World world);
 
-    void clearWorldChanges(World world);
+    /**
+     * Clear all captured changes without stopping capture.
+     */
+    void captureReset(World world);
 
-    void recordBlockChange(BlockState state);
+    /**
+     * Capture the current state of this block for later rollback.
+     */
+    void capture(BlockState state);
 
-    default void recordBlockChange(Block block) { recordBlockChange(block.getState()); }
+    /**
+     * Capture the entity for later rollback.
+     */
+    void capture(Entity entity);
+
+    default void capture(Block block) { capture(block.getState()); }
 }
