@@ -637,11 +637,8 @@ public class WorldManager implements WorldService {
         }
     }
 
-    private void recordBlockChange(Block block) {
-        recordBlockChange(block.getState());
-    }
-
-    private void recordBlockChange(BlockState state) {
+    @Override
+    public void recordBlockChange(BlockState state) {
         World world = state.getWorld();
         if (!isRecordingChanges(world)) return;
 
