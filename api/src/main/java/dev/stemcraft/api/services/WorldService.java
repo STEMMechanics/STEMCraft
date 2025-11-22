@@ -50,7 +50,7 @@ public interface WorldService extends STEMCraftService {
 
     boolean isRecordingChanges(World world);
     void startRecordingChanges(World world);
-    void stopRecordingChanges(World world);
-    void resetWorldChanges(World world);
+    void stopRecordingChanges(World world, boolean rollback);
+    void rollbackWorldChanges(World world);
     void clearWorldChanges(World world);
 }
