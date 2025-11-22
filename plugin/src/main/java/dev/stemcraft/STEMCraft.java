@@ -1,6 +1,7 @@
 package dev.stemcraft;
 
 import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.api.commands.STEMCraftCommand;
 import dev.stemcraft.api.events.STEMCraftEventHandler;
 import dev.stemcraft.api.services.web.WebService;
 import dev.stemcraft.api.utils.STEMCraftUtil;
@@ -11,8 +12,8 @@ import dev.stemcraft.api.services.*;
 import dev.stemcraft.chunkgen.FlatGenerator;
 import dev.stemcraft.chunkgen.VoidGenerator;
 import dev.stemcraft.features.STEMCraftFeature;
+import lombok.AccessLevel;
 import lombok.Getter;
-import lombok.Setter;
 import lombok.experimental.Accessors;
 import org.bukkit.command.*;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -22,14 +23,11 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
 import java.io.IOException;
-import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Enumeration;
-import java.util.List;
 import java.util.function.Consumer;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
@@ -48,6 +46,8 @@ public final class STEMCraft extends JavaPlugin {
     private WebService webService;
 
     private YamlConfiguration config;
+    @Getter(AccessLevel.NONE)
+    private File configFile;
 
     private boolean debugging = false;
 
@@ -57,7 +57,7 @@ public final class STEMCraft extends JavaPlugin {
         instance = this;
 
         // Load configuration
-        File configFile = new File(instance.getDataFolder(), "config.yml");
+        configFile = new File(instance.getDataFolder(), "config.yml");
         if (!configFile.exists()) {
             saveResource("config.yml", false);
         }
@@ -112,37 +112,11 @@ public final class STEMCraft extends JavaPlugin {
         getServer().getServicesManager().unregisterAll(this);
     }
 
-    private static class STEMCraftCommand extends Command implements PluginIdentifiableCommand {
-        private final Plugin plugin;
-        private final CommandExecutor executor;
-        @Setter
-        private TabCompleter completer;
-
-        public STEMCraftCommand(String name, Plugin plugin, CommandExecutor executor) {
-            super(name);
-            this.plugin = plugin;
-            this.executor = executor;
-        }
-
-        @Override
-        public boolean execute(CommandSender sender, String label, String[] args) {
-            if (!testPermission(sender)) {
-                return true;
-            }
-            return executor.onCommand(sender, this, label, args);
-        }
-
-        @Override
-        public List<String> tabComplete(CommandSender sender, String alias, String[] args) {
-            if (completer != null) {
-                return completer.onTabComplete(sender, this, alias, args);
-            }
-            return super.tabComplete(sender, alias, args);
-        }
-
-        @Override
-        public @NotNull Plugin getPlugin() {
-            return plugin;
+    public void configSave() {
+        try {
+            instance.config().save(configFile);
+        } catch(Exception ex) {
+            error("Could not save the config file to disk", ex);
         }
     }
 
@@ -246,6 +220,10 @@ public final class STEMCraft extends JavaPlugin {
     }
 
     public <T extends Event> Listener registerEvent(Class<T> event, STEMCraftEventHandler<T> callback) { return registerEvent(event, callback, EventPriority.NORMAL, false); }
+
+    public STEMCraftCommand registerCommand(String label) {
+        return api.registerCommand(label);
+    }
 
     public void log(String message, String... placeholders) {
         messengerService.log(message, placeholders);
