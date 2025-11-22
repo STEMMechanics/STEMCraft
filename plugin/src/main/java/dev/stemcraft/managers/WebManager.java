@@ -25,6 +25,7 @@ import com.sun.net.httpserver.HttpServer;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.services.web.WebService;
 import dev.stemcraft.api.services.web.WebServiceEndpointHandler;
+import org.bukkit.entity.Player;
 
 import java.io.File;
 import java.io.IOException;
@@ -32,6 +33,7 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 
 public class WebManager implements WebService {
@@ -48,6 +50,50 @@ public class WebManager implements WebService {
         if(plugin.config().getBoolean("web_server.enabled", false)) {
             start();
         }
+
+        plugin.registerCommand("webserver")
+                .setUsage("webserver <start|stop|enable|disable>")
+                .setExecutor((api, cmd, ctx) -> {
+                    if (ctx.args().isEmpty()) {
+                        api.info(ctx.getSender(), cmd.getUsage());
+                        return;
+                    }
+
+                switch (ctx.args().getFirst().toLowerCase(Locale.ROOT)) {
+                    case "start" -> {
+                        if(isRunning()) {
+                            api.error(ctx.getSender(), "WEBSERVER_ALREADY_RUNNING");
+                        } else {
+                            start();
+                        }
+                    }
+                    case "stop" -> {
+                        if(isRunning()) {
+                            stop();
+                        } else {
+                            api.error(ctx.getSender(), "WEBSERVER_NOT_RUNNING");
+                        }
+                    }
+                    case "enable" -> {
+                        plugin.config().set("web_server.enabled", true);
+                        plugin.configSave();
+
+                        api.error(ctx.getSender(), "WEBSERVER_ENABLED", "state", isRunning() ? "WEBSERVER_STATE_RUNNING" : "WEBSERVER_STATE_NOT_RUNNING");
+                    }
+                    case "disable" -> {
+                        plugin.config().set("web_server.enabled", false);
+                        plugin.configSave();
+
+                        api.error(ctx.getSender(), "WEBSERVER_DISABLED", "state", isRunning() ? "WEBSERVER_STATE_RUNNING" : "WEBSERVER_STATE_NOT_RUNNING");
+                    }
+                    default -> api.info(ctx.getSender(), cmd.getUsage());
+                }
+            })
+            .register(plugin);
+    }
+
+    public boolean isRunning() {
+        return httpServer != null;
     }
 
     public void start() {
@@ -63,13 +109,13 @@ public class WebManager implements WebService {
 
         if (!wwwRoot.exists()) {
             if (!wwwRoot.mkdirs()) {
-                plugin.error("Failed to create web server directory");
+                plugin.error("FAILED_CREATE_DIR");
                 wwwRoot = null;
                 return;
             }
 
             if(!wwwRoot.isDirectory()) {
-                plugin.error("Web server path is not a directory");
+                plugin.error("WEBSERVER_PATH_NOT_DIR");
                 wwwRoot = null;
                 return;
             }
@@ -83,9 +129,9 @@ public class WebManager implements WebService {
             httpServer.createContext("/", new WebServiceHandler());
             httpServer.setExecutor(null);
             httpServer.start();
-            plugin.info("Web server started on http://" + ip + ":" + port);
+            plugin.info("WEBSERVER_STARTED_ON", "ip", ip, "port", String.valueOf(port));
         } catch (IOException e) {
-            plugin.error("Failed to start web server: " + e.getMessage());
+            plugin.error("WEBSERVER_START_FAILED", "error", e.getMessage());
             httpServer = null;
         }
     }
@@ -94,7 +140,7 @@ public class WebManager implements WebService {
         if (httpServer != null) {
             httpServer.stop(0);
             httpServer = null;
-            plugin.info("Web server stopped");
+            plugin.info("WEBSERVER_STOPPED");
         }
     }
 

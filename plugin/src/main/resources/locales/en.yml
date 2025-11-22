@@ -1,6 +1,7 @@
 CONSOLE_PLAYER_REQUIRED: "A player is required when using this command from the console"
 PLAYER_NOT_FOUND: "Player {player} not found."
 CONSOLE_NAME: "Console"
+FAILED_CREATE_DIR: "Failed to create web server directory"
 
 DENY_SPAWN_EGG: "You do not have permission to use spawn eggs."
 
@@ -11,3 +12,13 @@ HUB_TELEPORT_SUCCESS: "You have been teleported to the hub."
 HUB_TELEPORT_OTHER_SUCCESS_SENDER: "{player} has been teleported to the hub."
 HUB_TELEPORT_OTHER_SUCCESS_PLAYER: "You have been teleported to the hub by {playere}."
 
+WEBSERVER_ALREADY_RUNNING: "The webserver is already running"
+WEBSERVER_NOT_RUNNING: "The webserver is not running"
+WEBSERVER_STOPPED: "Webserver stopped"
+WEBSERVER_STATE_RUNNING: "running"
+WEBSERVER_STATE_NOT_RUNNING: "not running"
+WEBSERVER_ENABLED: "The webserver has been enabled at startup and is {state}"
+WEBSERVER_DISABLED: "The webserver has been disabled at startup and is {state}"
+WEBSERVER_PATH_NOT_DIR: "Web server path is not a directory"
+WEBSERVER_STARTED_ON: "Web server started on http://{ip}:{port}"
+WEBSERVER_START_FAILED: "Failed to start web server: {error}"
