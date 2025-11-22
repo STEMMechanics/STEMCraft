@@ -112,6 +112,10 @@ public final class STEMCraft extends JavaPlugin {
         getServer().getServicesManager().unregisterAll(this);
     }
 
+    public static STEMCraft getInstance() {
+        return instance;
+    }
+
     public void configSave() {
         try {
             instance.config().save(configFile);
@@ -222,6 +226,12 @@ public final class STEMCraft extends JavaPlugin {
 
     public STEMCraftCommand registerCommand(String label) {
         return api.registerCommand(label);
+    }
+
+    public void debug(String message, String... placeholders) {
+        if(debugging) {
+            messengerService.log(message, placeholders);
+        }
     }
 
     public void log(String message, String... placeholders) {
