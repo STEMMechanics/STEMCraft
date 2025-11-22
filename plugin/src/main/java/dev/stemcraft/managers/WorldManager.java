@@ -289,6 +289,41 @@ public class WorldManager implements WorldService {
             // First cook tick after recording starts will snapshot this campfire/furnace
             recordBlockChange(event.getBlock().getState());
         });
+
+        plugin.registerEvent(BlockPistonExtendEvent.class, event -> {
+            World world = event.getBlock().getWorld();
+            if (!isRecordingChanges(world)) return;
+
+            // Record the piston base before it changes state
+            recordBlockChange(event.getBlock());
+
+            // Record all blocks that are about to be moved by the piston
+            for (Block moved : event.getBlocks()) {
+                recordBlockChange(moved);
+            }
+
+            // Record the block in front where the piston head will appear
+            Block front = event.getBlock().getRelative(event.getDirection(), event.getBlocks().size() + 1);
+            recordBlockChange(front);
+        });
+
+        plugin.registerEvent(BlockPistonRetractEvent.class, event -> {
+            World world = event.getBlock().getWorld();
+            if (!isRecordingChanges(world)) return;
+
+            // Record the piston base before it retracts
+            recordBlockChange(event.getBlock());
+
+            // Record all blocks that are about to be moved back by the piston (sticky)
+            for (Block moved : event.getBlocks()) {
+                recordBlockChange(moved);
+            }
+
+            // Record the block directly in front of the piston where the head will disappear from
+            Block front = event.getBlock().getRelative(event.getDirection(), 1);
+            recordBlockChange(front);
+        });
+
     }
 
     // -------- status
