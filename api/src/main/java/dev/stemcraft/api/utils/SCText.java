@@ -12,6 +12,7 @@ import org.bukkit.inventory.ItemStack;
 
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -62,15 +63,33 @@ public final class SCText extends STEMCraftUtil {
             if (key == null || key.isEmpty()) continue;
             if (replacement == null) replacement = "";
 
-            String pattern = "(?i)\\{" + Pattern.quote(key) + "}";
+            // Transform replacement based on key casing
+            if (isAllUpper(key)) {
+                replacement = replacement.toUpperCase(Locale.ROOT);
+            } else if (isTitleCase(key)) {
+                replacement = toTitleCase(replacement);
+            } // else lowercase → leave as-is
 
-            result = result.replaceAll(
-                    pattern,
-                    Matcher.quoteReplacement(replacement)
-            );
+            String pattern = "(?i)\\{" + Pattern.quote(key) + "}";
+            result = result.replaceAll(pattern, Matcher.quoteReplacement(replacement));
         }
 
         return result;
+    }
+
+    private static boolean isAllUpper(String s) {
+        return s.equals(s.toUpperCase(Locale.ROOT));
+    }
+
+    private static boolean isTitleCase(String s) {
+        return s.length() > 0 &&
+                Character.isUpperCase(s.charAt(0)) &&
+                s.substring(1).equals(s.substring(1).toLowerCase(Locale.ROOT));
+    }
+
+    private static String toTitleCase(String s) {
+        if (s == null || s.isEmpty()) return s;
+        return Character.toUpperCase(s.charAt(0)) + s.substring(1).toLowerCase(Locale.ROOT);
     }
 
     /**
