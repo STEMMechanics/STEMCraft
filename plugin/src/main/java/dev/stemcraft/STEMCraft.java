@@ -104,7 +104,7 @@ public final class STEMCraft extends JavaPlugin {
         worldService.registerGenerator("normal", cfg -> null);               // null => vanilla normal
 
         loadFeatures();
-        registerCommands();
+        loadCommands();
     }
 
     @Override
@@ -176,47 +176,6 @@ public final class STEMCraft extends JavaPlugin {
         });
     }
 
-
-
-
-
-
-
-    private void registerCommands() {
-        try (JarFile jar = new JarFile(getFile())) {
-            Enumeration<JarEntry> entries = jar.entries();
-
-            while (entries.hasMoreElements()) {
-                JarEntry entry = entries.nextElement();
-
-                if (!entry.getName().startsWith("dev/stemcraft/commands/")
-                        || !entry.getName().endsWith(".class")) {
-                    continue;
-                }
-
-                String className = entry.getName()
-                        .replace('/', '.')
-                        .substring(0, entry.getName().length() - ".class".length());
-
-                try {
-                    Class<?> clazz = Class.forName(className);
-
-                    if (!dev.stemcraft.api.commands.STEMCraftCommand.class.isAssignableFrom(clazz)) continue;
-                    if (Modifier.isAbstract(clazz.getModifiers())) continue;
-
-                    Object instance = clazz.getDeclaredConstructor().newInstance();
-                    Method onRegisterMethod = clazz.getMethod("onRegister", STEMCraft.class);
-                    onRegisterMethod.invoke(instance, this);
-
-                } catch (ReflectiveOperationException ex) {
-                    error("Failed to load command " + className);
-                }
-            }
-        } catch (IOException ex) {
-            error("Failed to scan commands in plugin jar");
-        }
-    }
-
     /**
      * Get the plugin version.
      */
@@ -245,7 +204,7 @@ public final class STEMCraft extends JavaPlugin {
                 try {
                     Class<?> rawClass = Class.forName(className, true, getClassLoader());
 
-                    if (!typeFilter.isAssignableFrom(rawClass)) {
+                    if (!typeFilter.isAssignableFrom(rawClass) || rawClass == typeFilter) {
                         continue;
                     }
                     if (Modifier.isAbstract(rawClass.getModifiers())) {
