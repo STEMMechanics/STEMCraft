@@ -3,10 +3,9 @@ package dev.stemcraft.managers;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.factories.ChunkGeneratorFactory;
 import dev.stemcraft.api.services.WorldService;
+import dev.stemcraft.api.utils.SCText;
 import org.bukkit.*;
-import org.bukkit.block.Block;
-import org.bukkit.block.BlockState;
-import org.bukkit.block.Container;
+import org.bukkit.block.*;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.Openable;
 import org.bukkit.configuration.ConfigurationSection;
@@ -31,6 +30,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.*;
 import java.util.*;
+import java.util.Comparator;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class WorldManager implements WorldService {
@@ -120,22 +120,26 @@ public class WorldManager implements WorldService {
         });
 
         plugin.registerEvent(BlockPlaceEvent.class, event -> {
-//            BlockState oldState = event.getBlockReplacedState();
-//            BlockState newState = event.getBlockPlaced().getState();
-
-//            recordBlockChange(oldState, newState);
             World world = event.getBlock().getWorld();
             if (!isRecordingChanges(world)) return;
 
-            // For multi-block placements (doors, beds, etc), Paper/Spigot uses BlockMultiPlaceEvent
             if (event instanceof BlockMultiPlaceEvent multi) {
                 for (BlockState replaced : multi.getReplacedBlockStates()) {
-                    // Record the original state of every affected block (e.g., both halves of a door)
                     recordBlockChange(replaced);
                 }
             } else {
-                // Single-block placement: just record what was replaced at this position
                 recordBlockChange(event.getBlockReplacedState());
+            }
+
+            // Crude fix for Aikar's hopper patch on Paper
+            Block placed = event.getBlock();
+            if (placed.getType() == Material.HOPPER) {
+                Block above = placed.getRelative(BlockFace.UP);
+                BlockState aboveState = above.getState();
+                if (aboveState instanceof Container || aboveState instanceof Campfire) {
+                    // This captures the real contents before any hopper tick
+                    recordBlockChange(aboveState);
+                }
             }
         });
 
@@ -203,7 +207,7 @@ public class WorldManager implements WorldService {
             BlockData data = block.getBlockData();
 
             // Doors, trapdoors, fence gates
-            if (data instanceof Openable) {
+            if (data instanceof Openable || data instanceof Campfire) {
                 recordBlockChange(block);
             }
         });
@@ -278,9 +282,14 @@ public class WorldManager implements WorldService {
 
             recordInventoryContainer(event.getView().getTopInventory());
         });
-    }
 
-    public void onDisable() { }
+        plugin.registerEvent(BlockCookEvent.class, event -> {
+            if (!isRecordingChanges(event.getBlock().getWorld())) return;
+
+            // First cook tick after recording starts will snapshot this campfire/furnace
+            recordBlockChange(event.getBlock().getState());
+        });
+    }
 
     // -------- status
     @Override public boolean isWorldLoaded(String name) { return Bukkit.getWorld(name) != null; }
@@ -493,10 +502,16 @@ public class WorldManager implements WorldService {
 
             if (state instanceof Container container) {
                 ItemStack[] contents = container.getInventory().getContents();
-                // deep copy for safety
-                this.inventoryContents = Arrays.stream(contents)
+                inventoryContents = Arrays.stream(contents)
                         .map(item -> item == null ? null : item.clone())
                         .toArray(ItemStack[]::new);
+            } else if (state instanceof Campfire campfire) {
+                int size = campfire.getSize();
+                inventoryContents = new ItemStack[size];
+                for (int i = 0; i < size; i++) {
+                    ItemStack item = campfire.getItem(i);
+                    inventoryContents[i] = (item == null ? null : item.clone());
+                }
             }
         }
 
@@ -526,40 +541,14 @@ public class WorldManager implements WorldService {
         public void restore(Location location, boolean applyPhysics) {
             Block block = location.getBlock();
 
-            String locString = block.getX() + "," + block.getY() + "," + block.getZ();
-
             Material savedType = this.type;
-            Material currentType = block.getType();
 
-            // If this location was NOT a chest when we recorded, but is a chest now,
-            // we are likely "removing" one half of a double chest.
-            if (!isChest(savedType) && isChest(currentType)) {
-                for (org.bukkit.block.BlockFace face : new org.bukkit.block.BlockFace[] {
-                        org.bukkit.block.BlockFace.NORTH,
-                        org.bukkit.block.BlockFace.SOUTH,
-                        org.bukkit.block.BlockFace.EAST,
-                        org.bukkit.block.BlockFace.WEST
-                }) {
-                    Block neighbour = block.getRelative(face);
-                    if (!isChest(neighbour.getType())) continue;
-
-                    BlockData nbData = neighbour.getBlockData();
-                    if (nbData instanceof org.bukkit.block.data.type.Chest nbChest &&
-                            nbChest.getType() != org.bukkit.block.data.type.Chest.Type.SINGLE) {
-                        nbChest.setType(org.bukkit.block.data.type.Chest.Type.SINGLE);
-                        neighbour.setBlockData(nbChest, applyPhysics);
-                    }
-                }
-            }
-
-            // Now restore this block to its recorded state
+            // Just restore what we recorded
             block.setType(savedType, applyPhysics);
             BlockData data = Bukkit.createBlockData(this.data);
             block.setBlockData(data, applyPhysics);
 
             if (inventoryContents != null) {
-                long nonNull = Arrays.stream(inventoryContents).filter(Objects::nonNull).count();
-
                 org.bukkit.block.BlockState state = block.getState();
                 if (state instanceof org.bukkit.block.Container container) {
                     int invSize = container.getInventory().getSize();
@@ -567,9 +556,15 @@ public class WorldManager implements WorldService {
                     int copyLen = Math.min(invSize, inventoryContents.length);
                     System.arraycopy(inventoryContents, 0, toApply, 0, copyLen);
 
-                    // Clear then set contents; do NOT call update() here to avoid wiping items
                     container.getInventory().clear();
                     container.getInventory().setContents(toApply);
+                } else if (state instanceof Campfire campfire) {
+                    int size = campfire.getSize();
+                    for (int i = 0; i < size; i++) {
+                        ItemStack item = (i < inventoryContents.length ? inventoryContents[i] : null);
+                        campfire.setItem(i, item == null ? null : item.clone());
+                    }
+                    campfire.update(true, applyPhysics);
                 }
             }
         }
@@ -640,11 +635,17 @@ public class WorldManager implements WorldService {
             worldState.recordBlock(other.getState());
         }
 
-        // Chests (double chest – record partner half too)
-        if (isChest(type) && data instanceof org.bukkit.block.data.type.Chest chest) {
-            org.bukkit.block.BlockFace partnerFace = getChestPartnerOffset(chest);
-            if (partnerFace != null) {
-                Block other = block.getRelative(partnerFace);
+        // Chests (double chest – record any neighbouring chest halves too)
+        if (isChest(type)) {
+            for (org.bukkit.block.BlockFace face : new org.bukkit.block.BlockFace[] {
+                    org.bukkit.block.BlockFace.NORTH,
+                    org.bukkit.block.BlockFace.SOUTH,
+                    org.bukkit.block.BlockFace.EAST,
+                    org.bukkit.block.BlockFace.WEST
+            }) {
+                Block other = block.getRelative(face);
+                if (!isChest(other.getType())) continue;
+
                 worldState.recordBlock(other.getState());
             }
         }
@@ -680,34 +681,39 @@ public class WorldManager implements WorldService {
         return type != null && type.name().endsWith("CHEST");
     }
 
-    private static org.bukkit.block.BlockFace getChestPartnerOffset(org.bukkit.block.data.type.Chest chest) {
-        if (chest.getType() == org.bukkit.block.data.type.Chest.Type.SINGLE) return null;
-
-        org.bukkit.block.BlockFace facing = chest.getFacing();
-        org.bukkit.block.data.type.Chest.Type type = chest.getType();
-
-        // “Left” and “Right” are relative to the chest facing
-        return switch (facing) {
-            case NORTH -> (type == org.bukkit.block.data.type.Chest.Type.LEFT
-                    ? org.bukkit.block.BlockFace.EAST
-                    : org.bukkit.block.BlockFace.WEST);
-            case SOUTH -> (type == org.bukkit.block.data.type.Chest.Type.LEFT
-                    ? org.bukkit.block.BlockFace.WEST
-                    : org.bukkit.block.BlockFace.EAST);
-            case WEST -> (type == org.bukkit.block.data.type.Chest.Type.LEFT
-                    ? org.bukkit.block.BlockFace.SOUTH
-                    : org.bukkit.block.BlockFace.NORTH);
-            case EAST -> (type == org.bukkit.block.data.type.Chest.Type.LEFT
-                    ? org.bukkit.block.BlockFace.NORTH
-                    : org.bukkit.block.BlockFace.SOUTH);
-            default -> null;
-        };
-    }
-
     private void recordInventoryContainer(org.bukkit.inventory.Inventory inv) {
         InventoryHolder holder = inv.getHolder();
+
+        Block block = inv.getLocation().getBlock();
+        String type = block.getType().toString();
+        String loc = block.getX() + "," + block.getY() + "," + block.getZ();
+
+        // Prefer the real container inventory for logging, not the event snapshot
+        String items;
+        BlockState blockState = block.getState();
+        if (blockState instanceof Container container) {
+            items = SCText.toString(container.getInventory());
+        } else {
+            items = SCText.toString(inv);
+        }
+
+        // Single chest / barrel / etc
         if (holder instanceof BlockState state) {
-            recordBlockChange(state); // this will only snapshot once per location
+            recordBlockChange(state); // snapshots once per location
+            return;
+        }
+
+        // Double chest
+        if (holder instanceof org.bukkit.block.DoubleChest dc) {
+            InventoryHolder left = dc.getLeftSide();
+            InventoryHolder right = dc.getRightSide();
+
+            if (left instanceof BlockState ls) {
+                recordBlockChange(ls);
+            }
+            if (right instanceof BlockState rs) {
+                recordBlockChange(rs);
+            }
         }
     }
 }
