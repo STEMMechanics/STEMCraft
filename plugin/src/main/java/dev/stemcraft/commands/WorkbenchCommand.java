@@ -4,10 +4,7 @@ import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.commands.STEMCraftCommand;
 import dev.stemcraft.api.commands.STEMCraftCommandContext;
-import dev.stemcraft.api.utils.SCPlayer;
 import org.bukkit.Bukkit;
-import org.bukkit.Location;
-import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.inventory.Inventory;
@@ -38,7 +35,7 @@ public class WorkbenchCommand extends STEMCraftCommandImpl {
         String title = TABLE_TITLES.get(table);
 
         // check if console called without args
-        if(ctx.isConsole() && ctx.args().isEmpty()) {
+        if(ctx.fromConsole() && ctx.args().isEmpty()) {
             error("CONSOLE_PLAYER_REQUIRED");
             return;
         }
@@ -94,7 +91,7 @@ public class WorkbenchCommand extends STEMCraftCommandImpl {
         target.openInventory(workbench);
 
         if (!target.equals(ctx.getSender())) {
-            String senderName = ctx.isConsole() ? api.locale().get("CONSOLE_NAME") : ctx.getSender().getName();
+            String senderName = ctx.fromConsole() ? api.locale().get("CONSOLE_NAME") : ctx.getSender().getName();
             success(ctx.getSender(), "WORKBENCH_OPEN_OTHER_SUCCESS_SENDER", "player", target.getName(), "table", title);
             success(target, "WORKBENCH_OPEN_OTHER_SUCCESS_PLAYER", "player", senderName, "table", title);
         }

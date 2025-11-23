@@ -30,8 +30,8 @@ public interface STEMCraftCommandContext {
     String getLabelUsed();
     String getLabel();
     List<String> args();
-    boolean isConsole();
-    boolean isPlayer();
+    boolean fromConsole();
+    boolean fromPlayer();
     boolean hasPermission(String permission);
     String getArg(int index, String def);
     Player getArgAsPlayer(int index, CommandSender def);

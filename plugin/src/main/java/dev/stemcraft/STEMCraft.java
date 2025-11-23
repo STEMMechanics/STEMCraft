@@ -3,7 +3,9 @@ package dev.stemcraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.commands.STEMCraftCommand;
 import dev.stemcraft.api.events.STEMCraftEventHandler;
+import dev.stemcraft.api.services.persistenttimer.PersistentTimerService;
 import dev.stemcraft.api.services.web.WebService;
+import dev.stemcraft.api.tabcomplete.TabCompleteService;
 import dev.stemcraft.api.utils.STEMCraftUtil;
 import dev.stemcraft.commands.STEMCraftCommandImpl;
 import dev.stemcraft.managers.*;
@@ -12,10 +14,10 @@ import dev.stemcraft.api.services.*;
 import dev.stemcraft.chunkgen.FlatGenerator;
 import dev.stemcraft.chunkgen.VoidGenerator;
 import dev.stemcraft.features.STEMCraftFeature;
+import dev.stemcraft.tabcomplete.TabCompleteManager;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.experimental.Accessors;
-import org.bukkit.command.*;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.event.Cancellable;
 import org.bukkit.event.Event;
@@ -44,6 +46,8 @@ public final class STEMCraft extends JavaPlugin {
     private WorldService worldService;
     private MOTDService motdService;
     private WebService webService;
+    private TabCompleteService tabCompleteService;
+    private PersistentTimerService persistentTimerService;
 
     private YamlConfiguration config;
     @Getter(AccessLevel.NONE)
@@ -66,8 +70,11 @@ public final class STEMCraft extends JavaPlugin {
         // Load early managers
         messengerService = new MessengerManager(this);
         localeService = new LocaleManager(this);
+        persistentTimerService = new PersistentTimerManager(this);
+
         messengerService.onEnable();
         localeService.onEnable();
+        persistentTimerService.onEnable();
 
         // Check dependencies
         Plugin we = getServer().getPluginManager().getPlugin("WorldEdit");
@@ -91,6 +98,7 @@ public final class STEMCraft extends JavaPlugin {
         worldService = new WorldManager(this);
         motdService = new MOTDManager(this);
         webService = new WebManager(this);
+        tabCompleteService = new TabCompleteManager(this);
 
         playerLogService.onEnable();
         worldService.onEnable();
@@ -109,7 +117,14 @@ public final class STEMCraft extends JavaPlugin {
 
     @Override
     public void onDisable() {
-        getServer().getServicesManager().unregisterAll(this);
+        webService.onDisable();
+        motdService.onDisable();
+        worldService.onDisable();
+        playerLogService.onDisable();
+
+        persistentTimerService.onDisable();
+        localeService.onDisable();
+        messengerService.onDisable();
     }
 
     public static STEMCraft getInstance() {

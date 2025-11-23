@@ -17,19 +17,20 @@ public class HubCommand extends STEMCraftCommandImpl {
         setLabel("hub");
         setDescription("Teleports a player to the hub world.");
         setUsage("/hub [player]");
+        setPermission("stemcraft.command.hub");
         register(plugin);
     }
 
     @Override
     public void onExecute(STEMCraftAPI api, STEMCraftCommand cmd, STEMCraftCommandContext ctx) {
         // check if console called without args
-        if(ctx.isConsole() && ctx.args().isEmpty()) {
+        if(ctx.fromConsole() && ctx.args().isEmpty()) {
             error("CONSOLE_PLAYER_REQUIRED");
             return;
         }
 
         // check permission for others (if args given)
-        if(!ctx.args().isEmpty() && !ctx.hasPermission("stemcraft.hub.others")) {
+        if(!ctx.args().isEmpty() && !ctx.hasPermission("stemcraft.command.hub.others")) {
             error(ctx.getSender(), "HUB_TELEPORT_OTHER_DENY");
             return;
         }
@@ -61,7 +62,7 @@ public class HubCommand extends STEMCraftCommandImpl {
         if (target.equals(ctx.getSender())) {
             success(ctx.getSender(), "HUB_TELEPORT_SUCCESS");
         } else {
-            String senderName = ctx.isConsole() ? api.locale().get("CONSOLE_NAME") : ctx.getSender().getName();
+            String senderName = ctx.fromConsole() ? api.locale().get("CONSOLE_NAME") : ctx.getSender().getName();
             success(ctx.getSender(), "HUB_TELEPORT_OTHER_SUCCESS_SENDER", "player", target.getName());
             success(target, "HUB_TELEPORT_OTHER_SUCCESS_PLAYER", "player", senderName);
         }

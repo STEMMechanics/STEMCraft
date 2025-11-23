@@ -51,6 +51,121 @@ player_logs:
         - ".*_ORE"
         - "ANCIENT_DEBRIS"
 
+recipes:
+  # Remove some annoying / useless recipes
+  remove:
+    - wooden_sword
+    - wooden_pickaxe
+    - wooden_shovel
+    - golden_sword
+    - golden_hoe
+
+  # Stonecutter QoL
+  stonecutter:
+    cobblestone:
+      gravel: 2              # 1 cobble -> 2 gravel
+    gravel:
+      sand: 1                # recycle gravel into sand
+    sandstone:
+      sand: 4                # sandstone back into sand
+    oak_log:
+      oak_planks: 6          # better log -> plank yield
+    spruce_log:
+      spruce_planks: 6
+
+  # Shaped recipes (crafting table)
+  shaped:
+    compact_cobble:          # example id, not used by MC itself
+      result: COBBLESTONE
+      amount: 16
+      shape:
+        - "SSS"
+        - "S S"
+        - "SSS"
+      ingredients:
+        S: STONE
+
+    big_torch:
+      result: TORCH
+      amount: 8
+      shape:
+        - " C "
+        - " S "
+        - " S "
+      ingredients:
+        C: COAL
+        S: STICK
+
+  # Shapeless recipes
+  shapeless:
+    recycle_dirt:
+      result: DIRT
+      amount: 4
+      ingredients:
+        - DIRT
+        - DIRT
+        - DIRT
+        - DIRT
+
+    emerald_from_items:
+      result: EMERALD
+      amount: 1
+      ingredients:
+        - DIAMOND
+        - GOLD_INGOT
+        - IRON_INGOT
+
+  # Furnace recipes
+  furnace:
+    cook_rotten_flesh:
+      input: ROTTEN_FLESH
+      result: LEATHER
+      amount: 1
+      exp: 0.35
+      time: 200
+
+  # Smoker recipes (faster food)
+  smoker:
+    cook_kelp_fast:
+      input: KELP
+      result: DRIED_KELP
+      amount: 1
+      exp: 0.1
+      time: 100
+
+  # Blast furnace recipes (faster ores)
+  blast_furnace:
+    fast_iron:
+      input: RAW_IRON
+      result: IRON_INGOT
+      amount: 1
+      exp: 0.7
+      time: 80
+
+  # Campfire recipes (free cooking)
+  campfire:
+    campfire_fish:
+      input: COD
+      result: COOKED_COD
+      amount: 1
+      exp: 0.35
+      time: 600
+
+  # Smithing Transform (1.20+)
+  smithing_transform:
+    fast_netherite_sword:
+      result: NETHERITE_SWORD
+      template: NETHERITE_UPGRADE_SMITHING_TEMPLATE
+      base: DIAMOND_SWORD
+      addition: NETHERITE_INGOT
+
+  # Smithing Trim (armor trims)
+  smithing_trim:
+    gold_trim_on_diamond:
+      template: COAST_ARMOR_TRIM_SMITHING_TEMPLATE
+      base: DIAMOND_CHESTPLATE
+      material: GOLD_INGOT
+
 features:
   deny_spawn_eggs:
     enabled: true

@@ -31,11 +31,11 @@ public class STEMCraftCommandContextImpl implements STEMCraftCommandContext {
         return args;
     }
 
-    public boolean isConsole() {
+    public boolean fromConsole() {
         return !(sender instanceof org.bukkit.entity.Player);
     }
 
-    public boolean isPlayer() {
+    public boolean fromPlayer() {
         return sender instanceof org.bukkit.entity.Player;
     }
 
@@ -51,6 +51,18 @@ public class STEMCraftCommandContextImpl implements STEMCraftCommandContext {
         }
 
         return args.get(index - 1);
+    }
+
+    public Float getArgAsFloat(int index, Float def) {
+        if(index < 1 || index > args.size()) {
+            return def;
+        }
+
+        try {
+            return Float.parseFloat(args.get(index - 1));
+        } catch(NumberFormatException ex) {
+            return def;
+        }
     }
 
     public Player getArgAsPlayer(int index, CommandSender def) {

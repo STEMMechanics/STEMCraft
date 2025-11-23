@@ -25,7 +25,6 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.commands.STEMCraftCommand;
 import dev.stemcraft.api.commands.STEMCraftCommandContext;
 import dev.stemcraft.api.commands.STEMCraftCommandExecutor;
-import dev.stemcraft.api.tabcomplete.STEMCraftTabComplete;
 import lombok.Getter;
 import org.bukkit.Bukkit;
 import org.bukkit.command.*;
@@ -207,7 +206,7 @@ public class STEMCraftCommandImpl extends STEMCraftMessenger implements STEMCraf
 
             if (value.startsWith("{") && value.endsWith("}")) {
                 String placeholder = value.substring(1, value.length() - 1);
-                List<String> placeholderList = STEMCraftTabComplete.getCompletionList(placeholder);
+                List<String> placeholderList = STEMCraftAPI.api().tabComplete().getCompletionList(placeholder);
                 list.addAll(placeholderList);
             } else {
                 list.add(value);
@@ -280,8 +279,8 @@ public class STEMCraftCommandImpl extends STEMCraftMessenger implements STEMCraf
 
         // iterate each tab completion list
         tabCompletionList.forEach(list -> {
-            Boolean matches = true;
-            Integer listIndex = 0;
+            boolean matches = true;
+            int listIndex = 0;
 
             // Copy the elements except the last one
             TabCompleteArgParser argParser = new TabCompleteArgParser(fullArgs);
@@ -309,7 +308,7 @@ public class STEMCraftCommandImpl extends STEMCraftMessenger implements STEMCraf
                 if (nextMatches == null) {
                     tabCompletionResults.addAll(TabCompleteArgParser.parseValue(listItem));
                     break;
-                } else if (nextMatches == false) {
+                } else if (!nextMatches) {
                     matches = false;
                     break;
                 }
@@ -325,7 +324,7 @@ public class STEMCraftCommandImpl extends STEMCraftMessenger implements STEMCraf
         });
 
         // remove non-matching items from the results based on what the player has already entered
-        if (args[args.length - 1].length() > 0) {
+        if (!args[args.length - 1].isEmpty()) {
             String arg = args[args.length - 1];
 
             // if the player has only a dash in the arg, only show dash arguments
