@@ -28,7 +28,9 @@ import dev.stemcraft.api.services.LocaleService;
 import dev.stemcraft.api.services.MessengerService;
 import dev.stemcraft.api.services.PlayerLogService;
 import dev.stemcraft.api.services.WorldService;
-import dev.stemcraft.api.tabcomplete.TabCompleteService;
+import dev.stemcraft.api.services.persistenttimer.PersistentTimerService;
+import dev.stemcraft.api.services.punishment.PunishmentService;
+import dev.stemcraft.api.services.tabcomplete.TabCompleteService;
 import dev.stemcraft.commands.STEMCraftCommandImpl;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.event.Event;
@@ -75,4 +77,8 @@ public class STEMCraftApiManager extends STEMCraftMessenger implements STEMCraft
     public WorldService worlds() { return plugin.worldService(); }
 
     public TabCompleteService tabComplete() { return plugin.tabCompleteService(); }
+
+    public PersistentTimerService persistentTimer() { return plugin.persistentTimerService(); }
+
+    public PunishmentService punishment() { return plugin.punishmentService(); }
 }

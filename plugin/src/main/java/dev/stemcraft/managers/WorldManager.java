@@ -3,7 +3,7 @@ package dev.stemcraft.managers;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.factories.ChunkGeneratorFactory;
 import dev.stemcraft.api.services.WorldService;
-import dev.stemcraft.api.utils.SCText;
+import dev.stemcraft.api.utils.SCString;
 import org.bukkit.*;
 import org.bukkit.block.*;
 import org.bukkit.block.data.BlockData;
@@ -24,7 +24,6 @@ import org.bukkit.event.world.StructureGrowEvent;
 import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
-import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -53,7 +52,7 @@ public class WorldManager implements WorldService {
                 if(worldExists(worldName)) {
                     configuredWorlds.add(worldName);
                 } else {
-                    plugin.warn("Configuration contains the world {name} however it does not exist", "name", worldName);
+                    plugin.warn("WORLD_CONFIG_WORLD_NOT_EXIST", "world", worldName);
                 }
             }
         }
@@ -61,64 +60,305 @@ public class WorldManager implements WorldService {
         List<String> discoveredWorlds = listWorlds();
         for (String worldName : discoveredWorlds) {
             if(Bukkit.getWorld(worldName) != null) {
-                plugin.log("World {name}: <aqua>Loaded by Server</aqua>", "name", worldName);
+                plugin.log("WORLD_CONFIG_LOADED_BY_SERVER", "world", worldName);
             } else {
                 if (configuredWorlds.contains(worldName)) {
                     boolean load = worldsSection.getBoolean(worldName + ".load", false);
                     if (load) {
                         loadWorld(worldName);
-                        plugin.log("World {name}: <green>Loaded</green>", "name", worldName);
+                        plugin.log("WORLD_CONFIG_LOADED", "world", worldName);
                     }
                 } else {
-                    plugin.log("World {name}: <red>Unloaded</red>", "name", worldName);
+                    plugin.log("WORLD_CONFIG_UNLOADED", "world", worldName);
                 }
             }
         }
 
         plugin.registerCommand("world")
-                .addTabCompletion("start")
-                .addTabCompletion("enable")
-                .addTabCompletion("disable")
-                .addTabCompletion("enable")
-                .addTabCompletion("status")
-                .setUsage("webserver <start|stop|enable|disable>")
+                .setDescription("WORLD_DESCRIPTION")
+                .setPermission("stemcraft.command.world")
+                .addTabCompletion("record")
+                .addTabCompletion("create")
+                .addTabCompletion("delete")
+                .addTabCompletion("load")
+                .addTabCompletion("list")
+                .addTabCompletion("duplicate")
+                .addTabCompletion("listgenerators")
+                .addTabCompletion("flags")
+                .setUsage("WORLD_COMMAND_USAGE")
                 .setExecutor((api, cmd, ctx) -> {
-                    if (ctx.args().isEmpty()) {
-                        api.info(ctx.getSender(), cmd.getUsage());
+                    var sender = ctx.getSender();
+                    var args = ctx.args();
+
+                    if (args.isEmpty()) {
+                        api.info(sender, cmd.getUsage());
                         return;
                     }
 
-                    switch (ctx.args().getFirst().toLowerCase(Locale.ROOT)) {
-                        case "start" -> {
-                            Player player = (Player)ctx.getSender();
+                    String sub = args.getFirst().toLowerCase(Locale.ROOT);
+
+                    switch (sub) {
+                        case "record" -> {
+                            if (!(sender instanceof Player player)) {
+                                api.info(sender, "PLAYER_ONLY");
+                                return;
+                            }
                             World world = player.getWorld();
 
-                            captureStart(world);
-                            api.info(player, "Started recording");
-                        }
-                        case "stop" -> {
-                            Player player = (Player)ctx.getSender();
-                            World world = player.getWorld();
+                            if (args.size() < 2) {
+                                api.info(sender, cmd.getUsage());
+                                return;
+                            }
 
-                            captureStop(world);
-                            api.info(player, "Stopped recording");
+                            String action = args.get(1).toLowerCase(Locale.ROOT);
+                            switch (action) {
+                                case "start" -> {
+                                    captureStart(world);
+                                    api.info(player, "WORLD_COMMAND_START_RECORD");
+                                }
+                                case "stop" -> {
+                                    captureStop(world);
+                                    api.info(player, "WORLD_COMMAND_STOP_RECORD");
+                                }
+                                case "rollback" -> {
+                                    captureRollback(world);
+                                    api.info(player, "WORLD_COMMAND_ROLLBACK");
+                                }
+                                case "reset" -> {
+                                    captureReset(world);
+                                    api.info(player, "WORLD_COMMAND_RESET");
+                                }
+                                default -> api.info(sender, cmd.getUsage());
+                            }
                         }
-                        case "rollback" -> {
-                            Player player = (Player)ctx.getSender();
-                            World world = player.getWorld();
+                        case "create" -> {
+                            if (args.size() < 2) {
+                                api.info(sender, "WORLD_COMMAND_USAGE_CREATE");
+                                return;
+                            }
 
-                            captureStop(world);
-                            captureRollback(world);
-                            api.info(player, "Rolled back data");
-                        }
-                        case "reset" -> {
-                            Player player = (Player)ctx.getSender();
-                            World world = player.getWorld();
+                            String name = args.get(1);
+                            if (isWorldLoaded(name) || worldExists(name)) {
+                                api.info(sender, "WORLD_ALREADY_EXISTS", "world", name);
+                                return;
+                            }
 
-                            captureReset(world);
-                            api.info(player, "Reset world data");
+                            World world;
+                            if (args.size() >= 4) {
+                                String genKey = args.get(2);
+                                String genOpt = args.get(3);
+                                world = createWorld(name, genKey, genOpt);
+                            } else {
+                                world = createWorld(name);
+                            }
+
+                            if (sender instanceof Player player && world != null) {
+                                world.setSpawnLocation(player.getLocation());
+                            }
+
+                            api.info(sender, "WORLD_CREATED", "world", name);
                         }
-                        default -> api.info(ctx.getSender(), cmd.getUsage());
+                        case "delete" -> {
+                            if (args.size() < 2) {
+                                api.info(sender, "WORLD_COMMAND_USAGE_DELETE");
+                                return;
+                            }
+                            String name = args.get(1);
+
+                            if (isWorldLoaded(name)) {
+                                if (!unloadWorld(name, false)) {
+                                    api.info(sender, "WORLD_NOT_FOUND", "world", name);
+                                    return;
+                                }
+                            }
+
+                            try {
+                                deleteWorld(name);
+                                api.info(sender, "WORLD_DELETED", "world", name);
+                            } catch (IOException e) {
+                                api.info(sender, "WORLD_FAILED_DELETE", e, "world", name);
+                            }
+                        }
+                        case "load" -> {
+                            if (args.size() < 2) {
+                                api.info(sender, "WORLD_COMMAND_USAGE_LOAD");
+                                return;
+                            }
+                            String name = args.get(1);
+                            if (!worldExists(name)) {
+                                api.info(sender, "WORLD_NOT_FOUND", "world", name);
+                                return;
+                            }
+
+                            World world = loadWorld(name);
+                            if (world == null) {
+                                api.info(sender, "WORLD_FAILED_LOAD", "world", name);
+                            } else {
+                                api.info(sender, "WORLD_LOADED", "world", name);
+                            }
+                        }
+                        case "duplicate" -> {
+                            if (args.size() < 3) {
+                                api.info(sender, "WORLD_COMMAND_USAGE_DUPLICATE");
+                                return;
+                            }
+
+                            String src = args.get(1);
+                            String dst = args.get(2);
+
+                            try {
+                                duplicateWorld(src, dst);
+                                api.info(sender, "WORLD_DUPLICATED", "source", src, "target", dst);
+                            } catch (IOException e) {
+                                api.info(sender, "WORLD_FAILED_DUPLICATE", e, "world", src);
+                            }
+                        }
+                        case "list" -> {
+                            List<String> worlds = listWorlds();
+                            if (worlds.isEmpty()) {
+                                api.info(sender, "WORLD_NONE");
+                                return;
+                            }
+
+                            StringBuilder sb = new StringBuilder("Worlds:");
+                            for (String wName : worlds) {
+                                boolean loaded = isWorldLoaded(wName);
+                                sb.append("\n - ").append(wName).append(" [").append(loaded ? "loaded" : "unloaded").append("]");
+                            }
+
+                            api.info(sender, sb.toString());
+                        }
+                        case "listgenerators" -> {
+                            if (registry.isEmpty()) {
+                                api.info(sender, "WORLD_NO_GENERATORS");
+                                return;
+                            }
+
+                            StringBuilder sb = new StringBuilder("Registered generators:");
+                            for (String key : registry.keySet()) {
+                                sb.append("\n - ").append(key);
+                            }
+
+                            api.info(sender, sb.toString());
+                        }
+                        case "flags" -> {
+                            if (args.size() < 2 && !(sender instanceof Player)) {
+                                api.info(sender, "WORLD_COMMAND_USAGE_FLAGS");
+                                return;
+                            }
+
+                            World world;
+                            if (args.size() >= 2) {
+                                String worldArg = args.get(1);
+                                if ("here".equalsIgnoreCase(worldArg) && sender instanceof Player player) {
+                                    world = player.getWorld();
+                                } else {
+                                    world = Bukkit.getWorld(worldArg);
+                                }
+                            } else {
+                                world = ((Player) sender).getWorld();
+                            }
+
+                            if (world == null) {
+                                api.info(sender, "WORLD_NOT_FOUND", args.get(1));
+                                return;
+                            }
+
+                            if (args.size() == 1 || args.size() == 2) {
+                                Boolean daylight = world.getGameRuleValue(GameRule.DO_DAYLIGHT_CYCLE);
+                                Boolean weatherCycle = world.getGameRuleValue(GameRule.DO_WEATHER_CYCLE);
+                                Boolean mobSpawning = world.getGameRuleValue(GameRule.DO_MOB_SPAWNING);
+                                Integer tickSpeed = world.getGameRuleValue(GameRule.RANDOM_TICK_SPEED);
+                                long time = world.getTime();
+                                String weather = world.hasStorm() ? (world.isThundering() ? "thunder" : "rain") : "clear";
+
+                                StringBuilder sb = new StringBuilder("Flags for world ").append(world.getName()).append(":");
+                                sb.append("\n - time: ").append(time);
+                                sb.append("\n - weather: ").append(weather);
+                                sb.append("\n - frozen: ").append(Boolean.FALSE.equals(daylight) && Boolean.FALSE.equals(weatherCycle));
+                                sb.append("\n - mobspawning: ").append(mobSpawning != null && mobSpawning);
+                                sb.append("\n - tickspeed: ").append(tickSpeed == null ? "default" : tickSpeed);
+
+                                api.info(sender, sb.toString());
+                                return;
+                            }
+
+                            if (args.size() < 4) {
+                                api.info(sender, "WORLD_COMMAND_USAGE_FLAGS");
+                                return;
+                            }
+
+                            String flag = args.get(2).toLowerCase(Locale.ROOT);
+                            String value = args.get(3);
+
+                            switch (flag) {
+                                case "time" -> {
+                                    long time;
+                                    switch (value.toLowerCase(Locale.ROOT)) {
+                                        case "day" -> time = 1000L;
+                                        case "noon" -> time = 6000L;
+                                        case "night" -> time = 13000L;
+                                        case "midnight" -> time = 18000L;
+                                        default -> {
+                                            try {
+                                                time = Long.parseLong(value);
+                                            } catch (NumberFormatException ex) {
+                                                api.info(sender, "WORLD_INVALID_TIME");
+                                                return;
+                                            }
+                                        }
+                                    }
+                                    world.setTime(time);
+                                    api.info(sender, "WORLD_SET_TIME", "world", world.getName(), "status", value);
+                                }
+                                case "frozen" -> {
+                                    boolean frozen = Boolean.parseBoolean(value);
+                                    world.setGameRule(GameRule.DO_DAYLIGHT_CYCLE, !frozen);
+                                    world.setGameRule(GameRule.DO_WEATHER_CYCLE, !frozen);
+                                    api.info(sender, "WORLD_SET_FROZEN", "world", world.getName(), "status", frozen);
+                                }
+                                case "weather" -> {
+                                    switch (value.toLowerCase(Locale.ROOT)) {
+                                        case "clear" -> {
+                                            world.setStorm(false);
+                                            world.setThundering(false);
+                                        }
+                                        case "rain" -> {
+                                            world.setStorm(true);
+                                            world.setThundering(false);
+                                        }
+                                        case "thunder" -> {
+                                            world.setStorm(true);
+                                            world.setThundering(true);
+                                        }
+                                        default -> {
+                                            api.info(sender, "WORLD_INVALID_WEATHER");
+                                            return;
+                                        }
+                                    }
+                                    api.info(sender, "WORLD_SET_WEATHER", "world", world.getName(), "state", value.toLowerCase(Locale.ROOT));
+                                }
+                                case "mobspawning" -> {
+                                    boolean enabled = Boolean.parseBoolean(value);
+                                    world.setGameRule(GameRule.DO_MOB_SPAWNING, enabled);
+                                    api.info(sender, "WORLD_SET_MOB_SPAWNING",  "world",  world.getName(), "state", String.valueOf(enabled));
+                                }
+                                case "tickspeed" -> {
+                                    int speed;
+                                    try {
+                                        speed = Integer.parseInt(value);
+                                    } catch (NumberFormatException ex) {
+                                        api.error(sender, "WORLD_INVALID_TICKSPEED");
+                                        return;
+                                    }
+
+                                    world.setGameRule(GameRule.RANDOM_TICK_SPEED, speed);
+                                    api.info(sender, "WORLD_SET_TICKSPEED", "world", world.getName(), "speed", String.valueOf(speed));
+                                }
+                                default -> api.info(sender, "WORLD_INVALID_FLAG");
+                            }
+                        }
+                        default -> api.info(sender, cmd.getUsage());
                     }
                 })
                 .register(plugin);
@@ -351,8 +591,7 @@ public class WorldManager implements WorldService {
     @Override public World createWorld(String name, ChunkGenerator gen) { return ensure(name, gen); }
     @Override public World createWorld(String name, String key, String option) { return ensure(name, generatorFor(key, option)); }
 
-    private World.Environment resolveEnv(String name, @Nullable World.Environment override) {
-        if (override != null) return override;
+    private World.Environment resolveEnv(String name) {
 
         String lower = name.toLowerCase(Locale.ROOT);
         if (lower.endsWith("_nether")) return World.Environment.NETHER;
@@ -365,7 +604,7 @@ public class WorldManager implements WorldService {
         World w = Bukkit.getWorld(name);
         if (w != null) return w;
 
-        World.Environment env = resolveEnv(name, null);
+        World.Environment env = resolveEnv(name);
 
         WorldCreator wc = new WorldCreator(name).environment(env);
         if (gen != null) wc.generator(gen);
@@ -432,7 +671,7 @@ public class WorldManager implements WorldService {
     // -------- registry
     @Override public void registerGenerator(String key, ChunkGeneratorFactory factory) {
         registry.put(key.toLowerCase(Locale.ROOT), factory);
-        plugin.log("Registered chunk generator {key}", "key", key);
+        plugin.log("WORLD_REGISTERED_CHUNK_GENERATOR", "key", key);
     }
     @Override public Optional<ChunkGeneratorFactory> findGenerator(String key) {
         return Optional.ofNullable(registry.get(key.toLowerCase(Locale.ROOT)));
@@ -446,8 +685,8 @@ public class WorldManager implements WorldService {
     private Path levelDat(String name)  { return worldRoot(name).resolve("level.dat"); }
 
     static class RecordedWorldState {
-        Map<String,RecordedBlockState> blockStateMap = new HashMap<String, RecordedBlockState>();
-        Set<UUID> spawnedEntities = new HashSet<>();
+        final Map<String,RecordedBlockState> blockStateMap = new HashMap<String, RecordedBlockState>();
+        final Set<UUID> spawnedEntities = new HashSet<>();
 
         void recordEntity(Entity e) {
             spawnedEntities.add(e.getUniqueId());
@@ -522,8 +761,8 @@ public class WorldManager implements WorldService {
     }
 
     static class RecordedBlockState {
-        Material type;
-        String data;
+        final Material type;
+        final String data;
         ItemStack[] inventoryContents;
 
         RecordedBlockState(Block block) {
@@ -741,9 +980,9 @@ public class WorldManager implements WorldService {
         String items;
         BlockState blockState = block.getState();
         if (blockState instanceof Container container) {
-            items = SCText.toString(container.getInventory());
+            items = SCString.toString(container.getInventory());
         } else {
-            items = SCText.toString(inv);
+            items = SCString.toString(inv);
         }
 
         // Single chest / barrel / etc

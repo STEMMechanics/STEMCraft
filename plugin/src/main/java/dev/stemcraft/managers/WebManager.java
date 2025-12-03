@@ -25,7 +25,6 @@ import com.sun.net.httpserver.HttpServer;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.services.web.WebService;
 import dev.stemcraft.api.services.web.WebServiceEndpointHandler;
-import org.bukkit.entity.Player;
 
 import java.io.File;
 import java.io.IOException;
@@ -37,7 +36,7 @@ import java.util.Locale;
 import java.util.Map;
 
 public class WebManager implements WebService {
-    private STEMCraft plugin;
+    private final STEMCraft plugin;
     private File wwwRoot;
     private HttpServer httpServer;
     private final Map<String, WebServiceEndpointHandler> endpointHandlers = new LinkedHashMap<>();
@@ -52,6 +51,8 @@ public class WebManager implements WebService {
         }
 
         plugin.registerCommand("webserver")
+                .setDescription("WEB_SERVER_DESCRIPTION")
+                .setPermission("stemcraft.command.webserver")
                 .addTabCompletion("start")
                 .addTabCompletion("enable")
                 .addTabCompletion("disable")
@@ -91,13 +92,11 @@ public class WebManager implements WebService {
 
                         api.info(ctx.getSender(), "WEB_SERVER_DISABLED", "state", isRunning() ? "WEB_SERVER_STATE_RUNNING" : "WEB_SERVER_STATE_NOT_RUNNING");
                     }
-                    case "", "status" -> {
-                        api.info(ctx.getSender(), "WEB_SERVER_STATUS",
-                                "enabled_disabled",
-                                plugin.config().getBoolean("web_server.enabled", false) ? "WEB_SERVER_STATE_ENABLED" : "WEB_SERVER_STATE_DISABLED",
-                                "running_not",
-                                isRunning() ? "WEB_SERVER_STATE_RUNNING" : "WEB_SERVER_STATE_NOT_RUNNING");
-                    }
+                    case "", "status" -> api.info(ctx.getSender(), "WEB_SERVER_STATUS",
+                            "enabled_disabled",
+                            plugin.config().getBoolean("web_server.enabled", false) ? "WEB_SERVER_STATE_ENABLED" : "WEB_SERVER_STATE_DISABLED",
+                            "running_not",
+                            isRunning() ? "WEB_SERVER_STATE_RUNNING" : "WEB_SERVER_STATE_NOT_RUNNING");
                     default -> api.info(ctx.getSender(), cmd.getUsage());
                 }
             })
@@ -158,6 +157,7 @@ public class WebManager implements WebService {
 
     public void registerEndpointHandler(String path, WebServiceEndpointHandler handler) {
         this.endpointHandlers.put(path, handler);
+        plugin.info("WEB_SERVER_REGISTERED_ENDPOINT", "path", path);
     }
 
 

@@ -1,14 +1,10 @@
 package dev.stemcraft.api.utils;
 
-import dev.stemcraft.api.STEMCraftAPI;
-import dev.stemcraft.api.services.MessengerService;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
-import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
-import org.bukkit.plugin.RegisteredServiceProvider;
 
 import java.util.List;
 import java.util.function.BiFunction;
@@ -76,10 +72,10 @@ public class SCChatMenu extends STEMCraftUtil {
 
 
         // Calculate title width in pixels
-        int titleWidth = SCText.calculatePixelWidth(title);
+        int titleWidth = SCString.calculatePixelWidth(title);
 
         // Calculate separator width
-        int separatorWidth = SCText.calculatePixelWidth(separator);
+        int separatorWidth = SCString.calculatePixelWidth(separator);
         int paddingWidth = (maxWidth - titleWidth - 8) / 2; // Account for 4 pixels padding on each side
 
         // Calculate how many separators fit

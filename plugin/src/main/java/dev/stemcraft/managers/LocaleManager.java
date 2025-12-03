@@ -21,7 +21,7 @@ package dev.stemcraft.managers;
 
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.services.LocaleService;
-import dev.stemcraft.api.utils.SCText;
+import dev.stemcraft.api.utils.SCString;
 import lombok.Getter;
 import org.bukkit.configuration.file.YamlConfiguration;
 
@@ -56,17 +56,17 @@ public class LocaleManager implements LocaleService {
     }
 
     @Override
-    public String get(String lang, String key, String... placeholders) {
+    public String get(String lang, String key, Object... placeholders) {
         String str = processKey(lang, key);
 
         if (placeholders != null && placeholders.length > 1) {
-            String[] processed = placeholders.clone();
+            String[] processed = SCString.toStrings(placeholders);
 
             for (int i = 1; i < processed.length; i += 2) {
                 processed[i] = processKey(lang, processed[i]);
             }
 
-            return SCText.placeholders(str, processed);
+            return SCString.placeholders(str, processed);
         }
 
         return str;
@@ -99,7 +99,7 @@ public class LocaleManager implements LocaleService {
 
         File folder = new File(plugin.getDataFolder(), "locales");
         if (!folder.exists() && !folder.mkdirs()) {
-            plugin.error("Failed to create locales folder");
+            plugin.error("LOCALE_FAILED_CREATE_FOLDER");
             return;
         }
 
@@ -154,7 +154,7 @@ public class LocaleManager implements LocaleService {
                 }
             }
         } catch (Exception ex) {
-            plugin.error("Failed to export locale files", ex);
+            plugin.error("LOCALE_FAILED_EXPORT_FILES", ex);
         }
     }
 }

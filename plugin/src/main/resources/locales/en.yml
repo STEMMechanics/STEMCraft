@@ -1,19 +1,35 @@
+DEPENDENCY_WORLDEDIT_REQUIRED: "WorldEdit plugin not found or not enabled! STEMCraft requires WorldEdit to function."
+
+STEMCRAFT_ENABLED: "STEMCraft enabled"
+STEMCRAFT_ERROR_SAVING_CONFIG: "Could not save the config file to disk"
+STEMCRAFT_ERROR_PLUGIN_CLASS: "Error creating PluginCommand class {error}"
+STEMCRAFT_ERROR_LOAD_CLASS: "Failed to load class {class}: {error}"
+STEMCRAFT_ERROR_SCAN_CLASS: "Failed to scan classes in plugin jar: {error}"
+STEMCRAFT_FEATURE_DISABLED: "Feature {name} disabled in config"
+STEMCRAFT_FEATURE_LOADED: "Feature {name} loaded"
+
 CONSOLE_PLAYER_REQUIRED: "A player is required when using this command from the console."
 PLAYER_NOT_FOUND: "Player {player} not found."
+PLAYER_REQUIRED: "A player is required when using this command."
+PLAYER_ONLY: "This command can only be run by players."
 CONSOLE_NAME: "Console"
 FAILED_CREATE_DIR: "Failed to create web server directory."
 COMMAND_NO_PERMISSION: "You do not have permission to use this command."
 COMMAND_NO_PERMISSION_OTHERS: "You do not have permission to use this command on others."
+COMMAND_FAIL_UNREGISTER: "Could not unregister previous command {label}"
+WORLD_NOT_FOUND: "World {world} could not be found."
+INVALID_DURATION: "Invalid duration"
 
 DENY_SPAWN_EGG: "You do not have permission to use spawn eggs."
 
+HUB_DESCRIPTION: "Teleports a player to the hub world."
 HUB_TELEPORT_OTHER_DENY: "You do not have permission to teleport others to the hub."
-HUB_CONSOLE_NO_PLAYER: "You must specify a player when using this command from the console."
-HUB_TELEPORT_FAILED: "Failed to teleport to the hub."
 HUB_TELEPORT_SUCCESS: "You have been teleported to the hub."
 HUB_TELEPORT_OTHER_SUCCESS_SENDER: "{player} has been teleported to the hub."
 HUB_TELEPORT_OTHER_SUCCESS_PLAYER: "You have been teleported to the hub by {player}."
+HUB_WORLD_NOT_FOUND: "The hub world {world} was not found."
 
+WEB_SERVER_DESCRIPTION: "Control the web server."
 WEB_SERVER_ALREADY_RUNNING: "The web server is already running."
 WEB_SERVER_NOT_RUNNING: "The web server is not running."
 WEB_SERVER_STOPPED: "Web server stopped."
@@ -27,7 +43,9 @@ WEB_SERVER_PATH_NOT_DIR: "Web server path is not a directory."
 WEB_SERVER_STARTED_ON: "Web server started on http://{ip}:{port}."
 WEB_SERVER_START_FAILED: "Failed to start web server: {error}."
 WEB_SERVER_STATUS: "Web server is {enabled_disabled} at startup and is currently {running_not}."
+WEB_SERVER_REGISTERED_ENDPOINT: "Registered web endpoint handler {path}"
 
+WORKBENCH_DESCRIPTION: "Open a workbench."
 WORKBENCH_OTHER_DENY: "You do not have permission to open {table} for other players."
 WORKBENCH_OPEN_OTHER_SUCCESS_SENDER: "{table} opened for {player}."
 WORKBENCH_OPEN_OTHER_SUCCESS_PLAYER: "{table} opened for you by {player}."
@@ -39,3 +57,176 @@ CLEAR_INV_OTHER_SUCCESS_SENDER: "{player} inventory has been cleared."
 CLEAR_INV_OTHER_SUCCESS_PLAYER: "Your inventory has been cleared by {player}."
 
 DENY_THROWING_POTION: "You are not allowed to throw potions."
+
+INVSEE_DESCRIPTION: "Inspect the contents of a players inventory."
+INVSEE_VIEWING: "Viewing inventory of {player}."
+
+NAUGHTY_DESCRIPTION: ""
+NAUGHTY_SET: "You have been placed in naughty mode for {reason}. You cannot interact with others for {duration}."
+NAUGHTY_SET_ALL: "{player} has been placed in naughty mode. They cannot interact with others for {duration}."
+NAUGHTY_UNSET: "You are no longer in naughty mode."
+NAUGHTY_UNSET_ALL: "{player} is no longer in naughty mode."
+NAUGHTY_NO_CHAT: "You cannot chat while in naughty mode."
+NAUGHTY_NO_COMMAND: "You cannot use that command while in naughty mode."
+NAUGHTY_NO_BLOCK_BREAK: "You cannot break blocks while in naughty mode."
+NAUGHTY_NO_BLOCK_PLACE: "You cannot place blocks while in naughty mode."
+NAUGHTY_NO_SIGN_WRITE: "You cannot write signs while in naughty mode."
+NAUGHTY_NO_BOOK_WRITE: "You cannot write books while in naughty mode."
+NAUGHTY_NO_PVP: "You cannot attach players while in naughty mode."
+NAUGHTY_NO_USE: "You cannot use items or interact with blocks while in naughty mode."
+NAUGHTY_NOT_SET: "The player {player} is currently not naughty."
+NAUGHTY_REMAINING_SELF: "You are currently in naughty mode. You cannot interact with others for {duration}."
+NAUGHTY_REMAINING: "The player {player} is in naughty mode for {duration}."
+
+FLY_CANNOT_BE_TOGGLED: "Flight cannot be toggled in the current gamemode."
+FLY_SUCCESS: "Flying has been {state}."
+FLY_OTHER_SUCCESS_SENDER: "Flying has been {state} for {player}."
+FLY_OTHER_SUCCESS_PLAYER: "Flying has been {state} by {player}."
+
+REPAIR_DESCRIPTION: "Repair the item the player is currently holding."
+REPAIR_NO_ITEM: "You are not holding an item that can be repaired."
+REPAIR_NO_ITEM_OTHER: "{player} is not not holding an item that can be repaired."
+REPAIR_ITEM_REPAIRED: "Your item has been repaired."
+REPAIR_ITEM_REPAIRED_OTHER: "The item has been repaired for {player}."
+
+# /tphere
+TPHERE_DESCRIPTION: "Teleport a player to your location."
+TPHERE_SUCCESS: "&aTeleported &e{player}&a to your location."
+
+# /back
+BACK_DESCRIPTION: "Return to your previous location."
+BACK_NO_LOCATION: "&cNo previous location stored for &e{player}&c."
+BACK_SUCCESS: "&aReturned &e{player}&a to their previous location."
+
+# /warp
+WARP_DESCRIPTION: "Teleport to a named warp."
+WARP_LIST_EMPTY: "&cThere are no warps set."
+WARP_LIST: "&aAvailable warps: &e{warps}"
+WARP_NOT_FOUND: "&cWarp &e{warp}&c does not exist."
+WARP_SUCCESS: "&aTeleported to warp &e{warp}&a."
+
+# /setwarp
+SETWARP_DESCRIPTION: "Create or update a warp at your current location."
+SETWARP_SUCCESS: "&aWarp &e{warp}&a has been set at your current location."
+
+# /delwarp
+DELWARP_DESCRIPTION: "Delete a named warp."
+DELWARP_SUCCESS: "&aWarp &e{warp}&a has been deleted."
+
+# /spawn
+SPAWN_DESCRIPTION: "Teleport a player to a world's spawn."
+SPAWN_SUCCESS: "&aTeleported &e{player}&a to the spawn of world &e{world}&a."
+
+# /tpworld
+TPWORLD_DESCRIPTION: "Teleport yourself to another world's spawn."
+TPWORLD_SUCCESS: "&aTeleported you to the spawn of world &e{world}&a."
+
+# /top
+TOP_DESCRIPTION: "Teleport to the highest safe block above you."
+TOP_SUCCESS: "&aTeleported to the top."
+
+# /jump
+JUMP_DESCRIPTION: "Teleport to the block you're looking at."
+JUMP_NO_TARGET: "&cNo target block in sight."
+JUMP_SUCCESS: "&aJumped to target block."
+
+# /thru
+THRU_DESCRIPTION: "Teleport through the wall you are looking at."
+THRU_SUCCESS: "&aTeleported through the wall."
+THRU_FAILED: "&cCouldn't find a safe spot on the other side."
+
+# ptime
+PTIME_DESCRIPTION: "Set or reset a player's personal time."
+PTIME_MODE_REQUIRED: "&cYou must specify a time mode: &e/day&c, &e/night&c, &e/reset&c or ticks."
+PTIME_INVALID_MODE: "&cInvalid ptime mode: &e{mode}&c."
+PTIME_SET_DAY: "&aSet personal time to &eday&a for &e{player}&a."
+PTIME_SET_NIGHT: "&aSet personal time to &enight&a for &e{player}&a."
+PTIME_RESET: "&aReset personal time for &e{player}&a."
+PTIME_SET_TICKS: "&aSet personal time for &e{player}&a to &e{time}&a ticks."
+
+# pweather
+PWEATHER_DESCRIPTION: "Set or reset a player's personal weather."
+PWEATHER_MODE_REQUIRED: "&cYou must specify a weather mode: &e/sun&c, &e/rain&c, &e/storm&c or &e/reset&c."
+PWEATHER_INVALID_MODE: "&cInvalid pweather mode: &e{mode}&c."
+PWEATHER_SET_SUN: "&aSet personal weather to &esun&a for &e{player}&a."
+PWEATHER_SET_RAIN: "&aSet personal weather to &erain&a for &e{player}&a."
+PWEATHER_RESET: "&aReset personal weather for &e{player}&a."
+
+# break
+BREAK_DESCRIPTION: "Break blocks in a radius around the block you're looking at."
+BREAK_RADIUS_INVALID: "&cInvalid radius: &e{radius}&c."
+BREAK_RADIUS_CLAMPED: "&eRadius too large.&r Using &e{radius}&r (max &e{max}&r)."
+BREAK_NO_TARGET: "&cNo target block found."
+BREAK_SUCCESS: "&aBroke &e{count}&a blocks in radius &e{radius}&a."
+
+ENDERCHEST_DESCRIPTION: "Inspect the contents of a players enderchest."
+ENDERCHEST_VIEWING: "Viewing enderchest of {player}."
+
+FLY_DESCRIPTION: "Toggle the players ability to fly."
+
+MUTE_EXPIRED_BROADCAST: "The player {player} is no longer muted."
+BAN_PLAYER_BROADCAST: "The player {player} has been based {duration}. Reason: {reason}."
+PLAYER_NOT_BANNED: "The player {player} is not banned."
+BAN_EXPIRED_BROADCAST: "The player {player} is no longer banned."
+WARN_PLAYER: "You are warned by {actor} for {reason}."
+COMMAND_KICK_BROADCAST: "The player {player} has been kicked from the server for {reason}"
+COMMAND_WARNING_BROADCAST: "The player {player} has been warned for {reason}"
+
+RECIPE_STONECUTTER_UNKNOWN_INPUT: "Unknown stonecutter input {material}"
+RECIPE_STONECUTTER_UNKNOWN_OUTPUT: "Unknown stonecutter output {material}"
+RECIPE_REMOVED: "Removed recipe {key}"
+RECIPE_INVALID: "Invalid recipe key in recipes.remove {key}"
+RECIPE_STONECUTTER_RESULT: "Stonecutter recipe added: {input} -> {amount}x {output}"
+RECIPE_SMITHING_TRIM_LOADED: "Smithing trim loaded: {id}"
+RECIPE_SMITHING_TRANSFORM_LOADED: "Smithing transform loaded: {id}"
+RECIPE_SHAPED_LOADED: "Shaped recipe loaded: {id}"
+RECIPE_SHAPELESS_LOADED: "Shapeless recipe loaded: {id}"
+RECIPE_COOKING_LOADED: "Cooking recipe loaded: {type}.{id}"
+
+WORLD_DESCRIPTION: "Modify the worlds on the server."
+WORLD_CONFIG_WORLD_NOT_EXIST: "Configuration contains the world {world} however it does not exist."
+WORLD_CONFIG_LOADED_BY_SERVER: "World {world}: <aqua>Loaded by Server</aqua>"
+WORLD_CONFIG_LOADED: "World {world}: <green>Loaded</green>"
+WORLD_CONFIG_UNLOADED: "World {world}: <red>Unloaded</red>"
+WORLD_COMMAND_USAGE: "world <record|create|delete|load|list|duplicate|listgenerators|flags>"
+WORLD_COMMAND_USAGE_CREATE: "world create <name> [generatorKey] [generatorOptions]"
+WORLD_COMMAND_USAGE_DELETE: "world delete <name>"
+WORLD_COMMAND_USAGE_LOAD: "world load <name>"
+WORLD_COMMAND_USAGE_DUPLICATE: "world duplicate <source> <destination>"
+WORLD_COMMAND_USAGE_FLAGS: "world flags <world>|here [flag] [value]"
+WORLD_COMMAND_START_RECORD: "Started recording."
+WORLD_COMMAND_STOP_RECORD: "Stopped recording."
+WORLD_COMMAND_ROLLBACK: "Rolled back world data."
+WORLD_COMMAND_RESET: "Reset world data."
+WORLD_ALREADY_EXISTS: "World {world} already exists"
+WORLD_INVALID_TICKSPEED: "Invalid tick speed."
+WORLD_SET_TICKSPEED: "Set random tick speed for {world} to {speed}."
+WORLD_CREATED: "World {world} created"
+WORLD_DELETED: "World {world} deleted"
+WORLD_FAILED_DELETE: "Failed to delete world {world}"
+WORLD_FAILED_LOAD: "Failed to load world {world}"
+WORLD_FAILED_DUPLICATE: "Failed to duplicate world {world}"
+WORLD_LOADED: "Loaded world {world}"
+WORLD_NONE: "No worlds found"
+WORLD_DUPLICATED: "Duplicated world {source} to {target}"
+WORLD_NO_GENERATORS: "No chunk generators registered"
+WORLD_INVALID_FLAG: "Invalid world flag"
+WORLD_SET_MOB_SPAWNING: "Set mob spawning for {world} to {state}"
+WORLD_INVALID_WEATHER: "Invalid weather type"
+WORLD_INVALID_TIME: "Invalid time"
+WORLD_SET_WEATHER: "Set weather for {world} to {state}"
+WORLD_SET_FROZEN: "Set frozen for {world} to {state}"
+WORLD_SET_TIME:  "Set time for {world} to {state}"
+WORLD_REGISTERED_CHUNK_GENERATOR: "Registered chunk generator {key}"
+
+COMMAND_LOADED: "Command /{label} registered"
+
+LOCALE_FAILED_CREATE_FOLDER: "Failed to create locales folder"
+LOCALE_FAILED_EXPORT_FILES: "Failed to export locale files"
+
+PERSISTENT_TIMER_RUN_FAILED: "Persistent Timer Callback failed to run"
+PERSISTENT_TIMER_SAVE_FAILED: "Could not save timer data file."
+PERSISTENT_TIMER_CREATE_DATA_FILE_FAILED: "Could not create timer data file."
+
+PUNISHMENT_DESCRIPTION: "Allows staff to mute, kick and ban players"
+PLAYER_SPEED_DESCRIPTION: "Change a players speed."

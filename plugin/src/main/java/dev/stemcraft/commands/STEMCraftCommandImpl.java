@@ -30,6 +30,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.command.*;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.jetbrains.annotations.NotNull;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -46,8 +47,9 @@ public class STEMCraftCommandImpl extends STEMCraftMessenger implements STEMCraf
     @Getter
     private String permission = "";
     private STEMCraftCommandExecutor executor;
-    private List<String[]> tabCompletionList = new ArrayList<>();
+    private final List<String[]> tabCompletionList = new ArrayList<>();
     private STEMCraftAPI api;
+    private PluginCommand pluginCommand = null;
 
     public STEMCraftCommandImpl() { }
     public STEMCraftCommandImpl(String label) { this.label = label; }
@@ -63,24 +65,28 @@ public class STEMCraftCommandImpl extends STEMCraftMessenger implements STEMCraf
     @Override
     public STEMCraftCommand setAlias(String... aliases) {
         this.aliases = Arrays.asList(aliases);
+        if(this.pluginCommand != null) { this.pluginCommand.setAliases(this.aliases); }
         return this;
     }
 
     @Override
     public STEMCraftCommand setDescription(String description) {
         this.description = STEMCraft.getInstance().localeService().get(description);
+        if(this.pluginCommand != null) { this.pluginCommand.setDescription(this.description); }
         return this;
     }
 
     @Override
     public STEMCraftCommand setUsage(String usage) {
         this.usage = usage;
+        if(this.pluginCommand != null) { this.pluginCommand.setUsage(this.usage); }
         return this;
     }
 
     @Override
     public STEMCraftCommand setPermission(String permission) {
         this.permission = permission;
+        if(this.pluginCommand != null) { this.pluginCommand.setPermission(this.permission); }
         return this;
     }
 
@@ -97,7 +103,11 @@ public class STEMCraftCommandImpl extends STEMCraftMessenger implements STEMCraf
     }
 
     public void register(JavaPlugin plugin) {
-        PluginCommand pluginCommand = null;
+        if(pluginCommand != null) {
+            if(!unregister()) {
+                error("COMMAND_FAIL_UNREGISTER", "label", label);
+            }
+        }
 
         try {
             Constructor<PluginCommand> c = PluginCommand.class.getDeclaredConstructor(String.class, Plugin.class);
@@ -105,7 +115,7 @@ public class STEMCraftCommandImpl extends STEMCraftMessenger implements STEMCraf
 
             pluginCommand = c.newInstance(label, plugin);
         } catch (Exception e) {
-            STEMCraftAPI.api().messenger().error("Error creating PluginCommand class " + e.getMessage(), e);
+            STEMCraftAPI.api().messenger().error("STEMCRAFT_ERROR_PLUGIN_CLASS", e, "error", e.getMessage());
         }
 
         if (pluginCommand != null) {
@@ -113,6 +123,18 @@ public class STEMCraftCommandImpl extends STEMCraftMessenger implements STEMCraf
 
             if (!this.aliases.isEmpty()) {
                 pluginCommand.setAliases(aliases);
+            }
+
+            if (this.description != null && !this.description.isEmpty()) {
+                pluginCommand.setDescription(this.description);
+            }
+
+            if (this.usage != null && !this.usage.isEmpty()) {
+                pluginCommand.setUsage(this.usage);
+            }
+
+            if (this.permission != null && !this.permission.isEmpty()) {
+                pluginCommand.setPermission(this.permission);
             }
 
             pluginCommand.setExecutor((sender, command, label, args) -> {
@@ -132,7 +154,48 @@ public class STEMCraftCommandImpl extends STEMCraftMessenger implements STEMCraf
             });
 
             getCommandMap().register(label, "stemcraft", pluginCommand);
-            info("Command /{label} registered", "label", label);
+            info("COMMAND_LOADED", "label", label);
+        }
+    }
+
+    public boolean unregister() {
+        if(pluginCommand == null) { return true; }
+
+        CommandMap map = getCommandMap();
+        if (map == null) return false;
+
+        try {
+            // Remove from command map itself:
+            Field knownCommandsField = map.getClass().getDeclaredField("knownCommands");
+            knownCommandsField.setAccessible(true);
+
+            @SuppressWarnings("unchecked")
+            Map<String, Command> known = (Map<String, Command>) knownCommandsField.get(map);
+
+            // remove by its primary label
+            known.remove(this.label);
+
+            // remove by namespaced label ("stemcraft:fly")
+            known.remove("stemcraft:" + this.label.toLowerCase(Locale.ROOT));
+
+            // remove aliases
+            if (!aliases.isEmpty()) {
+                for (String alias : aliases) {
+                    known.remove(alias.toLowerCase(Locale.ROOT));
+                    known.remove("stemcraft:" + alias.toLowerCase(Locale.ROOT));
+                }
+            }
+
+            if (pluginCommand != null) {
+                pluginCommand.unregister(map);
+                pluginCommand = null;
+            }
+
+            return true;
+
+        } catch (Exception e) {
+            error("COMMAND_FAIL_UNREGISTER", e, "label", label);
+            return false;
         }
     }
 
@@ -163,12 +226,12 @@ public class STEMCraftCommandImpl extends STEMCraftMessenger implements STEMCraf
     }
 
     private static class TabCompleteArgParser {
-        List<String> optionArgsAvailable = new ArrayList<>();
-        Map<String, List<String>> valueOptionArgsAvailable = new HashMap<>();
-        List<String> optionArgsUsed = new ArrayList<>();
-        List<String> valueOptionArgsUsed = new ArrayList<>();
+        final List<String> optionArgsAvailable = new ArrayList<>();
+        final Map<String, List<String>> valueOptionArgsAvailable = new HashMap<>();
+        final List<String> optionArgsUsed = new ArrayList<>();
+        final List<String> valueOptionArgsUsed = new ArrayList<>();
         Integer argIndex = 0;
-        String[] args;
+        final String[] args;
 
         public TabCompleteArgParser(String[] args) {
             this.args = args;
@@ -269,7 +332,7 @@ public class STEMCraftCommandImpl extends STEMCraftMessenger implements STEMCraf
 
 
     @Override
-    public List<String> onTabComplete(CommandSender sender, Command cmd, String label, String[] args) {
+    public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command cmd, @NotNull String label, String[] args) {
         List<String> tabCompletionResults = new ArrayList<>();
         List<String> optionArgsAvailable = new ArrayList<>();
         Map<String, List<String>> valueOptionArgsAvailable = new HashMap<>();

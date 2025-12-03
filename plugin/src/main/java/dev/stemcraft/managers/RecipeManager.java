@@ -61,12 +61,12 @@ public class RecipeManager implements RecipeService {
             }
 
             if (key == null) {
-                plugin.getLogger().warning("Invalid recipe key in recipes.remove: " + raw);
+                plugin.warn("RECIPE_INVALID", "key", raw);
                 continue;
             }
 
             if (Bukkit.removeRecipe(key)) {
-                plugin.getLogger().info("Removed recipe: " + key);
+                plugin.info("RECIPE_REMOVED", "key", key.asString());
             }
         }
 
@@ -76,7 +76,7 @@ public class RecipeManager implements RecipeService {
             for (String inputKey : stonecutterSec.getKeys(false)) {
                 Material inputMat = Material.matchMaterial(inputKey.toUpperCase(Locale.ROOT));
                 if (inputMat == null) {
-                    plugin.getLogger().warning("Unknown stonecutter input: " + inputKey);
+                    plugin.messengerService().warn("RECIPE_STONECUTTER_UNKNOWN_INPUT", "material", inputKey);
                     continue;
                 }
 
@@ -86,7 +86,7 @@ public class RecipeManager implements RecipeService {
                 for (String outputKey : outputsSec.getKeys(false)) {
                     Material outputMat = Material.matchMaterial(outputKey.toUpperCase(Locale.ROOT));
                     if (outputMat == null) {
-                        plugin.getLogger().warning("Unknown stonecutter output: " + outputKey);
+                        plugin.messengerService().warn("RECIPE_STONECUTTER_UNKNOWN_OUTPUT", "material", outputKey);
                         continue;
                     }
 
@@ -94,7 +94,7 @@ public class RecipeManager implements RecipeService {
                     if (amount <= 0) amount = 1;
 
                     addStonecutter(inputMat, outputMat, amount);
-                    plugin.getLogger().info("Stonecutter: " + inputMat + " -> " + amount + "x " + outputMat);
+                    plugin.messengerService().info("RECIPE_STONECUTTER_RESULT", "input", inputMat.name(), "amount", String.valueOf(amount), "output", outputMat.name());
                 }
             }
         }
@@ -151,7 +151,7 @@ public class RecipeManager implements RecipeService {
 
                 ItemStack result = new ItemStack(resultMat, amount);
                 addShaped(id, result, shape, ingMap);
-                plugin.getLogger().info("Shaped recipe loaded: " + id);
+                plugin.info("RECIPE_SHAPED_LOADED", "id", id);
             }
         }
 
@@ -192,7 +192,7 @@ public class RecipeManager implements RecipeService {
                     recipe.addIngredient(m);
                 }
                 Bukkit.addRecipe(recipe);
-                plugin.getLogger().info("Shapeless recipe loaded: " + id);
+                plugin.info("RECIPE_SHAPELESS_LOADED", "id" + id);
             }
         }
 
@@ -244,7 +244,7 @@ public class RecipeManager implements RecipeService {
                 RecipeChoice addition = new RecipeChoice.MaterialChoice(addMat);
 
                 addSmithingTransform(id, result, template, base, addition);
-                plugin.getLogger().info("Smithing transform loaded: " + id);
+                plugin.info("RECIPE_SMITHING_TRANSFORM_LOADED", "id", id);
             }
         }
 
@@ -278,7 +278,7 @@ public class RecipeManager implements RecipeService {
                 RecipeChoice material = new RecipeChoice.MaterialChoice(materialMat);
 
                 addSmithingTrim(id, template, base, material);
-                plugin.getLogger().info("Smithing trim loaded: " + id);
+                plugin.info("RECIPE_SMITHING_TRIM_LOADED", "id", id);
             }
         }
     }
@@ -319,7 +319,7 @@ public class RecipeManager implements RecipeService {
                 case "blast_furnace" -> addBlastFurnace(id, inputMat, result, exp, time);
                 case "campfire" -> addCampfire(id, inputMat, result, exp, time);
             }
-            plugin.getLogger().info("Cooking recipe loaded: " + type + "." + id);
+            plugin.info("RECIPE_COOKING_LOADED", "type", type, "id", id);
         }
     }
 

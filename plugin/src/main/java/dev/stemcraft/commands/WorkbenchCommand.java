@@ -24,8 +24,10 @@ public class WorkbenchCommand extends STEMCraftCommandImpl {
 
     @Override
     public void onLoad(STEMCraft plugin) {
+        setDescription("WORKBENCH_DESCRIPTION");
         setLabel("workbench");
         setAlias("anvil", "cartographytable", "grindstone", "loom", "smithingtable", "stonecutter");
+        setPermission("stemcraft.command.workbench");
         register(plugin);
     }
 
@@ -35,7 +37,7 @@ public class WorkbenchCommand extends STEMCraftCommandImpl {
         String title = TABLE_TITLES.get(table);
 
         // check if console called without args
-        if(ctx.fromConsole() && ctx.args().isEmpty()) {
+        if(ctx.isConsole() && ctx.args().isEmpty()) {
             error("CONSOLE_PLAYER_REQUIRED");
             return;
         }
@@ -60,27 +62,13 @@ public class WorkbenchCommand extends STEMCraftCommandImpl {
 
         Inventory workbench = null;
         switch(table) {
-            case "workbench" -> {
-                workbench = Bukkit.createInventory(null, InventoryType.WORKBENCH);
-            }
-            case "anvil" -> {
-                workbench = Bukkit.createInventory(null, InventoryType.ANVIL);
-            }
-            case "cartographytable" -> {
-                workbench = Bukkit.createInventory(null, InventoryType.CARTOGRAPHY);
-            }
-            case "grindstone" -> {
-                workbench = Bukkit.createInventory(null, InventoryType.GRINDSTONE);
-            }
-            case "loom" -> {
-                workbench = Bukkit.createInventory(null, InventoryType.LOOM);
-            }
-            case "smithingtable" -> {
-                workbench = Bukkit.createInventory(null, InventoryType.SMITHING);
-            }
-            case "stonecutter" -> {
-                workbench = Bukkit.createInventory(null, InventoryType.STONECUTTER);
-            }
+            case "workbench" -> workbench = Bukkit.createInventory(null, InventoryType.WORKBENCH);
+            case "anvil" -> workbench = Bukkit.createInventory(null, InventoryType.ANVIL);
+            case "cartographytable" -> workbench = Bukkit.createInventory(null, InventoryType.CARTOGRAPHY);
+            case "grindstone" -> workbench = Bukkit.createInventory(null, InventoryType.GRINDSTONE);
+            case "loom" -> workbench = Bukkit.createInventory(null, InventoryType.LOOM);
+            case "smithingtable" -> workbench = Bukkit.createInventory(null, InventoryType.SMITHING);
+            case "stonecutter" -> workbench = Bukkit.createInventory(null, InventoryType.STONECUTTER);
         }
 
         if(workbench == null) {
@@ -91,7 +79,7 @@ public class WorkbenchCommand extends STEMCraftCommandImpl {
         target.openInventory(workbench);
 
         if (!target.equals(ctx.getSender())) {
-            String senderName = ctx.fromConsole() ? api.locale().get("CONSOLE_NAME") : ctx.getSender().getName();
+            String senderName = ctx.isConsole() ? api.locale().get("CONSOLE_NAME") : ctx.getSender().getName();
             success(ctx.getSender(), "WORKBENCH_OPEN_OTHER_SUCCESS_SENDER", "player", target.getName(), "table", title);
             success(target, "WORKBENCH_OPEN_OTHER_SUCCESS_PLAYER", "player", senderName, "table", title);
         }

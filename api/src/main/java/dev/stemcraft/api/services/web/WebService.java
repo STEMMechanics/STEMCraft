@@ -26,15 +26,23 @@ public interface WebService extends STEMCraftService {
     /**
      * Start the webserver
      */
-    public void start();
+    void start();
 
     /**
      * Stop the webserver
      */
-    public void stop();
+    void stop();
 
     /**
      * Register a endpoint handler which is called if the uri starts with the path string
      */
-    public void registerEndpointHandler(String path, WebServiceEndpointHandler handler);
+    void registerEndpointHandler(String path, WebServiceEndpointHandler handler);
+
+    static String escapeHtml(String in) {
+        if (in == null) return "";
+        return in.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;");
+    }
+
 }

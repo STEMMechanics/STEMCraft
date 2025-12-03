@@ -2,17 +2,16 @@ package dev.stemcraft.features;
 
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
-import dev.stemcraft.api.commands.STEMCraftCommand;
-import org.bukkit.Material;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
-import org.bukkit.event.block.Action;
-import org.bukkit.event.player.PlayerInteractEvent;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 
 public class PlayerSpeed implements STEMCraftFeature {
-    private String[] movementTypes = {"fly", "walk"};
+    private final String[] movementTypes = {"fly", "walk"};
 
     @Override
     public void onEnable(STEMCraftAPI api) {
@@ -28,78 +27,90 @@ public class PlayerSpeed implements STEMCraftFeature {
         });
 
         api.registerCommand("speed")
+                .setDescription("PLAYER_SPEED_DESCRIPTION")
                 .setPermission("stemcraft.command.speed")
                 .addTabCompletion("{speedtype}", "{speed}", "{player}")
                 .addTabCompletion("{speed}", "{player}")
                 .addTabCompletion("reset", "{player}")
                 .setExecutor((not_used, cmd, ctx) -> {
-                    if(!Arrays.asList(movementTypes).contains(ctx.getArg(1).toLowerCase(Locale.ROOT))) {
-                        cmd.error(ctx.getSender(), cmd.getUsage());
-                        return;
-                    }
-
-                    String type = ctx.getArg(1);
+                    List<String> args = new ArrayList<>(ctx.args());
+                    String type = null;
                     Float speed = null;
                     Player targetPlayer = null;
-                    boolean reset = false;
 
-//                    if (SMCommon.isInArrayIgnoreCase(movementTypes, type)) {
-//                        speed = ctx.getArgFloatLocale(2, "SPEED_NUMBER_USAGE");
-//                        targetPlayer = ctx.getArgAsPlayer(3, ctx.player);
-//                    } else {
-//                        if (!type.equalsIgnoreCase("reset")) {
-//                            speed = ctx.getArgFloatLocale(1, "SPEED_NUMBER_USAGE");
-//                        } else {
-//                            reset = true;
-//                        }
-//
-//                        targetPlayer = ctx.getArgAsPlayer(2, ctx.player);
-//                    }
-//
-//                    if (ctx.fromConsole() && targetPlayer == null) {
-//                        ctx.returnErrorLocale("CMD_PLAYER_REQ_FROM_CONSOLE");
-//                    }
+                    // First arg could be type or reset
+                    String rawArg = args.getFirst().toLowerCase(Locale.ROOT);
+                    if(Arrays.asList(movementTypes).contains(args.getFirst()) || args.getFirst().equals("reset")) {
+                        type = rawArg;
+                        args.removeFirst();
+                    }
 
-                    if (reset) {
+                    if(!args.isEmpty()) {
+                        if(type == null || !type.equals("reset")) {
+                            try {
+                                speed = Float.parseFloat(args.getFirst());
+                                args.removeFirst();
+
+                                speed = Math.max(0.1f, speed);
+                                speed = Math.min(10f, speed);
+
+                            } catch(NumberFormatException ex) {
+                                // ignore
+                            }
+                        }
+                    }
+
+                    if(!args.isEmpty()) {
+                        targetPlayer = Bukkit.getPlayerExact(args.getFirst());
+                    }
+
+                    if(targetPlayer == null) {
+                        if(ctx.isConsole()) {
+                            cmd.error("CONSOLE_PLAYER_REQUIRED");
+                            return;
+                        } else if(ctx.isPlayer() && !args.isEmpty()) {
+                            cmd.error(ctx.getSender(), "PLAYER_NOT_FOUND", "player", args.getFirst());
+                            return;
+                        } else {
+                            targetPlayer = (Player)ctx.getSender();
+                        }
+                    }
+
+                    if(type == null) {
+                        if(speed == null) {
+                            cmd.error(ctx.getSender(), cmd.getUsage());
+                        } else {
+                            type = (targetPlayer.isFlying()) ? "fly" : "walk";
+                        }
+                    } else if(type.equals("reset")) {
                         targetPlayer.setFlySpeed(getDefaultSpeed(true));
                         targetPlayer.setWalkSpeed(getDefaultSpeed(false));
-//                        ctx.returnInfoLocale("SPEED_RESET");
-                    } else {
-                        if (speed < 0.1f) {
-                            speed = 0.1f;
-                        } else if (speed > 10f) {
-                            speed = 10f;
-                        }
-
-//                        if (!SMCommon.isInArrayIgnoreCase(movementTypes, type)) {
-//                            type = targetPlayer.isFlying() ? "fly" : "walk";
-//                        }
-
-                        if (type.equalsIgnoreCase("fly")) {
-                            targetPlayer.setFlySpeed(getRealSpeed(speed, true));
-                        } else {
-                            targetPlayer.setWalkSpeed(getRealSpeed(speed, false));
-                        }
-
-//                        ctx.returnInfoLocale("SPEED_CHANGED", "type", SMCommon.capitalize(type), "speed", speed.toString());
+                        // output reset
                     }
+
+                    if(speed == null) {
+                        // display current
+                    } else {
+                        // set fly speed
+                    }// display current
+// set walk speed
                 })
                 .register(STEMCraft.getInstance());
-    }
-
-    private float getDefaultSpeed(final boolean isFly) {
-        return isFly ? 0.1f : 0.2f;
-    }
-
-    private float getRealSpeed(final float speed, final boolean isFly) {
-        final float defaultSpeed = getDefaultSpeed(isFly);
-        float maxSpeed = 1f;
-
-        if (speed < 1f) {
-            return defaultSpeed * speed;
-        } else {
-            final float ratio = ((speed - 1) / 9) * (maxSpeed - defaultSpeed);
-            return ratio + defaultSpeed;
         }
-    }
+
+        private float getDefaultSpeed(final boolean isFly) {
+            return isFly ? 0.1f : 0.2f;
+        }
+
+        private float getRealSpeed(final float speed, final boolean isFly) {
+            final float defaultSpeed = getDefaultSpeed(isFly);
+            float maxSpeed = 1f;
+
+            if (speed < 1f) {
+                return defaultSpeed * speed;
+            } else {
+                final float ratio = ((speed - 1) / 9) * (maxSpeed - defaultSpeed);
+                return ratio + defaultSpeed;
+            }
+        }
 }

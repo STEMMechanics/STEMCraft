@@ -21,9 +21,14 @@ package dev.stemcraft.managers;
 
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.services.MessengerService;
-import dev.stemcraft.api.utils.SCText;
+import dev.stemcraft.api.utils.SCString;
 import net.kyori.adventure.text.Component;
+import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
+
+import java.util.Collection;
+import java.util.List;
 
 public class MessengerManager implements MessengerService {
 
@@ -34,21 +39,23 @@ public class MessengerManager implements MessengerService {
     private final Component prefixWarn;
     private final Component prefixError;
     private final Component prefixSuccess;
+    private final Component prefixBroadcast;
 
     public MessengerManager(STEMCraft plugin) {
         this.plugin = plugin;
 
-        this.prefixLog = SCText.colourise(plugin.config().getString("logging.prefixes.log", "&7[STEM]&r "));
-        this.prefixInfo = SCText.colourise(plugin.config().getString("logging.prefixes.info", "&9[INFO]&r "));
-        this.prefixWarn = SCText.colourise(plugin.config().getString("logging.prefixes.warn", "&e[WARN]&r "));
-        this.prefixError = SCText.colourise(plugin.config().getString("logging.prefixes.error", "&c[ERROR]&r "));
-        this.prefixSuccess = SCText.colourise(plugin.config().getString("logging.prefixes.success", "&a[SUCCESS]&r "));
+        this.prefixLog = SCString.colourise(plugin.config().getString("logging.prefixes.log", "&7[STEM]&r "));
+        this.prefixInfo = SCString.colourise(plugin.config().getString("logging.prefixes.info", "&9[INFO]&r "));
+        this.prefixWarn = SCString.colourise(plugin.config().getString("logging.prefixes.warn", "&e[WARN]&r "));
+        this.prefixError = SCString.colourise(plugin.config().getString("logging.prefixes.error", "&c[ERROR]&r "));
+        this.prefixSuccess = SCString.colourise(plugin.config().getString("logging.prefixes.success", "&a[SUCCESS]&r "));
+        this.prefixBroadcast = SCString.colourise(plugin.config().getString("logging.prefixes.broadcast", "&e[SERVER] "));
     }
 
     @Override
-    public void log(CommandSender sender, String message, Throwable ex, String... placeholders) {
+    public void log(CommandSender sender, String message, Throwable ex, Object... placeholders) {
         message = locale(sender, message, placeholders);
-        Component component = SCText.colourise(message);
+        Component component = SCString.colourise(message);
 
         if(sender != null) {
             sender.sendMessage(this.prefixLog.append(component));
@@ -62,9 +69,9 @@ public class MessengerManager implements MessengerService {
     }
 
     @Override
-    public void info(CommandSender sender, String message, Throwable ex, String... placeholders) {
+    public void info(CommandSender sender, String message, Throwable ex, Object... placeholders) {
         message = locale(sender, message, placeholders);
-        Component component = SCText.colourise(message);
+        Component component = SCString.colourise(message);
 
         if(sender != null) {
             sender.sendMessage(this.prefixInfo.append(component));
@@ -78,9 +85,9 @@ public class MessengerManager implements MessengerService {
     }
 
     @Override
-    public void warn(CommandSender sender, String message, Throwable ex, String... placeholders) {
+    public void warn(CommandSender sender, String message, Throwable ex, Object... placeholders) {
         message = locale(sender, message, placeholders);
-        Component component = SCText.colourise(message);
+        Component component = SCString.colourise(message);
 
         if(sender != null) {
             sender.sendMessage(this.prefixWarn.append(component));
@@ -94,9 +101,9 @@ public class MessengerManager implements MessengerService {
     }
 
     @Override
-    public void error(CommandSender sender, String message, Throwable ex, String... placeholders) {
+    public void error(CommandSender sender, String message, Throwable ex, Object... placeholders) {
         message = locale(sender, message, placeholders);
-        Component component = SCText.colourise(message);
+        Component component = SCString.colourise(message);
 
         if(sender != null) {
             sender.sendMessage(this.prefixError.append(component));
@@ -110,9 +117,9 @@ public class MessengerManager implements MessengerService {
     }
 
     @Override
-    public void success(CommandSender sender, String message, Throwable ex, String... placeholders) {
+    public void success(CommandSender sender, String message, Throwable ex, Object... placeholders) {
         message = locale(sender, message, placeholders);
-        Component component = SCText.colourise(message);
+        Component component = SCString.colourise(message);
 
         if(sender != null) {
             sender.sendMessage(this.prefixSuccess.append(component));
@@ -125,7 +132,24 @@ public class MessengerManager implements MessengerService {
         }
     }
 
-    private String locale(CommandSender sender, String message, String... placeholders) {
+    @Override
+    public void broadcast(String message, List<Player> exclude, Object... placeholders) {
+        String serverMessage = locale(null, message, placeholders);
+        Component serverComponent = SCString.colourise(serverMessage);
+        plugin.getComponentLogger().info(this.prefixBroadcast.append(serverComponent));
+
+        Collection<? extends Player> onlinePlayers = Bukkit.getOnlinePlayers();
+        onlinePlayers.forEach(player -> {
+            if(exclude != null && !exclude.contains(player)) {
+                String playerMessage = locale(player, message, placeholders);
+                Component playerComponent = SCString.colourise(playerMessage);
+
+                player.sendMessage(this.prefixBroadcast.append(playerComponent));
+            }
+        });
+    }
+
+    private String locale(CommandSender sender, String message, Object... placeholders) {
         return plugin.localeService().get(sender, message, placeholders);
     }
 }

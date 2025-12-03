@@ -1,4 +1,4 @@
-package dev.stemcraft.tabcomplete;
+package dev.stemcraft.managers.tabcomplete;
 
 public class STEMCraftTabCompleteContext {
     

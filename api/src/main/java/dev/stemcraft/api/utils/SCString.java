@@ -17,15 +17,16 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public final class SCText extends STEMCraftUtil {
+public final class SCString extends STEMCraftUtil {
     private static final MiniMessage MM = MiniMessage.miniMessage();
     private static final LegacyComponentSerializer LEGACY = LegacyComponentSerializer.legacyAmpersand();
+    private static final LegacyComponentSerializer LEGACY_SECTION = LegacyComponentSerializer.legacySection();
     private static final int DEFAULT_WIDTH = 6; // Default width for unknown characters
-    private static Set<Character> WIDTH_2 = new HashSet<>(Set.of('i', '!', ';', ':', '\'', ',', '.', '|')); // 2 px
-    private static Set<Character> WIDTH_3 = new HashSet<>(Set.of('l', '`'));       // 3 px
-    private static Set<Character> WIDTH_4 = new HashSet<>(Set.of('t', '*', '(', ')', '[', ']', '{', '}', '"', 'I', ' '));      // 4 px
-    private static Set<Character> WIDTH_5 = new HashSet<>(Set.of('f', 'k', '<', '>'));                 // 5 px
-    private static Set<Character> WIDTH_6 = new HashSet<>(Set.of('a', 'b', 'c', 'd', 'e', 'g', 'h', 'j',
+    private static final Set<Character> WIDTH_2 = new HashSet<>(Set.of('i', '!', ';', ':', '\'', ',', '.', '|')); // 2 px
+    private static final Set<Character> WIDTH_3 = new HashSet<>(Set.of('l', '`'));       // 3 px
+    private static final Set<Character> WIDTH_4 = new HashSet<>(Set.of('t', '*', '(', ')', '[', ']', '{', '}', '"', 'I', ' '));      // 4 px
+    private static final Set<Character> WIDTH_5 = new HashSet<>(Set.of('f', 'k', '<', '>'));                 // 5 px
+    private static final Set<Character> WIDTH_6 = new HashSet<>(Set.of('a', 'b', 'c', 'd', 'e', 'g', 'h', 'j',
             'm', 'n', 'o', 'p', 'q', 'r', 's', 'u',
             'v', 'w', 'x', 'y', 'z',
             'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
@@ -34,7 +35,7 @@ public final class SCText extends STEMCraftUtil {
             'Z', '0', '1', '2', '3', '4', '5', '6',
             '7', '8', '9', '#', '$', '%', '^', '&',
             '-', '_', '=', '+', '/', '?', '\\')); // 6 px
-    private static Set<Character> WIDTH_7 = new HashSet<>(Set.of('~', '@')); // 7 px
+    private static final Set<Character> WIDTH_7 = new HashSet<>(Set.of('~', '@')); // 7 px
 
     /**
      * Replaces case-insensitive placeholders (e.g. <code>%key%</code>) using
@@ -82,7 +83,7 @@ public final class SCText extends STEMCraftUtil {
     }
 
     private static boolean isTitleCase(String s) {
-        return s.length() > 0 &&
+        return !s.isEmpty() &&
                 Character.isUpperCase(s.charAt(0)) &&
                 s.substring(1).equals(s.substring(1).toLowerCase(Locale.ROOT));
     }
@@ -110,6 +111,10 @@ public final class SCText extends STEMCraftUtil {
 
         // Otherwise, treat it as legacy & codes
         return LEGACY.deserialize(input);
+    }
+
+    public static String colouriseToSection(String input) {
+        return LEGACY_SECTION.serialize(colourise(input));
     }
 
     /**
@@ -328,5 +333,21 @@ public final class SCText extends STEMCraftUtil {
 
         if (out.isEmpty()) return "(empty)";
         return out.substring(0, out.length() - 2);
+    }
+
+    /**
+     * Convert a list of objects to strings (or null)
+     */
+    public static String[] toStrings(Object... placeholders) {
+        if (placeholders == null || placeholders.length == 0) {
+            return new String[0];
+        }
+
+        String[] out = new String[placeholders.length];
+        for (int i = 0; i < placeholders.length; i++) {
+            Object o = placeholders[i];
+            out[i] = (o == null ? "null" : String.valueOf(o));
+        }
+        return out;
     }
 }

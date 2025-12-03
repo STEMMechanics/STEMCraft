@@ -21,6 +21,7 @@ package dev.stemcraft.managers;
 
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.services.MOTDService;
+import dev.stemcraft.api.utils.SCString;
 import org.bukkit.event.Listener;
 import org.bukkit.event.server.ServerListPingEvent;
 
@@ -31,7 +32,7 @@ public class MOTDManager implements MOTDService, Listener {
     private final STEMCraft plugin;
 
     private final Map<String, String> motds = new LinkedHashMap<>();
-    private String motdTitle = "§6§lSTEMCraft";
+    private String motdTitle = "&6&lSTEMCraft";
     private String motdText = "";
 
     public MOTDManager(STEMCraft plugin) {
@@ -43,7 +44,7 @@ public class MOTDManager implements MOTDService, Listener {
         motdText = plugin.config().getString("motd.text", motdText);
 
         plugin.registerEvent(ServerListPingEvent.class, event -> {
-            event.setMotd(motdTitle + "\n" + current());
+            event.setMotd(SCString.colouriseToSection(motdTitle + "\n" + current()));
         });
     }
 

@@ -26,7 +26,9 @@ import dev.stemcraft.api.services.LocaleService;
 import dev.stemcraft.api.services.MessengerService;
 import dev.stemcraft.api.services.PlayerLogService;
 import dev.stemcraft.api.services.WorldService;
-import dev.stemcraft.api.tabcomplete.TabCompleteService;
+import dev.stemcraft.api.services.persistenttimer.PersistentTimerService;
+import dev.stemcraft.api.services.punishment.PunishmentService;
+import dev.stemcraft.api.services.tabcomplete.TabCompleteService;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.event.Event;
 import org.bukkit.event.EventPriority;
@@ -89,5 +91,11 @@ public interface STEMCraftAPI extends MessengerService {
      */
     TabCompleteService tabComplete();
 
-    default <T extends Event> Listener registerEvent(Class<T> event, STEMCraftEventHandler<T> callback) { return registerEvent(event, callback, EventPriority.NORMAL, false); }
+    PersistentTimerService persistentTimer();
+
+    PunishmentService punishment();
+
+    default <T extends Event> void registerEvent(Class<T> event, STEMCraftEventHandler<T> callback) {
+        registerEvent(event, callback, EventPriority.NORMAL, false);
+    }
 }

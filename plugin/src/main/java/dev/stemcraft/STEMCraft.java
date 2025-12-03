@@ -4,8 +4,9 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.commands.STEMCraftCommand;
 import dev.stemcraft.api.events.STEMCraftEventHandler;
 import dev.stemcraft.api.services.persistenttimer.PersistentTimerService;
+import dev.stemcraft.api.services.punishment.PunishmentService;
 import dev.stemcraft.api.services.web.WebService;
-import dev.stemcraft.api.tabcomplete.TabCompleteService;
+import dev.stemcraft.api.services.tabcomplete.TabCompleteService;
 import dev.stemcraft.api.utils.STEMCraftUtil;
 import dev.stemcraft.commands.STEMCraftCommandImpl;
 import dev.stemcraft.managers.*;
@@ -14,7 +15,7 @@ import dev.stemcraft.api.services.*;
 import dev.stemcraft.chunkgen.FlatGenerator;
 import dev.stemcraft.chunkgen.VoidGenerator;
 import dev.stemcraft.features.STEMCraftFeature;
-import dev.stemcraft.tabcomplete.TabCompleteManager;
+import dev.stemcraft.managers.tabcomplete.TabCompleteManager;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.experimental.Accessors;
@@ -48,6 +49,7 @@ public final class STEMCraft extends JavaPlugin {
     private WebService webService;
     private TabCompleteService tabCompleteService;
     private PersistentTimerService persistentTimerService;
+    private PunishmentService punishmentService;
 
     private YamlConfiguration config;
     @Getter(AccessLevel.NONE)
@@ -79,7 +81,7 @@ public final class STEMCraft extends JavaPlugin {
         // Check dependencies
         Plugin we = getServer().getPluginManager().getPlugin("WorldEdit");
         if(we == null || !we.isEnabled()) {
-            error("WorldEdit plugin not found or not enabled! STEMCraft requires WorldEdit to function.");
+            error("DEPENDENCY_WORLDEDIT_REQUIRED");
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
@@ -99,13 +101,16 @@ public final class STEMCraft extends JavaPlugin {
         motdService = new MOTDManager(this);
         webService = new WebManager(this);
         tabCompleteService = new TabCompleteManager(this);
+        punishmentService = new PunishmentManager(this);
 
         playerLogService.onEnable();
         worldService.onEnable();
         motdService.onEnable();
         webService.onEnable();
+        tabCompleteService.onEnable();
+        punishmentService.onEnable();
 
-        info("STEMCraft enabled");
+        info("STEMCRAFT_ENABLED");
 
         worldService.registerGenerator("void", (options) -> new VoidGenerator());
         worldService.registerGenerator("flat",   FlatGenerator::fromOptions);       // e.g., "grass_block;dirt:3;bedrock"
@@ -135,7 +140,7 @@ public final class STEMCraft extends JavaPlugin {
         try {
             instance.config().save(configFile);
         } catch(Exception ex) {
-            error("Could not save the config file to disk", ex);
+            error("STEMCRAFT_ERROR_SAVING_CONFIG", ex);
         }
     }
 
@@ -147,12 +152,12 @@ public final class STEMCraft extends JavaPlugin {
             String featureConfigBase = instance.getConfigBase();
 
             if (!config.getBoolean(featureConfigBase + ".enabled", true)) {
-                info("Feature {name} disabled in config", "name", instance.getName());
+                info("STEMCRAFT_FEATURE_DISABLED", "name", instance.getName());
                 return;
             }
 
             instance.onEnable(api);
-            info("Feature {name} loaded", "name", instance.getName());
+            info("STEMCRAFT_FEATURE_LOADED", "name", instance.getName());
         });
     }
 
@@ -212,11 +217,11 @@ public final class STEMCraft extends JavaPlugin {
                     callback.accept(instance);
 
                 } catch (ReflectiveOperationException ex) {
-                    error("Failed to load class " + className + ": " + ex.getMessage(), ex);
+                    error("STEMCRAFT_ERROR_LOAD_CLASS", ex, "class", className, "error", ex.getMessage());
                 }
             }
         } catch (IOException ex) {
-            error("Failed to scan classes in plugin jar: " + ex.getMessage(), ex);
+            error("STEMCRAFT_ERROR_SCAN_CLASS", ex, "error", ex.getMessage());
         }
     }
 
@@ -237,39 +242,41 @@ public final class STEMCraft extends JavaPlugin {
         return listener;
     }
 
-    public <T extends Event> Listener registerEvent(Class<T> event, STEMCraftEventHandler<T> callback) { return registerEvent(event, callback, EventPriority.NORMAL, false); }
+    public <T extends Event> void registerEvent(Class<T> event, STEMCraftEventHandler<T> callback) {
+        registerEvent(event, callback, EventPriority.NORMAL, false);
+    }
 
     public STEMCraftCommand registerCommand(String label) {
         return api.registerCommand(label);
     }
 
-    public void debug(String message, String... placeholders) {
+    public void debug(String message, Object... placeholders) {
         if(debugging) {
             messengerService.log(message, placeholders);
         }
     }
 
-    public void log(String message, String... placeholders) {
+    public void log(String message, Object... placeholders) {
         messengerService.log(message, placeholders);
     }
 
-    public void info(String message, String... placeholders) {
+    public void info(String message, Object... placeholders) {
         messengerService.info(message, placeholders);
     }
 
-    public void warn(String message, String... placeholders) {
+    public void warn(String message, Object... placeholders) {
         messengerService.warn(message, placeholders);
     }
 
-    public void error(String message, String... placeholders) {
+    public void error(String message, Object... placeholders) {
         messengerService.error(message, placeholders);
     }
 
-    public void error(String message, Throwable ex, String... placeholders) {
+    public void error(String message, Throwable ex, Object... placeholders) {
         messengerService.error(message, ex, placeholders);
     }
 
-    public void success(String message, String... placeholders) {
+    public void success(String message, Object... placeholders) {
         messengerService.success(message, placeholders);
     }
 }

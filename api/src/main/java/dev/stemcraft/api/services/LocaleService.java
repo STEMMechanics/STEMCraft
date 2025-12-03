@@ -33,11 +33,11 @@ public interface LocaleService extends STEMCraftService {
      * Get a locale string based on the lang and key and fill placeholders.
      * If key is a string, then it will be used in place of the key.
      */
-    String get(String lang, String key, String... placeholders);
+    String get(String lang, String key, Object... placeholders);
 
-    default String get(String key, String... placeholders) { return get(getDefaultLocale(), key, placeholders); }
+    default String get(String key, Object... placeholders) { return get(getDefaultLocale(), key, placeholders); }
 
-    default String get(CommandSender sender, String key, String... placeholders) {
+    default String get(CommandSender sender, String key, Object... placeholders) {
         String lang;
 
         if (sender instanceof Player p) {

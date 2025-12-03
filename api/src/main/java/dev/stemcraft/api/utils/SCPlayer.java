@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit;
 public class SCPlayer extends STEMCraftUtil {
     private static Boolean isGeyserInstalled = null;
     private static GeyserApi geyserApi = null;
-    private static Map<String, String> nameCache = new HashMap<>();
+    private static final Map<String, String> nameCache = new HashMap<>();
     private static File configFile;
     private static YamlConfiguration config;
 
@@ -93,16 +93,16 @@ public class SCPlayer extends STEMCraftUtil {
 
     /**
      * Safely teleport the player to a location
-     * @param player The player to teleport
+     *
+     * @param player   The player to teleport
      * @param location The location to teleport the player
      */
-    public static CompletableFuture<Void> teleport(Player player, Location location) {
+    public static void teleport(Player player, Location location) {
         CompletableFuture<Void> future = new CompletableFuture<>();
         Bukkit.getScheduler().runTaskLater(InstanceHolder.plugin(), () -> {
             player.teleport(location);
             future.complete(null); // Mark the task as complete
         }, 1L);
-        return future;
     }
 
     /**
@@ -135,7 +135,15 @@ public class SCPlayer extends STEMCraftUtil {
         return name(String.valueOf(id));
     }
 
+    public static String name(UUID id, String def) {
+        return name(String.valueOf(id), def);
+    }
+
     public static String name(String id) {
+        return name(id, null);
+    }
+
+    public static String name(String id, String def) {
         // 1. Check the cache
         if (nameCache.containsKey(id)) {
             return nameCache.get(id);
@@ -163,7 +171,7 @@ public class SCPlayer extends STEMCraftUtil {
             return name;
         } catch (Exception e) {
             error("Lookup player name for UUID " + id + " failed", e);
-            return null; // Return null if lookup fails
+            return def;
         }
     }
 }

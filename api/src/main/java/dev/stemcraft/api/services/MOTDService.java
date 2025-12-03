@@ -24,20 +24,20 @@ public interface MOTDService extends STEMCraftService {
     /**
      * Get the current MOTD
      */
-    public String current();
+    String current();
 
     /**
      * Get the MOTD based on key
      */
-    public String get(String key);
+    String get(String key);
 
     /**
      * Set the key MOTD. This will become the current MOTD.
      */
-    public void set(String key, String motd);
+    void set(String key, String motd);
 
     /**
      * Clear a MOTD based on key. The next MOTD will become current.
      */
-    public void clear(String key);
+    void clear(String key);
 }

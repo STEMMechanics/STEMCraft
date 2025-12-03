@@ -1,5 +1,12 @@
 package dev.stemcraft.api.utils;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+
 public class SCTime extends STEMCraftUtil {
     public static String formatDuration(long totalSeconds) {
         long days = totalSeconds / 86400;
@@ -17,7 +24,9 @@ public class SCTime extends STEMCraftUtil {
         if (minutes > 0 || hours > 0 || days > 0) {
             sb.append(minutes).append("m ");
         }
-        sb.append(seconds).append("s");
+        if(seconds > 0) {
+            sb.append(seconds).append("s");
+        }
 
         return sb.toString().trim();
     }
@@ -56,5 +65,35 @@ public class SCTime extends STEMCraftUtil {
         }
 
         return totalSeconds;
+    }
+
+    public static long parseDuration(String durationStr) { return parseDuration(durationStr, false); }
+
+    public static String toFriendlyTime(Instant instant) {
+        if (instant == null) return "";
+
+        ZoneId zone = ZoneId.systemDefault();
+        LocalDateTime t = LocalDateTime.ofInstant(instant, zone);
+        LocalDate today = LocalDate.now(zone);
+        LocalDate date = t.toLocalDate();
+
+        if (date.equals(today)) {
+            // Today
+            return "Today " + t.toLocalTime().format(DateTimeFormatter.ofPattern("h:mm a"));
+        }
+
+        if (date.equals(today.minusDays(1))) {
+            // Yesterday
+            return "Yesterday " + t.toLocalTime().format(DateTimeFormatter.ofPattern("h:mm a"));
+        }
+
+        long daysAgo = ChronoUnit.DAYS.between(date, today);
+        if (daysAgo <= 7) {
+            // Within a week
+            return daysAgo + " days ago";
+        }
+
+        // Older: nice readable format
+        return t.format(DateTimeFormatter.ofPattern("d MMM h:mm a"));
     }
 }

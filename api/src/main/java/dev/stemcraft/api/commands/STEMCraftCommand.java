@@ -50,6 +50,11 @@ public interface STEMCraftCommand extends MessengerService {
     STEMCraftCommand setUsage(String description);
 
     /**
+     * Get the command permission
+     */
+    String getPermission();
+
+    /**
      * Set the command permission
      */
     STEMCraftCommand setPermission(String permission);

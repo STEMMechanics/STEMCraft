@@ -10,12 +10,19 @@ dependencies {
     // Lombok
     compileOnly "org.projectlombok:lombok:1.18.32"
     annotationProcessor "org.projectlombok:lombok:1.18.32"
+
+    testImplementation "org.junit.jupiter:junit-jupiter:5.11.0"
+    testImplementation "org.yaml:snakeyaml:2.3"
 }
 
 tasks {
     runServer {
         minecraftVersion("1.21")
     }
+}
+
+test {
+    useJUnitPlatform()
 }
 
 // name the plugin jar

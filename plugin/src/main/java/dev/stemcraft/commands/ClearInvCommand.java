@@ -20,7 +20,7 @@ public class ClearInvCommand extends STEMCraftCommandImpl {
     @Override
     public void onExecute(STEMCraftAPI api, STEMCraftCommand cmd, STEMCraftCommandContext ctx) {
         // check if console called without args
-        if(ctx.fromConsole() && ctx.args().isEmpty()) {
+        if(ctx.isConsole() && ctx.args().isEmpty()) {
             error("CONSOLE_PLAYER_REQUIRED");
             return;
         }
@@ -44,7 +44,7 @@ public class ClearInvCommand extends STEMCraftCommandImpl {
         if (target.equals(ctx.getSender())) {
             success(ctx.getSender(), "CLEAR_INV_SUCCESS");
         } else {
-            String senderName = ctx.fromConsole() ? api.locale().get("CONSOLE_NAME") : ctx.getSender().getName();
+            String senderName = ctx.isConsole() ? api.locale().get("CONSOLE_NAME") : ctx.getSender().getName();
             success(ctx.getSender(), "CLEAR_INV_OTHER_SUCCESS_SENDER", "player", target.getName());
             success(target, "CLEAR_INV_OTHER_SUCCESS_PLAYER", "player", senderName);
         }

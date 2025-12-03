@@ -21,7 +21,7 @@ package dev.stemcraft.managers;
 
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.services.PlayerLogService;
-import dev.stemcraft.api.utils.SCText;
+import dev.stemcraft.api.utils.SCString;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -97,7 +97,7 @@ public class PlayerLogManager implements PlayerLogService, Listener {
 
         maxDays = plugin.getConfig().getInt("player_log.max-days", 28);
         tpsThreshold = plugin.getConfig().getInt("player_log.tps_threshold", 15);
-        memoryThreshold = SCText.toBytes(plugin.getConfig().getString("player-log.memory_threshold", "5MB"));
+        memoryThreshold = SCString.toBytes(plugin.getConfig().getString("player-log.memory_threshold", "5MB"));
         trackedPlacePatterns = loadPatterns("player_log.blocks.place");
         trackedBreakPatterns = loadPatterns("player_log.blocks.break");
 
@@ -138,6 +138,7 @@ public class PlayerLogManager implements PlayerLogService, Listener {
         return list;
     }
 
+    @SuppressWarnings("BooleanMethodIsAlwaysInverted")
     private boolean matches(List<Pattern> list, Material material) {
         if (list.isEmpty()) return true; // empty = log everything
 
@@ -166,7 +167,7 @@ public class PlayerLogManager implements PlayerLogService, Listener {
                 x -> new ArrayDeque<>()
         );
 
-        deque.addFirst(new PlayerLogEntry(Instant.now(), SCText.placeholders(action, placeholders), name));
+        deque.addFirst(new PlayerLogEntry(Instant.now(), SCString.placeholders(action, placeholders), name));
     }
 
     private void flushAll() {
@@ -362,8 +363,9 @@ public class PlayerLogManager implements PlayerLogService, Listener {
     @EventHandler
     public void onBookEdit(PlayerEditBookEvent event) {
         Player player = event.getPlayer();
+        event.getNewBookMeta();
         logPlayerAction(player, "BOOK EDIT: " + event.getPreviousBookMeta().getTitle() + " -> " +
-                (event.getNewBookMeta() != null ? event.getNewBookMeta().getTitle() : "unknown"));
+                event.getNewBookMeta().getTitle());
     }
 
     @EventHandler
