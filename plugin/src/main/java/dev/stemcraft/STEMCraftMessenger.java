@@ -19,20 +19,40 @@ public class STEMCraftMessenger {
         STEMCraftAPI.api().messenger().plain(sender, message, ex, placeholders);
     }
 
+    public void plain(List<CommandSender> senderList, String message, Throwable ex, Object... placeholders) {
+        senderList.forEach(sender -> STEMCraftAPI.api().messenger().plain(sender, message, ex, placeholders));
+    }
+
     public void info(CommandSender sender, String message, Throwable ex, Object... placeholders) {
         STEMCraftAPI.api().messenger().info(sender, message, ex, placeholders);
+    }
+
+    public void info(List<CommandSender> senderList, String message, Throwable ex, Object... placeholders) {
+        senderList.forEach(sender -> STEMCraftAPI.api().messenger().info(sender, message, ex, placeholders));
     }
 
     public void warn(CommandSender sender, String message, Throwable ex, Object... placeholders) {
         STEMCraftAPI.api().messenger().warn(sender, message, ex, placeholders);
     }
 
+    public void warn(List<CommandSender> senderList, String message, Throwable ex, Object... placeholders) {
+        senderList.forEach(sender -> STEMCraftAPI.api().messenger().warn(sender, message, ex, placeholders));
+    }
+
     public void error(CommandSender sender, String message, Throwable ex, Object... placeholders) {
         STEMCraftAPI.api().messenger().error(sender, message, ex, placeholders);
     }
 
+    public void error(List<CommandSender> senderList, String message, Throwable ex, Object... placeholders) {
+        senderList.forEach(sender -> STEMCraftAPI.api().messenger().error(sender, message, ex, placeholders));
+    }
+
     public void success(CommandSender sender, String message, Throwable ex, Object... placeholders)  {
         STEMCraftAPI.api().messenger().success(sender, message, ex, placeholders);
+    }
+
+    public void success(List<CommandSender> senderList, String message, Throwable ex, Object... placeholders)  {
+        senderList.forEach(sender -> STEMCraftAPI.api().messenger().success(sender, message, ex, placeholders));
     }
 
     public void broadcast(String message, List<Player> exclude, Object... placeholders)  {
