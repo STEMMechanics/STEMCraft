@@ -22,6 +22,12 @@ package dev.stemcraft.api.internal;
 import dev.stemcraft.api.STEMCraftAPI;
 import org.bukkit.plugin.Plugin;
 
+/**
+ * Internal holder for the STEMCraftAPI and Plugin instances
+
+ * Warning: This class is for internal use only. Do not use it in your plugins.
+ * Using this class may lead to unexpected behavior and is not supported.
+ */
 public class InstanceHolder {
     private static STEMCraftAPI api;
     private static Plugin plugin;

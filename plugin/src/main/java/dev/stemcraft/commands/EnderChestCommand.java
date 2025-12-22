@@ -11,7 +11,7 @@ public class EnderChestCommand extends STEMCraftCommandImpl {
     public void onLoad(STEMCraft plugin) {
         setLabel("enderchest");
         setDescription("ENDERCHEST_DESCRIPTION");
-        setUsage("/enderchest <player>");
+        setUsage("ENDERCHEST_USAGE");
         setPermission("stemcraft.command.invseendercheste");
         addTabCompletion("{player}");
         register(plugin);

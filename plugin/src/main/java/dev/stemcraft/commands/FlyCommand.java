@@ -13,7 +13,7 @@ public class FlyCommand extends STEMCraftCommandImpl {
     public void onLoad(STEMCraft plugin) {
         setLabel("fly");
         setDescription("FLY_DESCRIPTION");
-        setUsage("/fly [player]");
+        setUsage("FLY_USAGE");
         setPermission("stemcraft.command.fly");
         register(plugin);
     }
@@ -48,11 +48,11 @@ public class FlyCommand extends STEMCraftCommandImpl {
         target.setAllowFlight(newState);
 
         if (target.equals(ctx.getSender())) {
-            success(ctx.getSender(), "FLY_SUCCESS", "status", newState ? "enabled" : "disabled");
+            success(ctx.getSender(), "FLY_SUCCESS", "state", newState ? "enabled" : "disabled");
         } else {
             String senderName = ctx.isConsole() ? api.locale().get("CONSOLE_NAME") : ctx.getSender().getName();
-            success(ctx.getSender(), "FLY_OTHER_SUCCESS_SENDER", "status", newState ? "enabled" : "disabled", "player", target.getName());
-            success(target, "FLY_OTHER_SUCCESS_PLAYER", "status", newState ? "enabled" : "disabled", "player", senderName);
+            success(ctx.getSender(), "FLY_OTHER_SUCCESS_SENDER", "state", newState ? "enabled" : "disabled", "player", target.getName());
+            success(target, "FLY_OTHER_SUCCESS_PLAYER", "state", newState ? "enabled" : "disabled", "player", senderName);
         }
     }
 }

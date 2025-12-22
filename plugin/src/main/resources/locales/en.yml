@@ -11,25 +11,29 @@ STEMCRAFT_FEATURE_LOADED: "Feature {name} loaded"
 CONSOLE_PLAYER_REQUIRED: "A player is required when using this command from the console."
 PLAYER_NOT_FOUND: "Player {player} not found."
 PLAYER_REQUIRED: "A player is required when using this command."
-PLAYER_ONLY: "This command can only be run by players."
+COMMAND_PLAYER_ONLY: "This command can only be run by players."
 CONSOLE_NAME: "Console"
 FAILED_CREATE_DIR: "Failed to create web server directory."
 COMMAND_NO_PERMISSION: "You do not have permission to use this command."
 COMMAND_NO_PERMISSION_OTHERS: "You do not have permission to use this command on others."
 COMMAND_FAIL_UNREGISTER: "Could not unregister previous command {label}"
+COMMAND_MISSING_ARGUMENTS: "Missing arguments."
 WORLD_NOT_FOUND: "World {world} could not be found."
 INVALID_DURATION: "Invalid duration"
 
 DENY_SPAWN_EGG: "You do not have permission to use spawn eggs."
 
 HUB_DESCRIPTION: "Teleports a player to the hub world."
+HUB_USAGE: "/hub [player]"
 HUB_TELEPORT_OTHER_DENY: "You do not have permission to teleport others to the hub."
 HUB_TELEPORT_SUCCESS: "You have been teleported to the hub."
 HUB_TELEPORT_OTHER_SUCCESS_SENDER: "{player} has been teleported to the hub."
 HUB_TELEPORT_OTHER_SUCCESS_PLAYER: "You have been teleported to the hub by {player}."
 HUB_WORLD_NOT_FOUND: "The hub world {world} was not found."
 
+WEB_SERVER_REQUEST: "Received web request: {method} {path} from {ip}"
 WEB_SERVER_DESCRIPTION: "Control the web server."
+WEB_SERVER_USAGE: "/webserver <start|stop|enable|disable>"
 WEB_SERVER_ALREADY_RUNNING: "The web server is already running."
 WEB_SERVER_NOT_RUNNING: "The web server is not running."
 WEB_SERVER_STOPPED: "Web server stopped."
@@ -46,12 +50,14 @@ WEB_SERVER_STATUS: "Web server is {enabled_disabled} at startup and is currently
 WEB_SERVER_REGISTERED_ENDPOINT: "Registered web endpoint handler {path}"
 
 WORKBENCH_DESCRIPTION: "Open a workbench."
+WORKBENCH_USAGE: "TO BE UPDATED"
 WORKBENCH_OTHER_DENY: "You do not have permission to open {table} for other players."
 WORKBENCH_OPEN_OTHER_SUCCESS_SENDER: "{table} opened for {player}."
 WORKBENCH_OPEN_OTHER_SUCCESS_PLAYER: "{table} opened for you by {player}."
 WORKBENCH_OPEN_FAILED: "Opening {table} failed."
 
 CLEAR_INV_DESCRIPTION: "Clears a players inventory."
+CLEAR_INV_USAGE: "/clearinv [player]"
 CLEAR_INV_SUCCESS: "Your inventory has been cleared."
 CLEAR_INV_OTHER_SUCCESS_SENDER: "{player} inventory has been cleared."
 CLEAR_INV_OTHER_SUCCESS_PLAYER: "Your inventory has been cleared by {player}."
@@ -59,9 +65,11 @@ CLEAR_INV_OTHER_SUCCESS_PLAYER: "Your inventory has been cleared by {player}."
 DENY_THROWING_POTION: "You are not allowed to throw potions."
 
 INVSEE_DESCRIPTION: "Inspect the contents of a players inventory."
+INVSEE_USAGE: "/invsee <player>"
 INVSEE_VIEWING: "Viewing inventory of {player}."
 
 NAUGHTY_DESCRIPTION: ""
+NAUGHTY_USAGE: "/naughty <player> <duration|clear> (reason)"
 NAUGHTY_SET: "You have been placed in naughty mode for {reason}. You cannot interact with others for {duration}."
 NAUGHTY_SET_ALL: "{player} has been placed in naughty mode. They cannot interact with others for {duration}."
 NAUGHTY_UNSET: "You are no longer in naughty mode."
@@ -82,8 +90,10 @@ FLY_CANNOT_BE_TOGGLED: "Flight cannot be toggled in the current gamemode."
 FLY_SUCCESS: "Flying has been {state}."
 FLY_OTHER_SUCCESS_SENDER: "Flying has been {state} for {player}."
 FLY_OTHER_SUCCESS_PLAYER: "Flying has been {state} by {player}."
+FLY_USAGE: "/fly [player]"
 
 REPAIR_DESCRIPTION: "Repair the item the player is currently holding."
+REPAIR_USAGE: "/repair [player]"
 REPAIR_NO_ITEM: "You are not holding an item that can be repaired."
 REPAIR_NO_ITEM_OTHER: "{player} is not not holding an item that can be repaired."
 REPAIR_ITEM_REPAIRED: "Your item has been repaired."
@@ -91,15 +101,18 @@ REPAIR_ITEM_REPAIRED_OTHER: "The item has been repaired for {player}."
 
 # /tphere
 TPHERE_DESCRIPTION: "Teleport a player to your location."
+TPHERE_USAGE: "/tphere <player>"
 TPHERE_SUCCESS: "&aTeleported &e{player}&a to your location."
 
 # /back
 BACK_DESCRIPTION: "Return to your previous location."
+BACK_USAGE: "/back [player]"
 BACK_NO_LOCATION: "&cNo previous location stored for &e{player}&c."
 BACK_SUCCESS: "&aReturned &e{player}&a to their previous location."
 
 # /warp
 WARP_DESCRIPTION: "Teleport to a named warp."
+WARP_USAGE: "/warp <name>"
 WARP_LIST_EMPTY: "&cThere are no warps set."
 WARP_LIST: "&aAvailable warps: &e{warps}"
 WARP_NOT_FOUND: "&cWarp &e{warp}&c does not exist."
@@ -107,36 +120,44 @@ WARP_SUCCESS: "&aTeleported to warp &e{warp}&a."
 
 # /setwarp
 SETWARP_DESCRIPTION: "Create or update a warp at your current location."
+SETWARP_USAGE: "/setwarp <name>"
 SETWARP_SUCCESS: "&aWarp &e{warp}&a has been set at your current location."
 
 # /delwarp
 DELWARP_DESCRIPTION: "Delete a named warp."
+DELWARP_USAGE: "/delwarp <name>"
 DELWARP_SUCCESS: "&aWarp &e{warp}&a has been deleted."
 
 # /spawn
 SPAWN_DESCRIPTION: "Teleport a player to a world's spawn."
+SPAWN_USAGE: "/spawn <world> [player]"
 SPAWN_SUCCESS: "&aTeleported &e{player}&a to the spawn of world &e{world}&a."
 
 # /tpworld
 TPWORLD_DESCRIPTION: "Teleport yourself to another world's spawn."
+TPWORLD_USAGE: "/tpworld <world>"
 TPWORLD_SUCCESS: "&aTeleported you to the spawn of world &e{world}&a."
 
 # /top
 TOP_DESCRIPTION: "Teleport to the highest safe block above you."
+TOP_USAGE: "/top"
 TOP_SUCCESS: "&aTeleported to the top."
 
 # /jump
 JUMP_DESCRIPTION: "Teleport to the block you're looking at."
+JUMP_USAGE: "/jump"
 JUMP_NO_TARGET: "&cNo target block in sight."
 JUMP_SUCCESS: "&aJumped to target block."
 
 # /thru
 THRU_DESCRIPTION: "Teleport through the wall you are looking at."
+THRU_USAGE: "/thru"
 THRU_SUCCESS: "&aTeleported through the wall."
 THRU_FAILED: "&cCouldn't find a safe spot on the other side."
 
 # ptime
 PTIME_DESCRIPTION: "Set or reset a player's personal time."
+PTIME_USAGE: "/ptime <day|night|reset|ticks> [player]"
 PTIME_MODE_REQUIRED: "&cYou must specify a time mode: &e/day&c, &e/night&c, &e/reset&c or ticks."
 PTIME_INVALID_MODE: "&cInvalid ptime mode: &e{mode}&c."
 PTIME_SET_DAY: "&aSet personal time to &eday&a for &e{player}&a."
@@ -146,6 +167,7 @@ PTIME_SET_TICKS: "&aSet personal time for &e{player}&a to &e{time}&a ticks."
 
 # pweather
 PWEATHER_DESCRIPTION: "Set or reset a player's personal weather."
+PWEATHER_USAGE: "/pweather <sun|rain|storm|reset> [player]"
 PWEATHER_MODE_REQUIRED: "&cYou must specify a weather mode: &e/sun&c, &e/rain&c, &e/storm&c or &e/reset&c."
 PWEATHER_INVALID_MODE: "&cInvalid pweather mode: &e{mode}&c."
 PWEATHER_SET_SUN: "&aSet personal weather to &esun&a for &e{player}&a."
@@ -154,12 +176,14 @@ PWEATHER_RESET: "&aReset personal weather for &e{player}&a."
 
 # break
 BREAK_DESCRIPTION: "Break blocks in a radius around the block you're looking at."
+BREAK_USAGE: "/break [radius]"
 BREAK_RADIUS_INVALID: "&cInvalid radius: &e{radius}&c."
 BREAK_RADIUS_CLAMPED: "&eRadius too large.&r Using &e{radius}&r (max &e{max}&r)."
 BREAK_NO_TARGET: "&cNo target block found."
 BREAK_SUCCESS: "&aBroke &e{count}&a blocks in radius &e{radius}&a."
 
 ENDERCHEST_DESCRIPTION: "Inspect the contents of a players enderchest."
+ENDERCHEST_USAGE: "/enderchest <player>"
 ENDERCHEST_VIEWING: "Viewing enderchest of {player}."
 
 FLY_DESCRIPTION: "Toggle the players ability to fly."
@@ -206,7 +230,8 @@ WORLD_DELETED: "World {world} deleted"
 WORLD_FAILED_DELETE: "Failed to delete world {world}"
 WORLD_FAILED_LOAD: "Failed to load world {world}"
 WORLD_FAILED_DUPLICATE: "Failed to duplicate world {world}"
-WORLD_LOADED: "Loaded world {world}"
+WORLD_LOADING: "Loading world {world}"
+WORLD_LOADED: "World {world} loaded"
 WORLD_NONE: "No worlds found"
 WORLD_DUPLICATED: "Duplicated world {source} to {target}"
 WORLD_NO_GENERATORS: "No chunk generators registered"
@@ -218,6 +243,18 @@ WORLD_SET_WEATHER: "Set weather for {world} to {state}"
 WORLD_SET_FROZEN: "Set frozen for {world} to {state}"
 WORLD_SET_TIME:  "Set time for {world} to {state}"
 WORLD_REGISTERED_CHUNK_GENERATOR: "Registered chunk generator {key}"
+WORLD_COMMAND_USAGE_GAMEMODE: "/world gamemode <world> <gamemode|unset>"
+WORLD_GAMEMODE_UNSET: "The gamemode for world {world} has been unset."
+WORLD_INVALID_GAMEMODE: "Invalid gamemode."
+WORLD_SET_GAMEMODE: "The gamemode for world {world} has been set to {gamemode}."
+WORLD_INVALID_GAMEMODE_CONFIG: "The config gamemode {gamemode} is invalid for world {world}"
+WORLD_COMMAND_USAGE_TIME: "Usage: /world time <world> [day|noon|night|midnight|ticks|unset] [always]"
+WORLD_SET_NO_DAMAGE: "No-damage mode for world {world} set to {state}"
+WORLD_TIME_UNSET: "Time lock removed for world {world}"
+WORLD_WEATHER_UNSET: "Weather lock removed for world {world}"
+WORLD_WEATHER_STATUS: "World {world}: weather is {weather} (always={always})"
+WORLD_COMMAND_USAGE_WEATHER: "Usage: /world weather <world> [clear|rain|thunder|unset] [always]"
+WORLD_TIME_STATUS: "World {world}: time is {time} (always={always})"
 
 COMMAND_LOADED: "Command /{label} registered"
 
@@ -229,4 +266,67 @@ PERSISTENT_TIMER_SAVE_FAILED: "Could not save timer data file."
 PERSISTENT_TIMER_CREATE_DATA_FILE_FAILED: "Could not create timer data file."
 
 PUNISHMENT_DESCRIPTION: "Allows staff to mute, kick and ban players"
+PUNISHMENT_USAGE: "TO BE UPDATED"
+
+HOLOGRAM_LOCATION_INVALID: "Location or world cannot be null"
+HOLOGRAM_SAVE_FAILED: "Failed to save holograms: {error}"
+HOLOGRAM_DESCRIPTION: "Manage server holograms"
+HOLOGRAM_USAGE: "/hologram <create|update|closest|delete>"
+
+HOLOGRAM_CREATE_USAGE: "/hologram create <type|-for-unique> <text...>"
+HOLOGRAM_CREATE_SUCCESS: "Hologram created with id {id}."
+
+HOLOGRAM_UPDATE_USAGE: "/hologram update <id> <text...>"
+HOLOGRAM_UPDATE_TYPE_USAGE: "/hologram update type <type> <text...>"
+HOLOGRAM_UPDATE_SUCCESS: "Hologram {id} updated."
+HOLOGRAM_UPDATE_TYPE_SUCCESS: "All holograms of type {type} updated."
+
+HOLOGRAM_DELETE_USAGE: "/hologram delete <id|type>"
+HOLOGRAM_DELETE_SUCCESS: "Hologram {id} deleted."
+HOLOGRAM_DELETE_TYPE_SUCCESS: "All holograms of type {type} deleted."
+
+HOLOGRAM_CLOSEST_SUCCESS: "Closest hologram is {id} (within {range} blocks)."
+HOLOGRAM_CLOSEST_NONE: "No holograms found within {range} blocks."
+
+HOLOGRAM_ID_INVALID: "Invalid hologram id: {id}."
+HOLOGRAM_RANGE_INVALID: "Invalid range: {range}."
+HOLOGRAM_TYPE_INVALID: "Invalid hologram type: {type}."
+
+GAMEMODE_INVENTORIES_LOAD_FAILED: "Failed to load gamemode inventories data: {error}"
+
+RESTRICT_CREATIVE_NO_DROPS: "You cannot drop items in creative mode"
+RESTRICT_CREATIVE_NO_PICKUPS: "You cannot pick up items in creative mode"
+RESTRICT_CREATIVE_NO_INTERACT: "You cannot interact with that item in creative mode"
+RESTRICT_CREATIVE_NO_PORTALS: "You cannot create portals in creative mode"
+RESTRICT_CREATIVE_NO_PLACE: "You cannot place this block in creative mode"
+
+BOOK_USAGE: "Usage: /book <option>"
+BOOK_USAGE_SAVE: "Usage: /book save <author> <title>"
+BOOK_USAGE_GET: "Usage: /book get <name>"
+BOOK_USAGE_SHOW: "Usage: /book show <name> (player)"
+BOOK_USAGE_DEL: "Usage: /book del <name>"
+BOOK_UNKNOWN_OPTION: "Unknown book option"
+BOOK_INVENTORY_FULL: "Your inventory is full"
+BOOK_GIVEN_NEW: "You have been given a new book. Use /book save <name> to save it"
+BOOK_GIVEN: "You have received the book"
+BOOK_GIVEN_WITH_TITLE: "You have receive the book: {title}"
+BOOK_NO_TITLE: "Written Book"
+BOOK_SAVE_NOT_WRITABLE: "You are not holding a writable book"
+BOOK_SAVE_FAILED: "Could not save the book to the server"
+BOOK_SAVE_NEW: "Book saved as {name}"
+BOOK_SAVE_UPDATED: "Book updated"
+BOOK_NOT_FOUND: "Book not found"
+BOOK_UNLOCK_NOT_BOOK: "The book you are holding is not unlockable"
+BOOK_UNLOCK_SUCCESSFUL: "Book unlocked"
+BOOK_DELETE_SUCCESSFUL: "Book deleted"
+
+INV_NO_ROOM: "You don't have enough room in your inventory"
+CUSTOM_BOOKS_DESCRIPTION: "Manage custom books on the server."
+CUSTOM_BOOKS_USAGE: "TO BE UPDATED"
+
 PLAYER_SPEED_DESCRIPTION: "Change a players speed."
+PLAYER_SPEED_RESET: "Your speed has been reset."
+PLAYER_SPEED_RESET_OTHER: "Player speed for {player} has been reset."
+PLAYER_SPEED_GET: "Player {type} speed for {player} is {speed}."
+PLAYER_SPEED_SET: "Player {type} speed for {player} changed to {speed}."
+PLAYER_SPEED_USAGE: "/speed <fly|walk|reset> <speed> <player>"

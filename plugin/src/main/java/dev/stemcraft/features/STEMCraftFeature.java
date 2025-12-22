@@ -21,7 +21,7 @@ public interface STEMCraftFeature {
             append = append.substring(1);
         }
 
-        return "features." + camelToSnake(simple) + append;
+        return "features." + camelToSnake(simple) + "." + append;
     }
 
     default String getConfigBase() {

@@ -2,7 +2,7 @@ package dev.stemcraft.managers;
 
 import com.destroystokyo.paper.profile.PlayerProfile;
 import dev.stemcraft.STEMCraft;
-import dev.stemcraft.api.services.persistenttimer.PersistentTimerService;
+import dev.stemcraft.api.services.task.TaskService;
 import dev.stemcraft.api.services.punishment.PunishmentAlertCallback;
 import dev.stemcraft.api.services.punishment.PunishmentRecord;
 import dev.stemcraft.api.services.punishment.PunishmentService;
@@ -58,7 +58,6 @@ public class PunishmentManager implements PunishmentService {
     @Override
     public void onEnable() {
         PunishmentService punish = plugin.punishmentService();
-        PersistentTimerService persistent = plugin.persistentTimerService();
 
         registerAlert("warn", (type, player, record) -> {
             plugin.messengerService().info(player, "WARN_PLAYER", "reason", record.reason(), "actor", record.actorName());
@@ -66,7 +65,7 @@ public class PunishmentManager implements PunishmentService {
         });
 
         // Register a persistent type for temporary punishments
-        persistent.registerType("punishment", (type, id, data) -> {
+        plugin.taskService().registerPersistentCallback("punishment", (type, id, data) -> {
             PunishmentRecord record = getPunishmentById(id);
             if(record == null) {
                 return;
@@ -96,6 +95,7 @@ public class PunishmentManager implements PunishmentService {
         // /kick <player> [duration] [reason...]
         plugin.registerCommand("kick")
                 .setDescription("PUNISHMENT_DESCRIPTION")
+                .setUsage("PUNISHMENT_USAGE")
                 .setPermission("stemcraft.command.kick")
                 .addTabCompletion("{player}")
                 .setExecutor((ignored, cmd, ctx) -> {
@@ -413,27 +413,13 @@ public class PunishmentManager implements PunishmentService {
             return;
         }
 
-        webService.registerEndpointHandler("/punish", (method, uri) -> {
+        webService.registerEndpointHandler("/punish", (method, uri, queryParams) -> {
             // Parse URI and query string
             java.net.URI parsed = java.net.URI.create(uri);
             String path = parsed.getPath();           // /punish, /punish/type/ban, /punish/player/nomadjimbob
-            String query = parsed.getQuery();         // page=2&q=player
 
             int page = 1;
             int pageSize = 20;
-
-            // Parse query params into a map
-            Map<String, String> queryParams = new HashMap<>();
-            if (query != null && !query.isEmpty()) {
-                for (String part : query.split("&")) {
-                    String[] kv = part.split("=", 2);
-                    if (kv.length == 2) {
-                        String key = URLDecoder.decode(kv[0], StandardCharsets.UTF_8);
-                        String value = URLDecoder.decode(kv[1], StandardCharsets.UTF_8);
-                        queryParams.put(key, value);
-                    }
-                }
-            }
 
             String pageParam = queryParams.get("page");
             if (pageParam != null) {
@@ -501,7 +487,7 @@ public class PunishmentManager implements PunishmentService {
 
                 if (playerSpec == null || playerSpec.isBlank()) {
                     return java.util.Map.of(
-                            "code", 404,
+                            "responseCode", 404,
                             "body", "<html><body><h1>404 Not Found</h1><p>Missing player name or UUID.</p></body></html>"
                     );
                 }
@@ -532,7 +518,7 @@ public class PunishmentManager implements PunishmentService {
                 filteredMode = true;
             } else {
                 return java.util.Map.of(
-                        "code", 404,
+                        "responseCode", 404,
                         "body", "<html><body><h1>404 Not Found</h1><p>Unknown punish route: "
                                 + WebService.escapeHtml(path) + "</p></body></html>"
                 );

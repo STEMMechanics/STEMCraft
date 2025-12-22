@@ -2,22 +2,23 @@ package dev.stemcraft.api.utils;
 
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.internal.InstanceHolder;
+import org.bukkit.attribute.Attribute;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
+import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.SkullMeta;
 import org.geysermc.geyser.api.GeyserApi;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -27,6 +28,7 @@ public class SCPlayer extends STEMCraftUtil {
     private static final Map<String, String> nameCache = new HashMap<>();
     private static File configFile;
     private static YamlConfiguration config;
+    private static List<Player> hiddenPlayers = new ArrayList<>();
 
     @Override
     public void onLoad() {
@@ -47,6 +49,18 @@ public class SCPlayer extends STEMCraftUtil {
                 nameCache.put(key, cacheSection.getString(key));
             }
         }
+
+        STEMCraftAPI.api().registerEvent(PlayerJoinEvent.class, event -> {
+            Player player = event.getPlayer();
+            if (hiddenPlayers.contains(player)) {
+                for (Player other : Bukkit.getOnlinePlayers()) {
+                    if (other.getUniqueId().equals(player.getUniqueId())) continue;
+
+                    other.hidePlayer(InstanceHolder.plugin(), player);
+                    player.hidePlayer(InstanceHolder.plugin(), other);
+                }
+            }
+        });
     }
 
     /**
@@ -172,6 +186,87 @@ public class SCPlayer extends STEMCraftUtil {
         } catch (Exception e) {
             error("Lookup player name for UUID " + id + " failed", e);
             return def;
+        }
+    }
+
+    public static double maxHealth(Player player) {
+        return Optional.ofNullable(
+                        player.getAttribute(Attribute.MAX_HEALTH)
+                )
+                .map(AttributeInstance::getBaseValue)
+                .orElse(20.0);
+    }
+
+    /**
+     * Convert a duration string (1d) to seconds or epoch expiry time.
+     *
+     * @param player The player to give the item.
+     * @param item The item to give.
+     * @param dropOnFail Drop the item if the player inventory is full.
+     * @param showMessage Show a message if giving the item failed and item was not dropped.
+     * @return The result or null if error.
+     */
+    public static Boolean givePlayerItem(Player player, ItemStack item, Boolean dropOnFail, Boolean showMessage) {
+        Map<Integer, ItemStack> leftover = player.getInventory().addItem(item);
+        if (!leftover.isEmpty()) {
+            if (dropOnFail) {
+                player.getWorld().dropItemNaturally(player.getLocation(), item);
+                return true;
+            } else if (showMessage) {
+                error(player, "INV_NO_ROOM");
+            }
+
+            return false;
+        }
+
+        return true;
+    }
+
+    public static Boolean givePlayerItem(Player player, ItemStack item) {
+        return givePlayerItem(player, item, false, true);
+    }
+
+    public static boolean isWhitelisted(Player player) {
+        return STEMCraftAPI.api().gateKeeper().isWhitelisted(player);
+    }
+
+    public static void whitelist(Player player, boolean whitelist) {
+        STEMCraftAPI.api().gateKeeper().whitelist(player, whitelist);
+    }
+
+    public static boolean isBlacklisted(Player player) {
+        return STEMCraftAPI.api().gateKeeper().isWhitelisted(player);
+    }
+
+    public static void blacklist(Player player, boolean blacklist) {
+        STEMCraftAPI.api().gateKeeper().whitelist(player, blacklist);
+    }
+
+    public static void hide(Player player) {
+        if (hiddenPlayers.contains(player)) {
+            return;
+        }
+
+        hiddenPlayers.add(player);
+
+        for (Player other : Bukkit.getOnlinePlayers()) {
+            if (other.getUniqueId().equals(player.getUniqueId())) continue;
+            other.hidePlayer(InstanceHolder.plugin(), player);
+            player.hidePlayer(InstanceHolder.plugin(), other);
+        }
+    }
+
+    public static void show(Player player) {
+        if(!hiddenPlayers.contains(player)) {
+            return;
+        }
+
+        hiddenPlayers.remove(player);
+
+        for (Player other : Bukkit.getOnlinePlayers()) {
+            if (other.getUniqueId().equals(player.getUniqueId())) continue;
+            other.showPlayer(InstanceHolder.plugin(), player);
+            player.showPlayer(InstanceHolder.plugin(), other);
         }
     }
 }

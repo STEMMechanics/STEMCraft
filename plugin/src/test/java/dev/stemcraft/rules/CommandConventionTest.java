@@ -26,6 +26,10 @@ class CommandConventionTest extends BaseSourceScanTest {
     private static final Pattern DESCRIPTION_CALL =
             Pattern.compile("(?:\\.|\\b)setDescription\\s*\\(\\s*\"([A-Z0-9_]+)\"\\s*\\)");
 
+    // setUsage("UPPER_SNAKE_CASE") or obj.setUsage("UPPER_SNAKE_CASE")
+    private static final Pattern USAGE_CALL =
+            Pattern.compile("(?:\\.|\\b)setUsage\\s*\\(\\s*\"([A-Z0-9_]+)\"\\s*\\)");
+
     // setPermission("stemcraft.command.*") or obj.setPermission("stemcraft.command.*")
     private static final Pattern PERMISSION_CALL =
             Pattern.compile("(?:\\.|\\b)setPermission\\s*\\(\\s*\"stemcraft\\.[^\"]+\"\\s*\\)");
@@ -40,21 +44,25 @@ class CommandConventionTest extends BaseSourceScanTest {
             String content = String.join("\n", lines);
 
             boolean hasCommandImpl = EXTENDS_COMMAND_IMPL.matcher(content).find();
-            boolean hasRegisterCommandUsage = REGISTER_COMMAND_LITERAL.matcher(content).find();
+            boolean hasRegisterCommand = REGISTER_COMMAND_LITERAL.matcher(content).find();
 
             // not a command-related file
-            if (!hasCommandImpl && !hasRegisterCommandUsage) {
+            if (!hasCommandImpl && !hasRegisterCommand) {
                 continue;
             }
 
             boolean hasDescription = DESCRIPTION_CALL.matcher(content).find();
+            boolean hasUsage = USAGE_CALL.matcher(content).find();
             boolean hasPermission = PERMISSION_CALL.matcher(content).find();
 
-            if (!hasDescription || !hasPermission) {
+            if (!hasDescription || !hasPermission || !hasUsage) {
                 StringBuilder sb = new StringBuilder();
                 sb.append(file).append(":\n");
                 if (!hasDescription) {
                     sb.append(" - Missing setDescription(\"UPPER_SNAKE_CASE\") in command definition\n");
+                }
+                if (!hasUsage) {
+                    sb.append(" - Missing setUsage(\"UPPER_SNAKE_CASE\") in command definition\n");
                 }
                 if (!hasPermission) {
                     sb.append(" - Missing setPermission(\"stemcraft.*\") in command definition\n");

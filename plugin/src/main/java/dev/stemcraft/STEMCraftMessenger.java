@@ -7,8 +7,16 @@ import org.bukkit.entity.Player;
 import java.util.List;
 
 public class STEMCraftMessenger {
+    public void debug(String message, Throwable ex, Object... placeholders) {
+        STEMCraftAPI.api().messenger().debug(message, ex, placeholders);
+    }
+
     public void log(CommandSender sender, String message, Throwable ex, Object... placeholders) {
         STEMCraftAPI.api().messenger().log(sender, message, ex, placeholders);
+    }
+
+    public void plain(CommandSender sender, String message, Throwable ex, Object... placeholders) {
+        STEMCraftAPI.api().messenger().plain(sender, message, ex, placeholders);
     }
 
     public void info(CommandSender sender, String message, Throwable ex, Object... placeholders) {

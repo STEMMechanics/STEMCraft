@@ -34,9 +34,7 @@ public interface LocaleService extends STEMCraftService {
      * If key is a string, then it will be used in place of the key.
      */
     String get(String lang, String key, Object... placeholders);
-
     default String get(String key, Object... placeholders) { return get(getDefaultLocale(), key, placeholders); }
-
     default String get(CommandSender sender, String key, Object... placeholders) {
         String lang;
 
@@ -48,4 +46,20 @@ public interface LocaleService extends STEMCraftService {
 
         return get(lang, key, placeholders);
     }
+
+    /**
+     * Process the custom character bindings in the given string.
+     */
+    String processBindings(String str);
+
+    /**
+     * Add a custom character binding.
+     */
+    void addBinding(String placeholder, String value);
+
+    /**
+     * Remove a custom character binding.
+     */
+    void removeBinding(String placeholder);
+    void removeBindings(Iterable<String> placeholders);
 }

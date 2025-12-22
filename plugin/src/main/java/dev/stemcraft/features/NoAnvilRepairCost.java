@@ -2,7 +2,6 @@ package dev.stemcraft.features;
 
 import dev.stemcraft.api.STEMCraftAPI;
 import org.bukkit.event.inventory.PrepareAnvilEvent;
-import org.bukkit.inventory.AnvilInventory;
 
 public class NoAnvilRepairCost implements STEMCraftFeature {
 

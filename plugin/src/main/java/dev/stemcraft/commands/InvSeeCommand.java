@@ -11,7 +11,7 @@ public class InvSeeCommand extends STEMCraftCommandImpl {
     public void onLoad(STEMCraft plugin) {
         setLabel("invsee");
         setDescription("INVSEE_DESCRIPTION");
-        setUsage("/invsee <player>");
+        setUsage("INVSEE_USAGE");
         setPermission("stemcraft.command.invsee");
         addTabCompletion("{player}");
         register(plugin);

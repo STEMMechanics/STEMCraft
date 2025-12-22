@@ -38,6 +38,9 @@ public interface WebService extends STEMCraftService {
      */
     void registerEndpointHandler(String path, WebServiceEndpointHandler handler);
 
+    /**
+     * Escape HTML special characters in a string
+     */
     static String escapeHtml(String in) {
         if (in == null) return "";
         return in.replace("&", "&amp;")
@@ -45,4 +48,8 @@ public interface WebService extends STEMCraftService {
                 .replace(">", "&gt;");
     }
 
+    /**
+     * Get the public URL of the webserver
+     */
+    String getPublicUrl();
 }

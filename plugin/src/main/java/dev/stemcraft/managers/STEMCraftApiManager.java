@@ -24,20 +24,22 @@ import dev.stemcraft.STEMCraftMessenger;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.commands.STEMCraftCommand;
 import dev.stemcraft.api.events.STEMCraftEventHandler;
-import dev.stemcraft.api.services.LocaleService;
-import dev.stemcraft.api.services.MessengerService;
-import dev.stemcraft.api.services.PlayerLogService;
-import dev.stemcraft.api.services.WorldService;
-import dev.stemcraft.api.services.persistenttimer.PersistentTimerService;
+import dev.stemcraft.api.services.*;
+import dev.stemcraft.api.services.hologram.HologramService;
+import dev.stemcraft.api.services.region.RegionService;
+import dev.stemcraft.api.services.task.TaskService;
 import dev.stemcraft.api.services.punishment.PunishmentService;
 import dev.stemcraft.api.services.tabcomplete.TabCompleteService;
+import dev.stemcraft.api.services.web.WebService;
 import dev.stemcraft.commands.STEMCraftCommandImpl;
+import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.event.Event;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 
 import java.io.File;
+import java.io.IOException;
 
 public class STEMCraftApiManager extends STEMCraftMessenger implements STEMCraftAPI {
     private static STEMCraft plugin;
@@ -61,8 +63,12 @@ public class STEMCraftApiManager extends STEMCraftMessenger implements STEMCraft
     public YamlConfiguration config() {
         return plugin.config();
     }
+    public void saveConfig() { plugin.saveConfig(); }
 
     public File dataFolder() { return plugin.getDataFolder(); }
+    public File getCacheDir() { return plugin.cacheDir(); }
+    public FileConfiguration getCacheConfig(String fileName) { return plugin.getCacheConfig(fileName); }
+    public void saveCacheConfig(String fileName, FileConfiguration config) { plugin.saveCacheConfig(fileName, config); }
 
     public PlayerLogService playerLog() {
         return plugin.playerLogService();
@@ -78,7 +84,25 @@ public class STEMCraftApiManager extends STEMCraftMessenger implements STEMCraft
 
     public TabCompleteService tabComplete() { return plugin.tabCompleteService(); }
 
-    public PersistentTimerService persistentTimer() { return plugin.persistentTimerService(); }
+    public TaskService tasks() { return plugin.taskService(); }
 
     public PunishmentService punishment() { return plugin.punishmentService(); }
+
+    public HologramService holograms() { return plugin.hologramService(); }
+
+    public ItemService items() { return plugin.itemService(); }
+
+    public RegionService regions() { return plugin.regionService(); }
+
+    public WebService web() { return plugin.webService(); }
+
+    public boolean isInMaintenanceMode() { return plugin.isInMaintenanceMode(); }
+
+    public File getDataFolder() { return plugin.getDataFolder(); }
+
+    public FileConfiguration getConfig(String fileName) { return plugin.getConfig(fileName); }
+
+    public void saveConfig(String fileName, FileConfiguration config) { plugin.saveConfig(fileName, config); }
+
+    public GateKeeperService gateKeeper() { return plugin.gateKeeperService(); }
 }

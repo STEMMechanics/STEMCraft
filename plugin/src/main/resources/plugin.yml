@@ -4,3 +4,5 @@ main: dev.stemcraft.STEMCraft
 api-version: '1.21'
 softdepend:
   - WorldEdit
+  - Vault
+  - Floodgate

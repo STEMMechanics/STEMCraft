@@ -44,7 +44,11 @@ public class MOTDManager implements MOTDService, Listener {
         motdText = plugin.config().getString("motd.text", motdText);
 
         plugin.registerEvent(ServerListPingEvent.class, event -> {
-            event.setMotd(SCString.colouriseToSection(motdTitle + "\n" + current()));
+            if(plugin.inMaintenanceMode()) {
+                event.setMotd(SCString.colouriseToSection("&c&lServer is under maintenance!\n&7Please check back later."));
+            } else {
+                event.setMotd(SCString.colouriseToSection(motdTitle + "\n" + current()));
+            }
         });
     }
 

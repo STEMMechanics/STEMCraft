@@ -14,7 +14,7 @@ public class RepairCommand extends STEMCraftCommandImpl {
     public void onLoad(STEMCraft plugin) {
         setLabel("repair");
         setDescription("REPAIR_DESCRIPTION");
-        setUsage("/repair [player]");
+        setUsage("REPAIR_USAGE");
         setPermission("stemcraft.command.repair");
         register(plugin);
     }

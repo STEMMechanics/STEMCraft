@@ -27,9 +27,5 @@ public interface PlayerLogService extends STEMCraftService {
      * Log an action against the player. If player is null it is logged as a server action.
      */
     void logPlayerAction(Player player, String action, String... placeholders);
-
-    /**
-     * Log a server action.
-     */
     default void logServerAction(String action, String... placeholders) { logPlayerAction(null, action, placeholders); }
 }

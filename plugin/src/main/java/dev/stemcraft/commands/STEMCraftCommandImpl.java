@@ -24,10 +24,12 @@ import dev.stemcraft.STEMCraftMessenger;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.commands.STEMCraftCommand;
 import dev.stemcraft.api.commands.STEMCraftCommandContext;
+import dev.stemcraft.api.commands.STEMCraftCommandException;
 import dev.stemcraft.api.commands.STEMCraftCommandExecutor;
 import lombok.Getter;
 import org.bukkit.Bukkit;
 import org.bukkit.command.*;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
@@ -145,16 +147,24 @@ public class STEMCraftCommandImpl extends STEMCraftMessenger implements STEMCraf
                     return true;
                 }
 
-                if(executor != null) {
-                    executor.execute(STEMCraftAPI.api(), this, context);
-                } else {
-                    onExecute(STEMCraftAPI.api(), this, context);
+                try {
+                    if (executor != null) {
+                        executor.execute(STEMCraftAPI.api(), this, context);
+                    } else {
+                        onExecute(STEMCraftAPI.api(), this, context);
+                    }
+                } catch(STEMCraftCommandException ex) {
+                    String msg = ex.getMessage();
+                    if(msg != null && !msg.isEmpty()) {
+                        STEMCraftAPI.api().messenger().error(sender, ex.getMessage());
+                    }
                 }
+
                 return true;
             });
 
             getCommandMap().register(label, "stemcraft", pluginCommand);
-            info("COMMAND_LOADED", "label", label);
+            debug("COMMAND_LOADED", "label", label);
         }
     }
 
@@ -216,8 +226,8 @@ public class STEMCraftCommandImpl extends STEMCraftMessenger implements STEMCraf
     }
 
     private static class TabCompleteValueOption {
-        String option = null;
-        String value = null;
+        String option;
+        String value;
 
         TabCompleteValueOption(String option, String value) {
             this.option = option;
@@ -232,9 +242,11 @@ public class STEMCraftCommandImpl extends STEMCraftMessenger implements STEMCraf
         final List<String> valueOptionArgsUsed = new ArrayList<>();
         Integer argIndex = 0;
         final String[] args;
+        final Player player;
 
-        public TabCompleteArgParser(String[] args) {
+        public TabCompleteArgParser(String[] args, Player player) {
             this.args = args;
+            this.player = player;
         }
 
         public static String getStringAsOption(String arg) {
@@ -261,15 +273,27 @@ public class STEMCraftCommandImpl extends STEMCraftMessenger implements STEMCraf
         }
 
         public void addValueOption(TabCompleteValueOption option) {
-            valueOptionArgsAvailable.put(option.option, parseValue(option.value));
+            valueOptionArgsAvailable.put(option.option, parseValue(option.value, player));
         }
 
-        public static List<String> parseValue(String value) {
+        public static List<String> parseValue(String value, Player player) {
             List<String> list = new ArrayList<>();
 
             if (value.startsWith("{") && value.endsWith("}")) {
-                String placeholder = value.substring(1, value.length() - 1);
-                List<String> placeholderList = STEMCraftAPI.api().tabComplete().getCompletionList(placeholder);
+                String inner = value.substring(1, value.length() - 1); // remove { }
+                String[] parts = inner.split(":");
+
+                String placeholder = parts[0];
+                String[] args = new String[Math.max(0, parts.length - 1)];
+
+                if (parts.length > 1) {
+                    System.arraycopy(parts, 1, args, 0, parts.length - 1);
+                }
+
+                List<String> placeholderList = STEMCraftAPI.api()
+                        .tabComplete()
+                        .getCompletionList(placeholder, player, args);
+
                 list.addAll(placeholderList);
             } else {
                 list.add(value);
@@ -310,7 +334,7 @@ public class STEMCraftCommandImpl extends STEMCraftMessenger implements STEMCraf
                     return true;
                 }
 
-                List<String> values = parseValue(tabCompletionItem);
+                List<String> values = parseValue(tabCompletionItem, player);
                 if (values.contains(arg)) {
                     argIndex++;
                     return true;
@@ -333,6 +357,7 @@ public class STEMCraftCommandImpl extends STEMCraftMessenger implements STEMCraf
 
     @Override
     public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command cmd, @NotNull String label, String[] args) {
+        Player player = (sender instanceof Player p) ? p : null;
         List<String> tabCompletionResults = new ArrayList<>();
         List<String> optionArgsAvailable = new ArrayList<>();
         Map<String, List<String>> valueOptionArgsAvailable = new HashMap<>();
@@ -343,33 +368,38 @@ public class STEMCraftCommandImpl extends STEMCraftMessenger implements STEMCraf
         // iterate each tab completion list
         tabCompletionList.forEach(list -> {
             boolean matches = true;
-            int listIndex = 0;
+            int listIndex;
 
             // Copy the elements except the last one
-            TabCompleteArgParser argParser = new TabCompleteArgParser(fullArgs);
+            TabCompleteArgParser argParser = new TabCompleteArgParser(fullArgs, player);
 
             // iterate each tab completion list item
             for (listIndex = 0; listIndex < list.length; listIndex++) {
                 String listItem = list[listIndex];
 
-                // list item is an option
-                String option = TabCompleteArgParser.getStringAsOption(listItem);
-                if (option != null) {
-                    argParser.addOption(option);
-                    continue;
-                }
+                if(listItem != null) {
+                    // list item is an option
+                    String option = TabCompleteArgParser.getStringAsOption(listItem);
+                    if (option != null) {
+                        argParser.addOption(option);
+                        continue;
+                    }
 
-                // list item is a value option
-                TabCompleteValueOption valueOption = TabCompleteArgParser.getStringAsValueOption(listItem);
-                if (valueOption != null) {
-                    argParser.addValueOption(valueOption);
-                    continue;
+                    // list item is a value option
+                    TabCompleteValueOption valueOption = TabCompleteArgParser.getStringAsValueOption(listItem);
+                    if (valueOption != null) {
+                        argParser.addValueOption(valueOption);
+                        continue;
+                    }
                 }
 
                 // list item is a string or placeholder
                 Boolean nextMatches = argParser.nextMatches(listItem);
                 if (nextMatches == null) {
-                    tabCompletionResults.addAll(TabCompleteArgParser.parseValue(listItem));
+                    if(listItem != null) {
+                        tabCompletionResults.addAll(TabCompleteArgParser.parseValue(listItem, player));
+                    }
+
                     break;
                 } else if (!nextMatches) {
                     matches = false;

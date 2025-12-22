@@ -13,7 +13,7 @@ public class PTimeCommand extends STEMCraftCommandImpl {
     public void onLoad(STEMCraft plugin) {
         setLabel("ptime");
         setDescription("PTIME_DESCRIPTION");
-        setUsage("/ptime <day|night|reset|ticks> [player]");
+        setUsage("PTIME_USAGE");
         setPermission("stemcraft.command.ptime");
         addTabCompletion("day", "{player}");
         addTabCompletion("night", "{player}");
@@ -73,7 +73,7 @@ public class PTimeCommand extends STEMCraftCommandImpl {
         }
 
         if (!(ctx.getSender() instanceof Player sender)) {
-            cmd.error("PLAYER_ONLY");
+            cmd.error("COMMAND_PLAYER_ONLY");
             return null;
         }
 

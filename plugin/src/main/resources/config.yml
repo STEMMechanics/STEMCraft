@@ -1,19 +1,52 @@
 logging:
   prefixes:
     log: "[STEMCraft] "
-    info: "&9[INFO]&r "
-    warn: "&e[WARN]&r "
-    error: "&c[ERROR]&r "
-    success: "&a[SUCCESS]&r "
+    info: "&b&l[ i ]&b "
+    warn: "&6&l[ ! ]&6 "
+    error: "\uE132&c "
+    success: "&2&l[ \u2714 ]&2 "
+    broadcast: "&5&l[ ! ]&5 "
+
+whitelist_message: |-
+  This server is for our workshop players only.
+  
+  If you believe you should have access, please contact STEMMechanics.
+
 
 motd:
   title: "§9■§d■§9■§d■§9■§d■§9■§d■§9■§d■§9■§d■§9■§d■§9■§d■ §e§lSTEMCRAFT §9■§d■§9■§d■§9■§d■§9■§d■§9■§d■§9■§d■§9■§d■"
   text: "                   §e★ §bEnjoy your stay! §e★"
 
+hub:
+  world: world
+  exit_commands:
+    bw_*:
+      command: "bw leave"
+      as-player: true
+    PartyGames:
+      command: "pg leave"
+      as-player: true
+    tb_*:
+      command: "tb leave"
+      as-player: true
+
 web_server:
     enabled: true
-    port: 8080
+    port: 8950
     path: www
+
+distance_difficulty:
+  range: 500
+  multiplier: 0.25
+
+chat:
+  format: "{prefix}{player}: {message}{suffix}"
+  filter_command: ""
+  spam_cooldown: 3
+  spam_message: "Please do not spam the chat"
+  warning_threshold: 3
+  warning_cooldown: 600
+  warning_message: "You have been warned for bad chat. If you continue you will be banned."
 
 player_logs:
     enabled: true
@@ -180,3 +213,104 @@ features:
   naughty:
     allowed_commands:
       - "hub"
+  skip_night:
+    required: 0.25
+    random_tick_speed: 300
+    worlds:
+      - "survival"
+  player_game_messages:
+    join:
+      enabled: true
+      list:
+        - '{player} has entered the lab. Safety goggles on.'
+        - '{player} spawned in. Someone hide the redstone.'
+        - '{player} joined. The server sighed deeply.'
+        - '{player} spawned in. Please remain seated.'
+        - '{player} logged in. Chaos warming up…'
+        - '{player} joined the game. Nothing exploded yet.'
+        - '{player} appeared. This was not in the plan.'
+        - '{player} joined. Someone hide the diamonds.'
+        - '{player} has entered the chat. Blame incoming.'
+        - '{player} loaded in. Expectations lowered.'
+        - '{player} joined. Redstone engineers on standby.'
+        - '{player} arrived. The villagers are concerned.'
+    quit:
+      enabled: true
+      list:
+        - '{player} left to "touch grass". Unconfirmed.'
+        - '{player} disconnected. The hamsters stopped running.'
+        - '{player} left. The server feels safer now.'
+        - '{player} disconnected. Probably their fault.'
+        - '{player} quit. Lets call it a tactical retreat.'
+        - '{player} left the game. Dramatic exit achieved.'
+        - '{player} vanished. No loot dropped.'
+        - '{player} logged out. Rage level unknown.'
+        - '{player} left. The creepers celebrate quietly.'
+        - '{player} disconnected. Keyboard survived.'
+        - '{player} quit. Minecraft remains undefeated.'
+        - '{player} left the server. This is fine.'
+    death:
+      enabled: true
+      list:
+        - "{player} became a cautionary tale."
+        - "{player} found out the hard way."
+
+      list_entity:
+        - "{player} was deleted by {killer}."
+        - "{player} lost an argument with {killer}."
+
+      list_cause:
+        FALL:
+          - "{player} discovered gravity."
+          - "{player} tried flying. Nailed the landing."
+        LAVA:
+          - "{player} tried to hug lava. Lava said no."
+        DROWNING:
+          - "{player} forgot lungs are optional only in mods."
+        FIRE:
+          - "{player} is now lightly toasted."
+        VOID:
+          - "{player} fell out of the world. Classic."
+        SUFFOCATION:
+          - "{player} phased into a wall. The wall won."
+  tab:
+    update_ticks: 40 # 2s
+    ping:
+      good_max: 80
+      warn_max: 160
+    header:
+      - ""
+      - "<gold>STEMCraft</gold>"
+      - ""
+
+    footer:
+      - ""
+      - "<gray>Ping:</gray> <aqua>{ping}ms</aqua> <gray>| Online:</gray> <green>{online}</green>/<green>{max}</green>"
+
+    name_format: "{prefix}{player}"
+    # optional: enforce max length (tab list name has limits)
+    max_name_len: 48
+
+
+bindings:
+  crafting_table: "\uE120"
+  enchantment_table: "\uE121"
+  skeleton_head_front: "\uE122"
+  chat_bubble: "\uE123"
+  info_purple: "\uE124"
+  info_blue: "\uE125"
+  info_green: "\uE126"
+  question_yellow: "\uE127"
+  question_blue: "\uE128"
+  question_green: "\uE129"
+  world: "\uE12a"
+  location: "\uE12b"
+  house: "\uE12c"
+  purple_bed: "\uE12d"
+  green_bed: "\uE12e"
+  discord: "\uE12f"
+  warning_yellow: "\uE131"
+  warning_red: "\uE132"
+  click_action_left: "\uE133"
+  click_action_right: "\uE134"
+  chest: "\uE135"

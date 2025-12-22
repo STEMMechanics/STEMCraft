@@ -1,9 +1,6 @@
 package dev.stemcraft.api.utils;
 
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 
@@ -96,4 +93,27 @@ public class SCTime extends STEMCraftUtil {
         // Older: nice readable format
         return t.format(DateTimeFormatter.ofPattern("d MMM h:mm a"));
     }
+
+    public static String toTimestamp(long epochMillis) {
+        return Instant.ofEpochMilli(epochMillis)
+                .atZone(ZoneId.systemDefault())
+                .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+    }
+
+    public static long DurationToRunAtMillis(Duration duration) {
+        Instant targetTime = Instant.now().plus(duration);
+        return targetTime.toEpochMilli();
+    }
+
+    public static boolean validDate(String date) {
+        if (date == null || date.isBlank()) return false;
+        String s = date.trim();
+        try {
+            LocalDate.parse(s);
+            return true;
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
 }

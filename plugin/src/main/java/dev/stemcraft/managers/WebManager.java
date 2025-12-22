@@ -27,6 +27,7 @@ import dev.stemcraft.api.services.web.WebService;
 import dev.stemcraft.api.services.web.WebServiceEndpointHandler;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -40,6 +41,8 @@ public class WebManager implements WebService {
     private File wwwRoot;
     private HttpServer httpServer;
     private final Map<String, WebServiceEndpointHandler> endpointHandlers = new LinkedHashMap<>();
+    private String ip;
+    private int port;
 
     public WebManager(STEMCraft plugin) {
         this.plugin = plugin;
@@ -58,7 +61,7 @@ public class WebManager implements WebService {
                 .addTabCompletion("disable")
                 .addTabCompletion("enable")
                 .addTabCompletion("status")
-                .setUsage("webserver <start|stop|enable|disable>")
+                .setUsage("WEB_SERVER_USAGE")
                 .setExecutor((api, cmd, ctx) -> {
                     if (ctx.args().isEmpty()) {
                         api.info(ctx.getSender(), cmd.getUsage());
@@ -132,8 +135,8 @@ public class WebManager implements WebService {
             }
         }
 
-        int port = plugin.config().getInt("web_server.port", 8950);
-        String ip = plugin.config().getString("web_server.ip", "127.0.0.1");
+        port = plugin.config().getInt("web_server.port", 8950);
+        ip = plugin.config().getString("web_server.ip", "127.0.0.1");
 
         try {
             httpServer = HttpServer.create(new InetSocketAddress(ip, port), 0);
@@ -157,7 +160,7 @@ public class WebManager implements WebService {
 
     public void registerEndpointHandler(String path, WebServiceEndpointHandler handler) {
         this.endpointHandlers.put(path, handler);
-        plugin.info("WEB_SERVER_REGISTERED_ENDPOINT", "path", path);
+        plugin.debug("WEB_SERVER_REGISTERED_ENDPOINT", "path", path);
     }
 
 
@@ -165,6 +168,22 @@ public class WebManager implements WebService {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             String uri = exchange.getRequestURI().getPath();
+            Map<String, String> queryParams = new LinkedHashMap<>();
+            String query = exchange.getRequestURI().getQuery();
+            if (query != null) {
+                String[] pairs = query.split("&");
+                for (String pair : pairs) {
+                    String[] keyValue = pair.split("=", 2);
+                    if (keyValue.length == 2) {
+                        queryParams.put(keyValue[0], keyValue[1]);
+                    } else if (keyValue.length == 1) {
+                        queryParams.put(keyValue[0], "");
+                    }
+                }
+            }
+
+            plugin.info("WEB_SERVER_REQUEST", "method", exchange.getRequestMethod(), "path", uri, "ip", exchange.getRemoteAddress().toString());
+
             File file = new File(wwwRoot, uri.substring(1));
 
             if (!file.getAbsolutePath().startsWith(wwwRoot.getAbsolutePath())) {
@@ -174,30 +193,53 @@ public class WebManager implements WebService {
 
             for (var e : endpointHandlers.entrySet()) {
                 if (uri.startsWith(e.getKey())) {
-                    Object result = e.getValue().handle("GET", uri);
+                    Object result = e.getValue().handle("GET", uri, queryParams);
 
-                    int code;
-                    byte[] bodyBytes;
+                    int responseCode = 200;
+                    byte[] bodyBytes = new byte[0];
+                    File responseFile = null;
+                    String contentType = "text/html; charset=utf-8";
 
                     if (result instanceof Map<?,?> map) {
-                        Object codeObj = map.get("code");
-                        Object bodyObj = map.get("body");
+                        Object codeObj = map.get("responseCode");
+                        if (codeObj instanceof Number) {
+                            responseCode = ((Number) codeObj).intValue();
+                        }
 
-                        code = (codeObj instanceof Number) ? ((Number) codeObj).intValue() : 200;
-                        String body = (bodyObj != null) ? bodyObj.toString() : "";
-                        bodyBytes = body.getBytes();
+                        Object ctObj = map.get("contentType");
+                        if (ctObj instanceof String) {
+                            contentType = (String) ctObj;
+                        }
+
+                        Object fileObj = map.get("file");
+                        if (fileObj instanceof File f) {
+                            responseFile = f;
+                        } else {
+                            Object bodyObj = map.get("body");
+                            String body = (bodyObj != null) ? bodyObj.toString() : "";
+                            bodyBytes = body.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                        }
+                    } else if (result != null) {
+                        bodyBytes = result.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                    }
+
+                    // send response
+                    if (responseFile != null) {
+                        exchange.getResponseHeaders().add("Content-Type", contentType);
+                        exchange.sendResponseHeaders(responseCode, responseFile.length());
+                        try (OutputStream os = exchange.getResponseBody();
+                             FileInputStream fis = new FileInputStream(responseFile)) {
+                            fis.transferTo(os);
+                        }
                     } else {
-                        code = 200;
-                        bodyBytes = result != null ? result.toString().getBytes() : new byte[0];
+                        exchange.getResponseHeaders().add("Content-Type", contentType);
+                        exchange.sendResponseHeaders(responseCode, bodyBytes.length);
+                        try (OutputStream os = exchange.getResponseBody()) {
+                            os.write(bodyBytes);
+                        }
                     }
 
-                    exchange.sendResponseHeaders(code, bodyBytes.length);
-                    try (OutputStream os = exchange.getResponseBody()) {
-                        os.write(bodyBytes);
-                    }
-
-                    return;
-                }
+                    return;                }
             }
 
             if (file.isDirectory()) {
@@ -224,5 +266,50 @@ public class WebManager implements WebService {
                 os.write(errorMessage.getBytes());
             }
         }
+    }
+
+    public String getPublicUrl() {
+        String publicUrl = plugin.config().getString("web_server.public-url", "").trim();
+        if(!publicUrl.isEmpty()) {
+            if(!publicUrl.startsWith("http://") && !publicUrl.startsWith("https://")) {
+                publicUrl = "http://" + publicUrl;
+            }
+
+            if(publicUrl.endsWith("/")) {
+                publicUrl = publicUrl.substring(0, publicUrl.length() - 1);
+            }
+
+            return publicUrl;
+        }
+
+        String host = ip;
+
+        if ("0.0.0.0".equals(host) || "::".equals(host)) {
+            host = findBestLocalAddress();
+        }
+
+        return "http://" + host + ":" + port;
+    }
+
+    private String findBestLocalAddress() {
+        try {
+            for (var iface : java.util.Collections.list(java.net.NetworkInterface.getNetworkInterfaces())) {
+                if (!iface.isUp() || iface.isLoopback() || iface.isVirtual()) continue;
+
+                for (var addr : java.util.Collections.list(iface.getInetAddresses())) {
+                    if (addr.isLoopbackAddress()) continue;
+                    if (addr.isLinkLocalAddress()) continue;
+                    if (addr.isAnyLocalAddress()) continue;
+
+                    // Prefer IPv4 LAN addresses like 192.168.x.x / 10.x.x.x
+                    if (addr instanceof java.net.Inet4Address) {
+                        return addr.getHostAddress();
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+
+        // Fallback
+        return "127.0.0.1";
     }
 }

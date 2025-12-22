@@ -1,35 +1,57 @@
-package dev.stemcraft.api.utils;
+/*
+ * STEMCraft - Minecraft Plugin
+ * Copyright (C) 2025 James Collins
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, version 3.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ *
+ * @author STEMMechanics
+ * @link https://github.com/STEMMechanics/STEMCraft
+ */
+package dev.stemcraft.api.utils.chatmenu;
 
+import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.api.utils.SCString;
+import dev.stemcraft.api.utils.STEMCraftUtil;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
 
 import java.util.List;
 import java.util.function.BiFunction;
-
 
 public class SCChatMenu extends STEMCraftUtil {
     private final static int ITEMS_PER_PAGE = 8;
 
     /**
      * Render a Chat Menu for the player
-     * @param sender The sender requesting the menu
-     * @param title The menu title
-     * @param command The command to show the menu. Page numbers will be appended
-     * @param page The current page
-     * @param count The number of items in the menu
-     * @param func The callback function to display each item in the menu
-     * @param noneText The string to display when no items are found
      */
-    public static void render(CommandSender sender, String title, String command, int page, int count, BiFunction<Integer, Integer, List<Component>> func, String noneText) {
+    public static void render(CommandSender sender, String title, String command, int page, int count, SCChatMenuRenderer rendererFunc, String noneText) {
+        if(count <= 0) {
+            STEMCraftAPI.api().messenger().error(sender, noneText);
+            return;
+        }
+
         int start = (page - 1) * ITEMS_PER_PAGE;
         int maxPages = (int)Math.ceil((double) count / ITEMS_PER_PAGE);
-        List<Component> lines = func.apply(start, ITEMS_PER_PAGE);
+        boolean isPlayer = sender instanceof Player;
+        int renderCount = Math.min(ITEMS_PER_PAGE, count - start);
+        List<Component> lines = rendererFunc.render(start, renderCount, isPlayer);
 
         if(lines.isEmpty()) {
-            error(sender, noneText);
+            STEMCraftAPI.api().messenger().error(sender, noneText);
             return;
         }
 
@@ -57,13 +79,15 @@ public class SCChatMenu extends STEMCraftUtil {
                     .hoverEvent(HoverEvent.showText(Component.text("Next page")));
         }
 
-        sender.sendMessage(createSeparatorString(prev.append(pageInfo).append(next)));
+        if(isPlayer) {
+            sender.sendMessage(createSeparatorString(prev.append(pageInfo).append(next)));
+        } else {
+            sender.sendMessage(createSeparatorString(pageInfo));
+        }
     }
 
     /**
      * Generates the dash line texts with text centered ie ------ TITLE --------
-     * @param title The component to centre
-     * @return The resulting component
      */
     private static Component createSeparatorString(Component title) {
         // Separator character and max chat width
@@ -90,10 +114,6 @@ public class SCChatMenu extends STEMCraftUtil {
 
     /**
      * Get the page number requested from command args
-     * @param args The command args
-     * @param index Which command arg contains the page number
-     * @param defaultPage The default page number to use if no page number is in args
-     * @return The page number
      */
     public static int getPageFromArgs(List<String> args, int index, int defaultPage) {
         if (args != null && !args.isEmpty()) {

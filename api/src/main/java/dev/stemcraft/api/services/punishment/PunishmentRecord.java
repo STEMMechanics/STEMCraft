@@ -1,11 +1,34 @@
+/*
+ * STEMCraft - Minecraft Plugin
+ * Copyright (C) 2025 James Collins
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, version 3.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ *
+ * @author STEMMechanics
+ * @link https://github.com/STEMMechanics/STEMCraft
+ */
 package dev.stemcraft.api.services.punishment;
 
+import lombok.Getter;
+import lombok.experimental.Accessors;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
 import java.time.Instant;
 import java.util.UUID;
 
+@Getter
+@Accessors(fluent = true)
 public final class PunishmentRecord {
     private final long id;
     private final UUID targetUuid;
@@ -18,6 +41,9 @@ public final class PunishmentRecord {
     private final Instant createdAt;
     private final Long durationSeconds; // null = permanent, 0 is a one-off, -1 is cancelled
 
+    /**
+     * Constructor
+     */
     public PunishmentRecord(long id,
                             UUID targetUuid,
                             String targetName,
@@ -40,63 +66,38 @@ public final class PunishmentRecord {
         this.durationSeconds = durationSeconds;
     }
 
-    public long id() {
-        return id;
-    }
-
-    public UUID targetUuid() {
-        return targetUuid;
-    }
-
-    public String targetName() {
-        return targetName;
-    }
-
-    public UUID actorUuid() {
-        return actorUuid;
-    }
-
-    public String actorName() {
-        return actorName;
-    }
-
-    public String type() {
-        return type;
-    }
-
-    public boolean alerted() {
-        return alerted;
-    }
-
+    /**
+     * Marks this punishment as alerted
+     */
     public void setAlerted() {
         alerted = true;
     }
 
-    public String reason() {
-        return reason;
-    }
-
-    public Instant createdAt() {
-        return createdAt;
-    }
-
-    public Long durationSeconds() {
-        return durationSeconds;
-    }
-
+    /**
+     * Checks if this punishment is permanent
+     */
     public boolean permanent() {
         return durationSeconds == null;
     }
 
+    /**
+     * Checks if this punishment is cancelled
+     */
     public boolean cancelled() {
         return durationSeconds == -1;
     }
 
+    /**
+     * Gets the expiration time of this punishment
+     */
     public Instant expiresAt() {
         if (permanent()) return null;
         return createdAt.plusSeconds(durationSeconds);
     }
 
+    /**
+     * Gets the Player object of the target if they are online
+     */
     public Player getPlayerIfOnline() {
         Player player = Bukkit.getPlayer(targetUuid);
         if(player != null && player.isOnline()) {

@@ -14,7 +14,7 @@ public class PWeatherCommand extends STEMCraftCommandImpl {
     public void onLoad(STEMCraft plugin) {
         setLabel("pweather");
         setDescription("PWEATHER_DESCRIPTION");
-        setUsage("/pweather <sun|rain|storm|reset> [player]");
+        setUsage("PWEATHER_USAGE");
         setPermission("stemcraft.command.pweather");
         addTabCompletion("sun", "{player}");
         addTabCompletion("rain", "{player}");
@@ -62,7 +62,7 @@ public class PWeatherCommand extends STEMCraftCommandImpl {
         }
 
         if (!(ctx.getSender() instanceof Player sender)) {
-            cmd.error("PLAYER_ONLY");
+            cmd.error("COMMAND_PLAYER_ONLY");
             return null;
         }
 

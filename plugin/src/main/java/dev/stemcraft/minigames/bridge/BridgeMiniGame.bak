@@ -1,0 +1,407 @@
+package dev.stemcraft.minigames.bridge;
+
+import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.api.services.region.RegionListener;
+import dev.stemcraft.api.utils.SCRegion;
+import dev.stemcraft.minigames.STEMCraftMiniGame;
+import org.bukkit.Bukkit;
+import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.World;
+import org.bukkit.command.CommandSender;
+import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.EntityType;
+import org.bukkit.entity.Player;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityExplodeEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
+
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Map;
+
+public class BridgeMiniGame extends STEMCraftMiniGame {
+    private static String CONFIG_FILENAME = "bridge.yml";
+
+    private static final EnumSet<Material> ALLOWED_BREAKS = EnumSet.of(
+        Material.RED_WOOL,
+        Material.BLUE_WOOL
+    );
+
+    private static final EnumSet<EntityType> CLEANUP_ENTITIES = EnumSet.of(
+            EntityType.ITEM,
+            EntityType.EXPERIENCE_ORB,
+            EntityType.ARROW,
+            EntityType.SPECTRAL_ARROW,
+            EntityType.TRIDENT,
+            EntityType.SNOWBALL,
+            EntityType.EGG,
+            EntityType.FIREBALL,
+            EntityType.SMALL_FIREBALL,
+            EntityType.WITHER_SKULL,
+            EntityType.SHULKER_BULLET,
+            EntityType.LLAMA_SPIT,
+            EntityType.FIREWORK_ROCKET,
+            EntityType.AREA_EFFECT_CLOUD,
+            EntityType.TNT,
+            EntityType.FALLING_BLOCK
+    );
+
+    private STEMCraftAPI api;
+    private FileConfiguration config;
+    private Map<String, BridgeArena> arenas;
+
+    /**
+        Config Layout
+
+        bridge:
+            high-scores:
+                player1: 150
+                player2: 120
+            scoring:
+                team-win: 10
+                kill-player: 1
+                destroy-block: 1
+                place-block: 0
+                player-death: 0
+            games:
+                forest:
+                    enabled: true
+                    world: tb_forest
+                    min-players: 2
+                    max-players: 16
+                    lobby-spawn: 150,50,150
+                    game-region: cuboid,100,50,100,200,100,200
+                    bridge-region: cuboid,100,50,100,200,100,200
+                    game-time: 600
+                    wait-time: 60
+                    teams:
+                        red:
+                            spawn: 120,51,150
+                            protect-region: cuboid,110,50,140,130,60,160
+                        blue:
+                            spawn: 180,51,150
+                            protect-region: cuboid,170,50,140,190,60,160
+     */
+
+
+
+    @Override
+    public void onEnable(STEMCraftAPI api) {
+        this.api = api;
+        this.config = api.getConfig(CONFIG_FILENAME);
+
+        this.config.getConfigurationSection("bridge.games").getKeys(false).forEach(arenaId -> {
+            ConfigurationSection arenaConfig = config.getConfigurationSection("bridge.games." + arenaId);
+            if(arenaConfig == null) return;
+
+            BridgeArena.LoadResult result = BridgeArena.load(arenaId, arenaConfig);
+            if (result.errors.isEmpty()) {
+                arenas.put(arenaId, result.arena);
+                api.info("Loaded Bridge arena: " + arenaId);
+            } else {
+                api.error("Failed to load Bridge arena: " + arenaId + ", " + result.errors.getFirst());
+            }
+        });
+
+        String regionStr = config.getString("game-region", "");
+        SCRegion region = SCRegion.fromString(regionStr, Bukkit.getWorlds().getFirst());
+
+        api.regions().addRegionListener("bridge-region", region, new RegionListener() {
+            @Override
+            public void onEnter(Player player, SCRegion region) {
+                // Handle player entering the bridge game region
+                api.info(player, "Welcome to the Bridge Mini-Game!");
+                // Additional game logic here
+            }
+
+            @Override
+            public void onExit(Player player, SCRegion region) {
+                // Handle player exiting the bridge game region
+                api.info(player, "You have left the Bridge Mini-Game.");
+                // Additional game logic here
+                // Teleport player back to spawn or lobby
+            }
+        });
+
+        // Prevent block placement outside bridge region
+        api.registerEvent(BlockPlaceEvent.class, event -> {
+            if (!region.contains(event.getBlock().getLocation())) {
+                event.setCancelled(true);
+            }
+        });
+
+        // Prevent block breaking outside bridge region and restrict to allowed blocks
+        api.registerEvent(BlockBreakEvent.class, event -> {)
+            if (!region.contains(event.getBlock().getLocation())) {
+                event.setCancelled(true);
+            }
+
+            if (!ALLOWED_BREAKS.contains(event.getBlock().getType())) {
+                event.setCancelled(true);
+            }
+
+            event.setDropItems(false);
+        });
+
+        // Only allow explosions to destroy blocks within the bridge region and only allowed blocks
+        api.registerEvent(EntityExplodeEvent.class, event -> {)
+            event.blockList().removeIf(block -> {
+                Location loc = block.getLocation();
+                return !region.contains(loc) || !ALLOWED_BREAKS.contains(block.getType());
+            });
+        });
+
+        // Teleport players back to spawn point when they die in the world, reverting their health and deducting score
+        Location spawnPoint; // defined later - just a placehlolder
+        int playerScore; // again placeholder
+
+        api.registerEvent(EntityDamageEvent.class, event -> {
+            if (!(event.getEntity() instanceof Player p)) return;
+            if (!region.contains(p.getLocation())) return;
+
+            if (p.getHealth() - event.getFinalDamage() <= 0) {
+                event.setCancelled(true);
+                p.teleport(spawnPoint);
+                p.setHealth(p.getMaxHealth());
+                playerScore = Math.max(0, playerScore - config.getInt("scoring.player-death", 0));
+            }
+        });
+
+        // Prevent player drops
+        api.registerEvent(PlayerDropItemEvent.class, e -> {
+            Player p = e.getPlayer();
+            if (!region.contains(p.getLocation())) return;
+            e.setCancelled(true);
+        });
+
+        api.registerEvent(InventoryClickEvent.class, e -> {
+            if (!(e.getWhoClicked() instanceof Player p)) return;
+            if (!region.contains(p.getLocation())) return;
+
+            if (e.getClickedInventory() == null) {
+                e.setCancelled(true);
+            }
+        });
+
+
+
+    }
+
+    // ---------------------------------------------------------------------
+    // Private methods
+    // ---------------------------------------------------------------------
+    private void loadArena(String arenaId, CommandSender sender) {
+        if(arenas.containsKey(arenaId)) {
+            unloadArena(arenaId);
+        }
+
+        ConfigurationSection arenaConfig = config.getConfigurationSection("bridge.games." + arenaId);
+        if(arenaConfig == null) {
+            api.messenger().error(sender, "No configuration found for Bridge arena: " + arenaId);
+            return;
+        }
+
+        BridgeArena.LoadResult result = BridgeArena.load(arenaId, arenaConfig);
+        if (!result.errors.isEmpty()) {
+            api.messenger().error("Failed to load Bridge arena: " + arenaId + ", " + result.errors.getFirst());
+            return;
+        }
+
+        arenas.put(arenaId, result.arena);
+
+        RegionListener listener = new RegionListener() {
+            @Override
+            public void onExitWorld(Player player, World world) {
+                handlePlayerLeave(player, arenaId);
+            }
+
+            @Override
+            public void onEnter(Player player, SCRegion region) {
+                result.arena.handlePlayerEnter(player);
+            }
+
+            @Override
+            public void onExit(Player player, SCRegion region) {
+                result.arena.handlePlayerExit(player);
+            }
+        };
+
+        api.regions().addRegionListener("bridge-" + arenaId + "-world", result.arena.world, listener);
+        api.regions().addRegionListener("bridge-" + arenaId + "-game-region", result.arena.gameRegion, listener);
+
+        result.arena.status = BridgeArena.ArenaStatus.WAITING;
+        api.messenger().info("Loaded Bridge arena: " + arenaId);
+    }
+
+    private void unloadArena(String arenaId) {
+        BridgeArena arena = arenas.get(arenaId);
+        if(arena == null) return;
+
+        api.regions().removeRegionListener("bridge-" + arenaId + "-*");
+
+        World world = Bukkit.getWorld(arena.getWorldName());
+        if(world != null) {
+            List<Location> clearBlocks = arena.getGameRegion().allBlockLocations(world);
+            cleanWorld(world, clearBlocks);
+        }
+
+        arenas.remove(arenaId);
+    }
+
+
+    private void cleanWorld(World world, List<Location> clearBlocks) {
+        // Clear specified blocks in the world
+        clearBlocks.forEach(loc -> {
+            if (loc.getBlock().getType() != Material.AIR) {
+                loc.getBlock().setType(Material.AIR);
+            }
+        });
+
+        // Remove dropped items in the world, arrows, etc.
+        for (Entity e : world.getEntities()) {
+            if (CLEANUP_ENTITIES.contains(e.getType())) {
+                e.remove();
+            }
+        }
+    }
+
+    /**
+     * Handle player joining the arena's world
+     */
+    private void handlePlayerJoin(Player player, String arenaId) {
+
+    }
+
+    /**
+     * Handle player leaving the arena's world
+     */
+    private void handlePlayerLeave(Player player, String arenaId) {
+
+    }
+
+}
+
+
+import io.papermc.paper.scoreboard.numbers.NumberFormat;
+import net.kyori.adventure.text.Component;
+import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
+import org.bukkit.scoreboard.*;
+
+        import java.util.*;
+        import java.util.concurrent.ConcurrentHashMap;
+
+public final class BridgeSidebar {
+    private static final int MAX_LIVES = 5;
+
+    // Keep per-player references so you can update later
+    private final Map<UUID, SidebarHandle> handles = new ConcurrentHashMap<>();
+
+    // One handle per player, stores the objective and the line teams
+    private static final class SidebarHandle {
+        final Scoreboard sb;
+        final Objective obj;
+        final Map<String, Team> teams = new HashMap<>();
+
+        SidebarHandle(Scoreboard sb, Objective obj) {
+            this.sb = sb;
+            this.obj = obj;
+        }
+    }
+
+    // Call once when player joins the minigame
+    public void show(Player p) {
+        Scoreboard sb = Bukkit.getScoreboardManager().getNewScoreboard();
+
+        Objective obj = sb.registerNewObjective("thebridge", "dummy", Component.text("TheBridge"));
+        obj.setDisplaySlot(DisplaySlot.SIDEBAR);
+
+        // Hide the right-side numbers for Java clients that support it (Paper 1.20.10 does)
+        obj.numberFormat(NumberFormat.blank());
+
+        SidebarHandle h = new SidebarHandle(sb, obj);
+
+        // Each line needs a UNIQUE entry key (these are invisible IDs for each row)
+        String eTime = key("t");
+        String eSp1  = key("1");
+        String eRed  = key("r");
+        String eBlue = key("b");
+        String eSp2  = key("2");
+        String eKills= key("k");
+        String eDeaths=key("d");
+
+        // Register a team per line so we can update just the prefix later
+        h.teams.put("time",  team(sb, "time",  eTime));
+        h.teams.put("sp1",   team(sb, "sp1",   eSp1));
+        h.teams.put("red",   team(sb, "red",   eRed));
+        h.teams.put("blue",  team(sb, "blue",  eBlue));
+        h.teams.put("sp2",   team(sb, "sp2",   eSp2));
+        h.teams.put("kills", team(sb, "kills", eKills));
+        h.teams.put("deaths",team(sb, "deaths",eDeaths));
+
+        // Spacer line text (must be different strings, or one line will disappear)
+        h.teams.get("sp1").prefix(Component.text(" "));
+        h.teams.get("sp2").prefix(Component.text("  "));
+
+        // ===== THIS IS WHERE ORDER IS SET =====
+        // Higher score = higher on the sidebar
+        obj.getScore(eTime).setScore(7);   // top
+        obj.getScore(eSp1).setScore(6);
+        obj.getScore(eRed).setScore(5);
+        obj.getScore(eBlue).setScore(4);
+        obj.getScore(eSp2).setScore(3);
+        obj.getScore(eKills).setScore(2);
+        obj.getScore(eDeaths).setScore(1); // bottom
+        // =====================================
+
+        p.setScoreboard(sb);
+        handles.put(p.getUniqueId(), h);
+    }
+
+    // Call every second (or whenever something changes)
+    public void update(Player p, int secondsLeft, int redLives, int blueLives, int kills, int deaths) {
+        SidebarHandle h = handles.get(p.getUniqueId());
+        if (h == null) return;
+
+        h.teams.get("time").prefix(Component.text("Time: " + mmss(secondsLeft)));
+        h.teams.get("red").prefix(Component.text("Red  " + hearts(redLives)));
+        h.teams.get("blue").prefix(Component.text("Blue " + hearts(blueLives)));
+        h.teams.get("kills").prefix(Component.text("Kills: " + kills));
+        h.teams.get("deaths").prefix(Component.text("Deaths: " + deaths));
+    }
+
+    public void hide(Player p) {
+        handles.remove(p.getUniqueId());
+        p.setScoreboard(Bukkit.getScoreboardManager().getMainScoreboard());
+    }
+
+    private static Team team(Scoreboard sb, String teamName, String entryKey) {
+        Team t = sb.getTeam(teamName);
+        if (t == null) t = sb.registerNewTeam(teamName);
+        if (!t.hasEntry(entryKey)) t.addEntry(entryKey);
+        return t;
+    }
+
+    // Unique entry strings for each line (these act as row IDs)
+    private static String key(String id) {
+        return "§" + id;
+    }
+
+    private static String mmss(int totalSeconds) {
+        int m = totalSeconds / 60;
+        int s = totalSeconds % 60;
+        return String.format("%d:%02d", m, s);
+    }
+
+    // Simple hearts. If you want red/grey per-heart, tell me if you prefer Unicode hearts or icons.
+    private static String hearts(int lives) {
+        lives = Math.max(0, Math.min(MAX_LIVES, lives));
+        return "❤".repeat(lives) + "❤".repeat(MAX_LIVES - lives);
+    }
+}
+

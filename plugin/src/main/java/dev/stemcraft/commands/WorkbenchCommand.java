@@ -28,6 +28,8 @@ public class WorkbenchCommand extends STEMCraftCommandImpl {
         setLabel("workbench");
         setAlias("anvil", "cartographytable", "grindstone", "loom", "smithingtable", "stonecutter");
         setPermission("stemcraft.command.workbench");
+        setUsage("WORKBENCH_USAGE");
+        addTabCompletion("{player}");
         register(plugin);
     }
 

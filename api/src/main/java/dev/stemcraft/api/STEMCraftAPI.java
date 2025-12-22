@@ -22,13 +22,14 @@ package dev.stemcraft.api;
 import dev.stemcraft.api.commands.STEMCraftCommand;
 import dev.stemcraft.api.events.STEMCraftEventHandler;
 import dev.stemcraft.api.internal.InstanceHolder;
-import dev.stemcraft.api.services.LocaleService;
-import dev.stemcraft.api.services.MessengerService;
-import dev.stemcraft.api.services.PlayerLogService;
-import dev.stemcraft.api.services.WorldService;
-import dev.stemcraft.api.services.persistenttimer.PersistentTimerService;
+import dev.stemcraft.api.services.*;
+import dev.stemcraft.api.services.hologram.HologramService;
+import dev.stemcraft.api.services.region.RegionService;
+import dev.stemcraft.api.services.task.TaskService;
 import dev.stemcraft.api.services.punishment.PunishmentService;
 import dev.stemcraft.api.services.tabcomplete.TabCompleteService;
+import dev.stemcraft.api.services.web.WebService;
+import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.event.Event;
 import org.bukkit.event.EventPriority;
@@ -62,6 +63,11 @@ public interface STEMCraftAPI extends MessengerService {
     YamlConfiguration config();
 
     /**
+     * Save the STEMCraft configuration file.
+     */
+    void saveConfig();
+
+    /**
      * Get the STEMCraft Data Folder
      */
     File dataFolder();
@@ -91,11 +97,32 @@ public interface STEMCraftAPI extends MessengerService {
      */
     TabCompleteService tabComplete();
 
-    PersistentTimerService persistentTimer();
+    TaskService tasks();
 
     PunishmentService punishment();
+
+    HologramService holograms();
+
+    ItemService items();
+
+    RegionService regions();
+
+    WebService web();
+
+    GateKeeperService gateKeeper();
 
     default <T extends Event> void registerEvent(Class<T> event, STEMCraftEventHandler<T> callback) {
         registerEvent(event, callback, EventPriority.NORMAL, false);
     }
+
+    File getCacheDir();
+    FileConfiguration getCacheConfig(String fileName);
+    void saveCacheConfig(String fileName, FileConfiguration config);
+
+    boolean isInMaintenanceMode();
+
+    File getDataFolder();
+
+    FileConfiguration getConfig(String fileName);
+    void saveConfig(String fileName, FileConfiguration config);
 }

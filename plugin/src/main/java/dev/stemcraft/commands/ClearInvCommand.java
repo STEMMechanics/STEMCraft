@@ -12,7 +12,7 @@ public class ClearInvCommand extends STEMCraftCommandImpl {
     public void onLoad(STEMCraft plugin) {
         setLabel("clearinv");
         setDescription("CLEAR_INV_DESCRIPTION");
-        setUsage("/clearinv [player]");
+        setUsage("CLEAR_INV_USAGE");
         setPermission("stemcraft.command.clearinv");
         register(plugin);
     }

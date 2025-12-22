@@ -45,7 +45,7 @@ public class NaughtyMode implements STEMCraftFeature {
             return true;
         });
 
-        api.persistentTimer().list(PERSISTENT_TIMER_TYPE).forEach(data -> {
+        api.tasks().listPersistentTimers(PERSISTENT_TIMER_TYPE).forEach(data -> {
             try {
                 naughtyPlayers.add(UUID.fromString(data));
             } catch(Exception ignored) {
@@ -53,7 +53,7 @@ public class NaughtyMode implements STEMCraftFeature {
             }
         });
 
-        api.persistentTimer().registerType(PERSISTENT_TIMER_TYPE, (type, id, data) -> {
+        api.tasks().registerPersistentCallback(PERSISTENT_TIMER_TYPE, (type, id, data) -> {
             UUID uuid;
 
             try {
@@ -72,7 +72,7 @@ public class NaughtyMode implements STEMCraftFeature {
         api.registerCommand("naughty")
                 .addTabCompletion("{player}", "{duration}")
                 .addTabCompletion("{player}", "clear")
-                .setUsage("naughty <player> <duration|clear> (reason)")
+                .setUsage("NAUGHTY_USAGE")
                 .setPermission("stemcraft.command.naughty")
                 .setDescription("NAUGHTY_DESCRIPTION")
                 .setExecutor((plugin, cmd, ctx) -> {
@@ -262,7 +262,7 @@ public class NaughtyMode implements STEMCraftFeature {
     private void setNaughty(UUID uuid, Duration duration, Player actor, String reason) {
         String id = uuid.toString();
         if(duration == null || duration.isNegative() || duration.isZero()) {
-            api.persistentTimer().cancel(PERSISTENT_TIMER_TYPE, id);
+            api.tasks().cancel(id);
             naughtyPlayers.remove(uuid);
 
             Player player = Bukkit.getPlayer(uuid);
@@ -273,7 +273,7 @@ public class NaughtyMode implements STEMCraftFeature {
 
             api.broadcast("NAUGHTY_UNSET_ALL", player, playerName);
         } else {
-            api.persistentTimer().schedule(PERSISTENT_TIMER_TYPE, id, null, duration);
+            api.tasks().runLaterPersistent(PERSISTENT_TIMER_TYPE, id, null, SCTime.DurationToRunAtMillis(duration));
             naughtyPlayers.add(uuid);
 
             Player player = Bukkit.getPlayer(uuid);
@@ -290,6 +290,6 @@ public class NaughtyMode implements STEMCraftFeature {
     }
 
     private long remainingNaughty(UUID uuid) {
-        return api.persistentTimer().remaining(PERSISTENT_TIMER_TYPE, uuid.toString());
+        return api.tasks().remaining(uuid.toString());
     }
 }

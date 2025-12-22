@@ -1,0 +1,175 @@
+package dev.stemcraft.minigames.bridge;
+
+import dev.stemcraft.api.utils.SCRegion;
+import org.bukkit.Bukkit;
+import org.bukkit.Location;
+import org.bukkit.World;
+import org.bukkit.configuration.ConfigurationSection;
+
+import java.util.*;
+
+public class BridgeArena {
+    public final String id;
+    public final boolean enabled;
+    public final String name;
+    public World world;
+
+    public final int minPlayers;
+    public final int maxPlayers;
+    public final int gameTimeSeconds;
+    public final int waitTimeSeconds;
+
+    public final Location lobbySpawn;
+    public final SCRegion gameRegion;
+    public final SCRegion bridgeRegion;
+
+    public final Map<String, Team> teams; // key = "red", "blue", "green", ...
+
+    public ArenaStatus status;
+
+    public enum ArenaStatus {
+        WAITING,
+        STARTING,
+        IN_GAME,
+        ENDING
+    }
+
+    public static final class Team {
+        public final String id;
+        public final Location spawn;
+        public final SCRegion protectRegion;
+
+        Team(String id, Location spawn, SCRegion protectRegion) {
+            this.id = id;
+            this.spawn = spawn;
+            this.protectRegion = protectRegion;
+        }
+    }
+
+    private BridgeArena(String id,
+                        boolean enabled,
+                        String name,
+                        World world,
+                        int minPlayers,
+                        int maxPlayers,
+                        int gameTimeSeconds,
+                        int waitTimeSeconds,
+                        Location lobbySpawn,
+                        SCRegion gameRegion,
+                        SCRegion bridgeRegion,
+                        Map<String, Team> teams) {
+        this.id = id;
+        this.enabled = enabled;
+        this.name = name;
+        this.world = world;
+        this.minPlayers = minPlayers;
+        this.maxPlayers = maxPlayers;
+        this.gameTimeSeconds = gameTimeSeconds;
+        this.waitTimeSeconds = waitTimeSeconds;
+        this.lobbySpawn = lobbySpawn;
+        this.gameRegion = gameRegion;
+        this.bridgeRegion = bridgeRegion;
+        this.teams = Map.copyOf(teams);
+    }
+
+    public static LoadResult load(String id, ConfigurationSection s) {
+        List<String> errors = new ArrayList<>();
+
+        boolean enabled = s.getBoolean("enabled", true);
+        String name = reqString(s, "name", errors);
+        String worldName = reqString(s, "world", errors);
+        World world = null;
+        if (worldName != null) {
+            world = Bukkit.getWorld(worldName);
+            if (world == null) {
+                errors.add("World not found: " + worldName);
+            }
+        }
+
+        int minP = reqInt(s, "min-players", 1, 1, 999, errors);
+        int maxP = reqInt(s, "max-players", 16, 1, 999, errors);
+        if (minP > maxP) errors.add("min-players must be <= max-players");
+
+        int gameTime = reqInt(s, "game-time", 600, 1, 86400, errors);
+        int waitTime = reqInt(s, "wait-time", 60, 0, 86400, errors);
+
+        Location lobby = reqLoc(s, "lobby-spawn", errors);
+        SCRegion gameRegion = reqRegion(s, "game-region", errors);
+        SCRegion bridgeRegion = reqRegion(s, "bridge-region", errors);
+
+        Map<String, Team> teams = new LinkedHashMap<>();
+        ConfigurationSection teamsSec = s.getConfigurationSection("teams");
+        if (teamsSec == null) {
+            errors.add("Missing section: teams");
+        } else {
+            for (String teamId : teamsSec.getKeys(false)) {
+                ConfigurationSection t = teamsSec.getConfigurationSection(teamId);
+                if (t == null) continue;
+
+                Location spawn = reqLoc(t, "spawn", errors, "teams." + teamId + ".spawn");
+                SCRegion protect = reqRegion(t, "protect-region", errors, "teams." + teamId + ".protect-region");
+
+                if (spawn != null && protect != null) {
+                    teams.put(teamId.toLowerCase(Locale.ROOT), new Team(teamId, spawn, protect));
+                }
+            }
+        }
+
+        if (teams.size() < 2) errors.add("Need at least 2 teams under teams.*");
+
+        if (!errors.isEmpty()) return LoadResult.fail(id, errors);
+
+        return LoadResult.ok(new BridgeArena(id, enabled, name, world, minP, maxP, gameTime, waitTime,
+                lobby, gameRegion, bridgeRegion, teams));
+    }
+
+    // helpers (same as before)
+    private static String reqString(ConfigurationSection s, String key, List<String> errors) {
+        String v = s.getString(key);
+        if (v == null || v.isBlank()) errors.add("Missing/blank string: " + key);
+        return v;
+    }
+
+    private static int reqInt(ConfigurationSection s, String key, int def, int min, int max, List<String> errors) {
+        if (!s.isInt(key)) errors.add("Missing/invalid int: " + key);
+        int v = s.getInt(key, def);
+        if (v < min || v > max) errors.add(key + " out of range (" + min + "-" + max + "): " + v);
+        return v;
+    }
+
+    private static Location reqLoc(ConfigurationSection s, String key, List<String> errors) {
+        return reqLoc(s, key, errors, key);
+    }
+
+    private static Location reqLoc(ConfigurationSection s, String key, List<String> errors, String displayKey) {
+        String v = s.getString(key);
+        if (v == null || v.isBlank()) { errors.add("Missing location: " + displayKey); return null; }
+        try { return Location.fromString(v); }
+        catch (Exception ex) { errors.add("Invalid location for " + displayKey + ": " + v); return null; }
+    }
+
+    private static SCRegion reqRegion(ConfigurationSection s, String key, List<String> errors) {
+        return reqRegion(s, key, errors, key);
+    }
+
+    private static SCRegion reqRegion(ConfigurationSection s, String key, List<String> errors, String displayKey) {
+        String v = s.getString(key);
+        if (v == null || v.isBlank()) { errors.add("Missing region: " + displayKey); return null; }
+        try { return SCRegion.fromString(v, null); }
+        catch (Exception ex) { errors.add("Invalid region for " + displayKey + ": " + v); return null; }
+    }
+
+    public static final class LoadResult {
+        public final String id;
+        public final BridgeArena arena;
+        public final List<String> errors;
+        private LoadResult(String id, BridgeArena arena, List<String> errors) {
+            this.id = id; this.arena = arena; this.errors = errors;
+        }
+        public static LoadResult ok(BridgeArena arena) { return new LoadResult(arena.id, arena, List.of()); }
+        public static LoadResult fail(String id, List<String> errors) { return new LoadResult(id, null, List.copyOf(errors)); }
+        public boolean ok() { return arena != null; }
+    }
+
+
+}

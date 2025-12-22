@@ -19,8 +19,30 @@
  */
 package dev.stemcraft.api.services.web;
 
-import java.io.IOException;
+import java.util.Map;
 
 public interface WebServiceEndpointHandler {
-    Object handle(String method, String uri);
+
+    /**
+     * Web endpoint handler.
+
+     * Supported handler return types:
+     * - null
+     *   sends an empty body with HTTP 200 and Content-Type: text/plain; charset=utf-8}.
+
+     * - Any non-Map object
+     *   toString() is used as the response body with HTTP 200 and
+     *   Content-Type: text/plain; charset=utf-8}.
+
+     * - Map<?, ?>
+     * Allows full control of the response. The following keys are recognised:
+     *   - responseCode: Integer; HTTP status code. Optional, defaults to 200.
+     *   - contentType: String; sets the Content-Type header. Optional, defaults to
+     *     "text/plain; charset=utf-8"}.
+     *   - file: java.io.File; if present, this file is streamed as the response body.
+     *     In this case "body" is ignored.
+     *   - body: any object; converted to String and used as the response body when
+     *     "file" is not provided.
+     */
+    Object handle(String method, String uri, Map<String, String> queryParams);
 }

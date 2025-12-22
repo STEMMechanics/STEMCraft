@@ -16,20 +16,22 @@ public class PlayerSpeed implements STEMCraftFeature {
     @Override
     public void onEnable(STEMCraftAPI api) {
         // Tab Completion - Type
-        api.tabComplete().register("speedtype", () -> {
+        api.tabComplete().register("speedtype", (player, args) -> {
             return Arrays.asList(movementTypes);
         });
 
         // Tab Completion - Speed
-        api.tabComplete().register("speed", () -> {
+        api.tabComplete().register("speed", (player, args) -> {
             String[] speed = {"1", "1.5", "1.75", "2"};
             return Arrays.asList(speed);
         });
 
         api.registerCommand("speed")
                 .setDescription("PLAYER_SPEED_DESCRIPTION")
+                .setUsage("PLAYER_SPEED_USAGE")
                 .setPermission("stemcraft.command.speed")
                 .addTabCompletion("{speedtype}", "{speed}", "{player}")
+                .addTabCompletion("{speedtype}", "{player}")
                 .addTabCompletion("{speed}", "{player}")
                 .addTabCompletion("reset", "{player}")
                 .setExecutor((not_used, cmd, ctx) -> {
@@ -38,62 +40,71 @@ public class PlayerSpeed implements STEMCraftFeature {
                     Float speed = null;
                     Player targetPlayer = null;
 
-                    // First arg could be type or reset
-                    String rawArg = args.getFirst().toLowerCase(Locale.ROOT);
-                    if(Arrays.asList(movementTypes).contains(args.getFirst()) || args.getFirst().equals("reset")) {
-                        type = rawArg;
-                        args.removeFirst();
+                    if(!args.isEmpty()) {
+                        String firstArg = args.getFirst().toLowerCase(Locale.ROOT);
+                        if(firstArg.equals("reset") || firstArg.equals("walk") || firstArg.equals("fly")) {
+                            type = firstArg;
+                            args.removeFirst();
+                        }
                     }
 
                     if(!args.isEmpty()) {
-                        if(type == null || !type.equals("reset")) {
-                            try {
-                                speed = Float.parseFloat(args.getFirst());
-                                args.removeFirst();
-
-                                speed = Math.max(0.1f, speed);
-                                speed = Math.min(10f, speed);
-
-                            } catch(NumberFormatException ex) {
-                                // ignore
-                            }
+                        try {
+                            speed = Float.parseFloat(args.getFirst());
+                            args.removeFirst();
+                        } catch (NumberFormatException ex) {
+                            // ignore
                         }
                     }
 
                     if(!args.isEmpty()) {
                         targetPlayer = Bukkit.getPlayerExact(args.getFirst());
-                    }
-
-                    if(targetPlayer == null) {
-                        if(ctx.isConsole()) {
-                            cmd.error("CONSOLE_PLAYER_REQUIRED");
-                            return;
-                        } else if(ctx.isPlayer() && !args.isEmpty()) {
-                            cmd.error(ctx.getSender(), "PLAYER_NOT_FOUND", "player", args.getFirst());
-                            return;
+                        if(targetPlayer == null) {
+                            if(ctx.isConsole()) {
+                                ctx.returnError("CONSOLE_PLAYER_REQUIRED");
+                            } else if (ctx.isPlayer()) {
+                                ctx.returnError("PLAYER_NOT_FOUND", "player", args.getFirst());
+                            }
+                        }
+                    } else {
+                        if(!ctx.isPlayer()) {
+                            ctx.returnError("CONSOLE_PLAYER_REQUIRED");
                         } else {
-                            targetPlayer = (Player)ctx.getSender();
+                            targetPlayer = ctx.getSenderAsPlayer();
                         }
                     }
 
                     if(type == null) {
-                        if(speed == null) {
-                            cmd.error(ctx.getSender(), cmd.getUsage());
-                        } else {
-                            type = (targetPlayer.isFlying()) ? "fly" : "walk";
-                        }
+                        type = (targetPlayer.isFlying()) ? "fly" : "walk";
                     } else if(type.equals("reset")) {
                         targetPlayer.setFlySpeed(getDefaultSpeed(true));
                         targetPlayer.setWalkSpeed(getDefaultSpeed(false));
-                        // output reset
+
+                        if(targetPlayer.equals(ctx.getSender())) {
+                            ctx.returnInfo("PLAYER_SPEED_RESET");
+                        } else {
+                            ctx.returnInfo("PLAYER_SPEED_RESET_OTHER", "player", targetPlayer.getName());
+                        }
                     }
 
                     if(speed == null) {
-                        // display current
+                        if(type.equals("fly")) {
+                            speed = targetPlayer.getFlySpeed();
+                        } else {
+                            speed = targetPlayer.getWalkSpeed();
+                        }
+
+                        ctx.returnInfo("PLAYER_SPEED_GET", "type", type, "player", targetPlayer.getName(), "speed", getDisplaySpeed(speed, type.equals("fly")));
                     } else {
-                        // set fly speed
-                    }// display current
-// set walk speed
+                        speed = getRealSpeed(speed, type.equals("fly"));
+                        if(type.equals("fly")) {
+                            targetPlayer.setFlySpeed(speed);
+                        } else {
+                            targetPlayer.setWalkSpeed(speed);
+                        }
+
+                        ctx.returnInfo("PLAYER_SPEED_SET", "type", type, "player", targetPlayer.getName(), "speed", getDisplaySpeed(speed, type.equals("fly")));
+                    }
                 })
                 .register(STEMCraft.getInstance());
         }
@@ -113,4 +124,21 @@ public class PlayerSpeed implements STEMCraftFeature {
                 return ratio + defaultSpeed;
             }
         }
+
+    private float getDisplaySpeed(final float realSpeed, final boolean isFly) {
+        final float defaultSpeed = getDefaultSpeed(isFly);
+        final float maxSpeed = 1f;
+
+        // Below default should never happen, but clamp defensively
+        if (realSpeed <= defaultSpeed) {
+            return 1f;
+        }
+
+        // Reverse of: default + ((speed - 1) / 9) * (max - default)
+        float ratio = (realSpeed - defaultSpeed) / (maxSpeed - defaultSpeed);
+        float display = 1f + (ratio * 9f);
+
+        // Round to something sane for chat
+        return Math.round(display * 10f) / 10f;
+    }
 }

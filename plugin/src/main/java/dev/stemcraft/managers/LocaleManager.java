@@ -20,27 +20,34 @@
 package dev.stemcraft.managers;
 
 import dev.stemcraft.STEMCraft;
+import dev.stemcraft.annotations.IgnoreLocaleKeyCheck;
 import dev.stemcraft.api.services.LocaleService;
 import dev.stemcraft.api.utils.SCString;
+import io.papermc.paper.event.player.AsyncChatEvent;
 import lombok.Getter;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.event.EventPriority;
 
 import java.io.File;
-import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
-import java.util.jar.JarEntry;
-import java.util.jar.JarFile;
 import java.util.regex.Pattern;
 
+@IgnoreLocaleKeyCheck
 public class LocaleManager implements LocaleService {
-    private static final Pattern LOCALE_KEY_PATTERN = Pattern.compile("[A-Z_]+");
+    private static final Pattern LOCALE_KEY_PATTERN = Pattern.compile("[A-Z]+_[A-Z_]+");
+    private static final PlainTextComponentSerializer PLAIN_SERIALIZER =
+            PlainTextComponentSerializer.plainText();
 
     private final STEMCraft plugin;
     private final Map<String, YamlConfiguration> locales = new HashMap<>();
     @Getter
     private String defaultLocale;
+    private final Map<Pattern, String> bindings = new HashMap<>();
 
     public LocaleManager(STEMCraft plugin) {
         this.plugin = plugin;
@@ -49,6 +56,17 @@ public class LocaleManager implements LocaleService {
     public void onEnable() {
         defaultLocale = plugin.config().getString("default-locale", "en").toLowerCase(Locale.ROOT);
         loadLocales();
+
+        ConfigurationSection sec = plugin.config().getConfigurationSection("bindings");
+        if (sec != null) {
+            for (String key : sec.getKeys(false)) {
+                addBinding(key, sec.getString(key));
+            }
+        }
+
+        plugin.registerEvent(AsyncChatEvent.class, event -> {
+            event.message(processBindings(event.message()));
+        }, EventPriority.LOWEST, true);
     }
 
     public void onDisable() {
@@ -59,6 +77,7 @@ public class LocaleManager implements LocaleService {
     public String get(String lang, String key, Object... placeholders) {
         String str = processKey(lang, key);
 
+        str = processBindings(str);
         if (placeholders != null && placeholders.length > 1) {
             String[] processed = SCString.toStrings(placeholders);
 
@@ -70,6 +89,27 @@ public class LocaleManager implements LocaleService {
         }
 
         return str;
+    }
+
+    @Override
+    public void addBinding(String placeholder, String value) {
+        bindings.put(Pattern.compile(Pattern.quote(":" + placeholder + ":")), value);
+        String escaped = value.chars()
+                .mapToObj(c -> String.format("\\u%04X", c))
+                .reduce("", String::concat);
+        plugin.debug("Added locale binding: " + placeholder + " -> " + escaped);
+    }
+
+    @Override
+    public void removeBinding(String placeholder) {
+        bindings.remove(Pattern.compile(Pattern.quote(":" + placeholder + ":")));
+    }
+
+    @Override
+    public void removeBindings(Iterable<String> placeholders) {
+        for (String placeholder : placeholders) {
+            bindings.remove(Pattern.compile(Pattern.quote(":" + placeholder + ":")));
+        }
     }
 
     private String processKey(String lang, String key) {
@@ -88,22 +128,36 @@ public class LocaleManager implements LocaleService {
 
         String raw = cfg.getString(key);
         if (raw == null) {
+            plugin.getComponentLogger().info("The following locale key was not found: " + key);
             return key;
         }
 
         return raw;
     }
 
+    public String processBindings(String str) {
+        for (var entry : bindings.entrySet()) {
+            str = entry.getKey().matcher(str).replaceAll(entry.getValue());
+        }
+        return str;
+    }
+
+    public Component processBindings(Component comp) {
+        // Convert the incoming component to plain text, apply bindings, then re-apply colour formatting.
+        String plain = PLAIN_SERIALIZER.serialize(comp);
+        String processed = processBindings(plain);
+        return SCString.colourise(processed);
+    }
+
     private void loadLocales() {
+        plugin.exportBundledDirectory("locales");
         locales.clear();
 
         File folder = new File(plugin.getDataFolder(), "locales");
-        if (!folder.exists() && !folder.mkdirs()) {
-            plugin.error("LOCALE_FAILED_CREATE_FOLDER");
+        if (!folder.exists()) {
+//            plugin.error("LOCALE_FAILED_CREATE_FOLDER");
             return;
         }
-
-        exportBundledLocales();
 
         File[] files = folder.listFiles();
         if (files == null) {
@@ -126,35 +180,6 @@ public class LocaleManager implements LocaleService {
                     "lang", defaultLocale,
                     "available", String.join(", ", locales.keySet())
             );
-        }
-    }
-
-    private void exportBundledLocales() {
-        try {
-            String path = "locales/";
-            var jar = plugin.getClass().getProtectionDomain().getCodeSource().getLocation();
-
-            try (JarFile jf = new JarFile(new File(jar.toURI()))) {
-                Enumeration<JarEntry> entries = jf.entries();
-
-                while (entries.hasMoreElements()) {
-                    JarEntry entry = entries.nextElement();
-                    String name = entry.getName();
-
-                    if (!name.startsWith(path) || !name.endsWith(".yml")) {
-                        continue;
-                    }
-
-                    String fileName = name.substring(path.length());
-                    File out = new File(plugin.getDataFolder(), "locales/" + fileName);
-
-                    if (!out.exists()) {
-                        plugin.saveResource(name, false);
-                    }
-                }
-            }
-        } catch (Exception ex) {
-            plugin.error("LOCALE_FAILED_EXPORT_FILES", ex);
         }
     }
 }

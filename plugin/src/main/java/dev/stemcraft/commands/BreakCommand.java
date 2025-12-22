@@ -17,61 +17,52 @@ public class BreakCommand extends STEMCraftCommandImpl {
     public void onLoad(STEMCraft plugin) {
         setLabel("break");
         setDescription("BREAK_DESCRIPTION");
-        setUsage("/break [radius]");
+        setUsage("BREAK_USAGE");
+        addTabCompletion("{int}");
         setPermission("stemcraft.command.break");
         register(plugin);
     }
 
     @Override
     public void onExecute(STEMCraftAPI api, STEMCraftCommand cmd, STEMCraftCommandContext ctx) {
-        if (!(ctx.getSender() instanceof Player player)) {
-            cmd.error("PLAYER_ONLY");
-            return;
-        }
+        ctx.checkNotConsole();
+
+        Player player = ctx.getSenderAsPlayer();
 
         int radius = 1;
         if (!ctx.args().isEmpty()) {
-            String arg = ctx.getArg(1);
-            try {
-                radius = Integer.parseInt(arg);
-            } catch (NumberFormatException e) {
-                cmd.error("BREAK_RADIUS_INVALID", "radius", arg);
-                return;
-            }
-        }
-
-        if (radius < 1) {
-            cmd.error("BREAK_RADIUS_INVALID", "radius", String.valueOf(radius));
-            return;
-        }
-
-        if (radius > MAX_RADIUS) {
-            radius = MAX_RADIUS;
-            cmd.info(ctx.getSender(), "BREAK_RADIUS_CLAMPED",
-                    "radius", String.valueOf(radius),
-                    "max", String.valueOf(MAX_RADIUS));
+            ctx.checkArgIsInt(1, "BREAK_RADIUS_INVALID", "radius");
+            radius = ctx.getArgAsInt(1, 1, 1, MAX_RADIUS);
         }
 
         Block target = player.getTargetBlockExact(MAX_DISTANCE);
         if (target == null) {
-            cmd.error("BREAK_NO_TARGET");
-            return;
+            ctx.returnError("BREAK_NO_TARGET");
         }
 
         int broken = 0;
-        for (int x = -radius; x <= radius; x++) {
-            for (int y = -radius; y <= radius; y++) {
-                for (int z = -radius; z <= radius; z++) {
+
+        // Treat 1 as "just the target", 2 as "small cluster", etc
+        int r = radius - 1;
+
+        for (int x = -r; x <= r; x++) {
+            for (int y = -r; y <= r; y++) {
+                for (int z = -r; z <= r; z++) {
+
+                    // Manhattan distance within r
+                    if (Math.abs(x) + Math.abs(y) + Math.abs(z) > r) continue;
+
                     Block b = target.getRelative(x, y, z);
                     if (b.getType() == Material.AIR) continue;
+
                     b.setType(Material.AIR, false); // no drops, no physics spam
                     broken++;
                 }
             }
         }
 
-        cmd.info(ctx.getSender(), "BREAK_SUCCESS",
-                "count", String.valueOf(broken),
-                "radius", String.valueOf(radius));
+        ctx.returnInfo("BREAK_SUCCESS",
+                "count", broken,
+                "radius", radius);
     }
 }

@@ -94,23 +94,50 @@ public final class SCString extends STEMCraftUtil {
     }
 
     /**
+     * Converts a string into a slug suitable for filenames or identifiers.
+     * Lowercases the string, replaces spaces with underscores, and removes
+     * special characters.
+     */
+    public static String slugify(String input) {
+        if (input == null) return null;
+        return input.trim().toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9\\s_]", "") // Remove invalid chars
+                .replaceAll("\\s+", "_")         // Replace whitespace with hyphens
+                .replaceAll("_{2,}", "_");
+    }
+
+    /**
      * Converts a formatted string into an Adventure {@link Component}.
      *
      * @param input the formatted text (MiniMessage or legacy), may be null
      * @return a non-null {@link Component} representing the formatted text
      */
     public static Component colourise(String input) {
-        if (input == null || input.isEmpty()) {
-            return Component.empty();
+        if (input == null || input.isEmpty()) return Component.empty();
+
+        boolean hasAngleTag = input.indexOf('<') != -1 && input.indexOf('>') != -1;
+        boolean hasLegacy = input.indexOf('&') != -1 || input.indexOf('§') != -1;
+
+        if (hasAngleTag && !hasLegacy) {
+            try {
+                return MM.deserialize(input);
+            } catch (Exception ignored) {
+                // fall through
+            }
         }
 
-        // If it looks like MiniMessage (contains tags), treat it as MiniMessage
-        if (input.indexOf('<') != -1 && input.indexOf('>') != -1) {
-            return MM.deserialize(input);
-        }
-
-        // Otherwise, treat it as legacy & codes
         return LEGACY.deserialize(input);
+    }
+    public static String[] colourise(String... inputs) {
+        if (inputs == null || inputs.length == 0) {
+            return new String[0];
+        }
+
+        String[] out = new String[inputs.length];
+        for (int i = 0; i < inputs.length; i++) {
+            out[i] = colouriseToSection(inputs[i]);
+        }
+        return out;
     }
 
     public static String colouriseToSection(String input) {
@@ -133,6 +160,10 @@ public final class SCString extends STEMCraftUtil {
     public static String stripColour(Component component) {
         if (component == null) return "";
         return PlainTextComponentSerializer.plainText().serialize(component);
+    }
+
+    public static String untranslateColorCodes(String input) {
+        return LEGACY.serialize(LEGACY.deserialize(input));
     }
 
     /**
@@ -177,73 +208,6 @@ public final class SCString extends STEMCraftUtil {
             else width += DEFAULT_WIDTH; // Fallback for unsupported characters
         }
         return width;
-    }
-
-    /**
-     * Parse a string to a location
-     *
-     * @param s     The string to parse
-     * @param world Optional world to use if no world found
-     * @return A location
-     */
-    public static Location stringToLocation(String s, World world) {
-        String[] data = s.split(",");
-
-        // Check if the first item is a valid world name
-        World parsedWorld = Bukkit.getWorld(data[0]);
-        if (parsedWorld != null) {
-            world = parsedWorld;
-            data = Arrays.copyOfRange(data, 1, data.length); // Remove world name from data
-        }
-
-        // Use default world if no world provided
-        if (world == null) {
-            world = Bukkit.getWorlds().getFirst(); // Default to the first server world
-        }
-
-        // Parse coordinates
-        double x = Double.parseDouble(data[0]);
-        double y = Double.parseDouble(data[1]);
-        double z = Double.parseDouble(data[2]);
-
-        // Parse optional yaw and pitch
-        float yaw = (data.length > 3) ? Float.parseFloat(data[3]) : 0.0f;
-        float pitch = (data.length > 4) ? Float.parseFloat(data[4]) : 0.0f;
-
-        return new Location(world, x, y, z, yaw, pitch);
-    }
-
-    /**
-     * Parse a string to a location
-     *
-     * @param s The string to parse
-     * @return A location
-     */
-    public static Location stringToLocation(String s) {
-        return stringToLocation(s, null);
-    }
-
-    /**
-     * Convert a location to a formatted string
-     * @param loc The location to convert
-     * @param includeWorld Include the world name in the string
-     * @param includeYawPitch Include the yaw and pitch in the string
-     * @return The converted string
-     */
-    public static String locationToString(Location loc, boolean includeWorld, boolean includeYawPitch) {
-        StringBuilder sb = new StringBuilder();
-
-        if (includeWorld) {
-            sb.append(loc.getWorld().getName()).append(",");
-        }
-
-        sb.append(String.format("%.2f,%.2f,%.2f", loc.getX(), loc.getY(), loc.getZ()));
-
-        if (includeYawPitch) {
-            sb.append(String.format(",%.2f,%.2f", loc.getYaw(), loc.getPitch()));
-        }
-
-        return sb.toString();
     }
 
     /**
@@ -349,5 +313,78 @@ public final class SCString extends STEMCraftUtil {
             out[i] = (o == null ? "null" : String.valueOf(o));
         }
         return out;
+    }
+
+    public static String capitalize(String str, Boolean ignoreColors) {
+        if (str != null && !str.isEmpty()) {
+            final int strLen = str.length();
+            final StringBuilder buffer = new StringBuilder(strLen);
+            boolean capitalizeNext = true;
+
+            for (int i = 0; i < strLen; ++i) {
+                final char ch = str.charAt(i);
+
+                if (Character.isWhitespace(ch)) {
+                    buffer.append(ch);
+
+                    capitalizeNext = true;
+                } else if (ch == '&' && ignoreColors && i + 1 < strLen
+                        && "0123456789abcdefklmnor".indexOf(str.charAt(i + 1)) != -1) {
+                    buffer.append(ch).append(str.charAt(i + 1));
+                    i++;
+
+                } else if (capitalizeNext) {
+                    buffer.append(Character.toTitleCase(ch));
+
+                    capitalizeNext = false;
+                } else {
+                    buffer.append(ch);
+                }
+            }
+
+            return buffer.toString();
+        }
+
+        return str;
+    }
+
+    public static String capitalize(String str) {
+        return capitalize(str, false);
+    }
+
+    public static String beautify(String str) {
+        return str.toLowerCase().replace("_", " ");
+    }
+
+    /**
+     * Converts a YAW value to a compass direction.
+     *
+     * @param yaw The yaw value to convert.
+     * @return The compass direction.
+     */
+    public static String getCompassDirection(float yaw) {
+        double rotation = (yaw - 90) % 360;
+        if (rotation < 0) {
+            rotation += 360.0;
+        }
+
+        if (0 <= rotation && rotation < 22.5 || 337.5 <= rotation && rotation < 360) {
+            return "W"; // West
+        } else if (22.5 <= rotation && rotation < 67.5) {
+            return "NW"; // Northwest
+        } else if (67.5 <= rotation && rotation < 112.5) {
+            return "N"; // North
+        } else if (112.5 <= rotation && rotation < 157.5) {
+            return "NE"; // Northeast
+        } else if (157.5 <= rotation && rotation < 202.5) {
+            return "E"; // East
+        } else if (202.5 <= rotation && rotation < 247.5) {
+            return "SE"; // Southeast
+        } else if (247.5 <= rotation && rotation < 292.5) {
+            return "S"; // South
+        } else if (292.5 <= rotation && rotation < 337.5) {
+            return "SW"; // Southwest
+        }
+        return ""; // This should never happen
     }
 }
