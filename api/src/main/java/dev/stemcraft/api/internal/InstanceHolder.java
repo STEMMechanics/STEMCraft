@@ -1,6 +1,6 @@
 /*
  * STEMCraft - Minecraft Plugin
- * Copyright (C) 2025 James Collins
+ * Copyright (C) 2026 James Collins
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,6 +17,7 @@
  * @author STEMMechanics
  * @link https://github.com/STEMMechanics/STEMCraft
  */
+
 package dev.stemcraft.api.internal;
 
 import dev.stemcraft.api.STEMCraftAPI;
