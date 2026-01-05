@@ -19,73 +19,125 @@
  */
 package dev.stemcraft.api;
 
-import dev.stemcraft.api.commands.STEMCraftCommand;
-import dev.stemcraft.api.events.STEMCraftEventHandler;
+import dev.stemcraft.api.capability.HasMessages;
+import dev.stemcraft.api.service.command.CommandService;
 import dev.stemcraft.api.internal.InstanceHolder;
-import dev.stemcraft.api.services.*;
-import dev.stemcraft.api.services.hologram.HologramService;
-import dev.stemcraft.api.services.region.RegionService;
-import dev.stemcraft.api.services.task.TaskService;
-import dev.stemcraft.api.services.punishment.PunishmentService;
-import dev.stemcraft.api.services.tabcomplete.TabCompleteService;
-import dev.stemcraft.api.services.web.WebService;
-import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.event.Event;
-import org.bukkit.event.EventPriority;
-import org.bukkit.event.Listener;
+import dev.stemcraft.api.service.database.DatabaseService;
+import dev.stemcraft.api.service.event.EventService;
+import dev.stemcraft.api.service.minigame.MiniGameService;
+import dev.stemcraft.api.service.config.ConfigService;
+import dev.stemcraft.api.service.gatekeeper.GatekeeperService;
+import dev.stemcraft.api.service.hologram.HologramService;
+import dev.stemcraft.api.service.item.ItemService;
+import dev.stemcraft.api.service.locale.LocaleService;
+import dev.stemcraft.api.service.message.MessageService;
+import dev.stemcraft.api.service.player.PlayerLogService;
+import dev.stemcraft.api.service.player.PlayerService;
+import dev.stemcraft.api.service.region.RegionService;
+import dev.stemcraft.api.service.task.TaskService;
+import dev.stemcraft.api.service.punishment.PunishmentService;
+import dev.stemcraft.api.service.tabcomplete.TabCompleteService;
+import dev.stemcraft.api.service.web.WebService;
+import dev.stemcraft.api.service.world.WorldService;
 
 import java.io.File;
 
-public interface STEMCraftAPI extends MessengerService {
-    static STEMCraftAPI api() {
-        return InstanceHolder.api();
-    }
+public interface STEMCraftAPI extends HasMessages {
 
     /**
      * Get the current version of STEMCraft.
      */
-    String version();
+    String getVersion();
 
     /**
-     * Register a new event handler.
+     * Get the data folder for STEMCraft.
      */
-    <T extends Event> Listener registerEvent(Class<T> event, STEMCraftEventHandler<T> callback, EventPriority priority, boolean ignoreCancelled);
+    File getDataFolder();
+
+    /**
+     * Check if the server is in maintenance mode.
+     */
+    boolean isMaintenanceMode();
 
     /**
      * Register a new command.
      */
-    STEMCraftCommand registerCommand(String label);
+    CommandService commands();
 
     /**
      * Get the STEMCraft configuration file.
      */
-    YamlConfiguration config();
+    ConfigService config();
 
     /**
-     * Save the STEMCraft configuration file.
+     * Get the database service.
      */
-    void saveConfig();
+    DatabaseService database();
 
     /**
-     * Get the STEMCraft Data Folder
+     * Get the event service.
      */
-    File dataFolder();
+    EventService events();
 
     /**
-     * Get the player log service.
+     * Get the gatekeeper service.
      */
-    PlayerLogService playerLog();
+    GatekeeperService gatekeeper();
 
     /**
-     * Get the messenger service.
+     * Get the hologram service.
      */
-    MessengerService messenger();
+    HologramService holograms();
+
+    /**
+     * Get the item service.
+     */
+    ItemService items();
 
     /**
      * Get the locale service.
      */
-    LocaleService locale();
+    LocaleService locales();
+
+    /**
+     * Get the messenger service.
+     */
+    MessageService messages();
+
+    /**
+     * Get the minigame service.
+     */
+    MiniGameService minigames();
+
+    /**
+     * Get the player log service.
+     */
+    PlayerService players();
+
+    /**
+     * Get the punishment service.
+     */
+    PunishmentService punishments();
+
+    /**
+     * Get the region service.
+     */
+    RegionService regions();
+
+    /**
+     * Get the tab complete service.
+     */
+    TabCompleteService tabComplete();
+
+    /**
+     * Get the task service.
+     */
+    TaskService tasks();
+
+    /**
+     * Get the web service.
+     */
+    WebService web();
 
     /**
      * Get the world service.
@@ -93,36 +145,9 @@ public interface STEMCraftAPI extends MessengerService {
     WorldService worlds();
 
     /**
-     * Get the tab complete service.
+     * Static access to the STEMCraft API instance.
      */
-    TabCompleteService tabComplete();
-
-    TaskService tasks();
-
-    PunishmentService punishment();
-
-    HologramService holograms();
-
-    ItemService items();
-
-    RegionService regions();
-
-    WebService web();
-
-    GateKeeperService gateKeeper();
-
-    default <T extends Event> void registerEvent(Class<T> event, STEMCraftEventHandler<T> callback) {
-        registerEvent(event, callback, EventPriority.NORMAL, false);
+    static STEMCraftAPI api() {
+        return InstanceHolder.api();
     }
-
-    File getCacheDir();
-    FileConfiguration getCacheConfig(String fileName);
-    void saveCacheConfig(String fileName, FileConfiguration config);
-
-    boolean isInMaintenanceMode();
-
-    File getDataFolder();
-
-    FileConfiguration getConfig(String fileName);
-    void saveConfig(String fileName, FileConfiguration config);
 }

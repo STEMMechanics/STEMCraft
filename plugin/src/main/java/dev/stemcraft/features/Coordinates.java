@@ -1,13 +1,33 @@
+/*
+ * STEMCraft - Minecraft Plugin
+ * Copyright (C) 2025 James Collins
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, version 3.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ *
+ * @author STEMMechanics
+ * @link https://github.com/STEMMechanics/STEMCraft
+ */
 package dev.stemcraft.features;
 
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
-import dev.stemcraft.api.utils.SCString;
-import dev.stemcraft.api.utils.SCWorld;
-import net.md_5.bungee.api.ChatMessageType;
-import net.md_5.bungee.api.chat.TextComponent;
+import dev.stemcraft.api.util.DirectionUtil;
+import dev.stemcraft.api.util.StringUtil;
+import dev.stemcraft.api.util.WorldTimeUtil;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
+import org.bukkit.Location;
 import org.bukkit.boss.BarColor;
 import org.bukkit.boss.BarStyle;
 import org.bukkit.boss.BossBar;
@@ -17,7 +37,10 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import java.util.HashMap;
 import java.util.Map;
 
-public class Coordinates implements STEMCraftFeature {
+/**
+ * Feature that adds player coordinates to boss bar or action bar.
+ */
+public class Coordinates extends BaseFeature {
     /**
      * This class represents the player coordinate data.
      */
@@ -44,33 +67,38 @@ public class Coordinates implements STEMCraftFeature {
     private static final Map<Player, CoordData> coordBars = new HashMap<>();
 
     /**
+     * Constructor for Coordinates feature.
+     */
+    public Coordinates(STEMCraftAPI api) {
+        super(api);
+    }
+
+    /**
      * Called when the feature is requested to be enabled.
      */
     @Override
-    public void onEnable(STEMCraftAPI api) {
-        api.registerEvent(PlayerQuitEvent.class, event -> {
-            removeCoordBars(event.getPlayer());
-        });
+    public void onEnable() {
+        api.events().register(PlayerQuitEvent.class, event -> removeCoordBars(event.getPlayer()));
 
-        api.registerCommand("coord")
-            .setUsage("/coord")
-            .setDescription("Toggle coordinate action bar.")
-            .setPermission("stemcraft.command.coord")
-            .setExecutor((unused, cmd, ctx) -> {
+        api.commands().create("coord")
+            .usage("/coord")
+            .description("Toggle coordinate action bar.")
+            .permission("stemcraft.command.coord")
+            .executor((unused, cmd, ctx) -> {
                 ctx.checkNotConsole();
                 toggleActionBar(ctx.getSenderAsPlayer());
-            }).register(STEMCraft.getInstance());
+            }).register(STEMCraft.getPlugin());
 
-        api.registerCommand("coordbar")
-            .setUsage("/coordbar")
-            .setDescription("Toggle coordinate boss bar.")
-            .setPermission("stemcraft.command.coordbar")
-            .setExecutor((unused, cmd, ctx) -> {
+        api.commands().create("coordbar")
+            .usage("/coordbar")
+            .description("Toggle coordinate boss bar.")
+            .permission("stemcraft.command.coordbar")
+            .executor((unused, cmd, ctx) -> {
                 ctx.checkNotConsole();
                 toggleBossBar(ctx.getSenderAsPlayer());
-            }).register(STEMCraft.getInstance());
+            }).register(STEMCraft.getPlugin());
 
-        Bukkit.getScheduler().runTaskTimer(STEMCraft.getInstance(), () -> {
+        api.tasks().repeating(5, () -> {
             for (Player player : coordBars.keySet()) {
                 if (!player.isOnline()) {
                     removeCoordBars(player);
@@ -82,27 +110,34 @@ public class Coordinates implements STEMCraftFeature {
                     return;
                 }
 
-                String world = SCString.capitalize(SCString.beautify(player.getLocation().getWorld().getName()));
-                String time = SCWorld.convertWorldToRealTime(player.getLocation().getWorld());
-                String direction = SCString.getCompassDirection(player.getLocation().getYaw());
+                String world = StringUtil.capitalize(StringUtil.beautify(player.getLocation().getWorld().getName()));
+                String time = WorldTimeUtil.toClock(player.getLocation().getWorld());
+                String direction = DirectionUtil.getCompassDirection(player.getLocation().getYaw());
 
                 if (coordData.bossBar != null) {
                     coordData.bossBar.setTitle(
-                            api.locale().get(":world: " + world + " :mc_clock_00: " + time + " :mc_compass_00: " + direction));
+                            api.locales().resolve(":world: " + world + " :mc_clock_00: " + time + " :mc_compass_00: " + direction));
                 }
 
                 if (coordData.actionBar == true) {
-                    String subtitle = String.format("&6XYZ: &f%d %d %d  &6%s      %s",
-                            player.getLocation().getBlockX(), player.getLocation().getBlockY(),
-                            player.getLocation().getBlockZ(), direction, time);
+                    Location l = player.getLocation();
 
-                    player.spigot().sendMessage(
-                            ChatMessageType.ACTION_BAR,
-                            TextComponent.fromLegacyText(ChatColor.translateAlternateColorCodes('&', subtitle))
-                    );
+                    Component component = Component.text()
+                            .append(Component.text("XYZ: ", NamedTextColor.GOLD))
+                            .append(Component.text(
+                                    l.getBlockX() + " " + l.getBlockY() + " " + l.getBlockZ(),
+                                    NamedTextColor.WHITE
+                            ))
+                            .append(Component.space())
+                            .append(Component.text(direction, NamedTextColor.GOLD))
+                            .append(Component.space())
+                            .append(Component.text(time, NamedTextColor.WHITE))
+                            .build();
+
+                    player.sendActionBar(component);
                 }
             }
-        }, 0L, 5L);
+        });
     }
 
     /**
@@ -129,7 +164,7 @@ public class Coordinates implements STEMCraftFeature {
     }
 
     /**
-     * Add a action bar to a player.
+     * Add an action bar to a player.
      *
      * @param player The player to add the bar.
      */
@@ -158,7 +193,7 @@ public class Coordinates implements STEMCraftFeature {
     }
 
     /**
-     * Remove a action bar from a player.
+     * Remove an action bar from a player.
      *
      * @param player The player to remove the bar.
      */

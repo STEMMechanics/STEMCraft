@@ -1,3 +1,22 @@
+/*
+ * STEMCraft - Minecraft Plugin
+ * Copyright (C) 2025 James Collins
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, version 3.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ *
+ * @author STEMMechanics
+ * @link https://github.com/STEMMechanics/STEMCraft
+ */
 package dev.stemcraft.features;
 
 import dev.stemcraft.STEMCraft;
@@ -10,15 +29,17 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
-public class PlayerSpeed implements STEMCraftFeature {
+public class PlayerSpeed extends BaseFeature {
     private final String[] movementTypes = {"fly", "walk"};
 
+    public PlayerSpeed(STEMCraftAPI api) {
+        super(api);
+    }
+
     @Override
-    public void onEnable(STEMCraftAPI api) {
+    public void onEnable() {
         // Tab Completion - Type
-        api.tabComplete().register("speedtype", (player, args) -> {
-            return Arrays.asList(movementTypes);
-        });
+        api.tabComplete().register("speedtype", (player, args) -> Arrays.asList(movementTypes));
 
         // Tab Completion - Speed
         api.tabComplete().register("speed", (player, args) -> {
@@ -26,15 +47,15 @@ public class PlayerSpeed implements STEMCraftFeature {
             return Arrays.asList(speed);
         });
 
-        api.registerCommand("speed")
-                .setDescription("PLAYER_SPEED_DESCRIPTION")
-                .setUsage("PLAYER_SPEED_USAGE")
-                .setPermission("stemcraft.command.speed")
-                .addTabCompletion("{speedtype}", "{speed}", "{player}")
-                .addTabCompletion("{speedtype}", "{player}")
-                .addTabCompletion("{speed}", "{player}")
-                .addTabCompletion("reset", "{player}")
-                .setExecutor((not_used, cmd, ctx) -> {
+        api.commands().create("speed")
+                .description("PLAYER_SPEED_DESCRIPTION")
+                .usage("PLAYER_SPEED_USAGE")
+                .permission("stemcraft.command.speed")
+                .tabCompletion("{speedtype}", "{speed}", "{player}")
+                .tabCompletion("{speedtype}", "{player}")
+                .tabCompletion("{speed}", "{player}")
+                .tabCompletion("reset", "{player}")
+                .executor((not_used, cmd, ctx) -> {
                     List<String> args = new ArrayList<>(ctx.args());
                     String type = null;
                     Float speed = null;
@@ -74,6 +95,10 @@ public class PlayerSpeed implements STEMCraftFeature {
                         }
                     }
 
+                    if(targetPlayer == null) {
+                        ctx.returnError("COULD_NOT_RESOLVE_PLAYER");
+                    }
+
                     if(type == null) {
                         type = (targetPlayer.isFlying()) ? "fly" : "walk";
                     } else if(type.equals("reset")) {
@@ -106,7 +131,7 @@ public class PlayerSpeed implements STEMCraftFeature {
                         ctx.returnInfo("PLAYER_SPEED_SET", "type", type, "player", targetPlayer.getName(), "speed", getDisplaySpeed(speed, type.equals("fly")));
                     }
                 })
-                .register(STEMCraft.getInstance());
+                .register(STEMCraft.getPlugin());
         }
 
         private float getDefaultSpeed(final boolean isFly) {

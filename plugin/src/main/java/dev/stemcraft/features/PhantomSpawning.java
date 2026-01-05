@@ -1,3 +1,22 @@
+/*
+ * STEMCraft - Minecraft Plugin
+ * Copyright (C) 2025 James Collins
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, version 3.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ *
+ * @author STEMMechanics
+ * @link https://github.com/STEMMechanics/STEMCraft
+ */
 package dev.stemcraft.features;
 
 import dev.stemcraft.api.STEMCraftAPI;
@@ -8,12 +27,26 @@ import org.bukkit.event.entity.CreatureSpawnEvent;
 
 import java.util.concurrent.ThreadLocalRandom;
 
-public class PhantomSpawning implements STEMCraftFeature {
-    @Override
-    public void onEnable(STEMCraftAPI api) {
-        api.registerEvent(CreatureSpawnEvent.class, this::onCreatureSpawn, EventPriority.HIGH, false);
+public class PhantomSpawning extends BaseFeature {
+
+    /**
+     * Constructor
+     */
+    public PhantomSpawning(STEMCraftAPI api) {
+        super(api);
     }
 
+    /**
+     * Called when the feature is being enabled.
+     */
+    @Override
+    public void onEnable() {
+        api.events().register(CreatureSpawnEvent.class, this::onCreatureSpawn, EventPriority.HIGH, false);
+    }
+
+   /**
+     * Handle creature spawn events to modify phantom and enderman spawning.
+     */
     private void onCreatureSpawn(CreatureSpawnEvent event) {
         EntityType type = event.getEntityType();
         if (type != EntityType.PHANTOM && type != EntityType.ENDERMAN) {

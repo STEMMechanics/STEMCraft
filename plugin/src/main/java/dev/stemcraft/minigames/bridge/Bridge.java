@@ -1,0 +1,542 @@
+package dev.stemcraft.minigames.bridge;
+
+import dev.stemcraft.STEMCraft;
+import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.api.command.CommandContext;
+import dev.stemcraft.api.event.minigame.ArenaCountdownZeroEvent;
+import dev.stemcraft.api.event.minigame.ArenaPlayerJoinEvent;
+import dev.stemcraft.api.event.minigame.ArenaPlayerLeaveEvent;
+import dev.stemcraft.api.event.minigame.ArenaStatusChangedEvent;
+import dev.stemcraft.api.minigame.MiniGameArena;
+import dev.stemcraft.api.minigame.MiniGamePlayer;
+import dev.stemcraft.api.minigame.MiniGameTeam;
+import dev.stemcraft.api.minigame.util.TeamNames;
+import dev.stemcraft.api.service.region.RegionListener;
+import dev.stemcraft.api.util.LocationUtil;
+import dev.stemcraft.api.model.SCRegion;
+import dev.stemcraft.api.util.DirectionUtil;
+import org.bukkit.Bukkit;
+import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.World;
+import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.Player;
+import org.bukkit.entity.Projectile;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.player.PlayerDropItemEvent;
+import org.bukkit.projectiles.ProjectileSource;
+
+import java.util.*;
+
+public class Bridge {
+    private static final String NAMESPACE = "bridge";
+    private static final String CONFIG_FILENAME = "bridge.yml";
+
+    private STEMCraftAPI api;
+    private FileConfiguration config;
+
+    public void onEnable(STEMCraftAPI api) {
+        this.api = api;
+        config = api.getConfig(CONFIG_FILENAME);
+
+        loadConfig();
+        loadHUDs();
+        loadCommand();
+        loadEvents();
+
+    }
+
+    /**
+     * Load Bridge configuration.
+     */
+    private void loadConfig() {
+        ConfigurationSection arenas = config.getConfigurationSection("arenas");
+        if (arenas != null) {
+            for (String arenaId : arenas.getKeys(false)) {
+                loadArena(arenaId, arenas.getConfigurationSection(arenaId));
+            }
+        }
+    }
+
+    /**
+     * Load all Bridge arenas from configuration.
+     */
+    private void loadArena(String arenaId, ConfigurationSection section) {
+        if(section == null) {
+            api.warn("Arena '" + arenaId + "' configuration section is missing.");
+            return;
+        }
+
+        boolean enabled = section.getBoolean("enabled", true);
+        if (!enabled) {
+            return;
+        }
+
+        String worldName = section.getString("world");
+        if(worldName == null) {
+            api.warn("Arena '" + arenaId + "' does not have a world defined.");
+            return;
+        }
+
+        World world = Bukkit.getWorld(worldName);
+        if(world == null) {
+            api.warn("World '" + worldName + "' for arena '" + arenaId + "' does not exist.");
+            return;
+        }
+
+        String lobbyLocationString = section.getString("lobby");
+        if(lobbyLocationString == null) {
+            api.warn("Arena '" + arenaId + "' does not have a lobby location defined.");
+            return;
+        }
+
+        Location lobbyLocation = LocationUtil.deserialize(lobbyLocationString, world);
+        if(lobbyLocation == null) {
+            api.warn("Lobby location for arena '" + arenaId + "' is invalid.");
+            return;
+        }
+
+        String bridgeRegionString = section.getString("bridge");
+        if(bridgeRegionString == null) {
+            api.warn("Arena '" + arenaId + "' does not have a bridge region defined.");
+            return;
+        }
+
+        SCRegion bridgeRegion = SCRegion.fromString(bridgeRegionString, world);
+        if(bridgeRegion == null) {
+            api.warn("Bridge region for arena '" + arenaId + "' is invalid.");
+            return;
+        }
+
+        String arenaRegionString = section.getString("arena");
+        if(arenaRegionString == null) {
+            api.warn("Arena '" + arenaId + "' does not have an arena region defined.");
+            return;
+        }
+
+        SCRegion arenaRegion = SCRegion.fromString(arenaRegionString, world);
+        if(arenaRegion == null) {
+            api.warn("Arena region for arena '" + arenaId + "' is invalid.");
+            return;
+        }
+
+        String regionListenerPrefix = NAMESPACE + ":" + arenaId + "_";
+
+        Integer minPlayers = section.getInt("min-players", 2);
+        Integer maxPlayers = section.getInt("max-players", 16);
+
+        String name = section.getString("name", DirectionUtil.beautify(arenaId));
+        MiniGameArena arena = api.minigames().createArena(NAMESPACE, arenaId, name, world);
+        arena.setLobbySpawn(lobbyLocation);
+        arena.setMinPlayers(minPlayers);
+        arena.setMaxPlayers(maxPlayers);
+        arena.set("bridgeRegion", bridgeRegion);
+        arena.set("arenaRegion", arenaRegion);
+
+        // Load teams
+        ConfigurationSection teams = section.getConfigurationSection("teams");
+        if(teams == null) {
+            api.warn("Arena '" + arenaId + "' does not have any teams defined.");
+            return;
+        }
+
+        for (String teamId : teams.getKeys(false)) {
+            if(teamId == null || teamId.isEmpty()) {
+                continue;
+            }
+
+            if(!TeamNames.isPredefinedName(teamId)) {
+                api.warn("Team '" + teamId + "' in arena '" + arenaId + "' is not a predefined team name.");
+                continue;
+            }
+
+            ConfigurationSection teamSection = teams.getConfigurationSection(teamId);
+            if (teamSection != null) {
+                String teamName = teamSection.getString("name", DirectionUtil.beautify(teamId));
+                String spawnLocationString = teamSection.getString("spawn");
+                if (spawnLocationString == null) {
+                    api.warn("Team '" + teamId + "' in arena '" + arenaId + "' does not have a spawn location defined.");
+                    continue;
+                }
+
+                Location spawnLocation = LocationUtil.deserialize(spawnLocationString, world);
+                if (spawnLocation == null) {
+                    api.warn("Spawn location for team '" + teamId + "' in arena '" + arenaId + "' is invalid.");
+                    continue;
+                }
+
+                String portalRegionString = teamSection.getString("portal");
+                if (portalRegionString == null) {
+                    api.warn("Team '" + teamId + "' in arena '" + arenaId + "' does not have a portal region defined.");
+                    continue;
+                }
+
+                SCRegion portalRegion = SCRegion.fromString(portalRegionString, world);
+                if (portalRegion == null) {
+                    api.warn("Portal region for team '" + teamId + "' in arena '" + arenaId + "' is invalid.");
+                    continue;
+                }
+
+                MiniGameTeam team = arena.addTeam(teamId, teamName, spawnLocation);
+                team.set("portalRegion", portalRegion);
+
+                api.regions().addListener(regionListenerPrefix + "team_" + teamId, portalRegion, new RegionListener() {
+                    @Override
+                    public void onEnter(Player player, SCRegion region) {
+                        if(!arena.getPlayerTeam(player).getName().equals(teamId)) {
+                            addTeamPoint(arena, arena.getPlayer(player));
+                            arena.teleportAllToTeamSpawns();
+                        }
+                    }
+                });
+            }
+        }
+
+        api.regions().addListener(regionListenerPrefix + "bridge", arenaRegion, new RegionListener() {
+            @Override
+            public void onExit(Player player, SCRegion region) {
+                if(arena.hasPlayer(player) && arena.getStatus().equals("in-game")) {
+                    arena.getPlayer(player).addDeath();
+                    arena.teleportToTeamSpawn(player);
+                }
+            }
+        });
+
+        api.minigames().registerArena(arena);
+    }
+
+    /**
+     * Unload a Bridge arena.
+     */
+    private void unloadArena(MiniGameArena arena) {
+        String regionListenerPrefix = NAMESPACE + ":" + arena.getId() + "_";
+        for(MiniGameTeam team : arena.getTeams()) {
+            api.regions().Listener(regionListenerPrefix + "team_" + team.getName());
+        }
+        api.regions().Listener(regionListenerPrefix + "bridge");
+        api.minigames().removeArena(NAMESPACE, arena.getId());
+    }
+
+    private void saveArena(MiniGameArena arena) {
+        String arenaId = arena.getId();
+        ConfigurationSection section = config.createSection("arenas." + arenaId);
+
+        section.set("enabled", true);
+        section.set("world", arena.getWorld().getName());
+        section.set("lobby", LocationUtil.serialize(arena.getLobbySpawn(), false, false));
+        section.set("bridge", arena.get("bridgeRegion", SCRegion.class).toString());
+        section.set("arena", arena.get("arenaRegion", SCRegion.class).toString());
+        section.set("min-players", arena.getMinPlayers());
+        section.set("max-players", arena.getMaxPlayers());
+        section.set("name", arena.getName());
+
+        ConfigurationSection teamsSection = section.createSection("teams");
+        for(MiniGameTeam team : arena.getTeams()) {
+            ConfigurationSection teamSection = teamsSection.createSection(team.getName());
+            teamSection.set("name", team.getName());
+            teamSection.set("spawn", LocationUtil.serialize(team.getSpawn(), false, false));
+            teamSection.set("portal", team.get("portalRegion", SCRegion.class).toString());
+        }
+
+        api.saveConfig(CONFIG_FILENAME, config);
+    }
+
+
+    /**
+     * Load HUDs for the Bridge minigame.
+     */
+    private void loadHUDs() {
+        api.minigames().registerHud(NAMESPACE, MiniGameArena.STATUS_WAITING,
+            List.of(
+                    "Bridge: {arena-name}",
+                    "Waiting for players…"
+            ),
+            List.of(
+                    "Bridge: {arena-name}",
+                    "",
+                    "Players needed: {min-players}",
+                    "Players joined: {joined-players}",
+                    "Waiting for players…"
+            ),
+            (arena, player) -> {
+                int joined = arena.getPlayers().size();
+
+                Map<String, String> map = new HashMap<>();
+                map.put("min-players", Integer.toString(arena.getMinPlayers()));
+                map.put("joined-players", Integer.toString(joined));
+                return map;
+            }
+        );
+
+        api.minigames().registerHud(NAMESPACE, MiniGameArena.STATUS_RUNNING,
+                List.of(
+                        "Bridge: {arena-name}",
+                        "Time remaining: {arena-countdown}"
+                ),
+                List.of(
+                        "Bridge: {arena-name}",
+                        "",
+                        "{red-team-score}",
+                        "{blue-team-score}",
+                        "",
+                        "Kills: {player-kills}",
+                        "Deaths: {player-deaths}"
+                ),
+                (arena, player) -> {
+                    Map<String, String> map = new HashMap<>();
+
+                    // Team scores displayed with grey/red hearts remaining from 7
+                    map.put("red-team-score", teamLivesRemainingBuilder("Red", "c", arena.getData().getRedLivesRemaining()));
+                    map.put("blue-team-score", teamLivesRemainingBuilder("Blue", "9", arena.getData().getBlueLivesRemaining()));
+
+                    map.put("player-kills", arena.getData().getPlayerKills().getOrDefault(player, 0).toString());
+                    map.put("player-deaths", arena.getData().getPlayerDeaths().getOrDefault(player, 0).toString());
+
+                    return map;
+                }
+        );
+    }
+
+    /**
+     * Load the /bridge command.
+     */
+    private void loadCommand() {
+        api.tabComplete().register("bridge-arenas", (sender, args) -> api.minigames().getArenas(NAMESPACE).stream()
+                .map(MiniGameArena::getId)
+                .toList());
+
+        api.commands().create("bridge")
+                .permission("stemcraft.command.bridge")
+                .usage("/bridge <join|leave|stop|start|restart> [arena]")
+                .tabCompletion("join", "{bridge-arenas}", "{player}")
+                .tabCompletion("leave", "{player}")
+                .tabCompletion("stop", "{bridge-arenas}")
+                .tabCompletion("start", "{bridge-arenas}")
+                .tabCompletion("restart", "{bridge-arenas}")
+                .tabCompletion("enable", "{bridge-arenas}")
+                .tabCompletion("disable", "{bridge-arenas}")
+                .tabCompletion("create")
+                .tabCompletion("set", "lobbyspawn")
+                .tabCompletion("set", "bridgeregion")
+                .tabCompletion("set", "arenaregion")
+                .tabCompletion("set", "teamspawn", "{minigame-teams}")
+                .executor((ignored, cmd, ctx) -> {
+                    ctx.checkArgsSizeAtLeast(1);
+
+                    String subCommand = ctx.getArg(1).toLowerCase();
+                    switch (subCommand) {
+                        case "join" -> commandJoin(ctx);
+                        case "leave" -> commandLeave(ctx);
+                        case "stop" -> commandStart(ctx);
+                        case "start" -> commandStart(ctx);
+                        case "restart" -> commandRestart(ctx);
+                        default -> ctx.returnUsage();
+                    }
+                })
+                .register(STEMCraft.getPlugin());
+    }
+
+    /**
+     * Load event listeners for the Bridge minigames.
+     */
+    private void loadEvents() {
+
+        // Block Break event
+        api.events().register(BlockBreakEvent.class, event -> {
+            Player player = event.getPlayer();
+            Location blockLocation = event.getBlock().getLocation();
+
+            MiniGameArena arena = api.minigames().getPlayerArena(NAMESPACE, player);
+            if(arena != null) {
+
+                if (!arena.getOrCreate("blocks", HashSet::new).contains(blockLocation)) {
+                    event.setCancelled(true);
+                } else {
+                    arena.getOrCreate("blocks", HashSet::new).remove(blockLocation);
+                }
+            }
+        });
+
+        // Block Place event
+        api.events().register(BlockPlaceEvent.class, event -> {
+            Player player = event.getPlayer();
+
+            MiniGameArena arena = api.minigames().getPlayerArena(NAMESPACE, player);
+            if(arena != null) {
+                Location blockLocation = event.getBlock().getLocation();
+                SCRegion bridgeRegion = arena.get("bridgeRegion", SCRegion.class);
+
+                if (!bridgeRegion.contains(blockLocation)) {
+                    event.setCancelled(true);
+                } else {
+                    arena.getOrCreate("blocks", HashSet::new).add(blockLocation);
+                }
+            }
+        });
+
+        // Entity Damage event
+        api.events().register(EntityDamageEvent.class, event -> {
+            if (!(event.getEntity() instanceof Player player)) return;
+            MiniGameArena arena = api.minigames().getPlayerArena(NAMESPACE, player);
+            if (arena == null) return;
+
+            if (player.getHealth() - event.getFinalDamage() <= 0) {
+                event.setCancelled(true);
+                arena.teleportToTeamSpawn(player);
+                arena.addDeath(player);
+                player.setHealth(player.getMaxHealth());
+
+                if (!(event instanceof EntityDamageByEntityEvent eventByEntity)) return;
+
+                Player damagerPlayer = null;
+                Entity damager = eventByEntity.getDamager();
+                if (damager instanceof Player) {
+                    damagerPlayer = (Player) damager;
+                } else if (damager instanceof Projectile projectile) {
+                    ProjectileSource source = projectile.getShooter();
+                    if (source instanceof Player) {
+                        damagerPlayer = (Player) source;
+                    }
+                }
+
+                if(damagerPlayer != null && arena.hasPlayer(damagerPlayer)) {
+                    arena.addKill(damagerPlayer);
+                }
+            }
+        });
+
+        // Player Drop Item event
+        api.events().register(PlayerDropItemEvent.class, event -> {
+            Player player = event.getPlayer();
+
+            MiniGameArena arena = api.minigames().getPlayerArena(NAMESPACE, player);
+            if(arena != null) {
+                event.setCancelled(true);
+            }
+        });
+
+
+        api.events().register(ArenaStatusChangedEvent.class, event -> {
+            MiniGameArena<BridgeArenaData> arena = event.getArena(BridgeArenaData.class);
+            if(arena == null) { return; }
+
+            if(arena.getStatus().equals("reset")) {
+                arena.teleportAll(arena.getData().getLobby());
+
+                for(Location loc : arena.getData().getBlocks()) {
+                    loc.getBlock().setType(Material.AIR);
+                }
+
+                arena.getData().getBlocks().clear();
+                arena.setStatus("waiting");
+            } else if(arena.getStatus().equals("game-over")) {
+                // Announce winning team
+                String winningTeam;
+                if(arena.getData().getRedLivesRemaining() <= 0) {
+                    winningTeam = "Blue";
+                } else {
+                    winningTeam = "Red";
+                }
+
+                for(Player player : arena.getPlayers()) {
+                    arena.info(player, "Game Over! The " + winningTeam + " team has won!");
+                }
+            }
+        });
+
+        api.events().register(ArenaCountdownZeroEvent.class, event -> {
+            MiniGameArena arena = event.getArena(NAMESPACE);
+            if(arena == null) { return; }
+
+            if(arena.getStatus().equals("starting")) {
+                arena.setStatus("in-game", 300);
+                arena.teleportAllToTeamSpawn();
+            } else if(arena.getStatus().equals("in-game")) {
+                arena.setStatus("game-over");
+            } else if(arena.getStatus().equals("game-over")) {
+                arena.setStatus("reset");
+            }
+        });
+
+        api.events().register(ArenaPlayerJoinEvent.class, event -> {
+            MiniGameArena<BridgeArenaData> arena = event.getArena(BridgeArenaData.class);
+            if(arena == null) { return; }
+
+            Player player = event.getPlayer();
+            if(arena.getStatus().equals("in-game")) {
+                arena.teleportToTeamSpawn(player);
+            } else {
+                arena.teleportToLobby(player);
+
+                if(arena.getStatus().equals("waiting") && arena.getPlayers().size() >= 2) {
+                    arena.setStatus("starting");
+                    arena.setCountdown(30);
+                }
+            }
+        });
+
+        api.events().register(ArenaPlayerLeaveEvent.class, event -> {
+            MiniGameArena<BridgeArenaData> arena = event.getArena(BridgeArenaData.class);
+            if(arena == null) { return; }
+
+            if(arena.getStatus().equals("starting") && arena.getPlayers().size() < 2) {
+                arena.setStatus("waiting");
+                arena.setCountdown(0);
+            } else if(arena.getStatus().equals("in-game") && arena.getPlayers().size() < 2) {
+                arena.setStatus("reset");
+            }
+        });
+    }
+
+    private void commandJoin(CommandContext ctx, Player targetPlayer, String arenaId) {
+        MiniGameArena arena = api.minigames().getArena(NAMESPACE, arenaId);
+        if (arena == null) {
+            ctx.returnError("Arena '" + arenaId + "' does not exist.");
+            return;
+        }
+
+        String status = arena.getStatus();
+        if (!status.equals("waiting") && !status.equals("starting")) {
+            ctx.returnError("Cannot join arena '" + arenaId + "' because the game is already in progress.");
+            return;
+        }
+
+        api.minigames().addPlayer(targetPlayer, arena);
+        ctx.success("Player '" + targetPlayer.getName() + "' has joined arena '" + arenaId + "'.");
+
+    }
+
+    private void commandLeave(CommandContext ctx) {
+
+    }
+
+    private String teamLivesRemainingBuilder(String teamName, String colour, int livesRemaining) {
+        StringBuilder hearts = new StringBuilder("&f" + teamName + ": ");
+        for (int i = 7; i > 0; i--) {
+            if (i > livesRemaining) {
+                hearts.append("&").append(colour).append("❤");
+            } else {
+                hearts.append("&f❤");
+            }
+        }
+        return hearts.toString();
+    }
+
+    private void addTeamPoint(MiniGameArena arena, MiniGamePlayer player) {
+        MiniGameTeam team = arena.getPlayerTeam(player);
+        team.addScore();
+        player.addScore();
+
+        if(team.getScore() <= 0) {
+            arena.setStatus("game-over", 30);
+        } else {
+            arena.teleportAllToTeamSpawns();
+        }
+    }
+
+}

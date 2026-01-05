@@ -1,12 +1,30 @@
+/*
+ * STEMCraft - Minecraft Plugin
+ * Copyright (C) 2025 James Collins
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, version 3.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ *
+ * @author STEMMechanics
+ * @link https://github.com/STEMMechanics/STEMCraft
+ */
 package dev.stemcraft.features;
 
-import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
-import dev.stemcraft.api.utils.SCPlayer;
+import dev.stemcraft.api.config.ConfigSection;
+import dev.stemcraft.api.util.PlayerUtil;
+import dev.stemcraft.api.util.WorldUtil;
 import org.bukkit.GameMode;
 import org.bukkit.World;
-import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerGameModeChangeEvent;
@@ -14,66 +32,92 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 
-import java.io.File;
-import java.io.IOException;
 import java.util.*;
 
-public class GameModeInventories implements STEMCraftFeature {
+/**
+ * Feature that manages separate inventories for players based on their game mode
+ * and the world group they are in. World groups are determined by stripping
+ * "_nether" and "_the_end" suffixes from world names.
+ */
+public class GameModeInventories extends BaseFeature {
 
-    private File storageFile;
-    private YamlConfiguration storage;
-
+    private ConfigSection data;
     private final Map<UUID, PlayerProfiles> profiles = new HashMap<>();
 
-    @Override
-    public void onEnable(STEMCraftAPI api) {
-        this.storageFile = new File(api.dataFolder(), "inventories.yml");
-        this.storage = new YamlConfiguration();
-        loadAll();
-
-        api.registerEvent(PlayerJoinEvent.class, this::onJoin);
-        api.registerEvent(PlayerQuitEvent.class, this::onQuit);
-        api.registerEvent(PlayerChangedWorldEvent.class, this::onWorldChange);
-        api.registerEvent(PlayerGameModeChangeEvent.class, this::onGameModeChange);
+    /**
+     * Constructor for GameModeInventories feature.
+     */
+    public GameModeInventories(STEMCraftAPI api) {
+        super(api);
     }
 
+    /**
+     * Initializes the feature, loading stored inventories and registering event handlers.
+     */
+    @Override
+    public void onEnable() {
+
+        this.data = api.config().load("inventories.yml");
+        loadAll();
+
+        api.events().register(PlayerJoinEvent.class, this::onJoin);
+        api.events().register(PlayerQuitEvent.class, this::onQuit);
+        api.events().register(PlayerChangedWorldEvent.class, this::onWorldChange);
+        api.events().register(PlayerGameModeChangeEvent.class, this::onGameModeChange);
+    }
+
+    /**
+     * Cleans up the feature, saving all inventories to storage.
+     */
     @Override
     public void onDisable() {
         saveAll();
     }
 
+    /**
+     * Handles player join events, applying or creating the appropriate profile.
+     */
     private void onJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
-        String group = worldGroup(player.getWorld());
+        String baseName = WorldUtil.baseName(player.getWorld());
         GameMode gm = player.getGameMode();
-        applyOrCreateProfile(player, group, gm);
+        applyOrCreateProfile(player, baseName, gm);
     }
 
+    /**
+     * Handles player quit events, saving the current profile.
+     */
     private void onQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
-        String group = worldGroup(player.getWorld());
+        String baseName = WorldUtil.baseName(player.getWorld());
         GameMode gm = player.getGameMode();
-        saveCurrentProfile(player, group, gm);
+        saveCurrentProfile(player, baseName, gm);
         saveAll();
     }
 
+    /**
+     * Handles world change events, saving the current profile and applying or creating the new one.
+     */
     private void onWorldChange(PlayerChangedWorldEvent event) {
         Player player = event.getPlayer();
         World from = event.getFrom();
         World to = player.getWorld();
         GameMode gm = player.getGameMode();
 
-        String fromGroup = worldGroup(from);
-        String toGroup = worldGroup(to);
+        String fromBase = WorldUtil.baseName(from);
+        String toBase = WorldUtil.baseName(to);
 
-        if (fromGroup.equals(toGroup)) {
+        if (fromBase.equals(toBase)) {
             return;
         }
 
-        saveCurrentProfile(player, fromGroup, gm);
-        applyOrCreateProfile(player, toGroup, gm);
+        saveCurrentProfile(player, fromBase, gm);
+        applyOrCreateProfile(player, toBase, gm);
     }
 
+    /**
+     * Handles game mode change events, saving the current profile and applying or creating the new one.
+     */
     private void onGameModeChange(PlayerGameModeChangeEvent event) {
         if (event.isCancelled()) {
             return;
@@ -82,21 +126,10 @@ public class GameModeInventories implements STEMCraftFeature {
         Player player = event.getPlayer();
         GameMode oldGm = player.getGameMode();
         GameMode newGm = event.getNewGameMode();
-        String group = worldGroup(player.getWorld());
+        String baseName = WorldUtil.baseName(player.getWorld());
 
-        saveCurrentProfile(player, group, oldGm);
-        applyOrCreateProfile(player, group, newGm);
-    }
-
-    private String worldGroup(World world) {
-        String name = world.getName();
-        if (name.endsWith("_nether")) {
-            return name.substring(0, name.length() - "_nether".length());
-        }
-        if (name.endsWith("_the_end")) {
-            return name.substring(0, name.length() - "_the_end".length());
-        }
-        return name;
+        saveCurrentProfile(player, baseName, oldGm);
+        applyOrCreateProfile(player, baseName, newGm);
     }
 
     private String profileKey(String group, GameMode gm) {
@@ -128,21 +161,7 @@ public class GameModeInventories implements STEMCraftFeature {
 
     private void loadAll() {
         profiles.clear();
-        if (!storageFile.exists()) {
-            return;
-        }
-
-        try {
-            storage.load(storageFile);
-        } catch (Exception e) {
-            STEMCraft.getInstance().warn("GAMEMODE_INVENTORIES_LOAD_FAILED", "error", e.getMessage());
-            return;
-        }
-
-        ConfigurationSection playersSec = storage.getConfigurationSection("players");
-        if (playersSec == null) {
-            return;
-        }
+        ConfigSection playersSec = this.data.getSection("players");
 
         for (String uuidStr : playersSec.getKeys(false)) {
             UUID uuid;
@@ -155,13 +174,8 @@ public class GameModeInventories implements STEMCraftFeature {
             PlayerProfiles p = new PlayerProfiles();
             profiles.put(uuid, p);
 
-            ConfigurationSection profSec = playersSec.getConfigurationSection(uuidStr + ".profiles");
-            if (profSec == null) {
-                continue;
-            }
-
-            for (String key : profSec.getKeys(false)) {
-                ConfigurationSection s = profSec.getConfigurationSection(key);
+            for (String key : playersSec.getSection(uuidStr).getKeys(false)) {
+                ConfigSection s = playersSec.getSection(uuidStr).getSection(key);
                 if (s == null) continue;
 
                 PlayerState state = PlayerState.fromConfigSection(s);
@@ -171,27 +185,22 @@ public class GameModeInventories implements STEMCraftFeature {
     }
 
     private void saveAll() {
-        storage = new YamlConfiguration();
-        ConfigurationSection playersSec = storage.createSection("players");
+        ConfigSection playersSec = data.getSection("players");
 
         for (Map.Entry<UUID, PlayerProfiles> entry : profiles.entrySet()) {
             String uuidStr = entry.getKey().toString();
             PlayerProfiles p = entry.getValue();
 
-            ConfigurationSection profSec = playersSec.createSection(uuidStr + ".profiles");
+            ConfigSection profSec = playersSec.createSection(uuidStr);
             for (Map.Entry<String, PlayerState> profileEntry : p.states.entrySet()) {
                 String key = profileEntry.getKey();
                 PlayerState state = profileEntry.getValue();
-                ConfigurationSection s = profSec.createSection(key);
+                ConfigSection s = profSec.createSection(key);
                 state.toConfigSection(s);
             }
         }
 
-        try {
-            storage.save(storageFile);
-        } catch (IOException e) {
-            STEMCraft.getInstance().warn("GAMEMODE_INVENTORIES_LOAD_FAILED", "error", e.getMessage());
-        }
+        data.save();
     }
 
     private static class PlayerProfiles {
@@ -212,7 +221,7 @@ public class GameModeInventories implements STEMCraftFeature {
 
         static PlayerState create(Player player) {
             PlayerState state = new PlayerState();
-            state.health = SCPlayer.maxHealth(player);
+            state.health = PlayerUtil.getMaxHealth(player);
             state.foodLevel = 20;
             state.saturation = 5.0f;
             state.exhaustion = 0.0f;
@@ -241,7 +250,7 @@ public class GameModeInventories implements STEMCraftFeature {
         }
 
         void applyTo(Player player) {
-            double max = SCPlayer.maxHealth(player);
+            double max = PlayerUtil.getMaxHealth(player);
             player.setHealth(Math.min(health, max));
             player.setFoodLevel(foodLevel);
             player.setSaturation(saturation);
@@ -255,17 +264,17 @@ public class GameModeInventories implements STEMCraftFeature {
             player.getEnderChest().setContents(ender);
         }
 
-        static PlayerState fromConfigSection(ConfigurationSection s) {
+        static PlayerState fromConfigSection(ConfigSection s) {
             PlayerState state = new PlayerState();
             state.health = s.getDouble("health", 20.0);
             state.foodLevel = s.getInt("food", 20);
-            state.saturation = (float) s.getDouble("saturation", 5.0);
-            state.exhaustion = (float) s.getDouble("exhaustion", 0.0);
+            state.saturation = s.getFloat("saturation", 5.0F);
+            state.exhaustion = s.getFloat("exhaustion", 0.0F);
             state.level = s.getInt("level", 0);
-            state.exp = (float) s.getDouble("exp", 0.0);
+            state.exp = s.getFloat("exp", 0.0F);
             state.totalExp = s.getInt("totalExp", 0);
 
-            List<?> contentsList = s.getList("contents", List.of());
+            List<?> contentsList = s.getList("contents");
             List<ItemStack> contents = new ArrayList<>();
 
             for (Object o : contentsList) {
@@ -297,7 +306,7 @@ public class GameModeInventories implements STEMCraftFeature {
             return state;
         }
 
-        void toConfigSection(ConfigurationSection s) {
+        void toConfigSection(ConfigSection s) {
             s.set("health", health);
             s.set("food", foodLevel);
             s.set("saturation", saturation);

@@ -1,33 +1,48 @@
+/*
+ * STEMCraft - Minecraft Plugin
+ * Copyright (C) 2025 James Collins
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, version 3.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ *
+ * @author STEMMechanics
+ * @link https://github.com/STEMMechanics/STEMCraft
+ */
 package dev.stemcraft.features;
 
 import dev.stemcraft.api.STEMCraftAPI;
-import dev.stemcraft.api.utils.SCPlayer;
+import dev.stemcraft.api.config.ConfigSection;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
-import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.event.player.PlayerKickEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
-public class PlayerGameMessages implements STEMCraftFeature {
-    STEMCraftAPI api;
-
+/**
+ * Feature to customize player join, quit, and death messages.
+ */
+public class PlayerGameMessages extends BaseFeature {
     private final MiniMessage mm = MiniMessage.miniMessage();
     private final Random rng = new Random();
 
     private boolean joinEnabled;
     private boolean quitEnabled;
     private boolean deathEnabled;
-
-    private final Map<UUID, Long> kickedUntil = new ConcurrentHashMap<>();
 
     private List<String> joinList = List.of();
     private List<String> quitList = List.of();
@@ -36,23 +51,30 @@ public class PlayerGameMessages implements STEMCraftFeature {
     private final EnumMap<EntityDamageEvent.DamageCause, List<String>> deathByCause = new EnumMap<>(EntityDamageEvent.DamageCause.class);
     private List<String> deathByEntity = List.of();
 
+    /**
+     * Constructor
+     */
+    public PlayerGameMessages(STEMCraftAPI api) {
+        super(api);
+    }
+
+    /**
+     * Called when the feature is being enabled.
+     */
     @Override
-    public void onEnable(STEMCraftAPI api) {
-        this.api = api;
-        String base = getConfigBase(); // e.g. features.rebalance_iron_golem
+    public void onEnable() {
+        joinEnabled = getConfigSection().getBoolean("join.enabled", true);
+        quitEnabled = getConfigSection().getBoolean("quit.enabled", true);
+        deathEnabled = getConfigSection().getBoolean("death.enabled", true);
 
-        joinEnabled = api.config().getBoolean(base + ".join.enabled", true);
-        quitEnabled = api.config().getBoolean(base + ".quit.enabled", true);
-        deathEnabled = api.config().getBoolean(base + ".death.enabled", true);
+        joinList = readList("join.list");
+        quitList = readList("quit.list");
 
-        joinList = readList(base + ".join.list", null);
-        quitList = readList(base + ".quit.list", null);
-
-        deathDefault = readList(base + ".death.list", null);
-        deathByEntity = readList(base + ".death.list_entity", null);
+        deathDefault = readList("death.list");
+        deathByEntity = readList("death.list_entity");
 
         deathByCause.clear();
-        ConfigurationSection byCause = api.config().getConfigurationSection(base + ".death.list_cause");
+        ConfigSection byCause = getConfigSection().getSection("death.list_cause");
         if (byCause != null) {
             for (String key : byCause.getKeys(false)) {
                 EntityDamageEvent.DamageCause cause = parseCause(key);
@@ -62,13 +84,9 @@ public class PlayerGameMessages implements STEMCraftFeature {
             }
         }
 
-        api.registerEvent(PlayerKickEvent.class, event -> {
-            kickedUntil.put(event.getPlayer().getUniqueId(), System.currentTimeMillis() + 10_000L);
-        });
-
-        api.registerEvent(PlayerJoinEvent.class,event -> {
+        api.events().register(PlayerJoinEvent.class,event -> {
             if (!joinEnabled) return;
-            if (!SCPlayer.isWhitelisted(event.getPlayer())) return;
+            if (!api.gatekeeper().isWhitelisted(event.getPlayer())) return;
 
             String raw = pick(joinList);
             if (raw == null) return;
@@ -77,9 +95,9 @@ public class PlayerGameMessages implements STEMCraftFeature {
         });
 
 
-        api.registerEvent(PlayerQuitEvent.class, event -> {
+        api.events().register(PlayerQuitEvent.class, event -> {
             if (!quitEnabled) return;
-            if (!SCPlayer.isWhitelisted(event.getPlayer())) return;
+            if (!api.gatekeeper().isWhitelisted(event.getPlayer())) return;
 
             String raw = pick(quitList);
             if (raw == null) return;
@@ -87,7 +105,7 @@ public class PlayerGameMessages implements STEMCraftFeature {
             event.quitMessage(render("<yellow>" + raw, event.getPlayer(), null, null));
         });
 
-        api.registerEvent(PlayerDeathEvent.class, event -> {
+        api.events().register(PlayerDeathEvent.class, event -> {
             if (!deathEnabled) return;
 
             Player p = event.getEntity();
@@ -107,7 +125,7 @@ public class PlayerGameMessages implements STEMCraftFeature {
             if (last instanceof EntityDamageByEntityEvent) {
                 pool = deathByEntity;
                 Entity damager = ((EntityDamageByEntityEvent) last).getDamager();
-                if (killer == null && damager != null) killer = damager.getType().name().toLowerCase(Locale.ROOT);
+                if (killer == null) killer = damager.getType().name().toLowerCase(Locale.ROOT);
             } else if (cause != null) {
                 pool = deathByCause.get(cause);
             }
@@ -121,9 +139,9 @@ public class PlayerGameMessages implements STEMCraftFeature {
         });
     }
 
-    private List<String> readList(String path, List<String> fallback) {
-        List<String> list = api.config().getStringList(path);
-        if (list == null || list.isEmpty()) return fallback;
+    private List<String> readList(String path) {
+        List<String> list = getConfigSection().getStringList(path);
+        if (list == null || list.isEmpty()) return null;
         return List.copyOf(list);
     }
 
@@ -141,9 +159,6 @@ public class PlayerGameMessages implements STEMCraftFeature {
                 .replace("{killer}", killer == null ? "" : killer)
                 .replace("{cause}", cause == null ? "" : cause);
 
-        // If you want glyph bindings here too:
-        // s = plugin.localeService().processBindings(s);
-
         return mm.deserialize(s);
     }
 
@@ -157,13 +172,4 @@ public class PlayerGameMessages implements STEMCraftFeature {
         }
     }
 
-    private boolean wasRecentlyKicked(UUID uuid) {
-        Long until = kickedUntil.get(uuid);
-        if (until == null) return false;
-        if (until < System.currentTimeMillis()) {
-            kickedUntil.remove(uuid);
-            return false;
-        }
-        return true;
-    }
 }

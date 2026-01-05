@@ -1,12 +1,12 @@
 package dev.stemcraft.minigames;
 
-import dev.stemcraft.api.services.hologram.HologramTypeHandler;
-import dev.stemcraft.api.services.region.RegionListener;
-import dev.stemcraft.api.utils.SCPlayer;
+import dev.stemcraft.api.service.hologram.HologramTypeHandler;
+import dev.stemcraft.api.service.region.RegionListener;
+import dev.stemcraft.api.util.SCPlayer;
 
 import dev.stemcraft.STEMCraft;
-import dev.stemcraft.api.commands.STEMCraftCommandContext;
-import dev.stemcraft.api.utils.SCRegion;
+import dev.stemcraft.api.command.CommandContext;
+import dev.stemcraft.api.model.SCRegion;
 import lombok.Getter;
 import lombok.Setter;
 import org.bukkit.Bukkit;
@@ -44,19 +44,19 @@ public class ParkourMiniGame extends STEMCraftMiniGame {
 
         plugin.tabCompleteService().register("parkour", (player, args) -> new ArrayList<>(courses.keySet()));
         plugin.registerCommand("parkour")
-                .setUsage("/parkour <create|edit|delete|enable|disable|setstart|setend|start|end> ...")
-                .setDescription("Manage and play parkour minigames")
-                .setPermission("stemcraft.command.parkour")
-                .addTabCompletion("create", "", "{world}")
-                .addTabCompletion("edit", "{parkour}")
-                .addTabCompletion("delete", "{parkour}")
-                .addTabCompletion("enable", "{parkour}")
-                .addTabCompletion("disable", "{parkour}")
-                .addTabCompletion("setstart", "{parkour}")
-                .addTabCompletion("setend", "{parkour}")
-                .addTabCompletion("start", "{parkour}", "{player}")
-                .addTabCompletion("end", "{player}")
-                .setExecutor((api, cmd, ctx) -> {
+                .usage("/parkour <create|edit|delete|enable|disable|setstart|setend|start|end> ...")
+                .description("Manage and play parkour minigames")
+                .permission("stemcraft.command.parkour")
+                .tabCompletion("create", "", "{world}")
+                .tabCompletion("edit", "{parkour}")
+                .tabCompletion("delete", "{parkour}")
+                .tabCompletion("enable", "{parkour}")
+                .tabCompletion("disable", "{parkour}")
+                .tabCompletion("setstart", "{parkour}")
+                .tabCompletion("setend", "{parkour}")
+                .tabCompletion("start", "{parkour}", "{player}")
+                .tabCompletion("end", "{player}")
+                .executor((api, cmd, ctx) -> {
                     ctx.checkArgsNotEmpty();
 
                     String sub = ctx.getArg(1).toLowerCase(Locale.ROOT);

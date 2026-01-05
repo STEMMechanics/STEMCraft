@@ -1,3 +1,22 @@
+/*
+ * STEMCraft - Minecraft Plugin
+ * Copyright (C) 2025 James Collins
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, version 3.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ *
+ * @author STEMMechanics
+ * @link https://github.com/STEMMechanics/STEMCraft
+ */
 package dev.stemcraft.features;
 
 import dev.stemcraft.STEMCraft;
@@ -12,7 +31,10 @@ import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.projectiles.ProjectileSource;
 
-public class DistanceDifficulty implements STEMCraftFeature {
+/**
+ * Feature that adjusts mob difficulty based on distance from world spawn.
+ */
+public class DistanceDifficulty extends BaseFeature {
     private static final int DEFAULT_RANGE = 500;
     private static final double DEFAULT_MULTIPLIER = 0.25;
 
@@ -20,15 +42,24 @@ public class DistanceDifficulty implements STEMCraftFeature {
     private int range;
     private double multiplier;
 
+    /**
+     * Constructor for DistanceDifficulty feature.
+     */
+    public DistanceDifficulty(STEMCraftAPI api) {
+        super(api);
+    }
+
+    /**
+     * Registers event listeners to adjust mob difficulty based on distance from world spawn.
+     */
     @Override
-    public void onEnable(STEMCraftAPI api) {
-        String base = getConfigBase();
+    public void onEnable() {
+        key = new NamespacedKey(STEMCraft.getPlugin(), "distance_multiplier");
 
-        key = new NamespacedKey(STEMCraft.getInstance(), "distance_multiplier");
-        range = api.config().getInt(base + ".range", DEFAULT_RANGE);
-        multiplier = api.config().getDouble(base + ".multiplier", DEFAULT_MULTIPLIER);
+        range = getConfigSection().getInt("range", DEFAULT_RANGE);
+        multiplier = getConfigSection().getDouble("multiplier", DEFAULT_MULTIPLIER);
 
-        api.registerEvent(CreatureSpawnEvent.class, event -> {
+        api.events().register(CreatureSpawnEvent.class, event -> {
             LivingEntity entity = event.getEntity();
             if (!(entity instanceof Monster)) return;
 
@@ -38,13 +69,13 @@ public class DistanceDifficulty implements STEMCraftFeature {
             int dz = Math.abs(entity.getLocation().getBlockZ() - world.getSpawnLocation().getBlockZ());
             int dist = Math.max(dx, dz);
 
-            double mult = resolveMultiplier(dist);
-            if (mult == 1.0) return;
+            double multiplier = resolveMultiplier(dist);
+            if (multiplier == 1.0) return;
 
-            entity.getPersistentDataContainer().set(key, PersistentDataType.DOUBLE, mult);
+            entity.getPersistentDataContainer().set(key, PersistentDataType.DOUBLE, multiplier);
         });
 
-        api.registerEvent(EntityDamageByEntityEvent.class, event -> {
+        api.events().register(EntityDamageByEntityEvent.class, event -> {
             Entity rawDamager = event.getDamager();
             Entity victim = event.getEntity();
             if (!(victim instanceof LivingEntity livingVictim)) return;
@@ -76,11 +107,23 @@ public class DistanceDifficulty implements STEMCraftFeature {
         });
     }
 
+    /**
+     * Calculates the difficulty multiplier based on distance.
+     *
+     * @param dist Distance from world spawn.
+     * @return Calculated multiplier.
+     */
     private double resolveMultiplier(int dist) {
         int bands = dist / range;
         return 1.0 + (bands * multiplier);
     }
 
+    /**
+     * Unwraps the true damager entity from projectiles.
+     *
+     * @param damager The raw damager entity.
+     * @return The true damager entity.
+     */
     private Entity unwrapDamager(Entity damager) {
         if (damager instanceof Projectile projectile) {
             ProjectileSource shooter = projectile.getShooter();
@@ -91,18 +134,38 @@ public class DistanceDifficulty implements STEMCraftFeature {
         return damager;
     }
 
+    /**
+     * Checks if a mob is damaging a player.
+     *
+     * @param damager The entity causing damage.
+     * @param victim  The entity receiving damage.
+     * @return True if a mob is damaging a player, false otherwise.
+     */
     private boolean isMobDamagingPlayer(Entity damager, LivingEntity victim) {
         if (!(victim instanceof Player)) return false;
         if (damager instanceof Player) return false;
         return damager instanceof Monster;
     }
 
+    /**
+     * Checks if a player is damaging a mob.
+     *
+     * @param damager The entity causing damage.
+     * @param victim  The entity receiving damage.
+     * @return True if a player is damaging a mob, false otherwise.
+     */
     private boolean isPlayerDamagingMob(Entity damager, LivingEntity victim) {
         if (!(damager instanceof Player)) return false;
         if (victim instanceof Player) return false;
         return victim instanceof Monster;
     }
 
+    /**
+     * Retrieves the difficulty multiplier from an entity's persistent data.
+     *
+     * @param entity The entity to check.
+     * @return The difficulty multiplier, or 1.0 if not set.
+     */
     private double getMultiplierFromEntity(Entity entity) {
         if (!(entity instanceof LivingEntity living)) return 1.0;
         PersistentDataContainer pdc = living.getPersistentDataContainer();

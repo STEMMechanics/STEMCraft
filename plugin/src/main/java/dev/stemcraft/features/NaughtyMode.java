@@ -1,9 +1,29 @@
+/*
+ * STEMCraft - Minecraft Plugin
+ * Copyright (C) 2025 James Collins
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, version 3.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ *
+ * @author STEMMechanics
+ * @link https://github.com/STEMMechanics/STEMCraft
+ */
 package dev.stemcraft.features;
 
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
-import dev.stemcraft.api.utils.SCPlayer;
-import dev.stemcraft.api.utils.SCTime;
+import dev.stemcraft.api.util.PlayerUtil;
+import dev.stemcraft.api.util.TimeUtil;
+import io.papermc.paper.event.player.AsyncChatEvent;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Entity;
@@ -21,25 +41,30 @@ import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class NaughtyMode implements STEMCraftFeature {
-    STEMCraft plugin;
-    STEMCraftAPI api;
+public class NaughtyMode extends BaseFeature {
     private static final String PERSISTENT_TIMER_TYPE = "NAUGHTY";
     private final Set<UUID> naughtyPlayers = ConcurrentHashMap.newKeySet();
     private List<String> allowedCommands = new ArrayList<>();
 
+    /**
+     * Constructor
+     */
+    public NaughtyMode(STEMCraftAPI api) {
+        super(api);
+    }
 
-    public void onEnable(STEMCraftAPI api) {
-        plugin = STEMCraft.getInstance();
-        this.api = api;
-
+    /**
+     * Enable the feature
+     */
+    @Override
+    public void onEnable() {
         allowedCommands = new ArrayList<>();
-        for (String cmd : api.config().getStringList(getConfigBase("allowed-commands"))) {
+        for (String cmd : getConfigSection().getStringList("allowed-commands")) {
             allowedCommands.add(cmd.toLowerCase(Locale.ROOT));
         }
 
-        api.punishment().registerAlert("naughty", (type, player, record) -> {
-            String durationString = SCTime.formatDuration(record.durationSeconds());
+        api.punishments().registerAlert("naughty", (type, player, record) -> {
+            String durationString = TimeUtil.formatDuration(record.durationSeconds());
 
             api.info(player, "NAUGHTY_SET", "reason", record.reason(), "duration", durationString);
             return true;
@@ -63,65 +88,65 @@ public class NaughtyMode implements STEMCraftFeature {
                 return;
             }
 
-            String playerName = SCPlayer.name(uuid);
+            String playerName = PlayerUtil.name(uuid);
             if(playerName != null) {
                 api.broadcast("NAUGHTY_UNSET_ALL", "player", playerName);
             }
         });
 
-        api.registerCommand("naughty")
-                .addTabCompletion("{player}", "{duration}")
-                .addTabCompletion("{player}", "clear")
-                .setUsage("NAUGHTY_USAGE")
-                .setPermission("stemcraft.command.naughty")
-                .setDescription("NAUGHTY_DESCRIPTION")
-                .setExecutor((plugin, cmd, ctx) -> {
-                    if (ctx.args().isEmpty()) {
-                        cmd.error(ctx.getSender(), cmd.getUsage());
-                        return;
-                    }
+        api.commands().create("naughty")
+            .tabCompletion("{player}", "{duration}")
+            .tabCompletion("{player}", "clear")
+            .usage("NAUGHTY_USAGE")
+            .permission("stemcraft.command.naughty")
+            .description("NAUGHTY_DESCRIPTION")
+            .executor((plugin, cmd, ctx) -> {
+                if (ctx.args().isEmpty()) {
+                    cmd.error(ctx.getSender(), cmd.getUsage());
+                    return;
+                }
 
-                    // naughty <player> <- player status
-                    // naughty <player> <duration> (reason) <- player naughty for this duration
-                    // naughty <player> clear <- player naughty cleared
+                // naughty <player> <- player status
+                // naughty <player> <duration> (reason) <- player naughty for this duration
+                // naughty <player> clear <- player naughty cleared
 
-                    OfflinePlayer target = ctx.getArgAsOfflinePlayer(1);
-                    if (target == null) {
-                        cmd.error("PLAYER_NOT_FOUND", "player", ctx.args().getFirst());
-                        return;
-                    }
+                OfflinePlayer target = ctx.getArgAsOfflinePlayer(1);
+                if (target == null) {
+                    cmd.error("PLAYER_NOT_FOUND", "player", ctx.args().getFirst());
+                    return;
+                }
 
-                    if(ctx.args().size() >= 2) {
-                        // check if index 2 is clear
-                        if (ctx.getArg(2).equalsIgnoreCase("clear")) {
-                            UUID uuid = target.getUniqueId();
-                            if (isNaughty(uuid)) {
-                                clearNaughty(uuid);
-                            } else {
-                                cmd.error(ctx.getSender(), "NAUGHTY_NOT_SET", "player", target.getName());
-                            }
-
+                if(ctx.args().size() >= 2) {
+                    // check if index 2 is clear
+                    if (ctx.getArg(2).equalsIgnoreCase("clear")) {
+                        UUID uuid = target.getUniqueId();
+                        if (isNaughty(uuid)) {
+                            clearNaughty(uuid);
                         } else {
-                            Duration duration = ctx.getArgAsDuration(2);
-                            if (duration == null) {
-                                cmd.error(ctx.getSender(), "INVALID_DURATION");
-                            }
-
-                            setNaughty(target.getUniqueId(), duration, ctx.getSenderAsPlayer(), ctx.getArgsAsString(3));
+                            cmd.error(ctx.getSender(), "NAUGHTY_NOT_SET", "player", target.getName());
                         }
+
                     } else {
-                        long remaining = remainingNaughty(target.getUniqueId());
-                        if (remaining == 0) {
-                            cmd.info(ctx.getSender(), "NAUGHTY_NOT_SET", "player", target.getName());
-                        } else {
-                            cmd.info(ctx.getSender(), "NAUGHTY_REMAINING", "player", target.getName(), "duration", SCTime.formatDuration(remaining));
+                        Duration duration = ctx.getArgAsDuration(2);
+                        if (duration == null) {
+                            cmd.error(ctx.getSender(), "INVALID_DURATION");
                         }
 
+                        setNaughty(target.getUniqueId(), duration, ctx.getSenderAsPlayer(), ctx.getArgsAsString(3));
                     }
-                })
-                .register(STEMCraft.getInstance());
+                } else {
+                    long remaining = remainingNaughty(target.getUniqueId());
+                    if (remaining == 0) {
+                        cmd.info(ctx.getSender(), "NAUGHTY_NOT_SET", "player", target.getName());
+                    } else {
+                        cmd.info(ctx.getSender(), "NAUGHTY_REMAINING", "player", target.getName(), "duration", TimeUtil.formatDuration(remaining));
+                    }
 
-        api.registerEvent(AsyncPlayerChatEvent.class, event -> {
+                }
+            })
+            .register(STEMCraft.getPlugin());
+
+        api.events().register(AsyncChatEvent.class, event -> {
             if (isNaughty(event.getPlayer().getUniqueId())) {
                 event.setCancelled(true);
                 api.error(event.getPlayer(), "NAUGHTY_NO_CHAT");
@@ -129,7 +154,7 @@ public class NaughtyMode implements STEMCraftFeature {
         });
 
 
-        api.registerEvent(PlayerCommandPreprocessEvent.class, event -> {
+        api.events().register(PlayerCommandPreprocessEvent.class, event -> {
             Player player = event.getPlayer();
             if (!isNaughty(player.getUniqueId())) return;
 
@@ -146,36 +171,36 @@ public class NaughtyMode implements STEMCraftFeature {
             }
         });
 
-        api.registerEvent(SignChangeEvent.class, event -> {
+        api.events().register(SignChangeEvent.class, event -> {
             if (isNaughty(event.getPlayer().getUniqueId())) {
                 event.setCancelled(true);
                 api.error(event.getPlayer(), "NAUGHTY_NO_SIGN_WRITE");
             }
         });
 
-        api.registerEvent(PlayerEditBookEvent.class, event -> {
+        api.events().register(PlayerEditBookEvent.class, event -> {
             if (isNaughty(event.getPlayer().getUniqueId())) {
                 event.setCancelled(true);
                 api.error(event.getPlayer(), "NAUGHTY_NO_BOOK_WRITE");
             }
         });
 
-        api.registerEvent(BlockBreakEvent.class, event -> {
+        api.events().register(BlockBreakEvent.class, event -> {
             if (isNaughty(event.getPlayer().getUniqueId())) {
                 event.setCancelled(true);
                 api.error(event.getPlayer(), "NAUGHTY_NO_BLOCK_BREAK");
             }
         });
 
-        api.registerEvent(BlockPlaceEvent.class, event -> {
+        api.events().register(BlockPlaceEvent.class, event -> {
             if (isNaughty(event.getPlayer().getUniqueId())) {
                 event.setCancelled(true);
                 api.error(event.getPlayer(), "NAUGHTY_NO_BLOCK_PLACE");
             }
         });
 
-        api.registerEvent(EntityDamageByEntityEvent.class, event -> {
-            if (!(event.getEntity() instanceof Player victim)) return;
+        api.events().register(EntityDamageByEntityEvent.class, event -> {
+            if (!(event.getEntity() instanceof Player)) return;
 
             Entity damager = event.getDamager();
             Player damagerPlayer = null;
@@ -193,7 +218,7 @@ public class NaughtyMode implements STEMCraftFeature {
             }
         });
 
-        api.registerEvent(PlayerDeathEvent.class, event -> {
+        api.events().register(PlayerDeathEvent.class, event -> {
             Player player = event.getEntity();
             if (!isNaughty(player.getUniqueId())) return;
 
@@ -204,7 +229,7 @@ public class NaughtyMode implements STEMCraftFeature {
         });
 
         // Using blocks/items: chests, doors, buttons, eating, etc
-        api.registerEvent(PlayerInteractEvent.class, event -> {
+        api.events().register(PlayerInteractEvent.class, event -> {
             if (!isNaughty(event.getPlayer().getUniqueId())) return;
 
             Action action = event.getAction();
@@ -220,21 +245,21 @@ public class NaughtyMode implements STEMCraftFeature {
         });
 
         // Using entities: right-click on villagers, minecarts, item frames, etc
-        api.registerEvent(PlayerInteractEntityEvent.class, event -> {
+        api.events().register(PlayerInteractEntityEvent.class, event -> {
             if (!isNaughty(event.getPlayer().getUniqueId())) return;
 
             event.setCancelled(true);
             api.error(event.getPlayer(), "NAUGHTY_NO_USE");
         });
 
-        api.registerEvent(PlayerInteractAtEntityEvent.class, event -> {
+        api.events().register(PlayerInteractAtEntityEvent.class, event -> {
             if (!isNaughty(event.getPlayer().getUniqueId())) return;
 
             event.setCancelled(true);
             api.error(event.getPlayer(), "NAUGHTY_NO_USE");
         });
 
-        api.registerEvent(PlayerJoinEvent.class, event -> {
+        api.events().register(PlayerJoinEvent.class, event -> {
             Player player = event.getPlayer();
             UUID uuid = player.getUniqueId();
 
@@ -250,7 +275,7 @@ public class NaughtyMode implements STEMCraftFeature {
                 return;
             }
 
-            String durationString = SCTime.formatDuration(remaining);
+            String durationString = TimeUtil.formatDuration(remaining);
             api.info(player, "NAUGHTY_REMAINING_SELF", "duration", durationString);
         });
     }
@@ -266,22 +291,22 @@ public class NaughtyMode implements STEMCraftFeature {
             naughtyPlayers.remove(uuid);
 
             Player player = Bukkit.getPlayer(uuid);
-            String playerName = SCPlayer.name(uuid);
+            String playerName = PlayerUtil.name(uuid);
             if (player != null && player.isOnline()) {
                 api.info(player, "NAUGHTY_UNSET");
             }
 
             api.broadcast("NAUGHTY_UNSET_ALL", player, playerName);
         } else {
-            api.tasks().runLaterPersistent(PERSISTENT_TIMER_TYPE, id, null, SCTime.DurationToRunAtMillis(duration));
+            api.tasks().runLaterPersistent(PERSISTENT_TIMER_TYPE, id, null, TimeUtil.DurationToRunAtMillis(duration));
             naughtyPlayers.add(uuid);
 
             Player player = Bukkit.getPlayer(uuid);
-            String playerName = SCPlayer.name(uuid);
-            String durationString = SCTime.formatDuration(duration.toSeconds());
+            String playerName = PlayerUtil.name(uuid);
+            String durationString = TimeUtil.formatDuration(duration.toSeconds());
 
             api.broadcast("NAUGHTY_SET_ALL", player, "player", playerName, "duration", durationString);
-            api.punishment().record(uuid, actor, duration, "naughty", false, reason);
+            api.punishments().record(uuid, actor, duration, "naughty", false, reason);
         }
     }
 

@@ -1,3 +1,22 @@
+/*
+ * STEMCraft - Minecraft Plugin
+ * Copyright (C) 2025 James Collins
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, version 3.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ *
+ * @author STEMMechanics
+ * @link https://github.com/STEMMechanics/STEMCraft
+ */
 package dev.stemcraft.features;
 
 import dev.stemcraft.api.STEMCraftAPI;
@@ -7,21 +26,33 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.Material;
 import java.util.concurrent.ThreadLocalRandom;
 
-public final class RebalanceIronGolem implements STEMCraftFeature {
+/**
+ * Feature that rebalances the drops from Iron Golems.
+ * Instead of dropping iron ingots, they will drop a configurable number of iron nuggets.
+ */
+public final class RebalanceIronGolem extends BaseFeature {
     private static final int DEFAULT_MIN_DROPS = 3;
     private static final int DEFAULT_MAX_DROPS = 5;
 
-    @Override
-    public void onEnable(STEMCraftAPI api) {
-        String base = getConfigBase(); // e.g. features.rebalance_iron_golem
+    /**
+     * Constructor for RebalanceIronGolem.
+     */
+    public RebalanceIronGolem(STEMCraftAPI api) {
+        super(api);
+    }
 
-        int min = Math.max(0, api.config().getInt(base + ".min_drops", DEFAULT_MIN_DROPS));
-        int max = Math.max(0, api.config().getInt(base + ".max_drops", DEFAULT_MAX_DROPS));
+    /**
+     * Called when the feature is being enabled.
+     */
+    @Override
+    public void onEnable() {
+        int min = Math.max(0, getConfigSection().getInt("min-drops", DEFAULT_MIN_DROPS));
+        int max = Math.max(0, getConfigSection().getInt("max-drops", DEFAULT_MAX_DROPS));
 
         final int minDrops = Math.min(min, max);
         final int maxDrops = Math.max(min, max);
 
-        api.registerEvent(EntityDeathEvent.class, event -> {
+        api.events().register(EntityDeathEvent.class, event -> {
             if (event.getEntityType() != EntityType.IRON_GOLEM) return;
 
             event.getDrops().clear();

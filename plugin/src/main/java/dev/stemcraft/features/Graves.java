@@ -1,6 +1,26 @@
+/*
+ * STEMCraft - Minecraft Plugin
+ * Copyright (C) 2025 James Collins
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, version 3.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ *
+ * @author STEMMechanics
+ * @link https://github.com/STEMMechanics/STEMCraft
+ */
 package dev.stemcraft.features;
 
 import dev.stemcraft.api.STEMCraftAPI;
+import net.kyori.adventure.text.Component;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -24,7 +44,7 @@ import java.util.Map;
  * - Water/Lava: build a small dirt "cap" at the surface, chest beneath, and dirt around chest where blocks aren't solid.
  * - If we can't safely place without wrecking blocks, fall back to vanilla drops.
  */
-public class Graves implements STEMCraftFeature {
+public class Graves extends BaseFeature {
 
     private static final int SEARCH_RADIUS = 10;
     private static final int SEARCH_Y_UP = 6;
@@ -36,9 +56,19 @@ public class Graves implements STEMCraftFeature {
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
+    /**
+     * Constructor
+     */
+    public Graves(STEMCraftAPI api) {
+        super(api);
+    }
+
+    /**
+     * Enable the feature
+     */
     @Override
-    public void onEnable(STEMCraftAPI api) {
-        api.registerEvent(PlayerDeathEvent.class, event -> {
+    public void onEnable() {
+        api.events().register(PlayerDeathEvent.class, event -> {
             Player player = event.getEntity();
             if (player.getGameMode() != org.bukkit.GameMode.SURVIVAL) return;
 
@@ -116,9 +146,7 @@ public class Graves implements STEMCraftFeature {
 
         Material signType = signBlock.getType();
         if (!isReplaceableForGrave(signType)) return false;
-        if (isLiquid(signType) || isHazard(signType)) return false;
-
-        return true;
+        return !isLiquid(signType) && !isHazard(signType);
     }
 
     private boolean createBuriedGrave(STEMCraftAPI api, Location surfaceLoc, Player player, List<ItemStack> drops) {
@@ -242,10 +270,13 @@ public class Graves implements STEMCraftFeature {
         if (!(signBlock.getState() instanceof Sign sign)) return false;
 
         String when = LocalDateTime.now().format(DATE_FMT);
-        sign.setLine(0, "RIP");
-        sign.setLine(1, player.getName());
-        sign.setLine(2, when);
-        sign.setLine(3, "");
+        for (org.bukkit.block.sign.Side side : org.bukkit.block.sign.Side.values()) {
+            org.bukkit.block.sign.SignSide signSide = sign.getSide(side);
+            signSide.line(0, Component.text("RIP"));
+            signSide.line(1, Component.text(player.getName()));
+            signSide.line(2, Component.text(when));
+            signSide.line(3, Component.empty());
+        }
         sign.update(true, false);
         return true;
     }

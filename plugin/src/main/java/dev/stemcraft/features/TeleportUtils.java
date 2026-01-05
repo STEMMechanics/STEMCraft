@@ -1,60 +1,72 @@
+/*
+ * STEMCraft - Minecraft Plugin
+ * Copyright (C) 2025 James Collins
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, version 3.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ *
+ * @author STEMMechanics
+ * @link https://github.com/STEMMechanics/STEMCraft
+ */
 package dev.stemcraft.features;
 
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
-import dev.stemcraft.api.commands.STEMCraftCommand;
-import dev.stemcraft.api.utils.SCLocation;
-import dev.stemcraft.api.utils.SCPlayer;
-import dev.stemcraft.api.utils.SCString;
+import dev.stemcraft.api.command.Command;
+import dev.stemcraft.api.config.ConfigSection;
+import dev.stemcraft.api.util.LocationUtil;
+import dev.stemcraft.api.util.PlayerUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.World;
+import org.bukkit.block.Block;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.ConsoleCommandSender;
-import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import java.util.List;
 
-import java.io.File;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class TeleportUtils implements STEMCraftFeature {
-    private STEMCraft plugin;
-    private STEMCraftAPI api;
-
-    private FileConfiguration backConfig;
-
+public class TeleportUtils extends BaseFeature {
     private final Map<UUID, Location> backLocations = new ConcurrentHashMap<>();
     private final Map<String, Location> warps = new ConcurrentHashMap<>();
 
-    @Override
-    public void onEnable(STEMCraftAPI api) {
-        this.plugin = STEMCraft.getInstance();
-        this.api = api;
-        this.backConfig = api.getCacheConfig("back-locations.yml");
+    public TeleportUtils(STEMCraftAPI api) {
+        super(api);
+    }
 
+    @Override
+    public void onEnable() {
         loadWarpsFromConfig();
         loadBackLocationsFromConfig();
 
         // Track previous locations for /back
-        api.registerEvent(PlayerTeleportEvent.class, event -> {
+        api.events().register(PlayerTeleportEvent.class, event -> {
             Player player = event.getPlayer();
             Location from = event.getFrom();
             setBackLocation(player.getUniqueId(), from);
         });
 
         // Run configured commands when a player teleports to a different world
-        api.registerEvent(PlayerTeleportEvent.class, event -> {
+        api.events().register(PlayerTeleportEvent.class, event -> {
             Location from = event.getFrom();
             Location to = event.getTo();
-            if (to == null) return;
             if (from.getWorld() == null || to.getWorld() == null) return;
             if (from.getWorld().equals(to.getWorld())) return;
 
@@ -64,37 +76,37 @@ public class TeleportUtils implements STEMCraftFeature {
             }
         }, EventPriority.MONITOR, true);
 
-        api.registerEvent(PlayerDeathEvent.class, event -> {
+        api.events().register(PlayerDeathEvent.class, event -> {
             Player player = event.getEntity();
             Location loc = player.getLocation();
             setBackLocation(player.getUniqueId(), loc);
         });
 
         // /tpall
-        api.registerCommand("tpall")
-                .setUsage("TPALL_USAGE")
-                .setPermission("stemcraft.command.tpall")
-                .setDescription("TPALL_DESCRIPTION")
-                .setExecutor((plugin, cmd, ctx) -> {
+        api.commands().create("tpall")
+                .usage("TPALL_USAGE")
+                .permission("stemcraft.command.tpall")
+                .description("TPALL_DESCRIPTION")
+                .executor((plugin, cmd, ctx) -> {
                     ctx.checkNotConsole();
                     Player sender = ctx.getSenderAsPlayer();
                     Location targetLocation = sender.getLocation();
                     for (Player target : Bukkit.getOnlinePlayers()) {
                         if (target.equals(sender)) continue;
-                        SCPlayer.teleport(target, targetLocation);
+                        PlayerUtil.teleport(target, targetLocation);
                         cmd.info(target, "TPALL_TARGET_NOTIFY", "player", sender.getName());
                     }
 
                     ctx.returnInfo("TPALL_SUCCESS", "count", (Bukkit.getOnlinePlayers().size() - 1));
                 })
-                .register(plugin);
+                .register(STEMCraft.getPlugin());
         
         // /tphere <player>
-        api.registerCommand("tphere")
-                .setUsage("TPHERE_USAGE")
-                .setPermission("stemcraft.command.tphere")
-                .setDescription("TPHERE_DESCRIPTION")
-                .setExecutor((plugin, cmd, ctx) -> {
+        api.commands().create("tphere")
+                .usage("TPHERE_USAGE")
+                .permission("stemcraft.command.tphere")
+                .description("TPHERE_DESCRIPTION")
+                .executor((plugin, cmd, ctx) -> {
                     if (!(ctx.getSender() instanceof Player sender)) {
                         cmd.error(ctx.getSender(), "COMMAND_PLAYER_ONLY");
                         return;
@@ -115,13 +127,13 @@ public class TeleportUtils implements STEMCraftFeature {
                     target.teleport(sender.getLocation());
                     cmd.info(ctx.getSender(), "TPHERE_SUCCESS", "player", target.getName());
                 })
-                .register(plugin);
+                .register(STEMCraft.getPlugin());
 
-        api.registerCommand("tpspawn")
-                .setUsage("TPSPAWN_USAGE")
-                .setPermission("stemcraft.command.tpspawn")
-                .setDescription("TPSPAWN_DESCRIPTION")
-                .setExecutor((plugin, cmd, ctx) -> {
+        api.commands().create("tpspawn")
+                .usage("TPSPAWN_USAGE")
+                .permission("stemcraft.command.tpspawn")
+                .description("TPSPAWN_DESCRIPTION")
+                .executor((plugin, cmd, ctx) -> {
                     if(ctx.isConsole() && ctx.numArgs() < 2) {
                         ctx.returnError("CONSOLE_PLAYER_REQUIRED");
                     }
@@ -137,17 +149,17 @@ public class TeleportUtils implements STEMCraftFeature {
                     }
 
                     setBackLocation(target.getUniqueId(), target.getLocation());
-                    SCPlayer.teleport(target, world.getSpawnLocation());
+                    PlayerUtil.teleport(target, world.getSpawnLocation());
                     cmd.info(ctx.getSender(), "TPSPAWN_SUCCESS", "player", target.getName(), "world", world.getName());
                 })
-                .register(plugin);
+                .register(STEMCraft.getPlugin());
 
         // /back [player]
-        api.registerCommand("back")
-                .setUsage("BACK_USAGE")
-                .setPermission("stemcraft.command.back")
-                .setDescription("BACK_DESCRIPTION")
-                .setExecutor((plugin, cmd, ctx) -> {
+        api.commands().create("back")
+                .usage("BACK_USAGE")
+                .permission("stemcraft.command.back")
+                .description("BACK_DESCRIPTION")
+                .executor((plugin, cmd, ctx) -> {
                     Player target;
 
                     if (ctx.args().isEmpty()) {
@@ -183,14 +195,14 @@ public class TeleportUtils implements STEMCraftFeature {
                     target.teleport(back);
                     cmd.info(ctx.getSender(), "BACK_SUCCESS", "player", target.getName());
                 })
-                .register(plugin);
+                .register(STEMCraft.getPlugin());
 
         // /warp <name>
-        api.registerCommand("warp")
-                .setUsage("WARP_USAGE")
-                .setPermission("stemcraft.command.warp")
-                .setDescription("WARP_DESCRIPTION")
-                .setExecutor((plugin, cmd, ctx) -> {
+        api.commands().create("warp")
+                .usage("WARP_USAGE")
+                .permission("stemcraft.command.warp")
+                .description("WARP_DESCRIPTION")
+                .executor((plugin, cmd, ctx) -> {
                     if (!(ctx.getSender() instanceof Player player)) {
                         cmd.error(ctx.getSender(), "COMMAND_PLAYER_ONLY");
                         return;
@@ -216,14 +228,14 @@ public class TeleportUtils implements STEMCraftFeature {
                     player.teleport(loc);
                     cmd.info(player, "WARP_SUCCESS", "warp", name);
                 })
-                .register(plugin);
+                .register(STEMCraft.getPlugin());
 
         // /setwarp <name>
-        api.registerCommand("setwarp")
-                .setUsage("SETWARP_USAGE")
-                .setPermission("stemcraft.command.setwarp")
-                .setDescription("SETWARP_DESCRIPTION")
-                .setExecutor((plugin, cmd, ctx) -> {
+        api.commands().create("setwarp")
+                .usage("SETWARP_USAGE")
+                .permission("stemcraft.command.setwarp")
+                .description("SETWARP_DESCRIPTION")
+                .executor((plugin, cmd, ctx) -> {
                     if (!(ctx.getSender() instanceof Player player)) {
                         cmd.error(ctx.getSender(), "COMMAND_PLAYER_ONLY");
                         return;
@@ -242,14 +254,14 @@ public class TeleportUtils implements STEMCraftFeature {
 
                     cmd.info(player, "SETWARP_SUCCESS", "warp", name);
                 })
-                .register(plugin);
+                .register(STEMCraft.getPlugin());
 
         // /delwarp <name>
-        api.registerCommand("delwarp")
-                .setUsage("DELWARP_USAGE")
-                .setPermission("stemcraft.command.delwarp")
-                .setDescription("DELWARP_DESCRIPTION")
-                .setExecutor((plugin, cmd, ctx) -> {
+        api.commands().create("delwarp")
+                .usage("DELWARP_USAGE")
+                .permission("stemcraft.command.delwarp")
+                .description("DELWARP_DESCRIPTION")
+                .executor((plugin, cmd, ctx) -> {
                     if (ctx.args().isEmpty()) {
                         cmd.error(ctx.getSender(), cmd.getUsage());
                         return;
@@ -266,14 +278,14 @@ public class TeleportUtils implements STEMCraftFeature {
 
                     cmd.info(ctx.getSender(), "DELWARP_SUCCESS", "warp", name);
                 })
-                .register(plugin);
+                .register(STEMCraft.getPlugin());
 
         // /spawn <world> [player]
-        api.registerCommand("spawn")
-                .setUsage("SPAWN_USAGE")
-                .setPermission("stemcraft.command.spawn")
-                .setDescription("SPAWN_DESCRIPTION")
-                .setExecutor((plugin, cmd, ctx) -> {
+        api.commands().create("spawn")
+                .usage("SPAWN_USAGE")
+                .permission("stemcraft.command.spawn")
+                .description("SPAWN_DESCRIPTION")
+                .executor((plugin, cmd, ctx) -> {
                     if (ctx.args().isEmpty()) {
                         if (!(ctx.getSender() instanceof Player sender)) {
                             cmd.error(ctx.getSender(), "COMMAND_PLAYER_ONLY");
@@ -310,15 +322,15 @@ public class TeleportUtils implements STEMCraftFeature {
 
                     teleportToWorldSpawn(cmd, ctx.getSender(), world, target);
                 })
-                .register(plugin);
+                .register(STEMCraft.getPlugin());
 
         // /tpworld <world>
-        api.registerCommand("tpworld")
-                .setUsage("TPWORLD_USAGE")
-                .setPermission("stemcraft.command.tpworld")
-                .setDescription("TPWORLD_DESCRIPTION")
-                .addTabCompletion("{world}", "{player}")
-                .setExecutor((plugin, cmd, ctx) -> {
+        api.commands().create("tpworld")
+                .usage("TPWORLD_USAGE")
+                .permission("stemcraft.command.tpworld")
+                .description("TPWORLD_DESCRIPTION")
+                .tabCompletion("{world}", "{player}")
+                .executor((plugin, cmd, ctx) -> {
                     ctx.checkArgsSizeAtLeast(1);
 
                     if(ctx.isConsole() && ctx.args().size() < 2) {
@@ -336,17 +348,17 @@ public class TeleportUtils implements STEMCraftFeature {
                         ctx.returnError("PLAYER_NOT_FOUND", "player", ctx.getArg(2));
                     }
 
-                    SCPlayer.teleport(targetPlayer, world.getSpawnLocation());
+                    PlayerUtil.teleport(targetPlayer, world.getSpawnLocation());
                     ctx.returnInfo("TPWORLD_SUCCESS", "world", worldName);
                 })
-                .register(plugin);
+                .register(STEMCraft.getPlugin());
 
         // /top
-        api.registerCommand("top")
-                .setUsage("TOP_USAGE")
-                .setPermission("stemcraft.command.top")
-                .setDescription("TOP_DESCRIPTION")
-                .setExecutor((plugin, cmd, ctx) -> {
+        api.commands().create("top")
+                .usage("TOP_USAGE")
+                .permission("stemcraft.command.top")
+                .description("TOP_DESCRIPTION")
+                .executor((plugin, cmd, ctx) -> {
                     if (!(ctx.getSender() instanceof Player player)) {
                         cmd.error(ctx.getSender(), "COMMAND_PLAYER_ONLY");
                         return;
@@ -366,23 +378,24 @@ public class TeleportUtils implements STEMCraftFeature {
 
                     cmd.info(player, "TOP_SUCCESS");
                 })
-                .register(plugin);
+                .register(STEMCraft.getPlugin());
 
 
 // /jump
-        api.registerCommand("jump")
-                .setUsage("JUMP_USAGE")
-                .setPermission("stemcraft.command.jump")
-                .setDescription("JUMP_DESCRIPTION")
-                .setExecutor((plugin, cmd, ctx) -> {
+        api.commands().create("jump")
+                .usage("JUMP_USAGE")
+                .permission("stemcraft.command.jump")
+                .description("JUMP_DESCRIPTION")
+                .executor((plugin, cmd, ctx) -> {
                     if (!(ctx.getSender() instanceof Player player)) {
                         cmd.error(ctx.getSender(), "COMMAND_PLAYER_ONLY");
                         return;
                     }
 
                     int maxDistance = 120; // adjustable
-                    Location target = player.getTargetBlockExact(maxDistance) != null
-                            ? player.getTargetBlockExact(maxDistance).getLocation()
+                    Block block = player.getTargetBlockExact(maxDistance);
+                    Location target = block != null
+                            ? block.getLocation()
                             : null;
 
                     if (target == null) {
@@ -397,15 +410,15 @@ public class TeleportUtils implements STEMCraftFeature {
 
                     cmd.info(player, "JUMP_SUCCESS");
                 })
-                .register(plugin);
+                .register(STEMCraft.getPlugin());
 
 
 // /thru
-        api.registerCommand("thru")
-                .setUsage("THRU_USAGE")
-                .setPermission("stemcraft.command.thru")
-                .setDescription("THRU_DESCRIPTION")
-                .setExecutor((plugin, cmd, ctx) -> {
+        api.commands().create("thru")
+                .usage("THRU_USAGE")
+                .permission("stemcraft.command.thru")
+                .description("THRU_DESCRIPTION")
+                .executor((plugin, cmd, ctx) -> {
                     if (!(ctx.getSender() instanceof Player player)) {
                         cmd.error(ctx.getSender(), "COMMAND_PLAYER_ONLY");
                         return;
@@ -438,69 +451,67 @@ public class TeleportUtils implements STEMCraftFeature {
 
                     cmd.error(player, "THRU_FAILED");
                 })
-                .register(plugin);
+                .register(STEMCraft.getPlugin());
     }
 
     private void loadWarpsFromConfig() {
-        String base = getConfigBase("warps");
-        if (!api.config().isConfigurationSection(base)) {
+        if (!getRootConfigSection().isSection("warps")) {
             return;
         }
 
-        var section = api.config().getConfigurationSection(base);
+        ConfigSection section = getRootConfigSection().getSection("warps");
         if (section == null) return;
 
         for (String key : section.getKeys(false)) {
-            String path = base + "." + key;
-            String value = api.config().getString(path);
+            String value = section.getString(key);
             if (value == null || value.isEmpty()) continue;
 
-            Location loc = SCLocation.deserialize(value);
+            Location loc = LocationUtil.deserialize(value);
             warps.put(key.toLowerCase(Locale.ROOT), loc);
         }
     }
 
     private void saveWarpToConfig(String name, Location loc) {
-        String path = getConfigBase("warps") + "." + name;
-        String value = SCLocation.serialize(loc, true, true);
-        api.config().set(path, value);
-        plugin.saveConfig();
+        String value = LocationUtil.serialize(loc, true, true);
+        getRootConfigSection().set("warps." + name, value);
+        getRootConfigSection().save();
     }
 
     private void deleteWarpFromConfig(String name) {
-        String path = getConfigBase("warps") + "." + name;
-        api.config().set(path, null);
-        plugin.saveConfig();
+        getRootConfigSection().set("warps." + name, null);
+        getRootConfigSection().save();
     }
 
     private void loadBackLocationsFromConfig() {
-        var section = backConfig.getConfigurationSection("locations");
+        ConfigSection section = getRootConfigSection().getSection("last-locations");
         if (section == null) return;
 
         for (String key : section.getKeys(false)) {
-            String path = "locations." + key;
-            String value = backConfig.getString(path);
+            String value = section.getString(key);
             if (value == null || value.isEmpty()) continue;
 
             try {
                 UUID uuid = UUID.fromString(key);
-                Location loc = SCLocation.deserialize(value);
+                Location loc = LocationUtil.deserialize(value);
                 if(loc == null) continue;
                 backLocations.put(uuid, loc);
             } catch (IllegalArgumentException ignored) {
+                // ignored
             }
         }
     }
 
     private void saveBackLocation(UUID uuid, Location loc) {
-        String path = "locations." + uuid;
+        ConfigSection section = getRootConfigSection().getSection("last-locations");
+
         if (loc == null) {
-            backConfig.set(path, null);
+            section.set(uuid.toString(), null);
         } else {
-            String value = SCLocation.serialize(loc, true, true);
-            backConfig.set(path, value);
+            String value = LocationUtil.serialize(loc, true, true);
+            section.set(uuid.toString(), value);
         }
-        plugin.saveCacheConfig("back-locations.yml", backConfig);
+
+        getRootConfigSection().save();
     }
 
     private void setBackLocation(UUID uuid, Location loc) {
@@ -511,8 +522,7 @@ public class TeleportUtils implements STEMCraftFeature {
     }
 
     private List<String> getWorldChangeCommands() {
-        if (!api.config().isList("teleport-commands")) return List.of();
-        List<String> list = api.config().getStringList("teleport-commands");
+        List<String> list = getRootConfigSection().getStringList("teleport-commands");
         return list == null ? List.of() : list;
     }
 
@@ -564,7 +574,7 @@ public class TeleportUtils implements STEMCraftFeature {
         Bukkit.dispatchCommand(console, cmdLine);
     }
 
-    private void teleportToWorldSpawn(STEMCraftCommand cmd,
+    private void teleportToWorldSpawn(Command cmd,
                                       CommandSender sender,
                                       World world,
                                       Player target) {

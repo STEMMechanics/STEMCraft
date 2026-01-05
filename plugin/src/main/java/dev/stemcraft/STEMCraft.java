@@ -1,32 +1,35 @@
 package dev.stemcraft;
 
 import dev.stemcraft.api.STEMCraftAPI;
-import dev.stemcraft.api.commands.STEMCraftCommand;
-import dev.stemcraft.api.events.STEMCraftEventHandler;
-import dev.stemcraft.api.services.hologram.HologramService;
-import dev.stemcraft.api.services.task.TaskService;
-import dev.stemcraft.api.services.punishment.PunishmentService;
-import dev.stemcraft.api.services.web.WebService;
-import dev.stemcraft.api.services.tabcomplete.TabCompleteService;
-import dev.stemcraft.api.utils.STEMCraftUtil;
-import dev.stemcraft.commands.STEMCraftCommandImpl;
-import dev.stemcraft.managers.*;
+import dev.stemcraft.api.config.ConfigFile;
+import dev.stemcraft.api.event.server.MaintenanceModeChangedEvent;
+import dev.stemcraft.api.service.hologram.HologramService;
+import dev.stemcraft.api.service.locale.LocaleService;
+import dev.stemcraft.api.service.message.MessageService;
+import dev.stemcraft.api.service.motd.MotdService;
+import dev.stemcraft.api.service.player.PlayerLogService;
+import dev.stemcraft.api.service.punishment.PunishmentService;
+import dev.stemcraft.api.service.web.WebService;
+import dev.stemcraft.api.service.tabcomplete.TabCompleteService;
+import dev.stemcraft.api.service.world.WorldService;
+import dev.stemcraft.command.STEMCraftCommandImpl;
+import dev.stemcraft.service.*;
 import dev.stemcraft.api.internal.InstanceHolder;
-import dev.stemcraft.api.services.*;
 import dev.stemcraft.chunkgen.FlatGenerator;
 import dev.stemcraft.chunkgen.VoidGenerator;
-import dev.stemcraft.features.STEMCraftFeature;
-//import dev.stemcraft.minigames.STEMCraftMiniGame;
+import dev.stemcraft.features.BaseFeature;
+import dev.stemcraft.service.command.CommandServiceImpl;
+import dev.stemcraft.service.minigame.MiniGameServiceImpl;
+import dev.stemcraft.service.PlayerServiceImpl;
+import dev.stemcraft.service.tabcompletion.TabCompleteServiceImpl;
+import dev.stemcraft.service.world.WorldServiceImpl;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.experimental.Accessors;
 import net.kyori.adventure.text.minimessage.MiniMessage;
+import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.event.Cancellable;
-import org.bukkit.event.Event;
-import org.bukkit.event.EventPriority;
-import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerPreLoginEvent;
 import org.bukkit.event.player.PlayerLoginEvent;
 import org.bukkit.plugin.Plugin;
@@ -47,27 +50,32 @@ public final class STEMCraft extends JavaPlugin {
     private static STEMCraftAPI api;
     private File cacheDir;
 
-    private LocaleService localeService;
-    private MessengerService messengerService;
+    private CommandServiceImpl commands;
+    private ConfigServiceImpl config;
+    private EventServiceImpl events;
+
+    private LocaleService locale;
+    private MessageService messengerService;
     private PlayerLogService playerLogService;
     private WorldService worldService;
-    private MOTDService motdService;
+    private MotdService motd;
     private WebService webService;
     private TabCompleteService tabCompleteService;
-    private TaskService taskService;
+    private dev.stemcraft.api.service.task.TaskService taskService;
     private PunishmentService punishmentService;
     private HologramService hologramService;
-    private ItemService itemService;
+    private ItemServiceImpl items;
     private ResourcePackManager resourcePackService;
-    private RegionManager regionService;
+    private RegionServiceImpl regions;
     private ChatManager chatService;
-    private GateKeeperManager gateKeeperService;
+    private GateKeeperServiceImpl gateKeeperService;
+    private MiniGameServiceImpl miniGameService;
 
-    private YamlConfiguration config;
+//    private YamlConfiguration config;
     @Getter(AccessLevel.NONE)
-    private File configFile;
+    private ConfigFile configFile;
 
-    private boolean inMaintenanceMode = false;
+    private boolean isMaintenanceMode = false;
 
     private boolean debugging = false;
     private String whiteListMessage = "This server is invite-only.";
@@ -75,21 +83,25 @@ public final class STEMCraft extends JavaPlugin {
     @Override
     public void onEnable() {
         instance = this;
+        api = new STEMCraftAPIImpl(this);
+        InstanceHolder.set(api, this);
+
+        config = new ConfigServiceImpl();
 
         // Load configuration
-        configFile = new File(instance.getDataFolder(), "config.yml");
+        configFile = api.config().load("config.yml");
         if (!configFile.exists()) {
             saveResource("config.yml", false);
         }
-        config = YamlConfiguration.loadConfiguration(configFile);
+
 
         // Load early managers
         messengerService = new MessengerManager(this);
-        localeService = new LocaleManager(this);
-        taskService = new TaskManager(this);
+        locale = new LocaleServiceImpl(this);
+        taskService = new TaskServiceImpl(this);
 
         messengerService.onEnable();
-        localeService.onEnable();
+        locale.onEnable();
         taskService.onEnable();
 
         // Check dependencies
@@ -101,40 +113,46 @@ public final class STEMCraft extends JavaPlugin {
         }
 
         // Setup API
-        api = new STEMCraftApiManager(this);
-        InstanceHolder.set(api, this);
 
-        debugging = config.getBoolean("debug", false);
+        debugging = configFile.getBoolean("debug", false);
 
         loadUtilities();
 
 
         // Load managers
-        playerLogService = new PlayerLogManager(this);
-        worldService = new WorldManager(this);
-        motdService = new MOTDManager(this);
-        webService = new WebManager(this);
-        tabCompleteService = new TabCompleteManager(this);
+        commands = new CommandServiceImpl(this, api);
+        events = new EventServiceImpl(this, api);
+
+        playerLogService = new PlayerServiceImpl(this);
+        worldService = new WorldServiceImpl(this);
+        motd = new MotdServiceImpl(this, api);
+        webService = new WebServiceImpl(this);
+        tabCompleteService = new TabCompleteServiceImpl(this);
         punishmentService = new PunishmentManager(this);
-        hologramService = new HologramManager(this);
-        itemService = new ItemManager(this);
+        hologramService = new HologramServiceImpl(this);
+        items = new ItemServiceImpl(this, api);
         resourcePackService = new ResourcePackManager(this);
-        regionService = new RegionManager(this);
+        regions = new RegionServiceImpl(this, api);
         chatService = new ChatManager(this);
-        gateKeeperService = new GateKeeperManager(this);
+        gateKeeperService = new GateKeeperServiceImpl(this);
+        miniGameService = new MiniGameServiceImpl(this);
+
+        commands.onEnable();
+        events.onEnable();
 
         playerLogService.onEnable();
         worldService.onEnable();
-        motdService.onEnable();
+        motd.onEnable();
         webService.onEnable();
         tabCompleteService.onEnable();
         punishmentService.onEnable();
         hologramService.onEnable();
-        itemService.onEnable();
+        items.onEnable();
         resourcePackService.onEnable();
-        regionService.onEnable();
+        regions.onEnable();
         chatService.onEnable();
         gateKeeperService.onEnable();
+        miniGameService.onEnable();
 
         info("STEMCRAFT_ENABLED");
 
@@ -144,9 +162,9 @@ public final class STEMCraft extends JavaPlugin {
 
         loadFeatures();
         loadCommands();
-        loadMiniGames();
+        loadminigames();
 
-        whiteListMessage = config.getString("whitelist_message", whiteListMessage);
+        whiteListMessage = configFile.getString("whitelist_message", whiteListMessage);
         registerEvent(AsyncPlayerPreLoginEvent.class, event -> {
             if (event.getLoginResult() == AsyncPlayerPreLoginEvent.Result.KICK_WHITELIST) {
                 event.disallow(
@@ -165,36 +183,39 @@ public final class STEMCraft extends JavaPlugin {
             }
         });
 
-        inMaintenanceMode = config().getBoolean("maintenance", false);
+        isMaintenanceMode = configFile.getBoolean("maintenance", false);
 
         registerCommand("maintenance")
-            .addTabCompletion("on")
-            .addTabCompletion("off")
-            .setDescription("MAINTENANCE_DESCRIPTION")
-            .setUsage("MAINTENANCE_USAGE")
-            .setPermission("stemcraft.command.maintenance")
-            .setExecutor((unused, cmd, ctx) -> {
+            .tabCompletion("on")
+            .tabCompletion("off")
+            .description("MAINTENANCE_DESCRIPTION")
+            .usage("MAINTENANCE_USAGE")
+            .permission("stemcraft.command.maintenance")
+            .executor((unused, cmd, ctx) -> {
                 if (ctx.args().isEmpty()) {
-                    ctx.returnInfo("MAINTENANCE_STATUS", inMaintenanceMode ? "on" : "off");
+                    ctx.returnInfo("MAINTENANCE_STATUS", isMaintenanceMode ? "on" : "off");
                 }
 
                 String state = ctx.args().getFirst().toLowerCase();
                 if ("on".equals(state)) {
-                    inMaintenanceMode = true;
+                    isMaintenanceMode = true;
                 } else if ("off".equals(state)) {
-                    inMaintenanceMode = false;
+                    isMaintenanceMode = false;
                 } else {
                     ctx.returnError("MAINTENANCE_INVALID_OPTION");
                 }
 
-                config().set("maintenance", inMaintenanceMode);
-                saveConfig();
-                ctx.returnInfo("MAINTENANCE_STATUS", inMaintenanceMode ? "on" : "off");
+                configFile.set("maintenance", isMaintenanceMode);
+                configFile.save();
+
+                Bukkit.getPluginManager().callEvent(new MaintenanceModeChangedEvent(isMaintenanceMode));
+
+                ctx.returnInfo("MAINTENANCE_STATUS", isMaintenanceMode ? "on" : "off");
             })
             .register(this);
 
         registerEvent(PlayerLoginEvent.class, event -> {
-            if (inMaintenanceMode) {
+            if (isMaintenanceMode) {
                 boolean isAdmin = event.getPlayer().hasPermission("stemcraft.maintenance.bypass");
 
                 if (!isAdmin) {
@@ -207,46 +228,42 @@ public final class STEMCraft extends JavaPlugin {
     @Override
     public void onDisable() {
 
+        miniGameService.onDisable();
         gateKeeperService.onDisable();
-        regionService.onDisable();
-        itemService.onDisable();
+        regions.onDisable();
+        items.onDisable();
         hologramService.onDisable();
         webService.onDisable();
-        motdService.onDisable();
+        motd.onDisable();
         worldService.onDisable();
         playerLogService.onDisable();
 
+        events.onDisable();
+        commands.onDisable();
+
         taskService.onDisable();
-        localeService.onDisable();
+        locale.onDisable();
         messengerService.onDisable();
     }
 
-    public static STEMCraft getInstance() {
+    public static STEMCraft getPlugin() {
         return instance;
-    }
-
-    public void configSave() {
-        try {
-            instance.config().save(configFile);
-        } catch(Exception ex) {
-            error("STEMCRAFT_ERROR_SAVING_CONFIG", ex);
-        }
     }
 
     /**
      * Load STEMCraft Features within dev.stemcraft.features
      */
     private void loadFeatures() {
-        iterateClasses("dev/stemcraft/features/", STEMCraftFeature.class, instance -> {
+        iterateClasses("dev/stemcraft/features/", BaseFeature.class, instance -> {
             String featureConfigBase = instance.getConfigBase();
 
-            if (!config.getBoolean(featureConfigBase + ".enabled", true)) {
-                debug("STEMCRAFT_FEATURE_DISABLED", "name", instance.getName());
+            if (!configFile.getBoolean(featureConfigBase + ".enabled", true)) {
+                debug("STEMCRAFT_FEATURE_DISABLED", "name", instance.getId());
                 return;
             }
 
             instance.onEnable(api);
-            debug("STEMCRAFT_FEATURE_LOADED", "name", instance.getName());
+            debug("STEMCRAFT_FEATURE_LOADED", "name", instance.getId());
         });
     }
 
@@ -254,19 +271,19 @@ public final class STEMCraft extends JavaPlugin {
      * Load STEMCraft Utilities within dev.stemcraft.api.utils
      */
     private void loadUtilities() {
-        iterateClasses("dev/stemcraft/api/utils", STEMCraftUtil.class, STEMCraftUtil::onLoad);
+        iterateClasses("dev/stemcraft/api/util", STEMCraftUtil.class, STEMCraftUtil::onLoad);
     }
 
     private void loadCommands() {
-        iterateClasses("dev/stemcraft/commands", STEMCraftCommandImpl.class, instance -> {
+        iterateClasses("dev/stemcraft/command", STEMCraftCommandImpl.class, instance -> {
             instance.onLoad(STEMCraft.instance);
         });
     }
 
-    private void loadMiniGames() {
-//        iterateClasses("dev/stemcraft/minigames", STEMCraftMiniGame.class, instance -> {
-//            instance.onLoad(STEMCraft.instance);
-//        });
+    private void loadminigames() {
+        iterateClasses("dev/stemcraft/minigames", STEMCraftMiniGame.class, instance -> {
+            instance.onLoad(STEMCraft.instance);
+        });
     }
 
     /**
@@ -318,31 +335,6 @@ public final class STEMCraft extends JavaPlugin {
         } catch (IOException ex) {
             error("STEMCRAFT_ERROR_SCAN_CLASS", ex, "error", ex.getMessage());
         }
-    }
-
-    public <T extends Event> Listener registerEvent(Class<T> event, STEMCraftEventHandler<T> callback, EventPriority priority, boolean ignoreCancelled) {
-        Listener listener = new Listener() {};
-
-        instance.getServer().getPluginManager().registerEvent(event, listener, priority, (ignored, rawEvent) -> {
-            if(event.isInstance(rawEvent)) {
-                T castedEvent = event.cast(rawEvent);
-                if (ignoreCancelled && rawEvent instanceof Cancellable c && c.isCancelled()) {
-                    return;
-                }
-
-                callback.handle(castedEvent);
-            }
-        }, instance, ignoreCancelled);
-
-        return listener;
-    }
-
-    public <T extends Event> void registerEvent(Class<T> event, STEMCraftEventHandler<T> callback) {
-        registerEvent(event, callback, EventPriority.NORMAL, false);
-    }
-
-    public STEMCraftCommand registerCommand(String label) {
-        return api.registerCommand(label);
     }
 
     public void debug(String message, Object... placeholders) {
@@ -451,35 +443,6 @@ public final class STEMCraft extends JavaPlugin {
             config.save(backFile);
         } catch (IOException ex) {
             error(ex.getMessage());
-        }
-    }
-
-    public boolean isInMaintenanceMode() {
-        return inMaintenanceMode;
-    }
-
-    public FileConfiguration getConfig(String fileName) {
-        File file = new File(this.getDataFolder(), fileName);
-        if (!file.exists()) {
-            try {
-                if (!file.createNewFile()) {
-                    return null;
-                }
-            } catch (IOException e) {
-                this.error("Could not create config file: " + fileName, e);
-                return null;
-            }
-        }
-
-        return YamlConfiguration.loadConfiguration(file);
-    }
-
-    public void saveConfig(String fileName, FileConfiguration config) {
-        File file = new File(this.getDataFolder(), fileName);
-        try {
-            config.save(file);
-        } catch (IOException e) {
-            this.error("Could not save config file: " + fileName, e);
         }
     }
 }

@@ -1,6 +1,26 @@
+/*
+ * STEMCraft - Minecraft Plugin
+ * Copyright (C) 2025 James Collins
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, version 3.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ *
+ * @author STEMMechanics
+ * @link https://github.com/STEMMechanics/STEMCraft
+ */
 package dev.stemcraft.features;
 
 import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.api.util.PlaceholderUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.GameRule;
@@ -15,24 +35,29 @@ import org.bukkit.event.player.*;
 import java.util.HashMap;
 import java.util.List;
 
-public class SkipNight implements STEMCraftFeature {
-    STEMCraftAPI api;
-    private double skipPercentange = 1d;
+public class SkipNight extends BaseFeature {
+    private double skipPercentage = 1d;
     private int skipRandomTickSpeed = 3;
     private final HashMap<World, BossBar> worlds = new HashMap<>();
     private final HashMap<World, Integer> worldRandomTickCount = new HashMap<>();
 
     /**
+     * Constructor
+     *
+     * @param api The STEMCraft API instance
+     */
+    public SkipNight(STEMCraftAPI api) {
+        super(api);
+    }
+
+    /**
      * When the feature is enabled
      */
     @Override
-    public void onEnable(STEMCraftAPI api) {
-        this.api = api;
-        String base = getConfigBase();
-
-        skipPercentange = api.config().getDouble(base + ".required", 0.25d);
-        skipRandomTickSpeed = api.config().getInt(base + ".random_tick_speed", 300);
-        List<String> worldsList = api.config().getStringList(base + ".worlds");
+    public void onEnable() {
+        skipPercentage = getConfigSection().getDouble("required", 0.25d);
+        skipRandomTickSpeed = getConfigSection().getInt("random_tick_speed", 300);
+        List<String> worldsList = getConfigSection().getStringList("worlds");
 
         worldsList.forEach(worldName -> {
             World world = Bukkit.getServer().getWorld(worldName);
@@ -44,50 +69,44 @@ public class SkipNight implements STEMCraftFeature {
         /*
          * PlayerBedEnterEvent
          */
-        api.registerEvent(PlayerBedEnterEvent.class, (event) -> {
+        api.events().register(PlayerBedEnterEvent.class, (event) -> {
             Player player = event.getPlayer();
             World world = player.getLocation().getWorld();
 
             if (player.getGameMode() == GameMode.SURVIVAL && worlds.containsKey(world)) {
-                api.tasks().runLater(1, () -> {
-                    updateSleepers(world);
-                });
+                api.tasks().runLater(1, () -> updateSleepers(world));
             }
         });
 
         /*
          * PlayerJoinEvent
          */
-        api.registerEvent(PlayerJoinEvent.class, (event) -> {
-            api.tasks().runLater(20, () -> {
-                Player player = event.getPlayer();
-                World world = player.getLocation().getWorld();
+        api.events().register(PlayerJoinEvent.class, (event) -> api.tasks().runLater(20, () -> {
+            Player player = event.getPlayer();
+            World world = player.getLocation().getWorld();
 
-                if (player.getGameMode() == GameMode.SURVIVAL && worlds.containsKey(world)) {
-                    updateSleepers(world);
-                }
-            });
-        });
+            if (player.getGameMode() == GameMode.SURVIVAL && worlds.containsKey(world)) {
+                updateSleepers(world);
+            }
+        }));
 
 
         /*
          * PlayerBedLeaveEvent
          */
-        api.registerEvent(PlayerBedLeaveEvent.class, (event) -> {
+        api.events().register(PlayerBedLeaveEvent.class, (event) -> {
             Player player = event.getPlayer();
             World world = player.getLocation().getWorld();
 
             if (player.getGameMode() == GameMode.SURVIVAL && worlds.containsKey(world)) {
-                api.tasks().runLater(1, () -> {
-                    updateSleepers(world);
-                });
+                api.tasks().runLater(1, () -> updateSleepers(world));
             }
         });
 
         /*
          * PlayerGameModeChangeEvent
          */
-        api.registerEvent(PlayerGameModeChangeEvent.class, (event) -> {
+        api.events().register(PlayerGameModeChangeEvent.class, (event) -> {
             Player player = event.getPlayer();
             World world = player.getLocation().getWorld();
 
@@ -99,7 +118,7 @@ public class SkipNight implements STEMCraftFeature {
         /*
          * PlayerDeathEvent
          */
-        api.registerEvent(PlayerDeathEvent.class, event -> {
+        api.events().register(PlayerDeathEvent.class, event -> {
             if (event.getEventName().equalsIgnoreCase("playerdeathevent")) {
                 Player player = event.getEntity();
                 World world = player.getLocation().getWorld();
@@ -113,25 +132,19 @@ public class SkipNight implements STEMCraftFeature {
         /*
          * PlayerQuitEvent
          */
-        api.registerEvent(PlayerQuitEvent.class, (event) -> {
-            updateAllSleepers();
-        });
+        api.events().register(PlayerQuitEvent.class, (event) -> updateAllSleepers());
 
         /*
          * PlayerQuitEvent
          */
-        api.registerEvent(PlayerTeleportEvent.class, (event) -> {
-            updateAllSleepers();
-        });
+        api.events().register(PlayerTeleportEvent.class, (event) -> updateAllSleepers());
     }
 
     /**
      * Update All Sleepers in each world
      */
     private void updateAllSleepers() {
-        worlds.forEach((world, bossbar) -> {
-            updateSleepers(world);
-        });
+        worlds.forEach((world, bossbar) -> updateSleepers(world));
     }
 
     /**
@@ -150,7 +163,7 @@ public class SkipNight implements STEMCraftFeature {
             }
         }
 
-        int required = (int)Math.round(numPlayers * skipPercentange);
+        int required = (int)Math.round(numPlayers * skipPercentage);
         BossBar bar = worlds.get(world);
 
         if (numSleepers == 0) {
@@ -162,7 +175,8 @@ public class SkipNight implements STEMCraftFeature {
             return;
         }
 
-        String title = api.locale().get("SKIP_NIGHT_BOSSBAR_TITLE", "sleeping", String.valueOf(numSleepers), "required", String.valueOf(required));
+        String title = api.locales().resolve("SKIP_NIGHT_BOSSBAR_TITLE");
+        title = PlaceholderUtil.apply(title, "sleeping", String.valueOf(numSleepers), "required", String.valueOf(required));
 
         if (bar == null) {
             bar = Bukkit.createBossBar(title, BarColor.BLUE, BarStyle.SOLID);
