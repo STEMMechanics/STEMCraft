@@ -20,24 +20,37 @@
 
 package dev.stemcraft.api.message;
 
+/**
+ * Interface for processing tokens in strings.
+ */
 public interface TokenProcessor {
     /**
      * Adds a token binding.
+     *
+     * @param placeholder The token placeholder to bind (e.g., "{username}").
+     * @param value The value to replace the token with.
      */
     void add(String placeholder, String value);
 
     /**
      * Removes a token binding.
+     *
+     * @param placeholder The token placeholder to remove.
      */
     void remove(String placeholder);
 
     /**
      * Removes multiple token bindings.
+     *
+     * @param placeholders An iterable of token placeholders to remove.
      */
     void remove(Iterable<String> placeholders);
 
     /**
      * Processes the input string, replacing all tokens with their bound values.
+     *
+     * @param str The input string containing tokens.
+     * @return The processed string with tokens replaced.
      */
     String apply(String str);
 }

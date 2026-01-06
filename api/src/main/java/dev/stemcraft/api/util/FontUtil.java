@@ -33,6 +33,9 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * Utility class for font-related calculations.
+ */
 public final class FontUtil {
     private static final int DEFAULT_WIDTH = 6; // Default width for unknown characters
     private static final Set<Character> WIDTH_2 = new HashSet<>(Set.of('i', '!', ';', ':', '\'', ',', '.', '|')); // 2 px

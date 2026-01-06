@@ -207,8 +207,20 @@ public class ConfigSectionImpl implements ConfigSection {
     /**
      * Gets a configuration section at the specified path.
      */
-    public ConfigSection getSection(String path) {
-        return new ConfigSectionImpl(configFile, section.getConfigurationSection(path));
+    public ConfigSection getSection(String path, boolean createIfAbsent) {
+        ConfigurationSection subSection = section.getConfigurationSection(path);
+        if (subSection == null) {
+            if (!createIfAbsent) {
+                return null;
+            }
+
+            subSection = section.createSection(path);
+            if (configFile != null) {
+                configFile.setDirty();
+            }
+        }
+
+        return new ConfigSectionImpl(configFile, subSection);
     }
 
     /**

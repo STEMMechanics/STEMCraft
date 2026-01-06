@@ -24,26 +24,40 @@ import dev.stemcraft.api.model.SCRegion;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 
-@SuppressWarnings({"unused", "EmptyMethod"})
-public class RegionListener {
+/**
+ * Listener for region-related events.
+ */
+public interface RegionListener {
 
-    /*
+    /**
      * Called when a player enters a region.
+     *
+     * @param player The player entering the region.
+     * @param region The region being entered.
      */
-    public void onEnter(Player player, SCRegion region) { }
+    default void onEnter(Player player, SCRegion region) { }
 
-    /*
+    /**
      * Called when a player enters a world.
+     *
+     * @param player The player entering the world.
+     * @param world  The world being entered.
      */
-    public void onEnterWorld(Player player, World world) { }
+    default void onEnterWorld(Player player, World world) { }
 
-    /*
+    /**
      * Called when a player exits a region.
+     *
+     * @param player The player exiting the region.
+     * @param region The region being exited.
      */
-    public void onExit(Player player, SCRegion region) { }
+    default void onExit(Player player, SCRegion region) { }
 
-    /*
+    /**
      * Called when a player exits a world.
+     *
+     * @param player The player exiting the world.
+     * @param world  The world being exited.
      */
-    public void onExitWorld(Player player, World world) { }
+    default void onExitWorld(Player player, World world) { }
 }

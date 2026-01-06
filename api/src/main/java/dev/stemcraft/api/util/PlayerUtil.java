@@ -45,6 +45,9 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
+/**
+ * Utility class for player-related operations.
+ */
 public class PlayerUtil {
     private static Boolean isGeyserInstalled = null;
     private static GeyserApi geyserApi = null;
@@ -63,6 +66,8 @@ public class PlayerUtil {
 
     /**
      * Sets the player's health to their maximum health.
+     *
+     * @param player The player to set the health of.
      */
     public static void setMaxHealth(Player player) {
         player.setHealth(getMaxHealth(player));
@@ -172,6 +177,10 @@ public class PlayerUtil {
      * Get the player's name from their UUID. If the player is not found
      * locally, an async lookup from Mojang is performed if a callback
      * is provided.
+     *
+     * @param uuid The player's UUID.
+     * @param onResolved Callback when the name is resolved (can be null).
+     * @return The player's name if found locally, otherwise null.
      */
     public static String name(UUID uuid, Consumer<String> onResolved) {
         // 1. Online player
@@ -227,6 +236,9 @@ public class PlayerUtil {
 
     /**
      * Async lookup of player name from Mojang API
+     *
+     * @param uuid The player's UUID.
+     * @return A CompletableFuture with the player's name or null if not found.
      */
     private static CompletableFuture<String> lookupNameFromMojang(UUID uuid) {
         return CompletableFuture.supplyAsync(() -> {

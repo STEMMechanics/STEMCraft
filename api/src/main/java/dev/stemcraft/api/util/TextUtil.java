@@ -28,6 +28,9 @@ import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Utility class for text formatting and colour handling using Adventure API.
+ */
 public final class TextUtil {
     private static final MiniMessage MM = MiniMessage.miniMessage();
     private static final LegacyComponentSerializer LEGACY_AMP = LegacyComponentSerializer.legacyAmpersand();
@@ -79,6 +82,9 @@ public final class TextUtil {
 
     /**
      * Converts formatted text to a legacy string using ampersand colour codes (e.g., &a, &7).
+     *
+     * @param input the formatted text, may be null
+     * @return the legacy-formatted string with ampersand colour codes
      */
     public static String colouriseToAmpersand(String input) {
         return LEGACY_AMP.serialize(colourise(input));
@@ -87,6 +93,9 @@ public final class TextUtil {
     /**
      * Converts formatted text to a legacy string using section colour codes (e.g., §a, §7).
      * Useful for APIs that still require section-coded legacy strings.
+     *
+     * @param input the formatted text, may be null
+     * @return the legacy-formatted string with section colour codes
      */
     public static String colouriseToSection(String input) {
         return LEGACY_SECTION.serialize(colourise(input));
@@ -134,6 +143,9 @@ public final class TextUtil {
 
     /**
      * Reverts section sign (§) colour codes back to ampersand (&) codes in a string.
+     *
+     * @param input the string with section colour codes, may be null
+     * @return the string with ampersand colour codes
      */
     public static String untranslateCodes(String input) {
         if (input == null) {

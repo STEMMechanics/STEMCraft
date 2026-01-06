@@ -26,10 +26,18 @@ import org.bukkit.event.Event;
 import org.bukkit.event.HandlerList;
 import org.jetbrains.annotations.NotNull;
 
+/**
+ * Event triggered when the server's maintenance mode status changes.
+ */
 public class MaintenanceModeChangedEvent extends BaseEvent {
     @Getter
     private final boolean inMaintenanceMode;
 
+    /**
+     * Constructs a new MaintenanceModeChangedEvent.
+     *
+     * @param inMaintenanceMode True if the server is now in maintenance mode, false otherwise.
+     */
     public MaintenanceModeChangedEvent(boolean inMaintenanceMode) {
         this.inMaintenanceMode = inMaintenanceMode;
     }

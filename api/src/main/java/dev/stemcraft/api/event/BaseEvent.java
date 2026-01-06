@@ -32,6 +32,11 @@ import org.jetbrains.annotations.NotNull;
 public class BaseEvent extends Event {
     private static final HandlerList handlers = new HandlerList();
 
+    /**
+     * Gets the handler list for this event.
+     *
+     * @return The handler list.
+     */
     @Override
     public @NotNull HandlerList getHandlers() {
         return handlers;

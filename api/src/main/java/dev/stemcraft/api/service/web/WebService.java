@@ -20,6 +20,9 @@
 
 package dev.stemcraft.api.service.web;
 
+/**
+ * Service for managing a webserver within the STEMCraft plugin.
+ */
 public interface WebService {
 
     /**
@@ -34,11 +37,17 @@ public interface WebService {
 
     /**
      * Register a endpoint handler which is called if the uri starts with the path string
+     *
+     * @param path The path prefix to match
+     * @param handler The handler to call for matching requests
      */
     void registerEndpointHandler(String path, WebServiceEndpointHandler handler);
 
     /**
-     * Escape HTML special characters in a string
+     * Escape HTML special characters in a string.
+     *
+     * @param in The input string
+     * @return The escaped string
      */
     static String escapeHtml(String in) {
         if (in == null) return "";
@@ -48,7 +57,9 @@ public interface WebService {
     }
 
     /**
-     * Get the public URL of the webserver
+     * Get the public URL of the webserver.
+     *
+     * @return The public URL
      */
     String getPublicUrl();
 }

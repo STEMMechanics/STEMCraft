@@ -24,15 +24,26 @@ import org.bukkit.entity.Player;
 
 import java.util.List;
 
+/**
+ * Service for managing tab completion providers.
+ */
 public interface TabCompleteService {
 
     /**
      * Register a tab completion provider with a specific name.
+     *
+     * @param name The name of the tab completion provider.
+     * @param callback The callback to provide tab completions.
      */
     void register(String name, TabCompletionProvider callback);
 
     /**
      * Get a list of tab completions for a specific provider name.
+     *
+     * @param name The name of the tab completion provider.
+     * @param player The player requesting tab completions.
+     * @param args The current arguments typed by the player.
+     * @return A list of tab completions.
      */
     List<String> getCompletionList(String name, Player player, String... args);
 }

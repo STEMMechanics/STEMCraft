@@ -22,10 +22,16 @@ package dev.stemcraft.api.util;
 
 import org.bukkit.World;
 
+/**
+ * Utility class for world-related operations.
+ */
 public class WorldUtil {
 
     /**
      * Returns the base name of a world, stripping any dimension suffixes.
+     *
+     * @param worldName The name of the world.
+     * @return The base name of the world.
      */
     public static String baseName(String worldName) {
         if(worldName == null) return null;

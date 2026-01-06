@@ -28,15 +28,23 @@ import org.bukkit.World;
 import java.util.List;
 import java.util.Locale;
 
+/**
+ * Interface representing a world base setting in STEMCraft.
+ */
 public interface WorldBaseSetting {
 
     /**
      * Returns the unique key for this setting.
+     *
+     * @return The setting key.
      */
     String key();
 
     /**
      * Called when the setting is enabled.
+     *
+     * @param api The STEMCraft API instance.
+     * @param service The world service instance.
      */
     void onEnable(STEMCraftAPI api, WorldService service);
 

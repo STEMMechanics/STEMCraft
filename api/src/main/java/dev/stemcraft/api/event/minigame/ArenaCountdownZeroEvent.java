@@ -34,17 +34,30 @@ import org.jetbrains.annotations.NotNull;
 public class ArenaCountdownZeroEvent extends BaseEvent {
     private final MiniGameArena arena;
 
+    /**
+     * Constructs a new ArenaCountdownZeroEvent.
+     *
+     * @param arena The mini-game arena where the countdown reached zero.
+     */
     public ArenaCountdownZeroEvent(MiniGameArena arena) {
         this.arena = arena;
+    }
+
+    /**
+     * Retrieves the arena associated with this event.
+     * If no namespace is provided, returns the default arena.
+     *
+     * @param filterNamespace The namespace to filter by.
+     * @return The mini-game arena.
+     */
+    public MiniGameArena getArena(String filterNamespace) {
+        if(filterNamespace == null || filterNamespace.isEmpty()) return arena;
+        if(arena.getNamespace().equals(filterNamespace)) return arena;
+        return null;
     }
 
     public MiniGameArena getArena() {
         return getArena("");
     }
 
-    public MiniGameArena getArena(String namespace) {
-        if(namespace == null || namespace.isEmpty()) return arena;
-        if(arena.getNamespace().equals(namespace)) return arena;
-        return null;
-    }
 }

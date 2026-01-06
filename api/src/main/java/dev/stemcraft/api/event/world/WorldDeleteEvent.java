@@ -34,6 +34,11 @@ public class WorldDeleteEvent extends BaseEvent {
 
     private final String worldName;
 
+    /**
+     * Constructs a new WorldDeleteEvent.
+     *
+     * @param worldName The name of the world being deleted.
+     */
     public WorldDeleteEvent(String worldName) {
         this.worldName = worldName;
     }

@@ -27,13 +27,37 @@ import org.bukkit.event.Event;
 import org.bukkit.event.HandlerList;
 import org.jetbrains.annotations.NotNull;
 
-@Getter
+/**
+ * Event triggered when a mini-game arena changes its status.
+ */
 public class ArenaStatusChangedEvent extends BaseEvent {
 
     private final MiniGameArena arena;
 
+    /**
+     * Constructs a new ArenaStatusChangedEvent.
+     *
+     * @param arena The mini-game arena that changed status.
+     */
     public ArenaStatusChangedEvent(MiniGameArena arena) {
         this.arena = arena;
     }
 
+
+    /**
+     * Retrieves the arena associated with this event.
+     * If no namespace is provided, returns the default arena.
+     *
+     * @param filterNamespace The namespace to filter by.
+     * @return The mini-game arena.
+     */
+    public MiniGameArena getArena(String filterNamespace) {
+        if(filterNamespace == null || filterNamespace.isEmpty()) return arena;
+        if(arena.getNamespace().equals(filterNamespace)) return arena;
+        return null;
+    }
+
+    public MiniGameArena getArena() {
+        return getArena("");
+    }
 }

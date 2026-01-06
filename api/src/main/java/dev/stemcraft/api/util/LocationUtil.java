@@ -24,6 +24,9 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 
+/**
+ * Utility class for serializing and deserializing Locations.
+ */
 public class LocationUtil {
     private static final String DELIM = ",";
 
@@ -96,7 +99,11 @@ public class LocationUtil {
         return sb.toString();
     }
 
-
+    /**
+     * Check if a string represents a valid number.
+     * @param s The string to check.
+     * @return True if the string is a valid number, false otherwise.
+     */
     private static boolean isNumber(String s) {
         if (s == null || s.isEmpty()) return false;
         try {
@@ -106,5 +113,4 @@ public class LocationUtil {
             return false;
         }
     }
-
 }

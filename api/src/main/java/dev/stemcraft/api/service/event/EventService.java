@@ -24,10 +24,20 @@ import org.bukkit.event.Event;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 
+/**
+ * Service for managing event handlers within the STEMCraft plugin.
+ */
 public interface EventService {
 
     /**
      * Register a new event handler.
+     *
+     * @param <T> The type of event to handle.
+     * @param event The class of the event to handle.
+     * @param callback The callback to invoke when the event is fired.
+     * @param priority The priority of the event handler.
+     * @param ignoreCancelled Whether to ignore cancelled events.
+     * @return The registered listener.
      */
     <T extends Event> Listener register(Class<T> event, EventHandler<T> callback, EventPriority priority, boolean ignoreCancelled);
     default <T extends Event> Listener register(Class<T> event, EventHandler<T> callback) { return register(event, callback, EventPriority.NORMAL, false); }

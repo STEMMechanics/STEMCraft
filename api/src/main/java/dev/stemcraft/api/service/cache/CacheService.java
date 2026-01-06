@@ -24,15 +24,23 @@ import dev.stemcraft.api.config.ConfigFile;
 
 import java.io.File;
 
+/**
+ * Service for managing cache files and configurations.
+ */
 public interface CacheService {
 
     /**
      * Gets the directory where cache files are stored.
+     *
+     * @return The cache directory.
      */
     File cacheDir();
 
     /**
      * Retrieves the cache configuration for the specified file name.
+     *
+     * @param fileName The name of the cache file.
+     * @return The configuration file object.
      */
     ConfigFile cacheConfig(String fileName);
 }

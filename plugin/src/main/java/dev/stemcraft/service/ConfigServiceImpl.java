@@ -60,7 +60,11 @@ public class ConfigServiceImpl extends BaseService implements ConfigService {
     }
 
     /**
-     * Retrieves a configuration file by name.
+     * Retrieves a configuration file by name. If no extension is provided, ".yml" is assumed.
+     *
+     * @param name The name of the configuration file.
+     * @param createIfNotExist Whether to create the file if it does not exist.
+     * @return The configuration file object, or null if loading failed.
      */
     public ConfigFile load(String name, boolean createIfNotExist) {
         if(files.containsKey(name)) {

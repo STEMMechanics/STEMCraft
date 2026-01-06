@@ -24,6 +24,9 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.util.PlaceholderUtil;
 import lombok.Getter;
 
+/**
+ * Exception thrown to indicate a command error
+ */
 public class CommandException extends RuntimeException {
     /**
      * The messages to send to the command sender
@@ -40,7 +43,10 @@ public class CommandException extends RuntimeException {
     }
 
     /**
-     * Create a new command exception with messages for the command sender
+     * Create a new command exception with messages for the command sender.
+     *
+     * @param message The message key.
+     * @param placeholders The placeholders to apply.
      */
     public CommandException(String message, Object... placeholders) {
         super("");

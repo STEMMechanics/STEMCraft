@@ -22,10 +22,16 @@ package dev.stemcraft.api.service.command;
 
 import dev.stemcraft.api.command.CommandBuilder;
 
+/**
+ * Service for managing commands within the STEMCraft plugin.
+ */
 public interface CommandService {
 
     /**
      * Register a new command.
+     *
+     * @param label The label of the command.
+     * @return A CommandBuilder to further configure the command.
      */
     CommandBuilder create(String label);
 }

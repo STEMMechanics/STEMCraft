@@ -22,6 +22,9 @@ package dev.stemcraft.api.util;
 
 import org.bukkit.World;
 
+/**
+ * Utility class for converting world time to real time.
+ */
 public class WorldTimeUtil {
     /**
      * Convert a world time to a real time.

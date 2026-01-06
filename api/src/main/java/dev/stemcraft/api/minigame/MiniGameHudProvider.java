@@ -24,7 +24,18 @@ import org.bukkit.entity.Player;
 
 import java.util.Map;
 
+/**
+ * Functional interface for providing HUD data for a player in a mini-game arena.
+ */
 @FunctionalInterface
 public interface MiniGameHudProvider {
+
+    /**
+     * Provides HUD data for the specified player in the given mini-game arena.
+     *
+     * @param arena  The mini-game arena.
+     * @param player The player for whom to provide HUD data.
+     * @return A map of HUD data key-value pairs.
+     */
     Map<String,String> provide(MiniGameArena arena, Player player);
 }

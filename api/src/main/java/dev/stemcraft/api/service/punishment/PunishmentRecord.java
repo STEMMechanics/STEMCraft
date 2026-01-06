@@ -28,6 +28,9 @@ import org.bukkit.entity.Player;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * Represents a record of a punishment issued to a player.
+ */
 @Getter
 @Accessors(fluent = true)
 public final class PunishmentRecord {
@@ -44,6 +47,17 @@ public final class PunishmentRecord {
 
     /**
      * Constructor
+     *
+     * @param id The unique ID of the punishment record.
+     * @param targetUuid The UUID of the player being punished.
+     * @param targetName The name of the player being punished.
+     * @param actorUuid The UUID of the actor issuing the punishment.
+     * @param actorName The name of the actor issuing the punishment.
+     * @param type The type of punishment.
+     * @param alerted Whether the punishment has been alerted.
+     * @param reason The reason for the punishment.
+     * @param createdAt The timestamp when the punishment was created.
+     * @param durationSeconds The duration of the punishment in seconds (null for permanent).
      */
     public PunishmentRecord(long id,
                             UUID targetUuid,
@@ -76,6 +90,8 @@ public final class PunishmentRecord {
 
     /**
      * Checks if this punishment is permanent
+     *
+     * @return true if the punishment is permanent, false otherwise
      */
     public boolean permanent() {
         return durationSeconds == null;
@@ -83,6 +99,8 @@ public final class PunishmentRecord {
 
     /**
      * Checks if this punishment is cancelled
+     *
+     * @return true if the punishment is cancelled, false otherwise
      */
     public boolean cancelled() {
         return durationSeconds == -1;
@@ -90,6 +108,8 @@ public final class PunishmentRecord {
 
     /**
      * Gets the expiration time of this punishment
+     *
+     * @return The expiration time as an Instant, or null if permanent
      */
     public Instant expiresAt() {
         if (permanent()) return null;
@@ -98,6 +118,8 @@ public final class PunishmentRecord {
 
     /**
      * Gets the Player object of the target if they are online
+     *
+     * @return The Player object if online, null otherwise
      */
     public Player getPlayerIfOnline() {
         Player player = Bukkit.getPlayer(targetUuid);

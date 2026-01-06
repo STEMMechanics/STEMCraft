@@ -22,7 +22,18 @@ package dev.stemcraft.api.service.event;
 
 import org.bukkit.event.Event;
 
+/**
+ * Functional interface for handling events.
+ *
+ * @param <T> The type of event to handle.
+ */
 @FunctionalInterface
 public interface EventHandler<T extends Event> {
+
+    /**
+     * Handles the given event.
+     *
+     * @param event The event to handle.
+     */
     void handle(T event);
 }

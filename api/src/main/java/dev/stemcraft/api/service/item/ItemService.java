@@ -22,24 +22,48 @@ package dev.stemcraft.api.service.item;
 
 import org.bukkit.inventory.ItemStack;
 
+/**
+ * Service for managing item attributes and custom items.
+ */
 public interface ItemService {
     /**
      * Adds an attribute to the ItemStack with the given key and value.
+     *
+     * @param <T> The type of the attribute value.
+     * @param <Z> A placeholder type parameter (not used).
+     * @param item  The ItemStack to which the attribute will be added.
+     * @param key   The key of the attribute.
+     * @param value The value of the attribute.
      */
     <T, Z> void addAttrib(ItemStack item, String key, T value);
 
     /**
      * Checks if the ItemStack has an attribute with the given key.
+     *
+     * @param item The ItemStack to check.
+     * @param key  The key of the attribute.
+     * @return True if the attribute exists, false otherwise.
      */
     boolean hasAttrib(ItemStack item, String key);
 
     /**
      * Removes an attribute from the ItemStack with the given key.
+     *
+     * @param item The ItemStack from which the attribute will be removed.
+     * @param key  The key of the attribute to remove.
      */
     void removeAttrib(ItemStack item, String key);
 
     /**
      * Retrieves an attribute from the ItemStack with the given key or returns a default value if not found.
+     *
+     * @param <T> The type of the attribute value.
+     * @param <Z> A placeholder type parameter (not used).
+     * @param item The ItemStack from which the attribute will be retrieved.
+     * @param key The key of the attribute.
+     * @param typeClass The class of the attribute type.
+     * @param defaultValue The default value to return if the attribute is not found.
+     * @return The attribute value or the default value if not found.
      */
     <T, Z> T getAttrib(ItemStack item, String key, Class<T> typeClass, T defaultValue);
 
@@ -49,22 +73,36 @@ public interface ItemService {
 
     /**
      * Registers a custom item.
+     *
+     * @param id The unique identifier for the custom item.
+     * @param template The ItemStack template for the custom item.
      */
     void registerCustomItem(String id, ItemStack template);
 
     /**
      * Creates a new ItemStack for a custom item.
+     *
+     * @param id The unique identifier for the custom item.
+     * @param quantity The quantity of the item stack.
+     * @return The created ItemStack.
      */
     ItemStack createCustomItem(String id, int quantity);
     default ItemStack createCustomItem(String id) { return createCustomItem(id, 1); }
 
     /**
      * Checks if the given ItemStack is the specified custom item.
+     *
+     * @param id The unique identifier for the custom item.
+     * @param item The ItemStack to check.
+     * @return True if the ItemStack is the specified custom item, false otherwise.
      */
     boolean isCustomItemId(String id, ItemStack item);
 
     /**
      * Returns the ld of the custom item on this stack, if any.
+     *
+     * @param item The ItemStack to check.
+     * @return The custom item id, or null if not a custom item.
      */
     String getCustomItemId(ItemStack item);
 }

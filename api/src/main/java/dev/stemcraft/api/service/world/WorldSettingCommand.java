@@ -20,15 +20,24 @@
 
 package dev.stemcraft.api.service.world;
 
+/**
+ * Interface for defining world setting commands.
+ */
 public interface WorldSettingCommand {
 
     /**
      * Add tab completions for this command.
+     *
+     * @param completions The tab completions to add.
+     * @return The current WorldSettingCommand instance.
      */
     WorldSettingCommand tabCompletion(String... completions);
 
     /**
      * Set the executor for this command.
+     *
+     * @param executor The command executor.
+     * @return The current WorldSettingCommand instance.
      */
     WorldSettingCommand executor(WorldSettingCommandExecutor executor);
 

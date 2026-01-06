@@ -28,5 +28,11 @@ import java.sql.SQLException;
  */
 @FunctionalInterface
 public interface DatabaseStatementBinder {
+    /**
+     * Binds parameters to the given PreparedStatement.
+     *
+     * @param ps The PreparedStatement to bind parameters to.
+     * @throws SQLException If an SQL error occurs while binding parameters.
+     */
     void bind(PreparedStatement ps) throws SQLException;
 }

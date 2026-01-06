@@ -24,7 +24,18 @@ import org.bukkit.entity.Player;
 
 import java.util.List;
 
+/**
+ * Functional interface for providing tab completions for commands.
+ */
 @FunctionalInterface
 public interface TabCompletionProvider {
+
+    /**
+     * Provides a list of tab completions based on the player and current arguments.
+     *
+     * @param player The player requesting tab completions.
+     * @param args   The current arguments typed by the player.
+     * @return A list of tab completions.
+     */
     List<String> provide(Player player, String... args);
 }

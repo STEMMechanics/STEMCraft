@@ -51,7 +51,14 @@ public class TokenProcessorImpl implements TokenProcessor {
         if (placeholder == null || placeholder.isEmpty()) {
             return;
         }
+
         String safeValue = value == null ? "" : value;
+
+        // remove the leading and trailing colons if present
+        if (placeholder.startsWith(":") && placeholder.endsWith(":") && placeholder.length() > 2) {
+            placeholder = placeholder.substring(1, placeholder.length() - 1);
+        }
+
         tokens.put(Pattern.compile(Pattern.quote(":" + placeholder + ":")), safeValue);
     }
 
@@ -63,6 +70,12 @@ public class TokenProcessorImpl implements TokenProcessor {
         if (placeholder == null || placeholder.isEmpty()) {
             return;
         }
+
+        // remove the leading and trailing colons if present
+        if (placeholder.startsWith(":") && placeholder.endsWith(":") && placeholder.length() > 2) {
+            placeholder = placeholder.substring(1, placeholder.length() - 1);
+        }
+
         Pattern p = Pattern.compile(Pattern.quote(":" + placeholder + ":"));
         tokens.remove(p);
     }

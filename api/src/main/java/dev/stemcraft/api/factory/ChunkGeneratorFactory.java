@@ -22,7 +22,17 @@ package dev.stemcraft.api.factory;
 
 import org.bukkit.generator.ChunkGenerator;
 
+/**
+ * Functional interface for creating ChunkGenerator instances with specific options.
+ */
 @FunctionalInterface
 public interface ChunkGeneratorFactory {
+
+    /**
+     * Creates a ChunkGenerator instance based on the provided options.
+     *
+     * @param options A string representing configuration options for the ChunkGenerator.
+     * @return A new ChunkGenerator instance configured with the given options.
+     */
     ChunkGenerator create(String options);
 }

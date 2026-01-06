@@ -26,20 +26,39 @@ import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Service for recording and retrieving player punishments.
+ */
 public interface PunishmentService {
 
     /**
      * Generic entry point for other plugins (e.g. Naughty feature).
+     *
+     * @param playerUuid The UUID of the player being punished.
+     * @param actor The player issuing the punishment.
+     * @param duration The duration of the punishment.
+     * @param type The type of punishment (e.g., "ban", "mute").
+     * @param alerted Whether alerts should be sent for this punishment.
+     * @param reason The reason for the punishment.
      */
     void record(UUID playerUuid, Player actor, Duration duration, String type, boolean alerted, String reason);
 
     /**
      * Latest first, 1-based page index.
+     *
+     * @param targetUuid The UUID of the player whose punishments to list.
+     * @param type The type of punishment to filter by.
+     * @param page The page number (1-based).
+     * @param pageSize The number of records per page.
+     * @return A list of punishment records.
      */
     List<PunishmentRecord> list(UUID targetUuid, String type, int page, int pageSize);
 
     /**
      * Register a callback for alerting when a punishment of the given type is issued.
+     *
+     * @param type The type of punishment to listen for.
+     * @param callback The callback to invoke when a punishment of the specified type is issued.
      */
     void registerAlert(String type, PunishmentAlertCallback callback);
 }

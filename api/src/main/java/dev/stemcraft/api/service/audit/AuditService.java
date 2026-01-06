@@ -22,6 +22,9 @@ package dev.stemcraft.api.service.audit;
 
 import org.bukkit.entity.Player;
 
+/**
+ * Service for logging audit actions performed by players.
+ */
 public interface AuditService {
 
     /**

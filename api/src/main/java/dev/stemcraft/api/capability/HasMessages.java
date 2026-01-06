@@ -32,12 +32,21 @@ public interface HasMessages {
 
     /**
      * Log a debug message to the console.
+     *
+     * @param message The debug message.
+     * @param ex An optional exception to log.
+     * @param placeholders Placeholders to replace in the message.
      */
     void debug(String message, Throwable ex, Object... placeholders);
     default void debug(String message, Object... placeholders) { debug(message, null, placeholders); }
 
     /**
      * Log a message to the sender or console if null.
+     *
+     * @param sender The command sender to send the message to, or null for console.
+     * @param message The message to log.
+     * @param ex An optional exception to log.
+     * @param placeholders Placeholders to replace in the message.
      */
     void log(CommandSender sender, String message, Throwable ex, Object... placeholders);
     default void log(String message, Object... placeholders) { log(null, message, null, placeholders); }
@@ -46,6 +55,11 @@ public interface HasMessages {
 
     /**
      * Send a plain message to the sender or console if null.
+     *
+     * @param sender The command sender to send the message to, or null for console.
+     * @param message The message to send.
+     * @param ex An optional exception to log.
+     * @param placeholders Placeholders to replace in the message.
      */
     void plain(CommandSender sender, String message, Throwable ex, Object... placeholders);
     default void plain(String message, Object... placeholders) { plain(null, message, null, placeholders); }
@@ -54,6 +68,11 @@ public interface HasMessages {
 
     /**
      * Send an info message to the sender or console if null.
+     *
+     * @param sender The command sender to send the message to, or null for console.
+     * @param message The message to send.
+     * @param ex An optional exception to log.
+     * @param placeholders Placeholders to replace in the message.
      */
     void info(CommandSender sender, String message, Throwable ex, Object... placeholders);
     default void info(String message, Object... placeholders) { info(null, message, null, placeholders); }
@@ -62,6 +81,11 @@ public interface HasMessages {
 
     /**
      * Send a warning message to the sender or console if null.
+     *
+     * @param sender The command sender to send the message to, or null for console.
+     * @param message The message to send.
+     * @param ex An optional exception to log.
+     * @param placeholders Placeholders to replace in the message.
      */
     void warn(CommandSender sender, String message, Throwable ex, Object... placeholders);
     default void warn(String message, Object... placeholders) { warn(null, message, null, placeholders); }
@@ -70,6 +94,11 @@ public interface HasMessages {
 
     /**
      * Send an error message to the sender or console if null.
+     *
+     * @param sender The command sender to send the message to, or null for console.
+     * @param message The message to send.
+     * @param ex An optional exception to log.
+     * @param placeholders Placeholders to replace in the message.
      */
     void error(CommandSender sender, String message, Throwable ex, Object... placeholders);
     default void error(String message, Object... placeholders) { error(null, message, null, placeholders); }
@@ -78,6 +107,11 @@ public interface HasMessages {
 
     /**
      * Send a success message to the sender or console if null.
+     *
+     * @param sender The command sender to send the message to, or null for console.
+     * @param message The message to send.
+     * @param ex An optional exception to log.
+     * @param placeholders Placeholders to replace in the message.
      */
     void success(CommandSender sender, String message, Throwable ex, Object... placeholders);
     default void success(String message, Object... placeholders) { success(null, message, null, placeholders); }
@@ -86,6 +120,10 @@ public interface HasMessages {
 
     /**
      * Broadcast a message to all players, excluding those in the exclude list.
+     *
+     * @param message The message to broadcast.
+     * @param exclude A list of players to exclude from receiving the message.
+     * @param placeholders Placeholders to replace in the message.
      */
     void broadcast(String message, List<Player> exclude, Object... placeholders);
     default void broadcast(String message, Player exclude, Object... placeholders) { broadcast(message, exclude != null ? List.of(exclude) : null, placeholders); }

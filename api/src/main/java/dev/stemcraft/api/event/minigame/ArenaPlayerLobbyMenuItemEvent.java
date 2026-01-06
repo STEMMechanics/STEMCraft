@@ -28,14 +28,41 @@ import org.bukkit.event.Event;
 import org.bukkit.event.HandlerList;
 import org.jetbrains.annotations.NotNull;
 
-@Getter
+/**
+ * Event triggered when a player interacts with a mini-game arena lobby menu item.
+ */
 public class ArenaPlayerLobbyMenuItemEvent extends BaseEvent {
 
     private final MiniGameArena arena;
+    @Getter
     private final Player player;
 
+    /**
+     * Constructs a new ArenaPlayerLobbyMenuItemEvent.
+     *
+     * @param player The player interacting with the lobby menu item.
+     * @param arena  The mini-game arena associated with the lobby menu item.
+     */
     public ArenaPlayerLobbyMenuItemEvent(Player player, MiniGameArena arena) {
         this.arena = arena;
         this.player = player;
+    }
+
+
+    /**
+     * Retrieves the arena associated with this event.
+     * If no namespace is provided, returns the default arena.
+     *
+     * @param filterNamespace The namespace to filter by.
+     * @return The mini-game arena.
+     */
+    public MiniGameArena getArena(String filterNamespace) {
+        if(filterNamespace == null || filterNamespace.isEmpty()) return arena;
+        if(arena.getNamespace().equals(filterNamespace)) return arena;
+        return null;
+    }
+
+    public MiniGameArena getArena() {
+        return getArena("");
     }
 }

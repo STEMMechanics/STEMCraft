@@ -20,7 +20,16 @@
 
 package dev.stemcraft.api.service.task;
 
+/**
+ * Functional interface for retryable tasks.
+ */
 @FunctionalInterface
 public interface TaskRetryable {
+
+    /**
+     * Runs the task and returns whether it was successful.
+     *
+     * @return true if the task was successful, false otherwise.
+     */
     boolean run();
 }

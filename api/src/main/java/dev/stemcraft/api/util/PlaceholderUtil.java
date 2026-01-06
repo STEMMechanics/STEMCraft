@@ -26,11 +26,18 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * Utility class for applying placeholders in strings.
+ */
 public final class PlaceholderUtil {
 
     /**
      * Replaces case-insensitive placeholders (e.g. <code>%key%</code>) using
      * alternating key/value arguments.
+     *
+     * @param text The text containing placeholders.
+     * @param values Alternating keys and values.
+     * @return The text with placeholders replaced.
      */
     public static String apply(String text, String... values) {
         if (values == null || values.length == 0) {

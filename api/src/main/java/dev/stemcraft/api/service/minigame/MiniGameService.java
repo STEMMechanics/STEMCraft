@@ -28,6 +28,9 @@ import org.bukkit.entity.Player;
 
 import java.util.List;
 
+/**
+ * Service for managing mini-games within the STEMCraft plugin.
+ */
 public interface MiniGameService extends HasMeta {
 
     /**
@@ -68,22 +71,22 @@ public interface MiniGameService extends HasMeta {
 
     /**
      * Add a player to a mini-game arena.
-     * @param player
-     * @param namespace
-     * @param arenaId
+     * @param player The player to add
+     * @param namespace The namespace for the mini-game
+     * @param arenaId The ID of the arena to join
      */
     void addPlayer(Player player, String namespace, String arenaId);
 
     /**
      * Add a player to a mini-game arena.
-     * @param player
-     * @param arena
+     * @param player The player to add
+     * @param arena The arena to join
      */
     void addPlayer(Player player, MiniGameArena arena);
 
     /**
      * Remove a player from their current mini-game arena.
-     * @param player
+     * @param player The player to remove
      */
     void removePlayer(Player player);
 
@@ -111,7 +114,6 @@ public interface MiniGameService extends HasMeta {
      * @param status The status for which the HUD is provided
      * @param bossBarLines Lines to display in the boss bar
      * @param scoreboardLines Lines to display in the scoreboard
-     * @param dataType The expected data type of the arena
      * @param provider The HUD provider implementation
      */
     void registerHud(String namespace, String status, List<String> bossBarLines, List<String> scoreboardLines, MiniGameHudProvider provider);

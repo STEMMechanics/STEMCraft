@@ -24,25 +24,31 @@ import java.util.UUID;
 
 import org.bukkit.entity.Player;
 
+/**
+ * Service for managing player-related functionalities.
+ */
 public interface PlayerService {
 
     /**
      * Log an action against the player. If player is null it is logged as a server action.
+     *
+     * @param player The player who performed the action.
+     * @param action A string describing the action.
+     * @param placeholders Optional placeholders for additional context.
      */
     void log(Player player, String action, String... placeholders);
 
     /**
      * Hide a player from all other players.
+     *
+     * @param player The player to hide.
      */
     void hide(Player player);
 
     /**
      * Show a player to all other players.
+     *
+     * @param player The player to show.
      */
     void show(Player player);
-
-    /**
-     * Get office players name
-     */
-    String getOfflineName(UUID uuid);
 }

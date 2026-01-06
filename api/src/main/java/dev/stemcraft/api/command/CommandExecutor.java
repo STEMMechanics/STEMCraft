@@ -22,7 +22,18 @@ package dev.stemcraft.api.command;
 
 import dev.stemcraft.api.STEMCraftAPI;
 
+/**
+ * Functional interface for executing commands
+ */
 @FunctionalInterface
 public interface CommandExecutor {
+
+    /**
+     * Execute the command
+     *
+     * @param api The STEMCraft API instance
+     * @param command The command being executed
+     * @param context The command context
+     */
     void execute(STEMCraftAPI api, Command command, CommandContext context);
 }

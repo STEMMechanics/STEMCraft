@@ -30,32 +30,56 @@ import org.bukkit.entity.Entity;
 import java.nio.file.Path;
 import java.util.List;
 
+/**
+ * Service for managing worlds in STEMCraft.
+ */
 public interface WorldService {
 
-    enum SettingCommandMode { FLAG, SUBCOMMAND }
+    enum SettingCommandMode {
+        FLAG,           // e.g. /world flags <world> [flag] [args]
+        SUBCOMMAND      // e.g. /world [subcommand] <world> [args]
+    }
 
     /**
      * Check if a world with the given name exists on disk.
+     *
+     * @param worldName The name of the world to check.
+     * @return True if the world exists, false otherwise.
      */
     boolean worldExists(String worldName);
 
     /**
      * Check if a world with the given name is currently loaded.
+     *
+     * @param worldName The name of the world to check.
+     * @return True if the world is loaded, false otherwise.
      */
     boolean isWorldLoaded(String worldName);
 
     /**
      * Load the world with the given name into memory.
+     *
+     * @param worldName The name of the world to load.
+     * @return The loaded World object.
      */
     World loadWorld(String worldName);
 
     /**
      * Unload the world with the given name from memory.
+     *
+     * @param worldName The name of the world to unload.
+     * @param save Whether to save the world before unloading.
+     * @return True if the world was successfully unloaded, false otherwise.
      */
     boolean unloadWorld(String worldName, boolean save);
 
     /**
      * Create a new world with the given name.
+     *
+     * @param worldName The name of the world to create.
+     * @param generatorName The name of the custom generator to use (or null for default).
+     * @param generatorOptions The options for the custom generator (or null for default).
+     * @return The created World object.
      */
     World createWorld(String worldName, String generatorName, String generatorOptions);
     default World createWorld(String worldName) { return createWorld(worldName, null, null); }
@@ -63,36 +87,54 @@ public interface WorldService {
 
     /**
      * Delete the world with the given name from disk.
+     *
+     * @param worldName The name of the world to delete.
      */
     void deleteWorld(String worldName) throws Exception;
 
     /**
      * Rename the world with the given name on disk.
+     *
+     * @param oldName The current name of the world.
+     * @param newName The new name for the world.
      */
     void renameWorld(String oldName, String newName) throws Exception;
 
     /**
      * Duplicate the world with the given name on disk.
+     *
+     * @param sourceWorldName The name of the world to duplicate.
+     * @param targetWorldName The name for the duplicated world.
      */
     void duplicateWorld(String sourceWorldName, String targetWorldName) throws Exception;
 
     /**
      * Get a list of all worlds currently loaded and on disk.
+     *
+     * @return A list of world names.
      */
     List<String> listWorlds();
 
     /**
      * Get the file system path to the world folder with the given name.
+     *
+     * @param worldName The name of the world.
+     * @return The Path to the world folder.
      */
     Path getWorldFolder(String worldName);
 
     /**
      * Register a custom chunk generator factory with the given name.
+     *
+     * @param name The name of the custom generator.
+     * @param factory The factory to create instances of the generator.
      */
     void registerGenerator(String name, ChunkGeneratorFactory factory);
 
     /**
      * Evict all players from the given world to the main world.
+     *
+     * @param world The world to evict players from.
      */
     void evictAllPlayers(World world);
     default void evictAllPlayers(String worldName) {
@@ -104,24 +146,43 @@ public interface WorldService {
 
     /**
      * Get the default world.
+     *
+     * @return The default World object.
      */
     World getDefaultWorld();
 
     /**
      * Set the default world.
+     *
+     * @param world The World object to set as default.
      */
     void setDefaultWorld(World world);
 
     /**
      * Get the configuration section for the given world.
+     *
+     * @param world The world to get the config section for.
+     * @return The ConfigSection for the world.
      */
     ConfigSection getConfigSection(World world);
     ConfigSection getConfigSection(String worldName);
 
+    /**
+     * Register a world base setting.
+     *
+     * @param setting The WorldBaseSetting to register.
+     * @param mode The command mode for the setting.
+     */
     void registerSetting(WorldBaseSetting setting, SettingCommandMode mode);
     default void registerSetting(WorldBaseSetting setting) {
         registerSetting(setting, SettingCommandMode.FLAG);
     }
 
+    /**
+     * Begin a world change session for the given world.
+     *
+     * @param world The world to change.
+     * @return A WorldChangeSession for batching changes.
+     */
     WorldChangeSession changes(World world);
 }

@@ -22,6 +22,9 @@ package dev.stemcraft.api.service.web;
 
 import java.util.Map;
 
+/**
+ * Functional interface for handling web service endpoints.
+ */
 public interface WebServiceEndpointHandler {
 
     /**
@@ -44,6 +47,11 @@ public interface WebServiceEndpointHandler {
      *     In this case "body" is ignored.
      *   - body: any object; converted to String and used as the response body when
      *     "file" is not provided.
+     *
+     * @param method The HTTP method (e.g., GET, POST).
+     * @param uri The request URI.
+     * @param queryParams The query parameters as a map.
+     * @return The response object as described above.
      */
     Object handle(String method, String uri, Map<String, String> queryParams);
 }

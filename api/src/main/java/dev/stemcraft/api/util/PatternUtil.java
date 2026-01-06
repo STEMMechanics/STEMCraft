@@ -22,10 +22,16 @@ package dev.stemcraft.api.util;
 
 import java.util.regex.Pattern;
 
+/**
+ * Utility class for pattern conversions.
+ */
 public class PatternUtil {
 
     /**
      * Convert '*' wildcard to '.*' and escape everything else.
+     *
+     * @param glob The glob pattern to convert.
+     * @return The compiled regex pattern.
      */
     public static Pattern globToRegex(String glob) {
         StringBuilder out = new StringBuilder();

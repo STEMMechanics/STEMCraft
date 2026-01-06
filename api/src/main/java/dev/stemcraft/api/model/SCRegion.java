@@ -20,7 +20,6 @@
 
 package dev.stemcraft.api.model;
 
-import com.sk89q.worldedit.bukkit.BukkitAdapter;
 import com.sk89q.worldedit.math.BlockVector2;
 import com.sk89q.worldedit.math.BlockVector3;
 import com.sk89q.worldedit.regions.CuboidRegion;
@@ -42,8 +41,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.stream.Collectors;
 
+/**
+ * Wrapper around a WorldEdit Region with additional utility methods.
+ */
 public class SCRegion implements ConfigurationSerializable {
     @Getter
     private final Region region;
@@ -51,11 +52,26 @@ public class SCRegion implements ConfigurationSerializable {
     @Setter
     private World world;
 
+    private static final int RANDOM_SAMPLES_COUNT = 32;
+
+    /**
+     * Constructs an SCRegion with the given WorldEdit region and Bukkit world.
+     *
+     * @param region The WorldEdit region.
+     * @param world  The Bukkit world.
+     */
     public SCRegion(Region region, World world) {
         this.region = region;
         this.world = world;
     }
 
+    /**
+     * Returns true if the given location is contained within this region.
+     * World must match.
+     *
+     * @param loc The location to check.
+     * @return True if the location is inside the region, false otherwise.
+     */
     public boolean contains(Location loc) {
         if (!loc.getWorld().equals(world)) return false;
 
@@ -70,6 +86,9 @@ public class SCRegion implements ConfigurationSerializable {
     /**
      * Returns true if the given region is fully contained within this region.
      * World must match.
+     *
+     * @param other The other region to check.
+     * @return True if this region contains the other region, false otherwise.
      */
     public boolean contains(SCRegion other) {
         if (other == null) return false;
@@ -91,7 +110,7 @@ public class SCRegion implements ConfigurationSerializable {
 
         // Extra safety: sample a few random points inside the other's bounding box and ensure they're inside this.
         // This helps with polygon edge cases.
-        if (!containsRandomSamplesFrom(other, 24)) return false;
+        if (!containsRandomSamplesFrom(other)) return false;
 
         return true;
     }
@@ -99,6 +118,9 @@ public class SCRegion implements ConfigurationSerializable {
     /**
      * Returns true if this region intersects the given region.
      * World must match.
+     *
+     * @param other The other region to check.
+     * @return True if the regions intersect, false otherwise.
      */
     public boolean intersects(SCRegion other) {
         if (other == null) return false;
@@ -127,14 +149,32 @@ public class SCRegion implements ConfigurationSerializable {
         }
 
         // Fallback: random sampling within the AABB overlap box to catch edge-only intersections.
-        return intersectsByRandomSampling(other, 32);
+        return intersectsByRandomSampling(other);
     }
 
+    /**
+     * AABB containment test.
+     *
+     * @param aMin
+     * @param aMax
+     * @param bMin
+     * @param bMax
+     * @return true if A contains B
+     */
     private static boolean aabbContains(BlockVector3 aMin, BlockVector3 aMax, BlockVector3 bMin, BlockVector3 bMax) {
         return aMin.x() <= bMin.x() && aMin.y() <= bMin.y() && aMin.z() <= bMin.z()
                 && aMax.x() >= bMax.x() && aMax.y() >= bMax.y() && aMax.z() >= bMax.z();
     }
 
+    /**
+     * AABB intersection test.
+     *
+     * @param aMin
+     * @param aMax
+     * @param bMin
+     * @param bMax
+     * @return true if A intersects B
+     */
     private static boolean aabbIntersects(BlockVector3 aMin, BlockVector3 aMax, BlockVector3 bMin, BlockVector3 bMax) {
         return aMin.x() <= bMax.x() && aMax.x() >= bMin.x()
                 && aMin.y() <= bMax.y() && aMax.y() >= bMin.y()
@@ -144,6 +184,8 @@ public class SCRegion implements ConfigurationSerializable {
     /**
      * Returns a small set of representative points for containment/intersection checks.
      * Includes AABB corners, plus polygon vertices at minY/maxY.
+     *
+     * @return List of representative points.
      */
     private List<BlockVector3> getRepresentativePoints() {
         List<BlockVector3> pts = new ArrayList<>();
@@ -174,7 +216,14 @@ public class SCRegion implements ConfigurationSerializable {
         return pts;
     }
 
-    private boolean containsRandomSamplesFrom(SCRegion other, int samples) {
+    /**
+     * Checks if this region contains random samples from the other region.
+     *
+     * @param other the other region to sample from
+     * @param samples number of samples to test
+     * @return true if all sampled points from other are inside this region
+     */
+    private boolean containsRandomSamplesFrom(SCRegion other, @SuppressWarnings("SameParameterValue") int samples) {
         if (samples <= 0) return true;
 
         Random r = ThreadLocalRandom.current();
@@ -199,8 +248,16 @@ public class SCRegion implements ConfigurationSerializable {
         // If we couldn't find enough points inside other (very thin regions), fall back to representative points only.
         return true;
     }
+    private boolean containsRandomSamplesFrom(SCRegion other) { return containsRandomSamplesFrom(other, RANDOM_SAMPLES_COUNT); }
 
-    private boolean intersectsByRandomSampling(SCRegion other, int samples) {
+    /**
+     * Checks for intersection with another region using random sampling within the overlapping AABB.
+     *
+     * @param other the other region to check
+     * @param samples number of samples to test
+     * @return true if an intersection is found
+     */
+    private boolean intersectsByRandomSampling(SCRegion other, @SuppressWarnings("SameParameterValue") int samples) {
         if (samples <= 0) return false;
 
         Random r = ThreadLocalRandom.current();
@@ -235,11 +292,26 @@ public class SCRegion implements ConfigurationSerializable {
         return false;
     }
 
+    private boolean intersectsByRandomSampling(SCRegion other) { return intersectsByRandomSampling(other, RANDOM_SAMPLES_COUNT); }
 
+    /**
+     * Returns a random integer between min and max, inclusive.
+     *
+     * @param min    Minimum value.
+     * @param max    Maximum value.
+     * @param random Random instance.
+     * @return Random integer between min and max.
+     */
     private int randomBetween(int min, int max, Random random) {
         return min + random.nextInt((max - min) + 1);
     }
 
+    /**
+     * Returns a random location within the region.
+     * May return null if no valid location found after several attempts.
+     *
+     * @return Random location inside the region, or null if none found.
+     */
     public Location getRandomLocation() {
         Random random = ThreadLocalRandom.current();
         BlockVector3 min = region.getMinimumPoint();
@@ -261,6 +333,13 @@ public class SCRegion implements ConfigurationSerializable {
         return null;
     }
 
+    /**
+     * Returns a random ground location within the region.
+     * The location will be on solid ground with air above for player placement.
+     * May return null if no valid ground location found after several attempts.
+     *
+     * @return Random ground location inside the region, or null if none found.
+     */
     public Location getRandomGroundLocation() {
         for (int i = 0; i < 200; i++) {
             Location base = getRandomLocation();
@@ -291,19 +370,40 @@ public class SCRegion implements ConfigurationSerializable {
         return null;
     }
 
+    /**
+     * Checks if the region is a cuboid.
+     *
+     * @return true if the region is a cuboid
+     */
     public boolean isCuboid() {
         return region instanceof CuboidRegion;
     }
 
+    /**
+     * Checks if the region is a polygon.
+     *
+     * @return true if the region is a polygon
+     */
     public boolean isPolygon() {
         return region instanceof Polygonal2DRegion;
     }
 
+    /**
+     * Checks if the given player is inside this region.
+     *
+     * @param player The player to check.
+     * @return True if the player is inside the region, false otherwise.
+     */
     public boolean containsPlayer(Player player) {
         if (player == null) return false;
         return contains(player.getLocation());
     }
 
+    /**
+     * Returns a list of all online players currently inside this region.
+     *
+     * @return List of players inside the region.
+     */
     public List<Player> getPlayers() {
         return Bukkit.getOnlinePlayers().stream()
                 .filter(this::containsPlayer)
@@ -311,19 +411,42 @@ public class SCRegion implements ConfigurationSerializable {
                 .toList();
     }
 
+    /**
+     * Serializes this SCRegion to a map for storage.
+     *
+     * @return A map representing the serialized region.
+     */
     @Override
     public @NonNull Map<String, Object> serialize() {
         return RegionSerializer.serialize(this);
     }
 
+    /**
+     * Deserializes an SCRegion from a map.
+     *
+     * @param map The map containing serialized region data.
+     * @return The deserialized SCRegion.
+     */
     public static SCRegion deserialize(Map<String,Object> map) {
         return RegionSerializer.deserialize(map);
     }
 
+    /**
+     * Converts this SCRegion to a string representation.
+     *
+     * @return The string representation of the region.
+     */
     public String toString() {
         return RegionSerializer.toString(this);
     }
 
+    /**
+     * Creates an SCRegion from its string representation.
+     *
+     * @param s     The string representation of the region.
+     * @param world The Bukkit world for the region.
+     * @return The SCRegion instance.
+     */
     public static SCRegion fromString(String s, World world) {
         return RegionSerializer.fromString(s, world);
     }

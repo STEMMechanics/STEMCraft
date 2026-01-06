@@ -63,6 +63,9 @@ public final class NamespaceId {
 
     /**
      * Validates if the given string is a valid namespaced ID.
+     *
+     * @param id The namespaced ID string to validate.
+     * @return True if the ID is valid, false otherwise.
      */
     public static boolean isValid(String id) {
         return id != null && PATTERN.matcher(id).matches();
@@ -70,6 +73,9 @@ public final class NamespaceId {
 
     /**
      * Checks if the given string is a valid namespaced ID and throws an exception if not.
+     *
+     * @param id The namespaced ID string to validate.
+     * @throws IllegalArgumentException if the ID is not valid.
      */
     public static void checkValid(String id) {
         if (!isValid(id)) {
@@ -79,6 +85,10 @@ public final class NamespaceId {
 
     /**
      * Creates a namespaced ID from the given namespace and key.
+     *
+     * @param namespace The namespace portion.
+     * @param key The path portion.
+     * @return The combined namespaced ID.
      */
     public static String of(String namespace, String key) {
         return namespace + ":" + key;
@@ -86,6 +96,9 @@ public final class NamespaceId {
 
     /**
      * Normalizes the given namespaced ID to lowercase.
+     *
+     * @param id The namespaced ID to normalize.
+     * @return The normalized namespaced ID.
      */
     public static String normalize(String id) {
         return id.toLowerCase(Locale.ROOT);
@@ -93,6 +106,9 @@ public final class NamespaceId {
 
     /**
      * Extracts the namespace from the given namespaced ID.
+     *
+     * @param id The namespaced ID.
+     * @return The namespace portion.
      */
     public static String getNamespace(String id) {
         if (!isValid(id)) {
@@ -103,6 +119,9 @@ public final class NamespaceId {
 
     /**
      * Extracts the path from the given namespaced ID.
+     *
+     * @param id The namespaced ID.
+     * @return The path portion.
      */
     public static String getPath(String id) {
         if (!isValid(id)) {
@@ -113,6 +132,9 @@ public final class NamespaceId {
 
     /**
      * Extracts the path segments from the given namespaced ID.
+     *
+     * @param id The namespaced ID.
+     * @return An array of path segments.
      */
     public static String[] getPathSegments(String id) {
         String path = getPath(id);

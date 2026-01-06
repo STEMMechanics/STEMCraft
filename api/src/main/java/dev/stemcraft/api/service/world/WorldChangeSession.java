@@ -20,11 +20,13 @@
 
 package dev.stemcraft.api.service.world;
 
-import dev.stemcraft.api.config.ConfigSection;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
 import org.bukkit.entity.Entity;
 
+/**
+ * Interface for managing a session that tracks changes in the world.
+ */
 public interface WorldChangeSession {
 
     /**
@@ -49,21 +51,34 @@ public interface WorldChangeSession {
 
     /**
      * Rolls back all recorded changes.
+     *
+     * @param applyPhysics Whether to apply physics during the rollback.
      */
     void rollback(boolean applyPhysics);
+    default void rollback() { rollback(false); }
 
     /**
      * Captures the block.
+     *
+     * @param block The block to capture.
+     * @param overwriteExisting Whether to overwrite existing captured state.
      */
-    default void captureBlock(Block block) { captureBlockState(block.getState()); }
+    default void captureBlock(Block block, boolean overwriteExisting) { captureBlockState(block.getState(), overwriteExisting); }
+    default void captureBlock(Block block) { captureBlock(block, false); }
 
     /**
      * Captures the current state of a block.
+     *
+     * @param state The block state to capture.
+     * @param overwriteExisting Whether to overwrite existing captured state.
      */
-    void captureBlockState(BlockState state);
+    void captureBlockState(BlockState state, boolean overwriteExisting);
+    default void captureBlockState(BlockState state) { captureBlockState(state, false); }
 
     /**
      * Captures the current state of an entity.
+     *
+     * @param entity The entity to capture.
      */
     void captureEntity(Entity entity);
 

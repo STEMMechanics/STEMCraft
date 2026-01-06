@@ -28,5 +28,11 @@ import java.sql.SQLException;
  */
 @FunctionalInterface
 public interface DatabaseResultSetHandler {
+    /**
+     * Accepts a ResultSet for processing.
+     *
+     * @param rs The ResultSet to process.
+     * @throws SQLException If an SQL error occurs while processing the ResultSet.
+     */
     void accept(ResultSet rs) throws SQLException;
 }

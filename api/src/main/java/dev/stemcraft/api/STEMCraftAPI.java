@@ -32,7 +32,6 @@ import dev.stemcraft.api.service.hologram.HologramService;
 import dev.stemcraft.api.service.item.ItemService;
 import dev.stemcraft.api.service.locale.LocaleService;
 import dev.stemcraft.api.service.message.MessageService;
-import dev.stemcraft.api.service.player.PlayerLogService;
 import dev.stemcraft.api.service.player.PlayerService;
 import dev.stemcraft.api.service.region.RegionService;
 import dev.stemcraft.api.service.task.TaskService;

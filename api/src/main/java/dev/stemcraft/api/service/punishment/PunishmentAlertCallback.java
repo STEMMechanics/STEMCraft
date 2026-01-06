@@ -22,7 +22,19 @@ package dev.stemcraft.api.service.punishment;
 
 import org.bukkit.entity.Player;
 
+/**
+ * Functional interface for handling punishment alerts.
+ */
 @FunctionalInterface
 public interface PunishmentAlertCallback {
+
+    /**
+     * Handles a punishment alert.
+     *
+     * @param type   The type of punishment alert.
+     * @param player The player associated with the punishment.
+     * @param record The punishment record details.
+     * @return true if the alert was handled successfully, false otherwise.
+     */
     boolean run(String type, Player player, PunishmentRecord record);
 }

@@ -23,6 +23,9 @@ package dev.stemcraft.api.service.database;
 import dev.stemcraft.api.database.DatabaseResultSetHandler;
 import dev.stemcraft.api.database.DatabaseStatementBinder;
 
+/**
+ * Service for managing database interactions.
+ */
 public interface DatabaseService {
 
     /**
@@ -32,41 +35,68 @@ public interface DatabaseService {
 
     /**
      * Executes an update statement (INSERT, UPDATE, DELETE).
+     *
+     * @param sql The SQL statement to execute.
+     * @param binder The binder to bind parameters to the statement.
+     * @return The number of affected rows.
      */
     int update(String sql, DatabaseStatementBinder binder);
 
     /**
      * Executes a query statement and maps the result set.
+     *
+     * @param sql The SQL statement to execute.
+     * @param binder The binder to bind parameters to the statement.
+     * @param handler The handler to process the result set.
      */
     void query(String sql, DatabaseStatementBinder binder, DatabaseResultSetHandler handler);
 
     /**
      * Executes a query statement and maps a single result from the result set.
+     *
+     * @param sql The SQL statement to execute.
+     * @param binder The binder to bind parameters to the statement.
+     * @param handler The handler to process each row of the result set.
      */
     void queryEach(String sql, DatabaseStatementBinder binder, DatabaseResultSetHandler handler);
 
     /**
      * Executes a query statement and maps a single result from the result set.
+     *
+     * @param sql The SQL statement to execute.
+     * @param binder The binder to bind parameters to the statement.
+     * @param handler The handler to process the single result.
      */
     void querySingle(String sql, DatabaseStatementBinder binder, DatabaseResultSetHandler handler);
 
     /**
      * Executes a raw SQL statement.
+     *
+     * @param sql The SQL statement to execute.
+     * @return True if the execution was successful, false otherwise.
      */
     boolean execute(String sql);
 
     /**
      * Gets the migration version for the given migration name.
+     *
+     * @param name The name of the migration.
+     * @return The migration version, or -1 if not found.
      */
     int migrationVersion(String name);
 
     /**
      * Sets the migration version for the given migration name.
+     *
+     * @param name The name of the migration.
+     * @param version The migration version to set.
      */
     void setMigrationVersion(String name, int version);
 
     /**
      * Clears the migration record for the given migration name.
+     *
+     * @param name The name of the migration.
      */
     void clearMigration(String name);
 }

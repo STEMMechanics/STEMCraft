@@ -27,6 +27,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * Utility class for string manipulation and formatting.
+ */
 public final class StringUtil {
     private static final Map<String, String> IRREGULAR = Map.ofEntries(
             Map.entry("child", "children"),
@@ -41,6 +44,9 @@ public final class StringUtil {
 
     /**
      * Checks if a string is entirely in uppercase.
+     *
+     * @param s the string to check
+     * @return true if the string is all uppercase, false otherwise
      */
     public static boolean isAllUpper(String s) {
         return s.equals(s.toUpperCase(Locale.ROOT));
@@ -48,6 +54,9 @@ public final class StringUtil {
 
     /**
      * Checks if a string is in title case.
+     *
+     * @param s the string to check
+     * @return true if the string is in title case, false otherwise
      */
     public static boolean isTitleCase(String s) {
         return !s.isEmpty() &&
@@ -57,6 +66,9 @@ public final class StringUtil {
 
     /**
      * Converts a string into title case.
+     *
+     * @param s the string to convert
+     * @return the string in title case
      */
     public static String toTitleCase(String s) {
         if (s == null || s.isEmpty()) return s;
@@ -67,6 +79,9 @@ public final class StringUtil {
      * Converts a string into a slug suitable for filenames or identifiers.
      * Lowercases the string, replaces spaces with underscores, and removes
      * special characters.
+     *
+     * @param input the input string
+     * @return the slugified string
      */
     public static String slugify(String input) {
         if (input == null) return null;
@@ -91,6 +106,9 @@ public final class StringUtil {
 
     /**
      * Convert a list of objects to strings (or null)
+     *
+     * @param placeholders the objects to convert
+     * @return array of strings
      */
     public static String[] toStrings(Object... placeholders) {
         if (placeholders == null || placeholders.length == 0) {
@@ -105,6 +123,13 @@ public final class StringUtil {
         return out;
     }
 
+    /**
+     * Capitalizes the first letter of each word in a string.
+     *
+     * @param str The input string.
+     * @param ignoreColors Whether to ignore color codes (e.g., &a, &b).
+     * @return The capitalized string.
+     */
     public static String capitalize(String str, Boolean ignoreColors) {
         if (str != null && !str.isEmpty()) {
             final int strLen = str.length();
@@ -142,14 +167,32 @@ public final class StringUtil {
         return capitalize(str, false);
     }
 
+    /**
+     * Beautifies a string by replacing underscores with spaces and converting to lowercase.
+     *
+     * @param str The input string.
+     * @return The beautified string.
+     */
     public static String beautify(String str) {
         return str.toLowerCase().replace("_", " ");
     }
 
+    /**
+     * Converts a camelCase string to snake_case.
+     *
+     * @param s The camelCase string.
+     * @return The snake_case string.
+     */
     public static String camelToSnake(String s) {
         return s.replaceAll("([a-z])([A-Z])", "$1_$2").toLowerCase();
     }
 
+    /**
+     * Converts a camelCase string to kebab-case.
+     *
+     * @param s The camelCase string.
+     * @return The kebab-case string.
+     */
     public static String camelToKebab(String s) {
         return s.replaceAll("([a-z])([A-Z])", "$1-$2").toLowerCase();
     }

@@ -20,21 +20,20 @@
 
 package dev.stemcraft.api.util;
 
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.minimessage.MiniMessage;
-import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
-import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
-import java.util.HashSet;
-import java.util.Locale;
-import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
+/**
+ * Utility class for inventory-related operations.
+ */
 public final class InventoryUtil {
 
+    /**
+     * Converts the contents of an inventory to a string representation.
+     *
+     * @param inv The inventory to convert.
+     * @return A string representation of the inventory contents.
+     */
     public static String toString(Inventory inv) {
         ItemStack[] contents = inv.getContents();
         StringBuilder out = new StringBuilder();
@@ -50,6 +49,4 @@ public final class InventoryUtil {
         if (out.isEmpty()) return "(empty)";
         return out.substring(0, out.length() - 2);
     }
-
-
 }

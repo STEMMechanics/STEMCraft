@@ -25,6 +25,8 @@ import dev.stemcraft.api.config.ConfigFile;
 import lombok.Getter;
 import lombok.Setter;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.configuration.ConfigurationSection;
+import java.util.Set;
 
 import java.io.File;
 import java.io.IOException;
@@ -46,28 +48,37 @@ public class ConfigFileImpl extends ConfigSectionImpl implements ConfigFile {
      * Loads the configuration file with the given name.
      */
     public boolean load(String name, boolean createIfNotExist) {
+        if (!name.contains(".")) {
+            name += ".yml";
+        }
+
         this.name = name;
         this.dirty = false;
 
         file = new File(STEMCraftAPI.api().getDataFolder(), name);
-        if (!file.exists()) {
-            if (createIfNotExist) {
-                try {
-                    if (file.createNewFile()) {
-                        this.config = YamlConfiguration.loadConfiguration(file);
-                        super.setConfigFile(this);
-                        super.setSection(this.config.getDefaultSection());
 
-                        return true;
-                    }
-                } catch (IOException e) {
+        if (!file.exists()) {
+            if (!createIfNotExist) {
+                this.file = null;
+                return false;
+            }
+
+            try {
+                if (!file.createNewFile()) {
+                    this.file = null;
                     return false;
                 }
+            } catch (IOException e) {
+                this.file = null;
+                return false;
             }
         }
 
-        this.file = null;
-        return false;
+        this.config = YamlConfiguration.loadConfiguration(file);
+        super.setConfigFile(this);
+        // Root section should be the loaded YAML itself (not the defaults section)
+        super.setSection(this.config);
+        return true;
     }
 
     /**
@@ -87,10 +98,14 @@ public class ConfigFileImpl extends ConfigSectionImpl implements ConfigFile {
     /**
      * Saves the configuration file.
      */
-    public void save() {
+    public void save(boolean pruneEmptySections) {
         if (file == null || !dirty) return;
 
         try {
+            if(pruneEmptySections) {
+                pruneEmptySections(config);
+            }
+
             config.save(file);
             dirty = false;
         } catch (IOException e) {
@@ -120,5 +135,26 @@ public class ConfigFileImpl extends ConfigSectionImpl implements ConfigFile {
     @Override
     public boolean getSaveDefaults() {
         return saveDefaults;
+    }
+
+    private static void pruneEmptySections(ConfigurationSection section) {
+        Set<String> keys = section.getKeys(false);
+        for (String key : keys) {
+            if (!section.isConfigurationSection(key)) {
+                continue;
+            }
+
+            ConfigurationSection child = section.getConfigurationSection(key);
+            if (child == null) {
+                continue;
+            }
+
+            pruneEmptySections(child);
+
+            // After pruning children, remove this section if it's now empty
+            if (child.getKeys(false).isEmpty() && child.getValues(false).isEmpty()) {
+                section.set(key, null);
+            }
+        }
     }
 }

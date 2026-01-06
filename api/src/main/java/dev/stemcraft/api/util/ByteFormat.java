@@ -20,6 +20,9 @@
 
 package dev.stemcraft.api.util;
 
+/**
+ * Utility class for formatting and parsing byte values.
+ */
 public final class ByteFormat {
 
     /**
@@ -46,6 +49,13 @@ public final class ByteFormat {
         return String.format("%.2f %s", value, units[unitIndex]);
     }
 
+    /**
+     * Parse a formatted byte string back into a long value in bytes.
+     *
+     * @param formatted the formatted byte string (e.g. "14MB", "512 B", "1.5 GB")
+     * @return the number of bytes as a long
+     * @throws IllegalArgumentException if the input is invalid
+     */
     public static long toBytes(String formatted) {
         if (formatted == null || formatted.isEmpty()) {
             throw new IllegalArgumentException("Input cannot be null or empty");

@@ -20,7 +20,16 @@
 
 package dev.stemcraft.api.service.task;
 
+/**
+ * Functional interface for task retry callbacks.
+ */
 @FunctionalInterface
 public interface TaskRetryCallback {
+
+    /**
+     * Called when a task retry operation is completed.
+     *
+     * @param result The result of the retry operation.
+     */
     void done(TaskService.RetryResult result);
 }

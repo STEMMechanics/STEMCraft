@@ -22,10 +22,17 @@ package dev.stemcraft.api.service.config;
 
 import dev.stemcraft.api.config.ConfigFile;
 
+/**
+ * Service for managing configuration files.
+ */
 public interface ConfigService {
 
     /**
      * Retrieves a configuration file by name.
+     *
+     * @param name The name of the configuration file.
+     * @param createIfNotExist Whether to create the file if it does not exist.
+     * @return The configuration file object.
      */
     ConfigFile load(String name, boolean createIfNotExist);
     default ConfigFile load(String name) { return load(name, true); }

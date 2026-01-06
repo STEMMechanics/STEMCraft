@@ -24,13 +24,23 @@ import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 
+/**
+ * Utility class for time-related operations.
+ */
 public class TimeUtil {
     public enum FormatStyle {
-        SHORT,
-        LONG,
-        VERBOSE
+        SHORT,      // e.g., "1d 2h 3m 4s"
+        LONG,       // e.g., "1 day 2 hours 3 mins 4 secs"
+        VERBOSE     // e.g., "1 day 2 hours 3 minutes 4 seconds"
     }
 
+    /**
+     * Formats a duration given in total seconds into a human-readable string.
+     *
+     * @param totalSeconds The total duration in seconds.
+     * @param format       The desired format style.
+     * @return A formatted duration string.
+     */
     public static String formatDuration(long totalSeconds, FormatStyle format) {
         long days = totalSeconds / 86400;
         long hours = (totalSeconds % 86400) / 3600;
@@ -68,6 +78,15 @@ public class TimeUtil {
     public static String formatLongDuration(long totalSeconds) { return formatDuration(totalSeconds, FormatStyle.LONG); }
     public static String formatFriendlyDuration(long totalSeconds) { return formatDuration(totalSeconds, FormatStyle.VERBOSE); }
 
+    /**
+     * Parses a duration string into total seconds.
+     * Supports formats like "1d2h3m4s" and "permanent" if allowed.
+     *
+     * @param durationStr    The duration string to parse.
+     * @param allowPermanent Whether to allow "permanent" as a valid input.
+     * @return The total duration in seconds, or -1 for permanent.
+     * @throws IllegalArgumentException if the format is invalid.
+     */
     public static long parseDuration(String durationStr, boolean allowPermanent) {
         durationStr = durationStr.trim().toLowerCase();
         if (allowPermanent && (durationStr.equals("permanent") || durationStr.equals("perm"))) {
@@ -106,6 +125,12 @@ public class TimeUtil {
 
     public static long parseDuration(String durationStr) { return parseDuration(durationStr, false); }
 
+    /**
+     * Converts an Instant to a friendly time string.
+     *
+     * @param instant The instant to convert.
+     * @return A friendly time string.
+     */
     public static String toFriendlyTime(Instant instant) {
         if (instant == null) return "";
 
@@ -134,17 +159,35 @@ public class TimeUtil {
         return t.format(DateTimeFormatter.ofPattern("d MMM h:mm a"));
     }
 
+    /**
+     * Converts epoch milliseconds to a timestamp string.
+     *
+     * @param epochMillis The epoch milliseconds.
+     * @return A timestamp string in "yyyy-MM-dd HH:mm:ss" format.
+     */
     public static String toTimestamp(long epochMillis) {
         return Instant.ofEpochMilli(epochMillis)
                 .atZone(ZoneId.systemDefault())
                 .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
     }
 
+    /**
+     * Calculates the epoch milliseconds for a future time after a given duration.
+     *
+     * @param duration The duration to add to the current time.
+     * @return The epoch milliseconds of the future time.
+     */
     public static long DurationToRunAtMillis(Duration duration) {
         Instant targetTime = Instant.now().plus(duration);
         return targetTime.toEpochMilli();
     }
 
+    /**
+     * Validates if the given string is a valid date in ISO_LOCAL_DATE format (yyyy-MM-dd).
+     *
+     * @param date The date string to validate.
+     * @return True if valid, false otherwise.
+     */
     public static boolean validDate(String date) {
         if (date == null || date.isBlank()) return false;
         String s = date.trim();

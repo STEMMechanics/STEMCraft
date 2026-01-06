@@ -24,6 +24,18 @@ import net.kyori.adventure.text.Component;
 
 import java.util.List;
 
+/**
+ * Service for rendering chat menu components.
+ */
 public interface SCChatMenuRenderer {
+
+    /**
+     * Renders a list of chat menu components.
+     *
+     * @param start    The starting index for rendering.
+     * @param count    The number of components to render.
+     * @param isPlayer Whether the rendering is for a player.
+     * @return A list of rendered chat menu components.
+     */
     List<Component> render(int start, int count, boolean isPlayer);
 }

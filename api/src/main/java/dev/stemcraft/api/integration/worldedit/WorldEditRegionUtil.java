@@ -33,7 +33,17 @@ import com.sk89q.worldedit.regions.selector.Polygonal2DRegionSelector;
 import dev.stemcraft.api.model.SCRegion;
 import org.bukkit.entity.Player;
 
+/**
+ * Utility class for working with WorldEdit selections.
+ */
 public class WorldEditRegionUtil {
+
+    /**
+     * Gets the WorldEdit selection for the specified player.
+     *
+     * @param player The player whose selection to retrieve.
+     * @return The SCRegion representing the player's selection, or null if no valid selection exists.
+     */
     public static SCRegion getWESelection(Player player) {
         // assume you already checked that WorldEdit is installed/enabled
         com.sk89q.worldedit.entity.Player wePlayer = BukkitAdapter.adapt(player);
@@ -61,6 +71,12 @@ public class WorldEditRegionUtil {
         return new SCRegion(region, player.getWorld());
     }
 
+    /**
+     * Sets the WorldEdit selection for the specified player.
+     *
+     * @param player The player whose selection to set.
+     * @param region The SCRegion to set as the player's selection.
+     */
     public static void setWESelection(Player player, SCRegion region) {
         com.sk89q.worldedit.entity.Player wePlayer = BukkitAdapter.adapt(player);
         Region weRegion = region.getRegion();
