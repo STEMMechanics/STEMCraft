@@ -20,8 +20,6 @@
 
 package dev.stemcraft.api.service.player;
 
-import java.util.UUID;
-
 import org.bukkit.entity.Player;
 
 /**

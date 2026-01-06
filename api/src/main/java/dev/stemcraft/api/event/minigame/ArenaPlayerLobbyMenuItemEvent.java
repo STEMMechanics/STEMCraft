@@ -24,9 +24,6 @@ import dev.stemcraft.api.event.BaseEvent;
 import dev.stemcraft.api.minigame.MiniGameArena;
 import lombok.Getter;
 import org.bukkit.entity.Player;
-import org.bukkit.event.Event;
-import org.bukkit.event.HandlerList;
-import org.jetbrains.annotations.NotNull;
 
 /**
  * Event triggered when a player interacts with a mini-game arena lobby menu item.

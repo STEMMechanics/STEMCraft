@@ -25,7 +25,7 @@ package dev.stemcraft.api.service.motd;
  */
 public interface MotdService {
 
-    public enum Priority {
+    enum Priority {
         DEFAULT,        // normal server state
         INFO,           // informational notices
         EVENT,          // promotions, events

@@ -110,9 +110,7 @@ public class SCRegion implements ConfigurationSerializable {
 
         // Extra safety: sample a few random points inside the other's bounding box and ensure they're inside this.
         // This helps with polygon edge cases.
-        if (!containsRandomSamplesFrom(other)) return false;
-
-        return true;
+        return containsRandomSamplesFrom(other);
     }
 
     /**
@@ -155,11 +153,11 @@ public class SCRegion implements ConfigurationSerializable {
     /**
      * AABB containment test.
      *
-     * @param aMin
-     * @param aMax
-     * @param bMin
-     * @param bMax
-     * @return true if A contains B
+     * @param aMin the minimum corner of box A (lowest x, y, z)
+     * @param aMax the maximum corner of box A (highest x, y, z)
+     * @param bMin the minimum corner of box B (lowest x, y, z)
+     * @param bMax the maximum corner of box B (highest x, y, z)
+     * @return true if box A fully contains box B
      */
     private static boolean aabbContains(BlockVector3 aMin, BlockVector3 aMax, BlockVector3 bMin, BlockVector3 bMax) {
         return aMin.x() <= bMin.x() && aMin.y() <= bMin.y() && aMin.z() <= bMin.z()
@@ -169,11 +167,11 @@ public class SCRegion implements ConfigurationSerializable {
     /**
      * AABB intersection test.
      *
-     * @param aMin
-     * @param aMax
-     * @param bMin
-     * @param bMax
-     * @return true if A intersects B
+     * @param aMin the minimum corner of box A (lowest x, y, z)
+     * @param aMax the maximum corner of box A (highest x, y, z)
+     * @param bMin the minimum corner of box B (lowest x, y, z)
+     * @param bMax the maximum corner of box B (highest x, y, z)
+     * @return true if box A and box B overlap in any volume
      */
     private static boolean aabbIntersects(BlockVector3 aMin, BlockVector3 aMax, BlockVector3 bMin, BlockVector3 bMax) {
         return aMin.x() <= bMax.x() && aMax.x() >= bMin.x()

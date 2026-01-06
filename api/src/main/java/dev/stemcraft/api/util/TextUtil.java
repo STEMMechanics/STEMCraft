@@ -25,9 +25,6 @@ import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 
-import java.util.ArrayList;
-import java.util.List;
-
 /**
  * Utility class for text formatting and colour handling using Adventure API.
  */

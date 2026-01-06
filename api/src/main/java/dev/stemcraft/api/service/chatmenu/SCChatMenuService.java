@@ -21,7 +21,6 @@
 package dev.stemcraft.api.service.chatmenu;
 
 import dev.stemcraft.api.STEMCraftAPI;
-import dev.stemcraft.api.util.DirectionUtil;
 import dev.stemcraft.api.util.FontUtil;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
