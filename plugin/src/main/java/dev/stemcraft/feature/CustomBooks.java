@@ -24,7 +24,7 @@ import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.util.PlaceholderUtil;
 import dev.stemcraft.api.util.PlayerUtil;
-import dev.stemcraft.api.service.chatmenu.ChatMenuService;
+import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
 import dev.stemcraft.api.util.TextUtil;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
@@ -248,7 +248,7 @@ public class CustomBooks extends BaseFeature {
                             buildCacheList();
 
                             int page = ctx.getArgAsInt(2, 1);
-                            ChatMenuService.render(ctx.getSenderAsPlayer(), "BOOK_LIST_TITLE", "book list", page, bookNames.size(), (start, count, isPlayer) -> {
+                            ChatMenuUtil.render(ctx.getSenderAsPlayer(), "BOOK_LIST_TITLE", "book list", page, bookNames.size(), (start, count, isPlayer) -> {
                                 ctx.info("Start: {start}, Count: {count}",
                                         "start", String.valueOf(start),
                                         "count", String.valueOf(count)

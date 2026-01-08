@@ -25,7 +25,7 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.Command;
 import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.config.ConfigSection;
-import dev.stemcraft.api.service.chatmenu.ChatMenuService;
+import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
 import dev.stemcraft.api.service.task.TaskService;
 import dev.stemcraft.api.service.world.WorldBaseSetting;
 import dev.stemcraft.api.service.world.WorldService;
@@ -253,7 +253,7 @@ public class WorldCommand {
     public void handleSubCommandList(CommandContext ctx) {
         List<String> worlds = api.worlds().listWorlds();
 
-        ChatMenuService.render(
+        ChatMenuUtil.render(
                 ctx.getSender(),
                 "Worlds",
                 "world list",

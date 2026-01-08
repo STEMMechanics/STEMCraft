@@ -18,7 +18,7 @@
  * @link https://github.com/STEMMechanics/STEMCraft
  */
 
-package dev.stemcraft.api.service.chatmenu;
+package dev.stemcraft.api.util.chatmenu;
 
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.util.FontUtil;
@@ -32,13 +32,15 @@ import org.bukkit.entity.Player;
 import java.util.List;
 
 /**
- * Service for rendering chat menus with pagination.
+ * Utility for rendering chat menus with pagination.
  */
-public class ChatMenuService {
-    private final static int ITEMS_PER_PAGE = 8;
+public final class ChatMenuUtil {
+    private static final int ITEMS_PER_PAGE = 8;
+
+    private ChatMenuUtil() { }
 
     /**
-     * Render a Chat Menu for the player.
+     * Render a chat menu for the player.
      *
      * @param sender The command sender (player or console).
      * @param title The title of the menu.
@@ -49,7 +51,7 @@ public class ChatMenuService {
      * @param noneText The text to display if there are no items.
      */
     public static void render(CommandSender sender, String title, String command, int page, int count, ChatMenuRenderer rendererFunc, String noneText) {
-        if(count <= 0) {
+        if (count <= 0) {
             STEMCraftAPI.api().messages().error(sender, noneText);
             return;
         }
@@ -60,21 +62,21 @@ public class ChatMenuService {
         int renderCount = Math.min(ITEMS_PER_PAGE, count - start);
         List<Component> lines = rendererFunc.render(start, renderCount, isPlayer);
 
-        if(lines.isEmpty()) {
+        if (lines.isEmpty()) {
             STEMCraftAPI.api().messages().error(sender, noneText);
             return;
         }
 
         sender.sendMessage(createSeparatorString(Component.text(title, NamedTextColor.AQUA)));
 
-        // Display the content for the current page
+        // Display the content for the current page.
         for (Component line : lines) {
             sender.sendMessage(line);
         }
 
-        // Pagination
+        // Pagination.
         Component prev = Component.text("<<< ", (page <= 1 ? NamedTextColor.GRAY : NamedTextColor.GOLD));
-        if(page > 1) {
+        if (page > 1) {
             prev = prev.clickEvent(ClickEvent.runCommand("/" + command + " " + (page - 1)))
                     .hoverEvent(HoverEvent.showText(Component.text("Previous page")));
         }
@@ -84,12 +86,12 @@ public class ChatMenuService {
                         .append(Component.text(" of " + maxPages, NamedTextColor.YELLOW)));
 
         Component next = Component.text(" >>>", (page >= maxPages ? NamedTextColor.GRAY : NamedTextColor.GOLD));
-        if(page < maxPages) {
+        if (page < maxPages) {
             next = next.clickEvent(ClickEvent.runCommand("/" + command + " " + (page + 1)))
                     .hoverEvent(HoverEvent.showText(Component.text("Next page")));
         }
 
-        if(isPlayer) {
+        if (isPlayer) {
             sender.sendMessage(createSeparatorString(prev.append(pageInfo).append(next)));
         } else {
             sender.sendMessage(createSeparatorString(pageInfo));
@@ -103,23 +105,22 @@ public class ChatMenuService {
      * @return The formatted separator component.
      */
     private static Component createSeparatorString(Component title) {
-        // Separator character and max chat width
+        // Separator character and max chat width.
         String separator = "-";
-        int maxWidth = 320; // Pixels (default chat width in Minecraft)
+        int maxWidth = 320; // Pixels (default chat width in Minecraft).
 
-
-        // Calculate title width in pixels
+        // Calculate title width in pixels.
         int titleWidth = FontUtil.calculatePixelWidth(title);
 
-        // Calculate separator width
+        // Calculate separator width.
         int separatorWidth = FontUtil.calculatePixelWidth(separator);
-        int paddingWidth = (maxWidth - titleWidth - 8) / 2; // Account for 4 pixels padding on each side
+        int paddingWidth = (maxWidth - titleWidth - 8) / 2; // Account for 4 pixels padding on each side.
 
-        // Calculate how many separators fit
+        // Calculate how many separators fit.
         int separatorCount = paddingWidth / separatorWidth;
         String separatorStr = separator.repeat(separatorCount);
 
-        // Build and return the component
+        // Build and return the component.
         return Component.text(separatorStr + " ", NamedTextColor.YELLOW)
                 .append(title)
                 .append(Component.text(" " + separatorStr, NamedTextColor.YELLOW));
@@ -135,23 +136,29 @@ public class ChatMenuService {
      */
     public static int getPageFromArgs(List<String> args, int index, int defaultPage) {
         if (args != null && !args.isEmpty()) {
-            if(index < 0 || index >= args.size()) {
+            if (index < 0 || index >= args.size()) {
                 index = args.size() - 1;
             }
 
             try {
                 int p = Integer.parseInt(args.get(index));
-                if(p >= 1) {
+                if (p >= 1) {
                     return p;
                 }
             } catch (NumberFormatException e) {
-                // empty
+                // empty.
             }
         }
 
         return defaultPage;
     }
 
+    /**
+     * Get the page number requested from command args.
+     *
+     * @param args The command arguments.
+     * @return The page number.
+     */
     public static int getPageFromArgs(List<String> args) {
         return getPageFromArgs(args, -1, 1);
     }

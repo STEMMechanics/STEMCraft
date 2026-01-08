@@ -29,7 +29,7 @@ import dev.stemcraft.api.util.LocationUtil;
 import dev.stemcraft.api.util.PlaceholderUtil;
 import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.api.util.TimeUtil;
-import dev.stemcraft.api.service.chatmenu.ChatMenuService;
+import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
 import io.papermc.paper.event.player.AsyncChatEvent;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
@@ -160,7 +160,7 @@ public final class GatekeeperServiceImpl extends BaseService implements Gatekeep
                             List<String> inviteCodes = section.getKeys(false).stream().toList();
                             int page = ctx.getArgAsInt(2, 1);
 
-                            ChatMenuService.render(ctx.getSenderAsPlayer(), "Invite Codes", "invite list", page, inviteCodes.size(), (start, count, isPlayer) -> {
+                            ChatMenuUtil.render(ctx.getSenderAsPlayer(), "Invite Codes", "invite list", page, inviteCodes.size(), (start, count, isPlayer) -> {
                                 List<Component> lines = new ArrayList<>();
                                 for (int i = 0; i < count; i++) {
                                     String code = inviteCodes.get(i + start);

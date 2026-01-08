@@ -18,7 +18,7 @@
  * @link https://github.com/STEMMechanics/STEMCraft
  */
 
-package dev.stemcraft.api.service.chatmenu;
+package dev.stemcraft.api.util.chatmenu;
 
 import net.kyori.adventure.text.Component;
 
