@@ -36,7 +36,7 @@ public interface TaskService {
      * Register a persistent callback for a specific type.
      *
      * @param persistentType The type of persistent task.
-     * @param callback       The callback to be invoked.
+     * @param callback The callback to be invoked.
      */
     void registerPersistentCallback(String persistentType, TaskCallback callback);
 
@@ -78,7 +78,7 @@ public interface TaskService {
      * Schedule task to run after a delay.
      *
      * @param delay The delay in ticks before execution.
-     * @param task  The task to be executed.
+     * @param task The task to be executed.
      */
     void runLater(long delay, Runnable task);
 
@@ -92,7 +92,7 @@ public interface TaskService {
     }
 
     /**
-     * Run an asynchronous task immediately
+     * Run an asynchronous task immediately.
      *
      * @param task The task to be executed.
      */
@@ -134,7 +134,7 @@ public interface TaskService {
      * Get the remaining time in ticks for a scheduled task by its ID.
      *
      * @param id The unique identifier of the task.
-     * @return The remaining time in ticks, or -1 if the task does not exist
+     * @return The remaining time in ticks, or -1 if the task does not exist.
      */
     long remaining(String id);
 
@@ -153,11 +153,11 @@ public interface TaskService {
     /**
      * Retry a task up to a maximum number of retries with a delay between attempts.
      *
-     * @param maxRetries   The maximum number of retry attempts.
-     * @param task         The task to be retried.
-     * @param callback     The callback to be invoked with the result.
+     * @param maxRetries The maximum number of retry attempts.
+     * @param task The task to be retried.
+     * @param callback The callback to be invoked with the result.
      * @param intervalDelay The delay in ticks between retry attempts.
-     * @param startDelay   The initial delay in ticks before the first attempt.
+     * @param startDelay The initial delay in ticks before the first attempt.
      */
     void retry(int maxRetries, TaskRetryable task, TaskRetryCallback callback, long intervalDelay, long startDelay);
     default void retry(int maxRetries, TaskRetryable task, TaskRetryCallback callback) { retry(5, task, callback, 1L, 1L); }

@@ -92,10 +92,10 @@ public class PlayerUtil {
     }
 
     /**
-     * Safely teleport the player to a location
+     * Safely teleport the player to a location.
      *
-     * @param player   The player to teleport
-     * @param location The location to teleport the player
+     * @param player The player to teleport.
+     * @param location The location to teleport the player.
      */
     public static void teleport(Player player, Location location) {
         CompletableFuture<Void> future = new CompletableFuture<>();
@@ -106,10 +106,10 @@ public class PlayerUtil {
     }
 
     /**
-     * Safely teleport the player to a location
-     * @param player The player to teleport
-     * @param location The location to teleport the player
-     * @param callback Callback once the teleport is complete
+     * Safely teleport the player to a location.
+     * @param player The player to teleport.
+     * @param location The location to teleport the player.
+     * @param callback Callback once the teleport is complete.
      */
     public static void teleport(Player player, Location location, Runnable callback) {
         STEMCraftAPI.api().tasks().nextTick(() -> {
@@ -150,10 +150,10 @@ public class PlayerUtil {
     }
 
     /**
-     * Test if a player is a BedRock player
+     * Test if a player is a BedRock player.
      *
      * @param player The player to test.
-     * @return If the player is a geyser
+     * @return If the player is a geyser.
      */
     public static boolean isBedrock(Player player) {
         if(isGeyserInstalled == null) {
@@ -234,7 +234,7 @@ public class PlayerUtil {
     }
 
     /**
-     * Async lookup of player name from Mojang API
+     * Async lookup of player name from Mojang API.
      *
      * @param uuid The player's UUID.
      * @return A CompletableFuture with the player's name or null if not found.

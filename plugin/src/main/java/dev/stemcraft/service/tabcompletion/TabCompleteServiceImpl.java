@@ -41,7 +41,7 @@ public class TabCompleteServiceImpl extends BaseService implements TabCompleteSe
      * Constructor for TabCompleteServiceImpl.
      *
      * @param plugin The STEMCraft plugin instance.
-     * @param api    The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      */
     public TabCompleteServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
@@ -57,7 +57,7 @@ public class TabCompleteServiceImpl extends BaseService implements TabCompleteSe
     /**
      * Register a new tab completion placeholder.
      *
-     * @param name     The name of the placeholder.
+     * @param name The name of the placeholder.
      * @param callback The callback to provide completions.
      */
     public void register(String name, TabCompletionProvider callback) {
@@ -67,9 +67,9 @@ public class TabCompleteServiceImpl extends BaseService implements TabCompleteSe
     /**
      * Get the completion list for a given placeholder.
      *
-     * @param name   The name of the placeholder.
+     * @param name The name of the placeholder.
      * @param player The player requesting the completions.
-     * @param args   Additional arguments for the completion provider.
+     * @param args Additional arguments for the completion provider.
      * @return A list of completion strings.
      */
     public List<String> getCompletionList(String name, Player player, String... args) {

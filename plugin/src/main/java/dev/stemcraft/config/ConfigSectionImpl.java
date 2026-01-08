@@ -135,7 +135,7 @@ public class ConfigSectionImpl implements ConfigSection {
      *
      * @param path The configuration path.
      * @param def The default value if the path does not exist.
-     * @return the integer value at the specified path, or the default value if not present
+     * @return the integer value at the specified path, or the default value if not present.
      */
     public int getInt(String path, int def) {
         persistDefault(path, def);
@@ -147,7 +147,7 @@ public class ConfigSectionImpl implements ConfigSection {
      *
      * @param path The configuration path.
      * @param def The default value if the path does not exist.
-     * @return the long value at the specified path, or the default value if not present
+     * @return the long value at the specified path, or the default value if not present.
      */
     public long getLong(String path, long def) {
         persistDefault(path, def);
@@ -159,7 +159,7 @@ public class ConfigSectionImpl implements ConfigSection {
      *
      * @param path The configuration path.
      * @param def The default value if the path does not exist.
-     * @return the float value at the specified path, or the default value if not present
+     * @return the float value at the specified path, or the default value if not present.
      */
     public float getFloat(String path, float def) {
         persistDefault(path, def);
@@ -171,7 +171,7 @@ public class ConfigSectionImpl implements ConfigSection {
      *
      * @param path The configuration path.
      * @param def The default value if the path does not exist.
-     * @return the double value at the specified path, or the default value if not present
+     * @return the double value at the specified path, or the default value if not present.
      */
     public double getDouble(String path, double def) {
         persistDefault(path, def);
@@ -183,7 +183,7 @@ public class ConfigSectionImpl implements ConfigSection {
      *
      * @param path The configuration path.
      * @param def The default value if the path does not exist.
-     * @return the boolean value at the specified path, or the default value if not present
+     * @return the boolean value at the specified path, or the default value if not present.
      */
     public boolean getBoolean(String path, boolean def) {
         persistDefault(path, def);

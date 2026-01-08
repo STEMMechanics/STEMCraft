@@ -33,7 +33,7 @@ public interface MiniGameHudProvider {
     /**
      * Provides HUD data for the specified player in the given mini-game arena.
      *
-     * @param arena  The mini-game arena.
+     * @param arena The mini-game arena.
      * @param player The player for whom to provide HUD data.
      * @return A map of HUD data key-value pairs.
      */

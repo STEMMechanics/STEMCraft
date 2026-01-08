@@ -38,15 +38,15 @@ public class ChatMenuService {
     private final static int ITEMS_PER_PAGE = 8;
 
     /**
-     * Render a Chat Menu for the player
+     * Render a Chat Menu for the player.
      *
-     * @param sender The command sender (player or console)
-     * @param title The title of the menu
-     * @param command The base command for pagination links
-     * @param page The current page number
-     * @param count The total number of items
-     * @param rendererFunc The function to render the menu items
-     * @param noneText The text to display if there are no items
+     * @param sender The command sender (player or console).
+     * @param title The title of the menu.
+     * @param command The base command for pagination links.
+     * @param page The current page number.
+     * @param count The total number of items.
+     * @param rendererFunc The function to render the menu items.
+     * @param noneText The text to display if there are no items.
      */
     public static void render(CommandSender sender, String title, String command, int page, int count, ChatMenuRenderer rendererFunc, String noneText) {
         if(count <= 0) {
@@ -97,10 +97,10 @@ public class ChatMenuService {
     }
 
     /**
-     * Generates the dash line texts with text centered ie ------ TITLE --------
+     * Generates the dash line texts with text centered ie ------ TITLE --------.
      *
-     * @param title The title component to center
-     * @return The formatted separator component
+     * @param title The title component to center.
+     * @return The formatted separator component.
      */
     private static Component createSeparatorString(Component title) {
         // Separator character and max chat width
@@ -126,12 +126,12 @@ public class ChatMenuService {
     }
 
     /**
-     * Get the page number requested from command args
+     * Get the page number requested from command args.
      *
-     * @param args The command arguments
-     * @param index The index to check for page number
-     * @param defaultPage The default page if none found
-     * @return The page number
+     * @param args The command arguments.
+     * @param index The index to check for page number.
+     * @param defaultPage The default page if none found.
+     * @return The page number.
      */
     public static int getPageFromArgs(List<String> args, int index, int defaultPage) {
         if (args != null && !args.isEmpty()) {

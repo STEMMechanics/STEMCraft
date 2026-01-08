@@ -73,9 +73,9 @@ public class HubFeature extends BaseFeature {
     }
 
     /**
-     * Run defined exit commands from config that match the world name
+     * Run defined exit commands from config that match the world name.
      *
-     * @param player The player exiting the world
+     * @param player The player exiting the world.
      */
     public void runExitCommands(Player player) {
         String currentWorldName = player.getWorld().getName();
@@ -102,7 +102,7 @@ public class HubFeature extends BaseFeature {
     }
 
     /**
-     * Load configuration data
+     * Load configuration data.
      */
     private void loadConfig() {
         String hubWorldName = getConfigSection().getString("world", "world");

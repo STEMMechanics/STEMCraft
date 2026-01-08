@@ -43,7 +43,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
      * Constructor for ItemServiceImpl.
      *
      * @param plugin The STEMCraft plugin instance.
-     * @param api    The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      */
     public ItemServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
@@ -73,8 +73,8 @@ public class ItemServiceImpl extends BaseService implements ItemService {
     /**
      * Adds an attribute to the ItemStack with the given key and value.
      *
-     * @param item  The ItemStack to modify.
-     * @param key   The key for the attribute.
+     * @param item The ItemStack to modify.
+     * @param key The key for the attribute.
      * @param value The value for the attribute.
      */
     @Override
@@ -94,7 +94,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
      * Checks if the ItemStack has an attribute with the given key.
      *
      * @param item The ItemStack to check.
-     * @param key  The key for the attribute.
+     * @param key The key for the attribute.
      * @return true if the attribute exists, false otherwise.
      */
     @Override
@@ -112,7 +112,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
      * Removes an attribute from the ItemStack with the given key.
      *
      * @param item The ItemStack to modify.
-     * @param key  The key for the attribute to remove.
+     * @param key The key for the attribute to remove.
      */
     @Override
     public void removeAttrib(ItemStack item, String key) {
@@ -127,9 +127,9 @@ public class ItemServiceImpl extends BaseService implements ItemService {
     /**
      * Retrieves an attribute from the ItemStack with the given key or returns a default value if not found.
      *
-     * @param item         The ItemStack to check.
-     * @param key          The key for the attribute.
-     * @param typeClass    The class of the type you're expecting (String.class, Byte.class, etc.).
+     * @param item The ItemStack to check.
+     * @param key The key for the attribute.
+     * @param typeClass The class of the type you're expecting (String.class, Byte.class, etc.).
      * @param defaultValue The default value to return if the attribute is not found or there's an issue.
      * @return The value of the attribute or the default value.
      */
@@ -193,7 +193,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
     /**
      * Registers a custom item template with the given id.
      *
-     * @param id       The unique identifier for the custom item.
+     * @param id The unique identifier for the custom item.
      * @param template The ItemStack template for the custom item.
      */
     @Override
@@ -213,7 +213,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
     /**
      * Creates a new ItemStack instance of the custom item with the given id and quantity.
      *
-     * @param id       The unique identifier for the custom item.
+     * @param id The unique identifier for the custom item.
      * @param quantity The quantity of the item stack.
      * @return A new ItemStack instance of the custom item, or null if not found or invalid parameters.
      */
@@ -236,7 +236,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
     /**
      * Checks if the given ItemStack matches the custom item with the specified id.
      *
-     * @param id   The unique identifier for the custom item.
+     * @param id The unique identifier for the custom item.
      * @param item The ItemStack to check.
      * @return true if the ItemStack matches the custom item id, false otherwise.
      */

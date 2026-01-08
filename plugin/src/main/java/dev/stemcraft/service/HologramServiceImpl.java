@@ -62,7 +62,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
      * Constructor for HologramServiceImpl.
      *
      * @param plugin The STEMCraft plugin instance.
-     * @param api    The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      */
     public HologramServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
@@ -75,11 +75,13 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         this.config = api.config().load("holograms.yml");
 
         registerType("", new HologramTypeHandler() {
+            /** {@inheritDoc} */
             @Override
             public List<String> list(String type) {
                 return null;
             }
 
+            /** {@inheritDoc} */
             @Override
             public List<String> lines(String type, String context, int id, List<String> data) {
                 return data;
@@ -326,7 +328,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
     /**
      * Register a new hologram type handler.
      *
-     * @param type    The hologram type.
+     * @param type The hologram type.
      * @param handler The handler for the hologram type.
      */
     @Override
@@ -344,10 +346,10 @@ public class HologramServiceImpl extends BaseService implements HologramService 
     /**
      * Create a new hologram.
      *
-     * @param type     The hologram type.
-     * @param context  The hologram context.
+     * @param type The hologram type.
+     * @param context The hologram context.
      * @param location The location of the hologram.
-     * @param data     The data for the hologram.
+     * @param data The data for the hologram.
      * @return The ID of the created hologram.
      */
     @Override
@@ -378,7 +380,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
     /**
      * Update an existing hologram.
      *
-     * @param id   The ID of the hologram to update.
+     * @param id The ID of the hologram to update.
      * @param data The new data for the hologram.
      */
     @Override
@@ -402,7 +404,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
     /**
      * Update holograms by type and context.
      *
-     * @param type    The hologram type to update.
+     * @param type The hologram type to update.
      * @param context The hologram context to update (or null for all contexts).
      */
     @Override
@@ -431,7 +433,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
     /**
      * Move an existing hologram to a new location.
      *
-     * @param id          The ID of the hologram to move.
+     * @param id The ID of the hologram to move.
      * @param newLocation The new location for the hologram.
      */
     @Override
@@ -471,7 +473,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
     /**
      * Delete holograms by type and context.
      *
-     * @param type    The hologram type to delete.
+     * @param type The hologram type to delete.
      * @param context The hologram context to delete (or null for all contexts).
      */
     @Override
@@ -722,8 +724,8 @@ public class HologramServiceImpl extends BaseService implements HologramService 
     /**
      * Load holograms from the configuration for a specific world and optional type filter.
      *
-     * @param limitType  The hologram type to filter by (or null for all types).
-     * @param worldName  The name of the world to load holograms from.
+     * @param limitType The hologram type to filter by (or null for all types).
+     * @param worldName The name of the world to load holograms from.
      */
     private void loadHolograms(String limitType, String worldName) {
         World world = Bukkit.getWorld(worldName);

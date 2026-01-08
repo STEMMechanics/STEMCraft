@@ -28,8 +28,8 @@ public class PackMetaGenerator extends ResourcePackGenerator {
     /**
      * Generates the pack.mcmeta file for the resource pack.
      *
-     * @param manifest       The manifest configuration section (not used in this generator).
-     * @param resourcePackDir  The resource pack directory where pack.mcmeta will be created.
+     * @param manifest The manifest configuration section (not used in this generator).
+     * @param resourcePackDir The resource pack directory where pack.mcmeta will be created.
      */
     @Override
     public void buildStart(ConfigSection manifest, File resourcePackDir) {

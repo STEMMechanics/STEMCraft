@@ -54,10 +54,10 @@ public class CommandContextImpl implements CommandContext {
     /**
      * Constructor for CommandContextImpl.
      *
-     * @param command   The command being executed.
-     * @param sender    The sender of the command.
+     * @param command The command being executed.
+     * @param sender The sender of the command.
      * @param labelUsed The label used to invoke the command.
-     * @param args      The arguments passed to the command.
+     * @param args The arguments passed to the command.
      */
     public CommandContextImpl(Command command, CommandSender sender, String labelUsed, List<String> args) {
         this.command = command;
@@ -105,7 +105,7 @@ public class CommandContextImpl implements CommandContext {
      * Dispatches another command as the current sender.
      *
      * @param label The command label to dispatch.
-     * @param args  The arguments to pass to the command.
+     * @param args The arguments to pass to the command.
      * @throws CommandException if the command is not found or to stop execution.
      */
     @Override
@@ -171,10 +171,10 @@ public class CommandContextImpl implements CommandContext {
 
      * Examples:
      *  - hasFlag("-force")
-     *  - hasFlag("force")
+     *  - hasFlag("force").
      *
      *  @param flag The flag to check.
-     *  @param def  The default value to return if the flag is null or empty
+     *  @param def The default value to return if the flag is null or empty.
      *  @return true if the flag is present, false otherwise.
      */
     @Override
@@ -194,11 +194,11 @@ public class CommandContextImpl implements CommandContext {
 
      * Example:
      *   /cmd something course:parkour1
-     *   getOption("course") -> "parkour1"
+     *   getOption("course") -> "parkour1".
      *
      *   @param key The option key to retrieve.
      *   @param def The default value to return if the key is null, empty, or not found.
-     *   @return The option value, or the default value if not found
+     *   @return The option value, or the default value if not found.
      */
     @Override
     public String getOption(String key, String def) {
@@ -222,8 +222,8 @@ public class CommandContextImpl implements CommandContext {
     /**
      * Sends a warning message to the command sender.
      *
-     * @param message The message to send to the sender
-     * @param placeholders The placeholders to replace in the message
+     * @param message The message to send to the sender.
+     * @param placeholders The placeholders to replace in the message.
      */
     @Override
     public void warn(String message, Object... placeholders) {
@@ -233,8 +233,8 @@ public class CommandContextImpl implements CommandContext {
     /**
      * Sends an error message to the command sender.
      *
-     * @param message The message to send to the sender
-     * @param placeholders The placeholders to replace in the message
+     * @param message The message to send to the sender.
+     * @param placeholders The placeholders to replace in the message.
      */
     @Override
     public void error(String message, Object... placeholders) {
@@ -244,8 +244,8 @@ public class CommandContextImpl implements CommandContext {
     /**
      * Sends a success message to the command sender.
      *
-     * @param message The message to send to the sender
-     * @param placeholders The placeholders to replace in the message
+     * @param message The message to send to the sender.
+     * @param placeholders The placeholders to replace in the message.
      */
     @Override
     public void success(String message, Object... placeholders) {
@@ -255,8 +255,8 @@ public class CommandContextImpl implements CommandContext {
     /**
      * Sends an info message to the command sender and stops further command execution.
      *
-     * @param message The message to send to the sender
-     * @param placeholders The placeholders to replace in the message
+     * @param message The message to send to the sender.
+     * @param placeholders The placeholders to replace in the message.
      */
     @Override
     public void returnInfo(String message, Object... placeholders) {
@@ -266,8 +266,8 @@ public class CommandContextImpl implements CommandContext {
     /**
      * Sends a warning message to the command sender and stops further command execution.
      *
-     * @param message The message to send to the sender
-     * @param placeholders The placeholders to replace in the message
+     * @param message The message to send to the sender.
+     * @param placeholders The placeholders to replace in the message.
      */
     @Override
     public void returnWarn(String message, Object... placeholders) {
@@ -277,8 +277,8 @@ public class CommandContextImpl implements CommandContext {
     /**
      * Sends an error message to the command sender and stops further command execution.
      *
-     * @param message The message to send to the sender
-     * @param placeholders The placeholders to replace in the message
+     * @param message The message to send to the sender.
+     * @param placeholders The placeholders to replace in the message.
      */
     @Override
     public void returnError(String message, Object... placeholders) {
@@ -288,8 +288,8 @@ public class CommandContextImpl implements CommandContext {
     /**
      * Sends a success message to the command sender and stops further command execution.
      *
-     * @param message The message to send to the sender
-     * @param placeholders The placeholders to replace in the message
+     * @param message The message to send to the sender.
+     * @param placeholders The placeholders to replace in the message.
      */
     @Override
     public void returnSuccess(String message, Object... placeholders) {
@@ -364,7 +364,7 @@ public class CommandContextImpl implements CommandContext {
      * Gets the argument at the specified index, or a default value if not found.
      *
      * @param index The index of the argument to retrieve.
-     * @param def   The default value to return if the argument is not found.
+     * @param def The default value to return if the argument is not found.
      * @return The argument at the specified index, or the default value.
      */
     @Override
@@ -401,11 +401,11 @@ public class CommandContextImpl implements CommandContext {
     /**
      * Gets the argument at the specified index as a float.
      *
-     * @param index The argument index
-     * @param def The default value if not present
-     * @param min The minimum value, or null for no minimum
-     * @param max The maximum value, or null for no maximum
-     * @return The argument as a float
+     * @param index The argument index.
+     * @param def The default value if not present.
+     * @param min The minimum value, or null for no minimum.
+     * @param max The maximum value, or null for no maximum.
+     * @return The argument as a float.
      */
     @Override
     public float getArgAsFloat(int index, float def, Float min, Float max) {
@@ -430,11 +430,11 @@ public class CommandContextImpl implements CommandContext {
     /**
      * Gets the argument at the specified index as a double.
      *
-     * @param index The argument index
-     * @param def The default value if not present
-     * @param min The minimum value, or null for no minimum
-     * @param max The maximum value, or null for no maximum
-     * @return The argument as a double
+     * @param index The argument index.
+     * @param def The default value if not present.
+     * @param min The minimum value, or null for no minimum.
+     * @param max The maximum value, or null for no maximum.
+     * @return The argument as a double.
      */
     @Override
     public double getArgAsDouble(int index, double def, Double min, Double max) {
@@ -459,11 +459,11 @@ public class CommandContextImpl implements CommandContext {
     /**
      * Gets the argument at the specified index as an integer.
      *
-     * @param index The argument index
-     * @param def The default value if not present
-     * @param min The minimum value, or null for no minimum
-     * @param max The maximum value, or null for no maximum
-     * @return The argument as an integer
+     * @param index The argument index.
+     * @param def The default value if not present.
+     * @param min The minimum value, or null for no minimum.
+     * @param max The maximum value, or null for no maximum.
+     * @return The argument as an integer.
      */
     @Override
     public int getArgAsInt(int index, int def, Integer min, Integer max) {
@@ -488,9 +488,9 @@ public class CommandContextImpl implements CommandContext {
     /**
      * Gets the argument at the specified index as a boolean.
      *
-     * @param index The argument index
-     * @param def The default value if not present
-     * @return The argument as a boolean
+     * @param index The argument index.
+     * @param def The default value if not present.
+     * @return The argument as a boolean.
      */
     @Override
     public boolean getArgAsBoolean(int index, boolean def) {
@@ -505,9 +505,9 @@ public class CommandContextImpl implements CommandContext {
     /**
      * Gets the argument at the specified index as a Player.
      *
-     * @param index The argument index
-     * @param def The default CommandSender if not present
-     * @return The argument as a Player
+     * @param index The argument index.
+     * @param def The default CommandSender if not present.
+     * @return The argument as a Player.
      */
     @Override
     public Player getArgAsPlayer(int index, CommandSender def) {
@@ -530,9 +530,9 @@ public class CommandContextImpl implements CommandContext {
     /**
      * Gets the argument at the specified index as an OfflinePlayer.
      *
-     * @param index The argument index
-     * @param def The default CommandSender if not present
-     * @return The argument as an OfflinePlayer
+     * @param index The argument index.
+     * @param def The default CommandSender if not present.
+     * @return The argument as an OfflinePlayer.
      */
     @Override
     public OfflinePlayer getArgAsOfflinePlayer(int index, CommandSender def) {
@@ -551,9 +551,9 @@ public class CommandContextImpl implements CommandContext {
     /**
      * Gets the argument at the specified index as a World.
      *
-     * @param index The argument index
-     * @param def The default World if not present
-     * @return The argument as a World
+     * @param index The argument index.
+     * @param def The default World if not present.
+     * @return The argument as a World.
      */
     @Override
     public World getArgAsWorld(int index, World def) {
@@ -569,9 +569,9 @@ public class CommandContextImpl implements CommandContext {
     /**
      * Gets the argument at the specified index as a Duration.
      *
-     * @param index The argument index
-     * @param def The default Duration if not present
-     * @return The argument as a Duration
+     * @param index The argument index.
+     * @param def The default Duration if not present.
+     * @return The argument as a Duration.
      */
     @Override
     public Duration getArgAsDuration(int index, Duration def) {
@@ -591,7 +591,7 @@ public class CommandContextImpl implements CommandContext {
     /**
      * Checks if the number of arguments is at least the specified size.
      *
-     * @param size  The minimum number of arguments required.
+     * @param size The minimum number of arguments required.
      * @param error The error message to throw if the check fails.
      */
     @Override
@@ -827,9 +827,9 @@ public class CommandContextImpl implements CommandContext {
     /**
      * Sends an info message to the command sender.
      *
-     * @param message The message to send to the sender
-     * @param ret Whether to stop further command execution
-     * @param placeholders Placeholders for the message
+     * @param message The message to send to the sender.
+     * @param ret Whether to stop further command execution.
+     * @param placeholders Placeholders for the message.
      */
     private void infoImpl(String message, boolean ret, Object... placeholders) {
         command.info(sender, message, placeholders);
@@ -841,9 +841,9 @@ public class CommandContextImpl implements CommandContext {
     /**
      * Sends a warning message to the command sender.
      *
-     * @param message The message to send to the sender
-     * @param ret Whether to stop further command execution
-     * @param placeholders Placeholders for the message
+     * @param message The message to send to the sender.
+     * @param ret Whether to stop further command execution.
+     * @param placeholders Placeholders for the message.
      */
     private void warnImpl(String message, boolean ret, Object... placeholders) {
         command.warn(sender, message, placeholders);
@@ -855,9 +855,9 @@ public class CommandContextImpl implements CommandContext {
     /**
      * Sends an error message to the command sender.
      *
-     * @param message The message to send to the sender
-     * @param ret Whether to stop further command execution
-     * @param placeholders Placeholders for the message
+     * @param message The message to send to the sender.
+     * @param ret Whether to stop further command execution.
+     * @param placeholders Placeholders for the message.
      */
     private void errorImpl(String message, boolean ret, Object... placeholders) {
         command.error(sender, message, placeholders);
@@ -869,9 +869,9 @@ public class CommandContextImpl implements CommandContext {
     /**
      * Sends a success message to the command sender.
      *
-     * @param message The message to send to the sender
-     * @param ret Whether to stop further command execution
-     * @param placeholders Placeholders for the message
+     * @param message The message to send to the sender.
+     * @param ret Whether to stop further command execution.
+     * @param placeholders Placeholders for the message.
      */
     private void successImpl(String message, boolean ret, Object... placeholders) {
         command.success(sender, message, placeholders);

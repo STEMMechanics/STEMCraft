@@ -29,11 +29,11 @@ public record MessagePrefixes(String log, String info, String warn, String error
     /**
      * Constructor for MessagePrefixes.
      *
-     * @param log       The log message prefix.
-     * @param info      The info message prefix.
-     * @param warn      The warn message prefix.
-     * @param error     The error message prefix.
-     * @param success   The success message prefix.
+     * @param log The log message prefix.
+     * @param info The info message prefix.
+     * @param warn The warn message prefix.
+     * @param error The error message prefix.
+     * @param success The success message prefix.
      * @param broadcast The broadcast message prefix.
      */
     public MessagePrefixes { }

@@ -48,10 +48,10 @@ public class WorldCommand {
     private Command command;
 
     /**
-     * Constructor
+     * Constructor.
      *
-     * @param api STEMCraft API instance
-     * @param worldService World service implementation
+     * @param api STEMCraft API instance.
+     * @param worldService World service implementation.
      */
     public WorldCommand(STEMCraftAPI api, WorldServiceImpl worldService) {
         this.api = api;
@@ -59,7 +59,7 @@ public class WorldCommand {
     }
 
     /**
-     * Enable the world command
+     * Enable the world command.
      */
     public void onEnable() {
         command = api.commands().create("world")
@@ -79,7 +79,7 @@ public class WorldCommand {
     }
 
     /**
-     * Clean up on plugin disable
+     * Clean up on plugin disable.
      */
     @SuppressWarnings("EmptyMethod")
     public void onDisable() {
@@ -87,11 +87,11 @@ public class WorldCommand {
     }
 
     /**
-     * The command handler for a world command
+     * The command handler for a world command.
      *
-     * @param unused The STEMCraft API instance
-     * @param cmd The command being executed
-     * @param ctx The command context
+     * @param unused The STEMCraft API instance.
+     * @param cmd The command being executed.
+     * @param ctx The command context.
      */
     public void onCommand(STEMCraftAPI unused, Command cmd, CommandContext ctx) {
         if(ctx.numArgs() == 0) { ctx.returnUsage(); }
@@ -121,11 +121,11 @@ public class WorldCommand {
     }
 
     /**
-     * Get the world from the command argument, or the sender's world if not specified
+     * Get the world from the command argument, or the sender's world if not specified.
      *
-     * @param ctx The command context
-     * @param argIndex The argument index to check for the world name
-     * @return The world instance
+     * @param ctx The command context.
+     * @param argIndex The argument index to check for the world name.
+     * @return The world instance.
      */
     public World getWorldFromArg(CommandContext ctx, int argIndex) {
         World world = ctx.getArgAsWorld(argIndex);
@@ -141,9 +141,9 @@ public class WorldCommand {
     }
 
     /**
-     * Handle the 'create' sub-command
+     * Handle the 'create' sub-command.
      *
-     * @param ctx The command context
+     * @param ctx The command context.
      */
     public void handleSubCommandCreate(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2, "WORLD_COMMAND_USAGE_CREATE");
@@ -162,9 +162,9 @@ public class WorldCommand {
     }
 
     /**
-     * Handle the 'delete' sub-command
+     * Handle the 'delete' sub-command.
      *
-     * @param ctx The command context
+     * @param ctx The command context.
      */
     public void handleSubCommandDelete(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2, "WORLD_COMMAND_USAGE_DELETE");
@@ -203,9 +203,9 @@ public class WorldCommand {
     }
 
     /**
-     * Handle the 'load' sub-command
+     * Handle the 'load' sub-command.
      *
-     * @param ctx The command context
+     * @param ctx The command context.
      */
     public void handleSubCommandLoad(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2, "WORLD_COMMAND_USAGE_LOAD");
@@ -224,9 +224,9 @@ public class WorldCommand {
     }
 
     /**
-     * Handle the 'unload' sub-command
+     * Handle the 'unload' sub-command.
      *
-     * @param ctx The command context
+     * @param ctx The command context.
      */
     public void handleSubCommandUnload(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2, "WORLD_COMMAND_USAGE_UNLOAD");
@@ -246,9 +246,9 @@ public class WorldCommand {
     }
 
     /**
-     * Handle the 'list' sub-command
+     * Handle the 'list' sub-command.
      *
-     * @param ctx The command context
+     * @param ctx The command context.
      */
     public void handleSubCommandList(CommandContext ctx) {
         List<String> worlds = api.worlds().listWorlds();
@@ -304,9 +304,9 @@ public class WorldCommand {
     }
 
     /**
-     * Handle the 'duplicate' sub-command
+     * Handle the 'duplicate' sub-command.
      *
-     * @param ctx The command context
+     * @param ctx The command context.
      */
     public void handleSubCommandDuplicate(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3, "WORLD_COMMAND_USAGE_DUPLICATE");
@@ -323,9 +323,9 @@ public class WorldCommand {
     }
 
     /**
-     * Handle the 'listgenerators' sub-command
+     * Handle the 'listgenerators' sub-command.
      *
-     * @param ctx The command context
+     * @param ctx The command context.
      */
     public void handleSubCommandListGenerators(CommandContext ctx) {
         if (worldService.generator().list().isEmpty()) {
@@ -341,9 +341,9 @@ public class WorldCommand {
     }
 
     /**
-     * Handle the 'setspawn' sub-command
+     * Handle the 'setspawn' sub-command.
      *
-     * @param ctx The command context
+     * @param ctx The command context.
      */
     public void handleSubCommandSetSpawn(CommandContext ctx) {
         ctx.checkNotConsole();
@@ -357,11 +357,11 @@ public class WorldCommand {
     }
 
     /**
-     * Handle the 'flags' sub-command
+     * Handle the 'flags' sub-command.
      *
-     * @param flag The flag being modified
-     * @param ctx The command context
-     * @param world The world to apply the flag command to
+     * @param flag The flag being modified.
+     * @param ctx The command context.
+     * @param world The world to apply the flag command to.
      */
     public void handleSubCommandFlags(String flag, CommandContext ctx, World world) {
         if(flag.isEmpty()) {
@@ -381,11 +381,11 @@ public class WorldCommand {
     }
 
     /**
-     * Handle unknown sub-commands by delegating to registered handlers
+     * Handle unknown sub-commands by delegating to registered handlers.
      *
-     * @param subCommand The sub-command being executed
-     * @param ctx The command context
-     * @param world The world to apply the command to
+     * @param subCommand The sub-command being executed.
+     * @param ctx The command context.
+     * @param world The world to apply the command to.
      */
     private void handleUnknownSubCommand(String subCommand, CommandContext ctx, World world) {
         WorldBaseSetting setting = worldService.getSettingHandler(subCommand, WorldService.SettingCommandMode.SUBCOMMAND);

@@ -51,7 +51,7 @@ public class WorldGameModeSetting implements WorldBaseSetting {
     /**
      * Called when the setting is enabled.
      *
-     * @param api     The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      * @param service The WorldService instance.
      */
     @Override
@@ -88,9 +88,9 @@ public class WorldGameModeSetting implements WorldBaseSetting {
     /**
      * Handle the command for this setting.
      *
-     * @param ctx    The command context.
+     * @param ctx The command context.
      * @param config The configuration section for the world.
-     * @param world  The world to apply the setting to.
+     * @param world The world to apply the setting to.
      */
     @Override
     public void onCommand(CommandContext ctx, ConfigSection config, World world) {
@@ -137,9 +137,9 @@ public class WorldGameModeSetting implements WorldBaseSetting {
     /**
      * Set the value of this setting for the given world in the config.
      *
-     * @param world  The world to apply the setting to.
+     * @param world The world to apply the setting to.
      * @param config The configuration section for the world.
-     * @param value  The value to set (adventure, creative, spectator, survival, unset).
+     * @param value The value to set (adventure, creative, spectator, survival, unset).
      */
     @Override
     public void set(World world, ConfigSection config, String value) {

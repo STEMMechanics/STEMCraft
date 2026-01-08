@@ -179,7 +179,7 @@ public class PlayerSpeed extends BaseFeature {
      * Converts a real speed value used by Bukkit to a display speed value.
      *
      * @param realSpeed The real speed value used by Bukkit.
-     * @param isFly     True for flying speed, false for walking speed.
+     * @param isFly True for flying speed, false for walking speed.
      * @return The display speed value (1.0 to 10.0).
      */
     private float getDisplaySpeed(final float realSpeed, final boolean isFly) {

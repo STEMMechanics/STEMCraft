@@ -31,16 +31,16 @@ public abstract class ResourcePackGenerator {
     /**
      * Called at the start of the build process.
      *
-     * @param manifest         The manifest configuration section.
-     * @param resourcePackDir  The output directory for resource pack files.
+     * @param manifest The manifest configuration section.
+     * @param resourcePackDir The output directory for resource pack files.
      */
     public void buildStart(ConfigSection manifest, File resourcePackDir) { }
 
     /**
      * Called at the end of the build process.
      *
-     * @param manifest         The manifest configuration section.
-     * @param resourcePackDir  The output directory for resource pack files.
+     * @param manifest The manifest configuration section.
+     * @param resourcePackDir The output directory for resource pack files.
      */
     @SuppressWarnings("EmptyMethod")
     public void buildEnd(ConfigSection manifest, File resourcePackDir) { }
@@ -48,20 +48,20 @@ public abstract class ResourcePackGenerator {
     /**
      * Called to build the resource pack from existing data pack files.
      *
-     * @param dataPackDir      The output directory for data pack files.
-     * @param resourcePackDir  The output directory for resource pack files.
-     * @param manifest         The manifest configuration section.
+     * @param dataPackDir The output directory for data pack files.
+     * @param resourcePackDir The output directory for resource pack files.
+     * @param manifest The manifest configuration section.
      */
     public void buildFromDataPack(File dataPackDir, ConfigSection manifest, File resourcePackDir) { }
 
     /**
      * Called to build the resource pack based on data pack configuration.
      *
-     * @param dataPackDir      The output directory for data pack files.
-     * @param resourcePackDir  The output directory for resource pack files.
-     * @param namespace        The namespace to use for generated assets.
-     * @param config           The configuration section for generator settings.
-     * @param manifest         The manifest configuration section.
+     * @param dataPackDir The output directory for data pack files.
+     * @param resourcePackDir The output directory for resource pack files.
+     * @param namespace The namespace to use for generated assets.
+     * @param config The configuration section for generator settings.
+     * @param manifest The manifest configuration section.
      */
     public void buildFromDataPackConfig(String namespace, ConfigSection config, File dataPackDir, ConfigSection manifest, File resourcePackDir) { }
 
@@ -69,7 +69,7 @@ public abstract class ResourcePackGenerator {
      * Applies additional modifications to the resource pack based on the manifest.
      *
      * @param namespace The namespace to use for generated assets.
-     * @param manifest  The manifest configuration section.
+     * @param manifest The manifest configuration section.
      */
     public void apply(String namespace, ConfigSectionView manifest) { }
 }

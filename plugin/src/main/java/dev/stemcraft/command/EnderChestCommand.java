@@ -36,7 +36,7 @@ public class EnderChestCommand extends BaseCommand {
      * Constructs the EnderChestCommand.
      *
      * @param plugin The STEMCraft plugin instance.
-     * @param api    The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      */
     public EnderChestCommand(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);

@@ -52,7 +52,7 @@ public class TaskServiceImpl extends BaseService implements TaskService {
      * Constructor for TaskServiceImpl.
      *
      * @param plugin The STEMCraft plugin instance.
-     * @param api    The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      */
     public TaskServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
@@ -89,7 +89,7 @@ public class TaskServiceImpl extends BaseService implements TaskService {
      * Register a persistent timer callback type.
      *
      * @param persistentType The unique type name for this callback.
-     * @param callback       The callback to invoke when the timer runs.
+     * @param callback The callback to invoke when the timer runs.
      */
     @Override
     public void registerPersistentCallback(String persistentType, TaskCallback callback) {
@@ -98,12 +98,12 @@ public class TaskServiceImpl extends BaseService implements TaskService {
     }
 
     /**
-     * Schedule a timer
+     * Schedule a timer.
      *
      * @param persistentType The callback type.
-     * @param id             The unique timer id.
-     * @param data           The serialized data for the timer.
-     * @param delay          The delay in ticks before running.
+     * @param id The unique timer id.
+     * @param data The serialized data for the timer.
+     * @param delay The delay in ticks before running.
      */
     @Override
     public void runLaterPersistent(String persistentType, String id, String data, long delay) {
@@ -139,7 +139,7 @@ public class TaskServiceImpl extends BaseService implements TaskService {
     /**
      * Set the persistent data for a timer.
      *
-     * @param id   The unique timer id.
+     * @param id The unique timer id.
      * @param data The serialized data to store.
      */
     @Override
@@ -176,7 +176,7 @@ public class TaskServiceImpl extends BaseService implements TaskService {
      * Runs a task later after a delay.
      *
      * @param delay The delay in ticks.
-     * @param task  The task to run.
+     * @param task The task to run.
      */
     @Override
     public void runLater(long delay, Runnable task) {
@@ -193,6 +193,7 @@ public class TaskServiceImpl extends BaseService implements TaskService {
         Bukkit.getScheduler().runTaskAsynchronously(InstanceHolder.plugin(), task);
     }
 
+    /** {@inheritDoc} */
     @Override
     public void runSync(Runnable task) {
         Bukkit.getScheduler().runTask(InstanceHolder.plugin(), task);
@@ -202,9 +203,9 @@ public class TaskServiceImpl extends BaseService implements TaskService {
     /**
      * Runs once after delay. Cancels previous task with same id.
      *
-     * @param id    The unique task id.
+     * @param id The unique task id.
      * @param delay The delay in ticks.
-     * @param task  The task to run.
+     * @param task The task to run.
      */
     @Override
     public void runOnceDelay(String id, long delay, Runnable task) {
@@ -329,10 +330,10 @@ public class TaskServiceImpl extends BaseService implements TaskService {
     /**
      * Runs a repeating task with given period. Cancels previous task with same id.
      *
-     * @param id     The unique task id.
-     * @param delay  The delay in ticks before first run.
+     * @param id The unique task id.
+     * @param delay The delay in ticks before first run.
      * @param period The period in ticks between runs.
-     * @param task   The task to run.
+     * @param task The task to run.
      */
     @Override
     public void repeating(String id, long delay, long period, Runnable task) {
@@ -367,11 +368,11 @@ public class TaskServiceImpl extends BaseService implements TaskService {
     /**
      * Retry a task multiple times with delay intervals.
      *
-     * @param maxRetries    The maximum number of retries.
-     * @param task          The task to retry.
-     * @param callback      The callback to invoke when done.
+     * @param maxRetries The maximum number of retries.
+     * @param task The task to retry.
+     * @param callback The callback to invoke when done.
      * @param intervalDelay The delay in ticks between retries.
-     * @param startDelay    The initial delay in ticks before first attempt.
+     * @param startDelay The initial delay in ticks before first attempt.
      */
     public void retry(int maxRetries, TaskRetryable task, TaskRetryCallback callback, long intervalDelay, long startDelay) {
         retry0(maxRetries, task, callback, intervalDelay, startDelay, true);
@@ -424,7 +425,7 @@ public class TaskServiceImpl extends BaseService implements TaskService {
      * Schedule a persistent timer to run at its stored time.
      *
      * @param type The callback type.
-     * @param id   The unique timer id.
+     * @param id The unique timer id.
      */
     private void schedulePersistentTimer(String type, String id) {
         if(tasks.containsKey(id)) {

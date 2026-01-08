@@ -86,8 +86,8 @@ public final class TeamNames {
      * Checks whether the given team name matches one of the predefined
      * MiniGame team identifiers.
      *
-     * @param name the team name to check, may be {@code null}
-     * @return {@code true} if the name matches a predefined team identifier,
+     * @param name the team name to check, may be {@code null}.
+     * @return {@code true} if the name matches a predefined team identifier,.
      *         {@code false} otherwise
      */
     public static boolean isPredefinedName(String name) {
@@ -98,8 +98,8 @@ public final class TeamNames {
     /**
      * Normalises a team name to the canonical lowercase form used by the API.
      *
-     * @param name the team name to normalise, may be {@code null}
-     * @return the normalised team name, or {@code null} if the input was {@code null}
+     * @param name the team name to normalise, may be {@code null}.
+     * @return the normalised team name, or {@code null} if the input was {@code null}.
      */
     public static String normalize(String name) {
         return name == null ? null : name.toLowerCase();
@@ -110,7 +110,7 @@ public final class TeamNames {
      *
      * This can be used for UI, validation, or documentation purposes.
      *
-     * @return an unmodifiable set of predefined team identifiers
+     * @return an unmodifiable set of predefined team identifiers.
      */
     public static Set<String> predefined() {
         return PREDEFINED;
@@ -119,8 +119,8 @@ public final class TeamNames {
     /**
      * Get the wool material associated with a predefined team name.
      *
-     * @param name the team name
-     * @return the corresponding wool Material, or WHITE_WOOL if the name is not recognized
+     * @param name the team name.
+     * @return the corresponding wool Material, or WHITE_WOOL if the name is not recognized.
      */
     public static Material getMaterial(String name) {
         return switch (name.toLowerCase()) {

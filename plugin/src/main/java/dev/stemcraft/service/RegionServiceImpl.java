@@ -58,14 +58,14 @@ public class RegionServiceImpl extends BaseService implements RegionService {
      * Constructor for RegionServiceImpl.
      *
      * @param plugin The STEMCraft plugin instance.
-     * @param api    The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      */
     public RegionServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
     }
 
     /**
-     * Initializes the region service
+     * Initializes the region service.
      */
     @Override
     public void onEnable() {
@@ -138,8 +138,8 @@ public class RegionServiceImpl extends BaseService implements RegionService {
      * Adds a region listener for a specific region.
      *
      * @param namespaceId The namespace ID of the region listener.
-     * @param region      The SCRegion to listen to.
-     * @param listener    The RegionListener to notify on enter/exit events.
+     * @param region The SCRegion to listen to.
+     * @param listener The RegionListener to notify on enter/exit events.
      */
     public void addListener(String namespaceId, SCRegion region, RegionListener listener) {
         NamespaceId.checkValid(namespaceId);
@@ -151,8 +151,8 @@ public class RegionServiceImpl extends BaseService implements RegionService {
      * Adds a region listener for a specific world.
      *
      * @param namespaceId The namespace ID of the world listener.
-     * @param world       The World to listen to.
-     * @param listener    The RegionListener to notify on enter/exit world events.
+     * @param world The World to listen to.
+     * @param listener The RegionListener to notify on enter/exit world events.
      */
     public void addListener(String namespaceId, World world, RegionListener listener) {
         listeners.put(namespaceId, new RegionListenerEntry(null, world, listener));
@@ -188,7 +188,7 @@ public class RegionServiceImpl extends BaseService implements RegionService {
     /**
      * Checks if a player is currently within a region or world listener by its ID.
      *
-     * @param player      The player to check.
+     * @param player The player to check.
      * @param namespaceId The namespace ID of the region or world listener.
      * @return True if the player is within the region or world, false otherwise.
      */

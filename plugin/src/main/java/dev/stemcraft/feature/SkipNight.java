@@ -46,16 +46,16 @@ public class SkipNight extends BaseFeature {
     private final HashMap<World, Integer> worldRandomTickCount = new HashMap<>();
 
     /**
-     * Constructor
+     * Constructor.
      *
-     * @param api The STEMCraft API instance
+     * @param api The STEMCraft API instance.
      */
     public SkipNight(STEMCraftAPI api) {
         super(api);
     }
 
     /**
-     * When the feature is enabled
+     * When the feature is enabled.
      */
     @Override
     public void onEnable() {
@@ -145,16 +145,16 @@ public class SkipNight extends BaseFeature {
     }
 
     /**
-     * Update All Sleepers in each world
+     * Update All Sleepers in each world.
      */
     private void updateAllSleepers() {
         worlds.forEach((world, bossbar) -> updateSleepers(world));
     }
 
     /**
-     * Update Sleepers in the specified world
+     * Update Sleepers in the specified world.
      *
-     * @param world The world to update
+     * @param world The world to update.
      */
     private void updateSleepers(World world) {
         List<Player> players = world.getPlayers();
@@ -218,9 +218,9 @@ public class SkipNight extends BaseFeature {
     }
 
     /**
-     * Skip the night of a specified world
+     * Skip the night of a specified world.
      *
-     * @param world The world to skip the night
+     * @param world The world to skip the night.
      */
     private void skipNight(World world) {
         if (!worldRandomTickCount.containsKey(world)) {
@@ -236,9 +236,9 @@ public class SkipNight extends BaseFeature {
     }
 
     /**
-     * Skip the night of a specified world
+     * Skip the night of a specified world.
      *
-     * @param world The world to skip the night
+     * @param world The world to skip the night.
      */
     private void skipNightStep(World world) {
         api.tasks().runOnceDelay("skip_night_" + world.getName(), 1, () -> {
@@ -255,9 +255,9 @@ public class SkipNight extends BaseFeature {
     }
 
     /**
-     * Complete the skip night task
+     * Complete the skip night task.
      *
-     * @param world The world to finish
+     * @param world The world to finish.
      */
     private void skipNightFinish(World world) {
         if (worldRandomTickCount.containsKey(world)) {
@@ -267,13 +267,12 @@ public class SkipNight extends BaseFeature {
     }
 
     /**
-     * Are we skipping the night in the specified world
+     * Are we skipping the night in the specified world.
      *
-     * @param world The world to check
-     * @return boolean True if the night being skipped
+     * @param world The world to check.
+     * @return boolean True if the night being skipped.
      */
     public boolean isSkippingNight(World world) {
         return worldRandomTickCount.containsKey(world);
     }
 }
-

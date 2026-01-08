@@ -16,7 +16,7 @@ public class ResourcePackCommand {
     /**
      * Constructs a ResourcePackCommand with the specified API and service.
      *
-     * @param api     The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      * @param service The ResourcePackService instance.
      */
     public ResourcePackCommand(STEMCraftAPI api, ResourcePackService service) {

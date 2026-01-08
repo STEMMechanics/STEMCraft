@@ -45,7 +45,7 @@ public class STEMCraftException extends RuntimeException {
      *
      * The original throwable is set as the cause and logged automatically.
      *
-     * @param t the underlying cause of this exception
+     * @param t the underlying cause of this exception.
      */
     public STEMCraftException(Throwable t) {
         super(t);
@@ -57,7 +57,7 @@ public class STEMCraftException extends RuntimeException {
      *
      * The message is logged immediately when the exception is created.
      *
-     * @param message a human-readable description of the error
+     * @param message a human-readable description of the error.
      */
     public STEMCraftException(String message) {
         super(message);
@@ -69,8 +69,8 @@ public class STEMCraftException extends RuntimeException {
      *
      * Both the message and the underlying cause are logged immediately.
      *
-     * @param message a human-readable description of the error
-     * @param t the underlying cause of this exception
+     * @param message a human-readable description of the error.
+     * @param t the underlying cause of this exception.
      */
     public STEMCraftException(String message, Throwable t) {
         super(message, t);

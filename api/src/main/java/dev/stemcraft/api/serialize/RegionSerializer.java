@@ -91,7 +91,7 @@ public class RegionSerializer {
      *  * For POLYGON:
      *  region.minY: int
      *  region.maxY: int
-     *  region.points: List of Maps { x: int, z: int }
+     *  region.points: List of Maps { x: int, z: int }.
      *
      * @param map The map representing the serialized region.
      * @return The deserialized SCRegion.

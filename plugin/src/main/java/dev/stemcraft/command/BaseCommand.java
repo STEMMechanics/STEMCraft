@@ -39,8 +39,8 @@ public class BaseCommand extends HasMessagesImpl {
     /**
      * Constructor for BaseCommand.
      *
-     * @param plugin the STEMCraft plugin instance
-     * @param api the STEMCraft API instance
+     * @param plugin the STEMCraft plugin instance.
+     * @param api the STEMCraft API instance.
      */
     public BaseCommand(STEMCraft plugin, STEMCraftAPI api) {
         this.plugin = plugin;
@@ -56,15 +56,15 @@ public class BaseCommand extends HasMessagesImpl {
     /**
      * Called when the command is executed.
      *
-     * @param cmd the command being executed
-     * @param ctx the context of the command execution
+     * @param cmd the command being executed.
+     * @param ctx the context of the command execution.
      */
     public void onExecute(Command cmd, CommandContext ctx) { }
 
     /**
      * Set the label of the command.
      *
-     * @param label the label of the command
+     * @param label the label of the command.
      */
     public void setLabel(String label) {
         builder.label(label);
@@ -73,7 +73,7 @@ public class BaseCommand extends HasMessagesImpl {
     /**
      * Set the description of the command.
      *
-     * @param description the description of the command
+     * @param description the description of the command.
      */
     public void setDescription(String description) {
         builder.description(description);
@@ -82,7 +82,7 @@ public class BaseCommand extends HasMessagesImpl {
     /**
      * Set the usage message of the command.
      *
-     * @param usage the usage message of the command
+     * @param usage the usage message of the command.
      */
     public void setUsage(String usage) {
         builder.usage(usage);
@@ -91,7 +91,7 @@ public class BaseCommand extends HasMessagesImpl {
     /**
      * Set the permission required to execute the command.
      *
-     * @param permission the permission string
+     * @param permission the permission string.
      */
     public void setPermission(String permission) {
         builder.permission(permission);
@@ -100,7 +100,7 @@ public class BaseCommand extends HasMessagesImpl {
     /**
      * Add aliases for the command.
      *
-     * @param aliases the aliases to add
+     * @param aliases the aliases to add.
      */
     public void addAliases(String... aliases) {
         builder.aliases(aliases);
@@ -109,7 +109,7 @@ public class BaseCommand extends HasMessagesImpl {
     /**
      * Add tab completions for the command.
      *
-     * @param completions the tab completions to add
+     * @param completions the tab completions to add.
      */
     public void addTabCompletion(String... completions) {
         builder.tabCompletion(completions);

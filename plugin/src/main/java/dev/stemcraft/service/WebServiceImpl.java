@@ -53,7 +53,7 @@ public class WebServiceImpl extends BaseService implements WebService {
      * Constructor for the WebServiceImpl.
      * 
      * @param plugin The STEMCraft plugin instance.
-     * @param api    The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      */
     public WebServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
@@ -222,6 +222,7 @@ public class WebServiceImpl extends BaseService implements WebService {
      * Internal HTTP handler for processing requests.
      */
     class WebServiceHandler implements HttpHandler {
+        /** {@inheritDoc} */
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             String uri = exchange.getRequestURI().getPath();

@@ -64,7 +64,7 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
      * Constructor for PunishmentServiceImpl.
      *
      * @param plugin The STEMCraft plugin instance.
-     * @param api    The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      */
     public PunishmentServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
@@ -250,7 +250,7 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
     /**
      * Register an alert callback for a specific punishment type.
      *
-     * @param type     The punishment type to register the alert for.
+     * @param type The punishment type to register the alert for.
      * @param callback The callback to invoke when a punishment of the specified type is recorded.
      */
     @Override
@@ -268,11 +268,11 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
      * Record a new punishment for a player.
      *
      * @param playerUuid The UUID of the player being punished.
-     * @param actor      The player performing the punishment (null for server).
-     * @param duration   The duration of the punishment (null for permanent).
-     * @param type       The type of punishment (e.g., "ban", "mute", "warn").
-     * @param alerted    Whether the player has been alerted about the punishment.
-     * @param reason     The reason for the punishment.
+     * @param actor The player performing the punishment (null for server).
+     * @param duration The duration of the punishment (null for permanent).
+     * @param type The type of punishment (e.g., "ban", "mute", "warn").
+     * @param alerted Whether the player has been alerted about the punishment.
+     * @param reason The reason for the punishment.
      */
     @Override
     public synchronized void record(UUID playerUuid, Player actor, Duration duration, String type, boolean alerted, String reason) {
@@ -311,9 +311,9 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
     /**
      * List punishment records with optional filtering and pagination.
      *
-     * @param player   Optional player UUID to filter by (null for no filter).
-     * @param type     Optional punishment type to filter by (null for no filter).
-     * @param page     Page number (1-based).
+     * @param player Optional player UUID to filter by (null for no filter).
+     * @param type Optional punishment type to filter by (null for no filter).
+     * @param page Page number (1-based).
      * @param pageSize Number of records per page.
      * @return List of punishment records matching the criteria.
      */

@@ -71,7 +71,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      * Creates a new WorldServiceImpl instance.
      *
      * @param plugin The STEMCraft plugin instance.
-     * @param api    The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      */
     public WorldServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
@@ -271,7 +271,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      * Get the value of a setting for a specific world.
      *
      * @param world The world to get the setting for.
-     * @param key   The key of the setting.
+     * @param key The key of the setting.
      * @return The value of the setting, or null if not found.
      */
     @Override
@@ -381,25 +381,26 @@ public class WorldServiceImpl extends BaseService implements WorldService {
     }
 
     /**
-     * Get the config section for specific world
+     * Get the config section for specific world.
      *
-     * @param worldName The name of the world
-     * @return The ConfigSection for the world
+     * @param worldName The name of the world.
+     * @return The ConfigSection for the world.
      */
     @Override
     public ConfigSection getConfigSection(String worldName) {
         return getConfigSection().getSection(worldName);
     }
 
+    /** {@inheritDoc} */
     @Override
     public ConfigSection getConfigSection(World world) {
         return getConfigSection(world.getName());
     }
   
     /**
-     * Load settings for the world
+     * Load settings for the world.
      *
-     * @param world The world to load settings for
+     * @param world The world to load settings for.
      */
     private void loadWorldSettings(World world) {
         ConfigSection config = getConfigSection(world);
@@ -408,9 +409,9 @@ public class WorldServiceImpl extends BaseService implements WorldService {
     }
 
     /**
-     * Unload settings for the world
+     * Unload settings for the world.
      *
-     * @param world The world to unload settings for
+     * @param world The world to unload settings for.
      */
     private void unloadWorldSettings(World world) {
         ConfigSection config = getConfigSection(world);
@@ -419,9 +420,9 @@ public class WorldServiceImpl extends BaseService implements WorldService {
     }
 
     /**
-     * Delete settings for the world
+     * Delete settings for the world.
      *
-     * @param worldName The name of the world to delete settings for
+     * @param worldName The name of the world to delete settings for.
      */
     private void deleteWorldSettings(String worldName) {
         ConfigSection config = getConfigSection().getSection(worldName);
@@ -499,7 +500,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      * Ensure the world with the given name is loaded, creating it if necessary.
      *
      * @param name The name of the world.
-     * @param gen  The chunk generator to use, or null for default.
+     * @param gen The chunk generator to use, or null for default.
      * @return The World instance.
      */
     private World ensure(String name, ChunkGenerator gen) {
@@ -675,7 +676,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
     }
 
     /**
-     * Load worlds based on config and disk state
+     * Load worlds based on config and disk state.
      */
     private void loadWorlds() {
         // Load worlds

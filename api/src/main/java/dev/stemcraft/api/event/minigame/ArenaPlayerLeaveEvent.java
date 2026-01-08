@@ -38,7 +38,7 @@ public class ArenaPlayerLeaveEvent extends BaseEvent {
      * Constructs a new ArenaPlayerLeaveEvent.
      *
      * @param player The player who left the arena.
-     * @param arena  The mini-game arena that the player left.
+     * @param arena The mini-game arena that the player left.
      */
     public ArenaPlayerLeaveEvent(Player player, MiniGameArena arena) {
         this.arena = arena;

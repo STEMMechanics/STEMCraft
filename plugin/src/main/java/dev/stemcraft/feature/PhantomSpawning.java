@@ -34,7 +34,7 @@ import java.util.concurrent.ThreadLocalRandom;
 public class PhantomSpawning extends BaseFeature {
 
     /**
-     * Constructor
+     * Constructor.
      *
      * @param api The STEMCraft API instance.
      */

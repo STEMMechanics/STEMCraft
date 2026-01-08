@@ -48,7 +48,7 @@ public class LocaleServiceImpl extends BaseService implements LocaleService {
      * Constructor for LocaleServiceImpl.
      *
      * @param plugin The STEMCraft plugin instance.
-     * @param api    The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      */
     public LocaleServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
@@ -73,9 +73,9 @@ public class LocaleServiceImpl extends BaseService implements LocaleService {
     }
 
     /**
-     * Get the default locale of the server
+     * Get the default locale of the server.
      *
-     * @return The default locale string
+     * @return The default locale string.
      */
     @Override
     public String getDefaultLocale() {
@@ -86,7 +86,7 @@ public class LocaleServiceImpl extends BaseService implements LocaleService {
      * Resolve a locale key or return the raw string unchanged if it does not look like a locale key.
      *
      * @param lang The language code to use for resolution.
-     * @param key  The locale key to resolve.
+     * @param key The locale key to resolve.
      * @return The resolved locale string or the original key if not found.
      */
     public String resolve(String lang, String key) {
@@ -127,7 +127,7 @@ public class LocaleServiceImpl extends BaseService implements LocaleService {
     }
 
     /**
-     * Load locale files from the plugin's data folder
+     * Load locale files from the plugin's data folder.
      */
     private void loadLocales() {
         plugin.exportBundledDirectory("locales");

@@ -52,7 +52,7 @@ public class WorldChangeSessionImpl implements WorldChangeSession {
     /**
      * Constructs a WorldChangeSessionImpl for the given world.
      *
-     * @param api   The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      * @param world The world to track changes in.
      */
     public WorldChangeSessionImpl(STEMCraftAPI api, World world) {

@@ -62,7 +62,7 @@ public interface RegionService {
      *
      * @param player The player to check.
      * @param namespaceId The unique ID of the region or world listener.
-     * @return True if the player is within the specified region or world listener, false otherwise
+     * @return True if the player is within the specified region or world listener, false otherwise.
      */
     boolean contains(Player player, String namespaceId);
 

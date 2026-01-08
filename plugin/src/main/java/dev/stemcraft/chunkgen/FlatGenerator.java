@@ -35,7 +35,7 @@ import java.util.Random;
  *
  * Configuration string format: "material1:height1;material2:height2;..."
  * Example: "grass_block;dirt:3;bedrock" creates a world with
- * 1 layer of grass_block, 3 layers of dirt, and 1 layer of
+ * 1 layer of grass_block, 3 layers of dirt, and 1 layer of.
  */
 public class FlatGenerator extends ChunkGenerator {
     private record Layer(Material mat, int height) {}
@@ -44,7 +44,7 @@ public class FlatGenerator extends ChunkGenerator {
     /**
      * Private constructor to enforce use of fromOptions method.
      *
-     * @param layers list of layers
+     * @param layers list of layers.
      */
     private FlatGenerator(List<Layer> layers) {
         this.layers = layers;
@@ -53,8 +53,8 @@ public class FlatGenerator extends ChunkGenerator {
     /**
      * Create a FlatGenerator from a configuration string.
      *
-     * @param cfg configuration string
-     * @return FlatGenerator instance
+     * @param cfg configuration string.
+     * @return FlatGenerator instance.
      */
     public static FlatGenerator fromOptions(String cfg) {
         if (cfg == null || cfg.isBlank()) {
@@ -84,11 +84,11 @@ public class FlatGenerator extends ChunkGenerator {
     /**
      * Generate the surface of the chunk based on the configured layers.
      *
-     * @param info world information
-     * @param rnd random number generator
-     * @param chunkX chunk X coordinate
-     * @param chunkZ chunk Z coordinate
-     * @param data chunk data to modify
+     * @param info world information.
+     * @param rnd random number generator.
+     * @param chunkX chunk X coordinate.
+     * @param chunkZ chunk Z coordinate.
+     * @param data chunk data to modify.
      */
     @Override
     public void generateSurface(

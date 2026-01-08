@@ -37,7 +37,7 @@ public class PermissionUtil {
     /**
      * Checks if a player has a specific permission using LuckPerms.
      *
-     * @param uuid       The UUID of the player.
+     * @param uuid The UUID of the player.
      * @param permission The permission node to check.
      * @return True if the player has the permission, false otherwise.
      */

@@ -30,7 +30,7 @@ public interface TaskCallback {
      * Runs the callback with the given parameters.
      *
      * @param type The type of the task.
-     * @param id   The identifier of the task.
+     * @param id The identifier of the task.
      * @param data Additional data associated with the task.
      */
     void run(String type, String id, String data);

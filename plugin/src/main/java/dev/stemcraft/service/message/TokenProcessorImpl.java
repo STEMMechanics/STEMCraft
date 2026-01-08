@@ -52,7 +52,7 @@ public class TokenProcessorImpl implements TokenProcessor {
      * Adds a token binding.
      *
      * @param placeholder The placeholder token (without colons).
-     * @param value       The value to bind to the token.
+     * @param value The value to bind to the token.
      */
     @Override
     public void add(String placeholder, String value) {

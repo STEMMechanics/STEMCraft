@@ -73,13 +73,13 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
     /**
      * Constructor for CommandBuilderImpl.
      *
-     * @param api            The STEMCraft API instance.
-     * @param label          The command label.
-     * @param description    The command description.
-     * @param usage          The command usage string.
-     * @param aliases        The command aliases.
-     * @param permission     The permission required to run the command.
-     * @param executor       The command executor.
+     * @param api The STEMCraft API instance.
+     * @param label The command label.
+     * @param description The command description.
+     * @param usage The command usage string.
+     * @param aliases The command aliases.
+     * @param permission The permission required to run the command.
+     * @param executor The command executor.
      * @param tabCompletions The tab completion patterns.
      */
     public CommandImpl(STEMCraftAPI api, String label, String description, String usage, List<String> aliases, String permission, CommandExecutor executor, List<String[]> tabCompletions) {
@@ -93,7 +93,7 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
     }
 
     /**
-     * Register the command on the server
+     * Register the command on the server.
      *
      * @param plugin The plugin registering the command.
      */
@@ -238,9 +238,9 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
     }
 
     /**
-     * Get the server CommandMap
+     * Get the server CommandMap.
      *
-     * @return The CommandMap
+     * @return The CommandMap.
      */
     private CommandMap getCommandMap() {
         // Paper has Bukkit.getCommandMap()
@@ -395,9 +395,9 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
      * Handle tab completion for the command.
      *
      * @param sender The command sender.
-     * @param cmd    The command.
-     * @param label  The command label.
-     * @param args   The command arguments.
+     * @param cmd The command.
+     * @param label The command label.
+     * @param args The command arguments.
      * @return A list of tab completion results.
      */
     @Override

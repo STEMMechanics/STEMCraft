@@ -44,7 +44,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
      * Constructor for RecipeServiceImpl.
      *
      * @param plugin The STEMCraft plugin instance.
-     * @param api    The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      */
     public RecipeServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
@@ -302,7 +302,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
     /**
      * Load cooking recipes from a configuration section.
      *
-     * @param sec  The configuration section containing the recipes.
+     * @param sec The configuration section containing the recipes.
      * @param type The type of cooking recipe (furnace, smoker, blast_furnace, campfire).
      */
     private void loadCookingSection(ConfigSection sec, String type) {
@@ -371,9 +371,9 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
     /**
      * Add a shaped crafting recipe.
      *
-     * @param id          The unique identifier for the recipe.
-     * @param result      The resulting ItemStack from the recipe.
-     * @param shape       The shape of the recipe as an array of strings.
+     * @param id The unique identifier for the recipe.
+     * @param result The resulting ItemStack from the recipe.
+     * @param shape The shape of the recipe as an array of strings.
      * @param ingredients A map of characters to Materials representing the ingredients.
      */
     @Override
@@ -391,7 +391,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
     /**
      * Add a shapeless crafting recipe.
      *
-     * @param id     The unique identifier for the recipe.
+     * @param id The unique identifier for the recipe.
      * @param result The resulting ItemStack from the recipe.
      * @param inputs The input Materials for the recipe.
      */
@@ -407,10 +407,10 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
     /**
      * Add a furnace cooking recipe.
      *
-     * @param id        The unique identifier for the recipe.
-     * @param input     The input Material for the recipe.
-     * @param output    The resulting ItemStack from the recipe.
-     * @param exp       The experience gained from the recipe.
+     * @param id The unique identifier for the recipe.
+     * @param input The input Material for the recipe.
+     * @param output The resulting ItemStack from the recipe.
+     * @param exp The experience gained from the recipe.
      * @param cookTicks The cooking time in ticks.
      */
     @Override
@@ -423,10 +423,10 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
     /**
      * Add a smoker cooking recipe.
      *
-     * @param id        The unique identifier for the recipe.
-     * @param input     The input Material for the recipe.
-     * @param output    The resulting ItemStack from the recipe.
-     * @param exp       The experience gained from the recipe.
+     * @param id The unique identifier for the recipe.
+     * @param input The input Material for the recipe.
+     * @param output The resulting ItemStack from the recipe.
+     * @param exp The experience gained from the recipe.
      * @param cookTicks The cooking time in ticks.
      */
     @Override
@@ -439,10 +439,10 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
     /**
      * Add a blast furnace cooking recipe.
      *
-     * @param id        The unique identifier for the recipe.
-     * @param input     The input Material for the recipe.
-     * @param output    The resulting ItemStack from the recipe.
-     * @param exp       The experience gained from the recipe.
+     * @param id The unique identifier for the recipe.
+     * @param input The input Material for the recipe.
+     * @param output The resulting ItemStack from the recipe.
+     * @param exp The experience gained from the recipe.
      * @param cookTicks The cooking time in ticks.
      */
     @Override
@@ -455,10 +455,10 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
     /**
      * Add a campfire cooking recipe.
      *
-     * @param id        The unique identifier for the recipe.
-     * @param input     The input Material for the recipe.
-     * @param output    The resulting ItemStack from the recipe.
-     * @param exp       The experience gained from the recipe.
+     * @param id The unique identifier for the recipe.
+     * @param input The input Material for the recipe.
+     * @param output The resulting ItemStack from the recipe.
+     * @param exp The experience gained from the recipe.
      * @param cookTicks The cooking time in ticks.
      */
     @Override
@@ -471,7 +471,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
     /**
      * Add a stonecutter recipe.
      *
-     * @param input  The input Material for the recipe.
+     * @param input The input Material for the recipe.
      * @param output The output Material from the recipe.
      * @param amount The amount of the output Material.
      */

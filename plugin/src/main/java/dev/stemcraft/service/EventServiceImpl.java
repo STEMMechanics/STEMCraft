@@ -38,7 +38,7 @@ public class EventServiceImpl extends BaseService implements EventService {
      * Constructor for EventServiceImpl.
      *
      * @param plugin The STEMCraft plugin instance.
-     * @param api    The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      */
     public EventServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
@@ -47,11 +47,11 @@ public class EventServiceImpl extends BaseService implements EventService {
     /**
      * Register an event listener with callback handler.
      *
-     * @param <T>              The type of event.
-     * @param event            The event class to listen for.
-     * @param callback         The callback handler for the event.
-     * @param priority         The priority of the event listener.
-     * @param ignoreCancelled  Whether to ignore cancelled events.
+     * @param <T> The type of event.
+     * @param event The event class to listen for.
+     * @param callback The callback handler for the event.
+     * @param priority The priority of the event listener.
+     * @param ignoreCancelled Whether to ignore cancelled events.
      * @return The registered listener.
      */
     public <T extends Event> Listener register(Class<T> event, EventHandler<T> callback, EventPriority priority, boolean ignoreCancelled) {

@@ -141,7 +141,7 @@ public class DistanceDifficulty extends BaseFeature {
      * Checks if a mob is damaging a player.
      *
      * @param damager The entity causing damage.
-     * @param victim  The entity receiving damage.
+     * @param victim The entity receiving damage.
      * @return True if a mob is damaging a player, false otherwise.
      */
     private boolean isMobDamagingPlayer(Entity damager, LivingEntity victim) {
@@ -154,7 +154,7 @@ public class DistanceDifficulty extends BaseFeature {
      * Checks if a player is damaging a mob.
      *
      * @param damager The entity causing damage.
-     * @param victim  The entity receiving damage.
+     * @param victim The entity receiving damage.
      * @return True if a player is damaging a mob, false otherwise.
      */
     private boolean isPlayerDamagingMob(Entity damager, LivingEntity victim) {

@@ -73,10 +73,10 @@ public interface DatabaseService {
     /**
      * Executes a query statement and maps a single result from the result set.
      *
-     * @param sql    The SQL statement to execute.
+     * @param sql The SQL statement to execute.
      * @param binder The binder to set parameters on the prepared statement.
      * @param mapper The mapper to convert the result set row to an object of type T.
-     * @param <T>    The type of the object to map to.
+     * @param <T> The type of the object to map to.
      * @return The mapped object of type T, or null if no result was found.
      */
     <T> T querySingleMapped(String sql, DatabaseStatementBinder binder, DatabaseResultSetMapper<T> mapper);

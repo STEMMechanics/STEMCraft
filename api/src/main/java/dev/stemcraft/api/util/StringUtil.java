@@ -45,8 +45,8 @@ public final class StringUtil {
     /**
      * Checks if a string is entirely in uppercase.
      *
-     * @param s the string to check
-     * @return true if the string is all uppercase, false otherwise
+     * @param s the string to check.
+     * @return true if the string is all uppercase, false otherwise.
      */
     public static boolean isAllUpper(String s) {
         return s.equals(s.toUpperCase(Locale.ROOT));
@@ -55,8 +55,8 @@ public final class StringUtil {
     /**
      * Checks if a string is in title case.
      *
-     * @param s the string to check
-     * @return true if the string is in title case, false otherwise
+     * @param s the string to check.
+     * @return true if the string is in title case, false otherwise.
      */
     public static boolean isTitleCase(String s) {
         return !s.isEmpty() &&
@@ -67,8 +67,8 @@ public final class StringUtil {
     /**
      * Converts a string into title case.
      *
-     * @param s the string to convert
-     * @return the string in title case
+     * @param s the string to convert.
+     * @return the string in title case.
      */
     public static String toTitleCase(String s) {
         if (s == null || s.isEmpty()) return s;
@@ -80,8 +80,8 @@ public final class StringUtil {
      * Lowercases the string, replaces spaces with underscores, and removes
      * special characters.
      *
-     * @param input the input string
-     * @return the slugified string
+     * @param input the input string.
+     * @return the slugified string.
      */
     public static String slugify(String input) {
         if (input == null) return null;
@@ -93,10 +93,10 @@ public final class StringUtil {
 
 
     /**
-     * Convert a camelCase or PascalCase string to snake_case
+     * Convert a camelCase or PascalCase string to snake_case.
      *
-     * @param string The string to convert
-     * @return The converted string
+     * @param string The string to convert.
+     * @return The converted string.
      */
     public static String toSnakeCase(String string) {
         return string
@@ -105,10 +105,10 @@ public final class StringUtil {
     }
 
     /**
-     * Convert a list of objects to strings (or null)
+     * Convert a list of objects to strings (or null).
      *
-     * @param placeholders the objects to convert
-     * @return array of strings
+     * @param placeholders the objects to convert.
+     * @return array of strings.
      */
     public static String[] toStrings(Object... placeholders) {
         if (placeholders == null || placeholders.length == 0) {
@@ -210,10 +210,10 @@ public final class StringUtil {
      * - "world" -> "worlds"
      * - "worlds" -> "worlds"
      * - "game world" -> "game worlds"
-     * - "City" -> "Cities"
+     * - "City" -> "Cities".
      *
-     * @param text input text
-     * @return pluralised form, or original text if unchanged
+     * @param text input text.
+     * @return pluralised form, or original text if unchanged.
      */
     public static String toPlural(String text) {
         if (text == null || text.isBlank()) return text;
@@ -237,8 +237,8 @@ public final class StringUtil {
      * Accepts "true", "yes", "1" (case insensitive) as true.
      * All other values (including null) are false.
      *
-     * @param value input string
-     * @return parsed boolean
+     * @param value input string.
+     * @return parsed boolean.
      */
     public static boolean parseBoolean(String value) {
         if (value == null) {
@@ -251,9 +251,9 @@ public final class StringUtil {
     /**
      * Joins a list of Components into a single string, stripping color codes.
      *
-     * @param components list of Components
-     * @param separator separator string
-     * @return joined string
+     * @param components list of Components.
+     * @param separator separator string.
+     * @return joined string.
      */
     public static String joinPlainText(List<Component> components, String separator) {
         if (components == null || components.isEmpty()) {
@@ -268,8 +268,8 @@ public final class StringUtil {
      * Pluralises a single word.
      * If the word already appears plural, it is returned unchanged.
      *
-     * @param word single word
-     * @return pluralised word
+     * @param word single word.
+     * @return pluralised word.
      */
     private static String pluraliseWord(String word) {
         if (word.isEmpty()) return word;
@@ -313,8 +313,8 @@ public final class StringUtil {
      * Heuristic check to determine if a word is already plural.
      * Avoids double-pluralisation like "worlds" -> "worldss".
      *
-     * @param lower lowercase word
-     * @return true if the word likely represents a plural form
+     * @param lower lowercase word.
+     * @return true if the word likely represents a plural form.
      */
     private static boolean isLikelyPlural(String lower) {
         return lower.endsWith("s")
@@ -324,8 +324,8 @@ public final class StringUtil {
     /**
      * Checks whether a character is a vowel.
      *
-     * @param c character to test
-     * @return true if vowel
+     * @param c character to test.
+     * @return true if vowel.
      */
     private static boolean isVowel(char c) {
         return "aeiou".indexOf(c) >= 0;
@@ -334,9 +334,9 @@ public final class StringUtil {
     /**
      * Applies the original word's casing to the plural form.
      *
-     * @param original original word
-     * @param plural plural form in lowercase
-     * @return plural with matched casing
+     * @param original original word.
+     * @param plural plural form in lowercase.
+     * @return plural with matched casing.
      */
     private static String matchCase(String original, String plural) {
         if (original.equals(original.toUpperCase(Locale.ROOT))) {
@@ -351,8 +351,8 @@ public final class StringUtil {
     /**
      * Checks if a string can be parsed as an integer.
      *
-     * @param s the string to check
-     * @return true if the string is an integer, false otherwise
+     * @param s the string to check.
+     * @return true if the string is an integer, false otherwise.
      */
     public static boolean isInteger(String s) {
         if (s == null || s.isEmpty()) {
@@ -369,8 +369,8 @@ public final class StringUtil {
     /**
      * Escapes special characters in a string for JSON formatting.
      *
-     * @param s the string to escape
-     * @return the escaped string
+     * @param s the string to escape.
+     * @return the escaped string.
      */
     public static String escapeJson(String s) {
         if (s == null) return "";

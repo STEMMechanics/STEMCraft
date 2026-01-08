@@ -48,7 +48,7 @@ public interface MotdService {
     void setDefault(String title, String text);
 
     /**
-     * Get the current MOTD
+     * Get the current MOTD.
      *
      * @return The highest priority MOTD currently set.
      */
@@ -58,7 +58,7 @@ public interface MotdService {
      * Get the MOTD based on namespace ID.
      *
      * @param namespaceId The namespace ID of the MOTD.
-     * @return The MOTD associated with the given namespace ID.
+     * @return The MOTD associated with the given namespace ID, or null if not found.
      */
     ResolvedMotd get(String namespaceId);
 

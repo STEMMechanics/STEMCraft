@@ -46,7 +46,7 @@ public final class PunishmentRecord {
     private final Long durationSeconds; // null = permanent, 0 is a one-off, -1 is cancelled
 
     /**
-     * Constructor
+     * Constructor.
      *
      * @param id The unique ID of the punishment record.
      * @param targetUuid The UUID of the player being punished.
@@ -82,34 +82,34 @@ public final class PunishmentRecord {
     }
 
     /**
-     * Marks this punishment as alerted
+     * Marks this punishment as alerted.
      */
     public void setAlerted() {
         alerted = true;
     }
 
     /**
-     * Checks if this punishment is permanent
+     * Checks if this punishment is permanent.
      *
-     * @return true if the punishment is permanent, false otherwise
+     * @return true if the punishment is permanent, false otherwise.
      */
     public boolean permanent() {
         return durationSeconds == null;
     }
 
     /**
-     * Checks if this punishment is cancelled
+     * Checks if this punishment is cancelled.
      *
-     * @return true if the punishment is cancelled, false otherwise
+     * @return true if the punishment is cancelled, false otherwise.
      */
     public boolean cancelled() {
         return durationSeconds == -1;
     }
 
     /**
-     * Gets the expiration time of this punishment
+     * Gets the expiration time of this punishment.
      *
-     * @return The expiration time as an Instant, or null if permanent
+     * @return The expiration time as an Instant, or null if permanent.
      */
     public Instant expiresAt() {
         if (permanent()) return null;
@@ -117,9 +117,9 @@ public final class PunishmentRecord {
     }
 
     /**
-     * Gets the Player object of the target if they are online
+     * Gets the Player object of the target if they are online.
      *
-     * @return The Player object if online, null otherwise
+     * @return The Player object if online, null otherwise.
      */
     public Player getPlayerIfOnline() {
         Player player = Bukkit.getPlayer(targetUuid);

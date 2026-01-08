@@ -72,7 +72,7 @@ public class ChatServiceImpl extends BaseService {
      * Constructor for ChatServiceImpl.
      *
      * @param plugin The STEMCraft plugin instance.
-     * @param api    The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      */
     public ChatServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);

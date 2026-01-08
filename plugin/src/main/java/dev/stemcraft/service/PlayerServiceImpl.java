@@ -38,7 +38,7 @@ public class PlayerServiceImpl extends BaseService implements PlayerService {
      * Constructor for PlayerServiceImpl.
      *
      * @param plugin The STEMCraft plugin instance.
-     * @param api    The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      */
     public PlayerServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);

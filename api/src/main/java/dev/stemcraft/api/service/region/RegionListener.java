@@ -42,7 +42,7 @@ public interface RegionListener {
      * Called when a player enters a world.
      *
      * @param player The player entering the world.
-     * @param world  The world being entered.
+     * @param world The world being entered.
      */
     default void onEnterWorld(Player player, World world) { }
 
@@ -58,7 +58,7 @@ public interface RegionListener {
      * Called when a player exits a world.
      *
      * @param player The player exiting the world.
-     * @param world  The world being exited.
+     * @param world The world being exited.
      */
     default void onExitWorld(Player player, World world) { }
 }

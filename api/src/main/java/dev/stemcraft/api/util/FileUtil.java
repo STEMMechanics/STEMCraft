@@ -24,8 +24,8 @@ public class FileUtil {
      * Copies a directory from {@code srcDir} to {@code destDir}, creating parent directories as needed.
      * If {@code overwrite} is {@code true}, existing files will be replaced.
      *
-     * @param srcDir   The source directory.
-     * @param destDir  The destination directory.
+     * @param srcDir The source directory.
+     * @param destDir The destination directory.
      * @param overwrite Whether to overwrite existing files.
      */
     public static void copyDirectory(Path srcDir, Path destDir, boolean overwrite) throws IOException {
@@ -36,6 +36,7 @@ public class FileUtil {
                 : new CopyOption[]{StandardCopyOption.COPY_ATTRIBUTES};
 
         Files.walkFileTree(srcDir, new SimpleFileVisitor<>() {
+            /** {@inheritDoc} */
             @Override
             public @NonNull FileVisitResult preVisitDirectory(@NonNull Path dir,
                                                               @NonNull BasicFileAttributes attrs) throws IOException {
@@ -44,6 +45,7 @@ public class FileUtil {
                 return FileVisitResult.CONTINUE;
             }
 
+            /** {@inheritDoc} */
             @Override
             public @NonNull FileVisitResult visitFile(@NonNull Path file,
                                                       @NonNull BasicFileAttributes attrs) throws IOException {
@@ -64,8 +66,8 @@ public class FileUtil {
     /**
      * Computes the SHA-1 hash of a file and returns it as a hexadecimal string.
      *
-     * @param file the file to compute the hash for
-     * @return the SHA-1 hash as a hexadecimal string
+     * @param file the file to compute the hash for.
+     * @return the SHA-1 hash as a hexadecimal string.
      */
     public static String sha1Hex(File file) {
         try {
@@ -94,8 +96,8 @@ public class FileUtil {
     /**
      * Deletes a file or directory recursively.
      *
-     * @param f the file or directory to delete
-     * @throws IOException if an I/O error occurs
+     * @param f the file or directory to delete.
+     * @throws IOException if an I/O error occurs.
      */
     public static void deleteRecursive(File f) throws IOException {
         if (!f.exists()) return;
@@ -115,8 +117,8 @@ public class FileUtil {
     /**
      * Recursively gets the latest modified timestamp of a file or directory.
      *
-     * @param file the file or directory
-     * @return the latest modified timestamp in milliseconds since epoch
+     * @param file the file or directory.
+     * @return the latest modified timestamp in milliseconds since epoch.
      */
     public long getLatestModified(File file) {
         long latest = file.lastModified();

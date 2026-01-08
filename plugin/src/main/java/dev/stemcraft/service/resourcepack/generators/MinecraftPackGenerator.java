@@ -17,7 +17,7 @@ public class MinecraftPackGenerator extends ResourcePackGenerator {
     /**
      * Creates a new MinecraftPackGenerator.
      *
-     * @param api     The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      * @param service The ResourcePackService instance.
      */
     public MinecraftPackGenerator(STEMCraftAPI api, ResourcePackService service) {
@@ -27,8 +27,8 @@ public class MinecraftPackGenerator extends ResourcePackGenerator {
     /**
      * Builds the resource pack by copying Minecraft resource pack files from the data pack directory.
      *
-     * @param dataPackDir     The data pack directory.
-     * @param manifest        The manifest configuration section.
+     * @param dataPackDir The data pack directory.
+     * @param manifest The manifest configuration section.
      * @param resourcePackDir The resource pack directory to build into.
      */
     @Override

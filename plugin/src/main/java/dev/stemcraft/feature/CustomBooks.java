@@ -61,7 +61,7 @@ public class CustomBooks extends BaseFeature {
     }
 
     /**
-     * When feature is enabled
+     * When feature is enabled.
      */
     @Override
     public void onEnable() {
@@ -505,7 +505,7 @@ public class CustomBooks extends BaseFeature {
      * Present a book to a player.
      *
      * @param player The player to show the book to.
-     * @param name   The book name.
+     * @param name The book name.
      */
     public void showBook(Player player, String name) {
         ItemStack book = this.getBook(name);

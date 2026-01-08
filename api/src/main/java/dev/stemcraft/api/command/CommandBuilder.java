@@ -28,34 +28,34 @@ import org.bukkit.plugin.java.JavaPlugin;
 public interface CommandBuilder {
 
     /**
-     * Set the command aliases
+     * Set the command aliases.
      *
-     * @param aliases The command aliases
-     * @return The command builder
+     * @param aliases The command aliases.
+     * @return The command builder.
      */
     CommandBuilder aliases(String... aliases);
 
     /**
-     * Set the command description
+     * Set the command description.
      *
-     * @param description The command description
-     * @return The command builder
+     * @param description The command description.
+     * @return The command builder.
      */
     CommandBuilder description(String description);
 
     /**
-     * Set the command usage string
+     * Set the command usage string.
      *
-     * @param description The command usage string
-     * @return The command builder
+     * @param description The command usage string.
+     * @return The command builder.
      */
     CommandBuilder usage(String description);
 
     /**
-     * Set the command permission
+     * Set the command permission.
      *
-     * @param permission The command permission
-     * @return The command builder
+     * @param permission The command permission.
+     * @return The command builder.
      */
     CommandBuilder permission(String permission);
 
@@ -95,25 +95,25 @@ public interface CommandBuilder {
      * Each call to addTabCompletion(...) represents one valid argument pattern.
      */
     /**
-     * Add a tab completion for the command
+     * Add a tab completion for the command.
      *
-     * @param completions The tab completions
-     * @return The command builder
+     * @param completions The tab completions.
+     * @return The command builder.
      */
     CommandBuilder tabCompletion(String... completions);
 
     /**
-     * Set the command executor
+     * Set the command executor.
      *
-     * @param processor The command executor
-     * @return The command builder
+     * @param processor The command executor.
+     * @return The command builder.
      */
     CommandBuilder executor(CommandExecutor processor);
 
     /**
-     * Register the command on the server
+     * Register the command on the server.
      *
-     * @param plugin The plugin registering the command
+     * @param plugin The plugin registering the command.
      */
     Command register(JavaPlugin plugin);
 }

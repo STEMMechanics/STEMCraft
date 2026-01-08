@@ -63,7 +63,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
      * Constructor for ResourcePackServiceImpl.
      *
      * @param plugin The main STEMCraft plugin instance.
-     * @param api    The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      */
     public ResourcePackServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
@@ -153,7 +153,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
     /**
      * Ask a single player to download the resource pack.
      *
-     * @param player the player to send the pack to
+     * @param player the player to send the pack to.
      */
     public void sendPack(Player player) {
         File resPack = getResourcePack();
@@ -300,9 +300,9 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
     /**
      * Zips the contents of a folder into a zip file.
      *
-     * @param sourceDir the folder to zip
-     * @param outFile the output zip file
-     * @throws IOException if an I/O error occurs
+     * @param sourceDir the folder to zip.
+     * @param outFile the output zip file.
+     * @throws IOException if an I/O error occurs.
      */
     private static void zipFolder(File sourceDir, File outFile) throws IOException {
         try (ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(outFile))) {
@@ -314,10 +314,10 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
     /**
      * Recursively zips a directory.
      *
-     * @param zos the zip output stream
-     * @param file the current file or directory
-     * @param basePath the base path to determine relative paths
-     * @throws IOException if an I/O error occurs
+     * @param zos the zip output stream.
+     * @param file the current file or directory.
+     * @param basePath the base path to determine relative paths.
+     * @throws IOException if an I/O error occurs.
      */
     private static void zipDirectoryRecursive(ZipOutputStream zos, File file, String basePath) throws IOException {
         String filePath = file.getCanonicalPath();

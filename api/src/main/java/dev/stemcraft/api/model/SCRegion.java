@@ -58,7 +58,7 @@ public class SCRegion implements ConfigurationSerializable {
      * Constructs an SCRegion with the given WorldEdit region and Bukkit world.
      *
      * @param region The WorldEdit region.
-     * @param world  The Bukkit world.
+     * @param world The Bukkit world.
      */
     public SCRegion(Region region, World world) {
         this.region = region;
@@ -153,11 +153,11 @@ public class SCRegion implements ConfigurationSerializable {
     /**
      * AABB containment test.
      *
-     * @param aMin the minimum corner of box A (lowest x, y, z)
-     * @param aMax the maximum corner of box A (highest x, y, z)
-     * @param bMin the minimum corner of box B (lowest x, y, z)
-     * @param bMax the maximum corner of box B (highest x, y, z)
-     * @return true if box A fully contains box B
+     * @param aMin the minimum corner of box A (lowest x, y, z).
+     * @param aMax the maximum corner of box A (highest x, y, z).
+     * @param bMin the minimum corner of box B (lowest x, y, z).
+     * @param bMax the maximum corner of box B (highest x, y, z).
+     * @return true if box A fully contains box B.
      */
     private static boolean aabbContains(BlockVector3 aMin, BlockVector3 aMax, BlockVector3 bMin, BlockVector3 bMax) {
         return aMin.x() <= bMin.x() && aMin.y() <= bMin.y() && aMin.z() <= bMin.z()
@@ -167,11 +167,11 @@ public class SCRegion implements ConfigurationSerializable {
     /**
      * AABB intersection test.
      *
-     * @param aMin the minimum corner of box A (lowest x, y, z)
-     * @param aMax the maximum corner of box A (highest x, y, z)
-     * @param bMin the minimum corner of box B (lowest x, y, z)
-     * @param bMax the maximum corner of box B (highest x, y, z)
-     * @return true if box A and box B overlap in any volume
+     * @param aMin the minimum corner of box A (lowest x, y, z).
+     * @param aMax the maximum corner of box A (highest x, y, z).
+     * @param bMin the minimum corner of box B (lowest x, y, z).
+     * @param bMax the maximum corner of box B (highest x, y, z).
+     * @return true if box A and box B overlap in any volume.
      */
     private static boolean aabbIntersects(BlockVector3 aMin, BlockVector3 aMax, BlockVector3 bMin, BlockVector3 bMax) {
         return aMin.x() <= bMax.x() && aMax.x() >= bMin.x()
@@ -217,9 +217,9 @@ public class SCRegion implements ConfigurationSerializable {
     /**
      * Checks if this region contains random samples from the other region.
      *
-     * @param other the other region to sample from
-     * @param samples number of samples to test
-     * @return true if all sampled points from other are inside this region
+     * @param other the other region to sample from.
+     * @param samples number of samples to test.
+     * @return true if all sampled points from other are inside this region.
      */
     private boolean containsRandomSamplesFrom(SCRegion other, @SuppressWarnings("SameParameterValue") int samples) {
         if (samples <= 0) return true;
@@ -251,9 +251,9 @@ public class SCRegion implements ConfigurationSerializable {
     /**
      * Checks for intersection with another region using random sampling within the overlapping AABB.
      *
-     * @param other the other region to check
-     * @param samples number of samples to test
-     * @return true if an intersection is found
+     * @param other the other region to check.
+     * @param samples number of samples to test.
+     * @return true if an intersection is found.
      */
     private boolean intersectsByRandomSampling(SCRegion other, @SuppressWarnings("SameParameterValue") int samples) {
         if (samples <= 0) return false;
@@ -295,8 +295,8 @@ public class SCRegion implements ConfigurationSerializable {
     /**
      * Returns a random integer between min and max, inclusive.
      *
-     * @param min    Minimum value.
-     * @param max    Maximum value.
+     * @param min Minimum value.
+     * @param max Maximum value.
      * @param random Random instance.
      * @return Random integer between min and max.
      */
@@ -371,7 +371,7 @@ public class SCRegion implements ConfigurationSerializable {
     /**
      * Checks if the region is a cuboid.
      *
-     * @return true if the region is a cuboid
+     * @return true if the region is a cuboid.
      */
     public boolean isCuboid() {
         return region instanceof CuboidRegion;
@@ -380,7 +380,7 @@ public class SCRegion implements ConfigurationSerializable {
     /**
      * Checks if the region is a polygon.
      *
-     * @return true if the region is a polygon
+     * @return true if the region is a polygon.
      */
     public boolean isPolygon() {
         return region instanceof Polygonal2DRegion;
@@ -441,7 +441,7 @@ public class SCRegion implements ConfigurationSerializable {
     /**
      * Creates an SCRegion from its string representation.
      *
-     * @param s     The string representation of the region.
+     * @param s The string representation of the region.
      * @param world The Bukkit world for the region.
      * @return The SCRegion instance.
      */

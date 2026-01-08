@@ -32,8 +32,8 @@ public interface ChatMenuRenderer {
     /**
      * Renders a list of chat menu components.
      *
-     * @param start    The starting index for rendering.
-     * @param count    The number of components to render.
+     * @param start The starting index for rendering.
+     * @param count The number of components to render.
      * @param isPlayer Whether the rendering is for a player.
      * @return A list of rendered chat menu components.
      */

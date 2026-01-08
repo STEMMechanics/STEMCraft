@@ -40,7 +40,7 @@ public abstract class BaseService {
      * Constructor for BaseService.
      *
      * @param plugin The STEMCraft plugin instance.
-     * @param api    The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      */
     protected BaseService(STEMCraft plugin, STEMCraftAPI api) {
         this.plugin = plugin;

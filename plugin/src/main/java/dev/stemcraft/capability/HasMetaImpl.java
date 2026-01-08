@@ -33,15 +33,15 @@ import java.util.function.Supplier;
 public class HasMetaImpl implements HasMeta {
 
     /**
-     * Metadata storage
+     * Metadata storage.
      */
     private final Map<String, Object> meta = new HashMap<>();
 
     /**
      * Check if the metadata contains a value for the given key.
      *
-     * @param key the metadata key
-     * @return true if the metadata contains a value for the given key, false otherwise
+     * @param key the metadata key.
+     * @return true if the metadata contains a value for the given key, false otherwise.
      */
     @Override
     public boolean contains(String key) {
@@ -51,10 +51,10 @@ public class HasMetaImpl implements HasMeta {
     /**
      * Get the metadata value for the given key, or defaultValue if not present.
      *
-     * @param key the metadata key
-     * @param type the expected type of the metadata value
-     * @param defaultValue the default value to return if the key is not present
-     * @return the metadata value for the given key, or defaultValue if not present
+     * @param key the metadata key.
+     * @param type the expected type of the metadata value.
+     * @param defaultValue the default value to return if the key is not present.
+     * @return the metadata value for the given key, or defaultValue if not present.
      */
     @Override
     public <T> T get(String key, Class<T> type, T defaultValue) {
@@ -67,9 +67,9 @@ public class HasMetaImpl implements HasMeta {
     /**
      * Get the metadata value for the given key, or create and store a new value using the supplier if not present.
      *
-     * @param key the metadata key
-     * @param supplier the supplier to create a new value if the key is not present
-     * @return the metadata value for the given key, or a new value created by the supplier if not present
+     * @param key the metadata key.
+     * @param supplier the supplier to create a new value if the key is not present.
+     * @return the metadata value for the given key, or a new value created by the supplier if not present.
      */
     @Override
     public <T> T getOrCreate(String key, Class<T> type, Supplier<? extends T> supplier) {
@@ -91,8 +91,8 @@ public class HasMetaImpl implements HasMeta {
     /**
      * Set the metadata value for the given key.
      *
-     * @param key the metadata key
-     * @param value the metadata value
+     * @param key the metadata key.
+     * @param value the metadata value.
      */
     @Override
     public <T> void set(String key, T value) {
@@ -102,8 +102,8 @@ public class HasMetaImpl implements HasMeta {
     /**
      * Set the metadata value for the given key if not already present.
      *
-     * @param key the metadata key
-     * @param value the metadata value
+     * @param key the metadata key.
+     * @param value the metadata value.
      */
     @Override
     public <T> void setIfAbsent(String key, T value) {
@@ -113,7 +113,7 @@ public class HasMetaImpl implements HasMeta {
     /**
      * Remove the metadata value for the given key.
      *
-     * @param key the metadata key
+     * @param key the metadata key.
      */
     @Override
     public void remove(String key) {
@@ -131,7 +131,7 @@ public class HasMetaImpl implements HasMeta {
     /**
      * Perform the given action for each metadata key-value pair.
      *
-     * @param consumer the action to perform for each metadata key-value pair
+     * @param consumer the action to perform for each metadata key-value pair.
      */
     @Override
     public void forEach(BiConsumer<String, Object> consumer) {

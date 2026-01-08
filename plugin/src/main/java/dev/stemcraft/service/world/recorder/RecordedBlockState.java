@@ -49,9 +49,9 @@ public class RecordedBlockState {
     /**
      * Constructs a RecordedBlockState from the given parameters.
      *
-     * @param type               The material type of the block.
-     * @param data               The block data as a string.
-     * @param inventoryContents  The inventory contents of the block, if applicable.
+     * @param type The material type of the block.
+     * @param data The block data as a string.
+     * @param inventoryContents The inventory contents of the block, if applicable.
      */
     RecordedBlockState(Material type, String data, ItemStack[] inventoryContents) {
         this.material = type;
@@ -62,9 +62,9 @@ public class RecordedBlockState {
     /**
      * Constructs a RecordedBlockState from the given parameters.
      *
-     * @param materialName      The material name of the block.
-     * @param data              The block data as a string.
-     * @param inventoryBytes    The serialized inventory contents of the block, if applicable.
+     * @param materialName The material name of the block.
+     * @param data The block data as a string.
+     * @param inventoryBytes The serialized inventory contents of the block, if applicable.
      */
     RecordedBlockState(String materialName, String data, byte[] inventoryBytes) {
         this.material = Material.matchMaterial(materialName);
@@ -197,8 +197,8 @@ public class RecordedBlockState {
     /**
      * Restores the recorded block state at the given location.
      *
-     * @param location      The location to restore the block state to.
-     * @param applyPhysics  Whether to apply physics when setting the block.
+     * @param location The location to restore the block state to.
+     * @param applyPhysics Whether to apply physics when setting the block.
      */
     public void restore(Location location, boolean applyPhysics) {
         Block block = location.getBlock();

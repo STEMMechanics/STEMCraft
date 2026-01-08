@@ -37,7 +37,7 @@ public class ArenaPlayerJoinEvent extends BaseEvent {
      * Constructs a new ArenaPlayerJoinEvent.
      *
      * @param player The player who joined the arena.
-     * @param arena  The mini-game arena that the player joined.
+     * @param arena The mini-game arena that the player joined.
      */
     public ArenaPlayerJoinEvent(Player player, MiniGameArena arena) {
         this.arena = arena;

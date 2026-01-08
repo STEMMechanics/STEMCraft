@@ -37,8 +37,8 @@ public final class TextUtil {
     /**
      * Converts a formatted string into an Adventure {@link Component}.
      *
-     * @param input the formatted text (MiniMessage or legacy), may be null
-     * @return a non-null {@link Component} representing the formatted text
+     * @param input the formatted text (MiniMessage or legacy), may be null.
+     * @return a non-null {@link Component} representing the formatted text.
      */
     public static Component colourise(String input) {
         if (input == null || input.isEmpty()) return Component.empty();
@@ -80,8 +80,8 @@ public final class TextUtil {
     /**
      * Converts formatted text to a legacy string using ampersand colour codes (e.g., &a, &7).
      *
-     * @param input the formatted text, may be null
-     * @return the legacy-formatted string with ampersand colour codes
+     * @param input the formatted text, may be null.
+     * @return the legacy-formatted string with ampersand colour codes.
      */
     public static String colouriseToAmpersand(String input) {
         return LEGACY_AMP.serialize(colourise(input));
@@ -91,8 +91,8 @@ public final class TextUtil {
      * Converts formatted text to a legacy string using section colour codes (e.g., §a, §7).
      * Useful for APIs that still require section-coded legacy strings.
      *
-     * @param input the formatted text, may be null
-     * @return the legacy-formatted string with section colour codes
+     * @param input the formatted text, may be null.
+     * @return the legacy-formatted string with section colour codes.
      */
     public static String colouriseToSection(String input) {
         return LEGACY_SECTION.serialize(colourise(input));
@@ -102,8 +102,8 @@ public final class TextUtil {
     /**
      * Removes all colour and formatting from a MiniMessage or legacy-formatted string, returning plain text.
      *
-     * @param input the formatted text, may be null
-     * @return plain unformatted text
+     * @param input the formatted text, may be null.
+     * @return plain unformatted text.
     */
     public static String stripColour(String input) {
         if (input == null || input.isEmpty()) {
@@ -118,10 +118,10 @@ public final class TextUtil {
     }
 
     /**
-     * Helper method to return the text length of a component
+     * Helper method to return the text length of a component.
      *
-     * @param text The text to calculate
-     * @return The text length
+     * @param text The text to calculate.
+     * @return The text length.
      */
     public static int componentLength(Component text) {
         String t = LegacyComponentSerializer.legacySection().serialize(text);
@@ -129,10 +129,10 @@ public final class TextUtil {
     }
 
     /**
-     * Converts a Component to plain text
+     * Converts a Component to plain text.
      *
-     * @param c The component
-     * @return The plain text
+     * @param c The component.
+     * @return The plain text.
      */
     public static String plain(Component c) {
         return PlainTextComponentSerializer.plainText().serialize(c);
@@ -141,8 +141,8 @@ public final class TextUtil {
     /**
      * Reverts section sign (§) colour codes back to ampersand (&) codes in a string.
      *
-     * @param input the string with section colour codes, may be null
-     * @return the string with ampersand colour codes
+     * @param input the string with section colour codes, may be null.
+     * @return the string with ampersand colour codes.
      */
     public static String untranslateCodes(String input) {
         if (input == null) {

@@ -74,7 +74,7 @@ public final class GatekeeperServiceImpl extends BaseService implements Gatekeep
      * Constructor for GateKeeperServiceImpl.
      *
      * @param plugin The STEMCraft plugin instance.
-     * @param api    The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      */
     public GatekeeperServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
@@ -330,7 +330,7 @@ public final class GatekeeperServiceImpl extends BaseService implements Gatekeep
     /**
      * Blacklist or unblacklist a UUID.
      *
-     * @param uuid  The UUID to modify.
+     * @param uuid The UUID to modify.
      * @param value True to blacklist, false to unblacklist.
      */
     public void blacklist(UUID uuid, boolean value) {
@@ -495,7 +495,7 @@ public final class GatekeeperServiceImpl extends BaseService implements Gatekeep
      * Check an invite code for a player.
      *
      * @param player The player to check the code for.
-     * @param code   The invite code to check.
+     * @param code The invite code to check.
      */
     private void checkInviteCode(Player player, String code) {
         if (!player.isOnline()) return;

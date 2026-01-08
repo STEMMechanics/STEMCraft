@@ -31,8 +31,8 @@ public interface ItemService {
      *
      * @param <T> The type of the attribute value.
      * @param <Z> A placeholder type parameter (not used).
-     * @param item  The ItemStack to which the attribute will be added.
-     * @param key   The key of the attribute.
+     * @param item The ItemStack to which the attribute will be added.
+     * @param key The key of the attribute.
      * @param value The value of the attribute.
      */
     <T, Z> void addAttrib(ItemStack item, String key, T value);
@@ -41,7 +41,7 @@ public interface ItemService {
      * Checks if the ItemStack has an attribute with the given key.
      *
      * @param item The ItemStack to check.
-     * @param key  The key of the attribute.
+     * @param key The key of the attribute.
      * @return True if the attribute exists, false otherwise.
      */
     boolean hasAttrib(ItemStack item, String key);
@@ -50,7 +50,7 @@ public interface ItemService {
      * Removes an attribute from the ItemStack with the given key.
      *
      * @param item The ItemStack from which the attribute will be removed.
-     * @param key  The key of the attribute to remove.
+     * @param key The key of the attribute to remove.
      */
     void removeAttrib(ItemStack item, String key);
 

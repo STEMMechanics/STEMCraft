@@ -23,7 +23,7 @@ public class GlyphGenerator extends ResourcePackGenerator {
     /**
      * Constructs a GlyphGenerator with the given STEMCraftAPI and ResourcePackService.
      *
-     * @param api     The STEMCraftAPI instance.
+     * @param api The STEMCraftAPI instance.
      * @param service The ResourcePackService instance.
      */
     public GlyphGenerator(STEMCraftAPI api, ResourcePackService service) {
@@ -33,11 +33,11 @@ public class GlyphGenerator extends ResourcePackGenerator {
     /**
      * Generates glyphs defined in the data pack configuration into the resource pack.
      *
-     * @param namespace        The namespace to use for generated assets.
-     * @param config           The configuration section for generator settings.
-     * @param dataPackDir      The output directory for data pack files.
-     * @param manifest         The manifest configuration section.
-     * @param resourcePackDir  The output directory for resource pack files.
+     * @param namespace The namespace to use for generated assets.
+     * @param config The configuration section for generator settings.
+     * @param dataPackDir The output directory for data pack files.
+     * @param manifest The manifest configuration section.
+     * @param resourcePackDir The output directory for resource pack files.
      */
     @Override
     public void buildFromDataPackConfig(String namespace, ConfigSection config, File dataPackDir, ConfigSection manifest, File resourcePackDir) {
@@ -124,7 +124,7 @@ public class GlyphGenerator extends ResourcePackGenerator {
      * Applies token mappings from the manifest to the resource pack service.
      *
      * @param namespace The namespace for the resource pack.
-     * @param manifest  The manifest configuration section.
+     * @param manifest The manifest configuration section.
      */
     @Override
     public void apply(String namespace, ConfigSectionView manifest) {

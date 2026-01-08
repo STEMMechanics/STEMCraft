@@ -41,7 +41,7 @@ public interface GatekeeperService {
     /**
      * Sets the blacklist status of a player.
      *
-     * @param uuid  The UUID of the player.
+     * @param uuid The UUID of the player.
      * @param value True to blacklist the player, false to remove from blacklist.
      */
     void blacklist(UUID uuid, boolean value);
@@ -58,7 +58,7 @@ public interface GatekeeperService {
     /**
      * Sets the whitelist status of a player.
      *
-     * @param uuid  The UUID of the player.
+     * @param uuid The UUID of the player.
      * @param value True to whitelist the player, false to remove from whitelist.
      */
     void whitelist(UUID uuid, boolean value);

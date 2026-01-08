@@ -96,7 +96,7 @@ public interface RecipeService {
      * @param input The input Material to be cooked on the campfire.
      * @param output The resulting ItemStack from the campfire cooking process.
      * @param exp The experience gained from campfire cooking.
-     * @param cookTicks The time in ticks required to cook the item on the campfire
+     * @param cookTicks The time in ticks required to cook the item on the campfire.
      */
     void addCampfire(String id, Material input, ItemStack output, float exp, int cookTicks);
 

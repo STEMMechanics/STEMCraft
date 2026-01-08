@@ -50,7 +50,7 @@ public class WorldTickSpeedSetting implements WorldBaseSetting {
     /**
      * Called when the setting is enabled.
      *
-     * @param api     The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      * @param service The WorldService instance.
      */
     @Override
@@ -61,7 +61,7 @@ public class WorldTickSpeedSetting implements WorldBaseSetting {
     /**
      * Called when a world is loaded to apply the tickspeed setting.
      *
-     * @param world  The world being loaded.
+     * @param world The world being loaded.
      * @param config The configuration section for the world.
      */
     @Override
@@ -92,9 +92,9 @@ public class WorldTickSpeedSetting implements WorldBaseSetting {
     /**
      * Handle the command for this setting.
      *
-     * @param ctx    The command context.
+     * @param ctx The command context.
      * @param config The configuration section for the world.
-     * @param world  The world to apply the setting to.
+     * @param world The world to apply the setting to.
      */
     @Override
     public void onCommand(CommandContext ctx, ConfigSection config, World world) {
@@ -123,7 +123,7 @@ public class WorldTickSpeedSetting implements WorldBaseSetting {
     /**
      * Get the value of this setting for the given world from the config.
      *
-     * @param world  The world to get the setting for.
+     * @param world The world to get the setting for.
      * @param config The configuration section for the world.
      * @return The setting value (all, mobs, animals, unset).
      */
@@ -141,9 +141,9 @@ public class WorldTickSpeedSetting implements WorldBaseSetting {
     /**
      * Set the value of this setting for the given world in the config.
      *
-     * @param world  The world to apply the setting to.
+     * @param world The world to apply the setting to.
      * @param config The configuration section for the world.
-     * @param value  The value to set (all, mobs, animals, unset).
+     * @param value The value to set (all, mobs, animals, unset).
      */
     @Override
     public void set(World world, ConfigSection config, String value) {

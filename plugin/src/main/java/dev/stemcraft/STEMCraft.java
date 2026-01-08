@@ -98,6 +98,7 @@ public final class STEMCraft extends JavaPlugin {
     private boolean debugging = false;
     private final String whiteListMessage = "This server is invite-only.";
 
+    /** {@inheritDoc} */
     @Override
     public void onEnable() {
         instance = this;
@@ -262,6 +263,7 @@ public final class STEMCraft extends JavaPlugin {
         return uuid;
     }
 
+    /** {@inheritDoc} */
     @Override
     public void onDisable() {
         worlds.onDisable();
@@ -292,7 +294,7 @@ public final class STEMCraft extends JavaPlugin {
     }
 
     /**
-     * Load STEMCraft Features within dev.stemcraft.features
+     * Load STEMCraft Features within dev.stemcraft.features.
      */
     private void loadFeatures() {
         iterateClasses(
@@ -304,7 +306,7 @@ public final class STEMCraft extends JavaPlugin {
     }
 
     /**
-     * Load a specific STEMCraft Feature if enabled
+     * Load a specific STEMCraft Feature if enabled.
      */
     private void loadFeature(BaseFeature feature) {
         if(feature.getConfigSection().getBoolean("enabled", true)) {
@@ -317,7 +319,7 @@ public final class STEMCraft extends JavaPlugin {
     }
 
     /**
-     * Load STEMCraft Commands within dev.stemcraft.command
+     * Load STEMCraft Commands within dev.stemcraft.command.
      */
     private void loadCommands() {
         iterateClasses(
@@ -329,7 +331,7 @@ public final class STEMCraft extends JavaPlugin {
     }
 
     /**
-     * Load STEMCraft Minigames within dev.stemcraft.minigame
+     * Load STEMCraft Minigames within dev.stemcraft.minigame.
      */
     private void loadMinigames() {
 //        iterateClasses(
@@ -352,12 +354,12 @@ public final class STEMCraft extends JavaPlugin {
      * Iterate through classes in the JAR file under the specified path,
      * filtering by the given type and executing a callback for each instance.
      *
-     * @param path       The path within the JAR to scan.
+     * @param path The path within the JAR to scan.
      * @param typeFilter The class type to filter by.
-     * @param callback   The callback to execute for each instance.
-     * @param constructorTypes  The constructor argument types. (eg new Class<?>[]{STEMCraftAPI.class, WorldService.class})
-     * @param constructorArgs   The constructor arguments. (eg this.api, this.worlds)
-     * @param <T>        The type of the class to filter by.
+     * @param callback The callback to execute for each instance.
+     * @param constructorTypes The constructor argument types. (eg new Class<?>[]{STEMCraftAPI.class, WorldService.class}).
+     * @param constructorArgs The constructor arguments. (eg this.api, this.worlds).
+     * @param <T> The type of the class to filter by.
      */
     private <T> void iterateClasses(
             String path,
@@ -416,7 +418,7 @@ public final class STEMCraft extends JavaPlugin {
     /**
      * Export a directory bundled within the JAR to the plugin's data folder.
      *
-     * @param jarPath    The root path within the JAR to export.
+     * @param jarPath The root path within the JAR to export.
      * @param exportPath The subdirectory within the data folder to export to. Can be null to use the same as jarPath.
      */
     public void exportBundledDirectory(String jarPath, @Nullable String exportPath) {

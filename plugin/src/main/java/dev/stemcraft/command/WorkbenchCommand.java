@@ -47,7 +47,7 @@ public class WorkbenchCommand extends BaseCommand {
      * Creates a new WorkbenchCommand instance.
      *
      * @param plugin The main STEMCraft plugin instance.
-     * @param api    The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      */
     public WorkbenchCommand(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);

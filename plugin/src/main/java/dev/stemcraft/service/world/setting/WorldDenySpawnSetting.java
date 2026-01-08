@@ -52,7 +52,7 @@ public class WorldDenySpawnSetting implements WorldBaseSetting {
     /**
      * Called when the setting is enabled.
      *
-     * @param api     The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      * @param service The WorldService instance.
      */
     @Override
@@ -117,9 +117,9 @@ public class WorldDenySpawnSetting implements WorldBaseSetting {
     /**
      * Handle the command for this setting.
      *
-     * @param ctx    The command context.
+     * @param ctx The command context.
      * @param config The configuration section for the world.
-     * @param world  The world to apply the setting to.
+     * @param world The world to apply the setting to.
      */
     @Override
     public void onCommand(CommandContext ctx, ConfigSection config, World world) {
@@ -146,9 +146,9 @@ public class WorldDenySpawnSetting implements WorldBaseSetting {
     /**
      * Set the value of this setting for the given world in the config.
      *
-     * @param world  The world to apply the setting to.
+     * @param world The world to apply the setting to.
      * @param config The configuration section for the world.
-     * @param value  The value to set (all, mobs, animals, unset).
+     * @param value The value to set (all, mobs, animals, unset).
      */
     @Override
     public void set(World world, ConfigSection config, String value) {
@@ -174,7 +174,7 @@ public class WorldDenySpawnSetting implements WorldBaseSetting {
     }
 
     /**
-     * Check if an entity matches our "all"
+     * Check if an entity matches our "all".
      *
      * @param entity The entity to check.
      * @return true if the entity is a living entity but not a player or armor stand.

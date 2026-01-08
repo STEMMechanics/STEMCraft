@@ -47,20 +47,20 @@ public final class FontUtil {
     private static final Set<Character> WIDTH_7 = new HashSet<>(Set.of('~', '@')); // 7 px
 
     /**
-     * Calculate the pixel width of a string based on the default minecraft font
+     * Calculate the pixel width of a string based on the default minecraft font.
      *
-     * @param text The text to calculate
-     * @return The pixel width
+     * @param text The text to calculate.
+     * @return The pixel width.
      */
     public static int calculatePixelWidth(Component text) {
         return calculatePixelWidth(LegacyComponentSerializer.legacySection().serialize(text));
     }
 
     /**
-     * Calculate the pixel width of a string based on the default minecraft font
+     * Calculate the pixel width of a string based on the default minecraft font.
      *
-     * @param text The text to calculate
-     * @return The pixel width
+     * @param text The text to calculate.
+     * @return The pixel width.
      */
     public static int calculatePixelWidth(String text) {
         // Remove Minecraft color and formatting codes (e.g., §b, §l, etc.)

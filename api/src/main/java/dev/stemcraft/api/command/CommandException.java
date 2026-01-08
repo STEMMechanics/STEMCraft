@@ -25,17 +25,17 @@ import dev.stemcraft.api.util.PlaceholderUtil;
 import lombok.Getter;
 
 /**
- * Exception thrown to indicate a command error
+ * Exception thrown to indicate a command error.
  */
 public class CommandException extends RuntimeException {
     /**
-     * The messages to send to the command sender
+     * The messages to send to the command sender.
      */
     @Getter
     private final String message;
 
     /**
-     * Constructor
+     * Constructor.
      */
     public CommandException() {
         super("");

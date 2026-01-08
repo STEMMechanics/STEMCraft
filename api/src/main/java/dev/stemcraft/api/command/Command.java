@@ -30,72 +30,72 @@ import org.jetbrains.annotations.NotNull;
 public interface Command extends HasMessages {
 
     /**
-     * Get the command label
+     * Get the command label.
      *
-     * @return the command label
+     * @return the command label.
      */
     String getLabel();
 
     /**
-     * Get the command usage string
+     * Get the command usage string.
      *
-     * @return the command usage string
+     * @return the command usage string.
      */
     String getUsage();
 
     /**
-     * Get the command permission
+     * Get the command permission.
      *
-     * @return the command permission
+     * @return the command permission.
      */
     String getPermission();
     
     /**
-     * Register the command on the server
+     * Register the command on the server.
      *
-     * @param plugin the plugin registering the command
+     * @param plugin the plugin registering the command.
      */
     void register(JavaPlugin plugin);
 
     /**
      * Update the permission required to run this command. Use empty string to clear.
      *
-     * @param permission the new permission required to run this command
+     * @param permission the new permission required to run this command.
      */
     void setPermission(@NotNull String permission);
 
     /**
      * Replace aliases.
      *
-     * @param alias the new aliases for this command
+     * @param alias the new aliases for this command.
      */
     void setAliases(@NotNull String... alias);
 
     /**
      * Update the usage string.
      *
-     * @param usage the new usage string
+     * @param usage the new usage string.
      */
     void setUsage(@NotNull String usage);
 
     /**
      * Update the description.
      *
-     * @param description the new description
+     * @param description the new description.
      */
     void setDescription(@NotNull String description);
 
     /**
      * Add a tab completion pattern (your existing format: String[] items).
      *
-     * @param completions the tab completion patterns to add
+     * @param completions the tab completion patterns to add.
      */
     void addTabCompletion(@NotNull String... completions);
 
     /**
      * Remove a tab completion pattern (your existing format: String[] items).
      *
-     * @param completions the tab completion patterns to remove
+     * @param completions the tab completion patterns to remove.
      */
     void removeTabCompletion(@NotNull String... completions);
 

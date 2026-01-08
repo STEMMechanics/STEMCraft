@@ -46,7 +46,7 @@ public class ConfigServiceImpl extends BaseService implements ConfigService {
      * Constructor for ConfigServiceImpl.
      *
      * @param plugin The STEMCraft plugin instance.
-     * @param api    The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      */
     public ConfigServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);

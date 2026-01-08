@@ -59,8 +59,8 @@ public final class ArenaStatus {
      * Checks whether the given status matches one of the predefined
      * arena lifecycle statuses.
      *
-     * @param status the status to check, may be {@code null}
-     * @return {@code true} if the status is predefined
+     * @param status the status to check, may be {@code null}.
+     * @return {@code true} if the status is predefined.
      */
     public static boolean isPredefined(String status) {
         if (status == null) return false;
@@ -70,8 +70,8 @@ public final class ArenaStatus {
     /**
      * Normalises a status string to the canonical lowercase form used by the API.
      *
-     * @param status the status to normalise, may be {@code null}
-     * @return the normalised status, or {@code null} if input was {@code null}
+     * @param status the status to normalise, may be {@code null}.
+     * @return the normalised status, or {@code null} if input was {@code null}.
      */
     public static String normalize(String status) {
         return status == null ? null : status.toLowerCase();
@@ -80,7 +80,7 @@ public final class ArenaStatus {
     /**
      * Returns an immutable view of all predefined arena statuses.
      *
-     * @return an unmodifiable set of predefined statuses
+     * @return an unmodifiable set of predefined statuses.
      */
     public static Set<String> predefined() {
         return PREDEFINED;

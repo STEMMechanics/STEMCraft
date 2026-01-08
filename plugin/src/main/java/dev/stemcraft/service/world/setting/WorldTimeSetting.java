@@ -52,7 +52,7 @@ public class WorldTimeSetting implements WorldBaseSetting {
     /**
      * Called when the setting is enabled.
      *
-     * @param api     The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      * @param service The WorldService instance.
      */
     @Override
@@ -85,7 +85,7 @@ public class WorldTimeSetting implements WorldBaseSetting {
     /**
      * Called when a world is loaded.
      *
-     * @param world  The world being loaded.
+     * @param world The world being loaded.
      * @param config The configuration section for the world.
      */
     @Override
@@ -102,6 +102,7 @@ public class WorldTimeSetting implements WorldBaseSetting {
         }
     }
 
+    /** {@inheritDoc} */
     @Override
     public void onWorldUnload(World world, ConfigSection config) {
         worldLockedTimes.remove(world);
@@ -110,9 +111,9 @@ public class WorldTimeSetting implements WorldBaseSetting {
     /**
      * Handle the command for this setting.
      *
-     * @param ctx    The command context.
+     * @param ctx The command context.
      * @param config The configuration section for the world.
-     * @param world  The world to apply the setting to.
+     * @param world The world to apply the setting to.
      */
     @Override
     public void onCommand(CommandContext ctx, ConfigSection config, World world) {
@@ -141,7 +142,7 @@ public class WorldTimeSetting implements WorldBaseSetting {
     /**
      * Get the value of this setting for the given world in the config.
      *
-     * @param world  The world to get the setting for.
+     * @param world The world to get the setting for.
      * @param config The configuration section.
      * @return The weather setting value.
      */
@@ -159,9 +160,9 @@ public class WorldTimeSetting implements WorldBaseSetting {
     /**
      * Set the value of this setting for the given world in the config.
      *
-     * @param world  The world to apply the setting to.
+     * @param world The world to apply the setting to.
      * @param config The configuration section for the world.
-     * @param value  The value to set (clear, rain, thunder, unset).
+     * @param value The value to set (clear, rain, thunder, unset).
      */
     @Override
     public void set(World world, ConfigSection config, String value) {

@@ -43,7 +43,7 @@ public class MotdServiceImpl extends BaseService implements MotdService {
      * Constructor for MotdServiceImpl.
      *
      * @param plugin The STEMCraft plugin instance.
-     * @param api    The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      */
     public MotdServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
@@ -73,7 +73,7 @@ public class MotdServiceImpl extends BaseService implements MotdService {
      * Set the default MOTD used when no other MOTDs are set.
      *
      * @param title The default MOTD title.
-     * @param text  The default MOTD text.
+     * @param text The default MOTD text.
      */
     public void setDefault(String title, String text) {
         this.defaultMotdTitle = title;
@@ -81,7 +81,7 @@ public class MotdServiceImpl extends BaseService implements MotdService {
     }
 
     /**
-     * Get the current MOTD
+     * Get the current MOTD.
      *
      * @return The current MOTD.
      */
@@ -107,9 +107,9 @@ public class MotdServiceImpl extends BaseService implements MotdService {
      * Push a new MOTD with given priority. Higher priority MOTDs override lower priority ones.
      *
      * @param namespaceId The namespace ID for the MOTD.
-     * @param priority    The priority of the MOTD.
-     * @param motdTitle   The MOTD title.
-     * @param motdText    The MOTD text.
+     * @param priority The priority of the MOTD.
+     * @param motdTitle The MOTD title.
+     * @param motdText The MOTD text.
      */
     public void push(String namespaceId, Priority priority, String motdTitle, String motdText) {
         motdMap.put(namespaceId, new ResolvedMotd(motdTitle, motdText, priority));

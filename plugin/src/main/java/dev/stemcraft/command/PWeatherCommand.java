@@ -38,7 +38,7 @@ public class PWeatherCommand extends BaseCommand {
      * Creates a new PWeatherCommand instance.
      *
      * @param plugin The main STEMCraft plugin instance.
-     * @param api    The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      */
     public PWeatherCommand(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);

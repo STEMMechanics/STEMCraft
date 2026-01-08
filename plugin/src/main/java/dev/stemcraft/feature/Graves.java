@@ -58,7 +58,7 @@ public class Graves extends BaseFeature {
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     /**
-     * Constructor
+     * Constructor.
      *
      * @param api The STEMCraft API instance.
      */
@@ -67,7 +67,7 @@ public class Graves extends BaseFeature {
     }
 
     /**
-     * Enable the feature
+     * Enable the feature.
      */
     @Override
     public void onEnable() {
@@ -104,10 +104,10 @@ public class Graves extends BaseFeature {
      * - sign goes at y+1
      *
      * Searches in an expanding square around the death location, checking from
-     * y+SEARCH_Y_UP down to y-SEARCH_Y_DOWN for each x,z position
+     * y+SEARCH_Y_UP down to y-SEARCH_Y_DOWN for each x,z position.
      *
-     * @param near Location near which to search
-     * @return Location of surface block, or null if none found
+     * @param near Location near which to search.
+     * @return Location of surface block, or null if none found.
      */
     private Location findSafeSurfaceLocation(Location near) {
         World world = near.getWorld();
@@ -143,8 +143,8 @@ public class Graves extends BaseFeature {
     /**
      * Checks if the given location is a valid spot for a buried grave.
      *
-     * @param surfaceLoc Location of the surface block
-     * @return True if valid, false otherwise
+     * @param surfaceLoc Location of the surface block.
+     * @return True if valid, false otherwise.
      */
     private boolean isValidLandBuriedSpot(Location surfaceLoc) {
         Block surface = surfaceLoc.getBlock();                  // y
@@ -167,11 +167,11 @@ public class Graves extends BaseFeature {
     /**
      * LAND: Create a buried grave at the given surface location.
      *
-     * @param api STEMCraft API instance
-     * @param surfaceLoc Location of the surface block
-     * @param player Player who died
-     * @param drops List of item drops to store in the grave
-     * @return True if grave created, false otherwise
+     * @param api STEMCraft API instance.
+     * @param surfaceLoc Location of the surface block.
+     * @param player Player who died.
+     * @param drops List of item drops to store in the grave.
+     * @return True if grave created, false otherwise.
      */
     private boolean createBuriedGrave(STEMCraftAPI api, Location surfaceLoc, Player player, List<ItemStack> drops) {
         Block surface = surfaceLoc.getBlock();
@@ -200,13 +200,13 @@ public class Graves extends BaseFeature {
      * y    dirt cap (replaces top liquid block)
      * y-1  chest
      * y-1  sides: dirt if not solid
-     * y-2  below chest: dirt if not solid
+     * y-2  below chest: dirt if not solid.
      *
-     * @param api STEMCraft API instance
-     * @param death Location of player death
-     * @param player Player who died
-     * @param drops List of item drops to store in the grave
-     * @return True if grave created, false otherwise
+     * @param api STEMCraft API instance.
+     * @param death Location of player death.
+     * @param player Player who died.
+     * @param drops List of item drops to store in the grave.
+     * @return True if grave created, false otherwise.
      */
     private boolean createLiquidGrave(STEMCraftAPI api, Location death, Player player, List<ItemStack> drops) {
         World world = death.getWorld();
@@ -259,11 +259,11 @@ public class Graves extends BaseFeature {
     /**
      * Finds the topmost liquid block (surface) in the column at (x,z) near baseY.
      *
-     * @param world World to search in
-     * @param x X coordinate
-     * @param baseY Base Y coordinate to search near
-     * @param z Z coordinate
-     * @return Y coordinate of the liquid surface, or null if none found
+     * @param world World to search in.
+     * @param x X coordinate.
+     * @param baseY Base Y coordinate to search near.
+     * @param z Z coordinate.
+     * @return Y coordinate of the liquid surface, or null if none found.
      */
     private Integer findLiquidSurfaceTopY(World world, int x, int baseY, int z) {
         // Find any liquid in the column near the death Y

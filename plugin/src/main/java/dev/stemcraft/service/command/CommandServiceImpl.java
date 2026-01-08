@@ -35,7 +35,7 @@ public class CommandServiceImpl extends BaseService implements CommandService {
      * Constructor for CommandServiceImpl.
      *
      * @param plugin The STEMCraft plugin instance.
-     * @param api    The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      */
     public CommandServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);

@@ -27,10 +27,10 @@ public final class ByteFormat {
 
     /**
      * Convert a byte value into a human-readable string
-     * (Bytes, KB, MB, GB, TB)
+     * (Bytes, KB, MB, GB, TB).
      *
-     * @param bytes the number of bytes
-     * @return formatted string such as "512 B", "1.24 KB", "3.8 MB"
+     * @param bytes the number of bytes.
+     * @return formatted string such as "512 B", "1.24 KB", "3.8 MB".
      */
     public static String formatBytes(long bytes) {
         if (bytes < 1024) {
@@ -52,9 +52,9 @@ public final class ByteFormat {
     /**
      * Parse a formatted byte string back into a long value in bytes.
      *
-     * @param formatted the formatted byte string (e.g. "14MB", "512 B", "1.5 GB")
-     * @return the number of bytes as a long
-     * @throws IllegalArgumentException if the input is invalid
+     * @param formatted the formatted byte string (e.g. "14MB", "512 B", "1.5 GB").
+     * @return the number of bytes as a long.
+     * @throws IllegalArgumentException if the input is invalid.
      */
     public static long toBytes(String formatted) {
         if (formatted == null || formatted.isEmpty()) {

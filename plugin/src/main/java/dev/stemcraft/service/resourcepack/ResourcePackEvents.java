@@ -16,7 +16,7 @@ public class ResourcePackEvents {
     /**
      * Constructor for ResourcePackEvents.
      *
-     * @param api     The STEMCraftAPI instance.
+     * @param api The STEMCraftAPI instance.
      * @param service The ResourcePackServiceImpl instance.
      */
     public ResourcePackEvents(STEMCraftAPI api, ResourcePackServiceImpl service) {

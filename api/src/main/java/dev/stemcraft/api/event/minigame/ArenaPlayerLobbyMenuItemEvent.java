@@ -38,7 +38,7 @@ public class ArenaPlayerLobbyMenuItemEvent extends BaseEvent {
      * Constructs a new ArenaPlayerLobbyMenuItemEvent.
      *
      * @param player The player interacting with the lobby menu item.
-     * @param arena  The mini-game arena associated with the lobby menu item.
+     * @param arena The mini-game arena associated with the lobby menu item.
      */
     public ArenaPlayerLobbyMenuItemEvent(Player player, MiniGameArena arena) {
         this.arena = arena;

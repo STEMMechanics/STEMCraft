@@ -37,7 +37,7 @@ public class FlyCommand extends BaseCommand {
      * Constructs the FlyCommand with the given plugin and API instances.
      *
      * @param plugin The STEMCraft plugin instance.
-     * @param api    The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      */
     public FlyCommand(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);

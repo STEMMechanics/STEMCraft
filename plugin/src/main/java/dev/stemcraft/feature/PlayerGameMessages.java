@@ -53,7 +53,7 @@ public class PlayerGameMessages extends BaseFeature {
     private List<String> deathByEntity = List.of();
 
     /**
-     * Constructor
+     * Constructor.
      *
      * @param api The STEMCraftAPI instance.
      */
@@ -168,10 +168,10 @@ public class PlayerGameMessages extends BaseFeature {
     /**
      * Renders a raw message string into a Component, replacing placeholders.
      *
-     * @param raw    The raw message string.
+     * @param raw The raw message string.
      * @param player The player involved in the event.
      * @param killer The name of the killer, if applicable.
-     * @param cause  The cause of death, if applicable.
+     * @param cause The cause of death, if applicable.
      * @return The rendered Component.
      */
     private Component render(String raw, Player player, String killer, String cause) {

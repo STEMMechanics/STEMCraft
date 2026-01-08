@@ -38,7 +38,7 @@ public class TimeUtil {
      * Formats a duration given in total seconds into a human-readable string.
      *
      * @param totalSeconds The total duration in seconds.
-     * @param format       The desired format style.
+     * @param format The desired format style.
      * @return A formatted duration string.
      */
     public static String formatDuration(long totalSeconds, FormatStyle format) {
@@ -82,7 +82,7 @@ public class TimeUtil {
      * Parses a duration string into total seconds.
      * Supports formats like "1d2h3m4s" and "permanent" if allowed.
      *
-     * @param durationStr    The duration string to parse.
+     * @param durationStr The duration string to parse.
      * @param allowPermanent Whether to allow "permanent" as a valid input.
      * @return The total duration in seconds, or -1 for permanent.
      * @throws IllegalArgumentException if the format is invalid.

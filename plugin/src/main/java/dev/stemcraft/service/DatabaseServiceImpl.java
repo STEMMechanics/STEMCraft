@@ -48,7 +48,7 @@ import java.util.*;
  *
  *   db.init(); // opens + applies migrations
  *   try (Connection c = db.connection()) { ... }
- *   db.close();
+ *   db.close();.
  */
 public class DatabaseServiceImpl extends BaseService implements DatabaseService, AutoCloseable {
     private static final String DATABASE_FILENAME = "database.db";
@@ -62,7 +62,7 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
      * Creates a new SQLiteManager instance.
      *
      * @param plugin The STEMCraft plugin instance.
-     * @param api    The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      */
     public DatabaseServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
@@ -152,7 +152,7 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
     /**
      * Executes an update statement (INSERT, UPDATE, DELETE).
      *
-     * @param sql    The SQL statement to execute.
+     * @param sql The SQL statement to execute.
      * @param binder The binder to set parameters on the prepared statement.
      * @return The number of affected rows.
      */
@@ -178,8 +178,8 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
     /**
      * Executes a query statement and maps the result set.
      *
-     * @param sql     The SQL statement to execute.
-     * @param binder  The binder to set parameters on the prepared statement.
+     * @param sql The SQL statement to execute.
+     * @param binder The binder to set parameters on the prepared statement.
      * @param handler The handler to process the result set.
      */
     public void query(String sql, DatabaseStatementBinder binder, DatabaseResultSetHandler handler) {
@@ -205,8 +205,8 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
     /**
      * Executes a query statement and maps the result set.
      *
-     * @param sql     The SQL statement to execute.
-     * @param binder  The binder to set parameters on the prepared statement.
+     * @param sql The SQL statement to execute.
+     * @param binder The binder to set parameters on the prepared statement.
      * @param handler The handler to process each row of the result set.
      */
     public void queryEach(String sql, DatabaseStatementBinder binder, DatabaseResultSetHandler handler) {
@@ -234,8 +234,8 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
     /**
      * Executes a query statement and maps a single result from the result set.
      *
-     * @param sql     The SQL statement to execute.
-     * @param binder  The binder to set parameters on the prepared statement.
+     * @param sql The SQL statement to execute.
+     * @param binder The binder to set parameters on the prepared statement.
      * @param handler The handler to process the single row of the result set.
      */
     public void querySingle(String sql, DatabaseStatementBinder binder, DatabaseResultSetHandler handler) {
@@ -263,10 +263,10 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
     /**
      * Executes a query statement and maps a single result from the result set.
      *
-     * @param sql    The SQL statement to execute.
+     * @param sql The SQL statement to execute.
      * @param binder The binder to set parameters on the prepared statement.
      * @param mapper The mapper to convert the result set row to an object of type T.
-     * @param <T>    The type of the object to map to.
+     * @param <T> The type of the object to map to.
      * @return The mapped object of type T, or null if no result was found.
      */
     public <T> T querySingleMapped(
@@ -329,7 +329,7 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
     /**
      * Sets the migration version for the given migration name.
      *
-     * @param name    The name of the migration.
+     * @param name The name of the migration.
      * @param version The migration version to set.
      */
     public void setMigrationVersion(String name, int version) {

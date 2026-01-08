@@ -44,7 +44,7 @@ public class CommandBuilderImpl implements CommandBuilder {
     /**
      * Constructor for CommandBuilderImpl.
      *
-     * @param api   The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      * @param label The command label.
      */
     public CommandBuilderImpl(STEMCraftAPI api, String label) {
@@ -53,10 +53,10 @@ public class CommandBuilderImpl implements CommandBuilder {
     }
 
     /**
-     * Set the command label
+     * Set the command label.
      *
-     * @param label The command label
-     * @return The CommandBuilder instance
+     * @param label The command label.
+     * @return The CommandBuilder instance.
      */
     public CommandBuilder label(String label) {
         this.label = label;
@@ -64,10 +64,10 @@ public class CommandBuilderImpl implements CommandBuilder {
     }
 
     /**
-     * Set the command aliases
+     * Set the command aliases.
      *
-     * @param aliases The command aliases
-     * @return The CommandBuilder instance
+     * @param aliases The command aliases.
+     * @return The CommandBuilder instance.
      */
     public CommandBuilder aliases(String... aliases) {
         Collections.addAll(this.aliases, aliases);
@@ -75,10 +75,10 @@ public class CommandBuilderImpl implements CommandBuilder {
     }
 
     /**
-     * Set the command description
+     * Set the command description.
      *
-     * @param description The command description
-     * @return The CommandBuilder instance
+     * @param description The command description.
+     * @return The CommandBuilder instance.
      */
     public CommandBuilder description(String description) {
         this.description = description;
@@ -86,10 +86,10 @@ public class CommandBuilderImpl implements CommandBuilder {
     }
 
     /**
-     * Set the command usage string
+     * Set the command usage string.
      *
-     * @param description The command usage string
-     * @return The CommandBuilder instance
+     * @param description The command usage string.
+     * @return The CommandBuilder instance.
      */
     public CommandBuilder usage(String description) {
         this.usage = description;
@@ -97,10 +97,10 @@ public class CommandBuilderImpl implements CommandBuilder {
     }
 
     /**
-     * Set the command permission
+     * Set the command permission.
      *
-     * @param permission The command permission
-     * @return The CommandBuilder instance
+     * @param permission The command permission.
+     * @return The CommandBuilder instance.
      */
     public CommandBuilder permission(String permission) {
         this.permission = permission;
@@ -110,8 +110,8 @@ public class CommandBuilderImpl implements CommandBuilder {
     /**
      * Add a tab completion track.
      *
-     * @param completions The tab completions for a specific argument index
-     * @return The CommandBuilder instance
+     * @param completions The tab completions for a specific argument index.
+     * @return The CommandBuilder instance.
      */
     public CommandBuilder tabCompletion(String... completions) {
         this.tabCompletions.add(completions);
@@ -119,10 +119,10 @@ public class CommandBuilderImpl implements CommandBuilder {
     }
 
     /**
-     * Set the command executor
+     * Set the command executor.
      *
-     * @param processor The command executor
-     * @return The CommandBuilder instance
+     * @param processor The command executor.
+     * @return The CommandBuilder instance.
      */
     public CommandBuilder executor(CommandExecutor processor) {
         this.executor = processor;
@@ -130,10 +130,10 @@ public class CommandBuilderImpl implements CommandBuilder {
     }
 
     /**
-     * Register the command on the server
+     * Register the command on the server.
      *
-     * @param plugin The JavaPlugin instance
-     * @return The registered Command instance
+     * @param plugin The JavaPlugin instance.
+     * @return The registered Command instance.
      */
     public Command register(JavaPlugin plugin) {
         Command command = new CommandImpl(api, label, description, usage, aliases, permission, executor, tabCompletions);

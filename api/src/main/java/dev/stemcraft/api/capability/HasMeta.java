@@ -31,18 +31,18 @@ public interface HasMeta {
     /**
      * Check if the metadata contains a value for the given key.
      *
-     * @param key the metadata key
-     * @return true if the metadata contains a value for the given key, false otherwise
+     * @param key the metadata key.
+     * @return true if the metadata contains a value for the given key, false otherwise.
      */
     boolean contains(String key);
 
     /**
      * Get the metadata value for the given key, or defaultValue if not present.
      *
-     * @param key the metadata key
-     * @param type the expected type of the metadata value
-     * @param defaultValue the default value to return if the key is not present
-     * @return the metadata value for the given key, or defaultValue if not present
+     * @param key the metadata key.
+     * @param type the expected type of the metadata value.
+     * @param defaultValue the default value to return if the key is not present.
+     * @return the metadata value for the given key, or defaultValue if not present.
      */
     <T> T get(String key, Class<T> type, T defaultValue);
     default <T> T get(String key, Class<T> type) { return get(key, type, null); }
@@ -52,33 +52,33 @@ public interface HasMeta {
      *
      * This overload allows type-safe retrieval of an existing value.
      *
-     * @param key the metadata key
-     * @param type the expected type of the metadata value
-     * @param supplier the supplier to create a new value if the key is not present
-     * @return the metadata value for the given key, or a new value created by the supplier if not present
+     * @param key the metadata key.
+     * @param type the expected type of the metadata value.
+     * @param supplier the supplier to create a new value if the key is not present.
+     * @return the metadata value for the given key, or a new value created by the supplier if not present.
      */
     <T> T getOrCreate(String key, Class<T> type, Supplier<? extends T> supplier);
 
     /**
      * Set the metadata value for the given key.
      *
-     * @param key the metadata key
-     * @param value the metadata value
+     * @param key the metadata key.
+     * @param value the metadata value.
      */
     <T> void set(String key, T value);
 
     /**
      * Set the metadata value for the given key if not already present.
      *
-     * @param key the metadata key
-     * @param value the metadata value
+     * @param key the metadata key.
+     * @param value the metadata value.
      */
     <T> void setIfAbsent(String key, T value);
 
     /**
      * Remove the metadata value for the given key.
      *
-     * @param key the metadata key
+     * @param key the metadata key.
      */
     void remove(String key);
 
@@ -90,7 +90,7 @@ public interface HasMeta {
     /**
      * Perform the given action for each metadata key-value pair.
      *
-     * @param consumer the action to perform for each metadata key-value pair
+     * @param consumer the action to perform for each metadata key-value pair.
      */
     void forEach(BiConsumer<String, Object> consumer);
 }

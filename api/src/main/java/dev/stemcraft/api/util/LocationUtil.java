@@ -32,10 +32,10 @@ public class LocationUtil {
 
     /**
      * Deserialize a Location from a string.
-     * Format: world (optional), x, y, z, yaw (optional), pitch (optional)
+     * Format: world (optional), x, y, z, yaw (optional), pitch (optional).
      *
-     * @param serialized    The serialized location string.
-     * @param defaultWorld  The default world to use if none is specified in the string.
+     * @param serialized The serialized location string.
+     * @param defaultWorld The default world to use if none is specified in the string.
      * @return The deserialized Location, or null if the string is invalid.
      */
     static public Location deserialize(String serialized, World defaultWorld) {
@@ -71,9 +71,9 @@ public class LocationUtil {
     /**
      * Serialize a Location to a string.
      *
-     * @param location          The Location to serialize.
-     * @param includeWorld     Whether to include the world name in the serialization.
-     * @param includePitchYaw  Whether to include pitch and yaw in the serialization.
+     * @param location The Location to serialize.
+     * @param includeWorld Whether to include the world name in the serialization.
+     * @param includePitchYaw Whether to include pitch and yaw in the serialization.
      * @return The serialized location string, or null if the location is null.
      */
     public static String serialize(Location location, boolean includeWorld, boolean includePitchYaw) {

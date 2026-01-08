@@ -31,7 +31,7 @@ public interface PunishmentAlertCallback {
     /**
      * Handles a punishment alert.
      *
-     * @param type   The type of punishment alert.
+     * @param type The type of punishment alert.
      * @param player The player associated with the punishment.
      * @param record The punishment record details.
      * @return true if the alert was handled successfully, false otherwise.

@@ -52,7 +52,7 @@ public class TeleportUtils extends BaseFeature {
     private final Map<String, Location> warps = new ConcurrentHashMap<>();
 
     /**
-     * Constructor
+     * Constructor.
      *
      * @param api The STEMCraft API instance.
      */
@@ -490,7 +490,7 @@ public class TeleportUtils extends BaseFeature {
      * Save a warp to configuration.
      *
      * @param name The name of the warp.
-     * @param loc  The location of the warp.
+     * @param loc The location of the warp.
      */
     private void saveWarpToConfig(String name, Location loc) {
         String value = LocationUtil.serialize(loc, true, true);
@@ -534,7 +534,7 @@ public class TeleportUtils extends BaseFeature {
      * Save a back location to configuration.
      *
      * @param uuid The UUID of the player.
-     * @param loc  The location to save.
+     * @param loc The location to save.
      */
     private void saveBackLocation(UUID uuid, Location loc) {
         ConfigSection section = getRootConfigSection().getSection("last-locations");
@@ -553,7 +553,7 @@ public class TeleportUtils extends BaseFeature {
      * Set the back location for a player.
      *
      * @param uuid The UUID of the player.
-     * @param loc  The location to set as back location.
+     * @param loc The location to set as back location.
      */
     private void setBackLocation(UUID uuid, Location loc) {
         if (loc == null) return;
@@ -576,9 +576,9 @@ public class TeleportUtils extends BaseFeature {
      * Apply standard placeholders to a string.
      *
      * @param player The player involved in the teleport.
-     * @param from   The original location.
-     * @param to     The destination location.
-     * @param input  The input string with placeholders.
+     * @param from The original location.
+     * @param to The destination location.
+     * @param input The input string with placeholders.
      * @return The string with placeholders replaced.
      */
     private String applyStandardPlaceholders(Player player, Location from, Location to, String input) {
@@ -611,9 +611,9 @@ public class TeleportUtils extends BaseFeature {
      * Dispatch a world change command.
      *
      * @param player The player involved in the teleport.
-     * @param from   The original location.
-     * @param to     The destination location.
-     * @param raw    The raw command string.
+     * @param from The original location.
+     * @param to The destination location.
+     * @param raw The raw command string.
      */
     private void dispatchWorldChangeCommand(Player player, Location from, Location to, String raw) {
         if (raw == null) return;
@@ -640,9 +640,9 @@ public class TeleportUtils extends BaseFeature {
     /**
      * Teleport a player to a world's spawn location.
      *
-     * @param cmd    The command instance.
+     * @param cmd The command instance.
      * @param sender The command sender.
-     * @param world  The target world.
+     * @param world The target world.
      * @param target The target player.
      */
     private void teleportToWorldSpawn(Command cmd,

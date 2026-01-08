@@ -37,7 +37,7 @@ public class PTimeCommand extends BaseCommand {
      * Creates a new PTimeCommand instance.
      *
      * @param plugin The main STEMCraft plugin instance.
-     * @param api    The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      */
     public PTimeCommand(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);

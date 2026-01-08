@@ -47,7 +47,7 @@ public class MessageServiceImpl extends BaseService implements MessageService {
      * Constructor for MessageServiceImpl.
      *
      * @param plugin The STEMCraft plugin instance.
-     * @param api    The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      */
     public MessageServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
@@ -70,8 +70,8 @@ public class MessageServiceImpl extends BaseService implements MessageService {
     /**
      * Log a debug message to the console.
      *
-     * @param message      The message to log.
-     * @param ex           An optional exception to log.
+     * @param message The message to log.
+     * @param ex An optional exception to log.
      * @param placeholders Optional placeholders for the message.
      */
     @Override
@@ -91,9 +91,9 @@ public class MessageServiceImpl extends BaseService implements MessageService {
     /**
      * Send a message to the sender or console if null.
      *
-     * @param sender       The command sender, or null for console.
-     * @param message      The message to send.
-     * @param ex           An optional exception to log.
+     * @param sender The command sender, or null for console.
+     * @param message The message to send.
+     * @param ex An optional exception to log.
      * @param placeholders Optional placeholders for the message.
      */
     @Override
@@ -123,9 +123,9 @@ public class MessageServiceImpl extends BaseService implements MessageService {
     /**
      * Send a message to the sender or console if null.
      *
-     * @param sender       The command sender, or null for console.
-     * @param message      The message to send.
-     * @param ex           An optional exception to log.
+     * @param sender The command sender, or null for console.
+     * @param message The message to send.
+     * @param ex An optional exception to log.
      * @param placeholders Optional placeholders for the message.
      */
     public void send(CommandSender sender, String message, Throwable ex, Object... placeholders) {
@@ -148,9 +148,9 @@ public class MessageServiceImpl extends BaseService implements MessageService {
     /**
      * Send an info message to the sender or console if null.
      *
-     * @param sender      The command sender, or null for console.
-     * @param message     The message to send.
-     * @param ex          An optional exception to log.
+     * @param sender The command sender, or null for console.
+     * @param message The message to send.
+     * @param ex An optional exception to log.
      * @param placeholders Optional placeholders for the message.
      */
     @Override
@@ -180,9 +180,9 @@ public class MessageServiceImpl extends BaseService implements MessageService {
     /**
      * Send a warning message to the sender or console if null.
      *
-     * @param sender       The command sender, or null for console.
-     * @param message      The message to send.
-     * @param ex           An optional exception to log.
+     * @param sender The command sender, or null for console.
+     * @param message The message to send.
+     * @param ex An optional exception to log.
      * @param placeholders Optional placeholders for the message.
      */
     @Override
@@ -212,9 +212,9 @@ public class MessageServiceImpl extends BaseService implements MessageService {
     /**
      * Send an error message to the sender or console if null.
      *
-     * @param sender       The command sender, or null for console.
-     * @param message      The message to send.
-     * @param ex           An optional exception to log.
+     * @param sender The command sender, or null for console.
+     * @param message The message to send.
+     * @param ex An optional exception to log.
      * @param placeholders Optional placeholders for the message.
      */
     @Override
@@ -244,9 +244,9 @@ public class MessageServiceImpl extends BaseService implements MessageService {
     /**
      * Send a success message to the sender or console if null.
      *
-     * @param sender       The command sender, or null for console.
-     * @param message      The message to send.
-     * @param ex           An optional exception to log.
+     * @param sender The command sender, or null for console.
+     * @param message The message to send.
+     * @param ex An optional exception to log.
      * @param placeholders Optional placeholders for the message.
      */
     @Override
@@ -276,8 +276,8 @@ public class MessageServiceImpl extends BaseService implements MessageService {
     /**
      * Broadcast a message to all online players, excluding those in the exclude list.
      *
-     * @param message      The message to broadcast.
-     * @param exclude      A list of players to exclude from the broadcast.
+     * @param message The message to broadcast.
+     * @param exclude A list of players to exclude from the broadcast.
      * @param placeholders Optional placeholders for the message.
      */
     @Override
@@ -300,8 +300,8 @@ public class MessageServiceImpl extends BaseService implements MessageService {
     /**
      * Get the localized text for a key with optional placeholders.
      *
-     * @param sender       The command sender for localization context.
-     * @param key          The localization key.
+     * @param sender The command sender for localization context.
+     * @param key The localization key.
      * @param placeholders Optional placeholders for the message.
      * @return The localized and processed text.
      */
@@ -314,8 +314,8 @@ public class MessageServiceImpl extends BaseService implements MessageService {
     /**
      * Render a localized message with bindings and placeholders applied.
      *
-     * @param sender       The command sender for localization context.
-     * @param key          The localization key.
+     * @param sender The command sender for localization context.
+     * @param key The localization key.
      * @param placeholders Optional placeholders for the message.
      * @return The rendered message.
      */
@@ -330,8 +330,8 @@ public class MessageServiceImpl extends BaseService implements MessageService {
     /**
      * Apply placeholders to a string.
      *
-     * @param sender       The command sender for localization context.
-     * @param str          The string to apply placeholders to.
+     * @param sender The command sender for localization context.
+     * @param str The string to apply placeholders to.
      * @param placeholders The placeholders to apply.
      * @return The string with placeholders applied.
      */

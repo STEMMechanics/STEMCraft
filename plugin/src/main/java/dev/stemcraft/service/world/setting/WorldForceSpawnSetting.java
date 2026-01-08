@@ -55,7 +55,7 @@ public class WorldForceSpawnSetting implements WorldBaseSetting {
     /**
      * Called when the setting is enabled.
      *
-     * @param api     The STEMCraft API instance.
+     * @param api The STEMCraft API instance.
      * @param service The WorldService instance.
      */
     @Override
@@ -105,9 +105,9 @@ public class WorldForceSpawnSetting implements WorldBaseSetting {
     /**
      * Handle the command for this setting.
      *
-     * @param ctx    The command context.
+     * @param ctx The command context.
      * @param config The configuration section.
-     * @param world  The world to apply the setting to.
+     * @param world The world to apply the setting to.
      */
     @Override
     public void onCommand(CommandContext ctx, ConfigSection config, World world) {

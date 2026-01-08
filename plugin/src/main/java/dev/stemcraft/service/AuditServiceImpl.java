@@ -76,10 +76,10 @@ public class AuditServiceImpl extends BaseService implements AuditService {
             .withZone(ZoneId.systemDefault());
 
     /**
-     * Constructor
+     * Constructor.
      *
-     * @param plugin The STEMCraft plugin instance
-     * @param api    The STEMCraft API instance
+     * @param plugin The STEMCraft plugin instance.
+     * @param api The STEMCraft API instance.
      */
     public AuditServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
@@ -87,7 +87,7 @@ public class AuditServiceImpl extends BaseService implements AuditService {
     }
 
     /**
-     * Enable the service
+     * Enable the service.
      */
     @Override
     public void onEnable() {
@@ -288,7 +288,7 @@ public class AuditServiceImpl extends BaseService implements AuditService {
     }
 
     /**
-     * Disable the service
+     * Disable the service.
      */
     @Override
     public void onDisable() {
@@ -296,10 +296,10 @@ public class AuditServiceImpl extends BaseService implements AuditService {
     }
 
     /**
-     * Load regex patterns from config
+     * Load regex patterns from config.
      *
-     * @param path Config path
-     * @return List of compiled patterns
+     * @param path Config path.
+     * @return List of compiled patterns.
      */
     private List<Pattern> loadPatterns(String path) {
         List<Pattern> list = new ArrayList<>();
@@ -316,11 +316,11 @@ public class AuditServiceImpl extends BaseService implements AuditService {
     }
 
     /**
-     * Check if material matches any pattern in the list
+     * Check if material matches any pattern in the list.
      *
-     * @param list     List of patterns
-     * @param material Material to check
-     * @return True if matches, false otherwise
+     * @param list List of patterns.
+     * @param material Material to check.
+     * @return True if matches, false otherwise.
      */
     @SuppressWarnings("BooleanMethodIsAlwaysInverted")
     private boolean matches(List<Pattern> list, Material material) {
@@ -334,11 +334,11 @@ public class AuditServiceImpl extends BaseService implements AuditService {
     }
 
     /**
-     * Log action
+     * Log action.
      *
-     * @param player       The player (null for server)
-     * @param action       The action description
-     * @param placeholders Optional placeholders
+     * @param player The player (null for server).
+     * @param action The action description.
+     * @param placeholders Optional placeholders.
      */
     @Override
     public void log(Player player, String action, String... placeholders) {
@@ -362,7 +362,7 @@ public class AuditServiceImpl extends BaseService implements AuditService {
     }
 
     /**
-     * Flush all buffers to disk
+     * Flush all buffers to disk.
      */
     private void flushAll() {
         buffers.forEach((uuid, deque) -> {
@@ -374,9 +374,9 @@ public class AuditServiceImpl extends BaseService implements AuditService {
     }
 
     /**
-     * Flush specific player buffer to disk
+     * Flush specific player buffer to disk.
      *
-     * @param player The player
+     * @param player The player.
      */
     private void flush(Player player) {
         if (player == null) return;
@@ -384,10 +384,10 @@ public class AuditServiceImpl extends BaseService implements AuditService {
     }
 
     /**
-     * Flush specific player buffer to disk
+     * Flush specific player buffer to disk.
      *
-     * @param uuid       The player UUID
-     * @param playerName The player name
+     * @param uuid The player UUID.
+     * @param playerName The player name.
      */
     private void flush(UUID uuid, String playerName) {
         Deque<PlayerLogEntry> deque = buffers.get(uuid);
@@ -457,9 +457,9 @@ public class AuditServiceImpl extends BaseService implements AuditService {
     }
 
     /**
-     * Get current server TPS
+     * Get current server TPS.
      *
-     * @return TPS or -1.0 if unavailable
+     * @return TPS or -1.0 if unavailable.
      */
     private double getCurrentTPS() {
         try {
@@ -471,7 +471,7 @@ public class AuditServiceImpl extends BaseService implements AuditService {
     }
 
     /**
-     * Check server performance and log warnings if thresholds are breached
+     * Check server performance and log warnings if thresholds are breached.
      */
     private void checkPerformance() {
         double tps = getCurrentTPS();
@@ -488,7 +488,7 @@ public class AuditServiceImpl extends BaseService implements AuditService {
     }
 
     /**
-     * Record representing a player log entry
+     * Record representing a player log entry.
      */
     private record PlayerLogEntry(Instant timestamp, String action, String playerName) { }
 }

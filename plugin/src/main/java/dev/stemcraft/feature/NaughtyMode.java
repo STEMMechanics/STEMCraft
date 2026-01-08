@@ -51,7 +51,7 @@ public class NaughtyMode extends BaseFeature {
     private List<String> allowedCommands = new ArrayList<>();
 
     /**
-     * Constructor
+     * Constructor.
      *
      * @param api The STEMCraft API instance.
      */
@@ -60,7 +60,7 @@ public class NaughtyMode extends BaseFeature {
     }
 
     /**
-     * Enable the feature
+     * Enable the feature.
      */
     @Override
     public void onEnable() {
@@ -298,10 +298,10 @@ public class NaughtyMode extends BaseFeature {
     /**
      * Sets or clears Naughty Mode for a player.
      *
-     * @param uuid     The UUID of the player.
+     * @param uuid The UUID of the player.
      * @param duration The duration of Naughty Mode. If null or non-positive, Naughty Mode is cleared.
-     * @param actor    The player who is setting the Naughty Mode (can be null).
-     * @param reason   The reason for setting Naughty Mode (can be null).
+     * @param actor The player who is setting the Naughty Mode (can be null).
+     * @param reason The reason for setting Naughty Mode (can be null).
      */
     private void setNaughty(UUID uuid, Duration duration, Player actor, String reason) {
         String id = uuid.toString();

@@ -73,7 +73,7 @@ public class WorldGenerationImpl implements WorldGeneration {
     /**
      * Registers a new chunk generator factory with the given key.
      *
-     * @param key     The unique key for the chunk generator.
+     * @param key The unique key for the chunk generator.
      * @param factory The factory to create chunk generator instances.
      */
     public void register(String key, ChunkGeneratorFactory factory) {

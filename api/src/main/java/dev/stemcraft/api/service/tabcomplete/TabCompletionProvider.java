@@ -34,7 +34,7 @@ public interface TabCompletionProvider {
      * Provides a list of tab completions based on the player and current arguments.
      *
      * @param player The player requesting tab completions.
-     * @param args   The current arguments typed by the player.
+     * @param args The current arguments typed by the player.
      * @return A list of tab completions.
      */
     List<String> provide(Player player, String... args);

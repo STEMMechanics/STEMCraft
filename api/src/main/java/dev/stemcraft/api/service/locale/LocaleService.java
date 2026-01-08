@@ -29,19 +29,19 @@ import org.bukkit.entity.Player;
 public interface LocaleService {
 
     /**
-     * Get the default locale of the server
+     * Get the default locale of the server.
      *
-     * @return The default locale string
+     * @return The default locale string.
      */
     String getDefaultLocale();
 
     /**
-     * Get a locale string based on the lang and key and fill placeholders.
-     * If key is a string, then it will be used in place of the key.
+     * Resolve a locale key to a localized string.
+     * If the key does not look like a locale key, the raw key is returned unchanged.
      *
      * @param lang The language code (e.g., "en-US").
-     * @param key  The key for the locale string.
-     * @return The resolved locale string.
+     * @param key The key for the locale string.
+     * @return The resolved locale string, or the raw key when no lookup is performed.
      */
     String resolve(String lang, String key);
     default String resolve(String key) { return resolve(getDefaultLocale(), key); }

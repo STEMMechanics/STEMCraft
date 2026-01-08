@@ -135,12 +135,12 @@ public class PlayerTabList extends BaseFeature {
     /**
      * Applies placeholders to a string for a given player.
      *
-     * @param s       The input string with placeholders.
-     * @param p       The player.
-     * @param prefix  The player's prefix.
-     * @param suffix  The player's suffix.
-     * @param online  The number of online players.
-     * @param max     The maximum number of players.
+     * @param s The input string with placeholders.
+     * @param p The player.
+     * @param prefix The player's prefix.
+     * @param suffix The player's suffix.
+     * @param online The number of online players.
+     * @param max The maximum number of players.
      * @return The string with placeholders replaced.
      */
     private String applyPlaceholders(String s, Player p, String prefix, String suffix, int online, int max) {
@@ -222,7 +222,7 @@ public class PlayerTabList extends BaseFeature {
     /**
      * Trims a string to a maximum visible length.
      *
-     * @param s      The input string.
+     * @param s The input string.
      * @param maxLen The maximum visible length.
      * @return The trimmed string.
      */

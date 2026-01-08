@@ -37,8 +37,8 @@ public class ClearInvCommand extends BaseCommand {
     /**
      * Constructor for ClearInvCommand.
      *
-     * @param plugin the STEMCraft plugin instance
-     * @param api the STEMCraft API instance
+     * @param plugin the STEMCraft plugin instance.
+     * @param api the STEMCraft API instance.
      */
     ClearInvCommand(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
@@ -59,8 +59,8 @@ public class ClearInvCommand extends BaseCommand {
     /**
      * Called when the command is executed.
      *
-     * @param cmd the command being executed
-     * @param ctx the context of the command execution
+     * @param cmd the command being executed.
+     * @param ctx the context of the command execution.
      */
     @Override
     public void onExecute(Command cmd, CommandContext ctx) {
