@@ -33,6 +33,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
+import javax.annotation.Nullable;
 import java.util.Collection;
 import java.util.List;
 
@@ -75,7 +76,7 @@ public class MessageServiceImpl extends BaseService implements MessageService {
      * @param placeholders Optional placeholders for the message.
      */
     @Override
-    public void debug(String message, Throwable ex, Object... placeholders) {
+    public void debug(String message, @Nullable Throwable ex, Object... placeholders) {
         if(plugin.debugging()) {
             message = render(null, message, placeholders);
             Component component = TextUtil.colourise("[DEBUG] " + message);
@@ -97,7 +98,7 @@ public class MessageServiceImpl extends BaseService implements MessageService {
      * @param placeholders Optional placeholders for the message.
      */
     @Override
-    public void log(CommandSender sender, String message, Throwable ex, Object... placeholders) {
+    public void log(@Nullable CommandSender sender, String message, @Nullable Throwable ex, Object... placeholders) {
         message = render(sender, message, placeholders);
 
         Component senderComponent;
@@ -128,7 +129,7 @@ public class MessageServiceImpl extends BaseService implements MessageService {
      * @param ex An optional exception to log.
      * @param placeholders Optional placeholders for the message.
      */
-    public void send(CommandSender sender, String message, Throwable ex, Object... placeholders) {
+    public void send(@Nullable CommandSender sender, String message, @Nullable Throwable ex, Object... placeholders) {
         message = render(sender, message, placeholders);
 
         Component senderComponent = TextUtil.colourise(message);
@@ -154,7 +155,7 @@ public class MessageServiceImpl extends BaseService implements MessageService {
      * @param placeholders Optional placeholders for the message.
      */
     @Override
-    public void info(CommandSender sender, String message, Throwable ex, Object... placeholders) {
+    public void info(@Nullable CommandSender sender, String message, @Nullable Throwable ex, Object... placeholders) {
         message = render(sender, message, placeholders);
 
         Component senderComponent;
@@ -186,7 +187,7 @@ public class MessageServiceImpl extends BaseService implements MessageService {
      * @param placeholders Optional placeholders for the message.
      */
     @Override
-    public void warn(CommandSender sender, String message, Throwable ex, Object... placeholders) {
+    public void warn(@Nullable CommandSender sender, String message, @Nullable Throwable ex, Object... placeholders) {
         message = render(sender, message, placeholders);
 
         Component senderComponent;
@@ -218,7 +219,7 @@ public class MessageServiceImpl extends BaseService implements MessageService {
      * @param placeholders Optional placeholders for the message.
      */
     @Override
-    public void error(CommandSender sender, String message, Throwable ex, Object... placeholders) {
+    public void error(@Nullable CommandSender sender, String message, @Nullable Throwable ex, Object... placeholders) {
         message = render(sender, message, placeholders);
 
         Component senderComponent;
@@ -250,7 +251,7 @@ public class MessageServiceImpl extends BaseService implements MessageService {
      * @param placeholders Optional placeholders for the message.
      */
     @Override
-    public void success(CommandSender sender, String message, Throwable ex, Object... placeholders) {
+    public void success(@Nullable CommandSender sender, String message, @Nullable Throwable ex, Object... placeholders) {
         message = render(sender, message, placeholders);
 
         Component senderComponent;
@@ -281,7 +282,7 @@ public class MessageServiceImpl extends BaseService implements MessageService {
      * @param placeholders Optional placeholders for the message.
      */
     @Override
-    public void broadcast(String message, List<Player> exclude, Object... placeholders) {
+    public void broadcast(String message, @Nullable List<Player> exclude, Object... placeholders) {
         String serverMessage = render(null, message, placeholders);
         Component serverComponent = TextUtil.colourise(tokens.apply(prefixes.broadcast()) + serverMessage);
         plugin.getComponentLogger().info(serverComponent);
@@ -306,7 +307,7 @@ public class MessageServiceImpl extends BaseService implements MessageService {
      * @return The localized and processed text.
      */
     @Override
-    public String text(CommandSender sender, String key, Object... placeholders) {
+    public String text(@Nullable CommandSender sender, String key, Object... placeholders) {
         return render(sender, key, placeholders);
     }
 

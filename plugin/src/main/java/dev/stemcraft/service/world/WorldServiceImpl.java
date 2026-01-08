@@ -43,6 +43,7 @@ import org.bukkit.event.world.WorldUnloadEvent;
 import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.event.EventPriority;
 
+import javax.annotation.Nullable;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.*;
@@ -235,7 +236,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      * @param generatorOptions The options for the custom generator (or null for default).
      * @return The created World instance.
      */
-    @Override public World createWorld(String name, String generatorName, String generatorOptions) {
+    @Override public World createWorld(String name, @Nullable String generatorName, @Nullable String generatorOptions) {
         return ensure(name, worldGeneration.get(generatorName, generatorOptions));
     }
 
@@ -275,7 +276,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      * @return The value of the setting, or null if not found.
      */
     @Override
-    public String getSetting(World world, String key) {
+    public @Nullable String getSetting(World world, String key) {
         WorldBaseSetting setting = getSettingHandler(key);
         if(setting != null) {
             return setting.get(world, getConfigSection(world));

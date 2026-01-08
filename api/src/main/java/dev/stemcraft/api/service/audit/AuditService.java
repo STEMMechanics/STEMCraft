@@ -22,6 +22,8 @@ package dev.stemcraft.api.service.audit;
 
 import org.bukkit.entity.Player;
 
+import javax.annotation.Nullable;
+
 /**
  * Service for logging audit actions performed by players.
  */
@@ -34,5 +36,5 @@ public interface AuditService {
      * @param action A string describing the action.
      * @param placeholders Optional placeholders for additional context.
      */
-    void log(Player player, String action, String... placeholders);
+    void log(@Nullable Player player, String action, String... placeholders);
 }

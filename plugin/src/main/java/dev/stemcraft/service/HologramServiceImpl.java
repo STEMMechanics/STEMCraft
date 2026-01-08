@@ -44,6 +44,7 @@ import org.bukkit.event.world.ChunkUnloadEvent;
 import org.bukkit.event.world.WorldLoadEvent;
 import org.bukkit.event.world.WorldUnloadEvent;
 
+import javax.annotation.Nullable;
 import java.util.*;
 
 /**
@@ -551,7 +552,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
      * Save a hologram or all holograms to the configuration.
      */
     @Override
-    public void save(Integer id) {
+    public void save(@Nullable Integer id) {
         if(id == null) {
             for (HologramData data : holograms.values()) {
                 String path = "holograms." + data.id;

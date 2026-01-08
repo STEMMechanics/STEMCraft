@@ -20,6 +20,8 @@
 
 package dev.stemcraft.api.service.motd;
 
+import javax.annotation.Nullable;
+
 /**
  * Service for managing the Message of the Day (MOTD) displayed to players.
  */
@@ -60,7 +62,7 @@ public interface MotdService {
      * @param namespaceId The namespace ID of the MOTD.
      * @return The MOTD associated with the given namespace ID, or null if not found.
      */
-    ResolvedMotd get(String namespaceId);
+    @Nullable ResolvedMotd get(String namespaceId);
 
     /**
      * Push a new MOTD with given priority. Higher priority MOTDs override lower priority ones.

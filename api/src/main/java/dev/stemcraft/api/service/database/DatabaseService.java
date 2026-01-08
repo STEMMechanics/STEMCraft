@@ -24,6 +24,8 @@ import dev.stemcraft.api.database.DatabaseResultSetHandler;
 import dev.stemcraft.api.database.DatabaseResultSetMapper;
 import dev.stemcraft.api.database.DatabaseStatementBinder;
 
+import javax.annotation.Nullable;
+
 /**
  * Service for managing database interactions.
  */
@@ -79,7 +81,7 @@ public interface DatabaseService {
      * @param <T> The type of the object to map to.
      * @return The mapped object of type T, or null if no result was found.
      */
-    <T> T querySingleMapped(String sql, DatabaseStatementBinder binder, DatabaseResultSetMapper<T> mapper);
+    <T> @Nullable T querySingleMapped(String sql, DatabaseStatementBinder binder, DatabaseResultSetMapper<T> mapper);
 
     /**
      * Executes a raw SQL statement.

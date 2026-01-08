@@ -29,6 +29,8 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
+
+import javax.annotation.Nullable;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -256,7 +258,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
      * @return The custom item id, or null if not found.
      */
     @Override
-    public String getCustomItemId(ItemStack item) {
+    public @Nullable String getCustomItemId(ItemStack item) {
         if (item == null) {
             return null;
         }

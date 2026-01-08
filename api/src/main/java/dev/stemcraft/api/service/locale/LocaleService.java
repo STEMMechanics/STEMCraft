@@ -23,6 +23,8 @@ package dev.stemcraft.api.service.locale;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
+import javax.annotation.Nullable;
+
 /**
  * Service for managing localization and locale strings.
  */
@@ -45,5 +47,5 @@ public interface LocaleService {
      */
     String resolve(String lang, String key);
     default String resolve(String key) { return resolve(getDefaultLocale(), key); }
-    default String resolve(CommandSender sender, String key) { return resolve(sender instanceof Player p ? p.locale().toLanguageTag() : getDefaultLocale(), key); }
+    default String resolve(@Nullable CommandSender sender, String key) { return resolve(sender instanceof Player p ? p.locale().toLanguageTag() : getDefaultLocale(), key); }
 }

@@ -22,6 +22,8 @@ package dev.stemcraft.api.service.item;
 
 import org.bukkit.inventory.ItemStack;
 
+import javax.annotation.Nullable;
+
 /**
  * Service for managing item attributes and custom items.
  */
@@ -104,5 +106,5 @@ public interface ItemService {
      * @param item The ItemStack to check.
      * @return The custom item id, or null if not a custom item.
      */
-    String getCustomItemId(ItemStack item);
+    @Nullable String getCustomItemId(ItemStack item);
 }

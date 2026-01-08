@@ -20,6 +20,7 @@
 
 package dev.stemcraft.api.service.hologram;
 
+import javax.annotation.Nullable;
 import java.util.List;
 
 /**
@@ -35,7 +36,7 @@ public interface HologramTypeHandler {
      * @return A list of contexts.
      */
     @SuppressWarnings("SameReturnValue")
-    List<String> list(String type);
+    @Nullable List<String> list(String type);
 
     /**
      * Lists all lines of a specific hologram type and context (if used by the handler).

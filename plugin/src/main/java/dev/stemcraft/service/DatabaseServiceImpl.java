@@ -26,6 +26,7 @@ import dev.stemcraft.api.database.DatabaseResultSetMapper;
 import dev.stemcraft.api.database.DatabaseStatementBinder;
 import dev.stemcraft.api.service.database.DatabaseService;
 
+import javax.annotation.Nullable;
 import java.io.File;
 import java.sql.*;
 import java.util.*;
@@ -269,7 +270,7 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
      * @param <T> The type of the object to map to.
      * @return The mapped object of type T, or null if no result was found.
      */
-    public <T> T querySingleMapped(
+    public <T> @Nullable T querySingleMapped(
             String sql,
             DatabaseStatementBinder binder,
             DatabaseResultSetMapper<T> mapper

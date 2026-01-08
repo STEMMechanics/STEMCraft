@@ -23,6 +23,7 @@ package dev.stemcraft.api.service.world;
 import dev.stemcraft.api.config.ConfigSection;
 import org.bukkit.World;
 
+import javax.annotation.Nullable;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -77,7 +78,7 @@ public interface WorldService {
      * @param generatorOptions The options for the custom generator (or null for default).
      * @return The created World object.
      */
-    World createWorld(String worldName, String generatorName, String generatorOptions);
+    World createWorld(String worldName, @Nullable String generatorName, @Nullable String generatorOptions);
     default World createWorld(String worldName) { return createWorld(worldName, null, null); }
     default World createWorld(String worldName, String generatorName) { return createWorld(worldName, generatorName, null); }
 
@@ -195,7 +196,7 @@ public interface WorldService {
      * @param key The key of the setting.
      * @return The value of the setting, or null if not found.
      */
-    String getSetting(World world, String key);
+    @Nullable String getSetting(World world, String key);
 
     /**
      * Set the value of a setting for a specific world.

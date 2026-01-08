@@ -22,6 +22,7 @@ package dev.stemcraft.api.service.hologram;
 
 import org.bukkit.Location;
 
+import javax.annotation.Nullable;
 import java.util.List;
 
 /**
@@ -108,6 +109,6 @@ public interface HologramService {
      *
      * @param id hologram id or null for all.
      */
-    void save(Integer id);
+    void save(@Nullable Integer id);
     default void saveAll() { save(null); }
 }
