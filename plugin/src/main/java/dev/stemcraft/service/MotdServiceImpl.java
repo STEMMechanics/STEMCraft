@@ -54,13 +54,13 @@ public class MotdServiceImpl extends BaseService implements MotdService {
      */
     public void onEnable() {
         setDefault(
-            getConfigSection().getString("title", "&6&lSTEMCraft"),
+            getConfigSection().getString("title", "<gold><bold>STEMCraft</bold></gold>"),
             getConfigSection().getString("text", "")
         );
 
         api.events().register(ServerListPingEvent.class, event -> {
             if (api.isMaintenanceMode()) {
-                event.motd(TextUtil.colourise("&c&lServer is under maintenance!\n&7Please check back later."));
+                event.motd(TextUtil.colourise("<red><bold>Server is under maintenance!</bold>\n<gray>Please check back later.</gray>"));
                 return;
             }
 

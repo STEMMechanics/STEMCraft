@@ -50,12 +50,12 @@ public record MessagePrefixes(String log, String info, String warn, String error
             return defaults();
         }
         return new MessagePrefixes(
-                config.getString("log", "&7[STEM]&r "),
-                config.getString("info", "&9[INFO]&r "),
-                config.getString("warn", "&e[WARN]&r "),
-                config.getString("error", "&c[ERROR]&r "),
-                config.getString("success", "&a[SUCCESS]&r "),
-                config.getString("broadcast", "&e[SERVER] ")
+                config.getString("log", "<gray>[STEM]</gray> "),
+                config.getString("info", "<blue>[INFO]</blue> "),
+                config.getString("warn", "<yellow>[WARN]</yellow> "),
+                config.getString("error", "<red>[ERROR]</red> "),
+                config.getString("success", "<green>[SUCCESS]</green> "),
+                config.getString("broadcast", "<yellow>[SERVER]</yellow> ")
         );
     }
 
@@ -66,12 +66,12 @@ public record MessagePrefixes(String log, String info, String warn, String error
      */
     private static MessagePrefixes defaults() {
         return new MessagePrefixes(
-                "&7[LOG]&r ",
-                "&9[INFO]&r ",
-                "&e[WARN]&r ",
-                "&c[ERROR]&r ",
-                "&a[SUCCESS]&r ",
-                "&e[SERVER] "
+                "<gray>[LOG]</gray> ",
+                "<blue>[INFO]</blue> ",
+                "<yellow>[WARN]</yellow> ",
+                "<red>[ERROR]</red> ",
+                "<green>[SUCCESS]</green> ",
+                "<yellow>[SERVER]</yellow> "
         );
     }
 }

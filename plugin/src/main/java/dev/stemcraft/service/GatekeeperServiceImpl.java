@@ -441,11 +441,11 @@ public final class GatekeeperServiceImpl extends BaseService implements Gatekeep
 
         api.messages().send(player,
                 """
-                        &e----------------------------------------------------
+                        <yellow>----------------------------------------------------
                         Welcome to the STEMCraft server!
                         This server is invite-only. Please type your invite
                         code in chat to join.
-                        ----------------------------------------------------""");
+                        ----------------------------------------------------</yellow>""");
         resetInviteReminder(player, false);
     }
 

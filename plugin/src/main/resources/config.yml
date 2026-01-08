@@ -1,11 +1,11 @@
 logging:
   prefixes:
     log: "[STEMCraft] "
-    info: "&b&l[ i ]&b "
-    warn: "&6&l[ ! ]&6 "
-    error: "\uE132&c "
-    success: "&2&l[ \u2714 ]&2 "
-    broadcast: "&5&l[ ! ]&5 "
+    info: "<aqua><bold>[ i ]</bold></aqua> "
+    warn: "<gold><bold>[ ! ]</bold></gold> "
+    error: "<red>\uE132</red> "
+    success: "<dark_green><bold>[ \u2714 ]</bold></dark_green> "
+    broadcast: "<dark_purple><bold>[ ! ]</bold></dark_purple> "
 
 whitelist_message: |-
   This server is for our workshop players only.
@@ -14,8 +14,8 @@ whitelist_message: |-
 
 
 motd:
-  title: "§9■§d■§9■§d■§9■§d■§9■§d■§9■§d■§9■§d■§9■§d■§9■§d■ §e§lSTEMCRAFT §9■§d■§9■§d■§9■§d■§9■§d■§9■§d■§9■§d■§9■§d■"
-  text: "                   §e★ §bEnjoy your stay! §e★"
+  title: "<blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple> <yellow><bold>STEMCRAFT</bold></yellow> <blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple>"
+  text: "                   <yellow>★</yellow> <aqua>Enjoy your stay!</aqua> <yellow>★</yellow>"
 
 hub:
   world: world
