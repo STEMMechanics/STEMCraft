@@ -288,7 +288,7 @@ public class MessageServiceImpl extends BaseService implements MessageService {
 
         Collection<? extends Player> onlinePlayers = Bukkit.getOnlinePlayers();
         onlinePlayers.forEach(player -> {
-            if(exclude != null && !exclude.contains(player)) {
+            if (exclude == null || !exclude.contains(player)) {
                 String playerMessage = render(player, message, placeholders);
                 Component playerComponent = TextUtil.colourise(tokens.apply(prefixes.broadcast()) + playerMessage);
 
