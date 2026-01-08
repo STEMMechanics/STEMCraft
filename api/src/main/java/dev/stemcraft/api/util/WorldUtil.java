@@ -22,6 +22,8 @@ package dev.stemcraft.api.util;
 
 import org.bukkit.World;
 
+import java.util.Locale;
+
 /**
  * Utility class for world-related operations.
  */
@@ -47,5 +49,19 @@ public class WorldUtil {
     public static String baseName(World world) {
         if(world == null) return null;
         return baseName(world.getName());
+    }
+
+    /**
+     * Resolves the world environment based on the world name.
+     *
+     * @param name The name of the world.
+     * @return The corresponding World.Environment.
+     */
+    public static World.Environment resolveEnvironment(String name) {
+        String lower = name.toLowerCase(Locale.ROOT);
+        if (lower.endsWith("_nether")) return World.Environment.NETHER;
+        if (lower.endsWith("_the_end")) return World.Environment.THE_END;
+        if (lower.endsWith("_end")) return World.Environment.THE_END;
+        return World.Environment.NORMAL;
     }
 }

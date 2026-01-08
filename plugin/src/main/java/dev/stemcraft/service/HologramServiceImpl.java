@@ -46,6 +46,9 @@ import org.bukkit.event.world.WorldUnloadEvent;
 
 import java.util.*;
 
+/**
+ * Implementation of the HologramService for managing holograms in the game.
+ */
 public class HologramServiceImpl extends BaseService implements HologramService {
     private static final double LINE_SPACING = 0.25;
 
@@ -57,6 +60,9 @@ public class HologramServiceImpl extends BaseService implements HologramService 
 
     /**
      * Constructor for HologramServiceImpl.
+     *
+     * @param plugin The STEMCraft plugin instance.
+     * @param api    The STEMCraft API instance.
      */
     public HologramServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
@@ -80,9 +86,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
             }
         });
 
-        Bukkit.getWorlds().forEach(world -> {
-            loadHolograms(null, world.getName());
-        });
+        Bukkit.getWorlds().forEach(world -> loadHolograms(null, world.getName()));
 
         api.events().register(WorldLoadEvent.class, event -> {
             World world = event.getWorld();
@@ -184,22 +188,10 @@ public class HologramServiceImpl extends BaseService implements HologramService 
 
                     switch (action) {
 
-                        case "create" -> {
-                            subCommandCreate(api, cmd, ctx);
-                        }
-
-                        case "closest" -> {
-                            subCommandClosest(api, cmd, ctx);
-                        }
-
-                        case "delete" -> {
-                            subCommandDelete(api, cmd, ctx);
-                        }
-
-                        case "deleteall" -> {
-                            subCommandDeleteAll(api, cmd, ctx);
-                        }
-
+                        case "create" -> subCommandCreate(api, cmd, ctx);
+                        case "closest" -> subCommandClosest(api, cmd, ctx);
+                        case "delete" -> subCommandDelete(api, cmd, ctx);
+                        case "deleteall" -> subCommandDeleteAll(api, cmd, ctx);
                         default -> cmd.error(ctx.getSender(), "HOLOGRAM_USAGE");
                     }
 
@@ -215,7 +207,13 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         saveAll();
     }
 
-    // ===== Sub Commands =====
+    /**
+     * Subcommand handler for "hologram create".
+     *
+     * @param api The STEMCraft API instance.
+     * @param cmd The command being executed.
+     * @param ctx The command context.
+     */
     private void subCommandCreate(STEMCraftAPI api, Command cmd, CommandContext ctx) {
         // hologram create <type> <text...>
         ctx.checkNotConsole();
@@ -247,6 +245,13 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         ctx.returnSuccess("HOLOGRAM_CREATE_SUCCESS", "id", id);
     }
 
+    /**
+     * Subcommand handler for "hologram closest".
+     *
+     * @param api The STEMCraft API instance.
+     * @param cmd The command being executed.
+     * @param ctx The command context.
+     */
     private void subCommandClosest(STEMCraftAPI api, Command cmd, CommandContext ctx) {
         // hologram closest [range]
         ctx.checkNotConsole();
@@ -266,6 +271,13 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         }
     }
 
+    /**
+     * Subcommand handler for "hologram delete".
+     *
+     * @param api The STEMCraft API instance.
+     * @param cmd The command being executed.
+     * @param ctx The command context.
+     */
     private void subCommandDelete(STEMCraftAPI api, Command cmd, CommandContext ctx) {
         // hologram delete <id>
         ctx.checkArgsSizeAtLeast(2, "HOLOGRAM_USAGE_DELETE");
@@ -281,6 +293,13 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         ctx.returnSuccess("HOLOGRAM_DELETE_SUCCESS", "id", String.valueOf(id));
     }
 
+    /**
+     * Subcommand handler for "hologram deleteall".
+     *
+     * @param api The STEMCraft API instance.
+     * @param cmd The command being executed.
+     * @param ctx The command context.
+     */
     private void subCommandDeleteAll(STEMCraftAPI api, Command cmd, CommandContext ctx) {
         // hologram deleteall <type> [context]
         ctx.checkArgsSizeAtLeast(2, "HOLOGRAM_USAGE_DELETEALL");
@@ -304,8 +323,12 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         ctx.returnSuccess("HOLOGRAM_DELETEALL_SUCCESS", "type", type);
     }
 
-    // ===== API =====
-
+    /**
+     * Register a new hologram type handler.
+     *
+     * @param type    The hologram type.
+     * @param handler The handler for the hologram type.
+     */
     @Override
     public void registerType(String type, HologramTypeHandler handler) {
         if (type == null) {
@@ -315,11 +338,18 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         String slug = StringUtil.slugify(type);
         handlers.put(slug, handler);
 
-        Bukkit.getWorlds().forEach(world -> {
-            loadHolograms(slug, world.getName());
-        });
+        Bukkit.getWorlds().forEach(world -> loadHolograms(slug, world.getName()));
     }
 
+    /**
+     * Create a new hologram.
+     *
+     * @param type     The hologram type.
+     * @param context  The hologram context.
+     * @param location The location of the hologram.
+     * @param data     The data for the hologram.
+     * @return The ID of the created hologram.
+     */
     @Override
     public int create(String type, String context, Location location, List<String> data) {
         if (location == null || location.getWorld() == null) {
@@ -345,6 +375,12 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         return nextId;
     }
 
+    /**
+     * Update an existing hologram.
+     *
+     * @param id   The ID of the hologram to update.
+     * @param data The new data for the hologram.
+     */
     @Override
     public void update(int id, List<String> data) {
         HologramData hologram = holograms.get(id);
@@ -363,6 +399,12 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         respawn(hologram);
     }
 
+    /**
+     * Update holograms by type and context.
+     *
+     * @param type    The hologram type to update.
+     * @param context The hologram context to update (or null for all contexts).
+     */
     @Override
     public void update(String type, String context) {
         for(HologramData data : holograms.values()) {
@@ -386,6 +428,12 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         }
     }
 
+    /**
+     * Move an existing hologram to a new location.
+     *
+     * @param id          The ID of the hologram to move.
+     * @param newLocation The new location for the hologram.
+     */
     @Override
     public void move(int id, Location newLocation) {
         if (newLocation == null || newLocation.getWorld() == null) {
@@ -402,6 +450,11 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         respawn(data);
     }
 
+    /**
+     * Delete a hologram by ID.
+     *
+     * @param id The ID of the hologram to delete.
+     */
     @Override
     public void delete(int id) {
         HologramData data = holograms.remove(id);
@@ -415,6 +468,12 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         config.save();
     }
 
+    /**
+     * Delete holograms by type and context.
+     *
+     * @param type    The hologram type to delete.
+     * @param context The hologram context to delete (or null for all contexts).
+     */
     @Override
     public void delete(String type, String context) {
         Iterator<Map.Entry<Integer, HologramData>> iterator = holograms.entrySet().iterator();
@@ -435,6 +494,9 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         config.save();
     }
 
+    /**
+     * Save all holograms to the configuration.
+     */
     @Override
     public int closest(Location loc, int range) {
         if (loc == null || loc.getWorld() == null) {
@@ -467,6 +529,9 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         return closestId;
     }
 
+    /**
+     * Despawn all holograms.
+     */
     @Override
     public void despawnAll() {
         for (List<UUID> uuids : entitiesById.values()) {
@@ -480,6 +545,9 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         entitiesById.clear();
     }
 
+    /**
+     * Save a hologram or all holograms to the configuration.
+     */
     @Override
     public void save(Integer id) {
         if(id == null) {
@@ -504,19 +572,30 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         config.save();
     }
 
-    // ===== internals =====
-
+    /**
+     * Spawn all holograms.
+     */
     private void spawnAll() {
         for (HologramData data : holograms.values()) {
             spawn(data);
         }
     }
 
+    /**
+     * Respawn a hologram by first despawning and then spawning it again.
+     *
+     * @param data The hologram data to respawn.
+     */
     private void respawn(HologramData data) {
         despawn(data.id);
         spawn(data);
     }
 
+    /**
+     * Spawn a hologram in the game world.
+     *
+     * @param hologram The hologram data to spawn.
+     */
     private void spawn(HologramData hologram) {
         HologramTypeHandler handler = handlers.get(hologram.type);
         if (handler == null) {
@@ -554,6 +633,11 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         entitiesById.put(hologram.id, uuids);
     }
 
+    /**
+     * Despawn a hologram from the game world.
+     *
+     * @param id The ID of the hologram to despawn.
+     */
     private void despawn(int id) {
         List<UUID> uuids = entitiesById.remove(id);
         if (uuids == null) {
@@ -567,6 +651,12 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         }
     }
 
+    /**
+     * Find an entity by its UUID across all worlds.
+     *
+     * @param uuid The UUID of the entity to find.
+     * @return The found entity, or null if not found.
+     */
     private Entity findEntity(UUID uuid) {
         for (World world : Bukkit.getWorlds()) {
             Entity e = world.getEntity(uuid);
@@ -577,10 +667,13 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         return null;
     }
 
+    /**
+     * Internal class to hold hologram data.
+     */
     private static class HologramData {
         final int id;
         final String type;
-        String context;
+        final String context;
         Location location;
         List<String> data;
 
@@ -595,6 +688,9 @@ public class HologramServiceImpl extends BaseService implements HologramService 
 
     /**
      * Parse lines from a string separated by '|'.
+     *
+     * @param str The input string.
+     * @return A list of parsed lines.
      */
     private List<String> parseLines(String str) {
         String[] split = str.split("\\|", -1);
@@ -623,6 +719,12 @@ public class HologramServiceImpl extends BaseService implements HologramService 
      *     ...
      */
 
+    /**
+     * Load holograms from the configuration for a specific world and optional type filter.
+     *
+     * @param limitType  The hologram type to filter by (or null for all types).
+     * @param worldName  The name of the world to load holograms from.
+     */
     private void loadHolograms(String limitType, String worldName) {
         World world = Bukkit.getWorld(worldName);
 
@@ -669,7 +771,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
                 HologramData dataObj = new HologramData(id, type, context, loc, new ArrayList<>(data));
                 holograms.put(id, dataObj);
             } catch (NumberFormatException e) {
-                continue;
+                // ignored
             }
         }
     }

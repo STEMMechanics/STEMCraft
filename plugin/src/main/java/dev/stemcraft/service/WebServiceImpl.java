@@ -27,6 +27,7 @@ import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.service.web.WebService;
 import dev.stemcraft.api.service.web.WebServiceEndpointHandler;
+import org.jspecify.annotations.NonNull;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -38,6 +39,9 @@ import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 
+/**
+ * Implementation of the WebService for serving HTTP requests.
+ */
 public class WebServiceImpl extends BaseService implements WebService {
     private File wwwRoot;
     private HttpServer httpServer;
@@ -47,6 +51,9 @@ public class WebServiceImpl extends BaseService implements WebService {
 
     /**
      * Constructor for the WebServiceImpl.
+     * 
+     * @param plugin The STEMCraft plugin instance.
+     * @param api    The STEMCraft API instance.
      */
     public WebServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
@@ -72,14 +79,14 @@ public class WebServiceImpl extends BaseService implements WebService {
                 .usage("WEB_SERVER_USAGE")
                 .executor((api, cmd, ctx) -> {
                     if (ctx.args().isEmpty()) {
-                        api.info(ctx.getSender(), cmd.getUsage());
+                        api.messages().info(ctx.getSender(), cmd.getUsage());
                         return;
                     }
 
                 switch (ctx.args().getFirst().toLowerCase(Locale.ROOT)) {
                     case "start" -> {
                         if(isRunning()) {
-                            api.error(ctx.getSender(), "WEB_SERVER_ALREADY_RUNNING");
+                            api.messages().error(ctx.getSender(), "WEB_SERVER_ALREADY_RUNNING");
                         } else {
                             start();
                         }
@@ -88,27 +95,27 @@ public class WebServiceImpl extends BaseService implements WebService {
                         if(isRunning()) {
                             stop();
                         } else {
-                            api.error(ctx.getSender(), "WEB_SERVER_NOT_RUNNING");
+                            api.messages().error(ctx.getSender(), "WEB_SERVER_NOT_RUNNING");
                         }
                     }
                     case "enable" -> {
                         getConfigSection().set("enabled", true);
                         saveConfig();
 
-                        api.info(ctx.getSender(), "WEB_SERVER_ENABLED", "state", isRunning() ? "WEB_SERVER_STATE_RUNNING" : "WEB_SERVER_STATE_NOT_RUNNING");
+                        api.messages().info(ctx.getSender(), "WEB_SERVER_ENABLED", "state", isRunning() ? "WEB_SERVER_STATE_RUNNING" : "WEB_SERVER_STATE_NOT_RUNNING");
                     }
                     case "disable" -> {
                         getConfigSection().set("enabled", false);
                         saveConfig();
 
-                        api.info(ctx.getSender(), "WEB_SERVER_DISABLED", "state", isRunning() ? "WEB_SERVER_STATE_RUNNING" : "WEB_SERVER_STATE_NOT_RUNNING");
+                        api.messages().info(ctx.getSender(), "WEB_SERVER_DISABLED", "state", isRunning() ? "WEB_SERVER_STATE_RUNNING" : "WEB_SERVER_STATE_NOT_RUNNING");
                     }
-                    case "", "status" -> api.info(ctx.getSender(), "WEB_SERVER_STATUS",
+                    case "", "status" -> api.messages().info(ctx.getSender(), "WEB_SERVER_STATUS",
                             "enabled_disabled",
                             getConfigSection().getBoolean("enabled", false) ? "WEB_SERVER_STATE_ENABLED" : "WEB_SERVER_STATE_DISABLED",
                             "running_not",
                             isRunning() ? "WEB_SERVER_STATE_RUNNING" : "WEB_SERVER_STATE_NOT_RUNNING");
-                    default -> api.info(ctx.getSender(), cmd.getUsage());
+                    default -> api.messages().info(ctx.getSender(), cmd.getUsage());
                 }
             })
             .register(plugin);
@@ -116,6 +123,8 @@ public class WebServiceImpl extends BaseService implements WebService {
 
     /**
      * Check if the web server is currently running.
+     *
+     * @return true if the web server is running, false otherwise.
      */
     public boolean isRunning() {
         return httpServer != null;
@@ -137,13 +146,13 @@ public class WebServiceImpl extends BaseService implements WebService {
 
         if (!wwwRoot.exists()) {
             if (!wwwRoot.mkdirs()) {
-                plugin.error("FAILED_CREATE_DIR");
+                api.messages().error("FAILED_CREATE_DIR");
                 wwwRoot = null;
                 return;
             }
 
             if(!wwwRoot.isDirectory()) {
-                plugin.error("WEB_SERVER_PATH_NOT_DIR");
+                api.messages().error("WEB_SERVER_PATH_NOT_DIR");
                 wwwRoot = null;
                 return;
             }
@@ -155,11 +164,11 @@ public class WebServiceImpl extends BaseService implements WebService {
         try {
             httpServer = HttpServer.create(new InetSocketAddress(ip, port), 0);
             httpServer.createContext("/", new WebServiceHandler());
-            httpServer.executor(null);
+            httpServer.setExecutor(null);
             httpServer.start();
-            plugin.info("WEB_SERVER_STARTED_ON", "ip", ip, "port", String.valueOf(port));
+            api.messages().info("WEB_SERVER_STARTED_ON", "ip", ip, "port", String.valueOf(port));
         } catch (IOException e) {
-            plugin.error("WEB_SERVER_START_FAILED", "error", e.getMessage());
+            api.messages().error("WEB_SERVER_START_FAILED", "error", e.getMessage());
             httpServer = null;
         }
     }
@@ -171,7 +180,7 @@ public class WebServiceImpl extends BaseService implements WebService {
         if (httpServer != null) {
             httpServer.stop(0);
             httpServer = null;
-            plugin.info("WEB_SERVER_STOPPED");
+            api.messages().info("WEB_SERVER_STOPPED");
         }
     }
 
@@ -180,7 +189,7 @@ public class WebServiceImpl extends BaseService implements WebService {
      */
     public void registerEndpointHandler(String path, WebServiceEndpointHandler handler) {
         this.endpointHandlers.put(path, handler);
-        plugin.debug("WEB_SERVER_REGISTERED_ENDPOINT", "path", path);
+        api.messages().debug("WEB_SERVER_REGISTERED_ENDPOINT", "path", path);
     }
 
     /**
@@ -216,21 +225,9 @@ public class WebServiceImpl extends BaseService implements WebService {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             String uri = exchange.getRequestURI().getPath();
-            Map<String, String> queryParams = new LinkedHashMap<>();
-            String query = exchange.getRequestURI().getQuery();
-            if (query != null) {
-                String[] pairs = query.split("&");
-                for (String pair : pairs) {
-                    String[] keyValue = pair.split("=", 2);
-                    if (keyValue.length == 2) {
-                        queryParams.put(keyValue[0], keyValue[1]);
-                    } else if (keyValue.length == 1) {
-                        queryParams.put(keyValue[0], "");
-                    }
-                }
-            }
+            Map<String, String> queryParams = getStringStringMap(exchange);
 
-            plugin.info("WEB_SERVER_REQUEST", "method", exchange.getRequestMethod(), "path", uri, "ip", exchange.getRemoteAddress().toString());
+            api.messages().info("WEB_SERVER_REQUEST", "method", exchange.getRequestMethod(), "path", uri, "ip", exchange.getRemoteAddress().toString());
 
             File file = new File(wwwRoot, uri.substring(1));
 
@@ -308,6 +305,23 @@ public class WebServiceImpl extends BaseService implements WebService {
             }
         }
 
+        private static @NonNull Map<String, String> getStringStringMap(HttpExchange exchange) {
+            Map<String, String> queryParams = new LinkedHashMap<>();
+            String query = exchange.getRequestURI().getQuery();
+            if (query != null) {
+                String[] pairs = query.split("&");
+                for (String pair : pairs) {
+                    String[] keyValue = pair.split("=", 2);
+                    if (keyValue.length == 2) {
+                        queryParams.put(keyValue[0], keyValue[1]);
+                    } else if (keyValue.length == 1) {
+                        queryParams.put(keyValue[0], "");
+                    }
+                }
+            }
+            return queryParams;
+        }
+
         private void sendErrorResponse(HttpExchange exchange, int statusCode, String errorMessage) throws IOException {
             exchange.sendResponseHeaders(statusCode, errorMessage.length());
             try (OutputStream os = exchange.getResponseBody()) {
@@ -318,6 +332,8 @@ public class WebServiceImpl extends BaseService implements WebService {
 
     /**
      * Attempt to find the best local IP address for the server.
+     *
+     * @return The best local IP address as a string.
      */
     private String findBestLocalAddress() {
         try {

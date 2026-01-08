@@ -36,10 +36,19 @@ import org.bukkit.entity.Player;
 import java.util.Collection;
 import java.util.List;
 
+/**
+ * Implementation of the MessageService interface.
+ */
 public class MessageServiceImpl extends BaseService implements MessageService {
     private final TokenProcessorImpl tokens;
     private final MessagePrefixes prefixes;
 
+    /**
+     * Constructor for MessageServiceImpl.
+     *
+     * @param plugin The STEMCraft plugin instance.
+     * @param api    The STEMCraft API instance.
+     */
     public MessageServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
 
@@ -50,6 +59,8 @@ public class MessageServiceImpl extends BaseService implements MessageService {
 
     /**
      * Get the token processor for adding/removing global tokens.
+     *
+     * @return The TokenProcessor instance.
      */
     @Override
     public TokenProcessor tokens() {
@@ -58,6 +69,10 @@ public class MessageServiceImpl extends BaseService implements MessageService {
 
     /**
      * Log a debug message to the console.
+     *
+     * @param message      The message to log.
+     * @param ex           An optional exception to log.
+     * @param placeholders Optional placeholders for the message.
      */
     @Override
     public void debug(String message, Throwable ex, Object... placeholders) {
@@ -75,14 +90,19 @@ public class MessageServiceImpl extends BaseService implements MessageService {
 
     /**
      * Send a message to the sender or console if null.
+     *
+     * @param sender       The command sender, or null for console.
+     * @param message      The message to send.
+     * @param ex           An optional exception to log.
+     * @param placeholders Optional placeholders for the message.
      */
     @Override
     public void log(CommandSender sender, String message, Throwable ex, Object... placeholders) {
         message = render(sender, message, placeholders);
 
-        Component senderComponent = null;
+        Component senderComponent;
         if (sender instanceof Player) {
-            senderComponent = TextUtil.colourise(tokens.apply(prefixes.log) + message);
+            senderComponent = TextUtil.colourise(tokens.apply(prefixes.log()) + message);
         } else {
             senderComponent = TextUtil.colourise(message);
         }
@@ -102,6 +122,11 @@ public class MessageServiceImpl extends BaseService implements MessageService {
 
     /**
      * Send a message to the sender or console if null.
+     *
+     * @param sender       The command sender, or null for console.
+     * @param message      The message to send.
+     * @param ex           An optional exception to log.
+     * @param placeholders Optional placeholders for the message.
      */
     public void send(CommandSender sender, String message, Throwable ex, Object... placeholders) {
         message = render(sender, message, placeholders);
@@ -122,14 +147,19 @@ public class MessageServiceImpl extends BaseService implements MessageService {
 
     /**
      * Send an info message to the sender or console if null.
+     *
+     * @param sender      The command sender, or null for console.
+     * @param message     The message to send.
+     * @param ex          An optional exception to log.
+     * @param placeholders Optional placeholders for the message.
      */
     @Override
     public void info(CommandSender sender, String message, Throwable ex, Object... placeholders) {
         message = render(sender, message, placeholders);
 
-        Component senderComponent = null;
+        Component senderComponent;
         if (sender instanceof Player) {
-            senderComponent = TextUtil.colourise(tokens.apply(prefixes.info) + message);
+            senderComponent = TextUtil.colourise(tokens.apply(prefixes.info()) + message);
         } else {
             senderComponent = TextUtil.colourise(message);
         }
@@ -149,14 +179,19 @@ public class MessageServiceImpl extends BaseService implements MessageService {
 
     /**
      * Send a warning message to the sender or console if null.
+     *
+     * @param sender       The command sender, or null for console.
+     * @param message      The message to send.
+     * @param ex           An optional exception to log.
+     * @param placeholders Optional placeholders for the message.
      */
     @Override
     public void warn(CommandSender sender, String message, Throwable ex, Object... placeholders) {
         message = render(sender, message, placeholders);
 
-        Component senderComponent = null;
+        Component senderComponent;
         if (sender instanceof Player) {
-            senderComponent = TextUtil.colourise(tokens.apply(prefixes.warn) + message);
+            senderComponent = TextUtil.colourise(tokens.apply(prefixes.warn()) + message);
         } else {
             senderComponent = TextUtil.colourise(message);
         }
@@ -176,14 +211,19 @@ public class MessageServiceImpl extends BaseService implements MessageService {
 
     /**
      * Send an error message to the sender or console if null.
+     *
+     * @param sender       The command sender, or null for console.
+     * @param message      The message to send.
+     * @param ex           An optional exception to log.
+     * @param placeholders Optional placeholders for the message.
      */
     @Override
     public void error(CommandSender sender, String message, Throwable ex, Object... placeholders) {
         message = render(sender, message, placeholders);
 
-        Component senderComponent = null;
+        Component senderComponent;
         if (sender instanceof Player) {
-            senderComponent = TextUtil.colourise(tokens.apply(prefixes.error) + message);
+            senderComponent = TextUtil.colourise(tokens.apply(prefixes.error()) + message);
         } else {
             senderComponent = TextUtil.colourise(message);
         }
@@ -203,14 +243,19 @@ public class MessageServiceImpl extends BaseService implements MessageService {
 
     /**
      * Send a success message to the sender or console if null.
+     *
+     * @param sender       The command sender, or null for console.
+     * @param message      The message to send.
+     * @param ex           An optional exception to log.
+     * @param placeholders Optional placeholders for the message.
      */
     @Override
     public void success(CommandSender sender, String message, Throwable ex, Object... placeholders) {
         message = render(sender, message, placeholders);
 
-        Component senderComponent = null;
+        Component senderComponent;
         if (sender instanceof Player) {
-            senderComponent = TextUtil.colourise(tokens.apply(prefixes.success) + message);
+            senderComponent = TextUtil.colourise(tokens.apply(prefixes.success()) + message);
         } else {
             senderComponent = TextUtil.colourise(message);
         }
@@ -230,18 +275,22 @@ public class MessageServiceImpl extends BaseService implements MessageService {
 
     /**
      * Broadcast a message to all online players, excluding those in the exclude list.
+     *
+     * @param message      The message to broadcast.
+     * @param exclude      A list of players to exclude from the broadcast.
+     * @param placeholders Optional placeholders for the message.
      */
     @Override
     public void broadcast(String message, List<Player> exclude, Object... placeholders) {
         String serverMessage = render(null, message, placeholders);
-        Component serverComponent = TextUtil.colourise(tokens.apply(prefixes.broadcast) + serverMessage);
+        Component serverComponent = TextUtil.colourise(tokens.apply(prefixes.broadcast()) + serverMessage);
         plugin.getComponentLogger().info(serverComponent);
 
         Collection<? extends Player> onlinePlayers = Bukkit.getOnlinePlayers();
         onlinePlayers.forEach(player -> {
             if(exclude != null && !exclude.contains(player)) {
                 String playerMessage = render(player, message, placeholders);
-                Component playerComponent = TextUtil.colourise(tokens.apply(prefixes.broadcast) + playerMessage);
+                Component playerComponent = TextUtil.colourise(tokens.apply(prefixes.broadcast()) + playerMessage);
 
                 player.sendMessage(playerComponent);
             }
@@ -250,6 +299,11 @@ public class MessageServiceImpl extends BaseService implements MessageService {
 
     /**
      * Get the localized text for a key with optional placeholders.
+     *
+     * @param sender       The command sender for localization context.
+     * @param key          The localization key.
+     * @param placeholders Optional placeholders for the message.
+     * @return The localized and processed text.
      */
     @Override
     public String text(CommandSender sender, String key, Object... placeholders) {
@@ -259,15 +313,28 @@ public class MessageServiceImpl extends BaseService implements MessageService {
 
     /**
      * Render a localized message with bindings and placeholders applied.
+     *
+     * @param sender       The command sender for localization context.
+     * @param key          The localization key.
+     * @param placeholders Optional placeholders for the message.
+     * @return The rendered message.
      */
     private String render(CommandSender sender, String key, Object... placeholders) {
-        String base = plugin.locale().resolve(sender, key);
+        String base = api.locales().resolve(sender, key);
 
         base = tokens.apply(base);
         base = applyPlaceholders(sender, base, placeholders);
         return base;
     }
 
+    /**
+     * Apply placeholders to a string.
+     *
+     * @param sender       The command sender for localization context.
+     * @param str          The string to apply placeholders to.
+     * @param placeholders The placeholders to apply.
+     * @return The string with placeholders applied.
+     */
     private String applyPlaceholders(CommandSender sender, String str, Object... placeholders) {
         if (str == null) {
             return null;
@@ -282,14 +349,10 @@ public class MessageServiceImpl extends BaseService implements MessageService {
         for (int i = 1; i < processed.length; i += 2) {
             String value = processed[i];
             if (value != null) {
-                processed[i] = plugin.locale().resolve(sender, value);
+                processed[i] = api.locales().resolve(sender, value);
             }
         }
 
         return PlaceholderUtil.apply(str, processed);
-    }
-
-    private static final class Prefixes {
-
     }
 }

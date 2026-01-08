@@ -29,6 +29,9 @@ import org.bukkit.event.server.ServerListPingEvent;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+/**
+ * Implementation of the MotdService for managing the server's Message of the Day (MOTD).
+ */
 public class MotdServiceImpl extends BaseService implements MotdService {
 
     private final Map<String, ResolvedMotd> motdMap = new LinkedHashMap<>();
@@ -38,6 +41,9 @@ public class MotdServiceImpl extends BaseService implements MotdService {
 
     /**
      * Constructor for MotdServiceImpl.
+     *
+     * @param plugin The STEMCraft plugin instance.
+     * @param api    The STEMCraft API instance.
      */
     public MotdServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
@@ -65,6 +71,9 @@ public class MotdServiceImpl extends BaseService implements MotdService {
 
     /**
      * Set the default MOTD used when no other MOTDs are set.
+     *
+     * @param title The default MOTD title.
+     * @param text  The default MOTD text.
      */
     public void setDefault(String title, String text) {
         this.defaultMotdTitle = title;
@@ -73,6 +82,8 @@ public class MotdServiceImpl extends BaseService implements MotdService {
 
     /**
      * Get the current MOTD
+     *
+     * @return The current MOTD.
      */
     public ResolvedMotd current() {
         if (motdMap.isEmpty() || currentMotdId == null) {
@@ -84,6 +95,9 @@ public class MotdServiceImpl extends BaseService implements MotdService {
 
     /**
      * Get the MOTD based on namespace ID.
+     *
+     * @param namespaceId The namespace ID of the MOTD.
+     * @return The MOTD associated with the namespace ID, or null if not found.
      */
     public ResolvedMotd get(String namespaceId) {
         return motdMap.get(namespaceId);
@@ -91,6 +105,11 @@ public class MotdServiceImpl extends BaseService implements MotdService {
 
     /**
      * Push a new MOTD with given priority. Higher priority MOTDs override lower priority ones.
+     *
+     * @param namespaceId The namespace ID for the MOTD.
+     * @param priority    The priority of the MOTD.
+     * @param motdTitle   The MOTD title.
+     * @param motdText    The MOTD text.
      */
     public void push(String namespaceId, Priority priority, String motdTitle, String motdText) {
         motdMap.put(namespaceId, new ResolvedMotd(motdTitle, motdText, priority));
@@ -99,6 +118,8 @@ public class MotdServiceImpl extends BaseService implements MotdService {
 
     /**
      * Remove the MOTD associated with the given namespace ID.
+     *
+     * @param namespaceId The namespace ID of the MOTD to remove.
      */
     public void remove(String namespaceId) {
         motdMap.remove(namespaceId);

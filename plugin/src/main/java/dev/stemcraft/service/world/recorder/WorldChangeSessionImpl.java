@@ -37,10 +37,13 @@ import org.bukkit.inventory.ItemStack;
 
 import java.util.*;
 
+/**
+ * Implementation of the WorldChangeSession interface.
+ */
 public class WorldChangeSessionImpl implements WorldChangeSession {
     private final STEMCraftAPI api;
     private final World world;
-    final Map<String, RecordedBlockState> blockStateMap = new HashMap<String, RecordedBlockState>();
+    final Map<String, RecordedBlockState> blockStateMap = new HashMap<>();
     final Set<UUID> spawnedEntities = new HashSet<>();
 
     @Getter
@@ -48,6 +51,9 @@ public class WorldChangeSessionImpl implements WorldChangeSession {
 
     /**
      * Constructs a WorldChangeSessionImpl for the given world.
+     *
+     * @param api   The STEMCraft API instance.
+     * @param world The world to track changes in.
      */
     public WorldChangeSessionImpl(STEMCraftAPI api, World world) {
         this.api = api;
@@ -78,6 +84,8 @@ public class WorldChangeSessionImpl implements WorldChangeSession {
 
     /**
      * Rolls back all recorded changes.
+     *
+     * @param applyPhysics Whether to apply physics when restoring blocks.
      */
     public void rollback(boolean applyPhysics) {
         // Restore block states
@@ -130,8 +138,11 @@ public class WorldChangeSessionImpl implements WorldChangeSession {
 
     /**
      * Captures the current state of a block.
+     *
+     * @param state The block state to capture.
+     * @param overwriteExisting Whether to overwrite existing recorded state for this block.
      */
-    public void captureBlockState(BlockState state) {
+    public void captureBlockState(BlockState state, boolean overwriteExisting) {
         if(!recording) return;
 
         Material type = state.getType();
@@ -143,7 +154,7 @@ public class WorldChangeSessionImpl implements WorldChangeSession {
             Block other = (door.getHalf() == org.bukkit.block.data.type.Door.Half.TOP)
                     ? block.getRelative(org.bukkit.block.BlockFace.DOWN)
                     : block.getRelative(org.bukkit.block.BlockFace.UP);
-            addBlockState(other.getState()); // snapshot partner's *old* state
+            addBlockState(other.getState(), overwriteExisting); // snapshot partner's *old* state
         }
 
         // Beds (two horizontal blocks)
@@ -151,7 +162,7 @@ public class WorldChangeSessionImpl implements WorldChangeSession {
             Block other = (bed.getPart() == org.bukkit.block.data.type.Bed.Part.HEAD)
                     ? block.getRelative(bed.getFacing().getOppositeFace())
                     : block.getRelative(bed.getFacing());
-            addBlockState(other.getState());
+            addBlockState(other.getState(), overwriteExisting);
         }
 
         // Chests (double chest – record any neighbouring chest halves too)
@@ -165,13 +176,15 @@ public class WorldChangeSessionImpl implements WorldChangeSession {
                 Block other = block.getRelative(face);
                 if (!isChest(other.getType())) continue;
 
-                addBlockState(other.getState());
+                addBlockState(other.getState(), overwriteExisting);
             }
         }
     }
 
     /**
      * Captures the current state of an entity.
+     *
+     * @param entity The entity to capture.
      */
     public void captureEntity(Entity entity) {
         if(!recording) return;
@@ -200,9 +213,7 @@ public class WorldChangeSessionImpl implements WorldChangeSession {
                 blockStateMap.put(locString, rbs);
 
                 api.database().update("DELETE FROM world_change_blocks WHERE world = ?",
-                    ps -> {
-                        ps.setString(1, world.getName());
-                    });
+                    ps -> ps.setString(1, world.getName()));
             });
 
         api.database().query(
@@ -213,9 +224,7 @@ public class WorldChangeSessionImpl implements WorldChangeSession {
                     spawnedEntities.add(entityId);
 
                     api.database().update("DELETE FROM world_change_entities WHERE world = ?",
-                            ps -> {
-                                ps.setString(1, world.getName());
-                            });
+                            ps -> ps.setString(1, world.getName()));
                 });
     }
 
@@ -260,16 +269,22 @@ public class WorldChangeSessionImpl implements WorldChangeSession {
 
     /**
      * Adds the given block state to the recorded states.
+     *
+     * @param state The block state to add.
+     * @param overwriteExisting Whether to overwrite existing recorded state for this block.
      */
-    private void addBlockState(BlockState state) {
+    private void addBlockState(BlockState state, boolean overwriteExisting) {
         String locString = state.getX() + "," + state.getY() + "," + state.getZ();
-        if (!blockStateMap.containsKey(locString)) {
+        if (overwriteExisting || !blockStateMap.containsKey(locString)) {
             blockStateMap.put(locString, new RecordedBlockState(state));
         }
     }
 
     /**
      * Returns true if the given material is a door.
+     *
+     * @param type The material to check.
+     * @return True if the material is a door.
      */
     private boolean isDoor(Material type) {
         return type != null && type.name().endsWith("_DOOR");
@@ -277,6 +292,9 @@ public class WorldChangeSessionImpl implements WorldChangeSession {
 
     /**
      * Returns true if the given material is a bed.
+     *
+     * @param type The material to check.
+     * @return True if the material is a bed.
      */
     private boolean isBed(Material type) {
         return type != null && type.name().endsWith("_BED");
@@ -284,6 +302,9 @@ public class WorldChangeSessionImpl implements WorldChangeSession {
 
     /**
      * Returns true if the given material is a chest.
+     *
+     * @param type The material to check.
+     * @return True if the material is a chest.
      */
     private boolean isChest(Material type) {
         return type != null && type.name().endsWith("CHEST");
@@ -291,6 +312,9 @@ public class WorldChangeSessionImpl implements WorldChangeSession {
 
     /**
      * Returns true if the given entity type is temporary and should be tracked.
+     *
+     * @param type The entity type to check.
+     * @return True if the entity type is temporary.
      */
     private boolean isTemporaryEntity(EntityType type) {
         String name = type.name();

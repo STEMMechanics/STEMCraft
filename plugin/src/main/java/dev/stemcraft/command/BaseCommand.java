@@ -27,13 +27,20 @@ import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.capability.HasMessagesImpl;
 import dev.stemcraft.service.command.CommandBuilderImpl;
 
+/**
+ * Base class for creating commands in STEMCraft.
+ */
+@SuppressWarnings("unused")
 public class BaseCommand extends HasMessagesImpl {
-    protected STEMCraft plugin;
-    protected STEMCraftAPI api;
-    private CommandBuilderImpl builder;
+    protected final STEMCraft plugin;
+    protected final STEMCraftAPI api;
+    private final CommandBuilderImpl builder;
 
     /**
      * Constructor for BaseCommand.
+     *
+     * @param plugin the STEMCraft plugin instance
+     * @param api the STEMCraft API instance
      */
     public BaseCommand(STEMCraft plugin, STEMCraftAPI api) {
         this.plugin = plugin;
@@ -48,29 +55,62 @@ public class BaseCommand extends HasMessagesImpl {
 
     /**
      * Called when the command is executed.
+     *
+     * @param cmd the command being executed
+     * @param ctx the context of the command execution
      */
     public void onExecute(Command cmd, CommandContext ctx) { }
 
+    /**
+     * Set the label of the command.
+     *
+     * @param label the label of the command
+     */
     public void setLabel(String label) {
         builder.label(label);
     }
 
+    /**
+     * Set the description of the command.
+     *
+     * @param description the description of the command
+     */
     public void setDescription(String description) {
         builder.description(description);
     }
 
+    /**
+     * Set the usage message of the command.
+     *
+     * @param usage the usage message of the command
+     */
     public void setUsage(String usage) {
         builder.usage(usage);
     }
 
+    /**
+     * Set the permission required to execute the command.
+     *
+     * @param permission the permission string
+     */
     public void setPermission(String permission) {
         builder.permission(permission);
     }
 
+    /**
+     * Add aliases for the command.
+     *
+     * @param aliases the aliases to add
+     */
     public void addAliases(String... aliases) {
         builder.aliases(aliases);
     }
 
+    /**
+     * Add tab completions for the command.
+     *
+     * @param completions the tab completions to add
+     */
     public void addTabCompletion(String... completions) {
         builder.tabCompletion(completions);
     }

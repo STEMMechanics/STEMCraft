@@ -28,23 +28,45 @@ import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 
-public class BreakCommand extends STEMCraftCommandImpl {
-
+/**
+ * Command to break blocks in a specified radius around the targeted block.
+ */
+public class BreakCommand extends BaseCommand {
+    private static final String PERMISSION = "stemcraft.command.break";
     private static final int MAX_RADIUS = 10;
     private static final int MAX_DISTANCE = 120;
 
+    /**
+     * Constructor for BreakCommand.
+     *
+     * @param plugin the STEMCraft plugin instance
+     * @param api the STEMCraft API instance
+     */
+    BreakCommand(STEMCraft plugin, STEMCraftAPI api) {
+        super(plugin, api);
+    }
+
+    /**
+     * Called when the command is loaded.
+     */
     @Override
-    public void onLoad(STEMCraft plugin) {
+    public void onLoad() {
         setLabel("break");
         setDescription("BREAK_DESCRIPTION");
         setUsage("BREAK_USAGE");
         addTabCompletion("{int}");
-        setPermission("stemcraft.command.break");
+        setPermission(PERMISSION);
         register(plugin);
     }
 
+    /**
+     * Called when the command is executed.
+     *
+     * @param cmd the command being executed
+     * @param ctx the context of the command execution
+     */
     @Override
-    public void onExecute(STEMCraftAPI api, Command cmd, CommandContext ctx) {
+    public void onExecute(Command cmd, CommandContext ctx) {
         ctx.checkNotConsole();
 
         Player player = ctx.getSenderAsPlayer();

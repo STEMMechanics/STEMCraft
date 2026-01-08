@@ -23,15 +23,16 @@ package dev.stemcraft.service.world;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigSection;
-import dev.stemcraft.api.factory.ChunkGeneratorFactory;
 import dev.stemcraft.api.service.world.WorldBaseSetting;
 import dev.stemcraft.api.service.world.WorldChangeSession;
+import dev.stemcraft.api.service.world.WorldGeneration;
 import dev.stemcraft.api.service.world.WorldService;
 import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.api.event.world.WorldDeleteEvent;
+import dev.stemcraft.api.util.WorldUtil;
 import dev.stemcraft.service.BaseService;
 import dev.stemcraft.service.world.recorder.WorldChangeRecorder;
-import dev.stemcraft.service.world.settings.*;
+import dev.stemcraft.service.world.setting.*;
 import lombok.Getter;
 import lombok.Setter;
 import org.bukkit.*;
@@ -46,35 +47,48 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.*;
 import java.util.*;
-import java.util.Comparator;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Implementation of the WorldService for managing worlds.
+ */
 public class WorldServiceImpl extends BaseService implements WorldService {
     private final Map<String, WorldSettingData> settings = new ConcurrentHashMap<>();
     private final WorldCommand worldCommand;
-    private final WorldGeneration worldGeneration;
+    private final WorldGenerationImpl worldGeneration;
     private final WorldChangeRecorder worldChangeRecorder;
 
+    /**
+     * Data holder for world setting and its command mode.
+     */
     private record WorldSettingData(WorldBaseSetting setting, SettingCommandMode mode) {}
 
     @Getter
     @Setter
     private World defaultWorld;
 
+    /**
+     * Creates a new WorldServiceImpl instance.
+     *
+     * @param plugin The STEMCraft plugin instance.
+     * @param api    The STEMCraft API instance.
+     */
     public WorldServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
 
         this.worldCommand = new WorldCommand(api, this);
-        this.worldGeneration = new WorldGeneration(api);
+        this.worldGeneration = new WorldGenerationImpl(api);
         this.worldChangeRecorder = new WorldChangeRecorder(api, this);
 
         this.defaultWorld = Bukkit.getWorlds().getFirst();
     }
 
+    /**
+     * Called when the service is enabled.
+     */
     public void onEnable() {
         worldCommand.onEnable();
         worldGeneration.onEnable();
-        worldChangeRecorder.onEnable();
 
         loadWorlds();
 
@@ -110,19 +124,23 @@ public class WorldServiceImpl extends BaseService implements WorldService {
             deleteWorldSettings(event.getWorldName());
         }, EventPriority.MONITOR, false);
 
-        registerSetting(new WorldDenySpawnSetting(), SettingCommandMode.FLAG);
-        registerSetting(new WorldForceSpawnSetting(), SettingCommandMode.FLAG);
-        registerSetting(new WorldGameModeSetting(), SettingCommandMode.SUBCOMMAND);
-        registerSetting(new WorldNoDamageSetting(), SettingCommandMode.FLAG);
-        registerSetting(new WorldNoHungerSetting(), SettingCommandMode.FLAG);
-        registerSetting(new WorldWeatherSetting(), SettingCommandMode.FLAG);
+        registerSettingHandler(worldChangeRecorder, SettingCommandMode.SUBCOMMAND);
+        registerSettingHandler(new WorldDenySpawnSetting(), SettingCommandMode.FLAG);
+        registerSettingHandler(new WorldForceSpawnSetting(), SettingCommandMode.FLAG);
+        registerSettingHandler(new WorldGameModeSetting(), SettingCommandMode.SUBCOMMAND);
+        registerSettingHandler(new WorldNoDamageSetting(), SettingCommandMode.FLAG);
+        registerSettingHandler(new WorldNoHungerSetting(), SettingCommandMode.FLAG);
+        registerSettingHandler(new WorldTickSpeedSetting(), SettingCommandMode.SUBCOMMAND);
+        registerSettingHandler(new WorldTimeSetting(), SettingCommandMode.SUBCOMMAND);
+        registerSettingHandler(new WorldWeatherSetting(), SettingCommandMode.SUBCOMMAND);
     }
 
+    /**
+     * Called when the service is disabled.
+     */
     @Override
     public void onDisable() {
-        settings.forEach((key, value) -> {
-            value.setting().onDisable();
-        });
+        settings.forEach((key, value) -> value.setting().onDisable());
 
         settings.clear();
 
@@ -133,6 +151,8 @@ public class WorldServiceImpl extends BaseService implements WorldService {
 
     /**
      * Get the world command instance.
+     *
+     * @return The WorldCommand instance.
      */
     public WorldCommand getCommand() {
         return worldCommand;
@@ -140,6 +160,8 @@ public class WorldServiceImpl extends BaseService implements WorldService {
 
     /**
      * Evict all players from the given world, teleporting them to the default world.
+     *
+     * @param world The world to evict players from.
      */
     @Override
     public void evictAllPlayers(World world) {
@@ -157,6 +179,9 @@ public class WorldServiceImpl extends BaseService implements WorldService {
 
     /**
      * Is the given world currently loaded?
+     *
+     * @param name The name of the world.
+     * @return true if loaded, false otherwise.
      */
     @Override public boolean isWorldLoaded(String name) {
         return Bukkit.getWorld(name) != null;
@@ -164,13 +189,31 @@ public class WorldServiceImpl extends BaseService implements WorldService {
 
     /**
      * Does the given world exist on disk or in config?
+     *
+     * @param name The name of the world.
+     * @return true if exists, false otherwise.
      */
     @Override public boolean worldExists(String name)   {
         return listWorlds().contains(name);
     }
 
-    // -------- load / unload
-    @Override public World loadWorld(String name) { return ensure(name, null); }
+    /**
+     * Load the given world by name.
+     *
+     * @param name The name of the world.
+     * @return The loaded World instance.
+     */
+    @Override public World loadWorld(String name) {
+        return ensure(name, null);
+    }
+
+    /**
+     * Unload the given world by name.
+     *
+     * @param name The name of the world.
+     * @param save Whether to save the world before unloading.
+     * @return true if unloaded, false otherwise.
+     */
     @Override public boolean unloadWorld(String name, boolean save) {
         World w = Bukkit.getWorld(name);
         if (w == null) return false;
@@ -184,25 +227,88 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         return result;
     }
 
-    // -------- create
-    @Override public World createWorld(String name, String key, String option) { return ensure(name, generatorFor(key, option)); }
+    /**
+     * Create a new world with the given name and generator.
+     *
+     * @param name The name of the world.
+     * @param generatorName The name of the custom generator to use (or null for default).
+     * @param generatorOptions The options for the custom generator (or null for default).
+     * @return The created World instance.
+     */
+    @Override public World createWorld(String name, String generatorName, String generatorOptions) {
+        return ensure(name, worldGeneration.get(generatorName, generatorOptions));
+    }
 
+    /**
+     * Check if a setting with the given key is registered.
+     *
+     * @param key The key of the setting.
+     * @return True if the setting is registered, false otherwise.
+     */
+    @Override
+    public boolean isSettingRegistered(String key) {
+        return settings.containsKey(key);
+    }
 
-    public WorldBaseSetting getSetting(String key, SettingCommandMode commandMode) {
-        if(key == null || commandMode == null) {
-            return null;
+    /**
+     * Check if a setting exists for a specific world.
+     *
+     * @param world The world to check.
+     * @param key The key of the setting.
+     * @return True if the setting exists, false otherwise.
+     */
+    @Override
+    public boolean settingExists(World world, String key) {
+        WorldBaseSetting setting = getSettingHandler(key);
+        if(setting != null) {
+            String value = setting.get(world, getConfigSection(world));
+            return value != null && !value.equals("unset");
         }
+        return false;
+    }
 
-        WorldSettingData data = settings.get(key);
-        if(data != null && data.mode() == commandMode) {
-            return data.setting();
+    /**
+     * Get the value of a setting for a specific world.
+     *
+     * @param world The world to get the setting for.
+     * @param key   The key of the setting.
+     * @return The value of the setting, or null if not found.
+     */
+    @Override
+    public String getSetting(World world, String key) {
+        WorldBaseSetting setting = getSettingHandler(key);
+        if(setting != null) {
+            return setting.get(world, getConfigSection(world));
         }
-
         return null;
     }
 
+    /**
+     * Set the value of a setting for a specific world.
+     *
+     * @param world The world to set the setting for.
+     * @param key The key of the setting.
+     * @param value The value to set.
+     * @throws IllegalArgumentException if the key or value is invalid.
+     */
     @Override
-    public void registerSetting(WorldBaseSetting setting, SettingCommandMode commandMode) {
+    public void setSetting(World world, String key, String value) {
+        WorldBaseSetting setting = getSettingHandler(key);
+        if(setting != null) {
+            setting.set(world, getConfigSection(world), value);
+        } else {
+            throw new IllegalArgumentException("No setting registered with key '" + key + "'.");
+        }
+    }
+
+    /**
+     * Register a world base setting.
+     *
+     * @param setting The WorldBaseSetting to register.
+     * @param commandMode The command mode for the setting.
+     */
+    @Override
+    public void registerSettingHandler(WorldBaseSetting setting, SettingCommandMode commandMode) {
         String key = setting.key();
 
         if(settings.containsKey(key)) {
@@ -212,74 +318,122 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         settings.put(key, new WorldSettingData(setting, commandMode));
 
         setting.tabCompletions().forEach(completions -> {
+            String[] out;
             if(commandMode == SettingCommandMode.FLAG) {
-                String[] out = new String[completions.length + 3];
+                out = new String[completions.length + 3];
                 out[0] = "flags";
                 out[1] = "{world}";
                 out[2] = setting.key();
                 System.arraycopy(completions, 0, out, 3, completions.length);
-                worldCommand.getCommand().addTabCompletion(out);
             } else {
-                String[] out = new String[completions.length + 2];
+                out = new String[completions.length + 2];
                 out[0] = setting.key();
                 out[1] = "{world}";
                 System.arraycopy(completions, 0, out, 2, completions.length);
-                worldCommand.getCommand().addTabCompletion(out);
             }
+            worldCommand.getCommand().addTabCompletion(out);
         });
 
         Bukkit.getWorlds().forEach(world -> {
-            ConfigSection config = getConfigSection().getSection(world.getName());
+            ConfigSection config = getConfigSection(world);
             setting.onWorldLoad(world, config);
         });
     }
 
     /**
-     * Get the config section for specific world
+     * Get a list of all registered setting handler keys.
+     *
+     * @return A list of setting handler keys.
      */
+    public List<String> getSettingHandlerKeys(SettingCommandMode commandMode) {
+        List<String> keys = new ArrayList<>();
+        settings.forEach((key, value) -> {
+            if(commandMode == null || value.mode() == commandMode) {
+                keys.add(key);
+            }
+        });
+
+        return keys;
+    }
+
+    /**
+     * Get the setting handler for a specific key.
+     *
+     * @param key The key of the setting.
+     * @param commandMode Filter by command mode or null for any.
+     * @return The WorldBaseSetting handler, or null if not found.
+     */
+    public WorldBaseSetting getSettingHandler(String key, SettingCommandMode commandMode) {
+        if(key == null) {
+            return null;
+        }
+
+        WorldSettingData data = settings.get(key);
+        if(data != null && (commandMode == null || data.mode() == commandMode)) {
+            return data.setting();
+        }
+
+        return null;
+    }
+
+    public WorldBaseSetting getSettingHandler(String key) {
+        return getSettingHandler(key, null);
+    }
+
+    /**
+     * Get the config section for specific world
+     *
+     * @param worldName The name of the world
+     * @return The ConfigSection for the world
+     */
+    @Override
     public ConfigSection getConfigSection(String worldName) {
         return getConfigSection().getSection(worldName);
     }
 
+    @Override
     public ConfigSection getConfigSection(World world) {
         return getConfigSection(world.getName());
     }
-
+  
     /**
      * Load settings for the world
+     *
+     * @param world The world to load settings for
      */
     private void loadWorldSettings(World world) {
-        ConfigSection config = getConfigSection().getSection(world.getName());
+        ConfigSection config = getConfigSection(world);
 
-        settings.forEach((key, value) -> {
-            value.setting().onWorldLoad(world, config);
-        });
+        settings.forEach((key, value) -> value.setting().onWorldLoad(world, config));
     }
 
     /**
      * Unload settings for the world
+     *
+     * @param world The world to unload settings for
      */
     private void unloadWorldSettings(World world) {
-        ConfigSection config = getConfigSection().getSection(world.getName());
+        ConfigSection config = getConfigSection(world);
 
-        settings.forEach((key, value) -> {
-            value.setting().onWorldUnload(world, config);
-        });
+        settings.forEach((key, value) -> value.setting().onWorldUnload(world, config));
     }
 
     /**
      * Delete settings for the world
+     *
+     * @param worldName The name of the world to delete settings for
      */
     private void deleteWorldSettings(String worldName) {
         ConfigSection config = getConfigSection().getSection(worldName);
 
-        settings.forEach((key, value) -> {
-            value.setting().onWorldDeleted(worldName, config);
-        });
+        settings.forEach((key, value) -> value.setting().onWorldDeleted(worldName, config));
     }
 
     /**
      * Handle portal routing for multi-world setups.
+     *
+     * @param event The PlayerPortalEvent to handle.
+     * @return The target Location, or null if no special routing is needed.
      */
     private Location handlePortalRouting(PlayerPortalEvent event) {
         var cause = event.getCause();
@@ -290,7 +444,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         World fromWorld = from.getWorld();
         if (fromWorld == null) return null;
 
-        String base = baseWorldName(fromWorld.getName());
+        String base = WorldUtil.baseName(fromWorld.getName());
         if (base == null || base.isEmpty()) return null;
 
         String targetName;
@@ -341,46 +495,18 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         return to;
     }
 
-    private static String baseWorldName(String name) {
-        if (name == null) return null;
-        String lower = name.toLowerCase(Locale.ROOT);
-        if (lower.endsWith("_nether")) return name.substring(0, name.length() - "_nether".length());
-        if (lower.endsWith("_the_end")) return name.substring(0, name.length() - "_the_end".length());
-        if (lower.endsWith("_end")) return name.substring(0, name.length() - "_end".length());
-        return name;
-    }
-
-    private void ensureDimensionWorlds(String baseName) {
-        if (baseName == null || baseName.isEmpty()) return;
-
-        String lower = baseName.toLowerCase(Locale.ROOT);
-        if (lower.endsWith("_nether") || lower.endsWith("_the_end") || lower.endsWith("_end")) return;
-
-        // Vanilla naming for End is _the_end.
-        String netherName = baseName + "_nether";
-        String endName = baseName + "_the_end";
-
-        if (worldExists(netherName) || Files.isDirectory(worldRoot(netherName))) {
-            ensure(netherName, null);
-        }
-        if (worldExists(endName) || Files.isDirectory(worldRoot(endName))) {
-            ensure(endName, null);
-        }
-    }
-
-    private World.Environment resolveEnv(String name) {
-        String lower = name.toLowerCase(Locale.ROOT);
-        if (lower.endsWith("_nether")) return World.Environment.NETHER;
-        if (lower.endsWith("_the_end")) return World.Environment.THE_END;
-        if (lower.endsWith("_end")) return World.Environment.THE_END;
-        return World.Environment.NORMAL;
-    }
-
+    /**
+     * Ensure the world with the given name is loaded, creating it if necessary.
+     *
+     * @param name The name of the world.
+     * @param gen  The chunk generator to use, or null for default.
+     * @return The World instance.
+     */
     private World ensure(String name, ChunkGenerator gen) {
         World w = Bukkit.getWorld(name);
         if (w != null) return w;
 
-        World.Environment env = resolveEnv(name);
+        World.Environment env = WorldUtil.resolveEnvironment(name);
 
         WorldCreator wc = new WorldCreator(name).environment(env);
         if (gen != null) wc.generator(gen);
@@ -390,17 +516,18 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         if (world != null) {
             getConfigSection().set(name + ".load", true);
             saveConfig();
-            applyWorldSettings(world);
-            if (world.getEnvironment() == World.Environment.NORMAL) {
-                ensureDimensionWorlds(world.getName());
-            }
+            loadWorldSettings(world);
         }
 
         return world;
     }
 
-
-    // -------- fs ops (must be unloaded)
+    /**
+     * Delete the world with the given name from disk.
+     *
+     * @param name The name of the world.
+     * @throws IOException If an I/O error occurs.
+     */
     @Override public void deleteWorld(String name) throws IOException {
         requireUnloaded(name);
         Path root = worldRoot(name);
@@ -416,11 +543,25 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         Bukkit.getPluginManager().callEvent(new WorldDeleteEvent(name));
     }
 
+    /**
+     * Rename the world with the given old name to the new name.
+     *
+     * @param oldName The current name of the world.
+     * @param newName The new name for the world.
+     * @throws IOException If an I/O error occurs.
+     */
     @Override public void renameWorld(String oldName, String newName) throws IOException {
         requireUnloaded(oldName); requireUnloaded(newName);
         Files.move(worldRoot(oldName), worldRoot(newName), StandardCopyOption.ATOMIC_MOVE);
     }
 
+    /**
+     * Duplicate the world with the given source name to the destination name.
+     *
+     * @param src The source world name.
+     * @param dst The destination world name.
+     * @throws IOException If an I/O error occurs.
+     */
     @Override public void duplicateWorld(String src, String dst) throws IOException {
         requireUnloaded(src); requireUnloaded(dst);
         Path s = worldRoot(src), d = worldRoot(dst);
@@ -445,7 +586,11 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         }
     }
 
-    // -------- discovery
+    /**
+     * Get a list of all worlds currently loaded and on disk.
+     *
+     * @return A list of world names.
+     */
     @Override public List<String> listWorlds() {
         Set<String> names = new LinkedHashSet<>();
 
@@ -479,23 +624,54 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         return out;
     }
 
-    @Override public Path getWorldFolder(String name) { return worldRoot(name); }
+    /**
+     * Get the file system path to the world folder with the given name.
+     *
+     * @param name The name of the world.
+     * @return The Path to the world folder.
+     */
+    @Override public Path getWorldFolder(String name) {
+        return worldRoot(name);
+    }
 
-    // -------- registry
-    // -------- helpers
+    /**
+     * Get the WorldGeneration service instance.
+     *
+     * @return The WorldGeneration instance.
+     */
+    @Override
+    public WorldGeneration generator() {
+        return worldGeneration;
+    }
+
+    /**
+     * Require that the world with the given name is not loaded.
+     *
+     * @param name The name of the world.
+     * @throws IOException If the world is loaded.
+     */
     private void requireUnloaded(String name) throws IOException {
-        if (isWorldLoaded(name)) throw new IOException("World is loaded: " + name);
+        if (isWorldLoaded(name)) {
+
+            // evict players if loaded and unload world
+            World world = Bukkit.getWorld(name);
+            if (world != null) {
+                evictAllPlayers(world);
+                if(!unloadWorld(name, true)) {
+                    throw new IOException("World is loaded: " + name);
+                }
+            }
+        }
     }
-    private Path worldRoot(String name) { return plugin.getServer().getWorldContainer().toPath().resolve(name); }
 
-    // -------- chunk generator helpers
-    public void registerGenerator(String key, ChunkGeneratorFactory factory) {
-        worldGeneration.registerGenerator(key, factory);
-    }
-
-    // -------- world settings helpers
-    private void applyWorldSettings(World world) {
-
+    /**
+     * Get the root path of the world with the given name.
+     *
+     * @param name The name of the world.
+     * @return The Path to the world root folder.
+     */
+    private Path worldRoot(String name) {
+        return plugin.getServer().getWorldContainer().toPath().resolve(name);
     }
 
     /**
@@ -510,7 +686,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
                 if(worldExists(worldName)) {
                     configuredWorlds.add(worldName);
                 } else {
-                    plugin.warn("WORLD_CONFIG_WORLD_NOT_EXIST", "world", worldName);
+                    api.messages().warn("WORLD_CONFIG_WORLD_NOT_EXIST", "world", worldName);
                 }
             }
         }
@@ -519,26 +695,20 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         for (String worldName : discoveredWorlds) {
             World existing = Bukkit.getWorld(worldName);
             if (existing != null) {
-                plugin.log("WORLD_CONFIG_LOADED_BY_SERVER", "world", worldName);
-                applyWorldSettings(existing);
-                if (existing.getEnvironment() == World.Environment.NORMAL) {
-                    ensureDimensionWorlds(existing.getName());
-                }
+                api.messages().log("WORLD_CONFIG_LOADED_BY_SERVER", "world", worldName);
+                loadWorldSettings(existing);
             } else {
                 if (configuredWorlds.contains(worldName)) {
                     boolean load = worldsSection.getBoolean(worldName + ".load", false);
                     if (load) {
                         World world = loadWorld(worldName);
                         if (world != null) {
-                            applyWorldSettings(world);
-                            if (world.getEnvironment() == World.Environment.NORMAL) {
-                                ensureDimensionWorlds(world.getName());
-                            }
+                            loadWorldSettings(world);
                         }
-                        plugin.log("WORLD_CONFIG_LOADED", "world", worldName);
+                        api.messages().log("WORLD_CONFIG_LOADED", "world", worldName);
                     }
                 } else {
-                    plugin.log("WORLD_CONFIG_UNLOADED", "world", worldName);
+                    api.messages().log("WORLD_CONFIG_UNLOADED", "world", worldName);
                 }
             }
         }
@@ -546,6 +716,9 @@ public class WorldServiceImpl extends BaseService implements WorldService {
 
     /**
      * Get or create a world change session for the given world.
+     *
+     * @param world The world to get the session for.
+     * @return The WorldChangeSession instance.
      */
     public WorldChangeSession changes(World world) {
         return worldChangeRecorder.getSession(world);

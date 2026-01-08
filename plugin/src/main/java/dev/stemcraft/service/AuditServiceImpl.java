@@ -59,6 +59,9 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
+/**
+ * Implementation of the AuditService for logging player actions.
+ */
 public class AuditServiceImpl extends BaseService implements AuditService {
     private File logDirectory;
     private int maxDays = 28;
@@ -74,6 +77,9 @@ public class AuditServiceImpl extends BaseService implements AuditService {
 
     /**
      * Constructor
+     *
+     * @param plugin The STEMCraft plugin instance
+     * @param api    The STEMCraft API instance
      */
     public AuditServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
@@ -119,13 +125,9 @@ public class AuditServiceImpl extends BaseService implements AuditService {
                 20L * 60 * 2
         );
 
-        api.events().register(AsyncChatEvent.class, event -> {
-            log(event.getPlayer(), "CHAT: " + event.message());
-        });
+        api.events().register(AsyncChatEvent.class, event -> log(event.getPlayer(), "CHAT: " + event.message()));
 
-        api.events().register(PlayerCommandPreprocessEvent.class, event -> {
-            log(event.getPlayer(), "COMMAND: " + event.getMessage());
-        });
+        api.events().register(PlayerCommandPreprocessEvent.class, event -> log(event.getPlayer(), "COMMAND: " + event.getMessage()));
 
         api.events().register(PlayerJoinEvent.class, event -> {
             Player player = event.getPlayer();
@@ -271,9 +273,7 @@ public class AuditServiceImpl extends BaseService implements AuditService {
             }
         });
 
-        api.events().register(ServerCommandEvent.class, event -> {
-            log(null, "RCON COMMAND: " + event.getCommand());
-        });
+        api.events().register(ServerCommandEvent.class, event -> log(null, "RCON COMMAND: " + event.getCommand()));
 
         api.events().register(PortalCreateEvent.class, event -> {
             if(event.getBlocks().isEmpty()) {
@@ -287,14 +287,20 @@ public class AuditServiceImpl extends BaseService implements AuditService {
         });
     }
 
+    /**
+     * Disable the service
+     */
     @Override
     public void onDisable() {
         flushAll();
     }
 
-
-
-
+    /**
+     * Load regex patterns from config
+     *
+     * @param path Config path
+     * @return List of compiled patterns
+     */
     private List<Pattern> loadPatterns(String path) {
         List<Pattern> list = new ArrayList<>();
 
@@ -309,6 +315,14 @@ public class AuditServiceImpl extends BaseService implements AuditService {
         return list;
     }
 
+    /**
+     * Check if material matches any pattern in the list
+     *
+     * @param list     List of patterns
+     * @param material Material to check
+     * @return True if matches, false otherwise
+     */
+    @SuppressWarnings("BooleanMethodIsAlwaysInverted")
     private boolean matches(List<Pattern> list, Material material) {
         if (list.isEmpty()) return true; // empty = log everything
 
@@ -347,6 +361,9 @@ public class AuditServiceImpl extends BaseService implements AuditService {
         deque.addFirst(new PlayerLogEntry(Instant.now(), PlaceholderUtil.apply(action, placeholders), name));
     }
 
+    /**
+     * Flush all buffers to disk
+     */
     private void flushAll() {
         buffers.forEach((uuid, deque) -> {
             String name = deque.peekFirst() != null ? deque.peekFirst().playerName() : null;
@@ -356,11 +373,22 @@ public class AuditServiceImpl extends BaseService implements AuditService {
         });
     }
 
+    /**
+     * Flush specific player buffer to disk
+     *
+     * @param player The player
+     */
     private void flush(Player player) {
         if (player == null) return;
         flush(player.getUniqueId(), player.getName());
     }
 
+    /**
+     * Flush specific player buffer to disk
+     *
+     * @param uuid       The player UUID
+     * @param playerName The player name
+     */
     private void flush(UUID uuid, String playerName) {
         Deque<PlayerLogEntry> deque = buffers.get(uuid);
         Instant cutoff = Instant.now().minus(maxDays, ChronoUnit.DAYS);
@@ -405,13 +433,13 @@ public class AuditServiceImpl extends BaseService implements AuditService {
         }
 
         // 3) Nothing left? Optionally delete file
-        if (merged.isEmpty()) {
-            if (file.exists()) {
-                // you can delete or leave an empty file; your call
-                // file.delete();
-            }
-            return;
-        }
+//        if (merged.isEmpty()) {
+//            if (file.exists()) {
+//                // you can delete or leave an empty file; your call
+//                // file.delete();
+//            }
+//            return;
+//        }
 
         // 4) Sort newest first
         merged.sort(Comparator.comparing(PlayerLogEntry::timestamp).reversed());
@@ -459,5 +487,8 @@ public class AuditServiceImpl extends BaseService implements AuditService {
         }
     }
 
+    /**
+     * Record representing a player log entry
+     */
     private record PlayerLogEntry(Instant timestamp, String action, String playerName) { }
 }

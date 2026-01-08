@@ -35,6 +35,9 @@ import java.io.*;
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * Class representing the recorded state of a block, including its type, data, and inventory contents.
+ */
 public class RecordedBlockState {
     @Getter
     final Material material;
@@ -43,6 +46,13 @@ public class RecordedBlockState {
     @Getter
     ItemStack[] inventory;
 
+    /**
+     * Constructs a RecordedBlockState from the given parameters.
+     *
+     * @param type               The material type of the block.
+     * @param data               The block data as a string.
+     * @param inventoryContents  The inventory contents of the block, if applicable.
+     */
     RecordedBlockState(Material type, String data, ItemStack[] inventoryContents) {
         this.material = type;
         this.data = data;
@@ -51,6 +61,10 @@ public class RecordedBlockState {
 
     /**
      * Constructs a RecordedBlockState from the given parameters.
+     *
+     * @param materialName      The material name of the block.
+     * @param data              The block data as a string.
+     * @param inventoryBytes    The serialized inventory contents of the block, if applicable.
      */
     RecordedBlockState(String materialName, String data, byte[] inventoryBytes) {
         this.material = Material.matchMaterial(materialName);
@@ -78,6 +92,8 @@ public class RecordedBlockState {
 
     /**
      * Constructs a RecordedBlockState from the given BlockState.
+     *
+     * @param state The BlockState to record.
      */
     RecordedBlockState(BlockState state) {
         material = state.getType();
@@ -122,6 +138,8 @@ public class RecordedBlockState {
 
     /**
      * Returns the material type of this block state.
+     *
+     * @return The material type.
      */
     public String getMaterialName() {
         return material.name();
@@ -129,6 +147,8 @@ public class RecordedBlockState {
 
     /**
      * Returns the inventory contents of this block state, or null if none.
+     *
+     * @return The inventory contents as a byte array, or null.
      */
     public byte[] getInventoryAsBytes() {
         if (inventory == null) return null;
@@ -153,8 +173,13 @@ public class RecordedBlockState {
         }
     }
 
-
-    static RecordedBlockState load(ConfigSection section) {
+    /**
+     * Loads a RecordedBlockState from the given configuration section.
+     *
+     * @param section The configuration section to load from.
+     * @return The loaded RecordedBlockState.
+     */
+    public static RecordedBlockState load(ConfigSection section) {
         String typeName = section.getString("type");
         Material type = typeName != null ? Material.matchMaterial(typeName) : Material.AIR;
         String data = section.getString("data", "minecraft:air");
@@ -169,6 +194,12 @@ public class RecordedBlockState {
         return new RecordedBlockState(type, data, inventory);
     }
 
+    /**
+     * Restores the recorded block state at the given location.
+     *
+     * @param location      The location to restore the block state to.
+     * @param applyPhysics  Whether to apply physics when setting the block.
+     */
     public void restore(Location location, boolean applyPhysics) {
         Block block = location.getBlock();
 

@@ -22,6 +22,9 @@ package dev.stemcraft.chunkgen;
 
 import org.bukkit.generator.ChunkGenerator;
 
+/**
+ * Chunk generator that creates a void world (all air).
+ */
 public class VoidGenerator extends ChunkGenerator {
     // no need to fill any pass; chunks stay air
 }

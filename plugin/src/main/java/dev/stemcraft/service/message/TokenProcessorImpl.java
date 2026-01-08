@@ -27,12 +27,17 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Pattern;
 
+/**
+ * Implementation of the TokenProcessor interface.
+ */
 public class TokenProcessorImpl implements TokenProcessor {
 
     private final Map<Pattern, String> tokens = new HashMap<>();
 
     /**
      * Constructs a new TokenProcessor with the given configuration.
+     *
+     * @param config The configuration section containing token definitions.
      */
     public TokenProcessorImpl(ConfigSection config) {
         ConfigSection sec = config.getSection("tokens");
@@ -45,6 +50,9 @@ public class TokenProcessorImpl implements TokenProcessor {
 
     /**
      * Adds a token binding.
+     *
+     * @param placeholder The placeholder token (without colons).
+     * @param value       The value to bind to the token.
      */
     @Override
     public void add(String placeholder, String value) {
@@ -64,6 +72,8 @@ public class TokenProcessorImpl implements TokenProcessor {
 
     /**
      * Removes a token binding.
+     *
+     * @param placeholder The placeholder token (without colons).
      */
     @Override
     public void remove(String placeholder) {
@@ -82,6 +92,8 @@ public class TokenProcessorImpl implements TokenProcessor {
 
     /**
      * Removes multiple token bindings.
+     *
+     * @param placeholders An iterable of placeholder tokens to remove.
      */
     @Override
     public void remove(Iterable<String> placeholders) {
@@ -95,6 +107,9 @@ public class TokenProcessorImpl implements TokenProcessor {
 
     /**
      * Processes the input string, replacing all tokens with their bound values.
+     *
+     * @param str The input string to process.
+     * @return The processed string with tokens replaced.
      */
     public String apply(String str) {
         if (str == null || str.isEmpty() || tokens.isEmpty()) {

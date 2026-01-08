@@ -31,6 +31,7 @@ import java.util.Locale;
 /**
  * Interface representing a world base setting in STEMCraft.
  */
+@SuppressWarnings("EmptyMethod")
 public interface WorldBaseSetting {
 
     /**
@@ -51,22 +52,22 @@ public interface WorldBaseSetting {
     /**
      * Called when the setting is disabled.
      */
-    default void onDisable() {}
+    default void onDisable() { }
 
     /**
      * Called when a world is loaded.
      */
-    default void onWorldLoad(World world, ConfigSection config) {}
+    default void onWorldLoad(World world, ConfigSection config) { }
 
     /**
      * Called when a world is unloaded.
      */
-    default void onWorldUnload(World world, ConfigSection config) {}
+    default void onWorldUnload(World world, ConfigSection config) { }
 
     /**
      * Called when a world is deleted.
      */
-    default void onWorldDeleted(String worldName, ConfigSection config) {}
+    default void onWorldDeleted(String worldName, ConfigSection config) { }
 
     /**
      * Returns a list of tab completions for this setting.

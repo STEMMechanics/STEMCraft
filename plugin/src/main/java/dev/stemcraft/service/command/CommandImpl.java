@@ -38,6 +38,9 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.util.*;
 
+/**
+ * Implementation of the Command interface.
+ */
 public class CommandImpl extends HasMessagesImpl implements Command, TabCompleter {
 
     @Getter
@@ -53,7 +56,7 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
     private final List<String> aliases = new ArrayList<>();
 
     @Getter
-    private String permission = "";
+    private String permission;
 
     @Getter
     private final CommandExecutor executor;
@@ -69,6 +72,15 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
 
     /**
      * Constructor for CommandBuilderImpl.
+     *
+     * @param api            The STEMCraft API instance.
+     * @param label          The command label.
+     * @param description    The command description.
+     * @param usage          The command usage string.
+     * @param aliases        The command aliases.
+     * @param permission     The permission required to run the command.
+     * @param executor       The command executor.
+     * @param tabCompletions The tab completion patterns.
      */
     public CommandImpl(STEMCraftAPI api, String label, String description, String usage, List<String> aliases, String permission, CommandExecutor executor, List<String[]> tabCompletions) {
         this.label = label;
@@ -82,6 +94,8 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
 
     /**
      * Register the command on the server
+     *
+     * @param plugin The plugin registering the command.
      */
     public void register(JavaPlugin plugin) {
         PluginCommand pluginCommand = null;
@@ -100,7 +114,7 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
             pluginCommand.setTabCompleter(this);
             applyToBukkitCommand(pluginCommand);
 
-            pluginCommand.executor((sender, command, label, args) -> {
+            pluginCommand.setExecutor((sender, command, label, args) -> {
                 CommandContext context = new CommandContextImpl(this, sender, label, Arrays.stream(args).toList());
 
                 if (!permission.isEmpty() && !sender.hasPermission(permission)) {
@@ -128,29 +142,31 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
 
     /**
      * Apply the current in-memory metadata to the Bukkit command instance.
+     *
+     * @param cmd The Bukkit PluginCommand to update.
      */
     private void applyToBukkitCommand(@NotNull PluginCommand cmd) {
-        // Aliases
         cmd.setAliases(this.aliases);
 
-        // Description / usage
         if (this.description != null) {
-            cmd.description(this.description);
+            cmd.setDescription(this.description);
         }
         if (this.usage != null) {
-            cmd.usage(this.usage);
+            cmd.setUsage(this.usage);
         }
 
         // Permission (empty string effectively means "no permission")
         if (this.permission == null || this.permission.isEmpty()) {
-            cmd.permission(null);
+            cmd.setPermission(null);
         } else {
-            cmd.permission(this.permission);
+            cmd.setPermission(this.permission);
         }
     }
 
     /**
      * Update the permission required to run this command. Use empty string to clear.
+     *
+     * @param permission The permission node.
      */
     public void setPermission(@NotNull String permission) {
         this.permission = permission;
@@ -161,6 +177,8 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
 
     /**
      * Replace aliases.
+     *
+     * @param aliases The new aliases.
      */
     public void setAliases(@NotNull String... aliases) {
         this.aliases.clear();
@@ -172,6 +190,8 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
 
     /**
      * Update the usage string.
+     *
+     * @param usage The usage string.
      */
     public void setUsage(@NotNull String usage) {
         this.usage = usage;
@@ -182,6 +202,8 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
 
     /**
      * Update the description.
+     *
+     * @param description The description.
      */
     public void setDescription(@NotNull String description) {
         this.description = description;
@@ -192,13 +214,33 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
 
     /**
      * Add a tab completion pattern (your existing format: String[] items).
+     *
+     * @param completions The tab completion pattern.
      */
     public void addTabCompletion(@NotNull String... completions) {
         this.tabCompletions.add(completions);
     }
 
     /**
+     * Remove a tab completion pattern.
+     *
+     * @param completions The tab completion pattern to remove.
+     */
+    public void removeTabCompletion(@NotNull String... completions) {
+        this.tabCompletions.removeIf(existing -> Arrays.equals(existing, completions));
+    }
+
+    /**
+     * Clear all tab completion patterns.
+     */
+    public void clearTabCompletions() {
+        this.tabCompletions.clear();
+    }
+
+    /**
      * Get the server CommandMap
+     *
+     * @return The CommandMap
      */
     private CommandMap getCommandMap() {
         // Paper has Bukkit.getCommandMap()
@@ -216,9 +258,12 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
         }
     }
 
+    /**
+     * Helper class representing a value option in tab completion.
+     */
     private static class TabCompleteValueOption {
-        String option;
-        String value;
+        final String option;
+        final String value;
 
         TabCompleteValueOption(String option, String value) {
             this.option = option;
@@ -226,11 +271,12 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
         }
     }
 
+    /**
+     * Helper class for parsing command arguments for tab completion.
+     */
     private static class TabCompleteArgParser {
         final List<String> optionArgsAvailable = new ArrayList<>();
         final Map<String, List<String>> valueOptionArgsAvailable = new HashMap<>();
-        final List<String> optionArgsUsed = new ArrayList<>();
-        final List<String> valueOptionArgsUsed = new ArrayList<>();
         Integer argIndex = 0;
         final String[] args;
         final Player player;
@@ -308,14 +354,14 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
 
                 String option = getStringAsOption(arg);
                 if (option != null) {
-                    optionArgsUsed.add(option);
+//                    optionArgsUsed.add(option);
                     optionArgsAvailable.remove(option);
                     continue;
                 }
 
                 TabCompleteValueOption valueOption = getStringAsValueOption(arg);
                 if (valueOption != null) {
-                    valueOptionArgsUsed.add(valueOption.option);
+//                    valueOptionArgsUsed.add(valueOption.option);
                     valueOptionArgsAvailable.remove(valueOption.option);
                     continue;
                 }
@@ -345,7 +391,15 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
         }
     }
 
-
+    /**
+     * Handle tab completion for the command.
+     *
+     * @param sender The command sender.
+     * @param cmd    The command.
+     * @param label  The command label.
+     * @param args   The command arguments.
+     * @return A list of tab completion results.
+     */
     @Override
     public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull org.bukkit.command.Command cmd, @NotNull String label, String[] args) {
         Player player = (sender instanceof Player p) ? p : null;

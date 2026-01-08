@@ -36,5 +36,6 @@ public interface PunishmentAlertCallback {
      * @param record The punishment record details.
      * @return true if the alert was handled successfully, false otherwise.
      */
+    @SuppressWarnings("SameReturnValue")
     boolean run(String type, Player player, PunishmentRecord record);
 }

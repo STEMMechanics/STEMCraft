@@ -26,10 +26,16 @@ import dev.stemcraft.api.command.CommandBuilder;
 import dev.stemcraft.api.service.command.CommandService;
 import dev.stemcraft.service.BaseService;
 
+/**
+ * Implementation of the CommandService interface.
+ */
 public class CommandServiceImpl extends BaseService implements CommandService {
 
     /**
      * Constructor for CommandServiceImpl.
+     *
+     * @param plugin The STEMCraft plugin instance.
+     * @param api    The STEMCraft API instance.
      */
     public CommandServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
@@ -37,6 +43,9 @@ public class CommandServiceImpl extends BaseService implements CommandService {
 
     /**
      * Create a new command builder with the given label.
+     *
+     * @param label The command label.
+     * @return A new CommandBuilder instance.
      */
     public CommandBuilder create(String label) {
         return new CommandBuilderImpl(api, label);

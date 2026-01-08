@@ -27,7 +27,11 @@ import java.util.Map;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 
+/**
+ * Capability for storing arbitrary metadata key-value pairs.
+ */
 public class HasMetaImpl implements HasMeta {
+
     /**
      * Metadata storage
      */
@@ -35,6 +39,9 @@ public class HasMetaImpl implements HasMeta {
 
     /**
      * Check if the metadata contains a value for the given key.
+     *
+     * @param key the metadata key
+     * @return true if the metadata contains a value for the given key, false otherwise
      */
     @Override
     public boolean contains(String key) {
@@ -43,26 +50,49 @@ public class HasMetaImpl implements HasMeta {
 
     /**
      * Get the metadata value for the given key, or defaultValue if not present.
+     *
+     * @param key the metadata key
+     * @param type the expected type of the metadata value
+     * @param defaultValue the default value to return if the key is not present
+     * @return the metadata value for the given key, or defaultValue if not present
      */
     @Override
     public <T> T get(String key, Class<T> type, T defaultValue) {
         Object value = meta.get(key);
         if (value == null) return defaultValue;
-        if (!value.getClass().isAssignableFrom(type)) return defaultValue;
+        if (!type.isInstance(value)) return defaultValue;
         return type.cast(value);
     }
 
     /**
      * Get the metadata value for the given key, or create and store a new value using the supplier if not present.
+     *
+     * @param key the metadata key
+     * @param supplier the supplier to create a new value if the key is not present
+     * @return the metadata value for the given key, or a new value created by the supplier if not present
      */
     @Override
-    @SuppressWarnings("unchecked")
-    public <T> T getOrCreate(String key, Supplier<T> supplier) {
-        return (T) meta.computeIfAbsent(key, k -> supplier.get());
+    public <T> T getOrCreate(String key, Class<T> type, Supplier<? extends T> supplier) {
+        Object existing = meta.get(key);
+        if (existing != null) {
+            if (!type.isInstance(existing)) {
+                throw new IllegalStateException(
+                        "Metadata key '" + key + "' is not of type " + type.getName() + ", got " + existing.getClass().getName()
+                );
+            }
+            return type.cast(existing);
+        }
+
+        T created = supplier.get();
+        meta.put(key, created);
+        return created;
     }
 
     /**
      * Set the metadata value for the given key.
+     *
+     * @param key the metadata key
+     * @param value the metadata value
      */
     @Override
     public <T> void set(String key, T value) {
@@ -71,6 +101,9 @@ public class HasMetaImpl implements HasMeta {
 
     /**
      * Set the metadata value for the given key if not already present.
+     *
+     * @param key the metadata key
+     * @param value the metadata value
      */
     @Override
     public <T> void setIfAbsent(String key, T value) {
@@ -79,6 +112,8 @@ public class HasMetaImpl implements HasMeta {
 
     /**
      * Remove the metadata value for the given key.
+     *
+     * @param key the metadata key
      */
     @Override
     public void remove(String key) {
@@ -95,6 +130,8 @@ public class HasMetaImpl implements HasMeta {
 
     /**
      * Perform the given action for each metadata key-value pair.
+     *
+     * @param consumer the action to perform for each metadata key-value pair
      */
     @Override
     public void forEach(BiConsumer<String, Object> consumer) {

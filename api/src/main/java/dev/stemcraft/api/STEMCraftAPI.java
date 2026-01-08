@@ -20,19 +20,19 @@
 
 package dev.stemcraft.api;
 
-import dev.stemcraft.api.capability.HasMessages;
 import dev.stemcraft.api.service.command.CommandService;
 import dev.stemcraft.api.internal.InstanceHolder;
 import dev.stemcraft.api.service.database.DatabaseService;
 import dev.stemcraft.api.service.event.EventService;
-import dev.stemcraft.api.service.minigame.MiniGameService;
 import dev.stemcraft.api.service.config.ConfigService;
 import dev.stemcraft.api.service.gatekeeper.GatekeeperService;
 import dev.stemcraft.api.service.hologram.HologramService;
 import dev.stemcraft.api.service.item.ItemService;
 import dev.stemcraft.api.service.locale.LocaleService;
 import dev.stemcraft.api.service.message.MessageService;
+import dev.stemcraft.api.service.motd.MotdService;
 import dev.stemcraft.api.service.player.PlayerService;
+import dev.stemcraft.api.service.recipe.RecipeService;
 import dev.stemcraft.api.service.region.RegionService;
 import dev.stemcraft.api.service.task.TaskService;
 import dev.stemcraft.api.service.punishment.PunishmentService;
@@ -42,7 +42,7 @@ import dev.stemcraft.api.service.world.WorldService;
 
 import java.io.File;
 
-public interface STEMCraftAPI extends HasMessages {
+public interface STEMCraftAPI {
 
     /**
      * Get the current version of STEMCraft.
@@ -107,7 +107,12 @@ public interface STEMCraftAPI extends HasMessages {
     /**
      * Get the minigame service.
      */
-    MiniGameService minigames();
+//    MiniGameService minigames();
+
+    /**
+     * Get the MOTD service.
+     */
+    MotdService motd();
 
     /**
      * Get the player log service.
@@ -118,6 +123,11 @@ public interface STEMCraftAPI extends HasMessages {
      * Get the punishment service.
      */
     PunishmentService punishments();
+
+    /**
+     * Get the recipe service.
+     */
+    RecipeService recipes();
 
     /**
      * Get the region service.

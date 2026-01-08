@@ -25,22 +25,43 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.Command;
 import dev.stemcraft.api.command.CommandContext;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.PlayerInventory;
 
+/**
+ * Command to clear a player's inventory.
+ */
 public class ClearInvCommand extends BaseCommand {
+    private static final String PERMISSION = "stemcraft.command.clearinv";
+    private static final String PERMISSION_OTHERS = "stemcraft.command.clearinv.others";
 
+    /**
+     * Constructor for ClearInvCommand.
+     *
+     * @param plugin the STEMCraft plugin instance
+     * @param api the STEMCraft API instance
+     */
     ClearInvCommand(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
     }
 
+    /**
+     * Called when the command is loaded.
+     */
     @Override
     public void onLoad() {
         setLabel("clearinv");
         setDescription("CLEAR_INV_DESCRIPTION");
         setUsage("CLEAR_INV_USAGE");
-        setPermission("stemcraft.command.clearinv");
+        setPermission(PERMISSION);
         register(plugin);
     }
 
+    /**
+     * Called when the command is executed.
+     *
+     * @param cmd the command being executed
+     * @param ctx the context of the command execution
+     */
     @Override
     public void onExecute(Command cmd, CommandContext ctx) {
         // check if console called without args
@@ -50,7 +71,7 @@ public class ClearInvCommand extends BaseCommand {
         }
 
         // check permission for others (if args given)
-        if(!ctx.args().isEmpty() && !ctx.hasPermission("stemcraft.command.clearinv.others")) {
+        if(!ctx.args().isEmpty() && !ctx.hasPermission(PERMISSION_OTHERS)) {
             error(ctx.getSender(), "COMMAND_NO_PERMISSION_OTHERS");
             return;
         }
@@ -62,8 +83,12 @@ public class ClearInvCommand extends BaseCommand {
             return;
         }
 
-        target.getInventory().clear();
-        target.getInventory().setArmorContents(null);
+        PlayerInventory inv = target.getInventory();
+        inv.clear();
+        inv.setHelmet(null);
+        inv.setChestplate(null);
+        inv.setLeggings(null);
+        inv.setBoots(null);
 
         if (target.equals(ctx.getSender())) {
             success(ctx.getSender(), "CLEAR_INV_SUCCESS");

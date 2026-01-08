@@ -23,7 +23,6 @@ package dev.stemcraft.config;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigFile;
 import lombok.Getter;
-import lombok.Setter;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.configuration.ConfigurationSection;
 import java.util.Set;
@@ -31,6 +30,9 @@ import java.util.Set;
 import java.io.File;
 import java.io.IOException;
 
+/**
+ * Implementation of the ConfigFile interface for managing YAML configuration files.
+ */
 public class ConfigFileImpl extends ConfigSectionImpl implements ConfigFile {
     @Getter
     private String name;
@@ -39,15 +41,25 @@ public class ConfigFileImpl extends ConfigSectionImpl implements ConfigFile {
     private File file;
     private YamlConfiguration config;
     @Getter
-    @Setter
     private boolean autoSave = false;
-    @Setter
     private boolean saveDefaults = true;
 
     /**
      * Loads the configuration file with the given name.
+     *
+     * @param name The name of the configuration file.
+     * @param createIfNotExist Whether to create the file if it does not exist.
+     * @return true if the file was loaded successfully, false otherwise.
      */
     public boolean load(String name, boolean createIfNotExist) {
+        return load(STEMCraftAPI.api().getDataFolder(), name, createIfNotExist);
+    }
+
+    public boolean load(File file, boolean createIfNotExist) {
+        return load(file.getParentFile(), file.getName(), createIfNotExist);
+    }
+
+    public boolean load(File parent, String name, boolean createIfNotExist) {
         if (!name.contains(".")) {
             name += ".yml";
         }
@@ -55,7 +67,7 @@ public class ConfigFileImpl extends ConfigSectionImpl implements ConfigFile {
         this.name = name;
         this.dirty = false;
 
-        file = new File(STEMCraftAPI.api().getDataFolder(), name);
+        file = new File(parent, name);
 
         if (!file.exists()) {
             if (!createIfNotExist) {
@@ -75,14 +87,13 @@ public class ConfigFileImpl extends ConfigSectionImpl implements ConfigFile {
         }
 
         this.config = YamlConfiguration.loadConfiguration(file);
-        super.setConfigFile(this);
-        // Root section should be the loaded YAML itself (not the defaults section)
-        super.setSection(this.config);
         return true;
     }
 
     /**
      * Checks if the configuration file exists.
+     *
+     * @return true if the file exists, false otherwise.
      */
     public boolean exists() {
         return file != null && file.exists();
@@ -97,6 +108,8 @@ public class ConfigFileImpl extends ConfigSectionImpl implements ConfigFile {
 
     /**
      * Saves the configuration file.
+     *
+     * @param pruneEmptySections Whether to remove empty sections before saving.
      */
     public void save(boolean pruneEmptySections) {
         if (file == null || !dirty) return;
@@ -109,12 +122,15 @@ public class ConfigFileImpl extends ConfigSectionImpl implements ConfigFile {
             config.save(file);
             dirty = false;
         } catch (IOException e) {
-            STEMCraftAPI.api().error("Could not save config file: " + name, e);
+            STEMCraftAPI.api().messages().error("Could not save config file: " + name, e);
         }
     }
 
     /**
      * Saves the configuration file under a new name.
+     *
+     * @param name The new name for the configuration file.
+     * @return The current ConfigFile instance.
      */
     public ConfigFile saveAs(String name) {
         if (file == null) return this;
@@ -124,19 +140,46 @@ public class ConfigFileImpl extends ConfigSectionImpl implements ConfigFile {
             config.save(newFile);
             return this;
         } catch (IOException e) {
-            STEMCraftAPI.api().error("Could not save config file as: " + name, e);
+            STEMCraftAPI.api().messages().error("Could not save config file as: " + name, e);
             return this;
         }
     }
 
     /**
+     * Sets whether the configuration file should auto-save.
+     *
+     * @param autoSave True to enable auto-save, false to disable.
+     */
+    @Override
+    public void setAutoSave(boolean autoSave) {
+        this.autoSave = autoSave;
+    }
+
+    /**
      * Gets whether the configuration file should save default values.
+     *
+     * @return true if default values should be saved, false otherwise.
      */
     @Override
     public boolean getSaveDefaults() {
         return saveDefaults;
     }
 
+    /**
+     * Sets whether the configuration file should save default values.
+     *
+     * @param saveDefaults True to save default values, false otherwise.
+     */
+    @Override
+    public void setSaveDefaults(boolean saveDefaults) {
+        this.saveDefaults = saveDefaults;
+    }
+
+    /**
+     * Recursively prunes empty sections from the given configuration section.
+     *
+     * @param section The configuration section to prune.
+     */
     private static void pruneEmptySections(ConfigurationSection section) {
         Set<String> keys = section.getKeys(false);
         for (String key : keys) {

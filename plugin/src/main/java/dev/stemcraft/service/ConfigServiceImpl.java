@@ -26,9 +26,13 @@ import dev.stemcraft.api.config.ConfigFile;
 import dev.stemcraft.api.service.config.ConfigService;
 import dev.stemcraft.config.ConfigFileImpl;
 
+import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Implementation of the ConfigService for managing configuration files.
+ */
 public class ConfigServiceImpl extends BaseService implements ConfigService {
 
     private static final long AUTO_SAVE_INTERVAL = 20 * 60 * 5; // 5 minutes
@@ -40,6 +44,9 @@ public class ConfigServiceImpl extends BaseService implements ConfigService {
 
     /**
      * Constructor for ConfigServiceImpl.
+     *
+     * @param plugin The STEMCraft plugin instance.
+     * @param api    The STEMCraft API instance.
      */
     public ConfigServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
@@ -74,6 +81,44 @@ public class ConfigServiceImpl extends BaseService implements ConfigService {
         ConfigFileImpl configFile = new ConfigFileImpl();
         if (configFile.load(name, createIfNotExist)) {
             files.put(name, configFile);
+            return configFile;
+        }
+
+        return null;
+    }
+
+    public ConfigFile load(File parent, String name, boolean createIfNotExist) {
+        if(!parent.exists() || !parent.isDirectory()) {
+            throw new IllegalArgumentException("Parent must be an existing directory");
+        }
+
+        String fullName = parent.getPath() + "/" + name;
+        if(files.containsKey(fullName)) {
+            return files.get(fullName);
+        }
+
+        ConfigFileImpl configFile = new ConfigFileImpl();
+        if (configFile.load(parent, name, createIfNotExist)) {
+            files.put(fullName, configFile);
+            return configFile;
+        }
+
+        return null;
+    }
+
+    public ConfigFile load(File file, boolean createIfNotExist) {
+        if(file.exists() && file.isDirectory()) {
+            throw new IllegalArgumentException("File must not be a directory");
+        }
+
+        String fullName = file.getPath();
+        if(files.containsKey(fullName)) {
+            return files.get(fullName);
+        }
+
+        ConfigFileImpl configFile = new ConfigFileImpl();
+        if (configFile.load(file, createIfNotExist)) {
+            files.put(fullName, configFile);
             return configFile;
         }
 

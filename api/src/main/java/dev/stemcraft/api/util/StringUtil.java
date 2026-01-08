@@ -347,4 +347,33 @@ public final class StringUtil {
         }
         return plural;
     }
+
+    /**
+     * Checks if a string can be parsed as an integer.
+     *
+     * @param s the string to check
+     * @return true if the string is an integer, false otherwise
+     */
+    public static boolean isInteger(String s) {
+        if (s == null || s.isEmpty()) {
+            return false;
+        }
+        try {
+            Integer.parseInt(s);
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Escapes special characters in a string for JSON formatting.
+     *
+     * @param s the string to escape
+     * @return the escaped string
+     */
+    public static String escapeJson(String s) {
+        if (s == null) return "";
+        return s.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
 }

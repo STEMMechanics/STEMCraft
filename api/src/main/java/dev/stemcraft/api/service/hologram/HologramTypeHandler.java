@@ -34,6 +34,7 @@ public interface HologramTypeHandler {
      * @param type The hologram type
      * @return A list of contexts
      */
+    @SuppressWarnings("SameReturnValue")
     List<String> list(String type);
 
     /**

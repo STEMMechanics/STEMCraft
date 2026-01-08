@@ -27,6 +27,7 @@ import org.bukkit.entity.Player;
 /**
  * Listener for region-related events.
  */
+@SuppressWarnings("EmptyMethod")
 public interface RegionListener {
 
     /**

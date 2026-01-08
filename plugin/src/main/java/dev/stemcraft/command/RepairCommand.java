@@ -28,19 +28,42 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.Damageable;
 
-public class RepairCommand extends STEMCraftCommandImpl {
+/**
+ * Command to repair the item in a player's main hand.
+ */
+public class RepairCommand extends BaseCommand {
+    private static final String PERMISSION = "stemcraft.command.repair";
 
+    /**
+     * Creates a new RepairCommand instance.
+     *
+     * @param plugin The main STEMCraft plugin instance.
+     * @param api    The STEMCraft API instance.
+     */
+    public RepairCommand(STEMCraft plugin, STEMCraftAPI api) {
+        super(plugin, api);
+    }
+
+    /**
+     * Initializes the command with its label, description, usage, and permission.
+     */
     @Override
-    public void onLoad(STEMCraft plugin) {
+    public void onLoad() {
         setLabel("repair");
         setDescription("REPAIR_DESCRIPTION");
         setUsage("REPAIR_USAGE");
-        setPermission("stemcraft.command.repair");
+        setPermission(PERMISSION);
         register(plugin);
     }
 
+    /**
+     * Executes the repair command, repairing the item in the target player's main hand.
+     *
+     * @param cmd The command being executed.
+     * @param ctx The context of the command execution.
+     */
     @Override
-    public void onExecute(STEMCraftAPI api, Command cmd, CommandContext ctx) {
+    public void onExecute(Command cmd, CommandContext ctx) {
         // check if console called without args
         if(ctx.isConsole() && ctx.args().isEmpty()) {
             error("CONSOLE_PLAYER_REQUIRED");

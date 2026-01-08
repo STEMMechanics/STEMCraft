@@ -61,10 +61,10 @@ public interface HasMessages {
      * @param ex An optional exception to log.
      * @param placeholders Placeholders to replace in the message.
      */
-    void plain(CommandSender sender, String message, Throwable ex, Object... placeholders);
-    default void plain(String message, Object... placeholders) { plain(null, message, null, placeholders); }
-    default void plain(String message, Throwable ex, Object... placeholders) { plain(null, message, ex, placeholders); }
-    default void plain(CommandSender sender, String message, Object... placeholders) { plain(sender, message, null, placeholders); }
+    void send(CommandSender sender, String message, Throwable ex, Object... placeholders);
+    default void send(String message, Object... placeholders) { send(null, message, null, placeholders); }
+    default void send(String message, Throwable ex, Object... placeholders) { send(null, message, ex, placeholders); }
+    default void send(CommandSender sender, String message, Object... placeholders) { send(sender, message, null, placeholders); }
 
     /**
      * Send an info message to the sender or console if null.

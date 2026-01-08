@@ -26,19 +26,43 @@ import dev.stemcraft.api.command.Command;
 import dev.stemcraft.api.command.CommandContext;
 import org.bukkit.entity.Player;
 
-public class InvSeeCommand extends STEMCraftCommandImpl {
+/**
+ * Command to view another player's inventory.
+ */
+public class InvSeeCommand extends BaseCommand {
+    private static final String PERMISSION = "stemcraft.command.invsee";
+
+    /**
+     * Creates a new InvSeeCommand instance.
+     *
+     * @param plugin The main STEMCraft plugin instance.
+     * @param api    The STEMCraft API instance.
+     */
+    public InvSeeCommand(STEMCraft plugin, STEMCraftAPI api) {
+        super(plugin, api);
+    }
+
+    /**
+     * Initializes the command with its label, description, usage, and permission.
+     */
     @Override
-    public void onLoad(STEMCraft plugin) {
+    public void onLoad() {
         setLabel("invsee");
         setDescription("INVSEE_DESCRIPTION");
         setUsage("INVSEE_USAGE");
-        setPermission("stemcraft.command.invsee");
+        setPermission(PERMISSION);
         addTabCompletion("{player}");
         register(plugin);
     }
 
+    /**
+     * Executes the invsee command, allowing a player to view another player's inventory.
+     *
+     * @param cmd The command being executed.
+     * @param ctx The context of the command execution.
+     */
     @Override
-    public void onExecute(STEMCraftAPI api, Command cmd, CommandContext ctx) {
+    public void onExecute(Command cmd, CommandContext ctx) {
         if(ctx.args().isEmpty()) {
             cmd.error("PLAYER_REQUIRED");
             return;

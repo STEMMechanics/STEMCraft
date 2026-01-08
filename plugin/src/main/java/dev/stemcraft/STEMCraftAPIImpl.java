@@ -22,7 +22,11 @@ package dev.stemcraft;
 
 import dev.stemcraft.api.service.command.CommandService;
 import dev.stemcraft.api.service.config.ConfigService;
+import dev.stemcraft.api.service.database.DatabaseService;
 import dev.stemcraft.api.service.event.EventService;
+import dev.stemcraft.api.service.motd.MotdService;
+import dev.stemcraft.api.service.player.PlayerService;
+import dev.stemcraft.api.service.recipe.RecipeService;
 import dev.stemcraft.capability.HasMessagesImpl;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.service.gatekeeper.GatekeeperService;
@@ -30,7 +34,6 @@ import dev.stemcraft.api.service.hologram.HologramService;
 import dev.stemcraft.api.service.item.ItemService;
 import dev.stemcraft.api.service.locale.LocaleService;
 import dev.stemcraft.api.service.message.MessageService;
-import dev.stemcraft.api.service.player.PlayerLogService;
 import dev.stemcraft.api.service.region.RegionService;
 import dev.stemcraft.api.service.task.TaskService;
 import dev.stemcraft.api.service.punishment.PunishmentService;
@@ -40,6 +43,9 @@ import dev.stemcraft.api.service.world.WorldService;
 
 import java.io.File;
 
+/**
+ * Implementation of the STEMCraftAPI interface.
+ */
 public class STEMCraftAPIImpl extends HasMessagesImpl implements STEMCraftAPI {
     private static STEMCraft plugin;
 
@@ -50,6 +56,7 @@ public class STEMCraftAPIImpl extends HasMessagesImpl implements STEMCraftAPI {
     /**
      * Get the current version of STEMCraft.
      */
+    @Override
     public String getVersion() {
         return STEMCraft.getVersion();
     }
@@ -57,16 +64,19 @@ public class STEMCraftAPIImpl extends HasMessagesImpl implements STEMCraftAPI {
     /**
      * Get the data folder for STEMCraft.
      */
+    @Override
     public File getDataFolder() { return plugin.getDataFolder(); }
 
     /**
      * Check if the server is in maintenance mode.
      */
+    @Override
     public boolean isMaintenanceMode() { return plugin.isMaintenanceMode(); }
 
     /**
      * Get the command service.
      */
+    @Override
     public CommandService commands() {
         return plugin.commands();
     }
@@ -74,57 +84,114 @@ public class STEMCraftAPIImpl extends HasMessagesImpl implements STEMCraftAPI {
     /**
      * Get the STEMCraft configuration file.
      */
+    @Override
     public ConfigService config() {
         return plugin.config();
     }
 
     /**
+     * Get the database service.
+     */
+    @Override
+    public DatabaseService database() {
+        return plugin.database();
+    }
+
+    /**
      * Get the event service.
      */
+    @Override
     public EventService events() { return plugin.events(); }
 
-//    public YamlConfiguration config() {
-//        return plugin.config();
-//    }
-//    public void saveConfig() { plugin.saveConfig(); }
-//
-//    public File dataFolder() { return plugin.getDataFolder(); }
-//    public File getCacheDir() { return plugin.cacheDir(); }
-//    public FileConfiguration getCacheConfig(String fileName) { return plugin.getCacheConfig(fileName); }
-//    public void saveCacheConfig(String fileName, FileConfiguration config) { plugin.saveCacheConfig(fileName, config); }
+    /**
+     * Get the gatekeeper service.
+     */
+    @Override
+    public GatekeeperService gatekeeper() { return plugin.gatekeeper(); }
 
-    public PlayerLogService playerLog() {
-        return plugin.playerLogService();
-    }
+    /**
+     * Get the hologram service.
+     */
+    @Override
+    public HologramService holograms() { return plugin.holograms(); }
 
-    public MessageService messages() {
-        return plugin.messengerService();
-    }
-
-    public LocaleService locales() { return plugin.locale(); }
-
-    public WorldService worlds() { return plugin.worldService(); }
-
-    public TabCompleteService tabComplete() { return plugin.tabCompleteService(); }
-
-    public TaskService tasks() { return plugin.taskService(); }
-
-    public PunishmentService punishments() { return plugin.punishmentService(); }
-
-    public HologramService holograms() { return plugin.hologramService(); }
-
+    /**
+     * Get the item service.
+     */
+    @Override
     public ItemService items() { return plugin.items(); }
+
+    /**
+     * Get the locale service.
+     */
+    @Override
+    public LocaleService locales() { return plugin.locales(); }
+
+    /**
+     * Get the messenger service.
+     */
+    @Override
+    public MessageService messages() {
+        return plugin.messages();
+    }
+
+    /**
+     * Get the minigame service.
+     */
+//    @Override
+//    public MiniGameService minigames() { return plugin.minigames(); }
+
+    /**
+     * Get the MOTD service.
+     */
+    @Override
+    public MotdService motd() { return plugin.motd(); }
+
+    /**
+     * Get the player log service.
+     */
+    @Override
+    public PlayerService players() { return plugin.players(); }
+
+    /**
+     * Get the punishment service.
+     */
+    @Override
+    public PunishmentService punishments() { return plugin.punishments(); }
+
+    /**
+     * Get the recipe service.
+     */
+    @Override
+    public RecipeService recipes() { return plugin.recipes(); }
 
     /**
      * Get the region service.
      */
+    @Override
     public RegionService regions() { return plugin.regions(); }
 
-    public WebService web() { return plugin.webService(); }
+    /**
+     * Get the tab complete service.
+     */
+    @Override
+    public TabCompleteService tabComplete() { return plugin.tabComplete(); }
 
-//    public FileConfiguration getConfig(String fileName) { return plugin.getConfig(fileName); }
-//
-//    public void saveConfig(String fileName, FileConfiguration config) { plugin.saveConfig(fileName, config); }
+    /**
+     * Get the task service.
+     */
+    @Override
+    public TaskService tasks() { return plugin.tasks(); }
 
-    public GatekeeperService gatekeeper() { return plugin.gateKeeperService(); }
+    /**
+     * Get the web service.
+     */
+    @Override
+    public WebService web() { return plugin.web(); }
+
+    /**
+     * Get the world service.
+     */
+    @Override
+    public WorldService worlds() { return plugin.worlds(); }
 }

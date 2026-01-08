@@ -35,10 +35,16 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+/**
+ * Implementation of the RecipeService for managing custom recipes.
+ */
 public class RecipeServiceImpl extends BaseService implements RecipeService {
 
     /**
      * Constructor for RecipeServiceImpl.
+     *
+     * @param plugin The STEMCraft plugin instance.
+     * @param api    The STEMCraft API instance.
      */
     public RecipeServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
@@ -71,12 +77,12 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
             }
 
             if (key == null) {
-                plugin.warn("RECIPE_INVALID", "key", raw);
+                api.messages().warn("RECIPE_INVALID", "key", raw);
                 continue;
             }
 
             if (Bukkit.removeRecipe(key)) {
-                plugin.info("RECIPE_REMOVED", "key", key.asString());
+                api.messages().info("RECIPE_REMOVED", "key", key.asString());
             }
         }
 
@@ -86,7 +92,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
             for (String inputKey : stonecutterSec.getKeys(false)) {
                 Material inputMat = Material.matchMaterial(inputKey.toUpperCase(Locale.ROOT));
                 if (inputMat == null) {
-                    plugin.messengerService().warn("RECIPE_STONECUTTER_UNKNOWN_INPUT", "material", inputKey);
+                    api.messages().warn("RECIPE_STONECUTTER_UNKNOWN_INPUT", "material", inputKey);
                     continue;
                 }
 
@@ -96,7 +102,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
                 for (String outputKey : outputsSec.getKeys(false)) {
                     Material outputMat = Material.matchMaterial(outputKey.toUpperCase(Locale.ROOT));
                     if (outputMat == null) {
-                        plugin.messengerService().warn("RECIPE_STONECUTTER_UNKNOWN_OUTPUT", "material", outputKey);
+                        api.messages().warn("RECIPE_STONECUTTER_UNKNOWN_OUTPUT", "material", outputKey);
                         continue;
                     }
 
@@ -104,7 +110,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
                     if (amount <= 0) amount = 1;
 
                     addStonecutter(inputMat, outputMat, amount);
-                    plugin.messengerService().info("RECIPE_STONECUTTER_RESULT", "input", inputMat.name(), "amount", String.valueOf(amount), "output", outputMat.name());
+                    api.messages().info("RECIPE_STONECUTTER_RESULT", "input", inputMat.name(), "amount", String.valueOf(amount), "output", outputMat.name());
                 }
             }
         }
@@ -161,7 +167,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
 
                 ItemStack result = new ItemStack(resultMat, amount);
                 addShaped(id, result, shape, ingMap);
-                plugin.info("RECIPE_SHAPED_LOADED", "id", id);
+                api.messages().info("RECIPE_SHAPED_LOADED", "id", id);
             }
         }
 
@@ -202,7 +208,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
                     recipe.addIngredient(m);
                 }
                 Bukkit.addRecipe(recipe);
-                plugin.info("RECIPE_SHAPELESS_LOADED", "id" + id);
+                api.messages().info("RECIPE_SHAPELESS_LOADED", "id" + id);
             }
         }
 
@@ -254,7 +260,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
                 RecipeChoice addition = new RecipeChoice.MaterialChoice(addMat);
 
                 addSmithingTransform(id, result, template, base, addition);
-                plugin.info("RECIPE_SMITHING_TRANSFORM_LOADED", "id", id);
+                api.messages().info("RECIPE_SMITHING_TRANSFORM_LOADED", "id", id);
             }
         }
 
@@ -288,12 +294,17 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
                 RecipeChoice material = new RecipeChoice.MaterialChoice(materialMat);
 
                 addSmithingTrim(id, template, base, material);
-                plugin.info("RECIPE_SMITHING_TRIM_LOADED", "id", id);
+                api.messages().info("RECIPE_SMITHING_TRIM_LOADED", "id", id);
             }
         }
     }
 
-    /* helper for furnace/smoker/blast_furnace/campfire sections */
+    /**
+     * Load cooking recipes from a configuration section.
+     *
+     * @param sec  The configuration section containing the recipes.
+     * @param type The type of cooking recipe (furnace, smoker, blast_furnace, campfire).
+     */
     private void loadCookingSection(ConfigSection sec, String type) {
         if (sec == null) return;
 
@@ -329,25 +340,42 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
                 case "blast_furnace" -> addBlastFurnace(id, inputMat, result, exp, time);
                 case "campfire" -> addCampfire(id, inputMat, result, exp, time);
             }
-            plugin.info("RECIPE_COOKING_LOADED", "type", type, "id", id);
+            api.messages().info("RECIPE_COOKING_LOADED", "type", type, "id", id);
         }
     }
 
+    /**
+     * Remove a recipe by its namespaced key.
+     *
+     * @param name The namespaced key of the recipe to remove.
+     */
     @Override
     public void remove(String name) {
         NamespacedKey namespaceItem = NamespacedKey.fromString(name);
-        Bukkit.removeRecipe(namespaceItem);
+        if (namespaceItem != null) {
+            Bukkit.removeRecipe(namespaceItem);
+        }
     }
 
+    /**
+     * Create a NamespacedKey for the plugin with the given id.
+     *
+     * @param id The id for the NamespacedKey.
+     * @return The created NamespacedKey.
+     */
     private NamespacedKey key(String id) {
         return new NamespacedKey(plugin, id.toLowerCase());
     }
 
-    /* ==========================
-       CRAFTING TABLE
-       ========================== */
-
     // Shaped: shape like new String[]{"ABC", "A A", " B "}
+    /**
+     * Add a shaped crafting recipe.
+     *
+     * @param id          The unique identifier for the recipe.
+     * @param result      The resulting ItemStack from the recipe.
+     * @param shape       The shape of the recipe as an array of strings.
+     * @param ingredients A map of characters to Materials representing the ingredients.
+     */
     @Override
     public void addShaped(String id, ItemStack result, String[] shape, Map<Character, Material> ingredients) {
         ShapedRecipe recipe = new ShapedRecipe(key(id), result);
@@ -360,6 +388,13 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
         Bukkit.addRecipe(recipe);
     }
 
+    /**
+     * Add a shapeless crafting recipe.
+     *
+     * @param id     The unique identifier for the recipe.
+     * @param result The resulting ItemStack from the recipe.
+     * @param inputs The input Materials for the recipe.
+     */
     @Override
     public void addShapeless(String id, ItemStack result, Material... inputs) {
         ShapelessRecipe recipe = new ShapelessRecipe(key(id), result);
@@ -369,6 +404,15 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
         Bukkit.addRecipe(recipe);
     }
 
+    /**
+     * Add a furnace cooking recipe.
+     *
+     * @param id        The unique identifier for the recipe.
+     * @param input     The input Material for the recipe.
+     * @param output    The resulting ItemStack from the recipe.
+     * @param exp       The experience gained from the recipe.
+     * @param cookTicks The cooking time in ticks.
+     */
     @Override
     public void addFurnace(String id, Material input, ItemStack output, float exp, int cookTicks) {
         FurnaceRecipe recipe = new FurnaceRecipe(key(id), output, input, exp, cookTicks);
@@ -376,6 +420,15 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
         Bukkit.addRecipe(recipe);
     }
 
+    /**
+     * Add a smoker cooking recipe.
+     *
+     * @param id        The unique identifier for the recipe.
+     * @param input     The input Material for the recipe.
+     * @param output    The resulting ItemStack from the recipe.
+     * @param exp       The experience gained from the recipe.
+     * @param cookTicks The cooking time in ticks.
+     */
     @Override
     public void addSmoker(String id, Material input, ItemStack output, float exp, int cookTicks) {
         SmokingRecipe recipe = new SmokingRecipe(key(id), output, input, exp, cookTicks);
@@ -383,6 +436,15 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
         Bukkit.addRecipe(recipe);
     }
 
+    /**
+     * Add a blast furnace cooking recipe.
+     *
+     * @param id        The unique identifier for the recipe.
+     * @param input     The input Material for the recipe.
+     * @param output    The resulting ItemStack from the recipe.
+     * @param exp       The experience gained from the recipe.
+     * @param cookTicks The cooking time in ticks.
+     */
     @Override
     public void addBlastFurnace(String id, Material input, ItemStack output, float exp, int cookTicks) {
         BlastingRecipe recipe = new BlastingRecipe(key(id), output, input, exp, cookTicks);
@@ -390,6 +452,15 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
         Bukkit.addRecipe(recipe);
     }
 
+    /**
+     * Add a campfire cooking recipe.
+     *
+     * @param id        The unique identifier for the recipe.
+     * @param input     The input Material for the recipe.
+     * @param output    The resulting ItemStack from the recipe.
+     * @param exp       The experience gained from the recipe.
+     * @param cookTicks The cooking time in ticks.
+     */
     @Override
     public void addCampfire(String id, Material input, ItemStack output, float exp, int cookTicks) {
         CampfireRecipe recipe = new CampfireRecipe(key(id), output, input, exp, cookTicks);
@@ -397,6 +468,13 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
         Bukkit.addRecipe(recipe);
     }
 
+    /**
+     * Add a stonecutter recipe.
+     *
+     * @param input  The input Material for the recipe.
+     * @param output The output Material from the recipe.
+     * @param amount The amount of the output Material.
+     */
     @Override
     public void addStonecutter(Material input, Material output, int amount) {
         ItemStack result = new ItemStack(output, amount);
@@ -407,6 +485,16 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
 
     // Smithing Transform: template + base + addition -> new item
     // Example: netherite upgrade (template, diamond chestplate, netherite ingot)
+
+    /**
+     * Add a smithing transform recipe.
+     *
+     * @param id The unique identifier for the recipe.
+     * @param result The resulting ItemStack from the smithing process.
+     * @param template The template RecipeChoice for the smithing recipe.
+     * @param base The base RecipeChoice for the smithing recipe.
+     * @param addition The addition RecipeChoice for the smithing recipe.
+     */
     @Override
     public void addSmithingTransform(
             String id,
@@ -421,6 +509,14 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
     }
 
     // Smithing Trim: template + armor + material -> trimmed armor
+    /**
+     * Add a smithing trim recipe.
+     *
+     * @param id The unique identifier for the recipe.
+     * @param template The template RecipeChoice for the smithing trim recipe.
+     * @param baseArmor The base armor RecipeChoice for the smithing trim recipe.
+     * @param material The material RecipeChoice for the smithing trim recipe.
+     */
     @Override
     public void addSmithingTrim(
             String id,

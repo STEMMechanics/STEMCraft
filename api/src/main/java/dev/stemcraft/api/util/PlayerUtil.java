@@ -23,7 +23,6 @@ package dev.stemcraft.api.util;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import dev.stemcraft.api.STEMCraftAPI;
-import dev.stemcraft.api.internal.InstanceHolder;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -100,10 +99,10 @@ public class PlayerUtil {
      */
     public static void teleport(Player player, Location location) {
         CompletableFuture<Void> future = new CompletableFuture<>();
-        Bukkit.getScheduler().runTaskLater(InstanceHolder.plugin(), () -> {
+        STEMCraftAPI.api().tasks().nextTick(() -> {
             player.teleport(location);
             future.complete(null); // Mark the task as complete
-        }, 1L);
+        });
     }
 
     /**
@@ -113,12 +112,12 @@ public class PlayerUtil {
      * @param callback Callback once the teleport is complete
      */
     public static void teleport(Player player, Location location, Runnable callback) {
-        Bukkit.getScheduler().runTaskLater(InstanceHolder.plugin(), () -> {
+        STEMCraftAPI.api().tasks().nextTick(() -> {
             player.teleport(location);
             if(callback != null) {
                 callback.run();
             }
-        }, 1L);
+        });
     }
 
     /**
@@ -137,7 +136,7 @@ public class PlayerUtil {
                 player.getWorld().dropItemNaturally(player.getLocation(), item);
                 return true;
             } else if (showMessage) {
-                STEMCraftAPI.api().error(player, "INV_NO_ROOM");
+                STEMCraftAPI.api().messages().error(player, "INV_NO_ROOM");
             }
 
             return false;

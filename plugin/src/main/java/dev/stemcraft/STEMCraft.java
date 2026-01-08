@@ -23,46 +23,43 @@ package dev.stemcraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigFile;
 import dev.stemcraft.api.event.server.MaintenanceModeChangedEvent;
-import dev.stemcraft.api.service.hologram.HologramService;
-import dev.stemcraft.api.service.locale.LocaleService;
-import dev.stemcraft.api.service.message.MessageService;
-import dev.stemcraft.api.service.motd.MotdService;
-import dev.stemcraft.api.service.player.PlayerLogService;
-import dev.stemcraft.api.service.punishment.PunishmentService;
-import dev.stemcraft.api.service.web.WebService;
-import dev.stemcraft.api.service.tabcomplete.TabCompleteService;
-import dev.stemcraft.api.service.world.WorldService;
-import dev.stemcraft.command.STEMCraftCommandImpl;
+import dev.stemcraft.api.util.PermissionUtil;
+import dev.stemcraft.command.BaseCommand;
 import dev.stemcraft.service.*;
 import dev.stemcraft.api.internal.InstanceHolder;
 import dev.stemcraft.chunkgen.FlatGenerator;
 import dev.stemcraft.chunkgen.VoidGenerator;
-import dev.stemcraft.features.BaseFeature;
+import dev.stemcraft.feature.BaseFeature;
 import dev.stemcraft.service.command.CommandServiceImpl;
-import dev.stemcraft.service.minigame.MiniGameServiceImpl;
-import dev.stemcraft.service.PlayerServiceImpl;
+import dev.stemcraft.service.message.MessageServiceImpl;
+//import dev.stemcraft.service.minigame.MiniGameServiceImpl;
+import dev.stemcraft.service.resourcepack.ResourcePackServiceImpl;
 import dev.stemcraft.service.tabcompletion.TabCompleteServiceImpl;
 import dev.stemcraft.service.world.WorldServiceImpl;
+import io.papermc.paper.connection.PlayerLoginConnection;
+import io.papermc.paper.event.connection.PlayerConnectionValidateLoginEvent;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.experimental.Accessors;
-import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
-import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.event.player.AsyncPlayerPreLoginEvent;
-import org.bukkit.event.player.PlayerLoginEvent;
+import org.bukkit.entity.Player;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import javax.annotation.Nullable;
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Modifier;
 import java.util.Enumeration;
+import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
+@SuppressWarnings("SameParameterValue")
 @Getter
 @Accessors(fluent = true)
 public final class STEMCraft extends JavaPlugin {
@@ -70,35 +67,36 @@ public final class STEMCraft extends JavaPlugin {
     private static STEMCraftAPI api;
     private File cacheDir;
 
+    private ChatServiceImpl chat;
     private CommandServiceImpl commands;
     private ConfigServiceImpl config;
+    private DatabaseServiceImpl database;
     private EventServiceImpl events;
-
-    private LocaleService locale;
-    private MessageService messengerService;
-    private PlayerLogService playerLogService;
-    private WorldService worldService;
-    private MotdService motd;
-    private WebService webService;
-    private TabCompleteService tabCompleteService;
-    private dev.stemcraft.api.service.task.TaskService taskService;
-    private PunishmentService punishmentService;
-    private HologramService hologramService;
+    private GatekeeperServiceImpl gatekeeper;
+    private HologramServiceImpl holograms;
     private ItemServiceImpl items;
-    private ResourcePackManager resourcePackService;
+    private LocaleServiceImpl locales;
+    private MessageServiceImpl messages;
+//    private MiniGameServiceImpl minigames;
+    private MotdServiceImpl motd;
+    private PlayerServiceImpl players;
+    private PunishmentServiceImpl punishments;
+    private RecipeServiceImpl recipes;
     private RegionServiceImpl regions;
-    private ChatManager chatService;
-    private GateKeeperServiceImpl gateKeeperService;
-    private MiniGameServiceImpl miniGameService;
+    private ResourcePackServiceImpl resourcePack;
+    private TabCompleteServiceImpl tabComplete;
+    private TaskServiceImpl tasks;
+    private WebServiceImpl web;
+    private WorldServiceImpl worlds;
 
-//    private YamlConfiguration config;
     @Getter(AccessLevel.NONE)
     private ConfigFile configFile;
 
     private boolean isMaintenanceMode = false;
 
+    @Getter
     private boolean debugging = false;
-    private String whiteListMessage = "This server is invite-only.";
+    private final String whiteListMessage = "This server is invite-only.";
 
     @Override
     public void onEnable() {
@@ -106,7 +104,9 @@ public final class STEMCraft extends JavaPlugin {
         api = new STEMCraftAPIImpl(this);
         InstanceHolder.set(api, this);
 
-        config = new ConfigServiceImpl();
+        // Load pre-early services
+        config = new ConfigServiceImpl(this, api);
+        config.onEnable();
 
         // Load configuration
         configFile = api.config().load("config.yml");
@@ -114,15 +114,14 @@ public final class STEMCraft extends JavaPlugin {
             saveResource("config.yml", false);
         }
 
+        // Load early services
+        messages = new MessageServiceImpl(this, api);
+        locales = new LocaleServiceImpl(this, api);
+        tasks = new TaskServiceImpl(this, api);
 
-        // Load early managers
-        messengerService = new MessengerManager(this);
-        locale = new LocaleServiceImpl(this);
-        taskService = new TaskServiceImpl(this);
-
-        messengerService.onEnable();
-        locale.onEnable();
-        taskService.onEnable();
+        messages.onEnable();
+        locales.onEnable();
+        tasks.onEnable();
 
         // Check dependencies
         Plugin we = getServer().getPluginManager().getPlugin("WorldEdit");
@@ -132,80 +131,60 @@ public final class STEMCraft extends JavaPlugin {
             return;
         }
 
-        // Setup API
-
         debugging = configFile.getBoolean("debug", false);
 
-        loadUtilities();
-
-
         // Load managers
+        chat = new ChatServiceImpl(this, api);
         commands = new CommandServiceImpl(this, api);
+        database = new DatabaseServiceImpl(this, api);
         events = new EventServiceImpl(this, api);
-
-        playerLogService = new PlayerServiceImpl(this);
-        worldService = new WorldServiceImpl(this);
-        motd = new MotdServiceImpl(this, api);
-        webService = new WebServiceImpl(this);
-        tabCompleteService = new TabCompleteServiceImpl(this);
-        punishmentService = new PunishmentManager(this);
-        hologramService = new HologramServiceImpl(this);
+        gatekeeper = new GatekeeperServiceImpl(this, api);
+        holograms = new HologramServiceImpl(this, api);
         items = new ItemServiceImpl(this, api);
-        resourcePackService = new ResourcePackManager(this);
+//        minigames = new MiniGameServiceImpl(this, api);
+        motd = new MotdServiceImpl(this, api);
+        players = new PlayerServiceImpl(this, api);
+        punishments = new PunishmentServiceImpl(this, api);
+        recipes = new RecipeServiceImpl(this, api);
         regions = new RegionServiceImpl(this, api);
-        chatService = new ChatManager(this);
-        gateKeeperService = new GateKeeperServiceImpl(this);
-        miniGameService = new MiniGameServiceImpl(this);
+        resourcePack = new ResourcePackServiceImpl(this, api);
+        tabComplete = new TabCompleteServiceImpl(this, api);
+        web = new WebServiceImpl(this, api);
+        worlds = new WorldServiceImpl(this, api);
 
+        chat.onEnable();
         commands.onEnable();
+        database.onEnable();
         events.onEnable();
-
-        playerLogService.onEnable();
-        worldService.onEnable();
-        motd.onEnable();
-        webService.onEnable();
-        tabCompleteService.onEnable();
-        punishmentService.onEnable();
-        hologramService.onEnable();
+        gatekeeper.onEnable();
+        holograms.onEnable();
         items.onEnable();
-        resourcePackService.onEnable();
+//        minigames.onEnable();
+        motd.onEnable();
+        players.onEnable();
+        punishments.onEnable();
+        recipes.onEnable();
         regions.onEnable();
-        chatService.onEnable();
-        gateKeeperService.onEnable();
-        miniGameService.onEnable();
+        resourcePack.onEnable();
+        tabComplete.onEnable();
+        web.onEnable();
+        worlds.onEnable();
+
 
         info("STEMCRAFT_ENABLED");
 
-        worldService.registerGenerator("void", (options) -> new VoidGenerator());
-        worldService.registerGenerator("flat",   FlatGenerator::fromOptions);       // e.g., "grass_block;dirt:3;bedrock"
-        worldService.registerGenerator("normal", cfg -> null);               // null => vanilla normal
+        // Register world generators
+        worlds.generator().register("void", (options) -> new VoidGenerator());
+        worlds.generator().register("flat",   FlatGenerator::fromOptions);
+        worlds.generator().register("normal", cfg -> null);
 
         loadFeatures();
         loadCommands();
-        loadminigames();
-
-        whiteListMessage = configFile.getString("whitelist_message", whiteListMessage);
-        registerEvent(AsyncPlayerPreLoginEvent.class, event -> {
-            if (event.getLoginResult() == AsyncPlayerPreLoginEvent.Result.KICK_WHITELIST) {
-                event.disallow(
-                        AsyncPlayerPreLoginEvent.Result.KICK_WHITELIST,
-                        MiniMessage.miniMessage().deserialize(whiteListMessage)
-                );
-            }
-        });
-
-        registerEvent(PlayerLoginEvent.class, event -> {
-            if (event.getResult() == PlayerLoginEvent.Result.KICK_WHITELIST) {
-                event.disallow(
-                        PlayerLoginEvent.Result.KICK_WHITELIST,
-                        MiniMessage.miniMessage().deserialize(whiteListMessage)
-                );
-            }
-        });
+        loadMinigames();
 
         isMaintenanceMode = configFile.getBoolean("maintenance", false);
 
-        registerCommand("maintenance")
+        api.commands().create("maintenance")
             .tabCompletion("on")
             .tabCompletion("off")
             .description("MAINTENANCE_DESCRIPTION")
@@ -234,36 +213,78 @@ public final class STEMCraft extends JavaPlugin {
             })
             .register(this);
 
-        registerEvent(PlayerLoginEvent.class, event -> {
+        //noinspection UnstableApiUsage
+        api.events().register(PlayerConnectionValidateLoginEvent.class, event -> {
             if (isMaintenanceMode) {
-                boolean isAdmin = event.getPlayer().hasPermission("stemcraft.maintenance.bypass");
+                UUID uuid = getUuid(event);
 
-                if (!isAdmin) {
-                    event.disallow(PlayerLoginEvent.Result.KICK_OTHER, "Server is under maintenance. Please try again later.");
+                if (uuid == null) {
+                    // may be null (https://jd.papermc.io/paper/1.21.11/org/bukkit/profile/PlayerProfile.html)
+                    // can’t reliably identify them here (offline mode / early stage / etc.)
+                    return;
+                }
+
+                if(PermissionUtil.hasPermission(uuid, "stemcraft.maintenance.bypass")) {
+                    return;
+                }
+
+                //noinspection UnstableApiUsage
+                event.kickMessage(Component.text("Server is under maintenance. Please try again later."));
+            }
+        });
+
+        // Also kick on join for safety as PlayerConnectionValidateLoginEvent may be bypassed in some cases
+        api.events().register(PlayerJoinEvent.class, event -> {
+            if(isMaintenanceMode) {
+                Player player = event.getPlayer();
+                if(!player.hasPermission("stemcraft.maintenance.bypass")) {
+                    player.kick(Component.text("Server is under maintenance. Please try again later."));
+                } else {
+                    info("The server is in maintenance mode");
                 }
             }
         });
     }
 
+    @SuppressWarnings("UnstableApiUsage")
+    private static @Nullable UUID getUuid(PlayerConnectionValidateLoginEvent event) {
+        var conn = event.getConnection();
+        UUID uuid = null;
+
+        //noinspection UnstableApiUsage
+        if (conn instanceof PlayerLoginConnection loginConn) {
+            //noinspection UnstableApiUsage
+            var profile = loginConn.getAuthenticatedProfile();
+            if (profile == null) //noinspection UnstableApiUsage
+                profile = loginConn.getUnsafeProfile();
+            if (profile != null) uuid = profile.getId();
+        }
+        return uuid;
+    }
+
     @Override
     public void onDisable() {
-
-        miniGameService.onDisable();
-        gateKeeperService.onDisable();
+        worlds.onDisable();
+        web.onDisable();
+        tabComplete.onDisable();
+        resourcePack.onDisable();
         regions.onDisable();
-        items.onDisable();
-        hologramService.onDisable();
-        webService.onDisable();
+        recipes.onDisable();
+        punishments.onDisable();
+        players.onDisable();
         motd.onDisable();
-        worldService.onDisable();
-        playerLogService.onDisable();
-
+//        minigames.onDisable();
+        items.onDisable();
+        holograms.onDisable();
+        gatekeeper.onDisable();
         events.onDisable();
+        database.onDisable();
         commands.onDisable();
+        chat.onDisable();
 
-        taskService.onDisable();
-        locale.onDisable();
-        messengerService.onDisable();
+        tasks.onDisable();
+        locales.onDisable();
+        messages.onDisable();
     }
 
     public static STEMCraft getPlugin() {
@@ -274,48 +295,77 @@ public final class STEMCraft extends JavaPlugin {
      * Load STEMCraft Features within dev.stemcraft.features
      */
     private void loadFeatures() {
-        iterateClasses("dev/stemcraft/features/", BaseFeature.class, instance -> {
-            String featureConfigBase = instance.getConfigBase();
-
-            if (!configFile.getBoolean(featureConfigBase + ".enabled", true)) {
-                debug("STEMCRAFT_FEATURE_DISABLED", "name", instance.getId());
-                return;
-            }
-
-            instance.onEnable(api);
-            debug("STEMCRAFT_FEATURE_LOADED", "name", instance.getId());
-        });
+        iterateClasses(
+                "dev/stemcraft/feature",
+                BaseFeature.class,
+                this::loadFeature,
+                new Class<?>[]{STEMCraftAPI.class},
+                api);
     }
 
     /**
-     * Load STEMCraft Utilities within dev.stemcraft.api.utils
+     * Load a specific STEMCraft Feature if enabled
      */
-    private void loadUtilities() {
-        iterateClasses("dev/stemcraft/api/util", STEMCraftUtil.class, STEMCraftUtil::onLoad);
+    private void loadFeature(BaseFeature feature) {
+        if(feature.getConfigSection().getBoolean("enabled", true)) {
+            debug("STEMCRAFT_FEATURE_DISABLED", "name", feature.id());
+            return;
+        }
+
+        feature.onEnable();
+        debug("STEMCRAFT_FEATURE_LOADED", "name", feature.id());
     }
 
+    /**
+     * Load STEMCraft Commands within dev.stemcraft.command
+     */
     private void loadCommands() {
-        iterateClasses("dev/stemcraft/command", STEMCraftCommandImpl.class, instance -> {
-            instance.onLoad(STEMCraft.instance);
-        });
+        iterateClasses(
+                "dev/stemcraft/command",
+                BaseCommand.class,
+                BaseCommand::onLoad,
+                new Class<?>[]{STEMCraft.class, STEMCraftAPI.class},
+                this, api);
     }
 
-    private void loadminigames() {
-        iterateClasses("dev/stemcraft/minigames", STEMCraftMiniGame.class, instance -> {
-            instance.onLoad(STEMCraft.instance);
-        });
+    /**
+     * Load STEMCraft Minigames within dev.stemcraft.minigame
+     */
+    private void loadMinigames() {
+//        iterateClasses(
+//                "dev/stemcraft/minigame",
+//                BaseMinigame.class,
+//                BaseMinigame::onLoad,
+//                new Class<?>[]{STEMCraftAPI.class},
+//                api);
     }
 
     /**
      * Get the plugin version.
      */
     public static String getVersion() {
+        //noinspection deprecation
         return instance.getDescription().getVersion();
     }
 
-    private <T> void iterateClasses(String path,
-                                    Class<T> typeFilter,
-                                    Consumer<T> callback) {
+    /**
+     * Iterate through classes in the JAR file under the specified path,
+     * filtering by the given type and executing a callback for each instance.
+     *
+     * @param path       The path within the JAR to scan.
+     * @param typeFilter The class type to filter by.
+     * @param callback   The callback to execute for each instance.
+     * @param constructorTypes  The constructor argument types. (eg new Class<?>[]{STEMCraftAPI.class, WorldService.class})
+     * @param constructorArgs   The constructor arguments. (eg this.api, this.worlds)
+     * @param <T>        The type of the class to filter by.
+     */
+    private <T> void iterateClasses(
+            String path,
+            Class<T> typeFilter,
+            Consumer<T> callback,
+            @Nullable Class<?>[] constructorTypes,
+            Object... constructorArgs
+    ) {
         try (JarFile jar = new JarFile(getFile())) {
             Enumeration<JarEntry> entries = jar.entries();
 
@@ -323,9 +373,7 @@ public final class STEMCraft extends JavaPlugin {
                 JarEntry entry = entries.nextElement();
                 String name = entry.getName();
 
-                if (!name.startsWith(path) || !name.endsWith(".class")) {
-                    continue;
-                }
+                if (!name.startsWith(path) || !name.endsWith(".class")) continue;
 
                 String className = name
                         .substring(0, name.length() - ".class".length())
@@ -334,22 +382,28 @@ public final class STEMCraft extends JavaPlugin {
                 try {
                     Class<?> rawClass = Class.forName(className, true, getClassLoader());
 
-                    if (!typeFilter.isAssignableFrom(rawClass) || rawClass == typeFilter) {
-                        continue;
-                    }
-                    if (Modifier.isAbstract(rawClass.getModifiers())) {
-                        continue;
-                    }
+                    if (!typeFilter.isAssignableFrom(rawClass) || rawClass == typeFilter) continue;
+                    if (Modifier.isAbstract(rawClass.getModifiers())) continue;
 
                     @SuppressWarnings("unchecked")
                     Class<? extends T> castClass = (Class<? extends T>) rawClass;
 
-                    T instance = castClass.getDeclaredConstructor().newInstance();
+                    if(constructorTypes == null) {
+                        constructorTypes = new Class<?>[0];
+                    }
+
+                    Constructor<? extends T> constructor =
+                            castClass.getDeclaredConstructor(constructorTypes);
+
+                    constructor.setAccessible(true);
+                    T instance = constructor.newInstance(constructorArgs);
 
                     callback.accept(instance);
 
                 } catch (ReflectiveOperationException ex) {
-                    error("STEMCRAFT_ERROR_LOAD_CLASS", ex, "class", className, "error", ex.getMessage());
+                    error("STEMCRAFT_ERROR_LOAD_CLASS", ex,
+                            "class", className,
+                            "error", ex.getMessage());
                 }
             }
         } catch (IOException ex) {
@@ -357,41 +411,20 @@ public final class STEMCraft extends JavaPlugin {
         }
     }
 
-    public void debug(String message, Object... placeholders) {
-        if(debugging) {
-            messengerService.log(message, placeholders);
-        }
-    }
+    private <T> void iterateClasses(String path, Class<T> typeFilter, Consumer<T> callback) { iterateClasses(path, typeFilter, callback, null); }
 
-    public void log(String message, Object... placeholders) {
-        messengerService.log(message, placeholders);
-    }
-
-    public void info(String message, Object... placeholders) {
-        messengerService.info(message, placeholders);
-    }
-
-    public void warn(String message, Object... placeholders) {
-        messengerService.warn(message, placeholders);
-    }
-
-    public void error(String message, Object... placeholders) {
-        messengerService.error(message, placeholders);
-    }
-
-    public void error(String message, Throwable ex, Object... placeholders) {
-        messengerService.error(message, ex, placeholders);
-    }
-
-    public void success(String message, Object... placeholders) {
-        messengerService.success(message, placeholders);
-    }
-
-    public void exportBundledDirectory(String jarRoot, String dataSubDir) {
+    /**
+     * Export a directory bundled within the JAR to the plugin's data folder.
+     *
+     * @param jarPath    The root path within the JAR to export.
+     * @param exportPath The subdirectory within the data folder to export to. Can be null to use the same as jarPath.
+     */
+    public void exportBundledDirectory(String jarPath, @Nullable String exportPath) {
         try (JarFile jf = new JarFile(getFile())) {
-            String prefix = jarRoot.endsWith("/") ? jarRoot : jarRoot + "/";
-            File targetRoot = new File(getDataFolder(), dataSubDir);
+            String prefix = jarPath.endsWith("/") ? jarPath : jarPath + "/";
+            String subDir = (exportPath == null || exportPath.isBlank()) ? jarPath : exportPath;
 
+            File targetRoot = new File(getDataFolder(), subDir);
             if (!targetRoot.exists() && !targetRoot.mkdirs()) {
                 getLogger().warning("Failed to create data folder: " + targetRoot);
                 return;
@@ -420,7 +453,7 @@ public final class STEMCraft extends JavaPlugin {
                 }
             }
         } catch (Exception ex) {
-            error("Failed to export bundled directory {dir}: {error}", ex, "dir", jarRoot, "error", ex.getMessage());
+            error("Failed to export bundled directory {dir}: {error}", ex, "dir", jarPath, "error", ex.getMessage());
         }
     }
 
@@ -428,41 +461,12 @@ public final class STEMCraft extends JavaPlugin {
         exportBundledDirectory(jarRoot, jarRoot);
     }
 
-    public File getCacheDir() {
-        if (this.cacheDir == null) {
-            this.cacheDir = new File(this.getDataFolder(), "cache");
-            if (!this.cacheDir.exists()) {
-                this.cacheDir.mkdirs();
-            }
-        }
-        return this.cacheDir;
-    }
-
-    public FileConfiguration getCacheConfig(String fileName) {
-        try {
-            File dir = this.getCacheDir();
-            File backFile = new File(dir, fileName);
-            if (!backFile.exists()) {
-                if(!backFile.createNewFile()) {
-                    throw new IOException("Failed to create cache file: " + backFile.getAbsolutePath());
-                }
-            }
-
-            return YamlConfiguration.loadConfiguration(backFile);
-        } catch (IOException ex) {
-            error(ex.getMessage());
-        }
-
-        return new YamlConfiguration();
-    }
-
-    public void saveCacheConfig(String fileName, FileConfiguration config) {
-        try {
-            File dir = this.getCacheDir();
-            File backFile = new File(dir, fileName);
-            config.save(backFile);
-        } catch (IOException ex) {
-            error(ex.getMessage());
-        }
-    }
+    // Messaging shortcuts
+    private void debug(String message, Object... placeholders) { this.messages.debug(message, placeholders); }
+    private void log(String message, Object... placeholders) { this.messages.log(message, placeholders); }
+    private void info(String message, Object... placeholders) { this.messages.info(message, placeholders); }
+    private void warn(String message, Object... placeholders) { this.messages.warn(message, placeholders); }
+    private void error(String message, Object... placeholders) { this.messages.error(message, placeholders); }
+    private void error(String message, Throwable ex, Object... placeholders) { this.messages.error(message, ex, placeholders); }
+    private void success(String message, Object... placeholders) { this.messages.success(message, placeholders); }
 }

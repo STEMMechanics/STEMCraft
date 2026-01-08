@@ -21,17 +21,21 @@
 package dev.stemcraft.service.tabcompletion;
 
 import dev.stemcraft.api.STEMCraftAPI;
-import dev.stemcraft.api.util.SCPlayer;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 
 import java.util.List;
 
+/**
+ * Class to register core tab completions.
+ */
 public class CoreTabCompletions {
 
     /**
      * Register all core tab completions.
+     *
+     * @param api The STEMCraft API instance.
      */
     public static void registerAll(STEMCraftAPI api) {
         // Online players

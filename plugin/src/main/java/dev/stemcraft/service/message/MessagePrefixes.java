@@ -22,23 +22,29 @@ package dev.stemcraft.service.message;
 
 import dev.stemcraft.api.config.ConfigSection;
 
-public class MessagePrefixes {
-    public final String log;
-    public final String info;
-    public final String warn;
-    public final String error;
-    public final String success;
-    public final String broadcast;
+/**
+ * Class representing message prefixes for different message types.
+ */
+public record MessagePrefixes(String log, String info, String warn, String error, String success, String broadcast) {
+    /**
+     * Constructor for MessagePrefixes.
+     *
+     * @param log       The log message prefix.
+     * @param info      The info message prefix.
+     * @param warn      The warn message prefix.
+     * @param error     The error message prefix.
+     * @param success   The success message prefix.
+     * @param broadcast The broadcast message prefix.
+     */
+    public MessagePrefixes { }
 
-    public MessagePrefixes(String log, String info, String warn, String error, String success, String broadcast) {
-        this.log = log;
-        this.info = info;
-        this.warn = warn;
-        this.error = error;
-        this.success = success;
-        this.broadcast = broadcast;
-    }
-
+    /**
+     * Create MessagePrefixes from a configuration section.
+     * If the config is null, default prefixes will be used.
+     *
+     * @param config The configuration section.
+     * @return A MessagePrefixes instance.
+     */
     public static MessagePrefixes from(ConfigSection config) {
         if (config == null) {
             return defaults();
@@ -53,6 +59,11 @@ public class MessagePrefixes {
         );
     }
 
+    /**
+     * Get the default message prefixes.
+     *
+     * @return The default MessagePrefixes instance.
+     */
     private static MessagePrefixes defaults() {
         return new MessagePrefixes(
                 "&7[LOG]&r ",

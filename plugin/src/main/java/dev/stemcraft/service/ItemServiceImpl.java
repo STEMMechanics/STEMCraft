@@ -32,14 +32,26 @@ import org.bukkit.persistence.PersistentDataType;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Implementation of the ItemService for managing item attributes and custom items.
+ */
 public class ItemServiceImpl extends BaseService implements ItemService {
     private static final String ATTR_ITEM_ID_KEY = "custom-item-id";
     private final Map<String, ItemStack> itemTemplates = new HashMap<>();
 
+    /**
+     * Constructor for ItemServiceImpl.
+     *
+     * @param plugin The STEMCraft plugin instance.
+     * @param api    The STEMCraft API instance.
+     */
     public ItemServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
     }
 
+    /**
+     * Initializes the item service and registers event handlers.
+     */
     @Override
     public void onEnable() {
         api.events().register(PlayerDropItemEvent.class, (event) -> {
@@ -178,6 +190,12 @@ public class ItemServiceImpl extends BaseService implements ItemService {
         return null;
     }
 
+    /**
+     * Registers a custom item template with the given id.
+     *
+     * @param id       The unique identifier for the custom item.
+     * @param template The ItemStack template for the custom item.
+     */
     @Override
     public void registerCustomItem(String id, ItemStack template) {
         if (id == null || id.isEmpty() || template == null) {
@@ -192,6 +210,13 @@ public class ItemServiceImpl extends BaseService implements ItemService {
         itemTemplates.put(id, cloned);
     }
 
+    /**
+     * Creates a new ItemStack instance of the custom item with the given id and quantity.
+     *
+     * @param id       The unique identifier for the custom item.
+     * @param quantity The quantity of the item stack.
+     * @return A new ItemStack instance of the custom item, or null if not found or invalid parameters.
+     */
     @Override
     public ItemStack createCustomItem(String id, int quantity) {
         if (id == null || quantity <= 0) {
@@ -208,6 +233,13 @@ public class ItemServiceImpl extends BaseService implements ItemService {
         return stack;
     }
 
+    /**
+     * Checks if the given ItemStack matches the custom item with the specified id.
+     *
+     * @param id   The unique identifier for the custom item.
+     * @param item The ItemStack to check.
+     * @return true if the ItemStack matches the custom item id, false otherwise.
+     */
     @Override
     public boolean isCustomItemId(String id, ItemStack item) {
         if (id == null || item == null) {
@@ -217,6 +249,12 @@ public class ItemServiceImpl extends BaseService implements ItemService {
         return id.equalsIgnoreCase(itemId);
     }
 
+    /**
+     * Retrieves the custom item id from the given ItemStack.
+     *
+     * @param item The ItemStack to check.
+     * @return The custom item id, or null if not found.
+     */
     @Override
     public String getCustomItemId(ItemStack item) {
         if (item == null) {

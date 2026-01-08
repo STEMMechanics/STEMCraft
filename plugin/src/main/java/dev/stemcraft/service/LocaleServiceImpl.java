@@ -23,7 +23,6 @@ package dev.stemcraft.service;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.service.locale.LocaleService;
-import lombok.Getter;
 import org.bukkit.configuration.file.YamlConfiguration;
 
 import java.io.File;
@@ -34,9 +33,11 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
+/**
+ * Implementation of the LocaleService for managing localization.
+ */
 public class LocaleServiceImpl extends BaseService implements LocaleService {
     private final Map<String, YamlConfiguration> locales = new HashMap<>();
-    @Getter
     private String defaultLocale;
 
     private static final Pattern LOCALE_KEY_PATTERN = Pattern.compile("[A-Z]+_[A-Z_]+");
@@ -45,6 +46,9 @@ public class LocaleServiceImpl extends BaseService implements LocaleService {
 
     /**
      * Constructor for LocaleServiceImpl.
+     *
+     * @param plugin The STEMCraft plugin instance.
+     * @param api    The STEMCraft API instance.
      */
     public LocaleServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
@@ -69,7 +73,21 @@ public class LocaleServiceImpl extends BaseService implements LocaleService {
     }
 
     /**
+     * Get the default locale of the server
+     *
+     * @return The default locale string
+     */
+    @Override
+    public String getDefaultLocale() {
+        return defaultLocale;
+    }
+
+    /**
      * Resolve a locale key or return the raw string unchanged if it does not look like a locale key.
+     *
+     * @param lang The language code to use for resolution.
+     * @param key  The locale key to resolve.
+     * @return The resolved locale string or the original key if not found.
      */
     public String resolve(String lang, String key) {
         if (key == null || key.isEmpty()) {
@@ -100,7 +118,7 @@ public class LocaleServiceImpl extends BaseService implements LocaleService {
             // Log missing keys once to avoid spam.
             String logKey = lang + ":" + key;
             if (missingKeysLogged.add(logKey)) {
-                plugin.getComponentLogger().info("The following locale (" + lang + ") key was not found: " + key);
+                plugin.getComponentLogger().info("The following locale ({}) key was not found: {}", lang, key);
             }
             return key;
         }
@@ -117,7 +135,7 @@ public class LocaleServiceImpl extends BaseService implements LocaleService {
 
         File folder = new File(plugin.getDataFolder(), "locales");
         if (!folder.exists()) {
-            plugin.error("LOCALE_FAILED_CREATE_FOLDER");
+            api.messages().error("LOCALE_FAILED_CREATE_FOLDER");
             return;
         }
 
@@ -137,7 +155,7 @@ public class LocaleServiceImpl extends BaseService implements LocaleService {
         }
 
         if (!locales.containsKey(defaultLocale)) {
-            plugin.warn(
+            api.messages().warn(
                     "Default locale {lang} not found; available: {available}",
                     "lang", defaultLocale,
                     "available", String.join(", ", locales.keySet())

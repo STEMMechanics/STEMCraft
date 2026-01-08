@@ -31,7 +31,8 @@ import org.bukkit.inventory.Inventory;
 
 import java.util.Map;
 
-public class WorkbenchCommand extends STEMCraftCommandImpl {
+public class WorkbenchCommand extends BaseCommand {
+    private static final String PERMISSION = "stemcraft.command.workbench";
     private static final Map<String, String> TABLE_TITLES = Map.of(
             "workbench", "Workbench",
             "anvil", "Anvil",
@@ -42,19 +43,38 @@ public class WorkbenchCommand extends STEMCraftCommandImpl {
             "stonecutter", "Stonecutter"
     );
 
+    /**
+     * Creates a new WorkbenchCommand instance.
+     *
+     * @param plugin The main STEMCraft plugin instance.
+     * @param api    The STEMCraft API instance.
+     */
+    public WorkbenchCommand(STEMCraft plugin, STEMCraftAPI api) {
+        super(plugin, api);
+    }
+
+    /**
+     * Initializes the command with its label, description, usage, and permission.
+     */
     @Override
-    public void onLoad(STEMCraft plugin) {
+    public void onLoad() {
         setDescription("WORKBENCH_DESCRIPTION");
         setLabel("workbench");
-        setAlias("anvil", "cartographytable", "grindstone", "loom", "smithingtable", "stonecutter");
-        setPermission("stemcraft.command.workbench");
+        addAliases("anvil", "cartographytable", "grindstone", "loom", "smithingtable", "stonecutter");
+        setPermission(PERMISSION);
         setUsage("WORKBENCH_USAGE");
         addTabCompletion("{player}");
         register(plugin);
     }
 
+    /**
+     * Executes the workbench command, allowing a player to open various workbench interfaces.
+     *
+     * @param cmd The command being executed.
+     * @param ctx The context of the command execution.
+     */
     @Override
-    public void onExecute(STEMCraftAPI api, Command cmd, CommandContext ctx) {
+    public void onExecute(Command cmd, CommandContext ctx) {
         String table = ctx.getLabelUsed();
         String title = TABLE_TITLES.get(table);
 

@@ -21,7 +21,6 @@
 package dev.stemcraft.api.service.world;
 
 import dev.stemcraft.api.config.ConfigSection;
-import dev.stemcraft.api.factory.ChunkGeneratorFactory;
 import org.bukkit.World;
 
 import java.nio.file.Path;
@@ -121,12 +120,11 @@ public interface WorldService {
     Path getWorldFolder(String worldName);
 
     /**
-     * Register a custom chunk generator factory with the given name.
+     * Get the WorldGeneration service for managing custom chunk generators.
      *
-     * @param name The name of the custom generator.
-     * @param factory The factory to create instances of the generator.
+     * @return The WorldGeneration service.
      */
-    void registerGenerator(String name, ChunkGeneratorFactory factory);
+    WorldGeneration generator();
 
     /**
      * Evict all players from the given world to the main world.
@@ -170,10 +168,44 @@ public interface WorldService {
      * @param setting The WorldBaseSetting to register.
      * @param mode The command mode for the setting.
      */
-    void registerSetting(WorldBaseSetting setting, SettingCommandMode mode);
-    default void registerSetting(WorldBaseSetting setting) {
-        registerSetting(setting, SettingCommandMode.FLAG);
-    }
+    void registerSettingHandler(WorldBaseSetting setting, SettingCommandMode mode);
+    default void registerSettingHandler(WorldBaseSetting setting) { registerSettingHandler(setting, SettingCommandMode.FLAG); }
+
+    /**
+     * Check if a setting with the given key is registered.
+     *
+     * @param key The key of the setting.
+     * @return True if the setting is registered, false otherwise.
+     */
+    boolean isSettingRegistered(String key);
+
+    /**
+     * Check if a setting exists for a specific world.
+     *
+     * @param world The world to check.
+     * @param key The key of the setting.
+     * @return True if the setting exists, false otherwise.
+     */
+    boolean settingExists(World world, String key);
+
+    /**
+     * Get the value of a setting for a specific world.
+     *
+     * @param world The world to get the setting for.
+     * @param key The key of the setting.
+     * @return The value of the setting, or null if not found.
+     */
+    String getSetting(World world, String key);
+
+    /**
+     * Set the value of a setting for a specific world.
+     *
+     * @param world The world to set the setting for.
+     * @param key The key of the setting.
+     * @param value The key or value to set.
+     * @throws IllegalArgumentException if the value is invalid.
+     */
+    void setSetting(World world, String key, String value);
 
     /**
      * Begin a world change session for the given world.

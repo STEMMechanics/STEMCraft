@@ -30,16 +30,32 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Random;
 
-// flat: parse "grass_block;dirt:3;bedrock"
+/**
+ * Chunk generator that creates a flat world with configurable layers.
+ *
+ * Configuration string format: "material1:height1;material2:height2;..."
+ * Example: "grass_block;dirt:3;bedrock" creates a world with
+ * 1 layer of grass_block, 3 layers of dirt, and 1 layer of
+ */
 public class FlatGenerator extends ChunkGenerator {
     private record Layer(Material mat, int height) {}
     private final List<Layer> layers;
 
+    /**
+     * Private constructor to enforce use of fromOptions method.
+     *
+     * @param layers list of layers
+     */
     private FlatGenerator(List<Layer> layers) {
         this.layers = layers;
     }
 
-    /** Parse config string like "grass_block;dirt:3;bedrock" */
+    /**
+     * Create a FlatGenerator from a configuration string.
+     *
+     * @param cfg configuration string
+     * @return FlatGenerator instance
+     */
     public static FlatGenerator fromOptions(String cfg) {
         if (cfg == null || cfg.isBlank()) {
             // default = bedrock, 3 dirt, grass
@@ -65,6 +81,15 @@ public class FlatGenerator extends ChunkGenerator {
         return new FlatGenerator(parsed);
     }
 
+    /**
+     * Generate the surface of the chunk based on the configured layers.
+     *
+     * @param info world information
+     * @param rnd random number generator
+     * @param chunkX chunk X coordinate
+     * @param chunkZ chunk Z coordinate
+     * @param data chunk data to modify
+     */
     @Override
     public void generateSurface(
             @NotNull WorldInfo info,

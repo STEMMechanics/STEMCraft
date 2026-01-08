@@ -47,13 +47,21 @@ import org.bukkit.event.world.StructureGrowEvent;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * WorldChangeRecorder is responsible for recording changes made to the world,
+ * such as block placements, block breaks, and entity spawns. It listens to various
+ * events and captures the state of blocks and entities before they are modified.
+ */
 public class WorldChangeRecorder implements WorldBaseSetting {
-    STEMCraftAPI api;
-    WorldServiceImpl worldService;
+    final STEMCraftAPI api;
+    final WorldServiceImpl worldService;
     private final Map<World, WorldChangeSessionImpl> sessions = new ConcurrentHashMap<>();
 
     /**
      * Constructor.
+     *
+     * @param api The STEMCraft API instance.
+     * @param worldService The WorldServiceImpl instance.
      */
     public WorldChangeRecorder(STEMCraftAPI api, WorldServiceImpl worldService) {
         this.api = api;
@@ -62,6 +70,8 @@ public class WorldChangeRecorder implements WorldBaseSetting {
 
     /**
      * Returns the unique key for this setting.
+     *
+     * @return The setting key.
      */
     public String key() {
         return "changes";
@@ -69,6 +79,9 @@ public class WorldChangeRecorder implements WorldBaseSetting {
 
     /**
      * Called when the recorder is enabled.
+     *
+     * @param api The STEMCraft API instance.
+     * @param unused The WorldService instance (not used).
      */
     public void onEnable(STEMCraftAPI api, WorldService unused) {
         if(api.database().migrationVersion("world-changes") < 1) {
@@ -94,12 +107,8 @@ public class WorldChangeRecorder implements WorldBaseSetting {
             }
         }
 
-
-
         // BlockBreakEvent
-        api.events().register(BlockBreakEvent.class, event -> {
-            captureBlockState(event.getBlock());
-        });
+        api.events().register(BlockBreakEvent.class, event -> captureBlockState(event.getBlock()));
 
         // BlockPlaceEvent
         api.events().register(BlockPlaceEvent.class, event -> {
@@ -124,14 +133,10 @@ public class WorldChangeRecorder implements WorldBaseSetting {
         });
 
         // BlockBurnEvent
-        api.events().register(BlockBurnEvent.class, event -> {
-            captureBlockState(event.getBlock());
-        });
+        api.events().register(BlockBurnEvent.class, event -> captureBlockState(event.getBlock()));
 
         // BlockIgniteEvent
-        api.events().register(BlockIgniteEvent.class, event -> {
-            captureBlockState(event.getBlock());
-        });
+        api.events().register(BlockIgniteEvent.class, event -> captureBlockState(event.getBlock()));
 
         // BlockSpreadEvent (fire)
         api.events().register(BlockExplodeEvent.class, event -> {
@@ -148,14 +153,10 @@ public class WorldChangeRecorder implements WorldBaseSetting {
         });
 
         // BlockFromToEvent (liquid flow)
-        api.events().register(BlockFromToEvent.class, event -> {
-            captureBlockState(event.getToBlock());
-        });
+        api.events().register(BlockFromToEvent.class, event -> captureBlockState(event.getToBlock()));
 
         // BlockFadeEvent (ice melting, snow melting)
-        api.events().register(BlockFadeEvent.class, event -> {
-            captureBlockState(event.getBlock());
-        });
+        api.events().register(BlockFadeEvent.class, event -> captureBlockState(event.getBlock()));
 
         // BlockFormEvent (snow forming, ice forming)
         api.events().register(BlockFormEvent.class, event -> {
@@ -164,14 +165,10 @@ public class WorldChangeRecorder implements WorldBaseSetting {
         });
 
         // Bukkit's BlockSpreadEvent is used for both plant spreading and fire spreading
-        api.events().register(BlockSpreadEvent.class, event -> {
-            captureBlockState(event.getBlock());
-        });
+        api.events().register(BlockSpreadEvent.class, event -> captureBlockState(event.getBlock()));
 
         // LeavesDecayEvent
-        api.events().register(LeavesDecayEvent.class, event -> {
-            captureBlockState(event.getBlock());
-        });
+        api.events().register(LeavesDecayEvent.class, event -> captureBlockState(event.getBlock()));
 
         // StructureGrowEvent
         api.events().register(StructureGrowEvent.class, event -> {
@@ -205,24 +202,16 @@ public class WorldChangeRecorder implements WorldBaseSetting {
         });
 
         // PlayerBucketEmptyEvent
-        api.events().register(PlayerBucketEmptyEvent.class, event -> {
-            captureBlockState(event.getBlockClicked().getRelative(event.getBlockFace()));
-        });
+        api.events().register(PlayerBucketEmptyEvent.class, event -> captureBlockState(event.getBlockClicked().getRelative(event.getBlockFace())));
 
         // ItemSpawnEvent
-        api.events().register(ItemSpawnEvent.class, event -> {
-            captureEntity(event.getEntity());
-        });
+        api.events().register(ItemSpawnEvent.class, event -> captureEntity(event.getEntity()));
 
         // EntitySpawnEvent
-        api.events().register(EntitySpawnEvent.class, event -> {
-            captureEntity(event.getEntity());
-        });
+        api.events().register(EntitySpawnEvent.class, event -> captureEntity(event.getEntity()));
 
         // EntityPlaceEvent
-        api.events().register(EntityPlaceEvent.class, event -> {
-            captureEntity(event.getEntity());
-        });
+        api.events().register(EntityPlaceEvent.class, event -> captureEntity(event.getEntity()));
 
         // SpongeAbsorbEvent (sponge absorbing water)
         api.events().register(SpongeAbsorbEvent.class, event -> {
@@ -307,13 +296,13 @@ public class WorldChangeRecorder implements WorldBaseSetting {
      * Called when the recorder is disabled.
      */
     public void onDisable() {
-        sessions.forEach((world, session) -> {
-            session.save();
-        });
+        sessions.forEach((world, session) -> session.save());
     }
 
     /**
      * Returns a list of tab completions for this setting.
+     *
+     * @return A list of tab completion string arrays.
      */
     @Override
     public List<String[]> tabCompletions() {
@@ -326,6 +315,10 @@ public class WorldChangeRecorder implements WorldBaseSetting {
 
     /**
      * Handle the command for this setting.
+     *
+     * @param ctx The command context.
+     * @param config The configuration section.
+     * @param world The world the command is being executed in.
      */
     @Override
     public void onCommand(CommandContext ctx, ConfigSection config, World world) {
@@ -350,6 +343,10 @@ public class WorldChangeRecorder implements WorldBaseSetting {
 
     /**
      * Set the value of this setting for the given world in the config.
+     *
+     * @param world The world to set the setting for.
+     * @param config The configuration section.
+     * @param value The value to set.
      */
     @Override
     public void set(World world, ConfigSection config, String value) {
@@ -358,6 +355,9 @@ public class WorldChangeRecorder implements WorldBaseSetting {
 
     /**
      * Gets the WorldChangeSession for the given world.
+     *
+     * @param world The world to get the session for.
+     * @return The WorldChangeSession for the world.
      */
     public WorldChangeSession getSession(World world) {
         if (!sessions.containsKey(world)) {
@@ -371,6 +371,8 @@ public class WorldChangeRecorder implements WorldBaseSetting {
 
     /**
      * Capture the current state of this block for later rollback.
+     *
+     * @param state The block state to capture.
      */
     private void captureBlockState(BlockState state) {
         World world = state.getWorld();
@@ -385,6 +387,8 @@ public class WorldChangeRecorder implements WorldBaseSetting {
 
     /**
      * Capture the entity for later rollback.
+     *
+     * @param entity The entity to capture.
      */
     private void captureEntity(Entity entity) {
         World world = entity.getWorld();
@@ -392,44 +396,4 @@ public class WorldChangeRecorder implements WorldBaseSetting {
         WorldChangeSession worldState = sessions.get(world);
         worldState.captureEntity(entity);
     }
-
-//    /**
-//     * Record the inventory container if it is block-based (chest, barrel, etc)
-//     */
-//    private void recordInventoryContainer(org.bukkit.inventory.Inventory inv) {
-//        InventoryHolder holder = inv.getHolder();
-//
-//        if (inv.getLocation() == null) return;
-//        Block block = inv.getLocation().getBlock();
-//        String type = block.getType().toString();
-//        String loc = block.getX() + "," + block.getY() + "," + block.getZ();
-//
-//        // Prefer the real container inventory for logging, not the event snapshot
-//        String items;
-//        org.bukkit.block.BlockState blockState = block.getState();
-//        if (blockState instanceof Container container) {
-//            items = InventoryUtil.toString(container.getInventory());
-//        } else {
-//            items = InventoryUtil.toString(inv);
-//        }
-//
-//        // Single chest / barrel / etc
-//        if (holder instanceof org.bukkit.block.BlockState state) {
-//            captureBlock(state); // snapshots once per location
-//            return;
-//        }
-//
-//        // Double chest
-//        if (holder instanceof DoubleChest dc) {
-//            InventoryHolder left = dc.getLeftSide();
-//            InventoryHolder right = dc.getRightSide();
-//
-//            if (left instanceof org.bukkit.block.BlockState ls) {
-//                captureBlock(ls);
-//            }
-//            if (right instanceof org.bukkit.block.BlockState rs) {
-//                captureBlock(rs);
-//            }
-//        }
-//    }
 }

@@ -56,10 +56,11 @@ WORKBENCH_OPEN_OTHER_SUCCESS_SENDER: "{table} opened for {player}."
 WORKBENCH_OPEN_OTHER_SUCCESS_PLAYER: "{table} opened for you by {player}."
 WORKBENCH_OPEN_FAILED: "Opening {table} failed."
 
+# /clearinv
 CLEAR_INV_DESCRIPTION: "Clears a players inventory."
 CLEAR_INV_USAGE: "/clearinv [player]"
 CLEAR_INV_SUCCESS: "Your inventory has been cleared."
-CLEAR_INV_OTHER_SUCCESS_SENDER: "{player} inventory has been cleared."
+CLEAR_INV_OTHER_SUCCESS_SENDER: "{player}'s inventory has been cleared."
 CLEAR_INV_OTHER_SUCCESS_PLAYER: "Your inventory has been cleared by {player}."
 
 DENY_THROWING_POTION: "You are not allowed to throw potions."
@@ -86,6 +87,8 @@ NAUGHTY_NOT_SET: "The player {player} is currently not naughty."
 NAUGHTY_REMAINING_SELF: "You are currently in naughty mode. You cannot interact with others for {duration}."
 NAUGHTY_REMAINING: "The player {player} is in naughty mode for {duration}."
 
+# /fly
+FLY_DESCRIPTION: "Toggle the players ability to fly."
 FLY_CANNOT_BE_TOGGLED: "Flight cannot be toggled in the current gamemode."
 FLY_SUCCESS: "Flying has been {state}."
 FLY_OTHER_SUCCESS_SENDER: "Flying has been {state} for {player}."
@@ -174,19 +177,17 @@ PWEATHER_SET_SUN: "&aSet personal weather to &esun&a for &e{player}&a."
 PWEATHER_SET_RAIN: "&aSet personal weather to &erain&a for &e{player}&a."
 PWEATHER_RESET: "&aReset personal weather for &e{player}&a."
 
-# break
+# /break
 BREAK_DESCRIPTION: "Break blocks in a radius around the block you're looking at."
 BREAK_USAGE: "/break [radius]"
-BREAK_RADIUS_INVALID: "&cInvalid radius: &e{radius}&c."
-# BREAK_RADIUS_CLAMPED: "&eRadius too large.&r Using &e{radius}&r (max &e{max}&r)."
-BREAK_NO_TARGET: "&cNo target block found."
-BREAK_SUCCESS: "&aBroke &e{count}&a blocks in radius &e{radius}&a."
+BREAK_RADIUS_INVALID: "Invalid radius: {radius}."
+BREAK_NO_TARGET: "No target block found or block is out of range."
+BREAK_SUCCESS: "Broke {count} blocks in radius {radius}."
 
+# /enderchest
 ENDERCHEST_DESCRIPTION: "Inspect the contents of a players enderchest."
 ENDERCHEST_USAGE: "/enderchest <player>"
 ENDERCHEST_VIEWING: "Viewing enderchest of {player}."
-
-FLY_DESCRIPTION: "Toggle the players ability to fly."
 
 MUTE_EXPIRED_BROADCAST: "The player {player} is no longer muted."
 BAN_PLAYER_BROADCAST: "The player {player} has been based {duration}. Reason: {reason}."

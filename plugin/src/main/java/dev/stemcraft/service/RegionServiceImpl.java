@@ -34,8 +34,14 @@ import org.bukkit.event.player.PlayerMoveEvent;
 import javax.annotation.Nullable;
 import java.util.*;
 
+/**
+ * Implementation of the RegionService for managing region and world listeners.
+ */
 public class RegionServiceImpl extends BaseService implements RegionService {
 
+    /**
+     * Entry for a region or world listener.
+     */
     record RegionListenerEntry(SCRegion region, World world, RegionListener listener) { }
 
     /**
@@ -48,6 +54,12 @@ public class RegionServiceImpl extends BaseService implements RegionService {
      */
     private final Map<Player, List<String>> playerRegions = new HashMap<>();
 
+    /**
+     * Constructor for RegionServiceImpl.
+     *
+     * @param plugin The STEMCraft plugin instance.
+     * @param api    The STEMCraft API instance.
+     */
     public RegionServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
     }
@@ -124,6 +136,10 @@ public class RegionServiceImpl extends BaseService implements RegionService {
 
     /**
      * Adds a region listener for a specific region.
+     *
+     * @param namespaceId The namespace ID of the region listener.
+     * @param region      The SCRegion to listen to.
+     * @param listener    The RegionListener to notify on enter/exit events.
      */
     public void addListener(String namespaceId, SCRegion region, RegionListener listener) {
         NamespaceId.checkValid(namespaceId);
@@ -133,6 +149,10 @@ public class RegionServiceImpl extends BaseService implements RegionService {
 
     /**
      * Adds a region listener for a specific world.
+     *
+     * @param namespaceId The namespace ID of the world listener.
+     * @param world       The World to listen to.
+     * @param listener    The RegionListener to notify on enter/exit world events.
      */
     public void addListener(String namespaceId, World world, RegionListener listener) {
         listeners.put(namespaceId, new RegionListenerEntry(null, world, listener));
@@ -140,6 +160,8 @@ public class RegionServiceImpl extends BaseService implements RegionService {
 
     /**
      * Removes a region listener by its ID. Support asterisk wildcards at the end of the ID.
+     *
+     * @param namespaceId The namespace ID of the listener to remove.
      */
     @Override
     public void removeListener(String namespaceId) {
@@ -165,6 +187,10 @@ public class RegionServiceImpl extends BaseService implements RegionService {
 
     /**
      * Checks if a player is currently within a region or world listener by its ID.
+     *
+     * @param player      The player to check.
+     * @param namespaceId The namespace ID of the region or world listener.
+     * @return True if the player is within the region or world, false otherwise.
      */
     @Override
     public boolean contains(Player player, String namespaceId) {
@@ -174,6 +200,9 @@ public class RegionServiceImpl extends BaseService implements RegionService {
 
     /**
      * Gets the set of region and world listener IDs that a player is currently within.
+     *
+     * @param player The player to check.
+     * @return A set of region and world listener IDs.
      */
     @Override
     public Set<String> getRegions(Player player) {
@@ -186,6 +215,9 @@ public class RegionServiceImpl extends BaseService implements RegionService {
 
     /**
      * Gets a region by its ID.
+     *
+     * @param id The ID of the region.
+     * @return The SCRegion associated with the ID, or null if not found.
      */
     @Override
     @Nullable

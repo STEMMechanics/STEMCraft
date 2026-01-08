@@ -22,6 +22,7 @@ package dev.stemcraft.service;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.database.DatabaseResultSetHandler;
+import dev.stemcraft.api.database.DatabaseResultSetMapper;
 import dev.stemcraft.api.database.DatabaseStatementBinder;
 import dev.stemcraft.api.service.database.DatabaseService;
 
@@ -59,6 +60,9 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
 
     /**
      * Creates a new SQLiteManager instance.
+     *
+     * @param plugin The STEMCraft plugin instance.
+     * @param api    The STEMCraft API instance.
      */
     public DatabaseServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
@@ -74,7 +78,7 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
         try {
             Class.forName("org.sqlite.JDBC");
         } catch (ClassNotFoundException e) {
-            plugin.error("SQLite JDBC driver not found. Add org.xerial:sqlite-jdbc to your plugin.", e);
+            api.messages().error("SQLite JDBC driver not found. Add org.xerial:sqlite-jdbc to your plugin.", e);
             return;
         }
 
@@ -121,7 +125,7 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
                 setMigrationVersion("stemcraft", 1);
             }
         } catch (SQLException e) {
-            plugin.error("Failed to open SQLite database connection.", e);
+            api.messages().error("Failed to open SQLite database connection.", e);
             connection = null;
         }
     }
@@ -147,6 +151,10 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
 
     /**
      * Executes an update statement (INSERT, UPDATE, DELETE).
+     *
+     * @param sql    The SQL statement to execute.
+     * @param binder The binder to set parameters on the prepared statement.
+     * @return The number of affected rows.
      */
     @Override
     public int update(String sql, DatabaseStatementBinder binder) {
@@ -158,10 +166,10 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
 
                 return ps.executeUpdate();
             } catch (SQLException e) {
-                plugin.error("Failed to execute update: " + sql, e);
+                api.messages().error("Failed to execute update: " + sql, e);
             }
         } else {
-            plugin.error("Cannot execute update; database connection is null.");
+            api.messages().error("Cannot execute update; database connection is null.");
         }
 
         return 0;
@@ -169,6 +177,10 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
 
     /**
      * Executes a query statement and maps the result set.
+     *
+     * @param sql     The SQL statement to execute.
+     * @param binder  The binder to set parameters on the prepared statement.
+     * @param handler The handler to process the result set.
      */
     public void query(String sql, DatabaseStatementBinder binder, DatabaseResultSetHandler handler) {
         if (connection == null) {
@@ -186,12 +198,16 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
             }
 
         } catch (SQLException e) {
-            plugin.error("Failed to execute query: " + sql, e);
+            api.messages().error("Failed to execute query: " + sql, e);
         }
     }
 
     /**
      * Executes a query statement and maps the result set.
+     *
+     * @param sql     The SQL statement to execute.
+     * @param binder  The binder to set parameters on the prepared statement.
+     * @param handler The handler to process each row of the result set.
      */
     public void queryEach(String sql, DatabaseStatementBinder binder, DatabaseResultSetHandler handler) {
         if (connection == null) {
@@ -211,12 +227,16 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
             }
 
         } catch (SQLException e) {
-            plugin.error("Failed to execute query: " + sql, e);
+            api.messages().error("Failed to execute query: " + sql, e);
         }
     }
 
     /**
      * Executes a query statement and maps a single result from the result set.
+     *
+     * @param sql     The SQL statement to execute.
+     * @param binder  The binder to set parameters on the prepared statement.
+     * @param handler The handler to process the single row of the result set.
      */
     public void querySingle(String sql, DatabaseStatementBinder binder, DatabaseResultSetHandler handler) {
         if (connection == null) {
@@ -236,18 +256,57 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
             }
 
         } catch (SQLException e) {
-            plugin.error("Failed to execute query: " + sql, e);
+            api.messages().error("Failed to execute query: " + sql, e);
+        }
+    }
+
+    /**
+     * Executes a query statement and maps a single result from the result set.
+     *
+     * @param sql    The SQL statement to execute.
+     * @param binder The binder to set parameters on the prepared statement.
+     * @param mapper The mapper to convert the result set row to an object of type T.
+     * @param <T>    The type of the object to map to.
+     * @return The mapped object of type T, or null if no result was found.
+     */
+    public <T> T querySingleMapped(
+            String sql,
+            DatabaseStatementBinder binder,
+            DatabaseResultSetMapper<T> mapper
+    ) {
+        if (connection == null) {
+            throw new IllegalStateException("Database connection is not initialized.");
+        }
+
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+
+            if (binder != null) {
+                binder.bind(ps);
+            }
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return mapper != null ? mapper.map(rs) : null;
+                }
+                return null;
+            }
+
+        } catch (SQLException e) {
+            api.messages().error("Failed to execute query: " + sql, e);
+            return null;
         }
     }
 
     /**
      * Executes a raw SQL statement.
+     *
+     * @param sql The SQL statement to execute.
      */
     public boolean execute(String sql) {
         try (Statement st = connection.createStatement()) {
             return st.execute(sql);
         } catch (SQLException e) {
-            plugin.error("Failed to execute SQL: " + sql, e);
+            api.messages().error("Failed to execute SQL: " + sql, e);
         }
 
         return false;
@@ -255,18 +314,23 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
 
     /**
      * Gets the migration version for the given migration name.
+     *
+     * @param name The name of the migration.
+     * @return The migration version, or 0 if not found.
      */
     public int migrationVersion(String name) {
-        return querySingle(
+        return querySingleMapped(
                 "SELECT version FROM migrations WHERE name = ?;",
                 ps -> ps.setString(1, name),
-                rs -> rs.getInt(1),
-                0
+                rs -> rs.getInt(1)
         );
     }
 
     /**
      * Sets the migration version for the given migration name.
+     *
+     * @param name    The name of the migration.
+     * @param version The migration version to set.
      */
     public void setMigrationVersion(String name, int version) {
         String sql = "INSERT INTO migrations (name, version) VALUES (?, ?) " +
@@ -280,10 +344,10 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
 
     /**
      * Clears the migration record for the given migration name.
+     *
+     * @param name The name of the migration.
      */
     public void clearMigration(String name) {
-        update("DELETE FROM migrations WHERE name = ?;", ps -> {
-            ps.setString(1, name);
-        });
+        update("DELETE FROM migrations WHERE name = ?;", ps -> ps.setString(1, name));
     }
 }

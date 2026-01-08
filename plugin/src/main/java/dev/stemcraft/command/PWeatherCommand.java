@@ -28,14 +28,31 @@ import org.bukkit.OfflinePlayer;
 import org.bukkit.WeatherType;
 import org.bukkit.entity.Player;
 
-public class PWeatherCommand extends STEMCraftCommandImpl {
+/**
+ * Command to set a player's personal weather.
+ */
+public class PWeatherCommand extends BaseCommand {
+    private static final String PERMISSION = "stemcraft.command.pweather";
 
+    /**
+     * Creates a new PWeatherCommand instance.
+     *
+     * @param plugin The main STEMCraft plugin instance.
+     * @param api    The STEMCraft API instance.
+     */
+    public PWeatherCommand(STEMCraft plugin, STEMCraftAPI api) {
+        super(plugin, api);
+    }
+
+    /**
+     * Initializes the command with its label, description, usage, and permission.
+     */
     @Override
-    public void onLoad(STEMCraft plugin) {
+    public void onLoad() {
         setLabel("pweather");
         setDescription("PWEATHER_DESCRIPTION");
         setUsage("PWEATHER_USAGE");
-        setPermission("stemcraft.command.pweather");
+        setPermission(PERMISSION);
         addTabCompletion("sun", "{player}");
         addTabCompletion("rain", "{player}");
         addTabCompletion("storm", "{player}");
@@ -43,8 +60,14 @@ public class PWeatherCommand extends STEMCraftCommandImpl {
         register(plugin);
     }
 
+    /**
+     * Executes the pweather command, allowing a player to set their personal weather.
+     *
+     * @param cmd The command being executed.
+     * @param ctx The context of the command execution.
+     */
     @Override
-    public void onExecute(STEMCraftAPI api, Command cmd, CommandContext ctx) {
+    public void onExecute(Command cmd, CommandContext ctx) {
         if (ctx.args().isEmpty()) {
             cmd.error("PWEATHER_MODE_REQUIRED");
             return;
@@ -71,6 +94,13 @@ public class PWeatherCommand extends STEMCraftCommandImpl {
         }
     }
 
+    /**
+     * Resolves the target player for the command.
+     *
+     * @param cmd The command being executed.
+     * @param ctx The context of the command execution.
+     * @return The target Player, or null if not found or invalid.
+     */
     private Player resolveTarget(Command cmd, CommandContext ctx) {
         if (ctx.args().size() >= 2) {
             OfflinePlayer off = ctx.getArgAsOfflinePlayer(2, null);

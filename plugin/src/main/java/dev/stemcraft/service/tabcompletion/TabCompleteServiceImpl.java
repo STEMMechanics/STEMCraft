@@ -24,21 +24,24 @@ import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.service.tabcomplete.TabCompleteService;
 import dev.stemcraft.api.service.tabcomplete.TabCompletionProvider;
-import dev.stemcraft.api.util.SCPlayer;
 import dev.stemcraft.service.BaseService;
-import org.bukkit.Bukkit;
-import org.bukkit.World;
 import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
+/**
+ * Implementation of the TabCompleteService interface.
+ */
 public class TabCompleteServiceImpl extends BaseService implements TabCompleteService {
     private final HashMap<String, TabCompletionProvider> tabCompletionPlaceholders = new HashMap<>();
 
     /**
      * Constructor for TabCompleteServiceImpl.
+     *
+     * @param plugin The STEMCraft plugin instance.
+     * @param api    The STEMCraft API instance.
      */
     public TabCompleteServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
@@ -53,6 +56,9 @@ public class TabCompleteServiceImpl extends BaseService implements TabCompleteSe
 
     /**
      * Register a new tab completion placeholder.
+     *
+     * @param name     The name of the placeholder.
+     * @param callback The callback to provide completions.
      */
     public void register(String name, TabCompletionProvider callback) {
         tabCompletionPlaceholders.put(name, callback);
@@ -60,12 +66,17 @@ public class TabCompleteServiceImpl extends BaseService implements TabCompleteSe
 
     /**
      * Get the completion list for a given placeholder.
+     *
+     * @param name   The name of the placeholder.
+     * @param player The player requesting the completions.
+     * @param args   Additional arguments for the completion provider.
+     * @return A list of completion strings.
      */
     public List<String> getCompletionList(String name, Player player, String... args) {
         if (tabCompletionPlaceholders.containsKey(name)) {
             return tabCompletionPlaceholders.get(name).provide(player, args);
         }
 
-        return new ArrayList<String>();
+        return new ArrayList<>();
     }
 }

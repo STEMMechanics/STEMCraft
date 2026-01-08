@@ -37,6 +37,9 @@ import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Implementation of the TaskService for managing scheduled tasks and persistent timers.
+ */
 public class TaskServiceImpl extends BaseService implements TaskService {
     private final static String DATA_FILE_NAME = "task-data.yml";
     private File dataFile;
@@ -45,32 +48,49 @@ public class TaskServiceImpl extends BaseService implements TaskService {
     private final Map<String, BukkitTask> tasks = new ConcurrentHashMap<>();
     private final Map<String, Long> tasksRunAt = new ConcurrentHashMap<>();
 
-    /*  Constructor */
+    /**
+     * Constructor for TaskServiceImpl.
+     *
+     * @param plugin The STEMCraft plugin instance.
+     * @param api    The STEMCraft API instance.
+     */
     public TaskServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
     }
 
+    /**
+     * Called when the service is being enabled.
+     */
     @Override
     public void onEnable() {
         this.dataFile = new File(plugin.getDataFolder(), DATA_FILE_NAME);
 
         if (!dataFile.exists()) {
             try {
-                plugin.getDataFolder().mkdirs();
+                //noinspection ResultOfMethodCallIgnored
                 dataFile.createNewFile();
             } catch (IOException e) {
-                plugin.error("PERSISTENT_TIMER_CREATE_DATA_FILE_FAILED", e);
+                api.messages().error("PERSISTENT_TIMER_CREATE_DATA_FILE_FAILED", e);
             }
         }
 
         this.dataConfig = YamlConfiguration.loadConfiguration(dataFile);
     }
 
+    /**
+     * Called when the service is being disabled.
+     */
     @Override
     public void onDisable() {
         save();
     }
 
+    /**
+     * Register a persistent timer callback type.
+     *
+     * @param persistentType The unique type name for this callback.
+     * @param callback       The callback to invoke when the timer runs.
+     */
     @Override
     public void registerPersistentCallback(String persistentType, TaskCallback callback) {
         persistentCallbacks.put(persistentType, callback);
@@ -78,10 +98,12 @@ public class TaskServiceImpl extends BaseService implements TaskService {
     }
 
     /**
-     * Schedule a timer:
-     *  - type: which callback type to invoke
-     *  - id:   unique id within that type
-     *  - data: serialized data for that timer
+     * Schedule a timer
+     *
+     * @param persistentType The callback type.
+     * @param id             The unique timer id.
+     * @param data           The serialized data for the timer.
+     * @param delay          The delay in ticks before running.
      */
     @Override
     public void runLaterPersistent(String persistentType, String id, String data, long delay) {
@@ -99,6 +121,12 @@ public class TaskServiceImpl extends BaseService implements TaskService {
         }
     }
 
+    /**
+     * Get the persistent data for a timer.
+     *
+     * @param id The unique timer id.
+     * @return The serialized data or null if not found.
+     */
     @Override
     public String getPersistentData(String id) {
         String path = "tasks." + id + ".data";
@@ -108,6 +136,12 @@ public class TaskServiceImpl extends BaseService implements TaskService {
         return dataConfig.getString(path);
     }
 
+    /**
+     * Set the persistent data for a timer.
+     *
+     * @param id   The unique timer id.
+     * @param data The serialized data to store.
+     */
     @Override
     public void setPersistentData(String id, String data) {
         String path = "tasks." + id + ".data";
@@ -115,6 +149,12 @@ public class TaskServiceImpl extends BaseService implements TaskService {
         save();
     }
 
+    /**
+     * List all persistent timer ids of a given type.
+     *
+     * @param type The callback type.
+     * @return A list of timer ids.
+     */
     @Override
     public List<String> listPersistentTimers(String type) {
         List<String> ids = new java.util.ArrayList<>();
@@ -132,11 +172,22 @@ public class TaskServiceImpl extends BaseService implements TaskService {
         return ids;
     }
 
+    /**
+     * Runs a task later after a delay.
+     *
+     * @param delay The delay in ticks.
+     * @param task  The task to run.
+     */
     @Override
     public void runLater(long delay, Runnable task) {
         BukkitTask bukkitTask = Bukkit.getScheduler().runTaskLater(InstanceHolder.plugin(), task, delay);
     }
 
+    /**
+     * Runs a task asynchronously.
+     *
+     * @param task The task to run.
+     */
     @Override
     public void runAsync(Runnable task) {
         Bukkit.getScheduler().runTaskAsynchronously(InstanceHolder.plugin(), task);
@@ -150,6 +201,10 @@ public class TaskServiceImpl extends BaseService implements TaskService {
 
     /**
      * Runs once after delay. Cancels previous task with same id.
+     *
+     * @param id    The unique task id.
+     * @param delay The delay in ticks.
+     * @param task  The task to run.
      */
     @Override
     public void runOnceDelay(String id, long delay, Runnable task) {
@@ -181,6 +236,8 @@ public class TaskServiceImpl extends BaseService implements TaskService {
 
     /**
      * Cancels a scheduled task by id.
+     *
+     * @param id The unique task id. Supports asterisk wildcards.
      */
     @Override
     public void cancel(String id) {
@@ -227,9 +284,11 @@ public class TaskServiceImpl extends BaseService implements TaskService {
         }
     }
 
-
     /**
      * Returns true if a task with this id is scheduled.
+     *
+     * @param id The unique task id.
+     * @return true if the task exists, false otherwise.
      */
     @Override
     public boolean exists(String id) {
@@ -241,6 +300,12 @@ public class TaskServiceImpl extends BaseService implements TaskService {
         return tasks.containsKey(id);
     }
 
+    /**
+     * Get the remaining time in ticks for a scheduled task.
+     *
+     * @param id The unique task id.
+     * @return The remaining time in ticks, or -1 if not found.
+     */
     @Override
     public long remaining(String id) {
         if(tasksRunAt.containsKey(id)) {
@@ -261,6 +326,14 @@ public class TaskServiceImpl extends BaseService implements TaskService {
         return Math.max(0, remainingMillis / 50L);
     }
 
+    /**
+     * Runs a repeating task with given period. Cancels previous task with same id.
+     *
+     * @param id     The unique task id.
+     * @param delay  The delay in ticks before first run.
+     * @param period The period in ticks between runs.
+     * @param task   The task to run.
+     */
     @Override
     public void repeating(String id, long delay, long period, Runnable task) {
         if(id != null && !id.isEmpty()) {
@@ -291,6 +364,15 @@ public class TaskServiceImpl extends BaseService implements TaskService {
         tasks.clear();
     }
 
+    /**
+     * Retry a task multiple times with delay intervals.
+     *
+     * @param maxRetries    The maximum number of retries.
+     * @param task          The task to retry.
+     * @param callback      The callback to invoke when done.
+     * @param intervalDelay The delay in ticks between retries.
+     * @param startDelay    The initial delay in ticks before first attempt.
+     */
     public void retry(int maxRetries, TaskRetryable task, TaskRetryCallback callback, long intervalDelay, long startDelay) {
         retry0(maxRetries, task, callback, intervalDelay, startDelay, true);
     }
@@ -315,7 +397,9 @@ public class TaskServiceImpl extends BaseService implements TaskService {
     }
 
     /**
-     * Call onEnable() after registering all callback types.
+     * Load persistent timers of a given type from storage.
+     *
+     * @param persistentType The callback type to load.
      */
     private void loadPersistentTimers(String persistentType) {
         ConfigurationSection timersSection = dataConfig.getConfigurationSection("tasks");
@@ -336,6 +420,12 @@ public class TaskServiceImpl extends BaseService implements TaskService {
         save();
     }
 
+    /**
+     * Schedule a persistent timer to run at its stored time.
+     *
+     * @param type The callback type.
+     * @param id   The unique timer id.
+     */
     private void schedulePersistentTimer(String type, String id) {
         if(tasks.containsKey(id)) {
             // already scheduled
@@ -364,7 +454,7 @@ public class TaskServiceImpl extends BaseService implements TaskService {
         try {
             dataConfig.save(dataFile);
         } catch (IOException e) {
-            plugin.error("PERSISTENT_TIMER_SAVE_FAILED", e);
+            api.messages().error("PERSISTENT_TIMER_SAVE_FAILED", e);
         }
     }
 }

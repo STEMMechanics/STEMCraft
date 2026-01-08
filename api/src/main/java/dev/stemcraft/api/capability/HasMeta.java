@@ -50,11 +50,14 @@ public interface HasMeta {
     /**
      * Get the metadata value for the given key, or create and store a new value using the supplier if not present.
      *
+     * This overload allows type-safe retrieval of an existing value.
+     *
      * @param key the metadata key
+     * @param type the expected type of the metadata value
      * @param supplier the supplier to create a new value if the key is not present
      * @return the metadata value for the given key, or a new value created by the supplier if not present
      */
-    <T> T getOrCreate(String key, Supplier<T> supplier);
+    <T> T getOrCreate(String key, Class<T> type, Supplier<? extends T> supplier);
 
     /**
      * Set the metadata value for the given key.

@@ -22,10 +22,12 @@ package dev.stemcraft.service;
 
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
-import dev.stemcraft.api.config.ConfigFile;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.util.StringUtil;
 
+/**
+ * Base class for STEMCraft services.
+ */
 public abstract class BaseService {
     protected final STEMCraft plugin;
     protected final STEMCraftAPI api;
@@ -36,6 +38,9 @@ public abstract class BaseService {
 
     /**
      * Constructor for BaseService.
+     *
+     * @param plugin The STEMCraft plugin instance.
+     * @param api    The STEMCraft API instance.
      */
     protected BaseService(STEMCraft plugin, STEMCraftAPI api) {
         this.plugin = plugin;
@@ -54,6 +59,8 @@ public abstract class BaseService {
 
     /**
      * Get the id of this feature.
+     *
+     * @return The feature id.
      */
     public String getId() {
         String name = getClass().getSimpleName();
@@ -70,6 +77,8 @@ public abstract class BaseService {
 
     /**
      * Set the configuration key for this service.
+     *
+     * @param configKey The configuration key.
      */
     public void setConfigKey(String configKey) {
         this.configKey = StringUtil.camelToKebab(configKey);
@@ -77,6 +86,8 @@ public abstract class BaseService {
 
     /**
      * Get the root configuration section of the plugin's config.
+     *
+     * @return The root ConfigSection.
      */
     public ConfigSection getRootConfigSection() {
         if(rootConfigSection == null) {
@@ -91,6 +102,8 @@ public abstract class BaseService {
 
     /**
      * Get the configuration section for this service from the plugin's config.
+     *
+     * @return The ConfigSection for this feature.
      */
     public ConfigSection getConfigSection() {
         if(configSection == null) {

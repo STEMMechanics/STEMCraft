@@ -27,19 +27,42 @@ import dev.stemcraft.api.command.CommandContext;
 import org.bukkit.GameMode;
 import org.bukkit.entity.Player;
 
-public class FlyCommand extends STEMCraftCommandImpl {
+/**
+ * Command to toggle flight mode for players.
+ */
+public class FlyCommand extends BaseCommand {
+    private static final String PERMISSION = "stemcraft.command.fly";
 
+    /**
+     * Constructs the FlyCommand with the given plugin and API instances.
+     *
+     * @param plugin The STEMCraft plugin instance.
+     * @param api    The STEMCraft API instance.
+     */
+    public FlyCommand(STEMCraft plugin, STEMCraftAPI api) {
+        super(plugin, api);
+    }
+
+    /**
+     * Initializes the command with its label, description, usage, and permission.
+     */
     @Override
-    public void onLoad(STEMCraft plugin) {
+    public void onLoad() {
         setLabel("fly");
         setDescription("FLY_DESCRIPTION");
         setUsage("FLY_USAGE");
-        setPermission("stemcraft.command.fly");
+        setPermission(PERMISSION);
         register(plugin);
     }
 
+    /**
+     * Executes the fly command, toggling flight mode for the target player.
+     *
+     * @param cmd The command being executed.
+     * @param ctx The context of the command execution.
+     */
     @Override
-    public void onExecute(STEMCraftAPI api, Command cmd, CommandContext ctx) {
+    public void onExecute(Command cmd, CommandContext ctx) {
         // check if console called without args
         if(ctx.isConsole() && ctx.args().isEmpty()) {
             error("CONSOLE_PLAYER_REQUIRED");

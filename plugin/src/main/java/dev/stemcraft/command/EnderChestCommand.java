@@ -26,19 +26,43 @@ import dev.stemcraft.api.command.Command;
 import dev.stemcraft.api.command.CommandContext;
 import org.bukkit.entity.Player;
 
-public class EnderChestCommand extends STEMCraftCommandImpl {
+/**
+ * Command to open another player's ender chest.
+ */
+public class EnderChestCommand extends BaseCommand {
+    private static final String PERMISSION = "stemcraft.command.enderchest";
+
+    /**
+     * Constructs the EnderChestCommand.
+     *
+     * @param plugin The STEMCraft plugin instance.
+     * @param api    The STEMCraft API instance.
+     */
+    public EnderChestCommand(STEMCraft plugin, STEMCraftAPI api) {
+        super(plugin, api);
+    }
+
+    /**
+     * Initializes the command with its label, description, usage, permission, and tab completions.
+     */
     @Override
-    public void onLoad(STEMCraft plugin) {
+    public void onLoad() {
         setLabel("enderchest");
         setDescription("ENDERCHEST_DESCRIPTION");
         setUsage("ENDERCHEST_USAGE");
-        setPermission("stemcraft.command.invseendercheste");
+        setPermission(PERMISSION);
         addTabCompletion("{player}");
         register(plugin);
     }
 
+    /**
+     * Executes the command to open another player's ender chest.
+     *
+     * @param cmd The command being executed.
+     * @param ctx The context of the command execution.
+     */
     @Override
-    public void onExecute(STEMCraftAPI api, Command cmd, CommandContext ctx) {
+    public void onExecute(Command cmd, CommandContext ctx) {
         if(ctx.args().isEmpty()) {
             cmd.error("PLAYER_REQUIRED");
             return;

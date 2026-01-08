@@ -22,6 +22,8 @@ package dev.stemcraft.api.service.config;
 
 import dev.stemcraft.api.config.ConfigFile;
 
+import java.io.File;
+
 /**
  * Service for managing configuration files.
  */
@@ -36,4 +38,10 @@ public interface ConfigService {
      */
     ConfigFile load(String name, boolean createIfNotExist);
     default ConfigFile load(String name) { return load(name, true); }
+
+    ConfigFile load(File parent, String name, boolean createIfNotExist);
+    default ConfigFile load(File parent, String name) { return load(parent, name, true); }
+
+    ConfigFile load(File file, boolean createIfNotExist);
+    default ConfigFile load(File file) { return load(file, true); }
 }
