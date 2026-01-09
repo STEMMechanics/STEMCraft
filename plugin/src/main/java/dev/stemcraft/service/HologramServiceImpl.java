@@ -44,6 +44,7 @@ import org.bukkit.event.world.ChunkUnloadEvent;
 import org.bukkit.event.world.WorldLoadEvent;
 import org.bukkit.event.world.WorldUnloadEvent;
 import org.jetbrains.annotations.NotNull;
+import org.jspecify.annotations.NonNull;
 
 import javax.annotation.Nullable;
 import java.util.*;
@@ -79,13 +80,13 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         registerType("", new HologramTypeHandler() {
             /** {@inheritDoc} */
             @Override
-            public List<String> list(String type) {
+            public List<String> list(@NonNull String type) {
                 return null;
             }
 
             /** {@inheritDoc} */
             @Override
-            public List<String> lines(String type, String context, int id, List<String> data) {
+            public @NonNull List<String> lines(@NonNull String type, @NonNull String context, int id, @NonNull List<String> data) {
                 return data;
             }
         });
@@ -335,9 +336,6 @@ public class HologramServiceImpl extends BaseService implements HologramService 
      */
     @Override
     public void registerType(@NotNull String type, @NotNull HologramTypeHandler handler) {
-        if (type == null) {
-            type = "";
-        }
 
         String slug = StringUtil.slugify(type);
         handlers.put(slug, handler);
@@ -355,12 +353,11 @@ public class HologramServiceImpl extends BaseService implements HologramService 
      * @return The ID of the created hologram.
      */
     @Override
-    public int create(@NotNull String type, @NotNull String context, @NotNull Location location, @NotNull List<String> data) {
-        if (location == null || location.getWorld() == null) {
+    public int create(@NotNull String type, @Nullable String context, @NotNull Location location, @NotNull List<String> data) {
+        if (location.getWorld() == null) {
             throw new IllegalArgumentException(api.locales().resolve("HOLOGRAM_LOCATION_INVALID"));
         }
 
-        if(type == null) { type = ""; }
         String slug = StringUtil.slugify(type);
 
         int nextId = holograms.keySet().stream().max(Integer::compareTo).orElse(0) + 1;
@@ -440,7 +437,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
      */
     @Override
     public void move(int id, @NotNull Location newLocation) {
-        if (newLocation == null || newLocation.getWorld() == null) {
+        if (newLocation.getWorld() == null) {
             return;
         }
 
@@ -503,7 +500,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
      */
     @Override
     public int closest(@NotNull Location loc, int range) {
-        if (loc == null || loc.getWorld() == null) {
+        if (loc.getWorld() == null) {
             return -1;
         }
 
@@ -762,7 +759,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
                     continue;
                 }
 
-                if(locationStr == null || locationStr.isEmpty()) {
+                if(locationStr.isEmpty()) {
                     continue;
                 }
 

@@ -30,6 +30,7 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.*;
 import org.bukkit.inventory.recipe.CookingBookCategory;
 import org.jetbrains.annotations.NotNull;
+import org.jspecify.annotations.NonNull;
 
 import java.util.HashMap;
 import java.util.List;
@@ -124,10 +125,6 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
                 if (rSec == null) continue;
 
                 String resultMatStr = rSec.getString("result");
-                if (resultMatStr == null) {
-                    plugin.getLogger().warning("shaped." + id + " missing result");
-                    continue;
-                }
                 Material resultMat = Material.matchMaterial(resultMatStr.toUpperCase(Locale.ROOT));
                 if (resultMat == null) {
                     plugin.getLogger().warning("shaped." + id + " unknown result material: " + resultMatStr);
@@ -157,7 +154,6 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
                     }
                     char c = key.charAt(0);
                     String matStr = ingSec.getString(key);
-                    if (matStr == null) continue;
                     Material m = Material.matchMaterial(matStr.toUpperCase(Locale.ROOT));
                     if (m == null) {
                         plugin.getLogger().warning("shaped." + id + " unknown material: " + matStr);
@@ -180,10 +176,6 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
                 if (rSec == null) continue;
 
                 String resultMatStr = rSec.getString("result");
-                if (resultMatStr == null) {
-                    plugin.getLogger().warning("shapeless." + id + " missing result");
-                    continue;
-                }
                 Material resultMat = Material.matchMaterial(resultMatStr.toUpperCase(Locale.ROOT));
                 if (resultMat == null) {
                     plugin.getLogger().warning("shapeless." + id + " unknown result material: " + resultMatStr);
@@ -227,10 +219,6 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
                 if (rSec == null) continue;
 
                 String resultMatStr = rSec.getString("result");
-                if (resultMatStr == null) {
-                    plugin.getLogger().warning("smithing_transform." + id + " missing result");
-                    continue;
-                }
                 Material resultMat = Material.matchMaterial(resultMatStr.toUpperCase(Locale.ROOT));
                 if (resultMat == null) {
                     plugin.getLogger().warning("smithing_transform." + id + " unknown result material: " + resultMatStr);
@@ -240,11 +228,6 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
                 String templateStr = rSec.getString("template");
                 String baseStr     = rSec.getString("base");
                 String addStr      = rSec.getString("addition");
-
-                if (templateStr == null || baseStr == null || addStr == null) {
-                    plugin.getLogger().warning("smithing_transform." + id + " missing template/base/addition");
-                    continue;
-                }
 
                 Material templateMat = Material.matchMaterial(templateStr.toUpperCase(Locale.ROOT));
                 Material baseMat     = Material.matchMaterial(baseStr.toUpperCase(Locale.ROOT));
@@ -275,11 +258,6 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
                 String templateStr = rSec.getString("template");
                 String baseStr     = rSec.getString("base");
                 String matStr      = rSec.getString("material");
-
-                if (templateStr == null || baseStr == null || matStr == null) {
-                    plugin.getLogger().warning("smithing_trim." + id + " missing template/base/material");
-                    continue;
-                }
 
                 Material templateMat = Material.matchMaterial(templateStr.toUpperCase(Locale.ROOT));
                 Material baseMat     = Material.matchMaterial(baseStr.toUpperCase(Locale.ROOT));
@@ -319,11 +297,6 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
             float exp        = (float) rSec.getDouble("exp", 0.0);
             int time         = rSec.getInt("time", 200);
 
-            if (inputStr == null || resultStr == null) {
-                plugin.getLogger().warning(type + "." + id + " missing input/result");
-                continue;
-            }
-
             Material inputMat  = Material.matchMaterial(inputStr.toUpperCase(Locale.ROOT));
             Material resultMat = Material.matchMaterial(resultStr.toUpperCase(Locale.ROOT));
 
@@ -351,7 +324,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
      * @param name The namespaced key of the recipe to remove.
      */
     @Override
-    public void remove(String name) {
+    public void remove(@NonNull @NonNull String name) {
         NamespacedKey namespaceItem = NamespacedKey.fromString(name);
         if (namespaceItem != null) {
             Bukkit.removeRecipe(namespaceItem);
@@ -498,11 +471,11 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
      */
     @Override
     public void addSmithingTransform(
-            String id,
-            ItemStack result,
-            RecipeChoice template,
-            RecipeChoice base,
-            RecipeChoice addition
+            @NonNull @NonNull String id,
+            @NonNull @NonNull ItemStack result,
+            @NonNull @NonNull RecipeChoice template,
+            @NonNull @NonNull RecipeChoice base,
+            @NonNull @NonNull RecipeChoice addition
     ) {
         SmithingTransformRecipe recipe =
                 new SmithingTransformRecipe(key(id), result, template, base, addition);
@@ -520,10 +493,10 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
      */
     @Override
     public void addSmithingTrim(
-            String id,
-            RecipeChoice template,
-            RecipeChoice baseArmor,
-            RecipeChoice material
+            @NonNull @NonNull String id,
+            @NonNull @NonNull RecipeChoice template,
+            @NonNull @NonNull RecipeChoice baseArmor,
+            @NonNull @NonNull RecipeChoice material
     ) {
         @SuppressWarnings("removal")
         SmithingTrimRecipe recipe =

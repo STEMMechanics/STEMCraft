@@ -148,7 +148,7 @@ public class WorldTickSpeedSetting implements WorldBaseSetting {
      */
     @Override
     public void set(@NotNull World world, @NotNull ConfigSection config, @NotNull String value) {
-        value = value == null ? "unset" : value.toLowerCase(Locale.ROOT);
+        value = value.toLowerCase(Locale.ROOT);
 
         if(StringUtil.isInteger(value)) {
             int tickSpeed = Integer.parseInt(value);

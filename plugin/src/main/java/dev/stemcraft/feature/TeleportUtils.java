@@ -479,7 +479,7 @@ public class TeleportUtils extends BaseFeature {
 
         for (String key : section.getKeys(false)) {
             String value = section.getString(key);
-            if (value == null || value.isEmpty()) continue;
+            if (value.isEmpty()) continue;
 
             Location loc = LocationUtil.deserialize(value);
             warps.put(key.toLowerCase(Locale.ROOT), loc);
@@ -517,7 +517,7 @@ public class TeleportUtils extends BaseFeature {
 
         for (String key : section.getKeys(false)) {
             String value = section.getString(key);
-            if (value == null || value.isEmpty()) continue;
+            if (value.isEmpty()) continue;
 
             try {
                 UUID uuid = UUID.fromString(key);
@@ -569,7 +569,7 @@ public class TeleportUtils extends BaseFeature {
      */
     private List<String> getWorldChangeCommands() {
         List<String> list = getRootConfigSection().getStringList("teleport-commands");
-        return list == null ? List.of() : list;
+        return list;
     }
 
     /**

@@ -24,6 +24,7 @@ import dev.stemcraft.api.config.ConfigFile;
 import dev.stemcraft.api.config.ConfigSection;
 import lombok.Setter;
 import org.bukkit.configuration.ConfigurationSection;
+import org.jspecify.annotations.NonNull;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -94,7 +95,7 @@ public class ConfigSectionImpl implements ConfigSection {
      * @param path The configuration path.
      * @return true if the configuration contains a value at the specified path, false otherwise.
      */
-    public boolean contains(String path) {
+    public boolean contains(@NonNull String path) {
         return section.contains(path);
     }
 
@@ -104,7 +105,7 @@ public class ConfigSectionImpl implements ConfigSection {
      * @param path The configuration path.
      * @return true if the configuration contains a section at the specified path, false otherwise.
      */
-    public boolean isSection(String path) {
+    public boolean isSection(@NonNull String path) {
         return section.isConfigurationSection(path);
     }
 
@@ -114,7 +115,7 @@ public class ConfigSectionImpl implements ConfigSection {
      * @param path The configuration path.
      * @return the object at the specified path, or null if not present.
      */
-    public Object get(String path) {
+    public Object get(@NonNull String path) {
         return section.get(path);
     }
 
@@ -125,7 +126,7 @@ public class ConfigSectionImpl implements ConfigSection {
      * @param def The default value if the path does not exist.
      * @return the value at the specified path, or the default value if not present.
      */
-    public String getString(String path, String def) {
+    public @NonNull String getString(@NonNull String path, String def) {
         persistDefault(path, def);
         return section.getString(path, def);
     }
@@ -137,7 +138,7 @@ public class ConfigSectionImpl implements ConfigSection {
      * @param def The default value if the path does not exist.
      * @return the integer value at the specified path, or the default value if not present.
      */
-    public int getInt(String path, int def) {
+    public int getInt(@NonNull String path, int def) {
         persistDefault(path, def);
         return section.getInt(path, def);
     }
@@ -149,7 +150,7 @@ public class ConfigSectionImpl implements ConfigSection {
      * @param def The default value if the path does not exist.
      * @return the long value at the specified path, or the default value if not present.
      */
-    public long getLong(String path, long def) {
+    public long getLong(@NonNull String path, long def) {
         persistDefault(path, def);
         return section.getLong(path, def);
     }
@@ -161,7 +162,7 @@ public class ConfigSectionImpl implements ConfigSection {
      * @param def The default value if the path does not exist.
      * @return the float value at the specified path, or the default value if not present.
      */
-    public float getFloat(String path, float def) {
+    public float getFloat(@NonNull String path, float def) {
         persistDefault(path, def);
         return (float) section.getDouble(path, def);
     }
@@ -173,7 +174,7 @@ public class ConfigSectionImpl implements ConfigSection {
      * @param def The default value if the path does not exist.
      * @return the double value at the specified path, or the default value if not present.
      */
-    public double getDouble(String path, double def) {
+    public double getDouble(@NonNull String path, double def) {
         persistDefault(path, def);
         return section.getDouble(path, def);
     }
@@ -185,7 +186,7 @@ public class ConfigSectionImpl implements ConfigSection {
      * @param def The default value if the path does not exist.
      * @return the boolean value at the specified path, or the default value if not present.
      */
-    public boolean getBoolean(String path, boolean def) {
+    public boolean getBoolean(@NonNull String path, boolean def) {
         persistDefault(path, def);
         return section.getBoolean(path, def);
     }
@@ -196,7 +197,7 @@ public class ConfigSectionImpl implements ConfigSection {
      * @param path The configuration path.
      * @return A list of strings from the configuration.
      */
-    public List<String> getStringList(String path) {
+    public @NonNull List<String> getStringList(@NonNull String path) {
         List<String> value = section.getStringList(path);
         persistDefault(path, value);
         return value;
@@ -208,7 +209,7 @@ public class ConfigSectionImpl implements ConfigSection {
      * @param path The configuration path.
      * @return A list of integers from the configuration.
      */
-    public List<Integer> getIntegerList(String path) {
+    public @NonNull List<Integer> getIntegerList(@NonNull String path) {
         List<Integer> value = section.getIntegerList(path);
         persistDefault(path, value);
         return value;
@@ -220,7 +221,7 @@ public class ConfigSectionImpl implements ConfigSection {
      * @param path The configuration path.
      * @return A list of floats from the configuration.
      */
-    public List<Float> getFloatList(String path) {
+    public @NonNull List<Float> getFloatList(@NonNull String path) {
         List<Float> value = section.getFloatList(path);
         persistDefault(path, value);
         return value;
@@ -232,7 +233,7 @@ public class ConfigSectionImpl implements ConfigSection {
      * @param path The configuration path.
      * @return A list of doubles from the configuration.
      */
-    public List<Double> getDoubleList(String path) {
+    public @NonNull List<Double> getDoubleList(@NonNull String path) {
         List<Double> value = section.getDoubleList(path);
         persistDefault(path, value);
         return value;
@@ -244,7 +245,7 @@ public class ConfigSectionImpl implements ConfigSection {
      * @param path The configuration path.
      * @return A list of booleans from the configuration.
      */
-    public List<Boolean> getBooleanList(String path) {
+    public @NonNull List<Boolean> getBooleanList(@NonNull String path) {
         List<Boolean> value = section.getBooleanList(path);
         persistDefault(path, value);
         return value;
@@ -257,7 +258,7 @@ public class ConfigSectionImpl implements ConfigSection {
      * @param def The default value if the path does not exist.
      * @return A list of objects from the configuration.
      */
-    public List<?> getList(String path, List<?> def) {
+    public List<?> getList(@NonNull String path, List<?> def) {
         List<?> value = section.getList(path, def);
         persistDefault(path, value);
         return value;
@@ -332,7 +333,7 @@ public class ConfigSectionImpl implements ConfigSection {
      * @param deep Whether to get keys recursively.
      * @return A set of keys in this configuration section.
      */
-    public Set<String> getKeys(boolean deep) {
+    public @NonNull Set<String> getKeys(boolean deep) {
         return section.getKeys(deep);
     }
 
@@ -343,7 +344,7 @@ public class ConfigSectionImpl implements ConfigSection {
      * @param deep Whether to get keys recursively.
      * @return A set of keys in the configuration section at the specified path.
      */
-    public Set<String> getSectionKeys(String path, boolean deep) {
+    public @NonNull Set<String> getSectionKeys(@NonNull String path, boolean deep) {
         ConfigurationSection subSection = section.getConfigurationSection(path);
         if (subSection == null) {
             return Set.of();
@@ -358,7 +359,7 @@ public class ConfigSectionImpl implements ConfigSection {
      * @param deep Whether to get values recursively.
      * @return A map representation of the configuration section at the specified path.
      */
-    public Map<String, Object> getMap(String path, boolean deep) {
+    public @NonNull Map<String, Object> getMap(@NonNull String path, boolean deep) {
         ConfigurationSection subSection = section.getConfigurationSection(path);
         if (subSection == null) {
             return Map.of();

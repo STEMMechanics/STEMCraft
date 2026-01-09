@@ -211,7 +211,7 @@ public class TaskServiceImpl extends BaseService implements TaskService {
      */
     @Override
     public void runOnceDelay(@NotNull String id, long delay, @NotNull Runnable task) {
-        if(id == null || id.isEmpty()) {
+        if(id.isEmpty()) {
             return;
         }
 
@@ -339,7 +339,7 @@ public class TaskServiceImpl extends BaseService implements TaskService {
      */
     @Override
     public void repeating(@NotNull String id, long delay, long period, @NotNull Runnable task) {
-        if(id != null && !id.isEmpty()) {
+        if(!id.isEmpty()) {
             if (exists(id)) {
                 cancel(id);
             }
@@ -352,7 +352,7 @@ public class TaskServiceImpl extends BaseService implements TaskService {
                 period
         );
 
-        if(id != null && !id.isEmpty()) {
+        if(!id.isEmpty()) {
             tasks.put(id, bukkitTask);
         }
     }

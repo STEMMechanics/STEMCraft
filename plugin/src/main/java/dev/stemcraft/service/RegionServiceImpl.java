@@ -31,6 +31,7 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.jetbrains.annotations.NotNull;
+import org.jspecify.annotations.NonNull;
 
 import javax.annotation.Nullable;
 import java.util.*;
@@ -222,7 +223,7 @@ public class RegionServiceImpl extends BaseService implements RegionService {
      */
     @Override
     @Nullable
-    public SCRegion getRegion(String id) {
+    public SCRegion getRegion(@NonNull String id) {
         RegionListenerEntry entry = listeners.get(id);
         if (entry != null) {
             return entry.region();

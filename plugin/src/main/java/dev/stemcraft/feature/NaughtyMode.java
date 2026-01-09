@@ -317,7 +317,7 @@ public class NaughtyMode extends BaseFeature {
 
             api.messages().broadcast("NAUGHTY_UNSET_ALL", player, playerName);
         } else {
-            api.tasks().runLaterPersistent(PERSISTENT_TIMER_TYPE, id, null, TimeUtil.DurationToRunAtMillis(duration));
+            api.tasks().runLaterPersistent(PERSISTENT_TIMER_TYPE, id, "", TimeUtil.DurationToRunAtMillis(duration));
             naughtyPlayers.add(uuid);
 
             Player player = Bukkit.getPlayer(uuid);

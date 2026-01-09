@@ -181,7 +181,7 @@ public class RecordedBlockState {
      */
     public static RecordedBlockState load(ConfigSection section) {
         String typeName = section.getString("type");
-        Material type = typeName != null ? Material.matchMaterial(typeName) : Material.AIR;
+        Material type = Material.matchMaterial(typeName);
         String data = section.getString("data", "minecraft:air");
 
         List<?> list = section.getList("inventory");

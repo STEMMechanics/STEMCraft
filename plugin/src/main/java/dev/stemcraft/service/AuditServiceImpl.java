@@ -47,6 +47,7 @@ import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.player.*;
 import org.bukkit.event.server.ServerCommandEvent;
 import org.bukkit.event.world.PortalCreateEvent;
+import org.jspecify.annotations.NonNull;
 
 import javax.annotation.Nullable;
 import java.io.*;
@@ -342,7 +343,7 @@ public class AuditServiceImpl extends BaseService implements AuditService {
      * @param placeholders Optional placeholders.
      */
     @Override
-    public void log(@Nullable Player player, String action, String... placeholders) {
+    public void log(@Nullable Player player, @NonNull String action, String... placeholders) {
         UUID id;
         String name;
 

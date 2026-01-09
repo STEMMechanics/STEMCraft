@@ -79,7 +79,6 @@ public class WorldGenerationImpl implements WorldGeneration {
      */
     public void register(@NotNull String key, @NotNull ChunkGeneratorFactory factory) {
         String k = normalizeKey(key);
-        if (factory == null) throw new IllegalArgumentException("factory cannot be null");
         registry.put(k, factory);
     }
 
@@ -117,7 +116,6 @@ public class WorldGenerationImpl implements WorldGeneration {
      * @throws IllegalArgumentException if the key is null or empty.
      */
     private static @NotNull String normalizeKey(@NotNull String key) {
-        if (key == null) throw new IllegalArgumentException("key cannot be null");
         String k = key.trim();
         if (k.isEmpty()) throw new IllegalArgumentException("key cannot be empty");
         return k.toLowerCase(Locale.ROOT);

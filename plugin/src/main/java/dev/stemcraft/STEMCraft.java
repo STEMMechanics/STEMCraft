@@ -111,6 +111,12 @@ public final class STEMCraft extends JavaPlugin {
 
         // Load configuration
         configFile = api.config().load("config.yml");
+        if(configFile == null) {
+            error("STEMCRAFT_ERROR_LOAD_CONFIG");
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
+
         if (!configFile.exists()) {
             saveResource("config.yml", false);
         }

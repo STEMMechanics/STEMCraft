@@ -67,7 +67,6 @@ public class WorldDenySpawnSetting implements WorldBaseSetting {
             ConfigSection cfg = service.getConfigSection(world);
 
             String mode = cfg.getString("deny-spawn", "unset");
-            if (mode == null) mode = "unset";
             mode = mode.toLowerCase(Locale.ROOT);
 
             if ("unset".equals(mode)) return;
@@ -153,7 +152,7 @@ public class WorldDenySpawnSetting implements WorldBaseSetting {
      */
     @Override
     public void set(@NotNull World world, @NotNull ConfigSection config, @NotNull String value) {
-         value = value == null ? "unset" : value.toLowerCase(Locale.ROOT);
+         value = value.toLowerCase(Locale.ROOT);
 
         switch (value) {
             case "all" -> world.getEntities().removeIf(this::isAll);

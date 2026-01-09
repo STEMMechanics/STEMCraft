@@ -26,6 +26,7 @@ import dev.stemcraft.api.service.motd.MotdService;
 import dev.stemcraft.api.util.TextUtil;
 import org.bukkit.event.server.ServerListPingEvent;
 import org.jetbrains.annotations.NotNull;
+import org.jspecify.annotations.NonNull;
 
 import javax.annotation.Nullable;
 import java.util.LinkedHashMap;
@@ -101,7 +102,7 @@ public class MotdServiceImpl extends BaseService implements MotdService {
      * @param namespaceId The namespace ID of the MOTD.
      * @return The MOTD associated with the namespace ID, or null if not found.
      */
-    public @Nullable ResolvedMotd get(String namespaceId) {
+    public @Nullable ResolvedMotd get(@NonNull String namespaceId) {
         return motdMap.get(namespaceId);
     }
 

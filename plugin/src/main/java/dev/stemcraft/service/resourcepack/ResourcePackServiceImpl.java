@@ -59,7 +59,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
     private ResourcePackHostImpl host;
 
     private final List<ResourcePackGenerator> generators = new ArrayList<>();
-    private String resourcePackHash = null;
+    private String resourcePackHash = "";
 
     /**
      * Constructor for ResourcePackServiceImpl.
@@ -107,7 +107,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
      * @param generator The resource pack generator to register.
      */
     public void registerGenerator(@NotNull ResourcePackGenerator generator) {
-        if(generator != null && generator.onLoad(getConfig())) {
+        if(generator.onLoad(getConfig())) {
             generators.add(generator);
         }
     }
@@ -131,8 +131,8 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
      *
      * @return The resource pack hash, or null if the pack does not exist.
      */
-    public @Nullable String getResourcePackHash() {
-        if(resourcePackHash == null) {
+    public @NotNull String getResourcePackHash() {
+        if(resourcePackHash.isEmpty()) {
             File resourcePack = getResourcePack();
             if (resourcePack != null && resourcePack.exists()) {
                 resourcePackHash = FileUtil.sha1Hex(resourcePack);
@@ -198,7 +198,14 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
         }
 
         // create resource pack manifest
-        ConfigSection manifest = api.config().load("resource-pack-manifest.yml").getSection("manifest");
+        ConfigSection manifest = api.config().load("resource-pack-manifest.yml");
+        if(manifest == null) {
+            api.messages().error("Failed to load resource pack manifest");
+            if(statusCallback != null) { statusCallback.accept("error"); }
+            return;
+        }
+
+        manifest = manifest.getSection("manifest");
         manifest.removeAll();
 
         // create temporary resource pack folder
@@ -254,9 +261,13 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
 
             for(File file : files) {
                 ConfigSection config = api.config().load(file);
+                if(config == null) {
+                    continue;
+                }
+
                 String namespace = config.getString("namespace");
 
-                if(namespace == null) {
+                if(namespace.isEmpty()) {
                     return;
                 }
 

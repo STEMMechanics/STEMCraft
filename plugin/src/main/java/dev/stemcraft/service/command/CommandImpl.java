@@ -258,17 +258,10 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
         }
     }
 
-    /**
-     * Helper class representing a value option in tab completion.
-     */
-    private static class TabCompleteValueOption {
-        final String option;
-        final String value;
-
-        TabCompleteValueOption(String option, String value) {
-            this.option = option;
-            this.value = value;
-        }
+        /**
+         * Helper class representing a value option in tab completion.
+         */
+        private record TabCompleteValueOption(String option, String value) {
     }
 
     /**

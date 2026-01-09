@@ -52,7 +52,6 @@ public class PlayerServiceImpl extends BaseService implements PlayerService {
      */
     @Override
     public void hide(@NotNull Player player) {
-        if(player == null) return;
         if(hiddenPlayers.contains(player)) return;
 
         hiddenPlayers.add(player);
@@ -69,7 +68,6 @@ public class PlayerServiceImpl extends BaseService implements PlayerService {
      */
     @Override
     public void show(@NotNull Player player) {
-        if(player == null) return;
         if(!hiddenPlayers.contains(player)) return;
 
         hiddenPlayers.remove(player);

@@ -63,7 +63,7 @@ public class ResourcePackCommand {
         String packHash = service.getResourcePackHash();
 
         ctx.info("Resource pack info:");
-        ctx.info(" - URL: " + (packUrl != null ? packUrl : "not available"));
+        ctx.info(" - URL: " + packUrl);
         ctx.info(" - Hash: " + (packHash != null ? packHash : "not available"));
     }
 
@@ -89,9 +89,7 @@ public class ResourcePackCommand {
             ctx.returnError("Player not found.");
         }
 
-        if(service.host().getUrl() == null) {
-            ctx.returnError("Resource pack is not currently available.");
-        }
+        service.host().getUrl();
 
         service.sendPack(target);
         ctx.returnInfo("Requesting resource pack download for " + target.getName() + "...");
@@ -103,9 +101,7 @@ public class ResourcePackCommand {
      * @param ctx The command context.
      */
     private void subCommandSendAll(CommandContext ctx) {
-        if(service.host().getUrl() == null) {
-            ctx.returnError("Resource pack is not currently available.");
-        }
+        service.host().getUrl();
 
         service.sendPackToAll();
         ctx.returnInfo("Sending resource pack to all online players...");

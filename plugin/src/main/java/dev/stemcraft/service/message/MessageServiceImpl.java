@@ -33,6 +33,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
+import org.jspecify.annotations.NonNull;
 
 import javax.annotation.Nullable;
 import java.util.Collection;
@@ -65,7 +66,7 @@ public class MessageServiceImpl extends BaseService implements MessageService {
      * @return The TokenProcessor instance.
      */
     @Override
-    public TokenProcessor tokens() {
+    public @NonNull TokenProcessor tokens() {
         return tokens;
     }
 

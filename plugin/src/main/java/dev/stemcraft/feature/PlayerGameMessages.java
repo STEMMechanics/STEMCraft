@@ -83,7 +83,7 @@ public class PlayerGameMessages extends BaseFeature {
                 EntityDamageEvent.DamageCause cause = parseCause(key);
                 if (cause == null) continue;
                 List<String> list = byCause.getStringList(key);
-                if (list != null && !list.isEmpty()) deathByCause.put(cause, List.copyOf(list));
+                if (!list.isEmpty()) deathByCause.put(cause, List.copyOf(list));
             }
         }
 
@@ -150,7 +150,7 @@ public class PlayerGameMessages extends BaseFeature {
      */
     private List<String> readList(String path) {
         List<String> list = getConfigSection().getStringList(path);
-        if (list == null || list.isEmpty()) return null;
+        if (list.isEmpty()) return null;
         return List.copyOf(list);
     }
 

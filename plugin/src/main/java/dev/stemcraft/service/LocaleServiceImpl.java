@@ -91,7 +91,7 @@ public class LocaleServiceImpl extends BaseService implements LocaleService {
      * @return The resolved locale string or the original key if not found.
      */
     public @NotNull String resolve(@NotNull String lang, @NotNull String key) {
-        if (key == null || key.isEmpty()) {
+        if (key.isEmpty()) {
             return key;
         }
 
@@ -100,7 +100,7 @@ public class LocaleServiceImpl extends BaseService implements LocaleService {
             return key;
         }
 
-        if (lang == null || lang.isEmpty()) {
+        if (lang.isEmpty()) {
             lang = defaultLocale;
         }
 

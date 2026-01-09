@@ -79,9 +79,9 @@ public interface WorldService {
      * @param generatorOptions The options for the custom generator (or null for default).
      * @return The created World object.
      */
-    @Nullable World createWorld(@NotNull String worldName, @Nullable String generatorName, @Nullable String generatorOptions);
-    default @Nullable World createWorld(@NotNull String worldName) { return createWorld(worldName, null, null); }
-    default @Nullable World createWorld(@NotNull String worldName, @Nullable String generatorName) { return createWorld(worldName, generatorName, null); }
+    @Nullable World createWorld(@NotNull String worldName, @NotNull String generatorName, @NotNull String generatorOptions);
+    default @Nullable World createWorld(@NotNull String worldName) { return createWorld(worldName, "", ""); }
+    default @Nullable World createWorld(@NotNull String worldName, @NotNull String generatorName) { return createWorld(worldName, generatorName, ""); }
 
     /**
      * Delete the world with the given name from disk.

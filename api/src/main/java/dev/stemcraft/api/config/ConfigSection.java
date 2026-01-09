@@ -20,6 +20,8 @@
 
 package dev.stemcraft.api.config;
 
+import org.jspecify.annotations.NonNull;
+
 /**
  * Represents a section of a configuration file.
  */
@@ -38,7 +40,7 @@ public interface ConfigSection extends ConfigSectionView {
      * @return The configuration section at the specified path.
      */
     ConfigSection getSection(String path, boolean createIfAbsent);
-    default ConfigSection getSection(String path) { return getSection(path, true); }
+    default ConfigSection getSection(@NonNull String path) { return getSection(path, true); }
 
     /**
      * Sets a value in the configuration at the specified path.

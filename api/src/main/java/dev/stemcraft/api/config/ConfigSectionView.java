@@ -20,6 +20,8 @@
 
 package dev.stemcraft.api.config;
 
+import org.jetbrains.annotations.NotNull;
+
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -35,7 +37,7 @@ public interface ConfigSectionView {
      * @param path The path to check.
      * @return True if the configuration contains a value at the specified path, false otherwise.
      */
-    boolean contains(String path);
+    boolean contains(@NotNull String path);
 
     /**
      * Checks if the configuration contains a section at the specified path.
@@ -43,7 +45,7 @@ public interface ConfigSectionView {
      * @param path The path to check.
      * @return True if the configuration contains a section at the specified path, false otherwise.
      */
-    boolean isSection(String path);
+    boolean isSection(@NotNull String path);
 
     /**
      * Gets an object from the configuration at the specified path.
@@ -51,7 +53,7 @@ public interface ConfigSectionView {
      * @param path The path to get the object from.
      * @return The object at the specified path, or null if the path does not exist.
      */
-    Object get(String path);
+    Object get(@NotNull String path);
 
     /**
      * Checks if the configuration contains a value at the specified path and is of the specified type.
@@ -60,8 +62,8 @@ public interface ConfigSectionView {
      * @param def The default value to return if the path does not exist or is of a different type.
      * @return The value at the specified path, or the default value if the path does not exist or is of a different type.
      */
-    String getString(String path, String def);
-    default String getString(String path) { return getString(path, ""); }
+    @NotNull String getString(@NotNull String path, String def);
+    default @NotNull String getString(@NotNull String path) { return getString(path, ""); }
 
     /**
      * Gets an integer value from the configuration at the specified path.
@@ -70,8 +72,8 @@ public interface ConfigSectionView {
      * @param def The default value to return if the path does not exist or is of a different type.
      * @return The value at the specified path, or the default value if the path does not exist or is of a different type.
      */
-    int getInt(String path, int def);
-    default int getInt(String path) { return getInt(path, 0); }
+    int getInt(@NotNull String path, int def);
+    default int getInt(@NotNull String path) { return getInt(path, 0); }
 
     /**
      * Gets a long value from the configuration at the specified path.
@@ -80,8 +82,8 @@ public interface ConfigSectionView {
      * @param def The default value to return if the path does not exist or is of a different type.
      * @return The value at the specified path, or the default value if the path does not exist or is of a different type.
      */
-    long getLong(String path, long def);
-    default long getLong(String path) { return getLong(path, 0L); }
+    long getLong(@NotNull String path, long def);
+    default long getLong(@NotNull String path) { return getLong(path, 0L); }
 
     /**
      * Gets a float value from the configuration at the specified path.
@@ -90,8 +92,8 @@ public interface ConfigSectionView {
      * @param def The default value to return if the path does not exist or is of a different type.
      * @return The value at the specified path, or the default value if the path does not exist or is of a different type.
      */
-    float getFloat(String path, float def);
-    default float getFloat(String path) { return getFloat(path, 0); }
+    float getFloat(@NotNull String path, float def);
+    default float getFloat(@NotNull String path) { return getFloat(path, 0); }
 
     /**
      * Gets a double value from the configuration at the specified path.
@@ -100,8 +102,8 @@ public interface ConfigSectionView {
      * @param def The default value to return if the path does not exist or is of a different type.
      * @return The value at the specified path, or the default value if the path does not exist or is of a different type.
      */
-    double getDouble(String path, double def);
-    default double getDouble(String path) { return getDouble(path, 0.0); }
+    double getDouble(@NotNull String path, double def);
+    default double getDouble(@NotNull String path) { return getDouble(path, 0.0); }
 
     /**
      * Gets a boolean value from the configuration at the specified path.
@@ -110,8 +112,8 @@ public interface ConfigSectionView {
      * @param def The default value to return if the path does not exist or is of a different type.
      * @return The value at the specified path, or the default value if the path does not exist or is of a different type.
      */
-    boolean getBoolean(String path, boolean def);
-    default boolean getBoolean(String path) { return getBoolean(path, false); }
+    boolean getBoolean(@NotNull String path, boolean def);
+    default boolean getBoolean(@NotNull String path) { return getBoolean(path, false); }
 
     /**
      * Gets a long value from the configuration at the specified path.
@@ -119,7 +121,7 @@ public interface ConfigSectionView {
      * @param path The path to check.
      * @return The value at the specified path, or an empty list if the path does not exist or is of a different type.
      */
-    List<String> getStringList(String path);
+    @NotNull List<String> getStringList(@NotNull String path);
 
     /**
      * Gets a list of integers from the configuration at the specified path.
@@ -127,7 +129,7 @@ public interface ConfigSectionView {
      * @param path The path to check.
      * @return The value at the specified path, or an empty list if the path does not exist or is of a different type.
      */
-    List<Integer> getIntegerList(String path);
+    @NotNull List<Integer> getIntegerList(@NotNull String path);
 
     /**
      * Gets a list of floats from the configuration at the specified path.
@@ -135,7 +137,7 @@ public interface ConfigSectionView {
      * @param path The path to check.
      * @return The value at the specified path, or an empty list if the path does not exist or is of a different type.
      */
-    List<Float> getFloatList(String path);
+    @NotNull List<Float> getFloatList(@NotNull String path);
 
     /**
      * Gets a list of doubles from the configuration at the specified path.
@@ -143,7 +145,7 @@ public interface ConfigSectionView {
      * @param path The path to check.
      * @return The value at the specified path, or an empty list if the path does not exist or is of a different type.
      */
-    List<Double> getDoubleList(String path);
+    @NotNull List<Double> getDoubleList(@NotNull String path);
 
     /**
      * Gets a list of booleans from the configuration at the specified path.
@@ -151,7 +153,7 @@ public interface ConfigSectionView {
      * @param path The path to check.
      * @return The value at the specified path, or an empty list if the path does not exist or is of a different type.
      */
-    List<Boolean> getBooleanList(String path);
+    @NotNull List<Boolean> getBooleanList(@NotNull String path);
 
     /**
      * Gets a list of objects of type T from the configuration at the specified path.
@@ -160,8 +162,8 @@ public interface ConfigSectionView {
      * @param def The default value to return if the path does not exist or is of a different type.
      * @return The value at the specified path, or the default value if the path does not exist or is of a different type.
      */
-    List<?> getList(String path, List<?> def);
-    default List<?> getList(String path) { return getList(path, List.of()); }
+    List<?> getList(@NotNull String path, List<?> def);
+    default List<?> getList(@NotNull String path) { return getList(path, List.of()); }
 
     /**
      * Gets a configuration section at the specified path.
@@ -169,7 +171,7 @@ public interface ConfigSectionView {
      * @param path The path to get the section from.
      * @return The configuration section at the specified path.
      */
-    ConfigSectionView getSection(String path);
+    ConfigSectionView getSection(@NotNull String path);
 
     /**
      * Gets the keys in this configuration section.
@@ -177,8 +179,8 @@ public interface ConfigSectionView {
      * @param deep Whether to get keys recursively.
      * @return A set of keys in this configuration section.
      */
-    Set<String> getKeys(boolean deep);
-    default Set<String> getKeys() { return getKeys(false); }
+    @NotNull Set<String> getKeys(boolean deep);
+    default @NotNull Set<String> getKeys() { return getKeys(false); }
 
     /**
      * Gets the keys in the configuration section at the specified path.
@@ -187,7 +189,7 @@ public interface ConfigSectionView {
      * @param deep Whether to get keys recursively.
      * @return A set of keys in the configuration section at the specified path.
      */
-    Set<String> getSectionKeys(String path, boolean deep);
+    @NotNull Set<String> getSectionKeys(@NotNull String path, boolean deep);
 
     /**
      * Gets a map representation of the configuration section at the specified path.
@@ -196,5 +198,5 @@ public interface ConfigSectionView {
      * @param deep Whether to include nested sections.
      * @return A map representation of the configuration section at the specified path.
      */
-    Map<String, Object> getMap(String path, boolean deep);
+    @NotNull Map<String, Object> getMap(@NotNull String path, boolean deep);
 }

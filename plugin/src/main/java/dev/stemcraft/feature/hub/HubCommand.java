@@ -75,10 +75,7 @@ public class HubCommand {
                     }
 
                     // get hub world from config, else first world
-                    if (api.worlds().getDefaultWorld() == null) {
-                        cmd.error(ctx.getSender(), "HUB_WORLD_NOT_FOUND");
-                        return;
-                    }
+                    api.worlds().getDefaultWorld();
 
                     feature.runExitCommands(target);
                     Location hubLocation = api.worlds().getDefaultWorld().getSpawnLocation();

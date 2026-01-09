@@ -179,18 +179,6 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         });
     }
 
-    /** {@inheritDoc} */
-    @Override
-    public @NotNull World getDefaultWorld() {
-        return defaultWorld;
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public void setDefaultWorld(@NotNull World world) {
-        defaultWorld = world;
-    }
-
     /**
      * Is the given world currently loaded?
      *
@@ -249,7 +237,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      * @param generatorOptions The options for the custom generator (or null for default).
      * @return The created World instance.
      */
-    @Override public @Nullable World createWorld(@NotNull String name, @Nullable String generatorName, @Nullable String generatorOptions) {
+    @Override public @Nullable World createWorld(@NotNull String name, @NotNull String generatorName, @NotNull String generatorOptions) {
         return ensure(name, worldGeneration.get(generatorName, generatorOptions));
     }
 
@@ -276,7 +264,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         WorldBaseSetting setting = getSettingHandler(key);
         if(setting != null) {
             String value = setting.get(world, getConfigSection(world));
-            return value != null && !value.equals("unset");
+            return !value.equals("unset");
         }
         return false;
     }

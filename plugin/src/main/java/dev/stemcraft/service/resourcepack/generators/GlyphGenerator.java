@@ -73,13 +73,13 @@ public class GlyphGenerator extends ResourcePackGenerator {
             }
 
             String charString = glyphConfig.getString("char");
-            if (charString == null || charString.isEmpty()) {
+            if (charString.isEmpty()) {
                 continue;
             }
             char glyphChar = charString.charAt(0);
 
             String filePath = glyphConfig.getString("file");
-            if (filePath == null || filePath.isBlank()) {
+            if (filePath.isBlank()) {
                 continue;
             }
 
@@ -130,7 +130,7 @@ public class GlyphGenerator extends ResourcePackGenerator {
     public void apply(String namespace, ConfigSectionView manifest) {
         for(String key : manifest.getSection("tokens").getKeys()) {
             String value = manifest.getSection("tokens").getString(key);
-            if(value != null && !value.isEmpty()) {
+            if(!value.isEmpty()) {
                 api.messages().tokens().add(key, value);
             }
         }

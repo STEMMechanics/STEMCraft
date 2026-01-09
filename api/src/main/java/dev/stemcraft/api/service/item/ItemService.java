@@ -68,11 +68,7 @@ public interface ItemService {
      * @param defaultValue The default value to return if the attribute is not found.
      * @return The attribute value or the default value if not found.
      */
-    <T, Z> @Nullable T getAttrib(@NotNull ItemStack item, @NotNull String key, @NotNull Class<T> typeClass, @Nullable T defaultValue);
-
-    default <T, Z> @Nullable T getAttrib(@NotNull ItemStack item, @NotNull String key, @NotNull Class<T> typeClass) {
-        return getAttrib(item, key, typeClass, null);
-    }
+    <T, Z> @NotNull T getAttrib(@NotNull ItemStack item, @NotNull String key, @NotNull Class<T> typeClass, @NotNull T defaultValue);
 
     /**
      * Registers a custom item.
@@ -89,8 +85,8 @@ public interface ItemService {
      * @param quantity The quantity of the item stack.
      * @return The created ItemStack.
      */
-    @NotNull ItemStack createCustomItem(@NotNull String id, int quantity);
-    default @NotNull ItemStack createCustomItem(@NotNull String id) { return createCustomItem(id, 1); }
+    @Nullable ItemStack createCustomItem(@NotNull String id, int quantity);
+    default @Nullable ItemStack createCustomItem(@NotNull String id) { return createCustomItem(id, 1); }
 
     /**
      * Checks if the given ItemStack is the specified custom item.

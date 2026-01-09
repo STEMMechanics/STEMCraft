@@ -281,18 +281,22 @@ public class ChatServiceImpl extends BaseService {
         warninglistRaw.clear();
 
         ConfigSection cfg = api.config().load("chat-filter.yml");
+        if(cfg == null) {
+            api.messages().error("Could not load chat-filter.yml for chat filter configuration.");
+            return;
+        }
 
         List<String> bl = cfg.getStringList("blacklist");
         List<String> wl = cfg.getStringList("whitelist");
         List<String> warn = cfg.getStringList("warninglist");
-        if (warn == null || warn.isEmpty()) {
+        if (warn.isEmpty()) {
             // allow alternate key name
             warn = cfg.getStringList("warnings");
         }
 
-        if (bl != null) blacklistRaw.addAll(bl);
-        if (wl != null) whitelistRaw.addAll(wl);
-        if (warn != null) warninglistRaw.addAll(warn);
+        blacklistRaw.addAll(bl);
+        whitelistRaw.addAll(wl);
+        warninglistRaw.addAll(warn);
 
         for (String s : blacklistRaw) {
             if (s == null || s.isBlank()) continue;

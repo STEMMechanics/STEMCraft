@@ -146,16 +146,10 @@ public class WorldForceSpawnSetting implements WorldBaseSetting {
         String baseName = WorldUtil.baseName(world.getName());
         ConfigSection config = worldService.getConfigSection(baseName);
 
-        if(config == null) {
-            return "unset";
-        }
-
         String value = config.getString("force-spawn-on-death");
-        if(value != null) {
-            value = value.toLowerCase(Locale.ROOT);
-            if(value.equals("true") || value.equals("yes") || value.equals("1")) return "true";
-            if(value.equals("false") || value.equals("no") || value.equals("0")) return "false";
-        }
+        value = value.toLowerCase(Locale.ROOT);
+        if(value.equals("true") || value.equals("yes") || value.equals("1")) return "true";
+        if(value.equals("false") || value.equals("no") || value.equals("0")) return "false";
 
         return "unset";
     }
@@ -173,7 +167,7 @@ public class WorldForceSpawnSetting implements WorldBaseSetting {
         String baseName = WorldUtil.baseName(world.getName());
         ConfigSection config = worldService.getConfigSection(baseName);
 
-        String valueLower = value == null ? "false" : value.toLowerCase(Locale.ROOT);
+        String valueLower = value.toLowerCase(Locale.ROOT);
 
         if(valueLower.equals("true") || valueLower.equals("yes") || valueLower.equals("1")) {
             config.set("force-spawn-on-death", true);

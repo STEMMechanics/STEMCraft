@@ -87,15 +87,17 @@ public final class GatekeeperServiceImpl extends BaseService implements Gatekeep
      */
     public void onEnable() {
         config = api.config().load(GATEKEEPER_FILENAME);
+        if(config == null) {
+            api.messages().error("Failed to load gatekeeper config.");
+            return;
+        }
 
         enabled = config.getBoolean("enabled", true);
 
         String spawnLocationStr = config.getString("spawn");
-        if(spawnLocationStr != null) {
-            spawnLocation = LocationUtil.deserialize(spawnLocationStr);
-            if (spawnLocation == null) {
-                api.messages().error("Invalid gatekeeper location in config: " + spawnLocationStr);
-            }
+        spawnLocation = LocationUtil.deserialize(spawnLocationStr);
+        if (spawnLocation == null) {
+            api.messages().error("Invalid gatekeeper location in config: " + spawnLocationStr);
         }
 
         if(spawnLocation == null) {
@@ -467,12 +469,10 @@ public final class GatekeeperServiceImpl extends BaseService implements Gatekeep
         List<String> commandList = config.getStringList("release.commands");
 
         boolean hasLocation = false;
-        if (releaseLocationStr != null) {
-            Location releaseLocation = LocationUtil.deserialize(releaseLocationStr);
-            if (releaseLocation != null) {
-                PlayerUtil.teleport(player, releaseLocation);
-                hasLocation = true;
-            }
+        Location releaseLocation = LocationUtil.deserialize(releaseLocationStr);
+        if (releaseLocation != null) {
+            PlayerUtil.teleport(player, releaseLocation);
+            hasLocation = true;
         }
 
         for (String cmd : commandList) {

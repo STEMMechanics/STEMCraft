@@ -129,9 +129,6 @@ public class WorldGameModeSetting implements WorldBaseSetting {
         ConfigSection config = service.getConfigSection(world);
         String gamemode = get(world, config);
 
-        if (gamemode == null) {
-            return null;
-        }
         return GameMode.valueOf(gamemode.toUpperCase(Locale.ROOT));
     }
 

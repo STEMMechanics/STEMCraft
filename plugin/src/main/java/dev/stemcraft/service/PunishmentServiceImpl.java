@@ -296,7 +296,7 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
                 actor != null ? actor.getName() : "<server>",
                 type,
                 alerted,
-                reason != null ? reason : "",
+                reason,
                 now,
                 durationSeconds
         );
@@ -380,19 +380,17 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
                 if (pSec == null) continue;
 
                 String targetUuidStr = pSec.getString("target.uuid");
-                UUID targetUuid = targetUuidStr != null && !targetUuidStr.isEmpty()
+                UUID targetUuid = !targetUuidStr.isEmpty()
                         ? UUID.fromString(targetUuidStr) : null;
                 String targetName = pSec.getString("target.name");
 
                 String actorUuidStr = pSec.getString("actor.uuid");
-                UUID actorUuid = actorUuidStr != null && !actorUuidStr.isEmpty()
+                UUID actorUuid = !actorUuidStr.isEmpty()
                         ? UUID.fromString(actorUuidStr) : null;
                 String actorName = pSec.getString("actor.name");
 
                 String typeStr = pSec.getString("type");
-                String type = typeStr != null
-                        ? typeStr
-                        : "warning";
+                String type = typeStr;
 
                 boolean alerted = pSec.getBoolean("alerted", false);
                 String reason = pSec.getString("reason", "");

@@ -137,7 +137,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
      * @return The value of the attribute or the default value.
      */
     @Override
-    public <T, Z> @Nullable T getAttrib(@NotNull ItemStack item, @NotNull String key, @NotNull Class<T> typeClass, @Nullable T defaultValue) {
+    public <T, Z> @NotNull T getAttrib(@NotNull ItemStack item, @NotNull String key, @NotNull Class<T> typeClass, @NotNull T defaultValue) {
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
             NamespacedKey namespacedKey = new NamespacedKey(plugin, key);
@@ -201,7 +201,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
      */
     @Override
     public void registerCustomItem(@NotNull String id, @NotNull ItemStack template) {
-        if (id == null || id.isEmpty() || template == null) {
+        if (id.isEmpty()) {
             return;
         }
 
@@ -221,8 +221,8 @@ public class ItemServiceImpl extends BaseService implements ItemService {
      * @return A new ItemStack instance of the custom item, or null if not found or invalid parameters.
      */
     @Override
-    public @NotNull ItemStack createCustomItem(@NotNull String id, int quantity) {
-        if (id == null || quantity <= 0) {
+    public @Nullable ItemStack createCustomItem(@NotNull String id, int quantity) {
+        if (quantity <= 0) {
             return null;
         }
 
@@ -245,9 +245,6 @@ public class ItemServiceImpl extends BaseService implements ItemService {
      */
     @Override
     public boolean isCustomItemId(@NotNull String id, @NotNull ItemStack item) {
-        if (id == null || item == null) {
-            return false;
-        }
         String itemId = getCustomItemId(item);
         return id.equalsIgnoreCase(itemId);
     }
@@ -263,6 +260,6 @@ public class ItemServiceImpl extends BaseService implements ItemService {
         if (item == null) {
             return null;
         }
-        return getAttrib(item, ATTR_ITEM_ID_KEY, String.class, null);
+        return getAttrib(item, ATTR_ITEM_ID_KEY, String.class, "");
     }
 }
