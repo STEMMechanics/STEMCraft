@@ -22,6 +22,7 @@ package dev.stemcraft.api.service.world;
 
 import dev.stemcraft.api.command.CommandContext;
 import org.bukkit.World;
+import org.jetbrains.annotations.NotNull;
 
 /**
  * Functional interface for executing world setting commands.
@@ -36,5 +37,5 @@ public interface WorldSettingCommandExecutor {
      * @param context The command context.
      * @param world The world associated with the command.
      */
-    void execute(String flag, CommandContext context, World world);
+    void execute(@NotNull String flag, @NotNull CommandContext context, @NotNull World world);
 }

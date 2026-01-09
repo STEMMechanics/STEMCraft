@@ -21,6 +21,7 @@
 package dev.stemcraft.api.service.cache;
 
 import dev.stemcraft.api.config.ConfigFile;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
 
@@ -34,7 +35,7 @@ public interface CacheService {
      *
      * @return The cache directory.
      */
-    File cacheDir();
+    @NotNull File cacheDir();
 
     /**
      * Retrieves the cache configuration for the specified file name.
@@ -42,5 +43,5 @@ public interface CacheService {
      * @param fileName The name of the cache file.
      * @return The configuration file object.
      */
-    ConfigFile cacheConfig(String fileName);
+    @NotNull ConfigFile cacheConfig(@NotNull String fileName);
 }

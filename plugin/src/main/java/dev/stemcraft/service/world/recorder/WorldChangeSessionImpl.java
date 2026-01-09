@@ -34,6 +34,7 @@ import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.inventory.ItemStack;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
 
@@ -55,7 +56,7 @@ public class WorldChangeSessionImpl implements WorldChangeSession {
      * @param api The STEMCraft API instance.
      * @param world The world to track changes in.
      */
-    public WorldChangeSessionImpl(STEMCraftAPI api, World world) {
+    public WorldChangeSessionImpl(@NotNull STEMCraftAPI api, @NotNull World world) {
         this.api = api;
         this.world = world;
     }
@@ -142,7 +143,7 @@ public class WorldChangeSessionImpl implements WorldChangeSession {
      * @param state The block state to capture.
      * @param overwriteExisting Whether to overwrite existing recorded state for this block.
      */
-    public void captureBlockState(BlockState state, boolean overwriteExisting) {
+    public void captureBlockState(@NotNull BlockState state, boolean overwriteExisting) {
         if(!recording) return;
 
         Material type = state.getType();
@@ -186,7 +187,7 @@ public class WorldChangeSessionImpl implements WorldChangeSession {
      *
      * @param entity The entity to capture.
      */
-    public void captureEntity(Entity entity) {
+    public void captureEntity(@NotNull Entity entity) {
         if(!recording) return;
 
         spawnedEntities.add(entity.getUniqueId());

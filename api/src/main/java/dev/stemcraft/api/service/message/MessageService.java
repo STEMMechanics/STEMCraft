@@ -23,6 +23,7 @@ package dev.stemcraft.api.service.message;
 import dev.stemcraft.api.message.TokenProcessor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
 import java.util.List;
@@ -37,7 +38,7 @@ public interface MessageService {
      *
      * @return The token processor.
      */
-    TokenProcessor tokens();
+    @NotNull TokenProcessor tokens();
 
     /**
      * Get the localized text for a key with optional placeholders.
@@ -47,8 +48,8 @@ public interface MessageService {
      * @param placeholders Optional placeholders to fill in the locale string.
      * @return The resolved locale string.
      */
-    String text(@Nullable CommandSender sender, String key, Object... placeholders);
-    default String text(String key, Object...placeholders) { return text(null, key, placeholders); }
+    @NotNull String text(@Nullable CommandSender sender, @NotNull String key, @NotNull Object... placeholders);
+    default @NotNull String text(@NotNull String key, @NotNull Object...placeholders) { return text(null, key, placeholders); }
 
     /**
      * Log a debug message to the console.
@@ -57,8 +58,8 @@ public interface MessageService {
      * @param ex An optional exception to log.
      * @param placeholders Optional placeholders to fill in the message.
      */
-    void debug(String message, @Nullable Throwable ex, Object... placeholders);
-    default void debug(String message, Object... placeholders) { debug(message, null, placeholders); }
+    void debug(@NotNull String message, @Nullable Throwable ex, @NotNull Object... placeholders);
+    default void debug(@NotNull String message, @NotNull Object... placeholders) { debug(message, null, placeholders); }
 
     /**
      * Log a message to the sender or console if null.
@@ -68,10 +69,10 @@ public interface MessageService {
      * @param ex An optional exception to log.
      * @param placeholders Optional placeholders to fill in the message.
      */
-    void log(@Nullable CommandSender sender, String message, @Nullable Throwable ex, Object... placeholders);
-    default void log(String message, Object... placeholders) { log(null, message, null, placeholders); }
-    default void log(String message, Throwable ex, Object... placeholders) { log(null, message, ex, placeholders); }
-    default void log(CommandSender sender, String message, Object... placeholders) { log(sender, message, null, placeholders); }
+    void log(@Nullable CommandSender sender, @NotNull String message, @Nullable Throwable ex, @NotNull Object... placeholders);
+    default void log(@NotNull String message, @NotNull Object... placeholders) { log(null, message, null, placeholders); }
+    default void log(@NotNull String message, @Nullable Throwable ex, @NotNull Object... placeholders) { log(null, message, ex, placeholders); }
+    default void log(@NotNull CommandSender sender, @NotNull String message, @NotNull Object... placeholders) { log(sender, message, null, placeholders); }
 
     /**
      * Send a message to the sender or console if null.
@@ -81,10 +82,10 @@ public interface MessageService {
      * @param ex An optional exception to include.
      * @param placeholders Optional placeholders to fill in the message.
      */
-    void send(@Nullable CommandSender sender, String message, @Nullable Throwable ex, Object... placeholders);
-    default void send(String message, Object... placeholders) { send(null, message, null, placeholders); }
-    default void send(String message, Throwable ex, Object... placeholders) { send(null, message, ex, placeholders); }
-    default void send(CommandSender sender, String message, Object... placeholders) { send(sender, message, null, placeholders); }
+    void send(@Nullable CommandSender sender, @NotNull String message, @Nullable Throwable ex, @NotNull Object... placeholders);
+    default void send(@NotNull String message, @NotNull Object... placeholders) { send(null, message, null, placeholders); }
+    default void send(@NotNull String message, @Nullable Throwable ex, @NotNull Object... placeholders) { send(null, message, ex, placeholders); }
+    default void send(@NotNull CommandSender sender, @NotNull String message, @NotNull Object... placeholders) { send(sender, message, null, placeholders); }
 
     /**
      * Send an info message to the sender or console if null.
@@ -94,10 +95,10 @@ public interface MessageService {
      * @param ex An optional exception to include.
      * @param placeholders Optional placeholders to fill in the message.
      */
-    void info(@Nullable CommandSender sender, String message, @Nullable Throwable ex, Object... placeholders);
-    default void info(String message, Object... placeholders) { info(null, message, null, placeholders); }
-    default void info(String message, Throwable ex, Object... placeholders) { info(null, message, ex, placeholders); }
-    default void info(CommandSender sender, String message, Object... placeholders) { info(sender, message, null, placeholders); }
+    void info(@Nullable CommandSender sender, @NotNull String message, @Nullable Throwable ex, @NotNull Object... placeholders);
+    default void info(@NotNull String message, @NotNull Object... placeholders) { info(null, message, null, placeholders); }
+    default void info(@NotNull String message, @Nullable Throwable ex, @NotNull Object... placeholders) { info(null, message, ex, placeholders); }
+    default void info(@NotNull CommandSender sender, @NotNull String message, @NotNull Object... placeholders) { info(sender, message, null, placeholders); }
 
     /**
      * Send a warning message to the sender or console if null.
@@ -107,10 +108,10 @@ public interface MessageService {
      * @param ex An optional exception to include.
      * @param placeholders Optional placeholders to fill in the message.
      */
-    void warn(@Nullable CommandSender sender, String message, @Nullable Throwable ex, Object... placeholders);
-    default void warn(String message, Object... placeholders) { warn(null, message, null, placeholders); }
-    default void warn(String message, Throwable ex, Object... placeholders) { warn(null, message, ex, placeholders); }
-    default void warn(CommandSender sender, String message, Object... placeholders) { warn(sender, message, null, placeholders); }
+    void warn(@Nullable CommandSender sender, @NotNull String message, @Nullable Throwable ex, @NotNull Object... placeholders);
+    default void warn(@NotNull String message, @NotNull Object... placeholders) { warn(null, message, null, placeholders); }
+    default void warn(@NotNull String message, @Nullable Throwable ex, @NotNull Object... placeholders) { warn(null, message, ex, placeholders); }
+    default void warn(@NotNull CommandSender sender, @NotNull String message, @NotNull Object... placeholders) { warn(sender, message, null, placeholders); }
 
     /**
      * Send an error message to the sender or console if null.
@@ -120,10 +121,10 @@ public interface MessageService {
      * @param ex An optional exception to include.
      * @param placeholders Optional placeholders to fill in the message.
      */
-    void error(@Nullable CommandSender sender, String message, @Nullable Throwable ex, Object... placeholders);
-    default void error(String message, Object... placeholders) { error(null, message, null, placeholders); }
-    default void error(String message, Throwable ex, Object... placeholders) { error(null, message, ex, placeholders); }
-    default void error(CommandSender sender, String message, Object... placeholders) { error(sender, message, null, placeholders); }
+    void error(@Nullable CommandSender sender, @NotNull String message, @Nullable Throwable ex, @NotNull Object... placeholders);
+    default void error(@NotNull String message, @NotNull Object... placeholders) { error(null, message, null, placeholders); }
+    default void error(@NotNull String message, @Nullable Throwable ex, @NotNull Object... placeholders) { error(null, message, ex, placeholders); }
+    default void error(@NotNull CommandSender sender, @NotNull String message, @NotNull Object... placeholders) { error(sender, message, null, placeholders); }
 
     /**
      * Send a success message to the sender or console if null.
@@ -133,10 +134,10 @@ public interface MessageService {
      * @param ex An optional exception to include.
      * @param placeholders Optional placeholders to fill in the message.
      */
-    void success(@Nullable CommandSender sender, String message, @Nullable Throwable ex, Object... placeholders);
-    default void success(String message, Object... placeholders) { success(null, message, null, placeholders); }
-    default void success(String message, Throwable ex, Object... placeholders) { success(null, message, ex, placeholders); }
-    default void success(CommandSender sender, String message, Object... placeholders) { success(sender, message, null, placeholders); }
+    void success(@Nullable CommandSender sender, @NotNull String message, @Nullable Throwable ex, @NotNull Object... placeholders);
+    default void success(@NotNull String message, @NotNull Object... placeholders) { success(null, message, null, placeholders); }
+    default void success(@NotNull String message, @Nullable Throwable ex, @NotNull Object... placeholders) { success(null, message, ex, placeholders); }
+    default void success(@NotNull CommandSender sender, @NotNull String message, @NotNull Object... placeholders) { success(sender, message, null, placeholders); }
 
     /**
      * Broadcast a message to all players, excluding those in the exclude list.
@@ -145,7 +146,7 @@ public interface MessageService {
      * @param exclude A list of players to exclude from receiving the message.
      * @param placeholders Optional placeholders to fill in the message.
      */
-    void broadcast(String message, @Nullable List<Player> exclude, Object... placeholders);
-    default void broadcast(String message, Player exclude, Object... placeholders) { broadcast(message, exclude != null ? List.of(exclude) : null, placeholders); }
-    default void broadcast(String message, Object... placeholders) { broadcast(message, (List<Player>)null, placeholders); }
+    void broadcast(@NotNull String message, @Nullable List<Player> exclude, @NotNull Object... placeholders);
+    default void broadcast(@NotNull String message, @Nullable Player exclude, @NotNull Object... placeholders) { broadcast(message, exclude != null ? List.of(exclude) : null, placeholders); }
+    default void broadcast(@NotNull String message, @NotNull Object... placeholders) { broadcast(message, (List<Player>)null, placeholders); }
 }

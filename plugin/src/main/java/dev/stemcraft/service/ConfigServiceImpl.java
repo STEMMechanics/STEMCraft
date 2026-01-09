@@ -26,6 +26,9 @@ import dev.stemcraft.api.config.ConfigFile;
 import dev.stemcraft.api.service.config.ConfigService;
 import dev.stemcraft.config.ConfigFileImpl;
 
+import org.jetbrains.annotations.NotNull;
+
+import javax.annotation.Nullable;
 import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
@@ -73,7 +76,7 @@ public class ConfigServiceImpl extends BaseService implements ConfigService {
      * @param createIfNotExist Whether to create the file if it does not exist.
      * @return The configuration file object, or null if loading failed.
      */
-    public ConfigFile load(String name, boolean createIfNotExist) {
+    public @Nullable ConfigFile load(@NotNull String name, boolean createIfNotExist) {
         if(files.containsKey(name)) {
             return files.get(name);
         }
@@ -87,7 +90,7 @@ public class ConfigServiceImpl extends BaseService implements ConfigService {
         return null;
     }
 
-    public ConfigFile load(File parent, String name, boolean createIfNotExist) {
+    public @Nullable ConfigFile load(@NotNull File parent, @NotNull String name, boolean createIfNotExist) {
         if(!parent.exists() || !parent.isDirectory()) {
             throw new IllegalArgumentException("Parent must be an existing directory");
         }
@@ -106,7 +109,7 @@ public class ConfigServiceImpl extends BaseService implements ConfigService {
         return null;
     }
 
-    public ConfigFile load(File file, boolean createIfNotExist) {
+    public @Nullable ConfigFile load(@NotNull File file, boolean createIfNotExist) {
         if(file.exists() && file.isDirectory()) {
             throw new IllegalArgumentException("File must not be a directory");
         }

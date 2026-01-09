@@ -20,6 +20,8 @@
 
 package dev.stemcraft.api.service.task;
 
+import org.jetbrains.annotations.NotNull;
+
 /**
  * Functional interface for task callbacks.
  */
@@ -33,5 +35,5 @@ public interface TaskCallback {
      * @param id The identifier of the task.
      * @param data Additional data associated with the task.
      */
-    void run(String type, String id, String data);
+    void run(@NotNull String type, @NotNull String id, @NotNull String data);
 }

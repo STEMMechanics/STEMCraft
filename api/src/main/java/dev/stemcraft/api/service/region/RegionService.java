@@ -23,6 +23,7 @@ package dev.stemcraft.api.service.region;
 import dev.stemcraft.api.model.SCRegion;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
 import java.util.Set;
@@ -39,7 +40,7 @@ public interface RegionService {
      * @param region The region to listen to.
      * @param listener The listener to handle region events.
      */
-    void addListener(String namespaceId, SCRegion region, RegionListener listener);
+    void addListener(@NotNull String namespaceId, @NotNull SCRegion region, @NotNull RegionListener listener);
 
     /**
      * Adds a region listener for an entire world.
@@ -48,14 +49,14 @@ public interface RegionService {
      * @param world The world to listen to.
      * @param listener The listener to handle world events.
      */
-    void addListener(String namespaceId, World world, RegionListener listener);
+    void addListener(@NotNull String namespaceId, @NotNull World world, @NotNull RegionListener listener);
 
     /**
      * Removes a region listener by its ID. Support asterisk wildcards at the end of the ID.
      *
      * @param namespaceId The unique ID of the listener to remove.
      */
-    void removeListener(String namespaceId);
+    void removeListener(@NotNull String namespaceId);
 
     /**
      * Checks if a player is currently within a region or world listener by its ID.
@@ -64,7 +65,7 @@ public interface RegionService {
      * @param namespaceId The unique ID of the region or world listener.
      * @return True if the player is within the specified region or world listener, false otherwise.
      */
-    boolean contains(Player player, String namespaceId);
+    boolean contains(@NotNull Player player, @NotNull String namespaceId);
 
     /**
      * Gets the set of region and world listener IDs that a player is currently within.
@@ -72,7 +73,7 @@ public interface RegionService {
      * @param player The player to check.
      * @return A set of region and world listener IDs the player is within.
      */
-    Set<String> getRegions(Player player);
+    @NotNull Set<String> getRegions(@NotNull Player player);
 
     /**
      * Gets a region by its ID.
@@ -81,5 +82,5 @@ public interface RegionService {
      * @return The SCRegion instance, or null if not found.
      */
     @Nullable
-    SCRegion getRegion(String id);
+    SCRegion getRegion(@NotNull String id);
 }

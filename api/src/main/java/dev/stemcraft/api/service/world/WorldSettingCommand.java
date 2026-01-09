@@ -20,6 +20,8 @@
 
 package dev.stemcraft.api.service.world;
 
+import org.jetbrains.annotations.NotNull;
+
 /**
  * Interface for defining world setting commands.
  */
@@ -31,7 +33,7 @@ public interface WorldSettingCommand {
      * @param completions The tab completions to add.
      * @return The current WorldSettingCommand instance.
      */
-    WorldSettingCommand tabCompletion(String... completions);
+    @NotNull WorldSettingCommand tabCompletion(@NotNull String... completions);
 
     /**
      * Set the executor for this command.
@@ -39,7 +41,7 @@ public interface WorldSettingCommand {
      * @param executor The command executor.
      * @return The current WorldSettingCommand instance.
      */
-    WorldSettingCommand executor(WorldSettingCommandExecutor executor);
+    @NotNull WorldSettingCommand executor(@NotNull WorldSettingCommandExecutor executor);
 
     /**
      * Register this command.

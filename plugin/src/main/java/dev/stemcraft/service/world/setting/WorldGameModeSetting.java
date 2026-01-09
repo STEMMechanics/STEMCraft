@@ -28,6 +28,7 @@ import dev.stemcraft.api.service.world.WorldService;
 import org.bukkit.*;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerTeleportEvent;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 import java.util.Locale;
@@ -44,7 +45,7 @@ public class WorldGameModeSetting implements WorldBaseSetting {
      * @return The setting key.
      */
     @Override
-    public String key() {
+    public @NotNull String key() {
         return "gamemode";
     }
 
@@ -55,7 +56,7 @@ public class WorldGameModeSetting implements WorldBaseSetting {
      * @param service The WorldService instance.
      */
     @Override
-    public void onEnable(STEMCraftAPI api, WorldService service) {
+    public void onEnable(@NotNull STEMCraftAPI api, @NotNull WorldService service) {
         this.service = service;
 
         api.events().register(PlayerTeleportEvent.class, event -> {
@@ -76,7 +77,7 @@ public class WorldGameModeSetting implements WorldBaseSetting {
      * @return A list of tab completion string arrays.
      */
     @Override
-    public List<String[]> tabCompletions() {
+    public @NotNull List<String[]> tabCompletions() {
         return List.of(
                 new String[]{"unset"},
                 new String[]{"adventure"},
@@ -93,7 +94,7 @@ public class WorldGameModeSetting implements WorldBaseSetting {
      * @param world The world to apply the setting to.
      */
     @Override
-    public void onCommand(CommandContext ctx, ConfigSection config, World world) {
+    public void onCommand(@NotNull CommandContext ctx, @NotNull ConfigSection config, @NotNull World world) {
         if(ctx.numArgs() == 0) {
             GameMode currentMode = get(world);
             ctx.returnInfo("World '" + world.getName() + "' game mode is " +
@@ -124,7 +125,7 @@ public class WorldGameModeSetting implements WorldBaseSetting {
      * @param world The world to get the setting for.
      * @return The GameMode for the world, or null if unset.
      */
-    GameMode get(World world) {
+    GameMode get(@NotNull World world) {
         ConfigSection config = service.getConfigSection(world);
         String gamemode = get(world, config);
 
@@ -142,7 +143,7 @@ public class WorldGameModeSetting implements WorldBaseSetting {
      * @param value The value to set (adventure, creative, spectator, survival, unset).
      */
     @Override
-    public void set(World world, ConfigSection config, String value) {
+    public void set(@NotNull World world, @NotNull ConfigSection config, @NotNull String value) {
         if(value.equals("adventure") || value.equals("creative") || value.equals("spectator") || value.equals("survival")) {
             config.set("gamemode", value);
 

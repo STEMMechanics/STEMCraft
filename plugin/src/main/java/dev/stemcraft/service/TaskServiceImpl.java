@@ -31,7 +31,9 @@ import org.bukkit.Bukkit;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.scheduler.BukkitTask;
+import org.jetbrains.annotations.NotNull;
 
+import javax.annotation.Nullable;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
@@ -92,7 +94,7 @@ public class TaskServiceImpl extends BaseService implements TaskService {
      * @param callback The callback to invoke when the timer runs.
      */
     @Override
-    public void registerPersistentCallback(String persistentType, TaskCallback callback) {
+    public void registerPersistentCallback(@NotNull String persistentType, @NotNull TaskCallback callback) {
         persistentCallbacks.put(persistentType, callback);
         loadPersistentTimers(persistentType);
     }
@@ -106,7 +108,7 @@ public class TaskServiceImpl extends BaseService implements TaskService {
      * @param delay The delay in ticks before running.
      */
     @Override
-    public void runLaterPersistent(String persistentType, String id, String data, long delay) {
+    public void runLaterPersistent(@NotNull String persistentType, @NotNull String id, @NotNull String data, long delay) {
         long runAt = System.currentTimeMillis() + (delay * 50L);
 
         cancel(id);
@@ -128,7 +130,7 @@ public class TaskServiceImpl extends BaseService implements TaskService {
      * @return The serialized data or null if not found.
      */
     @Override
-    public String getPersistentData(String id) {
+    public @Nullable String getPersistentData(@NotNull String id) {
         String path = "tasks." + id + ".data";
         if (!dataConfig.contains(path)) {
             return null;
@@ -143,7 +145,7 @@ public class TaskServiceImpl extends BaseService implements TaskService {
      * @param data The serialized data to store.
      */
     @Override
-    public void setPersistentData(String id, String data) {
+    public void setPersistentData(@NotNull String id, @NotNull String data) {
         String path = "tasks." + id + ".data";
         dataConfig.set(path, data);
         save();
@@ -156,7 +158,7 @@ public class TaskServiceImpl extends BaseService implements TaskService {
      * @return A list of timer ids.
      */
     @Override
-    public List<String> listPersistentTimers(String type) {
+    public @NotNull List<String> listPersistentTimers(@NotNull String type) {
         List<String> ids = new java.util.ArrayList<>();
 
         ConfigurationSection typeSection = dataConfig.getConfigurationSection("tasks");
@@ -179,7 +181,7 @@ public class TaskServiceImpl extends BaseService implements TaskService {
      * @param task The task to run.
      */
     @Override
-    public void runLater(long delay, Runnable task) {
+    public void runLater(long delay, @NotNull Runnable task) {
         BukkitTask bukkitTask = Bukkit.getScheduler().runTaskLater(InstanceHolder.plugin(), task, delay);
     }
 
@@ -189,13 +191,13 @@ public class TaskServiceImpl extends BaseService implements TaskService {
      * @param task The task to run.
      */
     @Override
-    public void runAsync(Runnable task) {
+    public void runAsync(@NotNull Runnable task) {
         Bukkit.getScheduler().runTaskAsynchronously(InstanceHolder.plugin(), task);
     }
 
     /** {@inheritDoc} */
     @Override
-    public void runSync(Runnable task) {
+    public void runSync(@NotNull Runnable task) {
         Bukkit.getScheduler().runTask(InstanceHolder.plugin(), task);
     }
 
@@ -208,7 +210,7 @@ public class TaskServiceImpl extends BaseService implements TaskService {
      * @param task The task to run.
      */
     @Override
-    public void runOnceDelay(String id, long delay, Runnable task) {
+    public void runOnceDelay(@NotNull String id, long delay, @NotNull Runnable task) {
         if(id == null || id.isEmpty()) {
             return;
         }
@@ -241,7 +243,7 @@ public class TaskServiceImpl extends BaseService implements TaskService {
      * @param id The unique task id. Supports asterisk wildcards.
      */
     @Override
-    public void cancel(String id) {
+    public void cancel(@NotNull String id) {
         Set<String> idList = new HashSet<>();
         ConfigurationSection tasksSection = dataConfig.getConfigurationSection("tasks");
 
@@ -292,7 +294,7 @@ public class TaskServiceImpl extends BaseService implements TaskService {
      * @return true if the task exists, false otherwise.
      */
     @Override
-    public boolean exists(String id) {
+    public boolean exists(@NotNull String id) {
         ConfigurationSection tasksSection = dataConfig.getConfigurationSection("tasks");
         if (tasksSection != null && tasksSection.contains(id)) {
             return true;
@@ -308,7 +310,7 @@ public class TaskServiceImpl extends BaseService implements TaskService {
      * @return The remaining time in ticks, or -1 if not found.
      */
     @Override
-    public long remaining(String id) {
+    public long remaining(@NotNull String id) {
         if(tasksRunAt.containsKey(id)) {
             long runAt = tasksRunAt.get(id);
             long now = System.currentTimeMillis();
@@ -336,7 +338,7 @@ public class TaskServiceImpl extends BaseService implements TaskService {
      * @param task The task to run.
      */
     @Override
-    public void repeating(String id, long delay, long period, Runnable task) {
+    public void repeating(@NotNull String id, long delay, long period, @NotNull Runnable task) {
         if(id != null && !id.isEmpty()) {
             if (exists(id)) {
                 cancel(id);
@@ -374,7 +376,7 @@ public class TaskServiceImpl extends BaseService implements TaskService {
      * @param intervalDelay The delay in ticks between retries.
      * @param startDelay The initial delay in ticks before first attempt.
      */
-    public void retry(int maxRetries, TaskRetryable task, TaskRetryCallback callback, long intervalDelay, long startDelay) {
+    public void retry(int maxRetries, @NotNull TaskRetryable task, @NotNull TaskRetryCallback callback, long intervalDelay, long startDelay) {
         retry0(maxRetries, task, callback, intervalDelay, startDelay, true);
     }
 

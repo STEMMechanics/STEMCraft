@@ -27,6 +27,7 @@ import dev.stemcraft.api.service.world.WorldBaseSetting;
 import dev.stemcraft.api.service.world.WorldService;
 import dev.stemcraft.api.util.StringUtil;
 import org.bukkit.World;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.HashMap;
 import java.util.List;
@@ -45,7 +46,7 @@ public class WorldTimeSetting implements WorldBaseSetting {
      * @return The setting key.
      */
     @Override
-    public String key() {
+    public @NotNull String key() {
         return "time";
     }
 
@@ -56,7 +57,7 @@ public class WorldTimeSetting implements WorldBaseSetting {
      * @param service The WorldService instance.
      */
     @Override
-    public void onEnable(STEMCraftAPI api, WorldService service) {
+    public void onEnable(@NotNull STEMCraftAPI api, @NotNull WorldService service) {
         api.tasks().repeating("world-time-setting", 20L, 20L, () -> {
             for (Map.Entry<World, Long> entry : worldLockedTimes.entrySet()) {
                 World world = entry.getKey();
@@ -72,7 +73,7 @@ public class WorldTimeSetting implements WorldBaseSetting {
      * @return List of tab completions.
      */
     @Override
-    public List<String[]> tabCompletions() {
+    public @NotNull List<String[]> tabCompletions() {
         return List.of(
                 new String[]{"unset"},
                 new String[]{"sunrise", "always"},
@@ -89,7 +90,7 @@ public class WorldTimeSetting implements WorldBaseSetting {
      * @param config The configuration section for the world.
      */
     @Override
-    public void onWorldLoad(World world, ConfigSection config) {
+    public void onWorldLoad(@NotNull World world, @NotNull ConfigSection config) {
         String setting = get(world, config);
 
         if (setting.endsWith(" always")) {
@@ -104,7 +105,7 @@ public class WorldTimeSetting implements WorldBaseSetting {
 
     /** {@inheritDoc} */
     @Override
-    public void onWorldUnload(World world, ConfigSection config) {
+    public void onWorldUnload(@NotNull World world, @NotNull ConfigSection config) {
         worldLockedTimes.remove(world);
     }
 
@@ -116,7 +117,7 @@ public class WorldTimeSetting implements WorldBaseSetting {
      * @param world The world to apply the setting to.
      */
     @Override
-    public void onCommand(CommandContext ctx, ConfigSection config, World world) {
+    public void onCommand(@NotNull CommandContext ctx, @NotNull ConfigSection config, @NotNull World world) {
         String value = ctx.getArg(0, "").toLowerCase(Locale.ROOT);
         if (value.isEmpty()) {
             value = get(world, config);
@@ -147,7 +148,7 @@ public class WorldTimeSetting implements WorldBaseSetting {
      * @return The weather setting value.
      */
     @Override
-    public String get(World world, ConfigSection config) {
+    public @NotNull String get(@NotNull World world, @NotNull ConfigSection config) {
         long timeSet = config.getLong("time.set", -1L);
         boolean always = config.getBoolean("time.always", false);
         if(timeSet != -1L) {
@@ -165,7 +166,7 @@ public class WorldTimeSetting implements WorldBaseSetting {
      * @param value The value to set (clear, rain, thunder, unset).
      */
     @Override
-    public void set(World world, ConfigSection config, String value) {
+    public void set(@NotNull World world, @NotNull ConfigSection config, @NotNull String value) {
         String valueLower = value.toLowerCase(Locale.ROOT);
         boolean always = valueLower.endsWith(" always");
         String timeStr = valueLower.replace(" always", "");

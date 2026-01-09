@@ -1,5 +1,7 @@
 package dev.stemcraft.api.service.resourcepack;
 
+import org.jetbrains.annotations.NotNull;
+
 /**
  * Hosts the resource pack and serves it via an HTTP endpoint.
  */
@@ -10,5 +12,5 @@ public interface ResourcePackHost {
      *
      * @return The resource pack URL.
      */
-    String getUrl();
+    @NotNull String getUrl();
 }

@@ -21,7 +21,9 @@
 package dev.stemcraft.api.service.config;
 
 import dev.stemcraft.api.config.ConfigFile;
+import org.jetbrains.annotations.NotNull;
 
+import javax.annotation.Nullable;
 import java.io.File;
 
 /**
@@ -36,12 +38,12 @@ public interface ConfigService {
      * @param createIfNotExist Whether to create the file if it does not exist.
      * @return The configuration file object.
      */
-    ConfigFile load(String name, boolean createIfNotExist);
-    default ConfigFile load(String name) { return load(name, true); }
+    @Nullable ConfigFile load(@NotNull String name, boolean createIfNotExist);
+    default @Nullable ConfigFile load(@NotNull String name) { return load(name, true); }
 
-    ConfigFile load(File parent, String name, boolean createIfNotExist);
-    default ConfigFile load(File parent, String name) { return load(parent, name, true); }
+    @Nullable ConfigFile load(@NotNull File parent, @NotNull String name, boolean createIfNotExist);
+    default @Nullable ConfigFile load(@NotNull File parent, @NotNull String name) { return load(parent, name, true); }
 
-    ConfigFile load(File file, boolean createIfNotExist);
-    default ConfigFile load(File file) { return load(file, true); }
+    @Nullable ConfigFile load(@NotNull File file, boolean createIfNotExist);
+    default @Nullable ConfigFile load(@NotNull File file) { return load(file, true); }
 }

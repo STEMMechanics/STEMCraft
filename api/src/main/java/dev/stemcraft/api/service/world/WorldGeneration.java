@@ -22,6 +22,7 @@ package dev.stemcraft.api.service.world;
 
 import dev.stemcraft.api.factory.ChunkGeneratorFactory;
 import org.bukkit.generator.ChunkGenerator;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
 
@@ -32,7 +33,7 @@ public interface WorldGeneration {
      *
      * @return A list of registered chunk generator keys.
      */
-    List<String> list();
+    @NotNull List<String> list();
 
     /**
      * Registers a new chunk generator factory with the given key.
@@ -40,7 +41,7 @@ public interface WorldGeneration {
      * @param key The unique key for the chunk generator.
      * @param factory The factory to create chunk generator instances.
      */
-    void register(String key, ChunkGeneratorFactory factory);
+    void register(@NotNull String key, @NotNull ChunkGeneratorFactory factory);
 
     /**
      * Checks if a chunk generator with the given key is registered.
@@ -48,7 +49,7 @@ public interface WorldGeneration {
      * @param key The chunk generator key.
      * @return True if the generator is registered, false otherwise.
      */
-    boolean isRegistered(String key);
+    boolean isRegistered(@NotNull String key);
 
     /**
      * Creates a new chunk generator instance for the given key and configuration.
@@ -58,5 +59,5 @@ public interface WorldGeneration {
      * @return A new ChunkGenerator instance.
      * @throws IllegalArgumentException if the key is unknown.
      */
-    ChunkGenerator get(String key, String cfg);
+    @NotNull ChunkGenerator get(@NotNull String key, @NotNull String cfg);
 }

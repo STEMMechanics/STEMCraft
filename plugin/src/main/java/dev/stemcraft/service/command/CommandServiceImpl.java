@@ -25,6 +25,7 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.CommandBuilder;
 import dev.stemcraft.api.service.command.CommandService;
 import dev.stemcraft.service.BaseService;
+import org.jetbrains.annotations.NotNull;
 
 /**
  * Implementation of the CommandService interface.
@@ -47,7 +48,7 @@ public class CommandServiceImpl extends BaseService implements CommandService {
      * @param label The command label.
      * @return A new CommandBuilder instance.
      */
-    public CommandBuilder create(String label) {
+    public @NotNull CommandBuilder create(@NotNull String label) {
         return new CommandBuilderImpl(api, label);
     }
 }

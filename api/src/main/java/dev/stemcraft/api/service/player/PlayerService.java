@@ -21,6 +21,7 @@
 package dev.stemcraft.api.service.player;
 
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.NotNull;
 
 /**
  * Service for managing player-related functionalities.
@@ -32,12 +33,12 @@ public interface PlayerService {
      *
      * @param player The player to hide.
      */
-    void hide(Player player);
+    void hide(@NotNull Player player);
 
     /**
      * Show a player to all other players.
      *
      * @param player The player to show.
      */
-    void show(Player player);
+    void show(@NotNull Player player);
 }

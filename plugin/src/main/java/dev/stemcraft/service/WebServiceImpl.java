@@ -28,6 +28,7 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.service.web.WebService;
 import dev.stemcraft.api.service.web.WebServiceEndpointHandler;
 import org.jspecify.annotations.NonNull;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -187,7 +188,7 @@ public class WebServiceImpl extends BaseService implements WebService {
     /**
      * Register a custom endpoint handler.
      */
-    public void registerEndpointHandler(String path, WebServiceEndpointHandler handler) {
+    public void registerEndpointHandler(@NotNull String path, @NotNull WebServiceEndpointHandler handler) {
         this.endpointHandlers.put(path, handler);
         api.messages().debug("WEB_SERVER_REGISTERED_ENDPOINT", "path", path);
     }
@@ -195,7 +196,7 @@ public class WebServiceImpl extends BaseService implements WebService {
     /**
      * Get the public URL of the web server.
      */
-    public String getPublicUrl() {
+    public @NotNull String getPublicUrl() {
         String publicUrl = getConfigSection().getString("public-url", "").trim();
         if(!publicUrl.isEmpty()) {
             if(!publicUrl.startsWith("http://") && !publicUrl.startsWith("https://")) {

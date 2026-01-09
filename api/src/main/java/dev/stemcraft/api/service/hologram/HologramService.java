@@ -21,6 +21,7 @@
 package dev.stemcraft.api.service.hologram;
 
 import org.bukkit.Location;
+import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
 import java.util.List;
@@ -37,7 +38,7 @@ public interface HologramService {
      * @param type type/category (e.g. "UNIQUE", "LEADERBOARD", "NPC_NAME").
      * @param handler handler for this type.
      */
-    void registerType(String type, HologramTypeHandler handler);
+    void registerType(@NotNull String type, @NotNull HologramTypeHandler handler);
 
     /**
      * Create and spawn a hologram.
@@ -48,7 +49,7 @@ public interface HologramService {
      * @param data additional data for the hologram.
      * @return unique hologram id.
      */
-    int create(String type, String context, Location location, List<String> data);
+    int create(@NotNull String type, @NotNull String context, @NotNull Location location, @NotNull List<String> data);
 
     /**
      * Update all lines for a hologram and refresh it in-world.
@@ -56,7 +57,7 @@ public interface HologramService {
      * @param id hologram id.
      * @param lines new lines to set.
      */
-    void update(int id, List<String> lines);
+    void update(int id, @NotNull List<String> lines);
 
     /**
      * Update lines of all holograms of this type.
@@ -64,7 +65,7 @@ public interface HologramService {
      * @param type type/category (e.g. "UNIQUE", "LEADERBOARD", "NPC_NAME").
      * @param ref context/reference (e.g. unique ID, leaderboard name, NPC id.
      */
-    void update(String type, String ref);
+    void update(@NotNull String type, @Nullable String ref);
 
     /**
      * Move a hologram to a new location.
@@ -72,7 +73,7 @@ public interface HologramService {
      * @param id hologram id.
      * @param newLocation new world location.
      */
-    void move(int id, Location newLocation);
+    void move(int id, @NotNull Location newLocation);
 
     /**
      * Delete a hologram by id and remove its entities.
@@ -87,7 +88,7 @@ public interface HologramService {
      * @param type type/category (e.g. "UNIQUE", "LEADERBOARD", "NPC_NAME").
      * @param context context/reference (e.g. unique ID, leaderboard name, NPC id.
      */
-    void delete(String type, String context);
+    void delete(@NotNull String type, @Nullable String context);
 
     /**
      * Find the closest hologram from a location.
@@ -96,8 +97,8 @@ public interface HologramService {
      * @param range maximum range to search within.
      * @return hologram id or -1 if none found within range.
      */
-    int closest(Location loc, int range);
-    default int closest(Location loc) { return closest(loc, DEFAULT_RANGE); }
+    int closest(@NotNull Location loc, int range);
+    default int closest(@NotNull Location loc) { return closest(loc, DEFAULT_RANGE); }
 
     /**
      * Despawn all entities, typically on plugin disable.

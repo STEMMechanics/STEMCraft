@@ -28,6 +28,7 @@ import org.bukkit.event.Cancellable;
 import org.bukkit.event.Event;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.jetbrains.annotations.NotNull;
 
 /**
  * Implementation of the EventService interface for managing event listeners.
@@ -54,7 +55,7 @@ public class EventServiceImpl extends BaseService implements EventService {
      * @param ignoreCancelled Whether to ignore cancelled events.
      * @return The registered listener.
      */
-    public <T extends Event> Listener register(Class<T> event, EventHandler<T> callback, EventPriority priority, boolean ignoreCancelled) {
+    public <T extends Event> @NotNull Listener register(@NotNull Class<T> event, @NotNull EventHandler<T> callback, @NotNull EventPriority priority, boolean ignoreCancelled) {
         Listener listener = new Listener() {};
 
         plugin.getServer().getPluginManager().registerEvent(event, listener, priority, (ignored, rawEvent) -> {

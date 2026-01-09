@@ -22,6 +22,7 @@ package dev.stemcraft.api.service.world;
 
 import dev.stemcraft.api.config.ConfigSection;
 import org.bukkit.World;
+import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
 import java.nio.file.Path;
@@ -43,7 +44,7 @@ public interface WorldService {
      * @param worldName The name of the world to check.
      * @return True if the world exists, false otherwise.
      */
-    boolean worldExists(String worldName);
+    boolean worldExists(@NotNull String worldName);
 
     /**
      * Check if a world with the given name is currently loaded.
@@ -51,7 +52,7 @@ public interface WorldService {
      * @param worldName The name of the world to check.
      * @return True if the world is loaded, false otherwise.
      */
-    boolean isWorldLoaded(String worldName);
+    boolean isWorldLoaded(@NotNull String worldName);
 
     /**
      * Load the world with the given name into memory.
@@ -59,7 +60,7 @@ public interface WorldService {
      * @param worldName The name of the world to load.
      * @return The loaded World object.
      */
-    World loadWorld(String worldName);
+    @Nullable World loadWorld(@NotNull String worldName);
 
     /**
      * Unload the world with the given name from memory.
@@ -68,7 +69,7 @@ public interface WorldService {
      * @param save Whether to save the world before unloading.
      * @return True if the world was successfully unloaded, false otherwise.
      */
-    boolean unloadWorld(String worldName, boolean save);
+    boolean unloadWorld(@NotNull String worldName, boolean save);
 
     /**
      * Create a new world with the given name.
@@ -78,16 +79,16 @@ public interface WorldService {
      * @param generatorOptions The options for the custom generator (or null for default).
      * @return The created World object.
      */
-    World createWorld(String worldName, @Nullable String generatorName, @Nullable String generatorOptions);
-    default World createWorld(String worldName) { return createWorld(worldName, null, null); }
-    default World createWorld(String worldName, String generatorName) { return createWorld(worldName, generatorName, null); }
+    @Nullable World createWorld(@NotNull String worldName, @Nullable String generatorName, @Nullable String generatorOptions);
+    default @Nullable World createWorld(@NotNull String worldName) { return createWorld(worldName, null, null); }
+    default @Nullable World createWorld(@NotNull String worldName, @Nullable String generatorName) { return createWorld(worldName, generatorName, null); }
 
     /**
      * Delete the world with the given name from disk.
      *
      * @param worldName The name of the world to delete.
      */
-    void deleteWorld(String worldName) throws Exception;
+    void deleteWorld(@NotNull String worldName) throws Exception;
 
     /**
      * Rename the world with the given name on disk.
@@ -95,7 +96,7 @@ public interface WorldService {
      * @param oldName The current name of the world.
      * @param newName The new name for the world.
      */
-    void renameWorld(String oldName, String newName) throws Exception;
+    void renameWorld(@NotNull String oldName, @NotNull String newName) throws Exception;
 
     /**
      * Duplicate the world with the given name on disk.
@@ -103,14 +104,14 @@ public interface WorldService {
      * @param sourceWorldName The name of the world to duplicate.
      * @param targetWorldName The name for the duplicated world.
      */
-    void duplicateWorld(String sourceWorldName, String targetWorldName) throws Exception;
+    void duplicateWorld(@NotNull String sourceWorldName, @NotNull String targetWorldName) throws Exception;
 
     /**
      * Get a list of all worlds currently loaded and on disk.
      *
      * @return A list of world names.
      */
-    List<String> listWorlds();
+    @NotNull List<String> listWorlds();
 
     /**
      * Get the file system path to the world folder with the given name.
@@ -118,21 +119,21 @@ public interface WorldService {
      * @param worldName The name of the world.
      * @return The Path to the world folder.
      */
-    Path getWorldFolder(String worldName);
+    @NotNull Path getWorldFolder(@NotNull String worldName);
 
     /**
      * Get the WorldGeneration service for managing custom chunk generators.
      *
      * @return The WorldGeneration service.
      */
-    WorldGeneration generator();
+    @NotNull WorldGeneration generator();
 
     /**
      * Evict all players from the given world to the main world.
      *
      * @param world The world to evict players from.
      */
-    void evictAllPlayers(World world);
+    void evictAllPlayers(@NotNull World world);
     default void evictAllPlayers(String worldName) {
         World world = org.bukkit.Bukkit.getWorld(worldName);
         if(world != null) {
@@ -145,14 +146,14 @@ public interface WorldService {
      *
      * @return The default World object.
      */
-    World getDefaultWorld();
+    @NotNull World getDefaultWorld();
 
     /**
      * Set the default world.
      *
      * @param world The World object to set as default.
      */
-    void setDefaultWorld(World world);
+    void setDefaultWorld(@NotNull World world);
 
     /**
      * Get the configuration section for the given world.
@@ -160,8 +161,8 @@ public interface WorldService {
      * @param world The world to get the config section for.
      * @return The ConfigSection for the world.
      */
-    ConfigSection getConfigSection(World world);
-    ConfigSection getConfigSection(String worldName);
+    @NotNull ConfigSection getConfigSection(@NotNull World world);
+    @NotNull ConfigSection getConfigSection(@NotNull String worldName);
 
     /**
      * Register a world base setting.
@@ -169,8 +170,8 @@ public interface WorldService {
      * @param setting The WorldBaseSetting to register.
      * @param mode The command mode for the setting.
      */
-    void registerSettingHandler(WorldBaseSetting setting, SettingCommandMode mode);
-    default void registerSettingHandler(WorldBaseSetting setting) { registerSettingHandler(setting, SettingCommandMode.FLAG); }
+    void registerSettingHandler(@NotNull WorldBaseSetting setting, @NotNull SettingCommandMode mode);
+    default void registerSettingHandler(@NotNull WorldBaseSetting setting) { registerSettingHandler(setting, SettingCommandMode.FLAG); }
 
     /**
      * Check if a setting with the given key is registered.
@@ -178,7 +179,7 @@ public interface WorldService {
      * @param key The key of the setting.
      * @return True if the setting is registered, false otherwise.
      */
-    boolean isSettingRegistered(String key);
+    boolean isSettingRegistered(@NotNull String key);
 
     /**
      * Check if a setting exists for a specific world.
@@ -187,7 +188,7 @@ public interface WorldService {
      * @param key The key of the setting.
      * @return True if the setting exists, false otherwise.
      */
-    boolean settingExists(World world, String key);
+    boolean settingExists(@NotNull World world, @NotNull String key);
 
     /**
      * Get the value of a setting for a specific world.
@@ -196,7 +197,7 @@ public interface WorldService {
      * @param key The key of the setting.
      * @return The value of the setting, or null if not found.
      */
-    @Nullable String getSetting(World world, String key);
+    @Nullable String getSetting(@NotNull World world, @NotNull String key);
 
     /**
      * Set the value of a setting for a specific world.
@@ -206,7 +207,7 @@ public interface WorldService {
      * @param value The key or value to set.
      * @throws IllegalArgumentException if the value is invalid.
      */
-    void setSetting(World world, String key, String value);
+    void setSetting(@NotNull World world, @NotNull String key, @NotNull String value);
 
     /**
      * Begin a world change session for the given world.
@@ -214,5 +215,5 @@ public interface WorldService {
      * @param world The world to change.
      * @return A WorldChangeSession for batching changes.
      */
-    WorldChangeSession changes(World world);
+    @NotNull WorldChangeSession changes(@NotNull World world);
 }

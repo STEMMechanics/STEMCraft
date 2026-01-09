@@ -3,7 +3,9 @@ package dev.stemcraft.api.service.resourcepack;
 import dev.stemcraft.api.config.ConfigSectionView;
 import dev.stemcraft.api.service.resourcepack.generator.ResourcePackGenerator;
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.NotNull;
 
+import javax.annotation.Nullable;
 import java.io.File;
 import java.util.function.Consumer;
 
@@ -17,42 +19,42 @@ public interface ResourcePackService {
      *
      * @return The configuration section view for the resource pack.
      */
-    ConfigSectionView getConfig();
+    @NotNull ConfigSectionView getConfig();
 
     /**
      * Retrieves the resource pack file.
      *
      * @return The resource pack file.
      */
-    File getResourcePack();
+    @Nullable File getResourcePack();
 
     /**
      * Retrieves the resource pack hash as a hexadecimal string.
      *
      * @return The resource pack hash.
      */
-    String getResourcePackHash();
+    @Nullable String getResourcePackHash();
 
     /**
      * Retrieves the resource pack host.
      *
      * @return The resource pack host.
      */
-    ResourcePackHost host();
+    @NotNull ResourcePackHost host();
 
     /**
      * Registers a resource pack generator.
      *
      * @param generator The resource pack generator to register.
      */
-    void registerGenerator(ResourcePackGenerator generator);
+    void registerGenerator(@NotNull ResourcePackGenerator generator);
 
     /**
      * Sends the resource pack to the specified player.
      *
      * @param player The player to send the resource pack to.
      */
-    void sendPack(Player player);
+    void sendPack(@NotNull Player player);
 
     /**
      * Sends the resource pack to all online players.
@@ -64,5 +66,5 @@ public interface ResourcePackService {
      *
      * @param statusCallback A consumer to receive status updates during generation.
      */
-    void generatePack(Consumer<String> statusCallback);
+    void generatePack(@Nullable Consumer<@NotNull String> statusCallback);
 }

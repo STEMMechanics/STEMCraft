@@ -21,6 +21,7 @@
 package dev.stemcraft.api.service.item;
 
 import org.bukkit.inventory.ItemStack;
+import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
 
@@ -37,7 +38,7 @@ public interface ItemService {
      * @param key The key of the attribute.
      * @param value The value of the attribute.
      */
-    <T, Z> void addAttrib(ItemStack item, String key, T value);
+    <T, Z> void addAttrib(@NotNull ItemStack item, @NotNull String key, @NotNull T value);
 
     /**
      * Checks if the ItemStack has an attribute with the given key.
@@ -46,7 +47,7 @@ public interface ItemService {
      * @param key The key of the attribute.
      * @return True if the attribute exists, false otherwise.
      */
-    boolean hasAttrib(ItemStack item, String key);
+    boolean hasAttrib(@NotNull ItemStack item, @NotNull String key);
 
     /**
      * Removes an attribute from the ItemStack with the given key.
@@ -54,7 +55,7 @@ public interface ItemService {
      * @param item The ItemStack from which the attribute will be removed.
      * @param key The key of the attribute to remove.
      */
-    void removeAttrib(ItemStack item, String key);
+    void removeAttrib(@NotNull ItemStack item, @NotNull String key);
 
     /**
      * Retrieves an attribute from the ItemStack with the given key or returns a default value if not found.
@@ -67,9 +68,9 @@ public interface ItemService {
      * @param defaultValue The default value to return if the attribute is not found.
      * @return The attribute value or the default value if not found.
      */
-    <T, Z> T getAttrib(ItemStack item, String key, Class<T> typeClass, T defaultValue);
+    <T, Z> @Nullable T getAttrib(@NotNull ItemStack item, @NotNull String key, @NotNull Class<T> typeClass, @Nullable T defaultValue);
 
-    default <T, Z> T getAttrib(ItemStack item, String key, Class<T> typeClass) {
+    default <T, Z> @Nullable T getAttrib(@NotNull ItemStack item, @NotNull String key, @NotNull Class<T> typeClass) {
         return getAttrib(item, key, typeClass, null);
     }
 
@@ -79,7 +80,7 @@ public interface ItemService {
      * @param id The unique identifier for the custom item.
      * @param template The ItemStack template for the custom item.
      */
-    void registerCustomItem(String id, ItemStack template);
+    void registerCustomItem(@NotNull String id, @NotNull ItemStack template);
 
     /**
      * Creates a new ItemStack for a custom item.
@@ -88,8 +89,8 @@ public interface ItemService {
      * @param quantity The quantity of the item stack.
      * @return The created ItemStack.
      */
-    ItemStack createCustomItem(String id, int quantity);
-    default ItemStack createCustomItem(String id) { return createCustomItem(id, 1); }
+    @NotNull ItemStack createCustomItem(@NotNull String id, int quantity);
+    default @NotNull ItemStack createCustomItem(@NotNull String id) { return createCustomItem(id, 1); }
 
     /**
      * Checks if the given ItemStack is the specified custom item.
@@ -98,7 +99,7 @@ public interface ItemService {
      * @param item The ItemStack to check.
      * @return True if the ItemStack is the specified custom item, false otherwise.
      */
-    boolean isCustomItemId(String id, ItemStack item);
+    boolean isCustomItemId(@NotNull String id, @NotNull ItemStack item);
 
     /**
      * Returns the ld of the custom item on this stack, if any.
@@ -106,5 +107,5 @@ public interface ItemService {
      * @param item The ItemStack to check.
      * @return The custom item id, or null if not a custom item.
      */
-    @Nullable String getCustomItemId(ItemStack item);
+    @Nullable String getCustomItemId(@Nullable ItemStack item);
 }

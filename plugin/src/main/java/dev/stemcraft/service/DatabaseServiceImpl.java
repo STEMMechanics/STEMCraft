@@ -27,6 +27,7 @@ import dev.stemcraft.api.database.DatabaseStatementBinder;
 import dev.stemcraft.api.service.database.DatabaseService;
 
 import javax.annotation.Nullable;
+import org.jetbrains.annotations.NotNull;
 import java.io.File;
 import java.sql.*;
 import java.util.*;
@@ -158,7 +159,7 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
      * @return The number of affected rows.
      */
     @Override
-    public int update(String sql, DatabaseStatementBinder binder) {
+    public int update(@NotNull String sql, @Nullable DatabaseStatementBinder binder) {
         if (connection != null) {
             try (PreparedStatement ps = connection.prepareStatement(sql)) {
                 if (binder != null) {
@@ -183,7 +184,7 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
      * @param binder The binder to set parameters on the prepared statement.
      * @param handler The handler to process the result set.
      */
-    public void query(String sql, DatabaseStatementBinder binder, DatabaseResultSetHandler handler) {
+    public void query(@NotNull String sql, @Nullable DatabaseStatementBinder binder, @NotNull DatabaseResultSetHandler handler) {
         if (connection == null) {
             throw new IllegalStateException("Database connection is not initialized.");
         }
@@ -210,7 +211,7 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
      * @param binder The binder to set parameters on the prepared statement.
      * @param handler The handler to process each row of the result set.
      */
-    public void queryEach(String sql, DatabaseStatementBinder binder, DatabaseResultSetHandler handler) {
+    public void queryEach(@NotNull String sql, @Nullable DatabaseStatementBinder binder, @NotNull DatabaseResultSetHandler handler) {
         if (connection == null) {
             throw new IllegalStateException("Database connection is not initialized.");
         }
@@ -239,7 +240,7 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
      * @param binder The binder to set parameters on the prepared statement.
      * @param handler The handler to process the single row of the result set.
      */
-    public void querySingle(String sql, DatabaseStatementBinder binder, DatabaseResultSetHandler handler) {
+    public void querySingle(@NotNull String sql, @Nullable DatabaseStatementBinder binder, @NotNull DatabaseResultSetHandler handler) {
         if (connection == null) {
             throw new IllegalStateException("Database connection is not initialized.");
         }
@@ -271,9 +272,9 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
      * @return The mapped object of type T, or null if no result was found.
      */
     public <T> @Nullable T querySingleMapped(
-            String sql,
-            DatabaseStatementBinder binder,
-            DatabaseResultSetMapper<T> mapper
+            @NotNull String sql,
+            @Nullable DatabaseStatementBinder binder,
+            @Nullable DatabaseResultSetMapper<T> mapper
     ) {
         if (connection == null) {
             throw new IllegalStateException("Database connection is not initialized.");
@@ -298,12 +299,22 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
         }
     }
 
+    public <T> @NotNull T querySingleMapped(
+            @NotNull String sql,
+            @Nullable DatabaseStatementBinder binder,
+            @Nullable DatabaseResultSetMapper<T> mapper,
+            @NotNull T defaultValue
+    ) {
+        T value = querySingleMapped(sql, binder, mapper);
+        return value != null ? value : defaultValue;
+    }
+
     /**
      * Executes a raw SQL statement.
      *
      * @param sql The SQL statement to execute.
      */
-    public boolean execute(String sql) {
+    public boolean execute(@NotNull String sql) {
         try (Statement st = connection.createStatement()) {
             return st.execute(sql);
         } catch (SQLException e) {
@@ -319,11 +330,12 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
      * @param name The name of the migration.
      * @return The migration version, or 0 if not found.
      */
-    public int migrationVersion(String name) {
+    public int migrationVersion(@NotNull String name) {
         return querySingleMapped(
-                "SELECT version FROM migrations WHERE name = ?;",
-                ps -> ps.setString(1, name),
-                rs -> rs.getInt(1)
+            "SELECT version FROM migrations WHERE name = ?;",
+            ps -> ps.setString(1, name),
+            rs -> rs.getInt(1),
+                0
         );
     }
 
@@ -333,7 +345,7 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
      * @param name The name of the migration.
      * @param version The migration version to set.
      */
-    public void setMigrationVersion(String name, int version) {
+    public void setMigrationVersion(@NotNull String name, int version) {
         String sql = "INSERT INTO migrations (name, version) VALUES (?, ?) " +
                         "ON CONFLICT(name) DO UPDATE SET version = excluded.version;";
 
@@ -348,7 +360,7 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
      *
      * @param name The name of the migration.
      */
-    public void clearMigration(String name) {
+    public void clearMigration(@NotNull String name) {
         update("DELETE FROM migrations WHERE name = ?;", ps -> ps.setString(1, name));
     }
 }

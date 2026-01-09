@@ -20,6 +20,8 @@
 
 package dev.stemcraft.api.service.motd;
 
+import org.jetbrains.annotations.NotNull;
+
 import javax.annotation.Nullable;
 
 /**
@@ -47,14 +49,14 @@ public interface MotdService {
      * @param title The title of the default MOTD.
      * @param text The text/body of the default MOTD.
      */
-    void setDefault(String title, String text);
+    void setDefault(@NotNull String title, @NotNull String text);
 
     /**
      * Get the current MOTD.
      *
      * @return The highest priority MOTD currently set.
      */
-    ResolvedMotd current();
+    @NotNull ResolvedMotd current();
 
     /**
      * Get the MOTD based on namespace ID.
@@ -62,7 +64,7 @@ public interface MotdService {
      * @param namespaceId The namespace ID of the MOTD.
      * @return The MOTD associated with the given namespace ID, or null if not found.
      */
-    @Nullable ResolvedMotd get(String namespaceId);
+    @Nullable ResolvedMotd get(@NotNull String namespaceId);
 
     /**
      * Push a new MOTD with given priority. Higher priority MOTDs override lower priority ones.
@@ -72,12 +74,12 @@ public interface MotdService {
      * @param motdTitle The title of the MOTD.
      * @param motdText The text/body of the MOTD.
      */
-    void push(String namespaceId, Priority priority, String motdTitle, String motdText);
+    void push(@NotNull String namespaceId, @NotNull Priority priority, @NotNull String motdTitle, @NotNull String motdText);
 
     /**
      * Remove the MOTD associated with the given namespace ID.
      *
      * @param namespaceId The namespace ID of the MOTD to remove.
      */
-    void remove(String namespaceId);
+    void remove(@NotNull String namespaceId);
 }

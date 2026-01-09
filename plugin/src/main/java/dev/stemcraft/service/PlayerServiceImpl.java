@@ -25,6 +25,7 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.service.player.PlayerService;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
 
@@ -50,7 +51,7 @@ public class PlayerServiceImpl extends BaseService implements PlayerService {
      * @param player The player to hide.
      */
     @Override
-    public void hide(Player player) {
+    public void hide(@NotNull Player player) {
         if(player == null) return;
         if(hiddenPlayers.contains(player)) return;
 
@@ -67,7 +68,7 @@ public class PlayerServiceImpl extends BaseService implements PlayerService {
      * @param player The player to show.
      */
     @Override
-    public void show(Player player) {
+    public void show(@NotNull Player player) {
         if(player == null) return;
         if(!hiddenPlayers.contains(player)) return;
 

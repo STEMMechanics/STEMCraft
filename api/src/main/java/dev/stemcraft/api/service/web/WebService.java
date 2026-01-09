@@ -20,6 +20,10 @@
 
 package dev.stemcraft.api.service.web;
 
+import org.jetbrains.annotations.NotNull;
+
+import javax.annotation.Nullable;
+
 /**
  * Service for managing a webserver within the STEMCraft plugin.
  */
@@ -41,7 +45,7 @@ public interface WebService {
      * @param path The path prefix to match.
      * @param handler The handler to call for matching requests.
      */
-    void registerEndpointHandler(String path, WebServiceEndpointHandler handler);
+    void registerEndpointHandler(@NotNull String path, @NotNull WebServiceEndpointHandler handler);
 
     /**
      * Escape HTML special characters in a string.
@@ -49,7 +53,7 @@ public interface WebService {
      * @param in The input string.
      * @return The escaped string.
      */
-    static String escapeHtml(String in) {
+    static @NotNull String escapeHtml(@Nullable String in) {
         if (in == null) return "";
         return in.replace("&", "&amp;")
                 .replace("<", "&lt;")
@@ -61,5 +65,5 @@ public interface WebService {
      *
      * @return The public URL.
      */
-    String getPublicUrl();
+    @NotNull String getPublicUrl();
 }

@@ -38,7 +38,9 @@ import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.jspecify.annotations.NonNull;
+import org.jetbrains.annotations.NotNull;
 
+import javax.annotation.Nullable;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
@@ -254,7 +256,7 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
      * @param callback The callback to invoke when a punishment of the specified type is recorded.
      */
     @Override
-    public void registerAlert(String type, PunishmentAlertCallback callback) {
+    public void registerAlert(@NotNull String type, @NotNull PunishmentAlertCallback callback) {
         alerts.put(type, callback);
 
         punishments.forEach(record -> {
@@ -275,7 +277,7 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
      * @param reason The reason for the punishment.
      */
     @Override
-    public synchronized void record(UUID playerUuid, Player actor, Duration duration, String type, boolean alerted, String reason) {
+    public synchronized void record(@NotNull UUID playerUuid, @Nullable Player actor, @Nullable Duration duration, @NotNull String type, boolean alerted, @NotNull String reason) {
         String playerName = PlayerUtil.name(playerUuid);
         if(playerName == null) {
             // ERROR PLAYER NOT FOUND!
@@ -318,7 +320,7 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
      * @return List of punishment records matching the criteria.
      */
     @Override
-    public synchronized List<PunishmentRecord> list(UUID player, String type, int page, int pageSize) {
+    public synchronized @NotNull List<PunishmentRecord> list(@Nullable UUID player, @Nullable String type, int page, int pageSize) {
         if (page < 1) page = 1;
         if (pageSize <= 0) pageSize = 25;
 

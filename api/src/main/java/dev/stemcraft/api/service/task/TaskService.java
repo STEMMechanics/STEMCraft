@@ -20,6 +20,9 @@
 
 package dev.stemcraft.api.service.task;
 
+import org.jetbrains.annotations.NotNull;
+
+import javax.annotation.Nullable;
 import java.util.List;
 
 /**
@@ -38,7 +41,7 @@ public interface TaskService {
      * @param persistentType The type of persistent task.
      * @param callback The callback to be invoked.
      */
-    void registerPersistentCallback(String persistentType, TaskCallback callback);
+    void registerPersistentCallback(@NotNull String persistentType, @NotNull TaskCallback callback);
 
     /**
      * Schedule a persistent task to run after a delay.
@@ -48,7 +51,7 @@ public interface TaskService {
      * @param data Additional data associated with the task.
      * @param delay The delay in ticks before execution.
      */
-    void runLaterPersistent(String persistentType, String id, String data, long delay);
+    void runLaterPersistent(@NotNull String persistentType, @NotNull String id, @NotNull String data, long delay);
 
     /**
      * Get or set persistent data associated with a specific ID.
@@ -56,7 +59,7 @@ public interface TaskService {
      * @param id The identifier for the persistent data.
      * @return The persistent data associated with the ID.
      */
-    String getPersistentData(String id);
+    @Nullable String getPersistentData(@NotNull String id);
 
     /**
      * Set persistent data associated with a specific ID.
@@ -64,7 +67,7 @@ public interface TaskService {
      * @param id The identifier for the persistent data.
      * @param data The persistent data to be set.
      */
-    void setPersistentData(String id, String data);
+    void setPersistentData(@NotNull String id, @NotNull String data);
 
     /**
      * List all persistent timers of a specific type.
@@ -72,7 +75,7 @@ public interface TaskService {
      * @param type The type of persistent timers.
      * @return A list of persistent timer IDs.
      */
-    List<String> listPersistentTimers(String type);
+    @NotNull List<String> listPersistentTimers(@NotNull String type);
 
     /**
      * Schedule task to run after a delay.
@@ -80,14 +83,14 @@ public interface TaskService {
      * @param delay The delay in ticks before execution.
      * @param task The task to be executed.
      */
-    void runLater(long delay, Runnable task);
+    void runLater(long delay, @NotNull Runnable task);
 
     /**
      * Schedule a task to run on the next tick.
      *
      * @param task The task to be executed.
      */
-    default void nextTick(Runnable task) {
+    default void nextTick(@NotNull Runnable task) {
         runLater(1L, task);
     }
 
@@ -96,14 +99,14 @@ public interface TaskService {
      *
      * @param task The task to be executed.
      */
-    void runAsync(Runnable task);
+    void runAsync(@NotNull Runnable task);
 
     /**
      * Run a synchronous task immediately.
      *
      * @param task The task to be executed.
      */
-    void runSync(Runnable task);
+    void runSync(@NotNull Runnable task);
 
     /**
      * Schedule a task to run once after a delay with a specific ID.
@@ -113,14 +116,14 @@ public interface TaskService {
      * @param delay The delay in ticks before execution.
      * @param task The task to be executed.
      */
-    void runOnceDelay(String id, long delay, Runnable task);
+    void runOnceDelay(@NotNull String id, long delay, @NotNull Runnable task);
 
     /**
      * Cancel a scheduled task by its ID.
      *
      * @param id The unique identifier of the task to cancel.
      */
-    void cancel(String id);
+    void cancel(@NotNull String id);
 
     /**
      * Check if a scheduled task exists by its ID.
@@ -128,7 +131,7 @@ public interface TaskService {
      * @param id The unique identifier of the task.
      * @return True if the task exists, false otherwise.
      */
-    boolean exists(String id);
+    boolean exists(@NotNull String id);
 
     /**
      * Get the remaining time in ticks for a scheduled task by its ID.
@@ -136,7 +139,7 @@ public interface TaskService {
      * @param id The unique identifier of the task.
      * @return The remaining time in ticks, or -1 if the task does not exist.
      */
-    long remaining(String id);
+    long remaining(@NotNull String id);
 
     /**
      * Schedule a repeating task with a fixed period.
@@ -146,9 +149,9 @@ public interface TaskService {
      * @param period The period in ticks between successive executions.
      * @param task The task to be executed.
      */
-    void repeating(String id, long delay, long period, Runnable task);
-    default void repeating(String id, long period, Runnable task) { repeating(id, period, period, task); }
-    default void repeating(long period, Runnable task) { repeating("", period, period, task); }
+    void repeating(@NotNull String id, long delay, long period, @NotNull Runnable task);
+    default void repeating(@NotNull String id, long period, @NotNull Runnable task) { repeating(id, period, period, task); }
+    default void repeating(long period, @NotNull Runnable task) { repeating("", period, period, task); }
 
     /**
      * Retry a task up to a maximum number of retries with a delay between attempts.
@@ -159,7 +162,7 @@ public interface TaskService {
      * @param intervalDelay The delay in ticks between retry attempts.
      * @param startDelay The initial delay in ticks before the first attempt.
      */
-    void retry(int maxRetries, TaskRetryable task, TaskRetryCallback callback, long intervalDelay, long startDelay);
-    default void retry(int maxRetries, TaskRetryable task, TaskRetryCallback callback) { retry(5, task, callback, 1L, 1L); }
-    default void retry(TaskRetryable task, TaskRetryCallback callback) { retry(5, task, callback, 1L, 1L); }
+    void retry(int maxRetries, @NotNull TaskRetryable task, @NotNull TaskRetryCallback callback, long intervalDelay, long startDelay);
+    default void retry(int maxRetries, @NotNull TaskRetryable task, @NotNull TaskRetryCallback callback) { retry(5, task, callback, 1L, 1L); }
+    default void retry(@NotNull TaskRetryable task, @NotNull TaskRetryCallback callback) { retry(5, task, callback, 1L, 1L); }
 }

@@ -30,6 +30,7 @@ import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerMoveEvent;
+import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
 import java.util.*;
@@ -141,7 +142,7 @@ public class RegionServiceImpl extends BaseService implements RegionService {
      * @param region The SCRegion to listen to.
      * @param listener The RegionListener to notify on enter/exit events.
      */
-    public void addListener(String namespaceId, SCRegion region, RegionListener listener) {
+    public void addListener(@NotNull String namespaceId, @NotNull SCRegion region, @NotNull RegionListener listener) {
         NamespaceId.checkValid(namespaceId);
 
         listeners.put(namespaceId, new RegionListenerEntry(region, null, listener));
@@ -154,7 +155,7 @@ public class RegionServiceImpl extends BaseService implements RegionService {
      * @param world The World to listen to.
      * @param listener The RegionListener to notify on enter/exit world events.
      */
-    public void addListener(String namespaceId, World world, RegionListener listener) {
+    public void addListener(@NotNull String namespaceId, @NotNull World world, @NotNull RegionListener listener) {
         listeners.put(namespaceId, new RegionListenerEntry(null, world, listener));
     }
 
@@ -164,7 +165,7 @@ public class RegionServiceImpl extends BaseService implements RegionService {
      * @param namespaceId The namespace ID of the listener to remove.
      */
     @Override
-    public void removeListener(String namespaceId) {
+    public void removeListener(@NotNull String namespaceId) {
         Set<String> idList = new HashSet<>();
 
         if(namespaceId.indexOf('*') != -1) {
@@ -193,7 +194,7 @@ public class RegionServiceImpl extends BaseService implements RegionService {
      * @return True if the player is within the region or world, false otherwise.
      */
     @Override
-    public boolean contains(Player player, String namespaceId) {
+    public boolean contains(@NotNull Player player, @NotNull String namespaceId) {
         List<String> regions = playerRegions.get(player);
         return regions != null && regions.contains(namespaceId);
     }
@@ -205,7 +206,7 @@ public class RegionServiceImpl extends BaseService implements RegionService {
      * @return A set of region and world listener IDs.
      */
     @Override
-    public Set<String> getRegions(Player player) {
+    public @NotNull Set<String> getRegions(@NotNull Player player) {
         List<String> regions = playerRegions.get(player);
         if (regions == null) {
             return Set.of();

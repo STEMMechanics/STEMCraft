@@ -20,9 +20,10 @@
 
 package dev.stemcraft.api.service.hologram;
 
+import org.jetbrains.annotations.NotNull;
+
 import javax.annotation.Nullable;
 import java.util.List;
-
 /**
  * Handler for different hologram types.
  */
@@ -36,7 +37,7 @@ public interface HologramTypeHandler {
      * @return A list of contexts.
      */
     @SuppressWarnings("SameReturnValue")
-    @Nullable List<String> list(String type);
+    @Nullable List<String> list(@NotNull String type);
 
     /**
      * Lists all lines of a specific hologram type and context (if used by the handler).
@@ -47,5 +48,5 @@ public interface HologramTypeHandler {
      * @param data Additional data.
      * @return A list of lines for the hologram.
      */
-    List<String> lines(String type, String context, int id, List<String> data);
+    @NotNull List<String> lines(@NotNull String type, @NotNull String context, int id, @NotNull List<String> data);
 }

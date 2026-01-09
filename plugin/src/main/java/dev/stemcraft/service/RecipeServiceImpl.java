@@ -29,6 +29,7 @@ import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.*;
 import org.bukkit.inventory.recipe.CookingBookCategory;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.HashMap;
 import java.util.List;
@@ -377,7 +378,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
      * @param ingredients A map of characters to Materials representing the ingredients.
      */
     @Override
-    public void addShaped(String id, ItemStack result, String[] shape, Map<Character, Material> ingredients) {
+    public void addShaped(@NotNull String id, @NotNull ItemStack result, @NotNull String[] shape, @NotNull Map<Character, Material> ingredients) {
         ShapedRecipe recipe = new ShapedRecipe(key(id), result);
         recipe.shape(shape);
 
@@ -396,7 +397,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
      * @param inputs The input Materials for the recipe.
      */
     @Override
-    public void addShapeless(String id, ItemStack result, Material... inputs) {
+    public void addShapeless(@NotNull String id, @NotNull ItemStack result, @NotNull Material... inputs) {
         ShapelessRecipe recipe = new ShapelessRecipe(key(id), result);
         for (Material mat : inputs) {
             recipe.addIngredient(mat);
@@ -414,7 +415,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
      * @param cookTicks The cooking time in ticks.
      */
     @Override
-    public void addFurnace(String id, Material input, ItemStack output, float exp, int cookTicks) {
+    public void addFurnace(@NotNull String id, @NotNull Material input, @NotNull ItemStack output, float exp, int cookTicks) {
         FurnaceRecipe recipe = new FurnaceRecipe(key(id), output, input, exp, cookTicks);
         recipe.setCategory(CookingBookCategory.MISC);
         Bukkit.addRecipe(recipe);
@@ -430,7 +431,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
      * @param cookTicks The cooking time in ticks.
      */
     @Override
-    public void addSmoker(String id, Material input, ItemStack output, float exp, int cookTicks) {
+    public void addSmoker(@NotNull String id, @NotNull Material input, @NotNull ItemStack output, float exp, int cookTicks) {
         SmokingRecipe recipe = new SmokingRecipe(key(id), output, input, exp, cookTicks);
         recipe.setCategory(CookingBookCategory.FOOD);
         Bukkit.addRecipe(recipe);
@@ -446,7 +447,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
      * @param cookTicks The cooking time in ticks.
      */
     @Override
-    public void addBlastFurnace(String id, Material input, ItemStack output, float exp, int cookTicks) {
+    public void addBlastFurnace(@NotNull String id, @NotNull Material input, @NotNull ItemStack output, float exp, int cookTicks) {
         BlastingRecipe recipe = new BlastingRecipe(key(id), output, input, exp, cookTicks);
         recipe.setCategory(CookingBookCategory.BLOCKS);
         Bukkit.addRecipe(recipe);
@@ -462,7 +463,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
      * @param cookTicks The cooking time in ticks.
      */
     @Override
-    public void addCampfire(String id, Material input, ItemStack output, float exp, int cookTicks) {
+    public void addCampfire(@NotNull String id, @NotNull Material input, @NotNull ItemStack output, float exp, int cookTicks) {
         CampfireRecipe recipe = new CampfireRecipe(key(id), output, input, exp, cookTicks);
         recipe.setCategory(CookingBookCategory.FOOD);
         Bukkit.addRecipe(recipe);
@@ -476,7 +477,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
      * @param amount The amount of the output Material.
      */
     @Override
-    public void addStonecutter(Material input, Material output, int amount) {
+    public void addStonecutter(@NotNull Material input, @NotNull Material output, int amount) {
         ItemStack result = new ItemStack(output, amount);
         String id = "stonecut_" + input.name().toLowerCase() + "_to_" + output.name().toLowerCase();
         StonecuttingRecipe recipe = new StonecuttingRecipe(key(id), result, input);

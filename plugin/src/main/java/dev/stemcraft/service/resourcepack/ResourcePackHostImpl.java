@@ -3,6 +3,7 @@ package dev.stemcraft.service.resourcepack;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.service.resourcepack.ResourcePackHost;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
 import java.util.HashMap;
@@ -48,7 +49,7 @@ public class ResourcePackHostImpl implements ResourcePackHost {
      *
      * @return The resource pack URL.
      */
-    public String getUrl() {
+    public @NotNull String getUrl() {
         String cacheBuster = "";
 
         File resourcePack = service.getResourcePack();

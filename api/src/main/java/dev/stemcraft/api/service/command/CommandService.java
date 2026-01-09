@@ -21,6 +21,7 @@
 package dev.stemcraft.api.service.command;
 
 import dev.stemcraft.api.command.CommandBuilder;
+import org.jetbrains.annotations.NotNull;
 
 /**
  * Service for managing commands within the STEMCraft plugin.
@@ -33,5 +34,5 @@ public interface CommandService {
      * @param label The label of the command.
      * @return A CommandBuilder to further configure the command.
      */
-    CommandBuilder create(String label);
+    @NotNull CommandBuilder create(@NotNull String label);
 }

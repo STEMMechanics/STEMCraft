@@ -21,6 +21,7 @@
 package dev.stemcraft.api.service.punishment;
 
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.NotNull;
 
 /**
  * Functional interface for handling punishment alerts.
@@ -37,5 +38,5 @@ public interface PunishmentAlertCallback {
      * @return true if the alert was handled successfully, false otherwise.
      */
     @SuppressWarnings("SameReturnValue")
-    boolean run(String type, Player player, PunishmentRecord record);
+    boolean run(@NotNull String type, @NotNull Player player, @NotNull PunishmentRecord record);
 }

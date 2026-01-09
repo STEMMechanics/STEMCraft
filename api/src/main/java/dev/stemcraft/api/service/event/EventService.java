@@ -23,6 +23,7 @@ package dev.stemcraft.api.service.event;
 import org.bukkit.event.Event;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.jetbrains.annotations.NotNull;
 
 /**
  * Service for managing event handlers within the STEMCraft plugin.
@@ -39,6 +40,6 @@ public interface EventService {
      * @param ignoreCancelled Whether to ignore cancelled events.
      * @return The registered listener.
      */
-    <T extends Event> Listener register(Class<T> event, EventHandler<T> callback, EventPriority priority, boolean ignoreCancelled);
-    default <T extends Event> Listener register(Class<T> event, EventHandler<T> callback) { return register(event, callback, EventPriority.NORMAL, false); }
+    <T extends Event> @NotNull Listener register(@NotNull Class<T> event, @NotNull EventHandler<T> callback, @NotNull EventPriority priority, boolean ignoreCancelled);
+    default <T extends Event> @NotNull Listener register(@NotNull Class<T> event, @NotNull EventHandler<T> callback) { return register(event, callback, EventPriority.NORMAL, false); }
 }

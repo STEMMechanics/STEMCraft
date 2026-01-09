@@ -21,6 +21,7 @@
 package dev.stemcraft.api.service.tabcomplete;
 
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 
@@ -35,7 +36,7 @@ public interface TabCompleteService {
      * @param name The name of the tab completion provider.
      * @param callback The callback to provide tab completions.
      */
-    void register(String name, TabCompletionProvider callback);
+    void register(@NotNull String name, @NotNull TabCompletionProvider callback);
 
     /**
      * Get a list of tab completions for a specific provider name.
@@ -45,5 +46,5 @@ public interface TabCompleteService {
      * @param args The current arguments typed by the player.
      * @return A list of tab completions.
      */
-    List<String> getCompletionList(String name, Player player, String... args);
+    @NotNull List<String> getCompletionList(@NotNull String name, @NotNull Player player, @NotNull String... args);
 }

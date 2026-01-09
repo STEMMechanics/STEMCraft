@@ -27,6 +27,7 @@ import dev.stemcraft.api.service.world.WorldBaseSetting;
 import dev.stemcraft.api.service.world.WorldService;
 import org.bukkit.World;
 import org.bukkit.event.entity.FoodLevelChangeEvent;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 import java.util.Locale;
@@ -42,7 +43,7 @@ public class WorldNoHungerSetting implements WorldBaseSetting {
      * @return The setting key.
      */
     @Override
-    public String key() {
+    public @NotNull String key() {
         return "no-hunger";
     }
 
@@ -53,7 +54,7 @@ public class WorldNoHungerSetting implements WorldBaseSetting {
      * @param service The WorldService instance.
      */
     @Override
-    public void onEnable(STEMCraftAPI api, WorldService service) {
+    public void onEnable(@NotNull STEMCraftAPI api, @NotNull WorldService service) {
         api.events().register(FoodLevelChangeEvent.class, event -> {
             World world = event.getEntity().getWorld();
             ConfigSection config = service.getConfigSection(world);
@@ -70,7 +71,7 @@ public class WorldNoHungerSetting implements WorldBaseSetting {
      * @return List of tab completions.
      */
     @Override
-    public List<String[]> tabCompletions() {
+    public @NotNull List<String[]> tabCompletions() {
         return List.of(
                 new String[]{"unset"},
                 new String[]{"true"},
@@ -85,7 +86,7 @@ public class WorldNoHungerSetting implements WorldBaseSetting {
      * @param world The world to apply the setting to.
      */
     @Override
-    public void onCommand(CommandContext ctx, ConfigSection config, World world) {
+    public void onCommand(@NotNull CommandContext ctx, @NotNull ConfigSection config, @NotNull World world) {
         String value = ctx.getArg(0, "").toLowerCase(Locale.ROOT);
         if (value.isEmpty()) {
             value = config.getString("no-hunger", "unset");
@@ -112,7 +113,7 @@ public class WorldNoHungerSetting implements WorldBaseSetting {
      * @param value The value to set (true, false, unset).
      */
     @Override
-    public void set(World world, ConfigSection config, String value) {
+    public void set(@NotNull World world, @NotNull ConfigSection config, @NotNull String value) {
         String valueLower = value.toLowerCase(Locale.ROOT);
 
         if(valueLower.equals("true")) {

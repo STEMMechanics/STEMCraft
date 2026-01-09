@@ -23,6 +23,7 @@ package dev.stemcraft.api.service.region;
 import dev.stemcraft.api.model.SCRegion;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.NotNull;
 
 /**
  * Listener for region-related events.
@@ -36,7 +37,7 @@ public interface RegionListener {
      * @param player The player entering the region.
      * @param region The region being entered.
      */
-    default void onEnter(Player player, SCRegion region) { }
+    default void onEnter(@NotNull Player player, @NotNull SCRegion region) { }
 
     /**
      * Called when a player enters a world.
@@ -44,7 +45,7 @@ public interface RegionListener {
      * @param player The player entering the world.
      * @param world The world being entered.
      */
-    default void onEnterWorld(Player player, World world) { }
+    default void onEnterWorld(@NotNull Player player, @NotNull World world) { }
 
     /**
      * Called when a player exits a region.
@@ -52,7 +53,7 @@ public interface RegionListener {
      * @param player The player exiting the region.
      * @param region The region being exited.
      */
-    default void onExit(Player player, SCRegion region) { }
+    default void onExit(@NotNull Player player, @NotNull SCRegion region) { }
 
     /**
      * Called when a player exits a world.
@@ -60,5 +61,5 @@ public interface RegionListener {
      * @param player The player exiting the world.
      * @param world The world being exited.
      */
-    default void onExitWorld(Player player, World world) { }
+    default void onExitWorld(@NotNull Player player, @NotNull World world) { }
 }

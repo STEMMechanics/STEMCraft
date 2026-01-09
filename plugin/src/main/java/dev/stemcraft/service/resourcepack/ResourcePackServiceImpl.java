@@ -37,7 +37,9 @@ import net.kyori.adventure.resource.ResourcePackRequest;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.NotNull;
 
+import javax.annotation.Nullable;
 import java.io.*;
 import java.net.URI;
 import java.nio.file.Files;
@@ -95,7 +97,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
      *
      * @return The resource pack configuration section.
      */
-    public ConfigSectionView getConfig() {
+    public @NotNull ConfigSectionView getConfig() {
         return getConfigSection();
     }
 
@@ -104,7 +106,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
      *
      * @param generator The resource pack generator to register.
      */
-    public void registerGenerator(ResourcePackGenerator generator) {
+    public void registerGenerator(@NotNull ResourcePackGenerator generator) {
         if(generator != null && generator.onLoad(getConfig())) {
             generators.add(generator);
         }
@@ -115,7 +117,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
      *
      * @return The resource pack file, or null if not found.
      */
-    public File getResourcePack() {
+    public @Nullable File getResourcePack() {
         File rpFile = new File(plugin.getDataFolder(), "resource-pack.zip");
         if (rpFile.exists() && rpFile.isFile()) {
             return rpFile;
@@ -129,7 +131,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
      *
      * @return The resource pack hash, or null if the pack does not exist.
      */
-    public String getResourcePackHash() {
+    public @Nullable String getResourcePackHash() {
         if(resourcePackHash == null) {
             File resourcePack = getResourcePack();
             if (resourcePack != null && resourcePack.exists()) {
@@ -146,7 +148,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
      *
      * @return The ResourcePackHost.
      */
-    public ResourcePackHost host() {
+    public @NotNull ResourcePackHost host() {
         return host;
     }
 
@@ -155,7 +157,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
      *
      * @param player the player to send the pack to.
      */
-    public void sendPack(Player player) {
+    public void sendPack(@NotNull Player player) {
         File resPack = getResourcePack();
         if (resPack == null || !resPack.exists()) { return; }
 
@@ -187,7 +189,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
      *
      * @param statusCallback Optional callback to receive status updates.
      */
-    public void generatePack(Consumer<String> statusCallback) {
+    public void generatePack(@Nullable Consumer<String> statusCallback) {
         // clear previous resource pack
         if(!plugin.getDataFolder().toPath().resolve("resource-pack.zip").toFile().delete()) {
             api.messages().error("Failed to delete old resource-pack.zip");

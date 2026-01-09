@@ -23,6 +23,7 @@ package dev.stemcraft.api.service.world;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
 import org.bukkit.entity.Entity;
+import org.jetbrains.annotations.NotNull;
 
 /**
  * Interface for managing a session that tracks changes in the world.
@@ -63,8 +64,8 @@ public interface WorldChangeSession {
      * @param block The block to capture.
      * @param overwriteExisting Whether to overwrite existing captured state.
      */
-    default void captureBlock(Block block, boolean overwriteExisting) { captureBlockState(block.getState(), overwriteExisting); }
-    default void captureBlock(Block block) { captureBlock(block, false); }
+    default void captureBlock(@NotNull Block block, boolean overwriteExisting) { captureBlockState(block.getState(), overwriteExisting); }
+    default void captureBlock(@NotNull Block block) { captureBlock(block, false); }
 
     /**
      * Captures the current state of a block.
@@ -72,15 +73,15 @@ public interface WorldChangeSession {
      * @param state The block state to capture.
      * @param overwriteExisting Whether to overwrite existing captured state.
      */
-    void captureBlockState(BlockState state, boolean overwriteExisting);
-    default void captureBlockState(BlockState state) { captureBlockState(state, false); }
+    void captureBlockState(@NotNull BlockState state, boolean overwriteExisting);
+    default void captureBlockState(@NotNull BlockState state) { captureBlockState(state, false); }
 
     /**
      * Captures the current state of an entity.
      *
      * @param entity The entity to capture.
      */
-    void captureEntity(Entity entity);
+    void captureEntity(@NotNull Entity entity);
 
     /**
      * Loads the session state from the database.

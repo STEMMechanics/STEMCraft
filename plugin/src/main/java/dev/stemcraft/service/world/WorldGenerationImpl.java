@@ -24,6 +24,7 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.factory.ChunkGeneratorFactory;
 import dev.stemcraft.api.service.world.WorldGeneration;
 import org.bukkit.generator.ChunkGenerator;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -64,7 +65,7 @@ public class WorldGenerationImpl implements WorldGeneration {
      *
      * @return A list of registered chunk generator keys.
      */
-    public List<String> list() {
+    public @NotNull List<String> list() {
         List<String> out = new ArrayList<>(registry.keySet());
         Collections.sort(out);
         return out;
@@ -76,7 +77,7 @@ public class WorldGenerationImpl implements WorldGeneration {
      * @param key The unique key for the chunk generator.
      * @param factory The factory to create chunk generator instances.
      */
-    public void register(String key, ChunkGeneratorFactory factory) {
+    public void register(@NotNull String key, @NotNull ChunkGeneratorFactory factory) {
         String k = normalizeKey(key);
         if (factory == null) throw new IllegalArgumentException("factory cannot be null");
         registry.put(k, factory);
@@ -88,7 +89,7 @@ public class WorldGenerationImpl implements WorldGeneration {
      * @param key The chunk generator key.
      * @return True if the generator is registered, false otherwise.
      */
-    public boolean isRegistered(String key) {
+    public boolean isRegistered(@NotNull String key) {
         String k = normalizeKey(key);
         return registry.containsKey(k);
     }
@@ -101,7 +102,7 @@ public class WorldGenerationImpl implements WorldGeneration {
      * @return A new ChunkGenerator instance.
      * @throws IllegalArgumentException if the key is unknown.
      */
-    public ChunkGenerator get(String key, String cfg) {
+    public @NotNull ChunkGenerator get(@NotNull String key, @NotNull String cfg) {
         String k = normalizeKey(key);
         ChunkGeneratorFactory f = registry.get(k);
         if (f == null) throw new IllegalArgumentException("Unknown generator key: " + key);
@@ -115,7 +116,7 @@ public class WorldGenerationImpl implements WorldGeneration {
      * @return The normalized key.
      * @throws IllegalArgumentException if the key is null or empty.
      */
-    private static String normalizeKey(String key) {
+    private static @NotNull String normalizeKey(@NotNull String key) {
         if (key == null) throw new IllegalArgumentException("key cannot be null");
         String k = key.trim();
         if (k.isEmpty()) throw new IllegalArgumentException("key cannot be empty");

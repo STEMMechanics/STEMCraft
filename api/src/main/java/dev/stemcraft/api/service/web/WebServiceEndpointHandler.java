@@ -20,6 +20,8 @@
 
 package dev.stemcraft.api.service.web;
 
+import org.jetbrains.annotations.NotNull;
+
 import javax.annotation.Nullable;
 import java.util.Map;
 
@@ -54,5 +56,5 @@ public interface WebServiceEndpointHandler {
      * @param queryParams The query parameters as a map.
      * @return The response object as described above.
      */
-    @Nullable Object handle(String method, String uri, Map<String, String> queryParams);
+    @Nullable Object handle(@NotNull String method, @NotNull String uri, @NotNull Map<String, String> queryParams);
 }

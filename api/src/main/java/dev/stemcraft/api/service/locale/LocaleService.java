@@ -22,6 +22,7 @@ package dev.stemcraft.api.service.locale;
 
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
 
@@ -35,7 +36,7 @@ public interface LocaleService {
      *
      * @return The default locale string.
      */
-    String getDefaultLocale();
+    @NotNull String getDefaultLocale();
 
     /**
      * Resolve a locale key to a localized string.
@@ -45,7 +46,7 @@ public interface LocaleService {
      * @param key The key for the locale string.
      * @return The resolved locale string, or the raw key when no lookup is performed.
      */
-    String resolve(String lang, String key);
-    default String resolve(String key) { return resolve(getDefaultLocale(), key); }
-    default String resolve(@Nullable CommandSender sender, String key) { return resolve(sender instanceof Player p ? p.locale().toLanguageTag() : getDefaultLocale(), key); }
+    @NotNull String resolve(@NotNull String lang, @NotNull String key);
+    default @NotNull String resolve(@NotNull String key) { return resolve(getDefaultLocale(), key); }
+    default @NotNull String resolve(@Nullable CommandSender sender, @NotNull String key) { return resolve(sender instanceof Player p ? p.locale().toLanguageTag() : getDefaultLocale(), key); }
 }

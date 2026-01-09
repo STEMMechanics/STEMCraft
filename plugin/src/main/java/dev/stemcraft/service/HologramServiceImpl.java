@@ -43,6 +43,7 @@ import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.event.world.ChunkUnloadEvent;
 import org.bukkit.event.world.WorldLoadEvent;
 import org.bukkit.event.world.WorldUnloadEvent;
+import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
 import java.util.*;
@@ -333,7 +334,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
      * @param handler The handler for the hologram type.
      */
     @Override
-    public void registerType(String type, HologramTypeHandler handler) {
+    public void registerType(@NotNull String type, @NotNull HologramTypeHandler handler) {
         if (type == null) {
             type = "";
         }
@@ -354,7 +355,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
      * @return The ID of the created hologram.
      */
     @Override
-    public int create(String type, String context, Location location, List<String> data) {
+    public int create(@NotNull String type, @NotNull String context, @NotNull Location location, @NotNull List<String> data) {
         if (location == null || location.getWorld() == null) {
             throw new IllegalArgumentException(api.locales().resolve("HOLOGRAM_LOCATION_INVALID"));
         }
@@ -385,7 +386,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
      * @param data The new data for the hologram.
      */
     @Override
-    public void update(int id, List<String> data) {
+    public void update(int id, @NotNull List<String> data) {
         HologramData hologram = holograms.get(id);
         if (hologram == null) {
             return;
@@ -409,7 +410,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
      * @param context The hologram context to update (or null for all contexts).
      */
     @Override
-    public void update(String type, String context) {
+    public void update(@NotNull String type, @Nullable String context) {
         for(HologramData data : holograms.values()) {
             if(!data.type.equals(type)) {
                 continue;
@@ -438,7 +439,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
      * @param newLocation The new location for the hologram.
      */
     @Override
-    public void move(int id, Location newLocation) {
+    public void move(int id, @NotNull Location newLocation) {
         if (newLocation == null || newLocation.getWorld() == null) {
             return;
         }
@@ -478,7 +479,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
      * @param context The hologram context to delete (or null for all contexts).
      */
     @Override
-    public void delete(String type, String context) {
+    public void delete(@NotNull String type, @Nullable String context) {
         Iterator<Map.Entry<Integer, HologramData>> iterator = holograms.entrySet().iterator();
         while (iterator.hasNext()) {
             Map.Entry<Integer, HologramData> entry = iterator.next();
@@ -501,7 +502,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
      * Save all holograms to the configuration.
      */
     @Override
-    public int closest(Location loc, int range) {
+    public int closest(@NotNull Location loc, int range) {
         if (loc == null || loc.getWorld() == null) {
             return -1;
         }

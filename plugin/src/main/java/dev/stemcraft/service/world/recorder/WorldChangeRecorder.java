@@ -43,6 +43,7 @@ import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.player.PlayerBucketEmptyEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.world.StructureGrowEvent;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -63,7 +64,7 @@ public class WorldChangeRecorder implements WorldBaseSetting {
      * @param api The STEMCraft API instance.
      * @param worldService The WorldServiceImpl instance.
      */
-    public WorldChangeRecorder(STEMCraftAPI api, WorldServiceImpl worldService) {
+    public WorldChangeRecorder(@NotNull STEMCraftAPI api, @NotNull WorldServiceImpl worldService) {
         this.api = api;
         this.worldService = worldService;
     }
@@ -73,7 +74,7 @@ public class WorldChangeRecorder implements WorldBaseSetting {
      *
      * @return The setting key.
      */
-    public String key() {
+    public @NotNull String key() {
         return "changes";
     }
 
@@ -83,7 +84,7 @@ public class WorldChangeRecorder implements WorldBaseSetting {
      * @param api The STEMCraft API instance.
      * @param unused The WorldService instance (not used).
      */
-    public void onEnable(STEMCraftAPI api, WorldService unused) {
+    public void onEnable(@NotNull STEMCraftAPI api, @NotNull WorldService unused) {
         if(api.database().migrationVersion("world-changes") < 1) {
             if(api.database().execute("CREATE TABLE IF NOT EXISTS world_changes_blocks(" +
                     "id INT AUTO_INCREMENT," +
@@ -305,7 +306,7 @@ public class WorldChangeRecorder implements WorldBaseSetting {
      * @return A list of tab completion string arrays.
      */
     @Override
-    public List<String[]> tabCompletions() {
+    public @NotNull List<String[]> tabCompletions() {
         return List.of(
                 new String[]{"record"},
                 new String[]{"stop"},
@@ -321,7 +322,7 @@ public class WorldChangeRecorder implements WorldBaseSetting {
      * @param world The world the command is being executed in.
      */
     @Override
-    public void onCommand(CommandContext ctx, ConfigSection config, World world) {
+    public void onCommand(@NotNull CommandContext ctx, @NotNull ConfigSection config, @NotNull World world) {
         switch(ctx.getArgLower(0)) {
             case "record" -> {
                 getSession(world).start();
@@ -349,7 +350,7 @@ public class WorldChangeRecorder implements WorldBaseSetting {
      * @param value The value to set.
      */
     @Override
-    public void set(World world, ConfigSection config, String value) {
+    public void set(@NotNull World world, @NotNull ConfigSection config, @NotNull String value) {
         // not used
     }
 
@@ -359,7 +360,7 @@ public class WorldChangeRecorder implements WorldBaseSetting {
      * @param world The world to get the session for.
      * @return The WorldChangeSession for the world.
      */
-    public WorldChangeSession getSession(World world) {
+    public @NotNull WorldChangeSession getSession(@NotNull World world) {
         if (!sessions.containsKey(world)) {
             WorldChangeSessionImpl session = new WorldChangeSessionImpl(api, world);
             sessions.put(world, session);

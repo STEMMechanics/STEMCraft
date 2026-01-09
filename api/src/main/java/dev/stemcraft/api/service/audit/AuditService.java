@@ -21,6 +21,7 @@
 package dev.stemcraft.api.service.audit;
 
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
 
@@ -36,5 +37,5 @@ public interface AuditService {
      * @param action A string describing the action.
      * @param placeholders Optional placeholders for additional context.
      */
-    void log(@Nullable Player player, String action, String... placeholders);
+    void log(@Nullable Player player, @NotNull String action, @NotNull String... placeholders);
 }

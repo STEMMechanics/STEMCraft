@@ -21,6 +21,7 @@
 package dev.stemcraft.api.service.event;
 
 import org.bukkit.event.Event;
+import org.jetbrains.annotations.NotNull;
 
 /**
  * Functional interface for handling events.
@@ -35,5 +36,5 @@ public interface EventHandler<T extends Event> {
      *
      * @param event The event to handle.
      */
-    void handle(T event);
+    void handle(@NotNull T event);
 }

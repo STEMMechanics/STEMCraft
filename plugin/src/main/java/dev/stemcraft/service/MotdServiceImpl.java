@@ -25,6 +25,7 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.service.motd.MotdService;
 import dev.stemcraft.api.util.TextUtil;
 import org.bukkit.event.server.ServerListPingEvent;
+import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
 import java.util.LinkedHashMap;
@@ -76,7 +77,7 @@ public class MotdServiceImpl extends BaseService implements MotdService {
      * @param title The default MOTD title.
      * @param text The default MOTD text.
      */
-    public void setDefault(String title, String text) {
+    public void setDefault(@NotNull String title, @NotNull String text) {
         this.defaultMotdTitle = title;
         this.defaultMotdText = text;
     }
@@ -86,7 +87,7 @@ public class MotdServiceImpl extends BaseService implements MotdService {
      *
      * @return The current MOTD.
      */
-    public ResolvedMotd current() {
+    public @NotNull ResolvedMotd current() {
         if (motdMap.isEmpty() || currentMotdId == null) {
             return new ResolvedMotd(defaultMotdTitle, defaultMotdText, Priority.DEFAULT);
         }
@@ -112,7 +113,7 @@ public class MotdServiceImpl extends BaseService implements MotdService {
      * @param motdTitle The MOTD title.
      * @param motdText The MOTD text.
      */
-    public void push(String namespaceId, Priority priority, String motdTitle, String motdText) {
+    public void push(@NotNull String namespaceId, @NotNull Priority priority, @NotNull String motdTitle, @NotNull String motdText) {
         motdMap.put(namespaceId, new ResolvedMotd(motdTitle, motdText, priority));
         updateCurrentMotd();
     }
@@ -122,7 +123,7 @@ public class MotdServiceImpl extends BaseService implements MotdService {
      *
      * @param namespaceId The namespace ID of the MOTD to remove.
      */
-    public void remove(String namespaceId) {
+    public void remove(@NotNull String namespaceId) {
         motdMap.remove(namespaceId);
         updateCurrentMotd();
     }

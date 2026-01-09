@@ -26,6 +26,7 @@ import dev.stemcraft.api.service.tabcomplete.TabCompleteService;
 import dev.stemcraft.api.service.tabcomplete.TabCompletionProvider;
 import dev.stemcraft.service.BaseService;
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -60,7 +61,7 @@ public class TabCompleteServiceImpl extends BaseService implements TabCompleteSe
      * @param name The name of the placeholder.
      * @param callback The callback to provide completions.
      */
-    public void register(String name, TabCompletionProvider callback) {
+    public void register(@NotNull String name, @NotNull TabCompletionProvider callback) {
         tabCompletionPlaceholders.put(name, callback);
     }
 
@@ -72,7 +73,7 @@ public class TabCompleteServiceImpl extends BaseService implements TabCompleteSe
      * @param args Additional arguments for the completion provider.
      * @return A list of completion strings.
      */
-    public List<String> getCompletionList(String name, Player player, String... args) {
+    public @NotNull List<String> getCompletionList(@NotNull String name, @NotNull Player player, @NotNull String... args) {
         if (tabCompletionPlaceholders.containsKey(name)) {
             return tabCompletionPlaceholders.get(name).provide(player, args);
         }

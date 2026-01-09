@@ -23,6 +23,7 @@ package dev.stemcraft.api.service.database;
 import dev.stemcraft.api.database.DatabaseResultSetHandler;
 import dev.stemcraft.api.database.DatabaseResultSetMapper;
 import dev.stemcraft.api.database.DatabaseStatementBinder;
+import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
 
@@ -43,7 +44,7 @@ public interface DatabaseService {
      * @param binder The binder to bind parameters to the statement.
      * @return The number of affected rows.
      */
-    int update(String sql, DatabaseStatementBinder binder);
+    int update(@NotNull String sql, @Nullable DatabaseStatementBinder binder);
 
     /**
      * Executes a query statement and maps the result set.
@@ -52,7 +53,7 @@ public interface DatabaseService {
      * @param binder The binder to bind parameters to the statement.
      * @param handler The handler to process the result set.
      */
-    void query(String sql, DatabaseStatementBinder binder, DatabaseResultSetHandler handler);
+    void query(@NotNull String sql, @Nullable DatabaseStatementBinder binder, @NotNull DatabaseResultSetHandler handler);
 
     /**
      * Executes a query statement and maps a single result from the result set.
@@ -61,7 +62,7 @@ public interface DatabaseService {
      * @param binder The binder to bind parameters to the statement.
      * @param handler The handler to process each row of the result set.
      */
-    void queryEach(String sql, DatabaseStatementBinder binder, DatabaseResultSetHandler handler);
+    void queryEach(@NotNull String sql, @Nullable DatabaseStatementBinder binder, @NotNull DatabaseResultSetHandler handler);
 
     /**
      * Executes a query statement and maps a single result from the result set.
@@ -70,7 +71,7 @@ public interface DatabaseService {
      * @param binder The binder to bind parameters to the statement.
      * @param handler The handler to process the single result.
      */
-    void querySingle(String sql, DatabaseStatementBinder binder, DatabaseResultSetHandler handler);
+    void querySingle(@NotNull String sql, @Nullable DatabaseStatementBinder binder, @NotNull DatabaseResultSetHandler handler);
 
     /**
      * Executes a query statement and maps a single result from the result set.
@@ -81,7 +82,16 @@ public interface DatabaseService {
      * @param <T> The type of the object to map to.
      * @return The mapped object of type T, or null if no result was found.
      */
-    <T> @Nullable T querySingleMapped(String sql, DatabaseStatementBinder binder, DatabaseResultSetMapper<T> mapper);
+    <T> @Nullable T querySingleMapped(@NotNull String sql, @Nullable DatabaseStatementBinder binder, @Nullable DatabaseResultSetMapper<T> mapper);
+    default <T> @NotNull T querySingleMapped(
+        @NotNull String sql,
+        @Nullable DatabaseStatementBinder binder,
+        @Nullable DatabaseResultSetMapper<T> mapper,
+        @NotNull T defaultValue
+    ) {
+        T value = querySingleMapped(sql, binder, mapper);
+        return value != null ? value : defaultValue;
+    }
 
     /**
      * Executes a raw SQL statement.
@@ -89,7 +99,7 @@ public interface DatabaseService {
      * @param sql The SQL statement to execute.
      * @return True if the execution was successful, false otherwise.
      */
-    boolean execute(String sql);
+    boolean execute(@NotNull String sql);
 
     /**
      * Gets the migration version for the given migration name.
@@ -97,7 +107,7 @@ public interface DatabaseService {
      * @param name The name of the migration.
      * @return The migration version, or -1 if not found.
      */
-    int migrationVersion(String name);
+    int migrationVersion(@NotNull String name);
 
     /**
      * Sets the migration version for the given migration name.
@@ -105,12 +115,12 @@ public interface DatabaseService {
      * @param name The name of the migration.
      * @param version The migration version to set.
      */
-    void setMigrationVersion(String name, int version);
+    void setMigrationVersion(@NotNull String name, int version);
 
     /**
      * Clears the migration record for the given migration name.
      *
      * @param name The name of the migration.
      */
-    void clearMigration(String name);
+    void clearMigration(@NotNull String name);
 }

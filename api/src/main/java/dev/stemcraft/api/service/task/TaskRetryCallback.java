@@ -20,6 +20,8 @@
 
 package dev.stemcraft.api.service.task;
 
+import org.jetbrains.annotations.NotNull;
+
 /**
  * Functional interface for task retry callbacks.
  */
@@ -31,5 +33,5 @@ public interface TaskRetryCallback {
      *
      * @param result The result of the retry operation.
      */
-    void done(TaskService.RetryResult result);
+    void done(@NotNull TaskService.RetryResult result);
 }

@@ -29,6 +29,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
+import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
 import java.util.HashMap;
@@ -80,7 +81,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
      * @param value The value for the attribute.
      */
     @Override
-    public <T, Z> void addAttrib(ItemStack item, String key, T value) {
+    public <T, Z> void addAttrib(@NotNull ItemStack item, @NotNull String key, @NotNull T value) {
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
             NamespacedKey namespacedKey = new NamespacedKey(plugin, key);
@@ -100,7 +101,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
      * @return true if the attribute exists, false otherwise.
      */
     @Override
-    public boolean hasAttrib(ItemStack item, String key) {
+    public boolean hasAttrib(@NotNull ItemStack item, @NotNull String key) {
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
             NamespacedKey namespacedKey = new NamespacedKey(plugin, key);
@@ -117,7 +118,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
      * @param key The key for the attribute to remove.
      */
     @Override
-    public void removeAttrib(ItemStack item, String key) {
+    public void removeAttrib(@NotNull ItemStack item, @NotNull String key) {
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
             NamespacedKey namespacedKey = new NamespacedKey(plugin, key);
@@ -136,7 +137,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
      * @return The value of the attribute or the default value.
      */
     @Override
-    public <T, Z> T getAttrib(ItemStack item, String key, Class<T> typeClass, T defaultValue) {
+    public <T, Z> @Nullable T getAttrib(@NotNull ItemStack item, @NotNull String key, @NotNull Class<T> typeClass, @Nullable T defaultValue) {
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
             NamespacedKey namespacedKey = new NamespacedKey(plugin, key);
@@ -199,7 +200,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
      * @param template The ItemStack template for the custom item.
      */
     @Override
-    public void registerCustomItem(String id, ItemStack template) {
+    public void registerCustomItem(@NotNull String id, @NotNull ItemStack template) {
         if (id == null || id.isEmpty() || template == null) {
             return;
         }
@@ -220,7 +221,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
      * @return A new ItemStack instance of the custom item, or null if not found or invalid parameters.
      */
     @Override
-    public ItemStack createCustomItem(String id, int quantity) {
+    public @NotNull ItemStack createCustomItem(@NotNull String id, int quantity) {
         if (id == null || quantity <= 0) {
             return null;
         }
@@ -243,7 +244,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
      * @return true if the ItemStack matches the custom item id, false otherwise.
      */
     @Override
-    public boolean isCustomItemId(String id, ItemStack item) {
+    public boolean isCustomItemId(@NotNull String id, @NotNull ItemStack item) {
         if (id == null || item == null) {
             return false;
         }

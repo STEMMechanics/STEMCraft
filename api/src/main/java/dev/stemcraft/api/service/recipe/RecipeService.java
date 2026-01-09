@@ -22,6 +22,7 @@ package dev.stemcraft.api.service.recipe;
 
 import org.bukkit.Material;
 import org.bukkit.inventory.*;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.Map;
 
@@ -35,7 +36,7 @@ public interface RecipeService {
      *
      * @param name The name/ID of the recipe to remove.
      */
-    void remove(String name);
+    void remove(@NotNull String name);
 
     /**
      * Adds a shaped crafting recipe.
@@ -45,7 +46,7 @@ public interface RecipeService {
      * @param shape An array of strings representing the shape of the recipe.
      * @param ingredients A map of characters to Materials representing the ingredients.
      */
-    void addShaped(String id, ItemStack result, String[] shape, Map<Character, Material> ingredients);
+    void addShaped(@NotNull String id, @NotNull ItemStack result, @NotNull String[] shape, @NotNull Map<Character, Material> ingredients);
 
     /**
      * Adds a shapeless crafting recipe.
@@ -54,7 +55,7 @@ public interface RecipeService {
      * @param result The resulting ItemStack from the recipe.
      * @param inputs The input Materials required for the recipe.
      */
-    void addShapeless(String id, ItemStack result, Material... inputs);
+    void addShapeless(@NotNull String id, @NotNull ItemStack result, @NotNull Material... inputs);
 
     /**
      * Adds a furnace smelting recipe.
@@ -65,7 +66,7 @@ public interface RecipeService {
      * @param exp The experience gained from smelting.
      * @param cookTicks The time in ticks required to smelt the item.
      */
-    void addFurnace(String id, Material input, ItemStack output, float exp, int cookTicks);
+    void addFurnace(@NotNull String id, @NotNull Material input, @NotNull ItemStack output, float exp, int cookTicks);
 
     /**
      * Adds a smoker recipe.
@@ -76,7 +77,7 @@ public interface RecipeService {
      * @param exp The experience gained from smoking.
      * @param cookTicks The time in ticks required to smoke the item.
      */
-    void addSmoker(String id, Material input, ItemStack output, float exp, int cookTicks);
+    void addSmoker(@NotNull String id, @NotNull Material input, @NotNull ItemStack output, float exp, int cookTicks);
 
     /**
      * Adds a blast furnace recipe.
@@ -87,7 +88,7 @@ public interface RecipeService {
      * @param exp The experience gained from the blast furnace process.
      * @param cookTicks The time in ticks required for the blast furnace process.
      */
-    void addBlastFurnace(String id, Material input, ItemStack output, float exp, int cookTicks);
+    void addBlastFurnace(@NotNull String id, @NotNull Material input, @NotNull ItemStack output, float exp, int cookTicks);
 
     /**
      * Adds a campfire recipe.
@@ -98,7 +99,7 @@ public interface RecipeService {
      * @param exp The experience gained from campfire cooking.
      * @param cookTicks The time in ticks required to cook the item on the campfire.
      */
-    void addCampfire(String id, Material input, ItemStack output, float exp, int cookTicks);
+    void addCampfire(@NotNull String id, @NotNull Material input, @NotNull ItemStack output, float exp, int cookTicks);
 
     /**
      * Adds a stonecutter recipe.
@@ -107,7 +108,7 @@ public interface RecipeService {
      * @param output The resulting Material from the stonecutter.
      * @param amount The amount of output Material produced.
      */
-    void addStonecutter(Material input, Material output, int amount);
+    void addStonecutter(@NotNull Material input, @NotNull Material output, int amount);
 
     /**
      * Adds a smithing transform recipe.
@@ -119,11 +120,11 @@ public interface RecipeService {
      * @param addition The addition RecipeChoice for the smithing recipe.
      */
     void addSmithingTransform(
-            String id,
-            ItemStack result,
-            RecipeChoice template,
-            RecipeChoice base,
-            RecipeChoice addition
+            @NotNull String id,
+            @NotNull ItemStack result,
+            @NotNull RecipeChoice template,
+            @NotNull RecipeChoice base,
+            @NotNull RecipeChoice addition
     );
 
     /**
@@ -135,9 +136,9 @@ public interface RecipeService {
      * @param material The material RecipeChoice for the smithing trim.
      */
     void addSmithingTrim(
-            String id,
-            RecipeChoice template,
-            RecipeChoice baseArmor,
-            RecipeChoice material
+            @NotNull String id,
+            @NotNull RecipeChoice template,
+            @NotNull RecipeChoice baseArmor,
+            @NotNull RecipeChoice material
     );
 }

@@ -21,10 +21,13 @@
 package dev.stemcraft.api.service.punishment;
 
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.NotNull;
 
+import javax.annotation.Nullable;
 import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
+import javax.annotation.Nullable;
 
 /**
  * Service for recording and retrieving player punishments.
@@ -41,7 +44,7 @@ public interface PunishmentService {
      * @param alerted Whether alerts should be sent for this punishment.
      * @param reason The reason for the punishment.
      */
-    void record(UUID playerUuid, Player actor, Duration duration, String type, boolean alerted, String reason);
+    void record(@NotNull UUID playerUuid, @Nullable Player actor, @Nullable Duration duration, @NotNull String type, boolean alerted, @NotNull String reason);
 
     /**
      * Latest first, 1-based page index.
@@ -52,7 +55,7 @@ public interface PunishmentService {
      * @param pageSize The number of records per page.
      * @return A list of punishment records.
      */
-    List<PunishmentRecord> list(UUID targetUuid, String type, int page, int pageSize);
+    @NotNull List<PunishmentRecord> list(@Nullable UUID targetUuid, @Nullable String type, int page, int pageSize);
 
     /**
      * Register a callback for alerting when a punishment of the given type is issued.
@@ -60,5 +63,5 @@ public interface PunishmentService {
      * @param type The type of punishment to listen for.
      * @param callback The callback to invoke when a punishment of the specified type is issued.
      */
-    void registerAlert(String type, PunishmentAlertCallback callback);
+    void registerAlert(@NotNull String type, @NotNull PunishmentAlertCallback callback);
 }

@@ -24,6 +24,7 @@ import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.service.locale.LocaleService;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
 import java.util.HashMap;
@@ -78,7 +79,7 @@ public class LocaleServiceImpl extends BaseService implements LocaleService {
      * @return The default locale string.
      */
     @Override
-    public String getDefaultLocale() {
+    public @NotNull String getDefaultLocale() {
         return defaultLocale;
     }
 
@@ -89,7 +90,7 @@ public class LocaleServiceImpl extends BaseService implements LocaleService {
      * @param key The locale key to resolve.
      * @return The resolved locale string or the original key if not found.
      */
-    public String resolve(String lang, String key) {
+    public @NotNull String resolve(@NotNull String lang, @NotNull String key) {
         if (key == null || key.isEmpty()) {
             return key;
         }

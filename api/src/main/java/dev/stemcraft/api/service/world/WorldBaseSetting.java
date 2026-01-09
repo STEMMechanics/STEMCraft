@@ -24,6 +24,7 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.config.ConfigSection;
 import org.bukkit.World;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 import java.util.Locale;
@@ -39,7 +40,7 @@ public interface WorldBaseSetting {
      *
      * @return The setting key.
      */
-    String key();
+    @NotNull String key();
 
     /**
      * Called when the setting is enabled.
@@ -47,7 +48,7 @@ public interface WorldBaseSetting {
      * @param api The STEMCraft API instance.
      * @param service The world service instance.
      */
-    void onEnable(STEMCraftAPI api, WorldService service);
+    void onEnable(@NotNull STEMCraftAPI api, @NotNull WorldService service);
 
     /**
      * Called when the setting is disabled.
@@ -57,37 +58,37 @@ public interface WorldBaseSetting {
     /**
      * Called when a world is loaded.
      */
-    default void onWorldLoad(World world, ConfigSection config) { }
+    default void onWorldLoad(@NotNull World world, @NotNull ConfigSection config) { }
 
     /**
      * Called when a world is unloaded.
      */
-    default void onWorldUnload(World world, ConfigSection config) { }
+    default void onWorldUnload(@NotNull World world, @NotNull ConfigSection config) { }
 
     /**
      * Called when a world is deleted.
      */
-    default void onWorldDeleted(String worldName, ConfigSection config) { }
+    default void onWorldDeleted(@NotNull String worldName, @NotNull ConfigSection config) { }
 
     /**
      * Returns a list of tab completions for this setting.
      */
-    List<String[]> tabCompletions();
+    @NotNull List<String[]> tabCompletions();
 
     /**
      * Called when the command for this setting is executed.
      */
-    void onCommand(CommandContext ctx, ConfigSection config, World world);
+    void onCommand(@NotNull CommandContext ctx, @NotNull ConfigSection config, @NotNull World world);
 
     /**
      * Return the value of this setting for the given world from the config.
      */
-    default String get(World world, ConfigSection config) {
+    default @NotNull String get(@NotNull World world, @NotNull ConfigSection config) {
         return config.getString(key(), "unset").toLowerCase(Locale.ROOT);
     }
 
     /**
      * Set the value of this setting for the given world in the config.
      */
-    void set(World world, ConfigSection config, String value);
+    void set(@NotNull World world, @NotNull ConfigSection config, @NotNull String value);
 }

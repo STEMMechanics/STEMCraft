@@ -38,6 +38,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.*;
+import org.jetbrains.annotations.NotNull;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.event.*;
@@ -322,7 +323,7 @@ public final class GatekeeperServiceImpl extends BaseService implements Gatekeep
      * @param uuid The UUID to check.
      * @return True if blacklisted, false otherwise.
      */
-    public boolean isBlacklisted(UUID uuid) {
+    public boolean isBlacklisted(@NotNull UUID uuid) {
         if(!enabled) { return false; }
         return blacklist.contains(uuid);
     }
@@ -333,7 +334,7 @@ public final class GatekeeperServiceImpl extends BaseService implements Gatekeep
      * @param uuid The UUID to modify.
      * @param value True to blacklist, false to unblacklist.
      */
-    public void blacklist(UUID uuid, boolean value) {
+    public void blacklist(@NotNull UUID uuid, boolean value) {
         boolean dirty = false;
 
         if(value) {
@@ -358,7 +359,7 @@ public final class GatekeeperServiceImpl extends BaseService implements Gatekeep
         }
     }
 
-    public void blacklist(Player player, boolean value) {
+    public void blacklist(@NotNull Player player, boolean value) {
         blacklist(player.getUniqueId(), value);
     }
 
@@ -368,7 +369,7 @@ public final class GatekeeperServiceImpl extends BaseService implements Gatekeep
      * @param uuid The UUID to check.
      * @return True if whitelisted, false otherwise.
      */
-    public boolean isWhitelisted(UUID uuid) {
+    public boolean isWhitelisted(@NotNull UUID uuid) {
         if(!enabled) { return true; }
         return whitelist.contains(uuid);
     }
@@ -379,7 +380,7 @@ public final class GatekeeperServiceImpl extends BaseService implements Gatekeep
      * @param uuid The UUID to modify.
      * @param value True to approve, false to unapprove.
      */
-    public void whitelist(UUID uuid, boolean value) {
+    public void whitelist(@NotNull UUID uuid, boolean value) {
         boolean dirty = false;
 
         if(value) {

@@ -42,6 +42,7 @@ import org.bukkit.event.world.WorldLoadEvent;
 import org.bukkit.event.world.WorldUnloadEvent;
 import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.event.EventPriority;
+import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
 import java.io.IOException;
@@ -165,7 +166,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      * @param world The world to evict players from.
      */
     @Override
-    public void evictAllPlayers(World world) {
+    public void evictAllPlayers(@NotNull World world) {
         World firstWorld = Bukkit.getWorlds().getFirst();
 
         if (world.equals(firstWorld)) {
@@ -178,13 +179,25 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         });
     }
 
+    /** {@inheritDoc} */
+    @Override
+    public @NotNull World getDefaultWorld() {
+        return defaultWorld;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void setDefaultWorld(@NotNull World world) {
+        defaultWorld = world;
+    }
+
     /**
      * Is the given world currently loaded?
      *
      * @param name The name of the world.
      * @return true if loaded, false otherwise.
      */
-    @Override public boolean isWorldLoaded(String name) {
+    @Override public boolean isWorldLoaded(@NotNull String name) {
         return Bukkit.getWorld(name) != null;
     }
 
@@ -194,7 +207,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      * @param name The name of the world.
      * @return true if exists, false otherwise.
      */
-    @Override public boolean worldExists(String name)   {
+    @Override public boolean worldExists(@NotNull String name)   {
         return listWorlds().contains(name);
     }
 
@@ -204,7 +217,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      * @param name The name of the world.
      * @return The loaded World instance.
      */
-    @Override public World loadWorld(String name) {
+    @Override public @Nullable World loadWorld(@NotNull String name) {
         return ensure(name, null);
     }
 
@@ -215,7 +228,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      * @param save Whether to save the world before unloading.
      * @return true if unloaded, false otherwise.
      */
-    @Override public boolean unloadWorld(String name, boolean save) {
+    @Override public boolean unloadWorld(@NotNull String name, boolean save) {
         World w = Bukkit.getWorld(name);
         if (w == null) return false;
 
@@ -236,7 +249,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      * @param generatorOptions The options for the custom generator (or null for default).
      * @return The created World instance.
      */
-    @Override public World createWorld(String name, @Nullable String generatorName, @Nullable String generatorOptions) {
+    @Override public @Nullable World createWorld(@NotNull String name, @Nullable String generatorName, @Nullable String generatorOptions) {
         return ensure(name, worldGeneration.get(generatorName, generatorOptions));
     }
 
@@ -247,7 +260,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      * @return True if the setting is registered, false otherwise.
      */
     @Override
-    public boolean isSettingRegistered(String key) {
+    public boolean isSettingRegistered(@NotNull String key) {
         return settings.containsKey(key);
     }
 
@@ -259,7 +272,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      * @return True if the setting exists, false otherwise.
      */
     @Override
-    public boolean settingExists(World world, String key) {
+    public boolean settingExists(@NotNull World world, @NotNull String key) {
         WorldBaseSetting setting = getSettingHandler(key);
         if(setting != null) {
             String value = setting.get(world, getConfigSection(world));
@@ -276,7 +289,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      * @return The value of the setting, or null if not found.
      */
     @Override
-    public @Nullable String getSetting(World world, String key) {
+    public @Nullable String getSetting(@NotNull World world, @NotNull String key) {
         WorldBaseSetting setting = getSettingHandler(key);
         if(setting != null) {
             return setting.get(world, getConfigSection(world));
@@ -293,7 +306,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      * @throws IllegalArgumentException if the key or value is invalid.
      */
     @Override
-    public void setSetting(World world, String key, String value) {
+    public void setSetting(@NotNull World world, @NotNull String key, @NotNull String value) {
         WorldBaseSetting setting = getSettingHandler(key);
         if(setting != null) {
             setting.set(world, getConfigSection(world), value);
@@ -309,7 +322,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      * @param commandMode The command mode for the setting.
      */
     @Override
-    public void registerSettingHandler(WorldBaseSetting setting, SettingCommandMode commandMode) {
+    public void registerSettingHandler(@NotNull WorldBaseSetting setting, @NotNull SettingCommandMode commandMode) {
         String key = setting.key();
 
         if(settings.containsKey(key)) {
@@ -388,13 +401,13 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      * @return The ConfigSection for the world.
      */
     @Override
-    public ConfigSection getConfigSection(String worldName) {
+    public @NotNull ConfigSection getConfigSection(@NotNull String worldName) {
         return getConfigSection().getSection(worldName);
     }
 
     /** {@inheritDoc} */
     @Override
-    public ConfigSection getConfigSection(World world) {
+    public @NotNull ConfigSection getConfigSection(@NotNull World world) {
         return getConfigSection(world.getName());
     }
   
@@ -530,7 +543,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      * @param name The name of the world.
      * @throws IOException If an I/O error occurs.
      */
-    @Override public void deleteWorld(String name) throws IOException {
+    @Override public void deleteWorld(@NotNull String name) throws IOException {
         requireUnloaded(name);
         Path root = worldRoot(name);
         if (!Files.exists(root)) return;
@@ -552,7 +565,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      * @param newName The new name for the world.
      * @throws IOException If an I/O error occurs.
      */
-    @Override public void renameWorld(String oldName, String newName) throws IOException {
+    @Override public void renameWorld(@NotNull String oldName, @NotNull String newName) throws IOException {
         requireUnloaded(oldName); requireUnloaded(newName);
         Files.move(worldRoot(oldName), worldRoot(newName), StandardCopyOption.ATOMIC_MOVE);
     }
@@ -564,7 +577,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      * @param dst The destination world name.
      * @throws IOException If an I/O error occurs.
      */
-    @Override public void duplicateWorld(String src, String dst) throws IOException {
+    @Override public void duplicateWorld(@NotNull String src, @NotNull String dst) throws IOException {
         requireUnloaded(src); requireUnloaded(dst);
         Path s = worldRoot(src), d = worldRoot(dst);
         if (!Files.exists(s)) throw new IOException("Source world not found: " + src);
@@ -593,7 +606,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      *
      * @return A list of world names.
      */
-    @Override public List<String> listWorlds() {
+    @Override public @NotNull List<String> listWorlds() {
         Set<String> names = new LinkedHashSet<>();
 
         // 1) Loaded worlds
@@ -632,7 +645,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      * @param name The name of the world.
      * @return The Path to the world folder.
      */
-    @Override public Path getWorldFolder(String name) {
+    @Override public @NotNull Path getWorldFolder(@NotNull String name) {
         return worldRoot(name);
     }
 
@@ -642,7 +655,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      * @return The WorldGeneration instance.
      */
     @Override
-    public WorldGeneration generator() {
+    public @NotNull WorldGeneration generator() {
         return worldGeneration;
     }
 
@@ -722,7 +735,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      * @param world The world to get the session for.
      * @return The WorldChangeSession instance.
      */
-    public WorldChangeSession changes(World world) {
+    public @NotNull WorldChangeSession changes(@NotNull World world) {
         return worldChangeRecorder.getSession(world);
     }
 }

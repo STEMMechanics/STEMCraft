@@ -32,6 +32,7 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.player.PlayerRespawnEvent;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 import java.util.Locale;
@@ -48,7 +49,7 @@ public class WorldForceSpawnSetting implements WorldBaseSetting {
      * @return The setting key.
      */
     @Override
-    public String key() {
+    public @NotNull String key() {
         return "force-spawn-on-death";
     }
 
@@ -59,7 +60,7 @@ public class WorldForceSpawnSetting implements WorldBaseSetting {
      * @param service The WorldService instance.
      */
     @Override
-    public void onEnable(STEMCraftAPI api, WorldService service) {
+    public void onEnable(@NotNull STEMCraftAPI api, @NotNull WorldService service) {
         this.worldService = service;
 
         // Respawn rules:
@@ -95,7 +96,7 @@ public class WorldForceSpawnSetting implements WorldBaseSetting {
      * @return A list of tab completion options.
      */
     @Override
-    public List<String[]> tabCompletions() {
+    public @NotNull List<String[]> tabCompletions() {
         return List.of(
                 new String[]{"unset"},
                 new String[]{"true"},
@@ -110,7 +111,7 @@ public class WorldForceSpawnSetting implements WorldBaseSetting {
      * @param world The world to apply the setting to.
      */
     @Override
-    public void onCommand(CommandContext ctx, ConfigSection config, World world) {
+    public void onCommand(@NotNull CommandContext ctx, @NotNull ConfigSection config, @NotNull World world) {
         // world flags [world] <flag> [options]
 
         if(ctx.numArgs() == 0) {
@@ -141,7 +142,7 @@ public class WorldForceSpawnSetting implements WorldBaseSetting {
      * @return The force-spawn setting ("true", "false", or "unset").
      */
     @Override
-    public String get(World world, ConfigSection unused) {
+    public @NotNull String get(@NotNull World world, @NotNull ConfigSection unused) {
         String baseName = WorldUtil.baseName(world.getName());
         ConfigSection config = worldService.getConfigSection(baseName);
 
@@ -168,7 +169,7 @@ public class WorldForceSpawnSetting implements WorldBaseSetting {
      * @param value The value to set ("true", "false", or "unset").
      */
     @Override
-    public void set(World world, ConfigSection unused, String value) {
+    public void set(@NotNull World world, @NotNull ConfigSection unused, @NotNull String value) {
         String baseName = WorldUtil.baseName(world.getName());
         ConfigSection config = worldService.getConfigSection(baseName);
 
