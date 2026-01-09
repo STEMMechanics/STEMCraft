@@ -326,19 +326,19 @@ public class WorldChangeRecorder implements WorldBaseSetting {
         switch(ctx.getArgLower(0)) {
             case "record" -> {
                 getSession(world).start();
-                ctx.returnSuccess("Started recording changes in world '" + world.getName() + "'.");
+                ctx.returnSuccess("WORLD_SETTING_CHANGES_STARTED", "world", world.getName());
             }
             case "stop" -> {
                 getSession(world).stop();
-                ctx.returnSuccess("Stopped recording changes in world '" + world.getName() + "'.");
+                ctx.returnSuccess("WORLD_SETTING_CHANGES_STOPPED", "world", world.getName());
             }
             case "rollback" -> {
                 WorldChangeSession session = getSession(world);
                 session.rollback(true);
                 session.clear();
-                ctx.returnSuccess("Rolled back recorded changes in world '" + world.getName() + "'.");
+                ctx.returnSuccess("WORLD_SETTING_CHANGES_ROLLBACK", "world", world.getName());
             }
-            default -> ctx.returnError("Unknown subcommand for changes setting: " + ctx.getArgLower(0));
+            default -> ctx.returnError("WORLD_SETTING_CHANGES_UNKNOWN", "command", ctx.getArgLower(0));
         }
     }
 

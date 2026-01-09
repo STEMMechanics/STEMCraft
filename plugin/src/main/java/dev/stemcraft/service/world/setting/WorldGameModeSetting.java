@@ -97,8 +97,13 @@ public class WorldGameModeSetting implements WorldBaseSetting {
     public void onCommand(@NotNull CommandContext ctx, @NotNull ConfigSection config, @NotNull World world) {
         if(ctx.numArgs() == 0) {
             GameMode currentMode = get(world);
-            ctx.returnInfo("World '" + world.getName() + "' game mode is " +
-                    (currentMode != null ? currentMode.name().toLowerCase() : "unset") + ".");
+            ctx.returnInfo(
+                "WORLD_SETTING_GAMEMODE_STATUS",
+                "world",
+                world.getName(),
+                "mode",
+                currentMode != null ? currentMode.name().toLowerCase() : "unset"
+            );
             return;
         }
         
@@ -108,14 +113,14 @@ public class WorldGameModeSetting implements WorldBaseSetting {
 
             set(world, config, mode);
             if(mode.equals("unset")) {
-                ctx.returnSuccess("World '" + world.getName() + "' game mode is unset.");
+                ctx.returnSuccess("WORLD_SETTING_GAMEMODE_UNSET", "world", world.getName());
             } else {
-                ctx.returnSuccess("Set world '" + world.getName() + "' game mode to " + mode + ".");
+                ctx.returnSuccess("WORLD_SETTING_GAMEMODE_SET", "world", world.getName(), "mode", mode);
             }
 
         }
 
-        ctx.returnError("Invalid game mode '" + mode + "'. Valid options are: unset, survival, creative, adventure, spectator.");
+        ctx.returnError("WORLD_SETTING_GAMEMODE_INVALID", "mode", mode);
     }
 
 

@@ -108,8 +108,8 @@ public final class GatekeeperServiceImpl extends BaseService implements Gatekeep
         whitelist = new ArrayList<>(config.getStringList("whitelist").stream().map(UUID::fromString).toList());
 
         api.commands().create("invite")
-                .description("Manage server invite codes")
-                .usage("/invite add <code> <yyyy-MM-dd|never> | /invite remove <code> | /invite list")
+                .description("INVITE_DESCRIPTION")
+                .usage("INVITE_USAGE")
                 .tabCompletion("add", "", "never")
                 .tabCompletion("remove", "{invite-codes}")
                 .tabCompletion("list")
@@ -129,41 +129,41 @@ public final class GatekeeperServiceImpl extends BaseService implements Gatekeep
                             }
 
                             if (config.contains("invites." + code)) {
-                                ctx.returnError("Invite code '" + code + "' already exists.");
+                                ctx.returnError("INVITE_CODE_EXISTS", "code", code);
                             }
 
                             if (expires != null && !TimeUtil.validDate(expires)) {
-                                ctx.returnError("Invalid date. Use yyyy-MM-dd or 'never'.");
+                                ctx.returnError("INVITE_DATE_INVALID");
                             }
 
                             config.set("invites." + code + ".expires", expires == null ? "never" : expires);
                             config.save();
 
-                            ctx.returnInfo("Invite code added");
+                            ctx.returnInfo("INVITE_CODE_ADDED");
                         }
                         case "remove" -> {
                             ctx.checkArgsSizeAtLeast(2);
                             String code = ctx.getArg(2).toLowerCase(Locale.ROOT);
 
                             if (!config.contains("invites." + code)) {
-                                ctx.returnError("Invite code '" + code + "' does not exist.");
+                                ctx.returnError("INVITE_CODE_NOT_FOUND", "code", code);
                             }
 
                             config.set("invites." + code, null);
                             config.save();
 
-                            ctx.returnInfo("Invite code removed");
+                            ctx.returnInfo("INVITE_CODE_REMOVED");
                         }
                         case "list" -> {
                             ConfigSection section = config.getSection("invites");
                             if(section == null || section.getKeys(false).isEmpty()) {
-                                ctx.returnInfo("No invite codes found.");
+                                ctx.returnInfo("INVITE_CODE_NONE");
                             }
 
                             List<String> inviteCodes = section.getKeys(false).stream().toList();
                             int page = ctx.getArgAsInt(2, 1);
 
-                            ChatMenuUtil.render(ctx.getSenderAsPlayer(), "Invite Codes", "invite list", page, inviteCodes.size(), (start, count, isPlayer) -> {
+                            ChatMenuUtil.render(ctx.getSenderAsPlayer(), api.locales().resolve(ctx.getSenderAsPlayer(), "INVITE_LIST_TITLE"), "invite list", page, inviteCodes.size(), (start, count, isPlayer) -> {
                                 List<Component> lines = new ArrayList<>();
                                 for (int i = 0; i < count; i++) {
                                     String code = inviteCodes.get(i + start);
@@ -189,7 +189,7 @@ public final class GatekeeperServiceImpl extends BaseService implements Gatekeep
                                 }
 
                                 return lines;
-                            }, "NO_INVITES_FOUND");
+                            }, "INVITE_CODE_NONE");
                         }
                         default -> ctx.returnUsage();
                     }
@@ -205,7 +205,7 @@ public final class GatekeeperServiceImpl extends BaseService implements Gatekeep
             if(isBlacklisted(uuid)) {
                 event.disallow(
                         AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
-                        MiniMessage.miniMessage().deserialize("You are blacklisted from this server.")
+                        MiniMessage.miniMessage().deserialize(api.messages().text(null, "GATEKEEPER_BLACKLISTED"))
                 );
             }
         }, EventPriority.HIGHEST, true);
@@ -217,7 +217,7 @@ public final class GatekeeperServiceImpl extends BaseService implements Gatekeep
             if(!enabled) { return; }
 
             if(isBlacklisted(player.getUniqueId())) {
-                player.kick(Component.text("You are blacklisted from this server."));
+                player.kick(MiniMessage.miniMessage().deserialize(api.messages().text(player, "GATEKEEPER_BLACKLISTED")));
                 return;
             }
 
@@ -235,7 +235,7 @@ public final class GatekeeperServiceImpl extends BaseService implements Gatekeep
 
             if (isWhitelisted(player)) return;
             event.setCancelled(true);
-            api.messages().error(player, "Commands are disabled until you enter a valid invite code.");
+            api.messages().error(player, "GATEKEEPER_COMMANDS_DISABLED");
         }, EventPriority.HIGHEST, true);
 
         // Event AsyncPlayerChatEvent
@@ -346,7 +346,7 @@ public final class GatekeeperServiceImpl extends BaseService implements Gatekeep
 
                 Player player = Bukkit.getPlayer(uuid);
                 if(player != null && player.isOnline()) {
-                    player.kick(Component.text("You have been blacklisted from this server."));
+                    player.kick(MiniMessage.miniMessage().deserialize(api.messages().text(player, "GATEKEEPER_BLACKLISTED")));
                 }
             }
         } else {
@@ -417,11 +417,11 @@ public final class GatekeeperServiceImpl extends BaseService implements Gatekeep
 
                 reminders.put(player, reminders.getOrDefault(player, 0) + 1);
                 if (reminders.get(player) >= GATEKEEPER_MAX_REMINDERS) {
-                    player.kick(Component.text("No correct invite code was entered\n\nTry again later or contact STEMMechanics.", NamedTextColor.YELLOW));
+                    player.kick(MiniMessage.miniMessage().deserialize(api.messages().text(player, "GATEKEEPER_TOO_MANY_REMINDERS")));
                     return;
                 }
 
-                api.messages().info(player, "Please type your invite code in chat.");
+                api.messages().info(player, "GATEKEEPER_INVITE_PROMPT_CHAT");
                 resetInviteReminder(player, false);
             });
         }
@@ -442,13 +442,7 @@ public final class GatekeeperServiceImpl extends BaseService implements Gatekeep
         player.setFlying(true);
         player.setCollidable(false);
 
-        api.messages().send(player,
-                """
-                        <yellow>----------------------------------------------------
-                        Welcome to the STEMCraft server!
-                        This server is invite-only. Please type your invite
-                        code in chat to join.
-                        ----------------------------------------------------</yellow>""");
+        api.messages().send(player, "GATEKEEPER_WELCOME");
         resetInviteReminder(player, false);
     }
 
@@ -502,7 +496,7 @@ public final class GatekeeperServiceImpl extends BaseService implements Gatekeep
         if (!player.isOnline()) return;
 
         if (code.isEmpty()) {
-            api.messages().warn(player, "Please type your invite code.");
+            api.messages().warn(player, "GATEKEEPER_INVITE_PROMPT");
             return;
         }
 
@@ -513,10 +507,10 @@ public final class GatekeeperServiceImpl extends BaseService implements Gatekeep
 
         // Success: approve + release
         whitelist(player.getUniqueId(), true);
-        api.messages().info(player, "Invite accepted.");
+        api.messages().info(player, "GATEKEEPER_INVITE_ACCEPTED");
         releasePlayer(player);
 
-        Bukkit.broadcast(Component.text(player.getName() + " joined the server.", NamedTextColor.YELLOW));
+        api.messages().broadcast("GATEKEEPER_JOIN_BROADCAST", "player", player.getName());
     }
 
     /**
@@ -529,11 +523,11 @@ public final class GatekeeperServiceImpl extends BaseService implements Gatekeep
         reminders.put(player, 0);
 
         if (attempts.get(player) >= GATEKEEPER_MAX_ATTEMPTS) {
-            player.kick(Component.text("Too many incorrect codes.\n\nTry again later or contact STEMMechanics.", NamedTextColor.YELLOW));
+            player.kick(MiniMessage.miniMessage().deserialize(api.messages().text(player, "GATEKEEPER_TOO_MANY_ATTEMPTS")));
             return;
         }
 
-        api.messages().warn(player, "Invalid or expired invite code. Please try again.");
+        api.messages().warn(player, "GATEKEEPER_INVITE_INVALID");
     }
 
     /**

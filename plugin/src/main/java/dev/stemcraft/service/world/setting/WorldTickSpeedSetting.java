@@ -104,20 +104,20 @@ public class WorldTickSpeedSetting implements WorldBaseSetting {
             value = get(world, config);
 
             if(value.equals("unset")) {
-                ctx.returnInfo("Tickspeed for world '" + world.getName() + "' is set to normal.");
+                ctx.returnInfo("WORLD_SETTING_TICKSPEED_NORMAL", "world", world.getName());
             }
 
-            ctx.returnInfo("Tickspeed for world '" + world.getName() + "' is set to '" + value + "'.");
+            ctx.returnInfo("WORLD_SETTING_TICKSPEED_STATUS", "world", world.getName(), "value", value);
         }
 
         if (value.equals("reset") || value.equals("unset")) {
             set(world, config, "unset");
-            ctx.returnSuccess("Reset tickspeed for world '" + world.getName() + "' to normal.");
+            ctx.returnSuccess("WORLD_SETTING_TICKSPEED_RESET", "world", world.getName());
         } else if(StringUtil.isInteger(value)) {
             set(world, config, value);
-            ctx.returnSuccess("Set tickspeed for world '" + world.getName() + "' to '" + value + "'.");
+            ctx.returnSuccess("WORLD_SETTING_TICKSPEED_SET", "world", world.getName(), "value", value);
         } else {
-            ctx.returnError("Invalid tickspeed value '" + value + "'.");
+            ctx.returnError("WORLD_SETTING_TICKSPEED_INVALID", "value", value);
         }
     }
 

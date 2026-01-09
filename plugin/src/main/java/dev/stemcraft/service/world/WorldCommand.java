@@ -131,7 +131,7 @@ public class WorldCommand {
         World world = ctx.getArgAsWorld(argIndex);
         if(world == null) {
             if(ctx.isConsole()) {
-                ctx.returnError("A world must be specified when using this command from console.");
+                ctx.returnError("WORLD_COMMAND_CONSOLE_WORLD_REQUIRED");
             } else {
                 world = ctx.getSenderAsPlayer().getWorld();
             }
@@ -365,14 +365,14 @@ public class WorldCommand {
      */
     public void handleSubCommandFlags(String flag, CommandContext ctx, World world) {
         if(flag.isEmpty()) {
-            ctx.info("World Flags:");
+            ctx.info("WORLD_FLAGS_HEADER");
             for(String key : worldService.getSettingHandlerKeys(WorldService.SettingCommandMode.FLAG)) {
-                ctx.info(" - " + key + ": " + worldService.getSetting(world, key));
+                ctx.info("WORLD_FLAGS_ENTRY", "flag", key, "value", worldService.getSetting(world, key));
             }
         } else {
             WorldBaseSetting setting = worldService.getSettingHandler(flag, WorldService.SettingCommandMode.FLAG);
             if(setting == null) {
-                ctx.returnError("Unknown flag setting '" + flag + "'.");
+                ctx.returnError("WORLD_COMMAND_UNKNOWN_FLAG", "flag", flag);
             }
 
             ConfigSection config = worldService.getConfigSection(world).getSection(flag);
@@ -390,7 +390,7 @@ public class WorldCommand {
     private void handleUnknownSubCommand(String subCommand, CommandContext ctx, World world) {
         WorldBaseSetting setting = worldService.getSettingHandler(subCommand, WorldService.SettingCommandMode.SUBCOMMAND);
         if(setting == null) {
-            ctx.returnError("Unknown world command '" + subCommand + "'.");
+            ctx.returnError("WORLD_COMMAND_UNKNOWN_SUBCOMMAND", "command", subCommand);
         }
 
         ConfigSection config = worldService.getConfigSection(world).getSection(subCommand);

@@ -91,17 +91,17 @@ public class WorldNoDamageSetting implements WorldBaseSetting {
         String value = ctx.getArg(0, "").toLowerCase(Locale.ROOT);
         if (value.isEmpty()) {
             value = config.getString("no-damage", "unset");
-            ctx.returnInfo("Current no-damage setting for world '" + world.getName() + "' is '" + value + "'.");
+            ctx.returnInfo("WORLD_SETTING_NO_DAMAGE_STATUS", "world", world.getName(), "value", value);
         }
 
         if (!value.equals("unset") && !value.equals("true") && !value.equals("false")) {
-            ctx.returnError("Invalid no-damage value '" + value + "'. Valid values are: true, false, unset.");
+            ctx.returnError("WORLD_SETTING_NO_DAMAGE_INVALID", "value", value);
         } else {
             set(world, config, value);
             if (value.equals("unset")) {
-                ctx.returnSuccess("Reset no-damage setting for world '" + world.getName() + "' to normal.");
+                ctx.returnSuccess("WORLD_SETTING_NO_DAMAGE_RESET", "world", world.getName());
             } else {
-                ctx.returnSuccess("Set no-damage setting for world '" + world.getName() + "' to '" + value + "'.");
+                ctx.returnSuccess("WORLD_SETTING_NO_DAMAGE_SET", "world", world.getName(), "value", value);
             }
         }
     }

@@ -128,17 +128,17 @@ public class WorldDenySpawnSetting implements WorldBaseSetting {
         String value = ctx.getArg(0, "").toLowerCase(Locale.ROOT);
         if (value.isEmpty()) {
             value = service.getConfigSection(world).getString("deny-spawn", "unset");
-            ctx.returnInfo("Current deny-spawn setting for world '" + world.getName() + "' is '" + value + "'.");
+            ctx.returnInfo("WORLD_SETTING_DENY_SPAWN_STATUS", "world", world.getName(), "value", value);
         }
 
         if (!value.equals("all") && !value.equals("mobs") && !value.equals("animals") && !value.equals("unset")) {
-            ctx.returnError("Invalid deny-spawn value '" + value + "'. Valid values are: all, mobs, animals, unset.");
+            ctx.returnError("WORLD_SETTING_DENY_SPAWN_INVALID", "value", value);
         } else {
             set(world, config, value);
             if (value.equals("unset")) {
-                ctx.returnSuccess("Reset deny-spawn setting for world '" + world.getName() + "' to normal.");
+                ctx.returnSuccess("WORLD_SETTING_DENY_SPAWN_RESET", "world", world.getName());
             } else {
-                ctx.returnSuccess("Set deny-spawn setting for world '" + world.getName() + "' to '" + value + "'.");
+                ctx.returnSuccess("WORLD_SETTING_DENY_SPAWN_SET", "world", world.getName(), "value", value);
             }
         }
     }

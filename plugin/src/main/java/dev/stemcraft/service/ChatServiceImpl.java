@@ -104,8 +104,8 @@ public class ChatServiceImpl extends BaseService {
 
         api.commands().create("muteall")
                 .permission("stemcraft.command.muteall")
-                .usage("/muteall <on|off>")
-                .description("Mute or unmute all chat")
+                .usage("MUTEALL_USAGE")
+                .description("MUTEALL_DESCRIPTION")
                 .tabCompletion("on", "off")
                 .executor((api, cmd, ctx) -> {
                     ctx.checkArgsSizeAtLeast(1);
@@ -113,10 +113,10 @@ public class ChatServiceImpl extends BaseService {
 
                     if (arg.equalsIgnoreCase("on")) {
                         muted = true;
-                        ctx.returnInfo("Chat has been muted.");
+                        ctx.returnInfo("MUTEALL_MUTED");
                     } else if (arg.equalsIgnoreCase("off")) {
                         muted = false;
-                        ctx.returnInfo("Chat has been unmuted.");
+                        ctx.returnInfo("MUTEALL_UNMUTED");
                     }
                     ctx.returnUsage();
                 })
@@ -125,14 +125,14 @@ public class ChatServiceImpl extends BaseService {
         api.events().register(AsyncChatEvent.class, (event) -> {
             if (muted) {
                 event.setCancelled(true);
-                api.messages().warn(event.getPlayer(), "Chat is currently muted.");
+                api.messages().warn(event.getPlayer(), "CHAT_MUTED_WARNING");
             }
         }, EventPriority.HIGH, true);
 
         api.commands().create("chatfilter")
                 .permission("stemcraft.command.chatfilter")
-                .usage("/chatfilter reload")
-                .description("Reload the chat filter configuration")
+                .usage("CHATFILTER_USAGE")
+                .description("CHATFILTER_DESCRIPTION")
                 .tabCompletion("reload")
                 .executor((api, cmd, ctx) -> {
                     ctx.checkArgsSizeAtLeast(1);
@@ -140,7 +140,7 @@ public class ChatServiceImpl extends BaseService {
 
                     if(subcmd.equalsIgnoreCase("reload")) {
                         loadChatFilterConfig();
-                        ctx.returnInfo("Chat filter configuration reloaded.");
+                        ctx.returnInfo("CHATFILTER_RELOADED");
                     } else {
                         ctx.returnUsage();
                     }

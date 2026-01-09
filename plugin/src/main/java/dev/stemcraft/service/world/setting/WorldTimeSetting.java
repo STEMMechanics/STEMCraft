@@ -121,22 +121,22 @@ public class WorldTimeSetting implements WorldBaseSetting {
         String value = ctx.getArg(0, "").toLowerCase(Locale.ROOT);
         if (value.isEmpty()) {
             value = get(world, config);
-            ctx.returnInfo("Current weather setting for world '" + world.getName() + "' is '" + value + "'.");
+            ctx.returnInfo("WORLD_SETTING_TIME_STATUS", "world", world.getName(), "value", value);
         }
 
         if(!value.equals("clear") && !value.equals("rain") && !value.equals("thunder") &&
            !value.equals("unset")) {
-            ctx.returnError("Invalid weather value '" + value + "'. Valid values are: clear, rain, thunder, unset.");
+            ctx.returnError("WORLD_SETTING_TIME_INVALID", "value", value);
         }
 
         boolean always = ctx.getArgAsBoolean(1, false);
-        set(world, config, value + (always ? " always" : ""));
+        String alwaysSuffix = always ? " always" : "";
+        set(world, config, value + alwaysSuffix);
 
         if(value.equals("unset")) {
-            ctx.returnSuccess("Reset weather for world '" + world.getName() + "' to normal cycle.");
+            ctx.returnSuccess("WORLD_SETTING_TIME_RESET", "world", world.getName());
         } else {
-            ctx.returnSuccess("Set weather for world '" + world.getName() + "' to " + value +
-                    (always ? " always." : "."));
+            ctx.returnSuccess("WORLD_SETTING_TIME_SET", "world", world.getName(), "value", value, "always", alwaysSuffix);
         }
     }
 

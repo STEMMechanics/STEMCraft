@@ -30,8 +30,8 @@ public class ResourcePackCommand {
     public void onEnable() {
         api.commands().create("resourcepack")
                 .aliases("respack")
-                .usage("/resourcepack [send] [player] | /resourcepack zip")
-                .description("Manage the STEMCraft resource pack")
+                .usage("RESOURCEPACK_USAGE")
+                .description("RESOURCEPACK_DESCRIPTION")
                 .tabCompletion("{player}")
                 .tabCompletion("send", "{player}")
                 .tabCompletion("sendall")
@@ -62,9 +62,13 @@ public class ResourcePackCommand {
         String packUrl = service.host().getUrl();
         String packHash = service.getResourcePackHash();
 
-        ctx.info("Resource pack info:");
-        ctx.info(" - URL: " + packUrl);
-        ctx.info(" - Hash: " + (packHash != null ? packHash : "not available"));
+        ctx.info("RESOURCEPACK_INFO_HEADER");
+        ctx.info("RESOURCEPACK_INFO_URL", "url", packUrl);
+        if (packHash != null) {
+            ctx.info("RESOURCEPACK_INFO_HASH", "hash", packHash);
+        } else {
+            ctx.info("RESOURCEPACK_INFO_HASH_UNAVAILABLE");
+        }
     }
 
     /**
@@ -79,20 +83,20 @@ public class ResourcePackCommand {
             if (ctx.isPlayer()) {
                 target = ctx.getSenderAsPlayer();
             } else {
-                ctx.returnError("You must specify a player when executing from console.");
+                ctx.returnError("RESOURCEPACK_PLAYER_REQUIRED");
             }
         } else {
             target = ctx.getArgAsPlayer(1);
         }
 
         if(target == null) {
-            ctx.returnError("Player not found.");
+            ctx.returnError("RESOURCEPACK_PLAYER_NOT_FOUND");
         }
 
         service.host().getUrl();
 
         service.sendPack(target);
-        ctx.returnInfo("Requesting resource pack download for " + target.getName() + "...");
+        ctx.returnInfo("RESOURCEPACK_REQUESTING", "player", target.getName());
     }
 
     /**
@@ -104,7 +108,7 @@ public class ResourcePackCommand {
         service.host().getUrl();
 
         service.sendPackToAll();
-        ctx.returnInfo("Sending resource pack to all online players...");
+        ctx.returnInfo("RESOURCEPACK_SENDING_ALL");
     }
 
     /**
@@ -115,11 +119,11 @@ public class ResourcePackCommand {
     private void subCommandZip(CommandContext ctx) {
         service.generatePack(progress -> {
             switch(progress) {
-                case "generating" -> ctx.info("Generating resource pack...");
-                case "compressing" -> ctx.info("Compressing resource pack...");
-                case "uploading" -> ctx.info("Uploading resource pack...");
+                case "generating" -> ctx.info("RESOURCEPACK_GENERATING");
+                case "compressing" -> ctx.info("RESOURCEPACK_COMPRESSING");
+                case "uploading" -> ctx.info("RESOURCEPACK_UPLOADING");
                 case "complete" -> {
-                    ctx.info("Resource pack is complete!");
+                    ctx.info("RESOURCEPACK_COMPLETE");
                     service.sendPackToAll();
                 }
             }

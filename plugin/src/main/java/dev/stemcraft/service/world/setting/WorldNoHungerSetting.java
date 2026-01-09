@@ -90,17 +90,17 @@ public class WorldNoHungerSetting implements WorldBaseSetting {
         String value = ctx.getArg(0, "").toLowerCase(Locale.ROOT);
         if (value.isEmpty()) {
             value = config.getString("no-hunger", "unset");
-            ctx.returnInfo("Current no-hunger setting for world '" + world.getName() + "' is '" + value + "'.");
+            ctx.returnInfo("WORLD_SETTING_NO_HUNGER_STATUS", "world", world.getName(), "value", value);
         }
 
         if (!value.equals("unset") && !value.equals("true") && !value.equals("false")) {
-            ctx.returnError("Invalid no-hunger value '" + value + "'. Valid values are: true, false, unset.");
+            ctx.returnError("WORLD_SETTING_NO_HUNGER_INVALID", "value", value);
         } else {
             set(world, config, value);
             if (value.equals("unset")) {
-                ctx.returnSuccess("Reset no-hunger setting for world '" + world.getName() + "' to normal.");
+                ctx.returnSuccess("WORLD_SETTING_NO_HUNGER_RESET", "world", world.getName());
             } else {
-                ctx.returnSuccess("Set no-hunger setting for world '" + world.getName() + "' to '" + value + "'.");
+                ctx.returnSuccess("WORLD_SETTING_NO_HUNGER_SET", "world", world.getName(), "value", value);
             }
         }
     }

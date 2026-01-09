@@ -115,8 +115,7 @@ public class WorldForceSpawnSetting implements WorldBaseSetting {
         // world flags [world] <flag> [options]
 
         if(ctx.numArgs() == 0) {
-            ctx.returnInfo("World '" + world.getName() + "' force-spawn-on-death is " +
-                    get(world, config) + ".");
+            ctx.returnInfo("WORLD_SETTING_FORCE_SPAWN_STATUS", "world", world.getName(), "value", get(world, config));
         }
 
         String value = ctx.getArgLower(1);
@@ -125,12 +124,12 @@ public class WorldForceSpawnSetting implements WorldBaseSetting {
                 || value.equals("unset")) {
             set(world, config, value);
             if (value.equals("unset")) {
-                ctx.returnSuccess("Reset force-spawn-on-death setting for world '" + world.getName() + "' to normal.");
+                ctx.returnSuccess("WORLD_SETTING_FORCE_SPAWN_RESET", "world", world.getName());
             } else {
-                ctx.returnSuccess("Set force-spawn-on-death setting for world '" + world.getName() + "' to '" + value + "'.");
+                ctx.returnSuccess("WORLD_SETTING_FORCE_SPAWN_SET", "world", world.getName(), "value", value);
             }
         } else {
-            ctx.returnError("Invalid value '" + value + "'. Valid values are: true, false, unset.");
+            ctx.returnError("WORLD_SETTING_FORCE_SPAWN_INVALID", "value", value);
         }
     }
 
