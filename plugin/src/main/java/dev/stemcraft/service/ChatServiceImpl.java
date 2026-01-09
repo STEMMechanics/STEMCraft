@@ -118,7 +118,7 @@ public class ChatServiceImpl extends BaseService {
                         muted = false;
                         ctx.returnInfo("Chat has been unmuted.");
                     }
-                    ctx.returnError(cmd.getUsage());
+                    ctx.returnUsage();
                 })
                 .register(plugin);
 
@@ -142,7 +142,7 @@ public class ChatServiceImpl extends BaseService {
                         loadChatFilterConfig();
                         ctx.returnInfo("Chat filter configuration reloaded.");
                     } else {
-                        ctx.returnError(cmd.getUsage());
+                        ctx.returnUsage();
                     }
                 })
                 .register(plugin);

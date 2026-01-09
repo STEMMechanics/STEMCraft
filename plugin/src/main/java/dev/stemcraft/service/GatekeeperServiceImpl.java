@@ -191,7 +191,7 @@ public final class GatekeeperServiceImpl extends BaseService implements Gatekeep
                                 return lines;
                             }, "NO_INVITES_FOUND");
                         }
-                        default -> ctx.returnError(cmd.getUsage());
+                        default -> ctx.returnUsage();
                     }
                 })
                 .register(STEMCraft.getPlugin());
