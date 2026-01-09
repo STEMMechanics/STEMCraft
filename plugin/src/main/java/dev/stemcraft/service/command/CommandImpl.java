@@ -463,7 +463,7 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
                 return optionArgsAvailable;
             }
 
-            // if the player has written the start of a option arg
+            // if the player has written the start of an option arg
             if (arg.contains(":")) {
                 // if the option arg is available
                 String key = arg.substring(0, arg.indexOf(":"));

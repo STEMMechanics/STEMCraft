@@ -40,7 +40,7 @@ public interface WebService {
     void stop();
 
     /**
-     * Register a endpoint handler which is called if the uri starts with the path string.
+     * Register an endpoint handler which is called if the uri starts with the path string.
      *
      * @param path The path prefix to match.
      * @param handler The handler to call for matching requests.

@@ -121,7 +121,7 @@ public interface CommandContext {
     default String getOption(String option) { return getOption(option, null); }
 
     /**
-     * Send a info message to the sender.
+     * Send an info message to the sender.
      *
      * @param message The message to send to the sender.
      * @param placeholders The placeholders to replace in the message.
@@ -153,7 +153,7 @@ public interface CommandContext {
     void success(String message, Object... placeholders);
 
     /**
-     * Return an usage message for this command to the sender.
+     * Return a usage message for this command to the sender.
      *
      */
     @Contract(" -> fail")
@@ -390,7 +390,7 @@ public interface CommandContext {
     void checkArgIsInt(int index, String error, Object... placeholders);
 
     /**
-     * Check that the argument at the given index is an float. Show error if check fails.
+     * Check that the argument at the given index is a float. Show error if check fails.
      *
      * @param index The argument index.
      * @param error The error message to show if check fails.
@@ -399,7 +399,7 @@ public interface CommandContext {
     void checkArgIsFloat(int index, String error, Object... placeholders);
 
     /**
-     * Check that the argument at the given index is an double. Show error if check fails.
+     * Check that the argument at the given index is a double. Show error if check fails.
      *
      * @param index The argument index.
      * @param error The error message to show if check fails.
@@ -408,7 +408,7 @@ public interface CommandContext {
     void checkArgIsDouble(int index, String error, Object... placeholders);
 
     /**
-     * Check that the argument at the given index is an player. Show error if check fails.
+     * Check that the argument at the given index is a player. Show error if check fails.
      *
      * @param index The argument index.
      * @param error The error message to show if check fails.
@@ -418,7 +418,7 @@ public interface CommandContext {
     default void checkArgIsPlayer(int index) { checkArgIsPlayer(index, "", ""); }
 
     /**
-     * Check that the argument at the given index is an player if the sender is console. Show error if check fails.
+     * Check that the argument at the given index is a player if the sender is console. Show error if check fails.
      *
      * @param index The argument index.
      * @param error The error message to show if check fails.
@@ -437,7 +437,7 @@ public interface CommandContext {
     void checkArgIsOfflinePlayer(int index, String error, Object... placeholders);
 
     /**
-     * Check that the argument at the given index is an world. Show error if check fails.
+     * Check that the argument at the given index is a world. Show error if check fails.
      *
      * @param index The argument index.
      * @param error The error message to show if check fails.

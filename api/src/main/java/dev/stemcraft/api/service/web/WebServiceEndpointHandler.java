@@ -35,17 +35,17 @@ public interface WebServiceEndpointHandler {
 
      * Supported handler return types:
      * - null
-     *   sends an empty body with HTTP 200 and Content-Type: text/plain; charset=utf-8}.
+     *   sends an empty body with HTTP 200 and Content-Type: text/plain; charset=utf-8.
 
      * - Any non-Map object
      *   toString() is used as the response body with HTTP 200 and
-     *   Content-Type: text/plain; charset=utf-8}.
+     *   Content-Type: text/plain; charset=utf-8.
 
      * - Map<?, ?>
-     * Allows full control of the response. The following keys are recognised:
+     * Allows full control of the response. The following keys are recognized:
      *   - responseCode: Integer; HTTP status code. Optional, defaults to 200.
      *   - contentType: String; sets the Content-Type header. Optional, defaults to
-     *     "text/plain; charset=utf-8"}.
+     *     "text/plain; charset=utf-8".
      *   - file: java.io.File; if present, this file is streamed as the response body.
      *     In this case "body" is ignored.
      *   - body: any object; converted to String and used as the response body when

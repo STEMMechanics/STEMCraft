@@ -167,7 +167,7 @@ public class CommandContextImpl implements CommandContext {
 
     /**
      * Checks if a flag is present. Flags are case-insensitive.
-     * The flag may be passed in with or without the leading "-".
+     * The flag may be passed in with or without the leading hyphen.
 
      * Examples:
      *  - hasFlag("-force")

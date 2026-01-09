@@ -347,7 +347,7 @@ public class SCRegion implements ConfigurationSerializable {
             int x = base.getBlockX();
             int z = base.getBlockZ();
 
-            // start from highest valid Y inside region
+            // start at the highest valid Y in the region
             int y = base.getBlockY();
 
             // walk downward until we hit something

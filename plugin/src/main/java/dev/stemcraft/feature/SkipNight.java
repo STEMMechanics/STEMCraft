@@ -267,7 +267,7 @@ public class SkipNight extends BaseFeature {
     }
 
     /**
-     * Are we skipping the night in the specified world.
+     * Are we skipping the night in the specified world?
      *
      * @param world The world to check.
      * @return boolean True if the night being skipped.

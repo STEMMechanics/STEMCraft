@@ -80,7 +80,7 @@ public class PhantomSpawning extends BaseFeature {
         if (env == World.Environment.THE_END) {
             CreatureSpawnEvent.SpawnReason reason = event.getSpawnReason();
 
-            // only touch natural / phantom spawns, leave others (eg. plugins) alone
+            // only touch natural / phantom spawns, leave others (e.g. plugins) alone
             if (reason != CreatureSpawnEvent.SpawnReason.NATURAL) {
                 return;
             }

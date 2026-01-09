@@ -363,8 +363,8 @@ public final class STEMCraft extends JavaPlugin {
      * @param path The path within the JAR to scan.
      * @param typeFilter The class type to filter by.
      * @param callback The callback to execute for each instance.
-     * @param constructorTypes The constructor argument types. (eg new Class<?>[]{STEMCraftAPI.class, WorldService.class}).
-     * @param constructorArgs The constructor arguments. (eg this.api, this.worlds).
+     * @param constructorTypes The constructor argument types. (e.g. new Class<?>[]{STEMCraftAPI.class, WorldService.class}).
+     * @param constructorArgs The constructor arguments. (e.g. this.api, this.worlds).
      * @param <T> The type of the class to filter by.
      */
     private <T> void iterateClasses(
