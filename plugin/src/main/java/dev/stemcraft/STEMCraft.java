@@ -45,6 +45,7 @@ import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerKickEvent;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -245,7 +246,7 @@ public final class STEMCraft extends JavaPlugin {
             if(isMaintenanceMode) {
                 Player player = event.getPlayer();
                 if(!player.hasPermission("stemcraft.maintenance.bypass")) {
-                    player.kick(Component.text("Server is under maintenance. Please try again later."));
+                    player.kick(Component.text("Server is under maintenance. Please try again later."), PlayerKickEvent.Cause.PLUGIN);
                 } else {
                     info("The server is in maintenance mode");
                 }
@@ -352,8 +353,7 @@ public final class STEMCraft extends JavaPlugin {
      * Get the plugin version.
      */
     public static String getVersion() {
-        //noinspection deprecation
-        return instance.getDescription().getVersion();
+        return instance.getPluginMeta().getVersion();
     }
 
     /**
