@@ -49,7 +49,6 @@ public interface MessageService {
      * @return The resolved locale string.
      */
     @NotNull String text(@Nullable CommandSender sender, @NotNull String key, @NotNull Object... placeholders);
-    default @NotNull String text(@NotNull String key, @NotNull Object...placeholders) { return text(null, key, placeholders); }
 
     /**
      * Log a debug message to the console.
