@@ -568,8 +568,7 @@ public class TeleportUtils extends BaseFeature {
      * @return List of commands.
      */
     private List<String> getWorldChangeCommands() {
-        List<String> list = getRootConfigSection().getStringList("teleport-commands");
-        return list;
+        return getRootConfigSection().getStringList("teleport-commands");
     }
 
     /**

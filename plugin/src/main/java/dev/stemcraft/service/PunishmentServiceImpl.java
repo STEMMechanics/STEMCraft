@@ -389,8 +389,7 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
                         ? UUID.fromString(actorUuidStr) : null;
                 String actorName = pSec.getString("actor.name");
 
-                String typeStr = pSec.getString("type");
-                String type = typeStr;
+                String type = pSec.getString("type");
 
                 boolean alerted = pSec.getBoolean("alerted", false);
                 String reason = pSec.getString("reason", "");

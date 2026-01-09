@@ -324,7 +324,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
      * @param name The namespaced key of the recipe to remove.
      */
     @Override
-    public void remove(@NonNull @NonNull String name) {
+    public void remove(@NonNull String name) {
         NamespacedKey namespaceItem = NamespacedKey.fromString(name);
         if (namespaceItem != null) {
             Bukkit.removeRecipe(namespaceItem);
@@ -471,11 +471,11 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
      */
     @Override
     public void addSmithingTransform(
-            @NonNull @NonNull String id,
-            @NonNull @NonNull ItemStack result,
-            @NonNull @NonNull RecipeChoice template,
-            @NonNull @NonNull RecipeChoice base,
-            @NonNull @NonNull RecipeChoice addition
+            @NonNull String id,
+            @NonNull ItemStack result,
+            @NonNull RecipeChoice template,
+            @NonNull RecipeChoice base,
+            @NonNull RecipeChoice addition
     ) {
         SmithingTransformRecipe recipe =
                 new SmithingTransformRecipe(key(id), result, template, base, addition);
@@ -493,10 +493,10 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
      */
     @Override
     public void addSmithingTrim(
-            @NonNull @NonNull String id,
-            @NonNull @NonNull RecipeChoice template,
-            @NonNull @NonNull RecipeChoice baseArmor,
-            @NonNull @NonNull RecipeChoice material
+            @NonNull String id,
+            @NonNull RecipeChoice template,
+            @NonNull RecipeChoice baseArmor,
+            @NonNull RecipeChoice material
     ) {
         @SuppressWarnings("removal")
         SmithingTrimRecipe recipe =
