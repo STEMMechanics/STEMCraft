@@ -30,6 +30,7 @@ import dev.stemcraft.api.service.hologram.HologramService;
 import dev.stemcraft.api.service.item.ItemService;
 import dev.stemcraft.api.service.locale.LocaleService;
 import dev.stemcraft.api.service.message.MessageService;
+import dev.stemcraft.api.service.minigame.MiniGameService;
 import dev.stemcraft.api.service.motd.MotdService;
 import dev.stemcraft.api.service.player.PlayerService;
 import dev.stemcraft.api.service.recipe.RecipeService;
@@ -107,7 +108,7 @@ public interface STEMCraftAPI {
     /**
      * Get the minigame service.
      */
-//    MiniGameService minigames();
+    MiniGameService minigames();
 
     /**
      * Get the MOTD service.

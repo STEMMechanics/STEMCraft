@@ -62,7 +62,7 @@ public interface CommandContext {
      *
      * @return The player sender, or null.
      */
-    Player getSenderAsPlayer();
+    Player asPlayer();
 
     /**
      * Get the label (alias) used to invoke the command.
@@ -314,13 +314,13 @@ public interface CommandContext {
      * @param def The default value if not present.
      * @return The argument at the given index as a Player, or the default value.
      */
-    Player getArgAsPlayer(int index, CommandSender def);
-    default Player getArgAsPlayer(int index) { return getArgAsPlayer(index, null); }
+    Player getPlayer(int index, CommandSender def);
+    default Player getPlayer(int index) { return getPlayer(index, null); }
 
     default Player getArgAsPlayerOrSender(int index) {
-        Player player = getArgAsPlayer(index, null);
+        Player player = getPlayer(index, null);
         if (player == null && isPlayer()) {
-            player = getSenderAsPlayer();
+            player = asPlayer();
         }
         return player;
     }
@@ -452,7 +452,7 @@ public interface CommandContext {
      * @return The sender's name or "SERVER".
      */
     default String getSenderName() {
-        Player player = getSenderAsPlayer();
+        Player player = asPlayer();
         return player == null ? "SERVER" : player.getName();
     }
 }

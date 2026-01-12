@@ -101,7 +101,7 @@ public class TeleportUtils extends BaseFeature {
                 .description("TPALL_DESCRIPTION")
                 .executor((plugin, cmd, ctx) -> {
                     ctx.checkNotConsole();
-                    Player sender = ctx.getSenderAsPlayer();
+                    Player sender = ctx.asPlayer();
                     Location targetLocation = sender.getLocation();
                     for (Player target : Bukkit.getOnlinePlayers()) {
                         if (target.equals(sender)) continue;
@@ -129,7 +129,7 @@ public class TeleportUtils extends BaseFeature {
                         return;
                     }
 
-                    Player target = ctx.getArgAsPlayer(1);
+                    Player target = ctx.getPlayer(1);
                     if (target == null) {
                         cmd.error("PLAYER_NOT_FOUND", "player", ctx.args().getFirst());
                         return;
@@ -150,7 +150,7 @@ public class TeleportUtils extends BaseFeature {
                         ctx.returnError("CONSOLE_PLAYER_REQUIRED");
                     }
 
-                    Player target = ctx.getArgAsPlayer(2);
+                    Player target = ctx.getPlayer(2);
                     if (target == null) {
                         ctx.returnError("PLAYER_NOT_FOUND", "player", ctx.getArg(2));
                     }
@@ -355,7 +355,7 @@ public class TeleportUtils extends BaseFeature {
                         ctx.returnError("WORLD_NOT_FOUND", "world", worldName);
                     }
 
-                    Player targetPlayer = ctx.getArgAsPlayer(2, ctx.getSender());
+                    Player targetPlayer = ctx.getPlayer(2, ctx.getSender());
                     if (targetPlayer == null) {
                         ctx.returnError("PLAYER_NOT_FOUND", "player", ctx.getArg(2));
                     }

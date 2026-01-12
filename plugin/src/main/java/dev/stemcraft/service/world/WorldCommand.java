@@ -133,7 +133,7 @@ public class WorldCommand {
             if(ctx.isConsole()) {
                 ctx.returnError("WORLD_COMMAND_CONSOLE_WORLD_REQUIRED");
             } else {
-                world = ctx.getSenderAsPlayer().getWorld();
+                world = ctx.asPlayer().getWorld();
             }
         }
 
@@ -348,7 +348,7 @@ public class WorldCommand {
     public void handleSubCommandSetSpawn(CommandContext ctx) {
         ctx.checkNotConsole();
 
-        Player player = ctx.getSenderAsPlayer();
+        Player player = ctx.asPlayer();
         World world = player.getWorld();
 
         world.setSpawnLocation(player.getLocation());

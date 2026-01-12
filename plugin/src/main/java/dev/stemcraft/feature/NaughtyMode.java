@@ -138,7 +138,7 @@ public class NaughtyMode extends BaseFeature {
                             cmd.error(ctx.getSender(), "INVALID_DURATION");
                         }
 
-                        setNaughty(target.getUniqueId(), duration, ctx.getSenderAsPlayer(), ctx.getArgsAsString(3));
+                        setNaughty(target.getUniqueId(), duration, ctx.asPlayer(), ctx.getArgsAsString(3));
                     }
                 } else {
                     long remaining = remainingNaughty(target.getUniqueId());

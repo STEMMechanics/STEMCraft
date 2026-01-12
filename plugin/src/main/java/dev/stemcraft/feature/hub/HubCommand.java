@@ -68,7 +68,7 @@ public class HubCommand {
                     }
 
                     // get target player
-                    Player target = ctx.getArgAsPlayer(1, ctx.getSender());
+                    Player target = ctx.getPlayer(1, ctx.getSender());
                     if(target == null) {
                         cmd.error(ctx.getSender(), "PLAYER_NOT_FOUND", "player", ctx.getArg(1));
                         return;

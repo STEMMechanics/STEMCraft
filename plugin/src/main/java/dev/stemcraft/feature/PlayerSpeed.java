@@ -103,7 +103,7 @@ public class PlayerSpeed extends BaseFeature {
                         if (!ctx.isPlayer()) {
                             ctx.returnError("CONSOLE_PLAYER_REQUIRED");
                         } else {
-                            targetPlayer = ctx.getSenderAsPlayer();
+                            targetPlayer = ctx.asPlayer();
                         }
                     }
 

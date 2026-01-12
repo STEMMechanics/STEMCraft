@@ -69,7 +69,7 @@ public class BreakCommand extends BaseCommand {
     public void onExecute(Command cmd, CommandContext ctx) {
         ctx.checkNotConsole();
 
-        Player player = ctx.getSenderAsPlayer();
+        Player player = ctx.asPlayer();
 
         int radius = 1;
         if (!ctx.args().isEmpty()) {

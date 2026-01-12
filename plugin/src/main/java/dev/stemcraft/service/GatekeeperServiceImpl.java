@@ -163,7 +163,7 @@ public final class GatekeeperServiceImpl extends BaseService implements Gatekeep
                             List<String> inviteCodes = section.getKeys(false).stream().toList();
                             int page = ctx.getArgAsInt(2, 1);
 
-                            ChatMenuUtil.render(ctx.getSenderAsPlayer(), api.locales().resolve(ctx.getSenderAsPlayer(), "INVITE_LIST_TITLE"), "invite list", page, inviteCodes.size(), (start, count, isPlayer) -> {
+                            ChatMenuUtil.render(ctx.asPlayer(), api.locales().resolve(ctx.asPlayer(), "INVITE_LIST_TITLE"), "invite list", page, inviteCodes.size(), (start, count, isPlayer) -> {
                                 List<Component> lines = new ArrayList<>();
                                 for (int i = 0; i < count; i++) {
                                     String code = inviteCodes.get(i + start);

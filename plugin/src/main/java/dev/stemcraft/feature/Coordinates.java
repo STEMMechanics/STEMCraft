@@ -89,7 +89,7 @@ public class Coordinates extends BaseFeature {
             .permission("stemcraft.command.coord")
             .executor((unused, cmd, ctx) -> {
                 ctx.checkNotConsole();
-                toggleActionBar(ctx.getSenderAsPlayer());
+                toggleActionBar(ctx.asPlayer());
             }).register(STEMCraft.getPlugin());
 
         api.commands().create("coordbar")
@@ -98,7 +98,7 @@ public class Coordinates extends BaseFeature {
             .permission("stemcraft.command.coordbar")
             .executor((unused, cmd, ctx) -> {
                 ctx.checkNotConsole();
-                toggleBossBar(ctx.getSenderAsPlayer());
+                toggleBossBar(ctx.asPlayer());
             }).register(STEMCraft.getPlugin());
 
         api.tasks().repeating(5, () -> {

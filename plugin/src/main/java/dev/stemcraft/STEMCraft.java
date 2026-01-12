@@ -25,6 +25,7 @@ import dev.stemcraft.api.config.ConfigFile;
 import dev.stemcraft.api.event.server.MaintenanceModeChangedEvent;
 import dev.stemcraft.api.util.PermissionUtil;
 import dev.stemcraft.command.BaseCommand;
+import dev.stemcraft.minigame.BaseMiniGame;
 import dev.stemcraft.service.*;
 import dev.stemcraft.api.internal.InstanceHolder;
 import dev.stemcraft.chunkgen.FlatGenerator;
@@ -32,7 +33,7 @@ import dev.stemcraft.chunkgen.VoidGenerator;
 import dev.stemcraft.feature.BaseFeature;
 import dev.stemcraft.service.command.CommandServiceImpl;
 import dev.stemcraft.service.message.MessageServiceImpl;
-//import dev.stemcraft.service.minigame.MiniGameServiceImpl;
+import dev.stemcraft.service.minigame.MiniGameServiceImpl;
 import dev.stemcraft.service.resourcepack.ResourcePackServiceImpl;
 import dev.stemcraft.service.tabcompletion.TabCompleteServiceImpl;
 import dev.stemcraft.service.world.WorldServiceImpl;
@@ -78,7 +79,7 @@ public final class STEMCraft extends JavaPlugin {
     private ItemServiceImpl items;
     private LocaleServiceImpl locales;
     private MessageServiceImpl messages;
-//    private MiniGameServiceImpl minigames;
+    private MiniGameServiceImpl minigames;
     private MotdServiceImpl motd;
     private PlayerServiceImpl players;
     private PunishmentServiceImpl punishments;
@@ -149,7 +150,7 @@ public final class STEMCraft extends JavaPlugin {
         gatekeeper = new GatekeeperServiceImpl(this, api);
         holograms = new HologramServiceImpl(this, api);
         items = new ItemServiceImpl(this, api);
-//        minigames = new MiniGameServiceImpl(this, api);
+        minigames = new MiniGameServiceImpl(this, api);
         motd = new MotdServiceImpl(this, api);
         players = new PlayerServiceImpl(this, api);
         punishments = new PunishmentServiceImpl(this, api);
@@ -167,7 +168,7 @@ public final class STEMCraft extends JavaPlugin {
         gatekeeper.onEnable();
         holograms.onEnable();
         items.onEnable();
-//        minigames.onEnable();
+        minigames.onEnable();
         motd.onEnable();
         players.onEnable();
         punishments.onEnable();
@@ -282,7 +283,7 @@ public final class STEMCraft extends JavaPlugin {
         punishments.onDisable();
         players.onDisable();
         motd.onDisable();
-//        minigames.onDisable();
+        minigames.onDisable();
         items.onDisable();
         holograms.onDisable();
         gatekeeper.onDisable();
@@ -341,12 +342,12 @@ public final class STEMCraft extends JavaPlugin {
      * Load STEMCraft Minigames within dev.stemcraft.minigame.
      */
     private void loadMinigames() {
-//        iterateClasses(
-//                "dev/stemcraft/minigame",
-//                BaseMinigame.class,
-//                BaseMinigame::onLoad,
-//                new Class<?>[]{STEMCraftAPI.class},
-//                api);
+        iterateClasses(
+                "dev/stemcraft/minigame",
+                BaseMiniGame.class,
+                BaseMiniGame::onLoad,
+                new Class<?>[]{STEMCraftAPI.class},
+                api);
     }
 
     /**

@@ -125,14 +125,14 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
                         return;
                     }
 
-                    Player target = ctx.getArgAsPlayer(1);
+                    Player target = ctx.getPlayer(1);
                     if (target == null) {
                         cmd.error(ctx.getSender(), "PLAYER_NOT_FOUND", "player", ctx.args().getFirst());
                         return;
                     }
 
                     String reason = ctx.getArgsAsString(2, "Kicked by " + ctx.getSenderName());
-                    Player actor = ctx.getSenderAsPlayer();
+                    Player actor = ctx.asPlayer();
                     this.record(target.getUniqueId(), actor, null, "kick", true, reason);
 
                     Player targetPlayer = target.getPlayer();
@@ -162,7 +162,7 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
                     }
 
                     String reason = ctx.getArgsAsString(2, "Warned by " + ctx.getSenderName());
-                    Player actor = ctx.getSenderAsPlayer();
+                    Player actor = ctx.asPlayer();
                     this.record(target.getUniqueId(), actor, null, "warn", false, reason);
 
                     String targetName = target.getName();
@@ -206,7 +206,7 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
                     }
 
                     String reason = ctx.getArgsAsString(reasonIndex, pardon ? "Cancelled" : "Banned");
-                    Player actor = ctx.getSenderAsPlayer();
+                    Player actor = ctx.asPlayer();
 
                     UUID targetUuid = target.getUniqueId();
                     this.record(targetUuid, actor, duration, "ban", true, reason);

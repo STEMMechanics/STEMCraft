@@ -81,12 +81,12 @@ public class ResourcePackCommand {
 
         if (ctx.numArgs() == 1) {
             if (ctx.isPlayer()) {
-                target = ctx.getSenderAsPlayer();
+                target = ctx.asPlayer();
             } else {
                 ctx.returnError("RESOURCEPACK_PLAYER_REQUIRED");
             }
         } else {
-            target = ctx.getArgAsPlayer(1);
+            target = ctx.getPlayer(1);
         }
 
         if(target == null) {

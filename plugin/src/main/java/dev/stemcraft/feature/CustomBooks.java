@@ -115,7 +115,7 @@ public class CustomBooks extends BaseFeature {
                                 throw new UnsupportedOperationException("Something went wrong with Bukkit Material!");
 
                             ItemStack item = new ItemStack(material);
-                            PlayerInventory inventory = ctx.getSenderAsPlayer().getInventory();
+                            PlayerInventory inventory = ctx.asPlayer().getInventory();
                             Map<Integer, ItemStack> result = inventory.addItem(item);
                             if (!result.isEmpty()) {
                                 cmd.error(ctx.getSender(), "BOOK_INVENTORY_FULL");
@@ -139,7 +139,7 @@ public class CustomBooks extends BaseFeature {
                                 return;
                             }
 
-                            Player player = ctx.getSenderAsPlayer();
+                            Player player = ctx.asPlayer();
                             ItemStack inHand = player.getInventory().getItemInMainHand();
                             Material type = inHand.getType();
 
@@ -228,7 +228,7 @@ public class CustomBooks extends BaseFeature {
 
                             ItemStack book = this.getBook(ctx.args().get(1));
                             if (book != null) {
-                                Map<Integer, ItemStack> result = ctx.getSenderAsPlayer().getInventory().addItem(book);
+                                Map<Integer, ItemStack> result = ctx.asPlayer().getInventory().addItem(book);
                                 if (!result.isEmpty()) {
                                     cmd.error(ctx.getSender(), "BOOK_INVENTORY_FULL");
                                 } else {
@@ -248,7 +248,7 @@ public class CustomBooks extends BaseFeature {
                             buildCacheList();
 
                             int page = ctx.getArgAsInt(2, 1);
-                            ChatMenuUtil.render(ctx.getSenderAsPlayer(), "BOOK_LIST_TITLE", "book list", page, bookNames.size(), (start, count, isPlayer) -> {
+                            ChatMenuUtil.render(ctx.asPlayer(), "BOOK_LIST_TITLE", "book list", page, bookNames.size(), (start, count, isPlayer) -> {
                                 ctx.info("Start: {start}, Count: {count}",
                                         "start", String.valueOf(start),
                                         "count", String.valueOf(count)
@@ -308,7 +308,7 @@ public class CustomBooks extends BaseFeature {
                                 return;
                             }
 
-                            Player targetPlayer = ctx.getArgAsPlayerOrSender(3);
+                            Player targetPlayer = ctx.getPlayer(3, ctx.asPlayer());
                             if (targetPlayer == null) {
                                 cmd.error(ctx.getSender(), "PLAYER_NOT_FOUND", "player", ctx.getArg(3));
                                 return;
@@ -375,7 +375,7 @@ public class CustomBooks extends BaseFeature {
                                 return;
                             }
 
-                            ItemStack item = ctx.getSenderAsPlayer().getInventory().getItemInMainHand();
+                            ItemStack item = ctx.asPlayer().getInventory().getItemInMainHand();
                             if (item.getType() != Material.WRITTEN_BOOK) {
                                 cmd.error(ctx.getSender(), "BOOK_UNLOCK_NOT_BOOK");
                                 return;
@@ -400,7 +400,7 @@ public class CustomBooks extends BaseFeature {
                                     .build();
 
                             book.setItemMeta(outMeta);
-                            ctx.getSenderAsPlayer().getInventory().setItemInMainHand(book);
+                            ctx.asPlayer().getInventory().setItemInMainHand(book);
                             cmd.success(ctx.getSender(), "BOOK_UNLOCK_SUCCESSFUL");
                         }
                         default -> cmd.error(ctx.getSender(), "BOOK_UNKNOWN_OPTION");

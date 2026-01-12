@@ -302,7 +302,7 @@ public class CommandContextImpl implements CommandContext {
      * @return The Player instance or null.
      */
     @Override
-    public Player getSenderAsPlayer() {
+    public Player asPlayer() {
         if(sender instanceof Player player) {
             return player;
         }
@@ -506,19 +506,20 @@ public class CommandContextImpl implements CommandContext {
      * Gets the argument at the specified index as a Player.
      *
      * @param index The argument index.
-     * @param def The default CommandSender if not present.
-     * @return The argument as a Player.
+     * @param def The default CommandSender if the arg is not present.
+     * @return The argument as a Player, the default Player if the arg is not present,
+     * or null if the arg value is not a recognized player.
      */
     @Override
-    public Player getArgAsPlayer(int index, CommandSender def) {
+    public Player getPlayer(int index, CommandSender def) {
         if(def instanceof Player) {
-            return getArgAsPlayer(index, (Player)def);
+            return getPlayer(index, (Player)def);
         } else {
-            return getArgAsPlayer(index, null);
+            return getPlayer(index, null);
         }
     }
 
-    public Player getArgAsPlayer(int index, Player def) {
+    public Player getPlayer(int index, Player def) {
         String playerName = getArg(index, null);
         if(playerName == null) {
             return def;
@@ -756,7 +757,7 @@ public class CommandContextImpl implements CommandContext {
     @Override
     public void checkArgIsPlayer(int index, String error, Object... placeholders) {
         String arg = getArg(index, null);
-        if(arg == null || getArgAsPlayer(index, null) == null) {
+        if(arg == null || getPlayer(index, null) == null) {
             String message = error;
 
             if(message == null || message.isEmpty()) {

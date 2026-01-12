@@ -244,7 +244,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
             data = parseLines(ctx.getArgsAsString(4));
         }
 
-        Location location = ctx.getSenderAsPlayer().getLocation().add(0, 2.0, 0);
+        Location location = ctx.asPlayer().getLocation().add(0, 2.0, 0);
         int id = create(type, context, location, data);
 
         ctx.returnSuccess("HOLOGRAM_CREATE_SUCCESS", "id", id);
@@ -260,7 +260,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
     private void subCommandClosest(STEMCraftAPI api, Command cmd, CommandContext ctx) {
         // hologram closest [range]
         ctx.checkNotConsole();
-        Player player = ctx.getSenderAsPlayer();
+        Player player = ctx.asPlayer();
 
         int range = 20;
         if(ctx.numArgs() >= 2) {
