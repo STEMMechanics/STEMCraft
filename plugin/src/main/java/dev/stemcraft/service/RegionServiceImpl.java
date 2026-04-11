@@ -73,6 +73,7 @@ public class RegionServiceImpl extends BaseService implements RegionService {
     public void onEnable() {
         api.events().register(PlayerMoveEvent.class, event -> {
             Player player = event.getPlayer();
+            Location from = event.getFrom();
             Location to = event.getTo();
             World toWorld = to.getWorld();
 
@@ -94,19 +95,22 @@ public class RegionServiceImpl extends BaseService implements RegionService {
                 if (region != null) {
                     // Region-based listener: exit when player is no longer inside
                     if (!region.contains(to)) {
-                        listener.onExit(player, region);
+                        listener.onExit(player, region, from, to);
                     } else {
                         currentIds.add(id);
                     }
                 } else if (world != null) {
                     // World-based listener: exit when player moved to a different world
                     if (!world.equals(toWorld)) {
-                        listener.onExitWorld(player, world);
+                        listener.onExitWorld(player, world, from, to);
                     } else {
                         currentIds.add(id);
                     }
                 }
             }
+
+            Location effectiveTo = resolveEffectiveEnterLocation(player, from, to);
+            World effectiveWorld = effectiveTo.getWorld();
 
             // detect regions/worlds player entered
             listeners.forEach((id, entry) -> {
@@ -119,13 +123,13 @@ public class RegionServiceImpl extends BaseService implements RegionService {
                 RegionListener listener = entry.listener();
 
                 if (region != null) {
-                    if (region.contains(to)) {
-                        listener.onEnter(player, region);
+                    if (region.contains(effectiveTo)) {
+                        listener.onEnter(player, region, from, effectiveTo);
                         currentIds.add(id);
                     }
                 } else if (world != null) {
-                    if (world.equals(toWorld)) {
-                        listener.onEnterWorld(player, world);
+                    if (world.equals(effectiveWorld)) {
+                        listener.onEnterWorld(player, world, from, effectiveTo);
                         currentIds.add(id);
                     }
                 }
@@ -134,6 +138,33 @@ public class RegionServiceImpl extends BaseService implements RegionService {
             // update player's current active regions/worlds
             playerRegions.put(player, currentIds);
         });
+    }
+
+    private Location resolveEffectiveEnterLocation(Player player, Location from, Location requestedTo) {
+        Location actual = player.getLocation();
+        if (actual == null) {
+            return requestedTo;
+        }
+
+        if (!sameBlockLocation(actual, from) && !sameBlockLocation(actual, requestedTo)) {
+            return actual;
+        }
+
+        return requestedTo;
+    }
+
+    private boolean sameBlockLocation(Location left, Location right) {
+        if (left == null || right == null) {
+            return false;
+        }
+        if (left.getWorld() == null || right.getWorld() == null) {
+            return false;
+        }
+
+        return left.getWorld().equals(right.getWorld())
+            && left.getBlockX() == right.getBlockX()
+            && left.getBlockY() == right.getBlockY()
+            && left.getBlockZ() == right.getBlockZ();
     }
 
     /**

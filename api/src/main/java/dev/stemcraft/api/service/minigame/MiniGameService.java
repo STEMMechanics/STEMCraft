@@ -20,101 +20,36 @@
 
 package dev.stemcraft.api.service.minigame;
 
-import dev.stemcraft.api.capability.HasMeta;
-import dev.stemcraft.api.minigame.MiniGameArena;
-import dev.stemcraft.api.minigame.MiniGameHudProvider;
-import org.bukkit.World;
-import org.bukkit.entity.Player;
+import dev.stemcraft.api.minigame.*;
 
 import java.util.List;
 
 /**
  * Service for managing mini-games within the STEMCraft plugin.
  */
-public interface MiniGameService extends HasMeta {
+public interface MiniGameService {
 
     /**
-     * Register a new mini-game arena.
+     * Creates a new mini-game with the specified namespace and arena handler.
      *
-     * @param namespace The namespace for the arena (usually the mini-game name).
-     * @param id The unique ID for the arena.
-     * @param name The display name for the arena.
-     * @param world The world where the arena is located.
-     * @return The registered MiniGameArena instance.
+     * @param namespace The unique namespace for the mini-game.
+     * @param handler   The arena handler for managing arenas of this mini-game.
+     * @return The created MiniGame instance.
      */
-    MiniGameArena addArena(String namespace, String id, String name, World world);
+    MiniGame create(String namespace, MiniGameArenaHandler handler);
 
     /**
-     * Remove an existing mini-game arena.
+     * Retrieves a mini-game by its namespace.
      *
-     * @param namespace The namespace for the arena.
-     * @param id The unique ID of the arena to remove.
+     * @param namespace The namespace of the mini-game.
+     * @return The MiniGame instance, or null if not found.
      */
-    void removeArena(String namespace, String id);
+    MiniGame get(String namespace);
 
     /**
-     * Check if a mini-game arena exists.
+     * Lists all registered mini-games.
      *
-     * @param namespace The namespace for the arena.
-     * @param id The unique ID of the arena.
-     * @return True if the arena exists, false otherwise.
+     * @return A list of all MiniGame instances.
      */
-    boolean hasArena(String namespace, String id);
-
-    /**
-     * Get a list of all arena IDs for a specific mini-game namespace.
-     *
-     * @param namespace The namespace for the mini-game.
-     * @return A list of arena IDs.
-     */
-    List<MiniGameArena> getArenas(String namespace);
-
-    /**
-     * Add a player to a mini-game arena.
-     * @param player The player to add.
-     * @param namespace The namespace for the mini-game.
-     * @param arenaId The ID of the arena to join.
-     */
-    void addPlayer(Player player, String namespace, String arenaId);
-
-    /**
-     * Add a player to a mini-game arena.
-     * @param player The player to add.
-     * @param arena The arena to join.
-     */
-    void addPlayer(Player player, MiniGameArena arena);
-
-    /**
-     * Remove a player from their current mini-game arena.
-     * @param player The player to remove.
-     */
-    void removePlayer(Player player);
-
-    /**
-     * Get the namespace of the mini-game arena a player is currently in.
-     *
-     * @param player The player to check.
-     * @return The namespace of the mini-game arena, or null if not in any arena.
-     */
-    String getPlayerArenaNamespace(Player player);
-
-    /**
-     * Get the mini-game arena a player is currently in.
-     *
-     * @param namespace The namespace for the mini-game.
-     * @param player The player to check.
-     * @return The MiniGameArena instance the player is in, or null if not in any arena.
-     */
-    MiniGameArena getPlayerArena(String namespace, Player player);
-
-    /**
-     * Register a HUD provider for a specific mini-game status.
-     *
-     * @param namespace The namespace for the mini-game.
-     * @param status The status for which the HUD is provided.
-     * @param bossBarLines Lines to display in the boss bar.
-     * @param scoreboardLines Lines to display in the scoreboard.
-     * @param provider The HUD provider implementation.
-     */
-    void registerHud(String namespace, String status, List<String> bossBarLines, List<String> scoreboardLines, MiniGameHudProvider provider);
+    List<MiniGame> list();
 }

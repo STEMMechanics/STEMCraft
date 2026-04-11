@@ -46,9 +46,9 @@ public final class TextUtil {
         boolean hasAngleTag = input.indexOf('<') != -1 && input.indexOf('>') != -1;
         boolean hasLegacy = input.indexOf('&') != -1 || input.indexOf('§') != -1;
 
-        if (hasAngleTag && !hasLegacy) {
+        if (hasAngleTag || hasLegacy) {
             try {
-                return MM.deserialize(input);
+                return MM.deserialize(translateLegacyToMiniMessage(input));
             } catch (Exception ignored) {
                 // fall through
             }
@@ -58,6 +58,127 @@ public final class TextUtil {
             return LEGACY_SECTION.deserialize(input);
         }
         return LEGACY_AMP.deserialize(input);
+    }
+
+    private static String translateLegacyToMiniMessage(String input) {
+        StringBuilder out = new StringBuilder(input.length() + 16);
+
+        for (int i = 0; i < input.length(); i++) {
+            char current = input.charAt(i);
+
+            if (current == '&' && i + 1 < input.length()) {
+                if (appendShortHexColour(input, i, out)) {
+                    i += 7;
+                    continue;
+                }
+                if (appendExpandedHexColour(input, i, out)) {
+                    i += 13;
+                    continue;
+                }
+                String replacement = legacyCodeToMiniMessage(input.charAt(i + 1));
+                if (replacement != null) {
+                    out.append(replacement);
+                    i++;
+                    continue;
+                }
+            }
+
+            if (current == '§' && i + 1 < input.length()) {
+                if (appendExpandedHexColour(input, i, out)) {
+                    i += 13;
+                    continue;
+                }
+                String replacement = legacyCodeToMiniMessage(input.charAt(i + 1));
+                if (replacement != null) {
+                    out.append(replacement);
+                    i++;
+                    continue;
+                }
+            }
+
+            out.append(current);
+        }
+
+        return out.toString();
+    }
+
+    private static boolean appendShortHexColour(String input, int index, StringBuilder out) {
+        if (index + 7 >= input.length() || input.charAt(index) != '&' || input.charAt(index + 1) != '#') {
+            return false;
+        }
+
+        String hex = input.substring(index + 2, index + 8);
+        if (!isHex(hex)) {
+            return false;
+        }
+
+        out.append("<#").append(hex).append('>');
+        return true;
+    }
+
+    private static boolean appendExpandedHexColour(String input, int index, StringBuilder out) {
+        if (index + 13 >= input.length() || Character.toLowerCase(input.charAt(index + 1)) != 'x') {
+            return false;
+        }
+
+        StringBuilder hex = new StringBuilder(6);
+        for (int i = index + 2; i <= index + 13; i += 2) {
+            char marker = input.charAt(i);
+            if (marker != '&' && marker != '§') {
+                return false;
+            }
+            char digit = input.charAt(i + 1);
+            if (!isHexDigit(digit)) {
+                return false;
+            }
+            hex.append(digit);
+        }
+
+        out.append("<#").append(hex).append('>');
+        return true;
+    }
+
+    private static String legacyCodeToMiniMessage(char code) {
+        return switch (Character.toLowerCase(code)) {
+            case '0' -> "<black>";
+            case '1' -> "<dark_blue>";
+            case '2' -> "<dark_green>";
+            case '3' -> "<dark_aqua>";
+            case '4' -> "<dark_red>";
+            case '5' -> "<dark_purple>";
+            case '6' -> "<gold>";
+            case '7' -> "<gray>";
+            case '8' -> "<dark_gray>";
+            case '9' -> "<blue>";
+            case 'a' -> "<green>";
+            case 'b' -> "<aqua>";
+            case 'c' -> "<red>";
+            case 'd' -> "<light_purple>";
+            case 'e' -> "<yellow>";
+            case 'f' -> "<white>";
+            case 'k' -> "<obfuscated>";
+            case 'l' -> "<bold>";
+            case 'm' -> "<strikethrough>";
+            case 'n' -> "<underlined>";
+            case 'o' -> "<italic>";
+            case 'r' -> "<reset>";
+            default -> null;
+        };
+    }
+
+    private static boolean isHex(String value) {
+        for (int i = 0; i < value.length(); i++) {
+            if (!isHexDigit(value.charAt(i))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean isHexDigit(char value) {
+        return (value >= '0' && value <= '9')
+            || (value >= 'a' && value <= 'f')
+            || (value >= 'A' && value <= 'F');
     }
 
     public static Component colourise(Component input) {

@@ -27,6 +27,8 @@ import dev.stemcraft.api.command.CommandContext;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 
+import java.util.Locale;
+
 /**
  * Command to set a player's personal time.
  */
@@ -71,7 +73,7 @@ public class PTimeCommand extends BaseCommand {
             return;
         }
 
-        String mode = ctx.getArg(1).toLowerCase();
+        String mode = ctx.getArg(0).toLowerCase(Locale.ROOT);
         Player target = resolveTarget(cmd, ctx);
         if (target == null) return;
 
@@ -114,9 +116,9 @@ public class PTimeCommand extends BaseCommand {
      */
     private Player resolveTarget(Command cmd, CommandContext ctx) {
         if (ctx.args().size() >= 2) {
-            OfflinePlayer off = ctx.getArgAsOfflinePlayer(2, null);
+            OfflinePlayer off = ctx.getArgAsOfflinePlayer(1, null);
             if (off == null || !off.isOnline()) {
-                cmd.error("PLAYER_NOT_FOUND", "player", ctx.getArg(2));
+                cmd.error("PLAYER_NOT_FOUND", "player", ctx.getArg(1));
                 return null;
             }
             return off.getPlayer();

@@ -84,6 +84,42 @@ public class SCRegion implements ConfigurationSerializable {
     }
 
     /**
+     * Returns true if the movement path from one location to another touches this region.
+     * World must match for both locations.
+     *
+     * @param from The path origin.
+     * @param to   The path destination.
+     * @return True if any sampled point along the path is inside the region.
+     */
+    public boolean intersectsPath(Location from, Location to) {
+        if (from == null || to == null || world == null) return false;
+        if (from.getWorld() == null || to.getWorld() == null) return false;
+        if (!world.equals(from.getWorld()) || !world.equals(to.getWorld())) return false;
+        if (contains(from) || contains(to)) return true;
+
+        double dx = to.getX() - from.getX();
+        double dy = to.getY() - from.getY();
+        double dz = to.getZ() - from.getZ();
+        double maxDelta = Math.max(Math.abs(dx), Math.max(Math.abs(dy), Math.abs(dz)));
+        int steps = Math.max(1, (int) Math.ceil(maxDelta * 4.0d));
+
+        for (int i = 1; i < steps; i++) {
+            double t = i / (double) steps;
+            Location sample = new Location(
+                world,
+                from.getX() + (dx * t),
+                from.getY() + (dy * t),
+                from.getZ() + (dz * t)
+            );
+            if (contains(sample)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Returns true if the given region is fully contained within this region.
      * World must match.
      *
@@ -387,6 +423,25 @@ public class SCRegion implements ConfigurationSerializable {
     }
 
     /**
+     * Returns the base polygon vertices as centered block locations.
+     * For non-polygon regions this returns an empty list.
+     *
+     * @return Polygon vertices at the region minimum Y.
+     */
+    public List<Location> getPolygonVertices() {
+        if (!(region instanceof Polygonal2DRegion poly) || world == null) {
+            return List.of();
+        }
+
+        List<Location> vertices = new ArrayList<>();
+        int y = poly.getMinimumY();
+        for (BlockVector2 point : poly.getPoints()) {
+            vertices.add(new Location(world, point.x() + 0.5, y + 0.5, point.z() + 0.5));
+        }
+        return vertices;
+    }
+
+    /**
      * Checks if the given player is inside this region.
      *
      * @param player The player to check.
@@ -395,6 +450,26 @@ public class SCRegion implements ConfigurationSerializable {
     public boolean containsPlayer(Player player) {
         if (player == null) return false;
         return contains(player.getLocation());
+    }
+
+    /**
+     * Returns the minimum block corner of the region as a Bukkit location.
+     *
+     * @return The minimum corner location.
+     */
+    public Location getMinimumLocation() {
+        BlockVector3 min = region.getMinimumPoint();
+        return new Location(world, min.x(), min.y(), min.z());
+    }
+
+    /**
+     * Returns the maximum block corner of the region as a Bukkit location.
+     *
+     * @return The maximum corner location.
+     */
+    public Location getMaximumLocation() {
+        BlockVector3 max = region.getMaximumPoint();
+        return new Location(world, max.x(), max.y(), max.z());
     }
 
     /**
@@ -447,5 +522,17 @@ public class SCRegion implements ConfigurationSerializable {
      */
     public static SCRegion fromString(String s, World world) {
         return RegionSerializer.fromString(s, world);
+    }
+
+    /**
+     * Returns a detached copy of this region.
+     *
+     * @return A new SCRegion with the same serialized shape and world.
+     */
+    public SCRegion copy() {
+        if (world == null) {
+            throw new IllegalStateException("Cannot copy a region without a world.");
+        }
+        return RegionSerializer.fromString(RegionSerializer.toString(this), world);
     }
 }

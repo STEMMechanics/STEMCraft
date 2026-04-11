@@ -53,6 +53,7 @@ public class HubCommand {
         api.commands().create("hub")
                 .description("HUB_DESCRIPTION")
                 .usage("HUB_USAGE")
+                .tabCompletion("{player}")
                 .permission(PERMISSION)
                 .executor((unused, cmd, ctx) -> {
                     // check if console called without args
@@ -68,9 +69,9 @@ public class HubCommand {
                     }
 
                     // get target player
-                    Player target = ctx.getPlayer(1, ctx.getSender());
+                    Player target = ctx.getPlayer(0, ctx.getSender());
                     if(target == null) {
-                        cmd.error(ctx.getSender(), "PLAYER_NOT_FOUND", "player", ctx.getArg(1));
+                        cmd.error(ctx.getSender(), "PLAYER_NOT_FOUND", "player", ctx.getArg(0));
                         return;
                     }
 

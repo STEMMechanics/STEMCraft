@@ -58,9 +58,7 @@ public class DistanceDifficulty extends BaseFeature {
     @Override
     public void onEnable() {
         key = new NamespacedKey(STEMCraft.getPlugin(), "distance_multiplier");
-
-        range = getConfigSection().getInt("range", DEFAULT_RANGE);
-        multiplier = getConfigSection().getDouble("multiplier", DEFAULT_MULTIPLIER);
+        reloadConfigState();
 
         api.events().register(CreatureSpawnEvent.class, event -> {
             LivingEntity entity = event.getEntity();
@@ -108,6 +106,17 @@ public class DistanceDifficulty extends BaseFeature {
                 }
             }
         });
+    }
+
+    @Override
+    public void onReload() {
+        super.onReload();
+        reloadConfigState();
+    }
+
+    private void reloadConfigState() {
+        range = Math.max(1, getConfigSection().getInt("range", DEFAULT_RANGE));
+        multiplier = getConfigSection().getDouble("multiplier", DEFAULT_MULTIPLIER);
     }
 
     /**

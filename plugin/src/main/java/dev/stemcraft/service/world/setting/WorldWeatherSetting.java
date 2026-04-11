@@ -37,6 +37,8 @@ import java.util.Locale;
  * World setting to control weather conditions.
  */
 public class WorldWeatherSetting implements WorldBaseSetting {
+    private static final GameRule<Boolean> DO_WEATHER_CYCLE_RULE = requireGameRule("DO_WEATHER_CYCLE", Boolean.class);
+
 
     /**
      * Returns the unique key for this setting.
@@ -118,7 +120,8 @@ public class WorldWeatherSetting implements WorldBaseSetting {
             ctx.returnError("WORLD_SETTING_WEATHER_INVALID", "value", value);
         }
 
-        boolean always = ctx.getArgAsBoolean(1, false);
+        String alwaysArg = ctx.getArg(1, "");
+        boolean always = "always".equalsIgnoreCase(alwaysArg) || ctx.getArgAsBoolean(1, false);
         String alwaysSuffix = always ? " always" : "";
         set(world, config, value + alwaysSuffix);
 
@@ -176,15 +179,30 @@ public class WorldWeatherSetting implements WorldBaseSetting {
             }
         }
 
-        world.setGameRule(GameRule.DO_WEATHER_CYCLE, !always);
+        world.setGameRule(DO_WEATHER_CYCLE_RULE, !always);
 
         if(always) {
             config.set("weather.state", weather);
             config.set("weather.always", true);
         } else {
-            config.set("weather", null);
+            config.set("weather.state", null);
+            config.set("weather.always", null);
         }
 
         config.save();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> GameRule<T> requireGameRule(String name, Class<T> type) {
+        try {
+            Object value = GameRule.class.getField(name).get(null);
+            if (!(value instanceof GameRule<?> rule) || !type.equals(rule.getType())) {
+                throw new IllegalStateException("Missing expected gamerule " + name);
+            }
+
+            return (GameRule<T>) rule;
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException("Missing expected gamerule " + name, exception);
+        }
     }
 }

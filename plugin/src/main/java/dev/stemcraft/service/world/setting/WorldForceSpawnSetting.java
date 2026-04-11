@@ -26,7 +26,6 @@ import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.service.world.WorldBaseSetting;
 import dev.stemcraft.api.service.world.WorldService;
 import dev.stemcraft.api.util.WorldUtil;
-import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
@@ -66,28 +65,44 @@ public class WorldForceSpawnSetting implements WorldBaseSetting {
         // Respawn rules:
         // - Default: let Minecraft handle bed/anchor respawns.
         // - If no bed/anchor and Minecraft would respawn the player in a different world,
-        //   respawn them at the death world's spawn.
-        // - Optional per-world override: force respawn at world spawn even if bed/anchor exists.
+        //   respawn them at the death world's own spawn.
+        // - Optional per-world override: force respawn at that world's spawn even if bed/anchor exists.
         api.events().register(PlayerRespawnEvent.class, event -> {
             Player player = event.getPlayer();
 
             World deathWorld = player.getWorld();
-            String baseWorld = WorldUtil.baseName(deathWorld.getName());
+            if (deathWorld == null) {
+                return;
+            }
 
-            if(get(deathWorld, service.getConfigSection(deathWorld)).equals("true")) {
-
+            if (isEnabledForWorld(deathWorld)) {
                 // Force respawn at world spawn
-                World overworld = Bukkit.getWorld(baseWorld);
-                if (overworld != null) {
-                    Location spawn = overworld.getSpawnLocation();
-                    event.setRespawnLocation(spawn);
-                    return;
-                }
+                event.setRespawnLocation(resolveWorldSpawn(deathWorld));
+                return;
+            }
 
-                Location spawn = deathWorld.getSpawnLocation();
-                event.setRespawnLocation(spawn);
+            // Default behavior: keep bed/anchor respawns. If Minecraft chooses a different
+            // world fallback (typically server main world), keep the player in the death world.
+            if (event.isBedSpawn() || event.isAnchorSpawn()) {
+                return;
+            }
+
+            Location respawn = event.getRespawnLocation();
+            if (respawn == null || respawn.getWorld() == null) {
+                return;
+            }
+            if (!respawn.getWorld().equals(deathWorld)) {
+                event.setRespawnLocation(resolveWorldSpawn(deathWorld));
             }
         }, EventPriority.HIGHEST, true);
+    }
+
+    private boolean isEnabledForWorld(@NotNull World world) {
+        return get(world, worldService.getConfigSection(world)).equals("true");
+    }
+
+    private @NotNull Location resolveWorldSpawn(@NotNull World world) {
+        return world.getSpawnLocation();
     }
 
     /**
@@ -118,7 +133,7 @@ public class WorldForceSpawnSetting implements WorldBaseSetting {
             ctx.returnInfo("WORLD_SETTING_FORCE_SPAWN_STATUS", "world", world.getName(), "value", get(world, config));
         }
 
-        String value = ctx.getArgLower(1);
+        String value = ctx.getArgLower(0);
         if(value.equals("true") || value.equals("yes") || value.equals("1")
                 || value.equals("false") || value.equals("no") || value.equals("0")
                 || value.equals("unset")) {
@@ -142,13 +157,15 @@ public class WorldForceSpawnSetting implements WorldBaseSetting {
      */
     @Override
     public @NotNull String get(@NotNull World world, @NotNull ConfigSection unused) {
-        String baseName = WorldUtil.baseName(world.getName());
-        ConfigSection config = worldService.getConfigSection(baseName);
+        String value = normalizeValue(worldService.getConfigSection(world).getString("force-spawn-on-death"));
+        if (!value.equals("unset")) {
+            return value;
+        }
 
-        String value = config.getString("force-spawn-on-death");
-        value = value.toLowerCase(Locale.ROOT);
-        if(value.equals("true") || value.equals("yes") || value.equals("1")) return "true";
-        if(value.equals("false") || value.equals("no") || value.equals("0")) return "false";
+        String baseName = WorldUtil.baseName(world.getName());
+        if (!world.getName().equals(baseName)) {
+            return normalizeValue(worldService.getConfigSection(baseName).getString("force-spawn-on-death"));
+        }
 
         return "unset";
     }
@@ -163,8 +180,7 @@ public class WorldForceSpawnSetting implements WorldBaseSetting {
      */
     @Override
     public void set(@NotNull World world, @NotNull ConfigSection unused, @NotNull String value) {
-        String baseName = WorldUtil.baseName(world.getName());
-        ConfigSection config = worldService.getConfigSection(baseName);
+        ConfigSection config = worldService.getConfigSection(world);
 
         String valueLower = value.toLowerCase(Locale.ROOT);
 
@@ -177,5 +193,16 @@ public class WorldForceSpawnSetting implements WorldBaseSetting {
         }
 
         config.save();
+    }
+
+    private @NotNull String normalizeValue(String value) {
+        if (value == null) {
+            return "unset";
+        }
+
+        value = value.toLowerCase(Locale.ROOT);
+        if(value.equals("true") || value.equals("yes") || value.equals("1")) return "true";
+        if(value.equals("false") || value.equals("no") || value.equals("0")) return "false";
+        return "unset";
     }
 }

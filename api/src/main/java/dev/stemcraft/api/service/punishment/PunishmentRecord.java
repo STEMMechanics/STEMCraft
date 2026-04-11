@@ -103,7 +103,7 @@ public final class PunishmentRecord {
      * @return true if the punishment is cancelled, false otherwise.
      */
     public boolean cancelled() {
-        return durationSeconds == -1;
+        return durationSeconds != null && durationSeconds == -1;
     }
 
     /**

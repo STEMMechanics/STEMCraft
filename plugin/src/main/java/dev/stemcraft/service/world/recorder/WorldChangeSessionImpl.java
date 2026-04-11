@@ -150,6 +150,9 @@ public class WorldChangeSessionImpl implements WorldChangeSession {
         Block block = state.getBlock();
         BlockData data = state.getBlockData();
 
+        // Always snapshot the requested block itself before any special multi-block handling.
+        addBlockState(state, overwriteExisting);
+
         // Doors (two vertical blocks)
         if (isDoor(type) && data instanceof org.bukkit.block.data.type.Door door) {
             Block other = (door.getHalf() == org.bukkit.block.data.type.Door.Half.TOP)
@@ -200,8 +203,8 @@ public class WorldChangeSessionImpl implements WorldChangeSession {
         blockStateMap.clear();
         spawnedEntities.clear();
 
-        api.database().query(
-            "SELECT material, x, y, z, data, inventory FROM world_change_blocks WHERE world_name = ?",
+        api.database().queryEach(
+            "SELECT material, x, y, z, data, inventory FROM world_changes_blocks WHERE world = ?",
             ps -> ps.setString(1, world.getName()),
             rs -> {
                 String locString = rs.getInt("x") + "," + rs.getInt("y") + "," + rs.getInt("z");
@@ -212,21 +215,21 @@ public class WorldChangeSessionImpl implements WorldChangeSession {
                 );
 
                 blockStateMap.put(locString, rbs);
-
-                api.database().update("DELETE FROM world_change_blocks WHERE world = ?",
-                    ps -> ps.setString(1, world.getName()));
             });
 
-        api.database().query(
-                "SELECT uuid FROM world_change_entities WHERE world = ?",
-                ps -> ps.setString(1, world.getName()),
-                rs -> {
-                    UUID entityId = UUID.fromString(rs.getString("uuid"));
-                    spawnedEntities.add(entityId);
+        api.database().update("DELETE FROM world_changes_blocks WHERE world = ?",
+            ps -> ps.setString(1, world.getName()));
 
-                    api.database().update("DELETE FROM world_change_entities WHERE world = ?",
-                            ps -> ps.setString(1, world.getName()));
-                });
+        api.database().queryEach(
+            "SELECT uuid FROM world_changes_entities WHERE world = ?",
+            ps -> ps.setString(1, world.getName()),
+            rs -> {
+                UUID entityId = UUID.fromString(rs.getString("uuid"));
+                spawnedEntities.add(entityId);
+            });
+
+        api.database().update("DELETE FROM world_changes_entities WHERE world = ?",
+            ps -> ps.setString(1, world.getName()));
     }
 
     /**
@@ -234,7 +237,7 @@ public class WorldChangeSessionImpl implements WorldChangeSession {
      */
     public void save() {
         // Save block states
-        api.database().update("DELETE FROM world_change_blocks WHERE world = ?",
+        api.database().update("DELETE FROM world_changes_blocks WHERE world = ?",
             ps -> ps.setString(1, world.getName()));
 
         for (Map.Entry<String, RecordedBlockState> entry : blockStateMap.entrySet()) {
@@ -242,7 +245,7 @@ public class WorldChangeSessionImpl implements WorldChangeSession {
             RecordedBlockState rbs = entry.getValue();
 
             api.database().update(
-                "INSERT INTO world_change_blocks (world, material, x, y, z, data, inventory) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO world_changes_blocks (world, material, x, y, z, data, inventory) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 ps -> {
                     ps.setString(1, world.getName());
                     ps.setString(2, rbs.getMaterialName());
@@ -256,11 +259,11 @@ public class WorldChangeSessionImpl implements WorldChangeSession {
         }
 
         // Save spawned entities
-        api.database().update("DELETE FROM world_change_entities WHERE world = ?",
+        api.database().update("DELETE FROM world_changes_entities WHERE world = ?",
             ps -> ps.setString(1, world.getName()));
         for (UUID entityId : spawnedEntities) {
             api.database().update(
-                "INSERT INTO world_change_entities (world, uuid) VALUES (?, ?)",
+                "INSERT INTO world_changes_entities (world, uuid) VALUES (?, ?)",
                 ps -> {
                     ps.setString(1, world.getName());
                     ps.setString(2, entityId.toString());

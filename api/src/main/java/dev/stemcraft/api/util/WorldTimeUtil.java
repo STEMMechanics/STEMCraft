@@ -48,4 +48,28 @@ public class WorldTimeUtil {
 
         return String.format("%d:%02d %s", hours12, minutes, amPm);
     }
+
+    /**
+     * Convert world time to a clock string snapped down to 15-minute increments.
+     *
+     * @param world The world to convert.
+     * @return The converted time rounded to :00/:15/:30/:45.
+     */
+    public static String toClockQuarter(World world) {
+        long time = world.getTime();
+
+        // Shift so 0 ticks = 6:00 AM
+        long adjusted = (time + 6000) % 24000;
+
+        int hours24 = (int) (adjusted / 1000);
+        int minutes = (int) ((adjusted % 1000) * 60 / 1000);
+
+        int quarterMinutes = (minutes / 15) * 15;
+        String amPm = hours24 >= 12 ? "PM" : "AM";
+
+        int hours12 = hours24 % 12;
+        if (hours12 == 0) hours12 = 12;
+
+        return String.format("%d:%02d %s", hours12, quarterMinutes, amPm);
+    }
 }

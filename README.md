@@ -8,7 +8,7 @@ This is the core STEMCraft plugin that provides the core functionality and helpe
 ## Requirements
 
 - Java 21
-- Paper 1.21.10 or higher
+- Paper 1.21.11 or higher
 
 
 ## Usage

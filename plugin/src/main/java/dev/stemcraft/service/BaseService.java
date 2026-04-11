@@ -22,8 +22,14 @@ package dev.stemcraft.service;
 
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.api.config.ConfigFile;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.util.StringUtil;
+import dev.stemcraft.config.BundledConfigDefaults;
+
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
 
 /**
  * Base class for STEMCraft services.
@@ -32,8 +38,9 @@ public abstract class BaseService {
     protected final STEMCraft plugin;
     protected final STEMCraftAPI api;
     private ConfigSection configSection;
-    private ConfigSection rootConfigSection;
+    private ConfigFile rootConfigSection;
     private String configKey;
+    private String resolvedConfigPath;
 
 
     /**
@@ -58,6 +65,13 @@ public abstract class BaseService {
     public void onDisable() {}
 
     /**
+     * Called when the service should refresh configuration-backed runtime state.
+     */
+    public void onReload() {
+        resetConfigCache();
+    }
+
+    /**
      * Get the id of this feature.
      *
      * @return The feature id.
@@ -66,10 +80,10 @@ public abstract class BaseService {
         String name = getClass().getSimpleName();
 
         if (name.endsWith("Impl")) {
-            return name.substring(0, name.length() - "Impl".length());
+            name = name.substring(0, name.length() - "Impl".length());
         }
         if (name.endsWith("Service")) {
-            return name.substring(0, name.length() - "Service".length());
+            name = name.substring(0, name.length() - "Service".length());
         }
 
         return name;
@@ -85,11 +99,68 @@ public abstract class BaseService {
     }
 
     /**
+     * Returns the config path candidates for this service in priority order.
+     *
+     * @return Candidate config paths.
+     */
+    protected List<String> getConfigPathCandidates() {
+        LinkedHashSet<String> candidates = new LinkedHashSet<>();
+
+        if (configKey != null && !configKey.isBlank()) {
+            addConfigPathVariants(candidates, configKey);
+        } else {
+            String kebab = StringUtil.camelToKebab(getId());
+            String snake = kebab.replace('-', '_');
+
+            candidates.add(kebab);
+            candidates.add(snake);
+            candidates.add(StringUtil.toPlural(kebab));
+            candidates.add(StringUtil.toPlural(snake));
+        }
+
+        // Backward compatibility for legacy auto-generated *-services paths.
+        String legacyName = getClass().getSimpleName();
+        if (legacyName.endsWith("Impl")) {
+            legacyName = legacyName.substring(0, legacyName.length() - "Impl".length());
+        }
+
+        String legacyKebab = StringUtil.camelToKebab(legacyName);
+        String legacySnake = legacyKebab.replace('-', '_');
+        candidates.add(StringUtil.toPlural(legacyKebab));
+        candidates.add(StringUtil.toPlural(legacySnake));
+
+        return new ArrayList<>(candidates);
+    }
+
+    private void addConfigPathVariants(LinkedHashSet<String> candidates, String path) {
+        candidates.add(path);
+
+        if (path.contains(".")) {
+            return;
+        }
+
+        candidates.add(path.replace('_', '-'));
+        candidates.add(path.replace('-', '_'));
+    }
+
+    /**
+     * Returns the config path actually resolved for this service.
+     *
+     * @return The resolved config path.
+     */
+    public String getResolvedConfigPath() {
+        if (resolvedConfigPath == null) {
+            resolvedConfigPath = getConfigPathCandidates().getFirst();
+        }
+        return resolvedConfigPath;
+    }
+
+    /**
      * Get the root configuration section of the plugin's config.
      *
      * @return The root ConfigSection.
      */
-    public ConfigSection getRootConfigSection() {
+    public ConfigFile getRootConfigSection() {
         if(rootConfigSection == null) {
             rootConfigSection = api.config().load("config.yml");
             if (rootConfigSection == null) {
@@ -107,17 +178,41 @@ public abstract class BaseService {
      */
     public ConfigSection getConfigSection() {
         if(configSection == null) {
-            ConfigSection root = getRootConfigSection();
-
-            if(configKey == null) {
-                configKey = StringUtil.camelToKebab(getId());
-                configKey = StringUtil.toPlural(configKey);
+            ConfigFile root = getRootConfigSection();
+            List<String> candidates = getConfigPathCandidates();
+            for (String path : candidates) {
+                if (!root.isSection(path)) {
+                    continue;
+                }
+                configSection = root.getSection(path, false);
+                resolvedConfigPath = path;
+                break;
             }
 
-            configSection = root.getSection(configKey);
+            if (configSection == null) {
+                resolvedConfigPath = BundledConfigDefaults.restoreMissingSection(plugin, root, candidates);
+            }
+
+            if (configSection == null && resolvedConfigPath != null && root.isSection(resolvedConfigPath)) {
+                configSection = root.getSection(resolvedConfigPath, false);
+            }
+
+            if (configSection == null) {
+                resolvedConfigPath = candidates.getFirst();
+                configSection = root.getSection(resolvedConfigPath);
+            }
         }
 
         return configSection;
+    }
+
+    /**
+     * Clears cached config handles so future lookups see updated disk state.
+     */
+    protected final void resetConfigCache() {
+        configSection = null;
+        rootConfigSection = null;
+        resolvedConfigPath = null;
     }
 
     /**

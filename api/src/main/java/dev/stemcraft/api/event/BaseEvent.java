@@ -33,6 +33,15 @@ public class BaseEvent extends Event {
     private static final HandlerList handlers = new HandlerList();
 
     /**
+     * Bukkit requires a static handler list accessor for event registration.
+     *
+     * @return The shared handler list.
+     */
+    public static @NotNull HandlerList getHandlerList() {
+        return handlers;
+    }
+
+    /**
      * Gets the handler list for this event.
      *
      * @return The handler list.

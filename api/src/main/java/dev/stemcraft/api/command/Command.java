@@ -103,4 +103,9 @@ public interface Command extends HasMessages {
      * Clear all tab completion patterns.
      */
     void clearTabCompletions();
+
+    /**
+     * Unregister the command from the server.
+     */
+    default void unregister() { }
 }

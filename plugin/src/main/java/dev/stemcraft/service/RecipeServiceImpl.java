@@ -50,6 +50,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
      */
     public RecipeServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
+        setConfigKey("recipes");
     }
 
     /**

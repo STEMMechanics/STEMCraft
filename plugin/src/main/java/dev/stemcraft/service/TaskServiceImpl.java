@@ -45,10 +45,10 @@ import java.util.concurrent.ConcurrentHashMap;
 public class TaskServiceImpl extends BaseService implements TaskService {
     private final static String DATA_FILE_NAME = "task-data.yml";
     private File dataFile;
-    private YamlConfiguration dataConfig;
     private final Map<String, TaskCallback> persistentCallbacks = new HashMap<>();
     private final Map<String, BukkitTask> tasks = new ConcurrentHashMap<>();
     private final Map<String, Long> tasksRunAt = new ConcurrentHashMap<>();
+    private boolean storageReady = false;
 
     /**
      * Constructor for TaskServiceImpl.
@@ -65,18 +65,13 @@ public class TaskServiceImpl extends BaseService implements TaskService {
      */
     @Override
     public void onEnable() {
-        this.dataFile = new File(plugin.getDataFolder(), DATA_FILE_NAME);
-
-        if (!dataFile.exists()) {
-            try {
-                //noinspection ResultOfMethodCallIgnored
-                dataFile.createNewFile();
-            } catch (IOException e) {
-                api.messages().error("PERSISTENT_TIMER_CREATE_DATA_FILE_FAILED", e);
-            }
+        File dataFolder = plugin.getDataFolder();
+        if (!dataFolder.exists() && !dataFolder.mkdirs()) {
+            logBootstrapError("PERSISTENT_TIMER_CREATE_DATA_FILE_FAILED", new IOException("Unable to create data folder " + dataFolder.getPath()));
+            return;
         }
 
-        this.dataConfig = YamlConfiguration.loadConfiguration(dataFile);
+        this.dataFile = new File(plugin.getDataFolder(), DATA_FILE_NAME);
     }
 
     /**
@@ -84,7 +79,7 @@ public class TaskServiceImpl extends BaseService implements TaskService {
      */
     @Override
     public void onDisable() {
-        save();
+        cancelAll();
     }
 
     /**
@@ -96,7 +91,9 @@ public class TaskServiceImpl extends BaseService implements TaskService {
     @Override
     public void registerPersistentCallback(@NotNull String persistentType, @NotNull TaskCallback callback) {
         persistentCallbacks.put(persistentType, callback);
-        loadPersistentTimers(persistentType);
+        if (ensureStorageReady()) {
+            loadPersistentTimers(persistentType);
+        }
     }
 
     /**
@@ -112,11 +109,27 @@ public class TaskServiceImpl extends BaseService implements TaskService {
         long runAt = System.currentTimeMillis() + (delay * 50L);
 
         cancel(id);
-        String path = "tasks." + id;
-        dataConfig.set(path + ".type", persistentType);
-        dataConfig.set(path + ".runAt", runAt);
-        dataConfig.set(path + ".data", data);
-        save();
+        if (!ensureStorageReady()) {
+            runOnceDelay(id, delay, () -> {
+                TaskCallback callback = persistentCallbacks.get(persistentType);
+                if (callback != null) {
+                    callback.run(persistentType, id, data);
+                }
+                cancel(id);
+            });
+            return;
+        }
+
+        api.database().update(
+            "INSERT INTO persistent_tasks (id, type, run_at, data) VALUES (?, ?, ?, ?) " +
+            "ON CONFLICT(id) DO UPDATE SET type = excluded.type, run_at = excluded.run_at, data = excluded.data",
+            ps -> {
+                ps.setString(1, id);
+                ps.setString(2, persistentType);
+                ps.setLong(3, runAt);
+                ps.setString(4, data);
+            }
+        );
 
         if(persistentCallbacks.containsKey(persistentType)) {
             schedulePersistentTimer(persistentType, id);
@@ -131,11 +144,14 @@ public class TaskServiceImpl extends BaseService implements TaskService {
      */
     @Override
     public @Nullable String getPersistentData(@NotNull String id) {
-        String path = "tasks." + id + ".data";
-        if (!dataConfig.contains(path)) {
+        if (!ensureStorageReady()) {
             return null;
         }
-        return dataConfig.getString(path);
+        return api.database().querySingleMapped(
+            "SELECT data FROM persistent_tasks WHERE id = ?",
+            ps -> ps.setString(1, id),
+            rs -> rs.getString(1)
+        );
     }
 
     /**
@@ -146,9 +162,13 @@ public class TaskServiceImpl extends BaseService implements TaskService {
      */
     @Override
     public void setPersistentData(@NotNull String id, @NotNull String data) {
-        String path = "tasks." + id + ".data";
-        dataConfig.set(path, data);
-        save();
+        if (!ensureStorageReady()) {
+            return;
+        }
+        api.database().update("UPDATE persistent_tasks SET data = ? WHERE id = ?", ps -> {
+            ps.setString(1, data);
+            ps.setString(2, id);
+        });
     }
 
     /**
@@ -159,18 +179,15 @@ public class TaskServiceImpl extends BaseService implements TaskService {
      */
     @Override
     public @NotNull List<String> listPersistentTimers(@NotNull String type) {
-        List<String> ids = new java.util.ArrayList<>();
-
-        ConfigurationSection typeSection = dataConfig.getConfigurationSection("tasks");
-        if (typeSection == null) return ids;
-
-        for (String id : typeSection.getKeys(false)) {
-            String timerType = dataConfig.getString("tasks." + id + ".type", "");
-            if (timerType.equals(type)) {
-                ids.add(id);
-            }
+        List<String> ids = new ArrayList<>();
+        if (!ensureStorageReady()) {
+            return ids;
         }
-
+        api.database().queryEach(
+            "SELECT id FROM persistent_tasks WHERE type = ?",
+            ps -> ps.setString(1, type),
+            rs -> ids.add(rs.getString("id"))
+        );
         return ids;
     }
 
@@ -245,18 +262,21 @@ public class TaskServiceImpl extends BaseService implements TaskService {
     @Override
     public void cancel(@NotNull String id) {
         Set<String> idList = new HashSet<>();
-        ConfigurationSection tasksSection = dataConfig.getConfigurationSection("tasks");
 
         if(id.indexOf('*') != -1) {
             String prefix = id.substring(0, id.indexOf('*'));
             String suffix = id.substring(id.indexOf('*') + 1);
-
-            if (tasksSection != null) {
-                for (String item : tasksSection.getKeys(false)) {
-                    if (item.startsWith(prefix) && item.endsWith(suffix)) {
-                        idList.add(item);
+            if (ensureStorageReady()) {
+                api.database().queryEach(
+                    "SELECT id FROM persistent_tasks",
+                    null,
+                    rs -> {
+                        String item = rs.getString("id");
+                        if (item.startsWith(prefix) && item.endsWith(suffix)) {
+                            idList.add(item);
+                        }
                     }
-                }
+                );
             }
 
             for (String item : tasks.keySet()) {
@@ -268,22 +288,15 @@ public class TaskServiceImpl extends BaseService implements TaskService {
             idList.add(id);
         }
 
-        boolean changed = false;
-
         for(String item : idList) {
-            if (tasksSection != null && tasksSection.contains(item)) {
-                tasksSection.set(item, null);
-                changed = true;
+            if (ensureStorageReady()) {
+                api.database().update("DELETE FROM persistent_tasks WHERE id = ?", ps -> ps.setString(1, item));
             }
 
             BukkitTask t = tasks.remove(item);
             tasksRunAt.remove(item);
 
             if (t != null) t.cancel();
-        }
-
-        if(changed) {
-            save();
         }
     }
 
@@ -295,12 +308,16 @@ public class TaskServiceImpl extends BaseService implements TaskService {
      */
     @Override
     public boolean exists(@NotNull String id) {
-        ConfigurationSection tasksSection = dataConfig.getConfigurationSection("tasks");
-        if (tasksSection != null && tasksSection.contains(id)) {
-            return true;
+        if (!ensureStorageReady()) {
+            return tasks.containsKey(id);
         }
-
-        return tasks.containsKey(id);
+        int count = api.database().querySingleMapped(
+            "SELECT COUNT(*) FROM persistent_tasks WHERE id = ?",
+            ps -> ps.setString(1, id),
+            rs -> rs.getInt(1),
+            0
+        );
+        return count > 0 || tasks.containsKey(id);
     }
 
     /**
@@ -317,13 +334,17 @@ public class TaskServiceImpl extends BaseService implements TaskService {
             long remainingMillis = runAt - now;
             return Math.max(0, remainingMillis / 50L);
         }
-
-        String path = "tasks." + id + ".runAt";
-        if (!dataConfig.contains(path)) {
+        if (!ensureStorageReady()) {
             return -1;
         }
-
-        long runAt = dataConfig.getLong(path);
+        Long runAt = api.database().querySingleMapped(
+            "SELECT run_at FROM persistent_tasks WHERE id = ?",
+            ps -> ps.setString(1, id),
+            rs -> rs.getLong(1)
+        );
+        if (runAt == null) {
+            return -1;
+        }
         long now = System.currentTimeMillis();
         long remainingMillis = runAt - now;
         return Math.max(0, remainingMillis / 50L);
@@ -405,22 +426,14 @@ public class TaskServiceImpl extends BaseService implements TaskService {
      * @param persistentType The callback type to load.
      */
     private void loadPersistentTimers(String persistentType) {
-        ConfigurationSection timersSection = dataConfig.getConfigurationSection("tasks");
-        if (timersSection == null) return;
-
-        for (String id : timersSection.getKeys(false)) {
-            String type = dataConfig.getString("tasks." + id + ".type", "");
-            if (!type.equals(persistentType)) {
-                continue;
-            }
-
-            long runAt = dataConfig.getLong("tasks." + id + ".runAt", 0L);
-            String data = dataConfig.getString("tasks." + id + ".data", "");
-
-            schedulePersistentTimer(type, id);
+        if (!ensureStorageReady()) {
+            return;
         }
-
-        save();
+        api.database().queryEach(
+            "SELECT id FROM persistent_tasks WHERE type = ?",
+            ps -> ps.setString(1, persistentType),
+            rs -> schedulePersistentTimer(persistentType, rs.getString("id"))
+        );
     }
 
     /**
@@ -441,7 +454,18 @@ public class TaskServiceImpl extends BaseService implements TaskService {
             return;
         }
 
-        long runAt = dataConfig.getLong("tasks." + id + ".runAt", 0L);
+        if (!ensureStorageReady()) {
+            return;
+        }
+        Long runAtValue = api.database().querySingleMapped(
+            "SELECT run_at FROM persistent_tasks WHERE id = ?",
+            ps -> ps.setString(1, id),
+            rs -> rs.getLong(1)
+        );
+        if (runAtValue == null) {
+            return;
+        }
+        long runAt = runAtValue;
         long delay = runAt - System.currentTimeMillis();
 
         runOnceDelay( id, Math.max(0, delay), () -> {
@@ -453,11 +477,75 @@ public class TaskServiceImpl extends BaseService implements TaskService {
         });
     }
 
-    private void save() {
-        try {
-            dataConfig.save(dataFile);
-        } catch (IOException e) {
-            api.messages().error("PERSISTENT_TIMER_SAVE_FAILED", e);
+    private void ensureStorage() {
+        api.database().execute(
+            "CREATE TABLE IF NOT EXISTS persistent_tasks (" +
+            "id TEXT PRIMARY KEY," +
+            "type TEXT NOT NULL," +
+            "run_at INTEGER NOT NULL," +
+            "data TEXT NOT NULL" +
+            ");"
+        );
+        api.database().execute("CREATE INDEX IF NOT EXISTS persistent_tasks_type ON persistent_tasks(type);");
+        api.database().execute("CREATE INDEX IF NOT EXISTS persistent_tasks_run_at ON persistent_tasks(run_at);");
+    }
+
+    private void migrateLegacyDataFile() {
+        if (api.database().migrationVersion("task-service-state") >= 1) {
+            return;
         }
+
+        if (dataFile == null || !dataFile.exists()) {
+            api.database().setMigrationVersion("task-service-state", 1);
+            return;
+        }
+
+        YamlConfiguration legacy = YamlConfiguration.loadConfiguration(dataFile);
+        ConfigurationSection tasksSection = legacy.getConfigurationSection("tasks");
+        if (tasksSection != null) {
+            for (String id : tasksSection.getKeys(false)) {
+                String type = legacy.getString("tasks." + id + ".type", "");
+                long runAt = legacy.getLong("tasks." + id + ".runAt", 0L);
+                String data = legacy.getString("tasks." + id + ".data", "");
+                if (type.isBlank()) {
+                    continue;
+                }
+                api.database().update(
+                    "INSERT INTO persistent_tasks (id, type, run_at, data) VALUES (?, ?, ?, ?) " +
+                    "ON CONFLICT(id) DO UPDATE SET type = excluded.type, run_at = excluded.run_at, data = excluded.data",
+                    ps -> {
+                        ps.setString(1, id);
+                        ps.setString(2, type);
+                        ps.setLong(3, runAt);
+                        ps.setString(4, data == null ? "" : data);
+                    }
+                );
+            }
+        }
+
+        api.database().setMigrationVersion("task-service-state", 1);
+    }
+
+    private boolean ensureStorageReady() {
+        if (storageReady) {
+            return true;
+        }
+        if (api.database() == null) {
+            return false;
+        }
+
+        ensureStorage();
+        migrateLegacyDataFile();
+        storageReady = true;
+        return true;
+    }
+
+    private void logBootstrapError(@NotNull String key, @NotNull Throwable error) {
+        if (api.messages() != null) {
+            api.messages().error(key, error);
+            return;
+        }
+
+        plugin.getLogger().severe(key + ": " + error.getMessage());
     }
 }

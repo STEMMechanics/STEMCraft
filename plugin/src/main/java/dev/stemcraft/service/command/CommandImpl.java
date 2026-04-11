@@ -115,7 +115,7 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
             applyToBukkitCommand(pluginCommand);
 
             pluginCommand.setExecutor((sender, command, label, args) -> {
-                CommandContext context = new CommandContextImpl(this, sender, label, Arrays.stream(args).toList());
+                CommandContext context = new CommandContextImpl(this, sender, label, new ArrayList<>(Arrays.asList(args)));
 
                 if (!permission.isEmpty() && !sender.hasPermission(permission)) {
                     STEMCraftAPI.api().messages().error(sender, "COMMAND_NO_PERMISSION");
@@ -137,6 +137,25 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
             });
 
             getCommandMap().register(label, "stemcraft", pluginCommand);
+        }
+    }
+
+    @Override
+    public void unregister() {
+        if (this.pluginCommand == null) {
+            return;
+        }
+
+        PluginCommand registeredCommand = this.pluginCommand;
+
+        try {
+            CommandMap commandMap = getCommandMap();
+            registeredCommand.unregister(commandMap);
+            removeKnownCommands(commandMap, registeredCommand);
+        } catch (RuntimeException ex) {
+            STEMCraftAPI.api().messages().warn("COMMAND_FAIL_UNREGISTER", "label", label);
+        } finally {
+            this.pluginCommand = null;
         }
     }
 
@@ -258,6 +277,29 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
         }
     }
 
+    @SuppressWarnings("unchecked")
+    private void removeKnownCommands(@NotNull CommandMap commandMap, @NotNull org.bukkit.command.Command command) {
+        Class<?> type = commandMap.getClass();
+
+        while (type != null) {
+            try {
+                Field field = type.getDeclaredField("knownCommands");
+                field.setAccessible(true);
+
+                Object value = field.get(commandMap);
+                if (value instanceof Map<?, ?> knownCommands) {
+                    ((Map<String, org.bukkit.command.Command>) knownCommands).entrySet().removeIf(entry -> entry.getValue() == command);
+                }
+                return;
+            } catch (NoSuchFieldException ignored) {
+                type = type.getSuperclass();
+            } catch (IllegalAccessException ex) {
+                STEMCraftAPI.api().messages().warn("COMMAND_FAIL_UNREGISTER", "label", label);
+                return;
+            }
+        }
+    }
+
         /**
          * Helper class representing a value option in tab completion.
          */
@@ -303,11 +345,35 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
         }
 
         public void addValueOption(TabCompleteValueOption option) {
-            valueOptionArgsAvailable.put(option.option, parseValue(option.value, player));
+            valueOptionArgsAvailable.put(option.option, parseValue(option.value, player, args));
         }
 
-        public static List<String> parseValue(String value, Player player) {
+        private static String[] resolvePlaceholderArgs(String[] placeholderArgs, String[] commandArgs) {
+            String[] resolved = new String[placeholderArgs.length];
+
+            for (int i = 0; i < placeholderArgs.length; i++) {
+                String arg = placeholderArgs[i];
+                if (arg.startsWith("$")) {
+                    try {
+                        int index = Integer.parseInt(arg.substring(1));
+                        resolved[i] = (index >= 0 && index < commandArgs.length) ? commandArgs[index] : "";
+                    } catch (NumberFormatException ignored) {
+                        resolved[i] = arg;
+                    }
+                } else {
+                    resolved[i] = arg;
+                }
+            }
+
+            return resolved;
+        }
+
+        public static List<String> parseValue(String value, Player player, String[] commandArgs) {
             List<String> list = new ArrayList<>();
+
+            if (value.isEmpty()) {
+                return list;
+            }
 
             if (value.startsWith("{") && value.endsWith("}")) {
                 String inner = value.substring(1, value.length() - 1); // remove { }
@@ -319,6 +385,8 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
                 if (parts.length > 1) {
                     System.arraycopy(parts, 1, args, 0, parts.length - 1);
                 }
+
+                args = resolvePlaceholderArgs(args, commandArgs);
 
                 List<String> placeholderList = STEMCraftAPI.api()
                         .tabComplete()
@@ -364,7 +432,12 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
                     return true;
                 }
 
-                List<String> values = parseValue(tabCompletionItem, player);
+                if (tabCompletionItem.isEmpty()) {
+                    argIndex++;
+                    return true;
+                }
+
+                List<String> values = parseValue(tabCompletionItem, player, args);
                 if (values.contains(arg)) {
                     argIndex++;
                     return true;
@@ -434,9 +507,9 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
                 // list item is a string or placeholder
                 Boolean nextMatches = argParser.nextMatches(listItem);
                 if (nextMatches == null) {
-                    if(listItem != null) {
-                        tabCompletionResults.addAll(TabCompleteArgParser.parseValue(listItem, player));
-                    }
+                    if(listItem != null && !listItem.isEmpty()) {
+                            tabCompletionResults.addAll(TabCompleteArgParser.parseValue(listItem, player, fullArgs));
+                        }
 
                     break;
                 } else if (!nextMatches) {

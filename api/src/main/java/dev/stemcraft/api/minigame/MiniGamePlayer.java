@@ -26,7 +26,7 @@ import org.bukkit.entity.Player;
 /**
  * Represents a player participating in a mini-game.
  */
-public interface MiniGamePlayer extends HasMeta {
+public interface MiniGamePlayer extends HasMeta<MiniGamePlayer> {
 
     /**
      * Gets the underlying Bukkit Player object.
@@ -34,6 +34,13 @@ public interface MiniGamePlayer extends HasMeta {
      * @return The Player object.
      */
     Player getPlayer();
+
+    /**
+     * Gets the mini-game arena the player is currently in.
+     *
+     * @return The MiniGameArena instance.
+     */
+    MiniGameArena arena();
 
     /**
      * Gets the team name of the player.

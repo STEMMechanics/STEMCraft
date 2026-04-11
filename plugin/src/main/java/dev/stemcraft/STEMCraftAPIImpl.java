@@ -26,20 +26,23 @@ import dev.stemcraft.api.service.database.DatabaseService;
 import dev.stemcraft.api.service.event.EventService;
 import dev.stemcraft.api.service.motd.MotdService;
 import dev.stemcraft.api.service.player.PlayerService;
+import dev.stemcraft.api.service.playerstats.PlayerStatsService;
+import dev.stemcraft.api.service.placeholder.PlaceholderService;
 import dev.stemcraft.api.service.recipe.RecipeService;
 import dev.stemcraft.capability.HasMessagesImpl;
 import dev.stemcraft.api.STEMCraftAPI;
-import dev.stemcraft.api.service.gatekeeper.GatekeeperService;
 import dev.stemcraft.api.service.hologram.HologramService;
 import dev.stemcraft.api.service.item.ItemService;
 import dev.stemcraft.api.service.locale.LocaleService;
 import dev.stemcraft.api.service.message.MessageService;
 import dev.stemcraft.api.service.region.RegionService;
+import dev.stemcraft.api.service.selection.SelectionService;
 import dev.stemcraft.api.service.task.TaskService;
 import dev.stemcraft.api.service.punishment.PunishmentService;
 import dev.stemcraft.api.service.tabcomplete.TabCompleteService;
 import dev.stemcraft.api.service.web.WebService;
 import dev.stemcraft.api.service.world.WorldService;
+import dev.stemcraft.api.service.minigame.MiniGameService;
 
 import java.io.File;
 
@@ -104,12 +107,6 @@ public class STEMCraftAPIImpl extends HasMessagesImpl implements STEMCraftAPI {
     public EventService events() { return plugin.events(); }
 
     /**
-     * Get the gatekeeper service.
-     */
-    @Override
-    public GatekeeperService gatekeeper() { return plugin.gatekeeper(); }
-
-    /**
      * Get the hologram service.
      */
     @Override
@@ -138,8 +135,8 @@ public class STEMCraftAPIImpl extends HasMessagesImpl implements STEMCraftAPI {
     /**
      * Get the minigame service.
      */
-//    @Override
-//    public MiniGameService minigames() { return plugin.minigames(); }
+    @Override
+    public MiniGameService minigames() { return plugin.minigames(); }
 
     /**
      * Get the MOTD service.
@@ -154,16 +151,34 @@ public class STEMCraftAPIImpl extends HasMessagesImpl implements STEMCraftAPI {
     public PlayerService players() { return plugin.players(); }
 
     /**
+     * Get the placeholder service.
+     */
+    @Override
+    public PlaceholderService placeholders() { return plugin.placeholders(); }
+
+    /**
      * Get the punishment service.
      */
     @Override
     public PunishmentService punishments() { return plugin.punishments(); }
 
     /**
+     * Get the player stats service.
+     */
+    @Override
+    public PlayerStatsService playerStats() { return plugin.playerStats(); }
+
+    /**
      * Get the recipe service.
      */
     @Override
     public RecipeService recipes() { return plugin.recipes(); }
+
+    /**
+     * Get the selection/highlight service.
+     */
+    @Override
+    public SelectionService selections() { return plugin.selections(); }
 
     /**
      * Get the region service.

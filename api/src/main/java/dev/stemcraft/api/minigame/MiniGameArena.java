@@ -21,43 +21,51 @@
 package dev.stemcraft.api.minigame;
 
 import dev.stemcraft.api.capability.HasMeta;
+import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.service.message.MessageService;
+import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Represents a mini-game arena with players, teams, and game states.
  */
-public interface MiniGameArena extends MessageService, HasMeta {
+public interface MiniGameArena extends MessageService, HasMeta<MiniGameArena> {
 
-    // Arena status constants
-    String STATUS_SETUP   = "setup";    // Arena is being configured
-    String STATUS_WAITING = "waiting";  // Waiting for players, lobby phase
-    String STATUS_STARTING = "starting";    // Countdown to game start
-    String STATUS_RUNNING = "running";  // Game is in progress
-    String STATUS_ENDING  = "ending";   // Game is ending, showing results
-    String STATUS_CLEANUP = "cleanup";  // Cleaning up after game
-    String STATUS_DISABLED = "disabled";    // Arena is disabled/unavailable
-
+    enum ArenaStatus {
+        DISABLED,   // Arena is disabled/unavailable
+        SETUP,      // Arena is being configured
+        IDLE,       // No players in arena
+        WAITING,    // Waiting forArenaStatus additional players, lobby phase
+        STARTING,   // Countdown to game start
+        PREPARATION,// Round setup/preparation phase after start countdown
+        RUNNING,    // Game is in progress
+        COOLDOWN,   // Post-round cooldown phase before final ending/reset
+        ENDING,     // Game is ending, showing results
+        RESETTING,  // Cleaning up after game
+        SHUTDOWN    // Arena is shutting down (either by command, world unload, or server stop)
+    }
 
     /**
      * Unique identifier for the arena.
      *
      * @return The arena ID.
      */
-    String getId();
+    String id();
 
     /**
      * Namespace for the arena.
      *
      * @return The arena namespace.
      */
-    String getNamespace();
+    String namespace();
 
     /**
      * Display name of the arena.
@@ -67,18 +75,29 @@ public interface MiniGameArena extends MessageService, HasMeta {
     String getName();
 
     /**
+     * Set the display name of the arena.
+     *
+     * @param name The new arena name.
+     */
+    MiniGameArena setName(String name);
+
+    /**
      * World where the arena is located.
      *
      * @return The arena world.
      */
-    World getWorld();
+    World world();
+
+    SCRegion getRegion();
+
+    MiniGameArena setRegion(SCRegion region);
 
     /**
      * Current status of the arena (e.g., "waiting", "in-game", "ending").
      *
      * @return The arena status.
      */
-    String getStatus();
+    ArenaStatus getStatus();
 
     /**
      * Set the current status of the arena.
@@ -86,8 +105,15 @@ public interface MiniGameArena extends MessageService, HasMeta {
      * @param status The new status.
      * @param countdown Update the countdown time in seconds (optional).
      */
-    void setStatus(String status, int countdown);
-    default void setStatus(String status) { setStatus(status, 0); }
+    MiniGameArena setStatus(ArenaStatus status, int countdown);
+    default MiniGameArena setStatus(ArenaStatus status) { return setStatus(status, 0); }
+
+    /**
+     * Validate the arena configuration using the registered handler.
+     *
+     * @return The validation result.
+     */
+    ArenaValidationResult validate();
 
     /**
      * Get the lobby spawn location.
@@ -101,7 +127,21 @@ public interface MiniGameArena extends MessageService, HasMeta {
      *
      * @param location The new lobby spawn location.
      */
-    void setLobbySpawn(Location location);
+    MiniGameArena setLobbySpawn(Location location);
+
+    /**
+     * Get the spectator spawn location.
+     *
+     * @return The spectator spawn location, or null to fall back to the lobby.
+     */
+    Location getSpectatorSpawn();
+
+    /**
+     * Set the spectator spawn location.
+     *
+     * @param location The spectator spawn location.
+     */
+    MiniGameArena setSpectatorSpawn(Location location);
 
     /**
      * Current countdown time in seconds.
@@ -111,11 +151,31 @@ public interface MiniGameArena extends MessageService, HasMeta {
     int getCountdown();
 
     /**
+     * The original countdown value for the current phase, used for progress displays.
+     *
+     * @return The countdown maximum for the current phase, or 0 if none.
+     */
+    int getCountdownMax();
+
+    /**
      * Set the countdown time in seconds.
      *
      * @param seconds The new countdown time.
      */
-    void setCountdown(int seconds);
+    MiniGameArena setCountdown(int seconds);
+
+    /**
+     * Decrement the countdown by 1 second.
+     *
+     * @return The updated countdown time.
+     */
+    default int decrementCountdown() {
+        int current = getCountdown();
+        if (current > 0) {
+            setCountdown(current - 1);
+        }
+        return getCountdown();
+    }
 
     /**
      * Number of players currently in the arena related to the minigame.
@@ -155,6 +215,88 @@ public interface MiniGameArena extends MessageService, HasMeta {
     void removePlayer(Player player);
 
     /**
+     * Number of spectators currently in the arena.
+     *
+     * @return The number of spectators.
+     */
+    int numSpectators();
+
+    /**
+     * List of spectators currently in the arena.
+     *
+     * @return The list of spectators.
+     */
+    List<Player> getSpectators();
+
+    /**
+     * List of all arena occupants, including participants and spectators.
+     *
+     * @return The combined occupant list.
+     */
+    default List<Player> getOccupants() {
+        List<Player> occupants = new java.util.ArrayList<>(getPlayers());
+        occupants.addAll(getSpectators());
+        return occupants;
+    }
+
+    /**
+     * Check if a player is spectating this arena.
+     *
+     * @param player The player to check.
+     * @return True if the player is spectating, false otherwise.
+     */
+    boolean hasSpectator(Player player);
+
+    /**
+     * Add a spectator to the arena.
+     *
+     * @param player The player to add as spectator.
+     */
+    void addSpectator(Player player);
+
+    /**
+     * Remove a spectator from the arena.
+     *
+     * @param player The player to remove as spectator.
+     */
+    void removeSpectator(Player player);
+
+    /**
+     * Check if a player is currently inside this arena as either a participant or spectator.
+     *
+     * @param player The player to check.
+     * @return True if the player is in the arena.
+     */
+    default boolean hasOccupant(Player player) {
+        return hasPlayer(player) || hasSpectator(player);
+    }
+
+    /**
+     * Remove a player from the arena regardless of whether they are a participant or spectator.
+     *
+     * @param player The player to remove.
+     */
+    default void removeOccupant(Player player) {
+        if (hasPlayer(player)) {
+            removePlayer(player);
+        } else if (hasSpectator(player)) {
+            removeSpectator(player);
+        }
+    }
+
+    /**
+     * Remove all participants and spectators from the arena, restoring their previous state and location.
+     */
+    default void removeAllOccupants() {
+        for (Player player : getPlayers()) {
+            removePlayer(player);
+        }
+        for (Player spectator : getSpectators()) {
+            removeSpectator(spectator);
+        }
+    }
+
+    /**
      * Get the list of teams in the arena.
      *
      * @return The list of teams.
@@ -170,6 +312,13 @@ public interface MiniGameArena extends MessageService, HasMeta {
      * @return The created MiniGameTeam.
      */
     MiniGameTeam addTeam(String id, String name, Location spawn);
+
+    /**
+     * Remove a team from the arena.
+     *
+     * @param id The team ID to remove.
+     */
+    void removeTeam(String id);
 
     /**
      * Get a team in the arena.
@@ -333,6 +482,110 @@ public interface MiniGameArena extends MessageService, HasMeta {
     List<String> getKits();
 
     /**
+     * Give a kit to the player.
+     *
+     * @param player The player to receive the kit.
+     * @param id The kit ID.
+     * @param clearInventory Whether to clear the inventory first.
+     */
+    void giveKit(Player player, String id, boolean clearInventory);
+    default void giveKit(Player player, String id) { giveKit(player, id, true); }
+
+    /**
+     * Enable or disable automatic ammo replenishment for a consumable material in this arena.
+     *
+     * @param ammo The ammo material to toggle.
+     * @param enabled True to replenish this ammo after supported shots, false to disable it.
+     */
+    void setUnlimitedAmmo(Material ammo, boolean enabled);
+    default void setUnlimitedAmmo(Material ammo) { setUnlimitedAmmo(ammo, true); }
+
+    /**
+     * Check whether an ammo material is replenished automatically in this arena.
+     *
+     * @param ammo The ammo material to check.
+     * @return True if the ammo is unlimited in this arena.
+     */
+    boolean hasUnlimitedAmmo(Material ammo);
+
+    /**
+     * Get the ammo materials configured for automatic replenishment in this arena.
+     *
+     * @return The configured unlimited ammo materials.
+     */
+    Set<Material> getUnlimitedAmmo();
+
+    /**
+     * Enable or disable automatic replenishment for a placed block material in this arena.
+     *
+     * @param material The block material to replenish after placement.
+     * @param enabled True to replenish the material, false to disable it.
+     */
+    void setUnlimitedPlacement(Material material, boolean enabled);
+    default void setUnlimitedPlacement(Material material) { setUnlimitedPlacement(material, true); }
+
+    /**
+     * Check whether a placed block material is replenished automatically in this arena.
+     *
+     * @param material The material to check.
+     * @return True if the material is replenished after placement.
+     */
+    boolean hasUnlimitedPlacement(Material material);
+
+    /**
+     * Get the placed block materials configured for automatic replenishment in this arena.
+     *
+     * @return The configured unlimited placement materials.
+     */
+    Set<Material> getUnlimitedPlacements();
+
+    /**
+     * Start a temporary named celebration using fireworks at one or more locations.
+     *
+     * @param key The celebration key. Reusing the same key replaces the previous effect.
+     * @param locations The celebration anchor locations.
+     * @param durationSeconds The duration of the celebration in seconds.
+     * @param colors The firework colors to use. If omitted, a default palette is used.
+     */
+    void startCelebration(String key, Collection<Location> locations, int durationSeconds, Color... colors);
+    default void startCelebration(String key, Location location, int durationSeconds, Color... colors) {
+        startCelebration(key, location == null ? List.of() : List.of(location), durationSeconds, colors);
+    }
+
+    /**
+     * Stop a named active celebration for this arena.
+     *
+     * @param key The celebration key.
+     */
+    void stopCelebration(String key);
+
+    /**
+     * Stop all active celebrations for this arena.
+     */
+    void stopAllCelebrations();
+
+    /**
+     * Start a temporary winner celebration using fireworks at one or more locations.
+     *
+     * @param locations The celebration anchor locations.
+     * @param durationSeconds The duration of the celebration in seconds.
+     * @param colors The firework colors to use. If omitted, a default palette is used.
+     */
+    default void startWinnerCelebration(Collection<Location> locations, int durationSeconds, Color... colors) {
+        startCelebration("winner", locations, durationSeconds, colors);
+    }
+    default void startWinnerCelebration(Location location, int durationSeconds, Color... colors) {
+        startWinnerCelebration(location == null ? List.of() : List.of(location), durationSeconds, colors);
+    }
+
+    /**
+     * Stop any active winner celebration for this arena.
+     */
+    default void stopWinnerCelebration() {
+        stopCelebration("winner");
+    }
+
+    /**
      * Get the minimum number of players required to start the game.
      *
      * @return The minimum number of players.
@@ -344,7 +597,7 @@ public interface MiniGameArena extends MessageService, HasMeta {
      *
      * @param minPlayers The minimum number of players.
      */
-    void setMinPlayers(int minPlayers);
+    MiniGameArena setMinPlayers(int minPlayers);
 
     /**
      * Get the maximum number of players allowed in the arena.
@@ -358,6 +611,42 @@ public interface MiniGameArena extends MessageService, HasMeta {
      *
      * @param maxPlayers The maximum number of players.
      */
-    void setMaxPlayers(int maxPlayers);
+    MiniGameArena setMaxPlayers(int maxPlayers);
 
+    /**
+     * Check if the arena is currently active (waiting, countdown, or running).
+     *
+     * @return True if the arena is active, false otherwise.
+     */
+    default boolean isActive() {
+        ArenaStatus status = getStatus();
+        return status == ArenaStatus.WAITING
+            || status == ArenaStatus.STARTING
+            || status == ArenaStatus.PREPARATION
+            || status == ArenaStatus.RUNNING
+            || status == ArenaStatus.COOLDOWN;
+    }
+
+    /**
+     * Check if players can join the pending/current game in the arena.
+     * If the arena is in WAITING or STARTING status, players can join
+     * and are placed into the game.
+     * If the arena is in any other status, players cannot join and
+     * will be placed into the lobby.
+     *
+     * @return True if players can join, false otherwise.
+     */
+    default boolean isJoinable() {
+        ArenaStatus status = getStatus();
+        return status == ArenaStatus.WAITING || status == ArenaStatus.STARTING;
+    }
+
+    /**
+     * Check if the arena is in configuration mode (SETUP or DISABLED).
+     *
+     * @return True if the arena is in configuration mode, false otherwise.
+     */
+    default boolean isInConfigMode() {
+        return getStatus() == ArenaStatus.SETUP || getStatus() == ArenaStatus.DISABLED;
+    }
 }

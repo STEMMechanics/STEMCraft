@@ -1,0 +1,7 @@
+generate_font_images:
+  enabled: true
+  name_prefix: "mc_"
+  textures_path: font
+  starting_char: "\uE200"
+  ascent: 8
+  height: 8

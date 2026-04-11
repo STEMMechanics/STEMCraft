@@ -25,7 +25,6 @@ import dev.stemcraft.api.internal.InstanceHolder;
 import dev.stemcraft.api.service.database.DatabaseService;
 import dev.stemcraft.api.service.event.EventService;
 import dev.stemcraft.api.service.config.ConfigService;
-import dev.stemcraft.api.service.gatekeeper.GatekeeperService;
 import dev.stemcraft.api.service.hologram.HologramService;
 import dev.stemcraft.api.service.item.ItemService;
 import dev.stemcraft.api.service.locale.LocaleService;
@@ -33,8 +32,11 @@ import dev.stemcraft.api.service.message.MessageService;
 import dev.stemcraft.api.service.minigame.MiniGameService;
 import dev.stemcraft.api.service.motd.MotdService;
 import dev.stemcraft.api.service.player.PlayerService;
+import dev.stemcraft.api.service.playerstats.PlayerStatsService;
+import dev.stemcraft.api.service.placeholder.PlaceholderService;
 import dev.stemcraft.api.service.recipe.RecipeService;
 import dev.stemcraft.api.service.region.RegionService;
+import dev.stemcraft.api.service.selection.SelectionService;
 import dev.stemcraft.api.service.task.TaskService;
 import dev.stemcraft.api.service.punishment.PunishmentService;
 import dev.stemcraft.api.service.tabcomplete.TabCompleteService;
@@ -81,11 +83,6 @@ public interface STEMCraftAPI {
     EventService events();
 
     /**
-     * Get the gatekeeper service.
-     */
-    GatekeeperService gatekeeper();
-
-    /**
      * Get the hologram service.
      */
     HologramService holograms();
@@ -121,14 +118,29 @@ public interface STEMCraftAPI {
     PlayerService players();
 
     /**
+     * Get the placeholder service.
+     */
+    PlaceholderService placeholders();
+
+    /**
      * Get the punishment service.
      */
     PunishmentService punishments();
 
     /**
+     * Get the player stats service.
+     */
+    PlayerStatsService playerStats();
+
+    /**
      * Get the recipe service.
      */
     RecipeService recipes();
+
+    /**
+     * Get the selection/highlight service.
+     */
+    SelectionService selections();
 
     /**
      * Get the region service.

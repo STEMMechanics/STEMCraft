@@ -52,6 +52,15 @@ public interface WorldGeneration {
     boolean isRegistered(@NotNull String key);
 
     /**
+     * Returns tab-completion suggestions for a generator's options.
+     *
+     * @param key The chunk generator key.
+     * @param cfg The current configuration string.
+     * @return A list of suggested option values.
+     */
+    @NotNull List<String> tabCompleteOptions(@NotNull String key, @NotNull String cfg);
+
+    /**
      * Creates a new chunk generator instance for the given key and configuration.
      *
      * @param key The chunk generator key.

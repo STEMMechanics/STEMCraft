@@ -114,12 +114,15 @@ public class Coordinates extends BaseFeature {
                 }
 
                 String world = StringUtil.capitalize(StringUtil.beautify(player.getLocation().getWorld().getName()));
-                String time = WorldTimeUtil.toClock(player.getLocation().getWorld());
+                String time = WorldTimeUtil.toClockQuarter(player.getLocation().getWorld());
                 String direction = DirectionUtil.getCompassDirection(player.getLocation().getYaw());
 
                 if (coordData.bossBar != null) {
+                    String title = api.messages().tokens().apply(
+                        api.locales().resolve(":world: " + world + " :mc_clock_00: " + time + " :mc_compass_00: " + direction)
+                    );
                     coordData.bossBar.setTitle(
-                            api.locales().resolve(":world: " + world + " :mc_clock_00: " + time + " :mc_compass_00: " + direction));
+                            title);
                 }
 
                 if (coordData.actionBar == true) {

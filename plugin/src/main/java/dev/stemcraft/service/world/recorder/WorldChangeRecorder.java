@@ -40,8 +40,10 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
+import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerBucketEmptyEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.vehicle.VehicleCreateEvent;
 import org.bukkit.event.world.StructureGrowEvent;
 import org.jetbrains.annotations.NotNull;
 
@@ -86,25 +88,32 @@ public class WorldChangeRecorder implements WorldBaseSetting {
      */
     public void onEnable(@NotNull STEMCraftAPI api, @NotNull WorldService unused) {
         if(api.database().migrationVersion("world-changes") < 1) {
-            if(api.database().execute("CREATE TABLE IF NOT EXISTS world_changes_blocks(" +
-                    "id INT AUTO_INCREMENT," +
-                    "world VARCHAR(64) NOT NULL," +
-                    "x INT NOT NULL," +
-                    "y INT NOT NULL," +
-                    "z INT NOT NULL," +
-                    "material VARCHAR(64) NOT NULL," +
+            boolean createdTable = api.database().execute("CREATE TABLE IF NOT EXISTS world_changes_blocks(" +
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                    "world TEXT NOT NULL," +
+                    "x INTEGER NOT NULL," +
+                    "y INTEGER NOT NULL," +
+                    "z INTEGER NOT NULL," +
+                    "material TEXT NOT NULL," +
                     "data TEXT," +
-                    "inventory BLOB," +
-                    "PRIMARY KEY (id)" +
-                    ");" +
-                "CREATE INDEX IF NOT EXISTS world_changes_entities (" +
-                    "world VARCHAR(64) NOT NULL," +
-                    "uuid VARCHAR(36) NOT NULL" +
-                ");"
-            )) {
+                    "inventory BLOB" +
+                    ");");
+            boolean createdEntityTable = api.database().execute("CREATE TABLE IF NOT EXISTS world_changes_entities(" +
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                    "world TEXT NOT NULL," +
+                    "uuid TEXT NOT NULL" +
+                    ");");
+            boolean createdIndex = api.database().execute(
+                "CREATE INDEX IF NOT EXISTS world_changes_blocks_world_xyz ON world_changes_blocks (world, x, y, z);"
+            );
+            boolean createdEntityIndex = api.database().execute(
+                "CREATE INDEX IF NOT EXISTS world_changes_entities_world_uuid ON world_changes_entities (world, uuid);"
+            );
+
+            if(createdTable && createdEntityTable && createdIndex && createdEntityIndex) {
                 api.database().setMigrationVersion("world-changes", 1);
             } else {
-                api.messages().error("Failed to create world_changes table for WorldChangeRecorder!");
+                api.messages().error("Failed to create world_changes schema for WorldChangeRecorder!");
             }
         }
 
@@ -208,11 +217,17 @@ public class WorldChangeRecorder implements WorldBaseSetting {
         // ItemSpawnEvent
         api.events().register(ItemSpawnEvent.class, event -> captureEntity(event.getEntity()));
 
+        // PlayerDropItemEvent fires reliably for manual item drops before any later item merge/despawn logic.
+        api.events().register(PlayerDropItemEvent.class, event -> captureEntity(event.getItemDrop()));
+
         // EntitySpawnEvent
         api.events().register(EntitySpawnEvent.class, event -> captureEntity(event.getEntity()));
 
         // EntityPlaceEvent
         api.events().register(EntityPlaceEvent.class, event -> captureEntity(event.getEntity()));
+
+        // Boats and minecarts are vehicles and are not consistently covered by EntityPlaceEvent.
+        api.events().register(VehicleCreateEvent.class, event -> captureEntity(event.getVehicle()));
 
         // SpongeAbsorbEvent (sponge absorbing water)
         api.events().register(SpongeAbsorbEvent.class, event -> {
@@ -377,8 +392,7 @@ public class WorldChangeRecorder implements WorldBaseSetting {
      */
     private void captureBlockState(BlockState state) {
         World world = state.getWorld();
-
-        WorldChangeSession worldState = sessions.get(world);
+        WorldChangeSession worldState = getSession(world);
         worldState.captureBlockState(state);
     }
 
@@ -393,8 +407,7 @@ public class WorldChangeRecorder implements WorldBaseSetting {
      */
     private void captureEntity(Entity entity) {
         World world = entity.getWorld();
-
-        WorldChangeSession worldState = sessions.get(world);
+        WorldChangeSession worldState = getSession(world);
         worldState.captureEntity(entity);
     }
 }

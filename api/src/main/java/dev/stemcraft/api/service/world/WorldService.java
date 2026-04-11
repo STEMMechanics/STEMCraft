@@ -80,8 +80,17 @@ public interface WorldService {
      * @return The created World object.
      */
     @Nullable World createWorld(@NotNull String worldName, @NotNull String generatorName, @NotNull String generatorOptions);
+    default @Nullable World createWorld(@NotNull String worldName, @NotNull String generatorName, @NotNull String generatorOptions, @Nullable Long seed) {
+        return createWorld(worldName, generatorName, generatorOptions);
+    }
     default @Nullable World createWorld(@NotNull String worldName) { return createWorld(worldName, "", ""); }
     default @Nullable World createWorld(@NotNull String worldName, @NotNull String generatorName) { return createWorld(worldName, generatorName, ""); }
+    default @Nullable World createWorld(@NotNull String worldName, @Nullable Long seed) {
+        return createWorld(worldName, "", "", seed);
+    }
+    default @Nullable World createWorld(@NotNull String worldName, @NotNull String generatorName, @Nullable Long seed) {
+        return createWorld(worldName, generatorName, "", seed);
+    }
 
     /**
      * Delete the world with the given name from disk.

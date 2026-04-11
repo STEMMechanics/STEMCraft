@@ -31,6 +31,7 @@ import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Material;
+import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -38,7 +39,6 @@ import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.BookMeta;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.*;
 
 /**
@@ -48,7 +48,6 @@ public class CustomBooks extends BaseFeature {
     private List<String> bookNames = new ArrayList<>();
 
     private File booksDir;
-    private final Map<String, File> bookFiles = new HashMap<>();
     private final Map<String, YamlConfiguration> books = new HashMap<>();
 
     /**
@@ -66,10 +65,9 @@ public class CustomBooks extends BaseFeature {
     @Override
     public void onEnable() {
         booksDir = new File(STEMCraft.getPlugin().getDataFolder(), "books");
-        if (!booksDir.exists() && !booksDir.mkdirs()) {
-            api.messages().warn("Failed to create books directory: " + booksDir.getAbsolutePath());
-        }
 
+        ensureStorage();
+        migrateLegacyBookFiles();
         loadAllBooks();
         buildCacheList();
 
@@ -180,10 +178,7 @@ public class CustomBooks extends BaseFeature {
                             ItemStack written = new ItemStack(Material.WRITTEN_BOOK);
                             BookMeta meta = (BookMeta) written.getItemMeta();
 
-                            // pages(...) returns a Book (adventure), so use the builder
-                            meta = meta.toBuilder()
-                                    .pages(displayPages)
-                                    .build();
+                            meta.addPages(displayPages.toArray(Component[]::new));
 
                             meta.setAuthor(TextUtil.colouriseToSection(authorRaw));
                             meta.setTitle(TextUtil.colouriseToSection(titleRaw));
@@ -193,23 +188,20 @@ public class CustomBooks extends BaseFeature {
 
                             try {
                                 boolean existed = books.containsKey(name);
-
-                                File outFile = new File(booksDir, name + ".yml");
                                 YamlConfiguration cfg = new YamlConfiguration();
                                 cfg.set("author", authorRaw);
                                 cfg.set("title", titleRaw);
                                 cfg.set("pages", rawPages);
-                                cfg.save(outFile);
+                                saveBookToStorage(name, cfg);
 
                                 books.put(name, cfg);
-                                bookFiles.put(name, outFile);
 
                                 if (existed) {
                                     cmd.success(ctx.getSender(), "BOOK_SAVE_UPDATED", "name", name);
                                 } else {
                                     cmd.success(ctx.getSender(), "BOOK_SAVE_NEW", "name", name);
                                 }
-                            } catch (IOException e) {
+                            } catch (Exception e) {
                                 cmd.error(ctx.getSender(), "BOOK_SAVE_FAILED", e, "name", name);
                             }
 
@@ -308,9 +300,9 @@ public class CustomBooks extends BaseFeature {
                                 return;
                             }
 
-                            Player targetPlayer = ctx.getPlayer(3, ctx.asPlayer());
+                            Player targetPlayer = ctx.getPlayer(2, ctx.asPlayer());
                             if (targetPlayer == null) {
-                                cmd.error(ctx.getSender(), "PLAYER_NOT_FOUND", "player", ctx.getArg(3));
+                                cmd.error(ctx.getSender(), "PLAYER_NOT_FOUND", "player", ctx.getArg(2));
                                 return;
                             }
 
@@ -349,16 +341,8 @@ public class CustomBooks extends BaseFeature {
                                 return;
                             }
 
-                            File f = bookFiles.get(name);
                             books.remove(name);
-                            bookFiles.remove(name);
-
-                            if (f != null && f.exists() && !f.delete()) {
-                                cmd.error(ctx.getSender(), "BOOK_SAVE_FAILED",
-                                        new IOException("Failed to delete: " + f.getAbsolutePath()),
-                                        "name", name);
-                                return;
-                            }
+                            deleteBookFromStorage(name);
 
                             cmd.success(ctx.getSender(), "BOOK_DELETE_SUCCESSFUL");
 
@@ -395,9 +379,7 @@ public class CustomBooks extends BaseFeature {
                             }
 
                             BookMeta outMeta = (BookMeta) book.getItemMeta();
-                            outMeta = outMeta.toBuilder()
-                                    .pages(editablePages)
-                                    .build();
+                            outMeta.addPages(editablePages.toArray(Component[]::new));
 
                             book.setItemMeta(outMeta);
                             ctx.asPlayer().getInventory().setItemInMainHand(book);
@@ -416,23 +398,25 @@ public class CustomBooks extends BaseFeature {
      */
     private void loadAllBooks() {
         books.clear();
-        bookFiles.clear();
 
-        if (booksDir == null || !booksDir.exists()) return;
-
-        File[] files = booksDir.listFiles((dir, filename) -> filename.toLowerCase(Locale.ROOT).endsWith(".yml"));
-        if (files == null) return;
-
-        for (File f : files) {
-            String filename = f.getName();
-            if (filename.length() <= 4) continue;
-
-            String key = filename.substring(0, filename.length() - 4);
-
-            YamlConfiguration cfg = YamlConfiguration.loadConfiguration(f);
-            books.put(key, cfg);
-            bookFiles.put(key, f);
-        }
+        api.database().queryEach(
+            "SELECT name, yaml_content FROM custom_books",
+            null,
+            rs -> {
+                String key = rs.getString("name");
+                String yaml = rs.getString("yaml_content");
+                if (key == null || key.isBlank() || yaml == null || yaml.isBlank()) {
+                    return;
+                }
+                YamlConfiguration cfg = new YamlConfiguration();
+                try {
+                    cfg.loadFromString(yaml);
+                    books.put(key, cfg);
+                } catch (InvalidConfigurationException ignored) {
+                    // ignored
+                }
+            }
+        );
     }
 
     /**
@@ -464,9 +448,7 @@ public class CustomBooks extends BaseFeature {
                 displayPages.add(TextUtil.colourise(Component.text(p)));
             }
 
-            meta = meta.toBuilder()
-                    .pages(displayPages)
-                    .build();
+            meta.addPages(displayPages.toArray(Component[]::new));
         }
 
         book.setItemMeta(meta);
@@ -533,6 +515,53 @@ public class CustomBooks extends BaseFeature {
      */
     public Boolean bookExists(String name) {
         return name != null && books.containsKey(name);
+    }
+
+    private void ensureStorage() {
+        api.database().execute(
+            "CREATE TABLE IF NOT EXISTS custom_books (" +
+            "name TEXT PRIMARY KEY," +
+            "yaml_content TEXT NOT NULL," +
+            "updated_at INTEGER NOT NULL" +
+            ");"
+        );
+    }
+
+    private void migrateLegacyBookFiles() {
+        if (api.database().migrationVersion("custom-books-state") >= 1) {
+            return;
+        }
+
+        if (booksDir != null && booksDir.exists()) {
+            File[] files = booksDir.listFiles((dir, filename) -> filename.toLowerCase(Locale.ROOT).endsWith(".yml"));
+            if (files != null) {
+                for (File f : files) {
+                    String filename = f.getName();
+                    if (filename.length() <= 4) continue;
+                    String key = filename.substring(0, filename.length() - 4);
+                    YamlConfiguration cfg = YamlConfiguration.loadConfiguration(f);
+                    saveBookToStorage(key, cfg);
+                }
+            }
+        }
+
+        api.database().setMigrationVersion("custom-books-state", 1);
+    }
+
+    private void saveBookToStorage(String name, YamlConfiguration cfg) {
+        api.database().update(
+            "INSERT INTO custom_books (name, yaml_content, updated_at) VALUES (?, ?, ?) " +
+            "ON CONFLICT(name) DO UPDATE SET yaml_content = excluded.yaml_content, updated_at = excluded.updated_at",
+            ps -> {
+                ps.setString(1, name);
+                ps.setString(2, cfg.saveToString());
+                ps.setLong(3, System.currentTimeMillis());
+            }
+        );
+    }
+
+    private void deleteBookFromStorage(String name) {
+        api.database().update("DELETE FROM custom_books WHERE name = ?", ps -> ps.setString(1, name));
     }
 
     /**

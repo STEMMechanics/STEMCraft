@@ -50,6 +50,14 @@ public class WorldGenerationImpl implements WorldGeneration {
      */
     public void onEnable() {
         api.tabComplete().register("world-generators", (player, args) -> list());
+        api.tabComplete().register("world-generator-options", (player, args) -> {
+            if (args.length == 0 || args[0].isBlank()) {
+                return List.of();
+            }
+
+            String options = args.length > 1 ? args[1] : "";
+            return tabCompleteOptions(args[0], options);
+        });
     }
 
     /**
@@ -91,6 +99,17 @@ public class WorldGenerationImpl implements WorldGeneration {
     public boolean isRegistered(@NotNull String key) {
         String k = normalizeKey(key);
         return registry.containsKey(k);
+    }
+
+    @Override
+    public @NotNull List<String> tabCompleteOptions(@NotNull String key, @NotNull String cfg) {
+        String k = normalizeKey(key);
+        ChunkGeneratorFactory f = registry.get(k);
+        if (f == null) {
+            return List.of();
+        }
+
+        return f.tabCompleteOptions(cfg);
     }
 
     /**

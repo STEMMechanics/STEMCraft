@@ -29,7 +29,7 @@ import java.util.List;
 /**
  * Represents a team in a mini-game.
  */
-public interface MiniGameTeam extends HasMeta {
+public interface MiniGameTeam extends HasMeta<MiniGameTeam> {
 
     /**
      * Gets the name of the team.

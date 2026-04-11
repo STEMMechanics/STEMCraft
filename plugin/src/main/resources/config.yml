@@ -30,10 +30,47 @@ hub:
       command: "tb leave"
       as-player: true
 
+custom-commands:
+  survival:
+    permission: stemcraft.command.survival
+    command: survival
+    run:
+      - tpworld survival
+
 web_server:
     enabled: true
     port: 8950
     path: www
+
+webhook_bridge:
+  enabled: false
+  site_webhook_url: "http://127.0.0.1:8080/webhooks/minecraft/server"
+  shared_secret: ""
+  server_name: "STEMCraft"
+  # Incoming website webhooks are served by the shared web_server on this path.
+  listen_path: "/stemcraft/webhook"
+  connect_timeout_millis: 5000
+  request_timeout_millis: 10000
+  replay_window_seconds: 300
+  debug_logging: false
+  enforce_account_whitelist: true
+  whitelist_kick_message: "You are not whitelisted on this server."
+  drop_stale_sync_managed_events: true
+  drop_sync_managed_events_missing_occurred_at: true
+  allow_status_requests: true
+  allow_player_stats_requests: true
+  allow_remote_commands: false
+  remote_command_max_output_chars: 12000
+
+player_stats:
+  autosave_ticks: 1200
+
+dragon-respawn:
+  enabled: false
+  days: 3
+  # Optional allow-list of End world names.
+  # Leave empty to allow all THE_END worlds.
+  worlds: []
 
 distance_difficulty:
   range: 500
@@ -44,9 +81,30 @@ chat:
   filter_command: ""
   spam_cooldown: 3
   spam_message: "Please do not spam the chat"
-  warning_threshold: 3
-  warning_cooldown: 600
-  warning_message: "You have been warned for bad chat. If you continue you will be banned."
+  content_filter:
+    enabled: true
+    timeout_millis: 10000
+    allow_filtered_message: false
+    blocked_message: "Your message was blocked by the content filter."
+    unavailable_message: "Chat is temporarily unavailable while the content filter service is offline."
+    actions:
+      "1":
+        count: 1
+        within: 5m
+        action: warn
+      "2":
+        count: 2
+        within: 5m
+        action: warn
+      "3":
+        count: 3
+        within: 10m
+        action: kick
+      "4":
+        count: 4
+        within: 30m
+        action: ban
+        duration: 7d
 
 player_logs:
     enabled: true
@@ -199,97 +257,133 @@ recipes:
       base: DIAMOND_CHESTPLATE
       material: GOLD_INGOT
 
-features:
-  deny_spawn_eggs:
+random-first-spawn:
+  enabled: true
+  delay-ticks: 20
+  worlds:
+    survival:
+      enabled: true
+      min-radius: 1500
+      max-radius: 6000
+      attempts: 128
+      min-distance-from-players: 512
+      border-buffer: 32
+      avoid-liquids: true
+      avoid-leaves: true
+      avoid-biomes:
+        - OCEAN
+        - DEEP_OCEAN
+        - FROZEN_OCEAN
+        - RIVER
+        - FROZEN_RIVER
+      avoid-blocks:
+        - WATER
+        - LAVA
+        - CACTUS
+        - MAGMA_BLOCK
+        - FIRE
+        - SOUL_FIRE
+        - CAMPFIRE
+        - SOUL_CAMPFIRE
+        - POWDER_SNOW
+
+deny_spawn_eggs:
+  enabled: true
+drop_player_heads:
+  enabled: true
+no_anvil_repair_cost:
+  enabled: true
+rebalance_iron_golem:
+  enabled: true
+  min_drops: 3
+  max_drops: 5
+naughty:
+  allowed_commands:
+    - "hub"
+skip_night:
+  required: 0.25
+  random_tick_speed: 300
+  worlds:
+    - "survival"
+player_game_messages:
+  join:
     enabled: true
-  drop_player_heads:
+    list:
+      - '{player} has entered the lab. Safety goggles on.'
+      - '{player} spawned in. Someone hide the redstone.'
+      - '{player} joined. The server sighed deeply.'
+      - '{player} spawned in. Please remain seated.'
+      - '{player} logged in. Chaos warming up…'
+      - '{player} joined the game. Nothing exploded yet.'
+      - '{player} appeared. This was not in the plan.'
+      - '{player} joined. Someone hide the diamonds.'
+      - '{player} has entered the chat. Blame incoming.'
+      - '{player} loaded in. Expectations lowered.'
+      - '{player} joined. Redstone engineers on standby.'
+      - '{player} arrived. The villagers are concerned.'
+  quit:
     enabled: true
-  no_anvil_repair_cost:
-      enabled: true
-  rebalance_iron_golem:
+    list:
+      - '{player} left to "touch grass". Unconfirmed.'
+      - '{player} disconnected. The hamsters stopped running.'
+      - '{player} left. The server feels safer now.'
+      - '{player} disconnected. Probably their fault.'
+      - '{player} quit. Lets call it a tactical retreat.'
+      - '{player} left the game. Dramatic exit achieved.'
+      - '{player} vanished. No loot dropped.'
+      - '{player} logged out. Rage level unknown.'
+      - '{player} left. The creepers celebrate quietly.'
+      - '{player} disconnected. Keyboard survived.'
+      - '{player} quit. Minecraft remains undefeated.'
+      - '{player} left the server. This is fine.'
+  death:
     enabled: true
-    min_drops: 3
-    max_drops: 5
-  naughty:
-    allowed_commands:
-      - "hub"
-  skip_night:
-    required: 0.25
-    random_tick_speed: 300
-    worlds:
-      - "survival"
-  player_game_messages:
-    join:
-      enabled: true
-      list:
-        - '{player} has entered the lab. Safety goggles on.'
-        - '{player} spawned in. Someone hide the redstone.'
-        - '{player} joined. The server sighed deeply.'
-        - '{player} spawned in. Please remain seated.'
-        - '{player} logged in. Chaos warming up…'
-        - '{player} joined the game. Nothing exploded yet.'
-        - '{player} appeared. This was not in the plan.'
-        - '{player} joined. Someone hide the diamonds.'
-        - '{player} has entered the chat. Blame incoming.'
-        - '{player} loaded in. Expectations lowered.'
-        - '{player} joined. Redstone engineers on standby.'
-        - '{player} arrived. The villagers are concerned.'
-    quit:
-      enabled: true
-      list:
-        - '{player} left to "touch grass". Unconfirmed.'
-        - '{player} disconnected. The hamsters stopped running.'
-        - '{player} left. The server feels safer now.'
-        - '{player} disconnected. Probably their fault.'
-        - '{player} quit. Lets call it a tactical retreat.'
-        - '{player} left the game. Dramatic exit achieved.'
-        - '{player} vanished. No loot dropped.'
-        - '{player} logged out. Rage level unknown.'
-        - '{player} left. The creepers celebrate quietly.'
-        - '{player} disconnected. Keyboard survived.'
-        - '{player} quit. Minecraft remains undefeated.'
-        - '{player} left the server. This is fine.'
-    death:
-      enabled: true
-      list:
-        - "{player} became a cautionary tale."
-        - "{player} found out the hard way."
+    list:
+      - "{player} became a cautionary tale."
+      - "{player} found out the hard way."
 
-      list_entity:
-        - "{player} was deleted by {killer}."
-        - "{player} lost an argument with {killer}."
+    list_entity:
+      - "{player} was deleted by {killer}."
+      - "{player} lost an argument with {killer}."
 
-      list_cause:
-        FALL:
-          - "{player} discovered gravity."
-          - "{player} tried flying. Nailed the landing."
-        LAVA:
-          - "{player} tried to hug lava. Lava said no."
-        DROWNING:
-          - "{player} forgot lungs are optional only in mods."
-        FIRE:
-          - "{player} is now lightly toasted."
-        VOID:
-          - "{player} fell out of the world. Classic."
-        SUFFOCATION:
-          - "{player} phased into a wall. The wall won."
-  tab:
-    update_ticks: 40 # 2s
-    ping:
-      good_max: 80
-      warn_max: 160
-    header:
-      - ""
-      - "<gold>STEMCraft</gold>"
-      - ""
+    list_cause:
+      FALL:
+        - "{player} discovered gravity."
+        - "{player} tried flying. Nailed the landing."
+      LAVA:
+        - "{player} tried to hug lava. Lava said no."
+      DROWNING:
+        - "{player} forgot lungs are optional only in mods."
+      FIRE:
+        - "{player} is now lightly toasted."
+      VOID:
+        - "{player} fell out of the world. Classic."
+      SUFFOCATION:
+        - "{player} phased into a wall. The wall won."
+tab:
+  update_ticks: 40 # 2s
+  ping:
+    good_max: 80
+    warn_max: 160
+  header:
+    - "<gradient:#f59e0b:#ef4444><bold>STEMCraft</bold></gradient>"
+    - "<gray>Welcome</gray> <yellow>{player}</yellow> <dark_gray>•</dark_gray> <gray>World</gray> <aqua>{world}</aqua>"
 
-    footer:
-      - ""
-      - "<gray>Ping:</gray> <aqua>{ping}ms</aqua> <gray>| Online:</gray> <green>{online}</green>/<green>{max}</green>"
+  footer:
+    - "<gray>Ping</gray> {ping-colour}{ping}ms{/ping-colour} <dark_gray>•</dark_gray> <gray>Online</gray> <green>{online}</green>/<green>{max}</green>"
+    - "<gray>Tab Name</gray> <white>{player}</white>"
 
-    name_format: "{prefix}{player}"
-    # optional: enforce max length (tab list name has limits)
-    max_name_len: 48
+  name_format: "{prefix}{player}"
+  # optional: enforce max length (tab list name has limits)
+  max_name_len: 48
+selection_preview:
+  enabled: true
+  update_ticks: 6
+  point_spacing: 2.0
+  max_points: 180
+  major_marker_interval: 5
+  max_view_distance: 96.0
+  flash_material: GLOWSTONE
 
 
 bindings:

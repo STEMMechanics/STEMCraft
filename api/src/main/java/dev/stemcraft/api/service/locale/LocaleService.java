@@ -39,6 +39,11 @@ public interface LocaleService {
     @NotNull String getDefaultLocale();
 
     /**
+     * Reload locale files from disk.
+     */
+    void reload();
+
+    /**
      * Resolve a locale key to a localized string.
      * If the key does not look like a locale key, the raw key is returned unchanged.
      *

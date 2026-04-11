@@ -39,6 +39,7 @@ import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.*;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -64,10 +65,7 @@ public class NaughtyMode extends BaseFeature {
      */
     @Override
     public void onEnable() {
-        allowedCommands = new ArrayList<>();
-        for (String cmd : getConfigSection().getStringList("allowed-commands")) {
-            allowedCommands.add(cmd.toLowerCase(Locale.ROOT));
-        }
+        reloadAllowedCommands();
 
         api.punishments().registerAlert("naughty", (type, player, record) -> {
             String durationString = TimeUtil.formatDuration(record.durationSeconds());
@@ -283,6 +281,28 @@ public class NaughtyMode extends BaseFeature {
             String durationString = TimeUtil.formatDuration(remaining);
             api.messages().info(player, "NAUGHTY_REMAINING_SELF", "duration", durationString);
         });
+    }
+
+    @Override
+    public void onReload() {
+        super.onReload();
+        reloadAllowedCommands();
+    }
+
+    @Override
+    protected List<String> getConfigPathCandidates() {
+        List<String> candidates = new ArrayList<>();
+        candidates.add("naughty");
+        candidates.add("features.naughty");
+        candidates.addAll(super.getConfigPathCandidates());
+        return candidates;
+    }
+
+    private void reloadAllowedCommands() {
+        allowedCommands = new ArrayList<>();
+        for (String cmd : getConfigSection().getStringList("allowed-commands")) {
+            allowedCommands.add(cmd.toLowerCase(Locale.ROOT));
+        }
     }
 
     /**

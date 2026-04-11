@@ -33,12 +33,23 @@ public class MinecraftPackGenerator extends ResourcePackGenerator {
      */
     @Override
     public void buildFromDataPack(File dataPackDir, ConfigSection manifest, File resourcePackDir) {
-        File file = new File(dataPackDir, "minecraft");
-        if (file.exists() && file.isDirectory()) {
+        File[] namespaceDirs = dataPackDir.listFiles(file ->
+            file.isDirectory() && !file.getName().startsWith(".")
+        );
+
+        if (namespaceDirs == null) {
+            return;
+        }
+
+        for (File namespaceDir : namespaceDirs) {
             try {
-                FileUtil.copyDirectory(file.toPath(), resourcePackDir.toPath(), true);
+                File targetNamespaceDir = new File(new File(resourcePackDir, "assets"), namespaceDir.getName());
+                FileUtil.copyDirectory(namespaceDir.toPath(), targetNamespaceDir.toPath(), true);
             } catch (Exception e) {
-                throw new ResourcePackGeneratorException("Failed to copy Minecraft resource pack files from data pack", e);
+                throw new ResourcePackGeneratorException(
+                    "Failed to copy resource pack namespace: " + namespaceDir.getName(),
+                    e
+                );
             }
         }
     }

@@ -21,19 +21,35 @@
 package dev.stemcraft.feature;
 
 import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.api.config.ConfigSection;
+import org.bukkit.Bukkit;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import net.milkbowl.vault.chat.Chat;
-import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Feature that customizes the player tab list header, footer, and name format.
  */
 public class PlayerTabList extends BaseFeature {
+    private static final long DEFAULT_UPDATE_TICKS = 40L;
+    private static final String DEFAULT_NAME_FORMAT = "{prefix}{player}";
+    private static final int DEFAULT_MAX_NAME_LEN = 48;
+    private static final int DEFAULT_GOOD_PING_MAX = 80;
+    private static final int DEFAULT_WARN_PING_MAX = 160;
+    private static final List<String> DEFAULT_HEADER_LINES = List.of(
+        "<gradient:#f59e0b:#ef4444><bold>STEMCraft</bold></gradient>",
+        "<gray>Welcome</gray> <yellow>{player}</yellow> <dark_gray>•</dark_gray> <gray>World</gray> <aqua>{world}</aqua>"
+    );
+    private static final List<String> DEFAULT_FOOTER_LINES = List.of(
+        "<gray>Ping</gray> {ping-colour}{ping}ms{/ping-colour} <dark_gray>•</dark_gray> <gray>Online</gray> <green>{online}</green>/<green>{max}</green>",
+        "<gray>Tab Name</gray> <white>{player}</white>"
+    );
+
     private final MiniMessage mm = MiniMessage.miniMessage();
 
     private Chat vaultChat;
@@ -65,6 +81,14 @@ public class PlayerTabList extends BaseFeature {
         start();
     }
 
+    @Override
+    public void onReload() {
+        super.onReload();
+        hookVault();
+        reload();
+        start();
+    }
+
     /**
      * Cleans up the feature by stopping the update task.
      */
@@ -78,14 +102,39 @@ public class PlayerTabList extends BaseFeature {
      * Stops the update task when the feature is disabled.
      */
     public void reload() {
-        updateTicks = getConfigSection().getLong("update_ticks", 40L);
-        headerLines = getConfigSection().getStringList("header");
-        footerLines = getConfigSection().getStringList("footer");
-        nameFormat = getConfigSection().getString("name_format", "{prefix}{player}");
-        maxNameLen = getConfigSection().getInt("max_name_len", 48);
+        ConfigSection section = getConfigSection();
+        boolean changed = false;
 
-        goodMax = getConfigSection().getInt("ping.good_max", 80);
-        warnMax = getConfigSection().getInt("ping.warn_max", 160);
+        changed |= ensureDefault(section, "update_ticks", DEFAULT_UPDATE_TICKS);
+        changed |= ensureDefault(section, "header", DEFAULT_HEADER_LINES);
+        changed |= ensureDefault(section, "footer", DEFAULT_FOOTER_LINES);
+        changed |= ensureDefault(section, "name_format", DEFAULT_NAME_FORMAT);
+        changed |= ensureDefault(section, "max_name_len", DEFAULT_MAX_NAME_LEN);
+        changed |= ensureDefault(section, "ping.good_max", DEFAULT_GOOD_PING_MAX);
+        changed |= ensureDefault(section, "ping.warn_max", DEFAULT_WARN_PING_MAX);
+
+        if (changed) {
+            section.save();
+        }
+
+        updateTicks = section.getLong("update_ticks", DEFAULT_UPDATE_TICKS);
+        headerLines = section.getStringList("header");
+        footerLines = section.getStringList("footer");
+        nameFormat = section.getString("name_format", DEFAULT_NAME_FORMAT);
+        maxNameLen = section.getInt("max_name_len", DEFAULT_MAX_NAME_LEN);
+
+        goodMax = section.getInt("ping.good_max", DEFAULT_GOOD_PING_MAX);
+        warnMax = section.getInt("ping.warn_max", DEFAULT_WARN_PING_MAX);
+    }
+
+    @Override
+    protected List<String> getConfigPathCandidates() {
+        List<String> candidates = new ArrayList<>();
+        candidates.add("tab");
+        candidates.add("features.tab");
+        candidates.add("chat.tab");
+        candidates.addAll(super.getConfigPathCandidates());
+        return candidates;
     }
 
     /**
@@ -167,7 +216,7 @@ public class PlayerTabList extends BaseFeature {
                 .replace("{prefix}", prefix == null ? "" : prefix)
                 .replace("{suffix}", suffix == null ? "" : suffix);
 
-        // glyph bindings (turn :roles\stemcraft: into the char)
+        // glyph bindings (turn :roles/stemcraft: into the char)
         out = api.messages().tokens().apply(out);
 
         return out;
@@ -231,5 +280,13 @@ public class PlayerTabList extends BaseFeature {
         if (maxLen <= 0) return s;
         if (s.length() <= maxLen) return s;
         return s.substring(0, maxLen);
+    }
+
+    private boolean ensureDefault(ConfigSection section, String path, Object value) {
+        if (section.contains(path)) {
+            return false;
+        }
+        section.set(path, value);
+        return true;
     }
 }

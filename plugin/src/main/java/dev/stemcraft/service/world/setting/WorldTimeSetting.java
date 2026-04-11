@@ -95,7 +95,7 @@ public class WorldTimeSetting implements WorldBaseSetting {
 
         if (setting.endsWith(" always")) {
             String timeStr = setting.replace(" always", "");
-            long timeValue = parseTime(timeStr);
+            long timeValue = StringUtil.isInteger(timeStr) ? Long.parseLong(timeStr) : parseTime(timeStr);
             if (timeValue != -1L) {
                 worldLockedTimes.put(world, timeValue);
                 world.setTime(timeValue);
@@ -124,12 +124,28 @@ public class WorldTimeSetting implements WorldBaseSetting {
             ctx.returnInfo("WORLD_SETTING_TIME_STATUS", "world", world.getName(), "value", value);
         }
 
-        if(!value.equals("clear") && !value.equals("rain") && !value.equals("thunder") &&
-           !value.equals("unset")) {
+        boolean validTicks = false;
+        if (StringUtil.isInteger(value)) {
+            try {
+                long ticks = Long.parseLong(value);
+                validTicks = ticks >= 0L && ticks < 24000L;
+            } catch (NumberFormatException ignored) {
+                validTicks = false;
+            }
+        }
+
+        if(!value.equals("unset")
+                && !value.equals("sunrise")
+                && !value.equals("noon")
+                && !value.equals("sunset")
+                && !value.equals("night")
+                && !value.equals("midnight")
+                && !validTicks) {
             ctx.returnError("WORLD_SETTING_TIME_INVALID", "value", value);
         }
 
-        boolean always = ctx.getArgAsBoolean(1, false);
+        String alwaysArg = ctx.getArg(1, "");
+        boolean always = "always".equalsIgnoreCase(alwaysArg) || ctx.getArgAsBoolean(1, false);
         String alwaysSuffix = always ? " always" : "";
         set(world, config, value + alwaysSuffix);
 
@@ -172,8 +188,8 @@ public class WorldTimeSetting implements WorldBaseSetting {
         String timeStr = valueLower.replace(" always", "");
         long timeValue;
 
-        if(StringUtil.isInteger(valueLower)) {
-            timeValue = Long.parseLong(valueLower);
+        if(StringUtil.isInteger(timeStr)) {
+            timeValue = Long.parseLong(timeStr);
             if(timeValue < 0L || timeValue >= 24000L) {
                 return;
             }
@@ -194,7 +210,8 @@ public class WorldTimeSetting implements WorldBaseSetting {
             config.set("time.always", always);
         } else {
             always = false;
-            config.set("time", null);
+            config.set("time.set", null);
+            config.set("time.always", null);
         }
 
         if(always) {

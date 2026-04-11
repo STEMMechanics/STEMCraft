@@ -22,6 +22,7 @@ package dev.stemcraft.feature;
 
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigSection;
+import dev.stemcraft.api.util.StringUtil;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.entity.Entity;
@@ -66,30 +67,10 @@ public class PlayerGameMessages extends BaseFeature {
      */
     @Override
     public void onEnable() {
-        joinEnabled = getConfigSection().getBoolean("join.enabled", true);
-        quitEnabled = getConfigSection().getBoolean("quit.enabled", true);
-        deathEnabled = getConfigSection().getBoolean("death.enabled", true);
-
-        joinList = readList("join.list");
-        quitList = readList("quit.list");
-
-        deathDefault = readList("death.list");
-        deathByEntity = readList("death.list_entity");
-
-        deathByCause.clear();
-        ConfigSection byCause = getConfigSection().getSection("death.list_cause");
-        if (byCause != null) {
-            for (String key : byCause.getKeys(false)) {
-                EntityDamageEvent.DamageCause cause = parseCause(key);
-                if (cause == null) continue;
-                List<String> list = byCause.getStringList(key);
-                if (!list.isEmpty()) deathByCause.put(cause, List.copyOf(list));
-            }
-        }
+        reloadMessageConfig();
 
         api.events().register(PlayerJoinEvent.class,event -> {
             if (!joinEnabled) return;
-            if (!api.gatekeeper().isWhitelisted(event.getPlayer())) return;
 
             String raw = pick(joinList);
             if (raw == null) return;
@@ -100,7 +81,6 @@ public class PlayerGameMessages extends BaseFeature {
 
         api.events().register(PlayerQuitEvent.class, event -> {
             if (!quitEnabled) return;
-            if (!api.gatekeeper().isWhitelisted(event.getPlayer())) return;
 
             String raw = pick(quitList);
             if (raw == null) return;
@@ -128,7 +108,7 @@ public class PlayerGameMessages extends BaseFeature {
             if (last instanceof EntityDamageByEntityEvent) {
                 pool = deathByEntity;
                 Entity damager = ((EntityDamageByEntityEvent) last).getDamager();
-                if (killer == null) killer = damager.getType().name().toLowerCase(Locale.ROOT);
+                if (killer == null) killer = describeDamager(damager);
             } else if (cause != null) {
                 pool = deathByCause.get(cause);
             }
@@ -140,6 +120,35 @@ public class PlayerGameMessages extends BaseFeature {
 
             event.deathMessage(render("<yellow>" + raw, p, killer, causeText));
         });
+    }
+
+    @Override
+    public void onReload() {
+        super.onReload();
+        reloadMessageConfig();
+    }
+
+    private void reloadMessageConfig() {
+        joinEnabled = getConfigSection().getBoolean("join.enabled", true);
+        quitEnabled = getConfigSection().getBoolean("quit.enabled", true);
+        deathEnabled = getConfigSection().getBoolean("death.enabled", true);
+
+        joinList = readList("join.list");
+        quitList = readList("quit.list");
+
+        deathDefault = readList("death.list");
+        deathByEntity = readList("death.list_entity");
+
+        deathByCause.clear();
+        ConfigSection byCause = getConfigSection().getSection("death.list_cause");
+        if (byCause != null) {
+            for (String key : byCause.getKeys(false)) {
+                EntityDamageEvent.DamageCause cause = parseCause(key);
+                if (cause == null) continue;
+                List<String> list = byCause.getStringList(key);
+                if (!list.isEmpty()) deathByCause.put(cause, List.copyOf(list));
+            }
+        }
     }
 
     /**
@@ -184,6 +193,16 @@ public class PlayerGameMessages extends BaseFeature {
                 .replace("{cause}", cause == null ? "" : cause);
 
         return mm.deserialize(s);
+    }
+
+    private String describeDamager(Entity damager) {
+        if (damager == null) {
+            return "";
+        }
+        if (damager instanceof Player player) {
+            return player.getName();
+        }
+        return StringUtil.capitalize(StringUtil.beautify(damager.getType().name()));
     }
 
     /**

@@ -29,8 +29,10 @@ import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.*;
 import org.bukkit.event.entity.CreatureSpawnEvent;
+import org.bukkit.event.world.EntitiesLoadEvent;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 
@@ -64,40 +66,19 @@ public class WorldDenySpawnSetting implements WorldBaseSetting {
             Location loc = event.getLocation();
             World world = loc.getWorld();
             if (world == null) return;
-            ConfigSection cfg = service.getConfigSection(world);
-
-            String mode = cfg.getString("deny-spawn", "unset");
-            mode = mode.toLowerCase(Locale.ROOT);
-
-            if ("unset".equals(mode)) return;
-
-            // Normalize unknown values to "animals"
-            if (!"all".equals(mode) && !"mobs".equals(mode) && !"animals".equals(mode)) {
-                mode = "all";
-            }
-
-            // animals: allow non-hostiles, block hostiles
-            if ("animals".equals(mode)) {
-                if (isAnimal(event.getEntity())) {
-                    event.setCancelled(true);
-                }
-            }
-
-            // mobs: allow hostiles (Monster), block non-hostiles
-            if ("mobs".equals(mode)) {
-                if (isMonster(event.getEntity())) {
-                    event.setCancelled(true);
-                }
-                return;
-            }
-
-            // none: block all creature spawns
-            if ("all".equals(mode)) {
-                if(isAll(event.getEntity())) {
-                    event.setCancelled(true);
-                }
+            if (shouldDeny(world, event.getEntity(), event.getSpawnReason())) {
+                event.setCancelled(true);
             }
         });
+
+        api.events().register(EntitiesLoadEvent.class, event ->
+            removeDeniedEntities(event.getEntities(), getMode(service.getConfigSection(event.getWorld())))
+        );
+    }
+
+    @Override
+    public void onWorldLoad(@NotNull World world, @NotNull ConfigSection config) {
+        removeDeniedEntities(world.getEntities(), getMode(config));
     }
 
     /**
@@ -111,7 +92,10 @@ public class WorldDenySpawnSetting implements WorldBaseSetting {
             new String[]{"unset"},
             new String[]{"all"},
             new String[]{"mobs"},
-            new String[]{"animals"});
+            new String[]{"animals"},
+            new String[]{"all", "natural"},
+            new String[]{"mobs", "natural"},
+            new String[]{"animals", "natural"});
     }
 
     /**
@@ -123,24 +107,35 @@ public class WorldDenySpawnSetting implements WorldBaseSetting {
      */
     @Override
     public void onCommand(@NotNull CommandContext ctx, @NotNull ConfigSection config, @NotNull World world) {
-        // flags {world} deny-spawn [all|mobs|animals|unset]
+        // flags {world} deny-spawn [unset|all|mobs|animals] [natural]
 
-        String value = ctx.getArg(0, "").toLowerCase(Locale.ROOT);
-        if (value.isEmpty()) {
-            value = service.getConfigSection(world).getString("deny-spawn", "unset");
-            ctx.returnInfo("WORLD_SETTING_DENY_SPAWN_STATUS", "world", world.getName(), "value", value);
+        String type = ctx.getArg(0, "").toLowerCase(Locale.ROOT);
+        if (type.isEmpty()) {
+            ctx.returnInfo("WORLD_SETTING_DENY_SPAWN_STATUS", "world", world.getName(), "value", get(world, config));
         }
 
-        if (!value.equals("all") && !value.equals("mobs") && !value.equals("animals") && !value.equals("unset")) {
-            ctx.returnError("WORLD_SETTING_DENY_SPAWN_INVALID", "value", value);
-        } else {
-            set(world, config, value);
-            if (value.equals("unset")) {
-                ctx.returnSuccess("WORLD_SETTING_DENY_SPAWN_RESET", "world", world.getName());
-            } else {
-                ctx.returnSuccess("WORLD_SETTING_DENY_SPAWN_SET", "world", world.getName(), "value", value);
-            }
+        if (type.equals("unset")) {
+            set(world, config, "unset");
+            ctx.returnSuccess("WORLD_SETTING_DENY_SPAWN_RESET", "world", world.getName());
         }
+
+        if (!isValidType(type)) {
+            ctx.returnError("WORLD_SETTING_DENY_SPAWN_INVALID", "value", ctx.getArgsAsString(1));
+        }
+
+        String scope = ctx.getArg(1, "").toLowerCase(Locale.ROOT);
+        if (!scope.isEmpty() && !scope.equals("natural")) {
+            ctx.returnError("WORLD_SETTING_DENY_SPAWN_INVALID", "value", ctx.getArgsAsString(1));
+        }
+
+        String value = scope.equals("natural") ? type + ":natural" : type;
+        set(world, config, value);
+        ctx.returnSuccess("WORLD_SETTING_DENY_SPAWN_SET", "world", world.getName(), "value", displayMode(value));
+    }
+
+    @Override
+    public @NotNull String get(@NotNull World world, @NotNull ConfigSection config) {
+        return displayMode(getMode(config));
     }
 
     /**
@@ -152,14 +147,15 @@ public class WorldDenySpawnSetting implements WorldBaseSetting {
      */
     @Override
     public void set(@NotNull World world, @NotNull ConfigSection config, @NotNull String value) {
-         value = value.toLowerCase(Locale.ROOT);
+        value = normalizeMode(value.toLowerCase(Locale.ROOT));
 
         switch (value) {
-            case "all" -> world.getEntities().removeIf(this::isAll);
-            case "mobs" -> world.getEntities().removeIf(this::isMonster);
-            case "animals" -> world.getEntities().removeIf(this::isAnimal);
-            case "unset" -> {
-                // Do nothing
+            case "all", "mobs", "animals" -> removeDeniedEntities(world.getEntities(), value);
+            case "natural", "natural-mobs", "natural-animals", "unset" -> {
+                // Natural-only modes affect future natural spawns only.
+            }
+            case "all:natural", "mobs:natural", "animals:natural" -> {
+                // Natural-only modes affect future natural spawns only.
             }
             default -> throw new IllegalArgumentException("Invalid deny-spawn value '" + value + "'.");
         }
@@ -171,6 +167,103 @@ public class WorldDenySpawnSetting implements WorldBaseSetting {
         }
 
         config.save();
+    }
+
+    private boolean shouldDeny(@NotNull World world, @NotNull Entity entity, @NotNull CreatureSpawnEvent.SpawnReason reason) {
+        return shouldDeny(entity, getMode(service.getConfigSection(world)), reason);
+    }
+
+    private boolean shouldDeny(@NotNull Entity entity, @NotNull String mode) {
+        return switch (baseMode(mode)) {
+            case "animals" -> isAnimal(entity);
+            case "mobs" -> isMonster(entity);
+            case "all" -> isAll(entity);
+            default -> false;
+        };
+    }
+
+    private boolean shouldDeny(@NotNull Entity entity, @NotNull String mode, @NotNull CreatureSpawnEvent.SpawnReason reason) {
+        if (!isNaturalMode(mode)) {
+            return shouldDeny(entity, mode);
+        }
+        if (!isNaturalSpawn(reason)) {
+            return false;
+        }
+
+        return switch (mode) {
+            case "animals:natural" -> isAnimal(entity);
+            case "mobs:natural" -> isMonster(entity);
+            case "all:natural" -> isAll(entity);
+            default -> false;
+        };
+    }
+
+    private void removeDeniedEntities(@NotNull Collection<? extends Entity> entities, @NotNull String mode) {
+        if ("unset".equals(mode) || isNaturalMode(mode)) {
+            return;
+        }
+
+        entities.stream()
+            .filter(entity -> shouldDeny(entity, mode))
+            .forEach(Entity::remove);
+    }
+
+    private @NotNull String getMode(@NotNull ConfigSection config) {
+        String mode = normalizeMode(config.getString("deny-spawn", "unset").toLowerCase(Locale.ROOT));
+        if ("unset".equals(mode)) {
+            return mode;
+        }
+
+        if (!isValidStoredMode(mode)) {
+            return "all";
+        }
+
+        return mode;
+    }
+
+    private boolean isValidType(@NotNull String type) {
+        return type.equals("all") || type.equals("mobs") || type.equals("animals");
+    }
+
+    private boolean isValidStoredMode(@NotNull String mode) {
+        return mode.equals("all")
+            || mode.equals("mobs")
+            || mode.equals("animals")
+            || mode.equals("all:natural")
+            || mode.equals("mobs:natural")
+            || mode.equals("animals:natural")
+            || mode.equals("unset");
+    }
+
+    private boolean isNaturalMode(@NotNull String mode) {
+        return mode.endsWith(":natural");
+    }
+
+    private boolean isNaturalSpawn(@NotNull CreatureSpawnEvent.SpawnReason reason) {
+        return reason == CreatureSpawnEvent.SpawnReason.NATURAL
+            || reason == CreatureSpawnEvent.SpawnReason.CHUNK_GEN;
+    }
+
+    private @NotNull String normalizeMode(@NotNull String mode) {
+        return switch (mode) {
+            case "natural" -> "all:natural";
+            case "natural-mobs" -> "mobs:natural";
+            case "natural-animals" -> "animals:natural";
+            default -> mode;
+        };
+    }
+
+    private @NotNull String baseMode(@NotNull String mode) {
+        int separator = mode.indexOf(':');
+        return separator > 0 ? mode.substring(0, separator) : mode;
+    }
+
+    private @NotNull String displayMode(@NotNull String mode) {
+        String normalized = normalizeMode(mode);
+        if (!isNaturalMode(normalized)) {
+            return normalized;
+        }
+        return baseMode(normalized) + " natural";
     }
 
     /**

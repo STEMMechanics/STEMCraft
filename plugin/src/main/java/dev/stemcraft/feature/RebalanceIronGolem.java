@@ -34,6 +34,8 @@ import java.util.concurrent.ThreadLocalRandom;
 public final class RebalanceIronGolem extends BaseFeature {
     private static final int DEFAULT_MIN_DROPS = 3;
     private static final int DEFAULT_MAX_DROPS = 5;
+    private int minDrops = DEFAULT_MIN_DROPS;
+    private int maxDrops = DEFAULT_MAX_DROPS;
 
     /**
      * Constructor for RebalanceIronGolem.
@@ -49,11 +51,7 @@ public final class RebalanceIronGolem extends BaseFeature {
      */
     @Override
     public void onEnable() {
-        int min = Math.max(0, getConfigSection().getInt("min-drops", DEFAULT_MIN_DROPS));
-        int max = Math.max(0, getConfigSection().getInt("max-drops", DEFAULT_MAX_DROPS));
-
-        final int minDrops = Math.min(min, max);
-        final int maxDrops = Math.max(min, max);
+        reloadDropRange();
 
         api.events().register(EntityDeathEvent.class, event -> {
             if (event.getEntityType() != EntityType.IRON_GOLEM) return;
@@ -65,5 +63,18 @@ public final class RebalanceIronGolem extends BaseFeature {
 
             event.getDrops().add(new ItemStack(Material.IRON_NUGGET, amount));
         });
+    }
+
+    @Override
+    public void onReload() {
+        super.onReload();
+        reloadDropRange();
+    }
+
+    private void reloadDropRange() {
+        int min = Math.max(0, getConfigSection().getInt("min-drops", DEFAULT_MIN_DROPS));
+        int max = Math.max(0, getConfigSection().getInt("max-drops", DEFAULT_MAX_DROPS));
+        minDrops = Math.min(min, max);
+        maxDrops = Math.max(min, max);
     }
 }

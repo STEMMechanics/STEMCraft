@@ -21,11 +21,12 @@
 package dev.stemcraft.feature;
 
 import dev.stemcraft.api.STEMCraftAPI;
-import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.api.util.WorldUtil;
 import org.bukkit.GameMode;
 import org.bukkit.World;
+import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerGameModeChangeEvent;
@@ -41,8 +42,6 @@ import java.util.*;
  * "_nether" and "_the_end" suffixes from world names.
  */
 public class GameModeInventories extends BaseFeature {
-
-    private ConfigSection data;
     private final Map<UUID, PlayerProfiles> profiles = new HashMap<>();
 
     /**
@@ -57,8 +56,7 @@ public class GameModeInventories extends BaseFeature {
      */
     @Override
     public void onEnable() {
-
-        this.data = api.config().load("inventories.yml");
+        ensureStorage();
         loadAll();
 
         api.events().register(PlayerJoinEvent.class, this::onJoin);
@@ -82,6 +80,9 @@ public class GameModeInventories extends BaseFeature {
      */
     private void onJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
+        if (isInMinigame(player)) {
+            return;
+        }
         String baseName = WorldUtil.baseName(player.getWorld());
         GameMode gm = player.getGameMode();
         applyOrCreateProfile(player, baseName, gm);
@@ -94,6 +95,9 @@ public class GameModeInventories extends BaseFeature {
      */
     private void onQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
+        if (isInMinigame(player)) {
+            return;
+        }
         String baseName = WorldUtil.baseName(player.getWorld());
         GameMode gm = player.getGameMode();
         saveCurrentProfile(player, baseName, gm);
@@ -107,6 +111,9 @@ public class GameModeInventories extends BaseFeature {
      */
     private void onWorldChange(PlayerChangedWorldEvent event) {
         Player player = event.getPlayer();
+        if (isInMinigame(player)) {
+            return;
+        }
         World from = event.getFrom();
         World to = player.getWorld();
         GameMode gm = player.getGameMode();
@@ -133,6 +140,9 @@ public class GameModeInventories extends BaseFeature {
         }
 
         Player player = event.getPlayer();
+        if (isInMinigame(player)) {
+            return;
+        }
         GameMode oldGm = player.getGameMode();
         GameMode newGm = event.getNewGameMode();
         String baseName = WorldUtil.baseName(player.getWorld());
@@ -195,54 +205,76 @@ public class GameModeInventories extends BaseFeature {
         state.applyTo(player);
     }
 
+    private boolean isInMinigame(Player player) {
+        return api.minigames().list().stream().anyMatch(miniGame -> miniGame.findPlayer(player) != null);
+    }
+
     /**
      * Loads all player profiles from storage.
      */
     private void loadAll() {
         profiles.clear();
-        ConfigSection playersSec = this.data.getSection("players");
+        api.database().queryEach(
+            "SELECT player_uuid, profile_key, state_yaml FROM gamemode_inventories",
+            null,
+            rs -> {
+                UUID uuid;
+                try {
+                    uuid = UUID.fromString(rs.getString("player_uuid"));
+                } catch (IllegalArgumentException ignored) {
+                    return;
+                }
 
-        for (String uuidStr : playersSec.getKeys(false)) {
-            UUID uuid;
-            try {
-                uuid = UUID.fromString(uuidStr);
-            } catch (IllegalArgumentException ignored) {
-                continue;
+                String profileKey = rs.getString("profile_key");
+                String stateYaml = rs.getString("state_yaml");
+                PlayerState state = PlayerState.fromYaml(stateYaml);
+                if (state == null) {
+                    return;
+                }
+
+                PlayerProfiles p = profiles.computeIfAbsent(uuid, u -> new PlayerProfiles());
+                p.states.put(profileKey, state);
             }
-
-            PlayerProfiles p = new PlayerProfiles();
-            profiles.put(uuid, p);
-
-            for (String key : playersSec.getSection(uuidStr).getKeys(false)) {
-                ConfigSection s = playersSec.getSection(uuidStr).getSection(key);
-                if (s == null) continue;
-
-                PlayerState state = PlayerState.fromConfigSection(s);
-                p.states.put(key, state);
-            }
-        }
+        );
     }
 
     /**
      * Saves all player profiles to storage.
      */
     private void saveAll() {
-        ConfigSection playersSec = data.getSection("players");
+        api.database().update("DELETE FROM gamemode_inventories", null);
 
-        for (Map.Entry<UUID, PlayerProfiles> entry : profiles.entrySet()) {
-            String uuidStr = entry.getKey().toString();
-            PlayerProfiles p = entry.getValue();
+        for (Map.Entry<UUID, PlayerProfiles> playerEntry : profiles.entrySet()) {
+            String uuid = playerEntry.getKey().toString();
+            PlayerProfiles p = playerEntry.getValue();
 
-            ConfigSection profSec = playersSec.createSection(uuidStr);
             for (Map.Entry<String, PlayerState> profileEntry : p.states.entrySet()) {
                 String key = profileEntry.getKey();
-                PlayerState state = profileEntry.getValue();
-                ConfigSection s = profSec.createSection(key);
-                state.toConfigSection(s);
+                String yaml = profileEntry.getValue().toYaml();
+                api.database().update(
+                    "INSERT INTO gamemode_inventories (player_uuid, profile_key, state_yaml, updated_at) VALUES (?, ?, ?, ?)",
+                    ps -> {
+                        ps.setString(1, uuid);
+                        ps.setString(2, key);
+                        ps.setString(3, yaml);
+                        ps.setLong(4, System.currentTimeMillis());
+                    }
+                );
             }
         }
+    }
 
-        data.save();
+    private void ensureStorage() {
+        api.database().execute(
+            "CREATE TABLE IF NOT EXISTS gamemode_inventories (" +
+            "player_uuid TEXT NOT NULL," +
+            "profile_key TEXT NOT NULL," +
+            "state_yaml TEXT NOT NULL," +
+            "updated_at INTEGER NOT NULL," +
+            "PRIMARY KEY (player_uuid, profile_key)" +
+            ");"
+        );
+        api.database().execute("CREATE INDEX IF NOT EXISTS gamemode_inventories_player_uuid ON gamemode_inventories(player_uuid);");
     }
 
     private static class PlayerProfiles {
@@ -306,17 +338,17 @@ public class GameModeInventories extends BaseFeature {
             player.getEnderChest().setContents(ender);
         }
 
-        static PlayerState fromConfigSection(ConfigSection s) {
+        static PlayerState fromConfigSection(ConfigurationSection s) {
             PlayerState state = new PlayerState();
             state.health = s.getDouble("health", 20.0);
             state.foodLevel = s.getInt("food", 20);
-            state.saturation = s.getFloat("saturation", 5.0F);
-            state.exhaustion = s.getFloat("exhaustion", 0.0F);
+            state.saturation = (float) s.getDouble("saturation", 5.0F);
+            state.exhaustion = (float) s.getDouble("exhaustion", 0.0F);
             state.level = s.getInt("level", 0);
-            state.exp = s.getFloat("exp", 0.0F);
+            state.exp = (float) s.getDouble("exp", 0.0F);
             state.totalExp = s.getInt("totalExp", 0);
 
-            List<?> contentsList = s.getList("contents");
+            List<?> contentsList = s.getList("contents", List.of());
             List<ItemStack> contents = new ArrayList<>();
 
             for (Object o : contentsList) {
@@ -348,7 +380,7 @@ public class GameModeInventories extends BaseFeature {
             return state;
         }
 
-        void toConfigSection(ConfigSection s) {
+        void toConfigSection(ConfigurationSection s) {
             s.set("health", health);
             s.set("food", foodLevel);
             s.set("saturation", saturation);
@@ -359,6 +391,32 @@ public class GameModeInventories extends BaseFeature {
             s.set("contents", contents);
             s.set("armor", armor);
             s.set("ender", ender);
+        }
+
+        static PlayerState fromYaml(String yaml) {
+            if (yaml == null || yaml.isBlank()) {
+                return null;
+            }
+
+            YamlConfiguration cfg = new YamlConfiguration();
+            try {
+                cfg.loadFromString(yaml);
+            } catch (Exception ignored) {
+                return null;
+            }
+
+            ConfigurationSection section = cfg.getConfigurationSection("state");
+            if (section == null) {
+                return null;
+            }
+            return fromConfigSection(section);
+        }
+
+        String toYaml() {
+            YamlConfiguration cfg = new YamlConfiguration();
+            ConfigurationSection section = cfg.createSection("state");
+            toConfigSection(section);
+            return cfg.saveToString();
         }
     }
 }

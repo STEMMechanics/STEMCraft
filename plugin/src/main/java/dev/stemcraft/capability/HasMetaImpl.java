@@ -30,12 +30,22 @@ import java.util.function.Supplier;
 /**
  * Capability for storing arbitrary metadata key-value pairs.
  */
-public class HasMetaImpl implements HasMeta {
+public class HasMetaImpl<T extends HasMeta<T>> implements HasMeta<T> {
 
     /**
      * Metadata storage.
      */
     private final Map<String, Object> meta = new HashMap<>();
+
+    /**
+     * Returns the current instance cast to the generic type T.
+     *
+     * @return the current instance as type T.
+     */
+    @SuppressWarnings("unchecked")
+    protected final T self() {
+        return (T) this;
+    }
 
     /**
      * Check if the metadata contains a value for the given key.
@@ -57,7 +67,7 @@ public class HasMetaImpl implements HasMeta {
      * @return the metadata value for the given key, or defaultValue if not present.
      */
     @Override
-    public <T> T get(String key, Class<T> type, T defaultValue) {
+    public <V> V get(String key, Class<V> type, V defaultValue) {
         Object value = meta.get(key);
         if (value == null) return defaultValue;
         if (!type.isInstance(value)) return defaultValue;
@@ -72,7 +82,7 @@ public class HasMetaImpl implements HasMeta {
      * @return the metadata value for the given key, or a new value created by the supplier if not present.
      */
     @Override
-    public <T> T getOrCreate(String key, Class<T> type, Supplier<? extends T> supplier) {
+    public <V> V getOrCreate(String key, Class<V> type, Supplier<? extends V> supplier) {
         Object existing = meta.get(key);
         if (existing != null) {
             if (!type.isInstance(existing)) {
@@ -83,7 +93,7 @@ public class HasMetaImpl implements HasMeta {
             return type.cast(existing);
         }
 
-        T created = supplier.get();
+        V created = supplier.get();
         meta.put(key, created);
         return created;
     }
@@ -95,8 +105,9 @@ public class HasMetaImpl implements HasMeta {
      * @param value the metadata value.
      */
     @Override
-    public <T> void set(String key, T value) {
+    public <V> T set(String key, V value) {
         meta.put(key, value);
+        return self();
     }
 
     /**
@@ -106,8 +117,9 @@ public class HasMetaImpl implements HasMeta {
      * @param value the metadata value.
      */
     @Override
-    public <T> void setIfAbsent(String key, T value) {
+    public <V> T setIfAbsent(String key, V value) {
         meta.putIfAbsent(key, value);
+        return self();
     }
 
     /**
@@ -116,16 +128,18 @@ public class HasMetaImpl implements HasMeta {
      * @param key the metadata key.
      */
     @Override
-    public void remove(String key) {
+    public T remove(String key) {
         meta.remove(key);
+        return self();
     }
 
     /**
      * Clear all metadata.
      */
     @Override
-    public void clear() {
+    public T clear() {
         meta.clear();
+        return self();
     }
 
     /**

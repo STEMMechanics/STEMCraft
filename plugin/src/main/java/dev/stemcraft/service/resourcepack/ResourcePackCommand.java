@@ -43,11 +43,17 @@ public class ResourcePackCommand {
                         return;
                     }
 
-                    switch(ctx.getArgLower(1)) {
+                    String subCommand = ctx.getArgLower(0);
+                    if (subCommand == null) {
+                        ctx.returnUsage();
+                    }
+
+                    switch(subCommand) {
                         case "info" -> subCommandInfo(ctx);
                         case "send" -> subCommandSend(ctx);
                         case "sendall" -> subCommandSendAll(ctx);
                         case "zip" -> subCommandZip(ctx);
+                        default -> ctx.returnUsage();
                     }
                 })
                 .register(STEMCraft.getPlugin());

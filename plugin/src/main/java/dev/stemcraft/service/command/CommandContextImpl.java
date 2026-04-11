@@ -96,7 +96,7 @@ public class CommandContextImpl implements CommandContext {
             positional.add(arg);
         }
 
-        this.args = java.util.Collections.unmodifiableList(positional);
+        this.args = positional;
         this.flags = java.util.Collections.unmodifiableSet(flagSet);
         this.options = java.util.Collections.unmodifiableMap(optionMap);
     }
@@ -205,7 +205,7 @@ public class CommandContextImpl implements CommandContext {
         if (key == null || key.isEmpty()) {
             return def;
         }
-        return options.get(key.toLowerCase(Locale.ROOT));
+        return options.getOrDefault(key.toLowerCase(Locale.ROOT), def);
     }
 
     /**

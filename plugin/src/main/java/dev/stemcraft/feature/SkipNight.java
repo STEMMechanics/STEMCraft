@@ -40,6 +40,8 @@ import java.util.List;
  * Feature that allows skipping the night when enough players are sleeping.
  */
 public class SkipNight extends BaseFeature {
+    private static final GameRule<Integer> RANDOM_TICK_SPEED_RULE = requireGameRule("RANDOM_TICK_SPEED", Integer.class);
+
     private double skipPercentage = 1d;
     private int skipRandomTickSpeed = 3;
     private final HashMap<World, BossBar> worlds = new HashMap<>();
@@ -59,16 +61,7 @@ public class SkipNight extends BaseFeature {
      */
     @Override
     public void onEnable() {
-        skipPercentage = getConfigSection().getDouble("required", 0.25d);
-        skipRandomTickSpeed = getConfigSection().getInt("random_tick_speed", 300);
-        List<String> worldsList = getConfigSection().getStringList("worlds");
-
-        worldsList.forEach(worldName -> {
-            World world = Bukkit.getServer().getWorld(worldName);
-            if (world != null) {
-                worlds.put(world, null);
-            }
-        });
+        reloadNightConfig();
 
         /*
          * PlayerBedEnterEvent
@@ -142,6 +135,31 @@ public class SkipNight extends BaseFeature {
          * PlayerQuitEvent
          */
         api.events().register(PlayerTeleportEvent.class, (event) -> updateAllSleepers());
+    }
+
+    @Override
+    public void onReload() {
+        super.onReload();
+        reloadNightConfig();
+        updateAllSleepers();
+    }
+
+    private void reloadNightConfig() {
+        skipPercentage = getConfigSection().getDouble("required", 0.25d);
+        skipRandomTickSpeed = getConfigSection().getInt("random_tick_speed", 300);
+        List<String> worldsList = getConfigSection().getStringList("worlds");
+
+        worlds.values().stream()
+            .filter(java.util.Objects::nonNull)
+            .forEach(BossBar::removeAll);
+        worlds.clear();
+
+        worldsList.forEach(worldName -> {
+            World world = Bukkit.getServer().getWorld(worldName);
+            if (world != null) {
+                worlds.put(world, null);
+            }
+        });
     }
 
     /**
@@ -226,8 +244,8 @@ public class SkipNight extends BaseFeature {
         if (!worldRandomTickCount.containsKey(world)) {
             if (world.getTime() > 13000) {
                 if (!worldRandomTickCount.containsKey(world)) {
-                    worldRandomTickCount.put(world, world.getGameRuleValue(GameRule.RANDOM_TICK_SPEED));
-                    world.setGameRule(GameRule.RANDOM_TICK_SPEED, skipRandomTickSpeed);
+                    worldRandomTickCount.put(world, getRandomTickSpeed(world));
+                    setRandomTickSpeed(world, skipRandomTickSpeed);
 
                     skipNightStep(world);
                 }
@@ -261,8 +279,31 @@ public class SkipNight extends BaseFeature {
      */
     private void skipNightFinish(World world) {
         if (worldRandomTickCount.containsKey(world)) {
-            world.setGameRule(GameRule.RANDOM_TICK_SPEED, worldRandomTickCount.get(world));
+            setRandomTickSpeed(world, worldRandomTickCount.get(world));
             worldRandomTickCount.remove(world);
+        }
+    }
+
+    private int getRandomTickSpeed(World world) {
+        Integer value = world.getGameRuleValue(RANDOM_TICK_SPEED_RULE);
+        return value == null ? 3 : value;
+    }
+
+    private void setRandomTickSpeed(World world, int value) {
+        world.setGameRule(RANDOM_TICK_SPEED_RULE, value);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> GameRule<T> requireGameRule(String name, Class<T> type) {
+        try {
+            Object value = GameRule.class.getField(name).get(null);
+            if (!(value instanceof GameRule<?> rule) || !type.equals(rule.getType())) {
+                throw new IllegalStateException("Missing expected gamerule " + name);
+            }
+
+            return (GameRule<T>) rule;
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException("Missing expected gamerule " + name, exception);
         }
     }
 

@@ -21,6 +21,9 @@
 package dev.stemcraft.api.factory;
 
 import org.bukkit.generator.ChunkGenerator;
+import org.jetbrains.annotations.NotNull;
+
+import java.util.List;
 
 /**
  * Functional interface for creating ChunkGenerator instances with specific options.
@@ -35,4 +38,14 @@ public interface ChunkGeneratorFactory {
      * @return A new ChunkGenerator instance configured with the given options.
      */
     ChunkGenerator create(String options);
+
+    /**
+     * Provides tab-completion suggestions for generator-specific options.
+     *
+     * @param options The current generator options string.
+     * @return Suggested option values.
+     */
+    default @NotNull List<String> tabCompleteOptions(@NotNull String options) {
+        return List.of();
+    }
 }

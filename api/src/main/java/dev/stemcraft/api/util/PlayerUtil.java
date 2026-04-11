@@ -156,13 +156,17 @@ public class PlayerUtil {
      * @return If the player is a geyser.
      */
     public static boolean isBedrock(Player player) {
+        if (player == null) {
+            return false;
+        }
+
         if(isGeyserInstalled == null) {
             if (Bukkit.getPluginManager().getPlugin("Geyser-Spigot") != null) {
                 isGeyserInstalled = true;
                 geyserApi = GeyserApi.api();
+            } else {
+                isGeyserInstalled = false;
             }
-
-            return false;
         }
 
         if(!isGeyserInstalled) {
@@ -170,6 +174,33 @@ public class PlayerUtil {
         }
 
         return geyserApi.isBedrockPlayer(player.getUniqueId());
+    }
+
+    /**
+     * Test if a UUID belongs to a Bedrock player.
+     *
+     * @param uuid The player UUID to test.
+     * @return True if the UUID belongs to a Bedrock player.
+     */
+    public static boolean isBedrock(UUID uuid) {
+        if (uuid == null) {
+            return false;
+        }
+
+        if(isGeyserInstalled == null) {
+            if (Bukkit.getPluginManager().getPlugin("Geyser-Spigot") != null) {
+                isGeyserInstalled = true;
+                geyserApi = GeyserApi.api();
+            } else {
+                isGeyserInstalled = false;
+            }
+        }
+
+        if(!isGeyserInstalled) {
+            return false;
+        }
+
+        return geyserApi.isBedrockPlayer(uuid);
     }
 
     /**

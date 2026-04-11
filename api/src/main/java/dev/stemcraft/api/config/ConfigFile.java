@@ -40,6 +40,13 @@ public interface ConfigFile extends ConfigSection {
     boolean exists();
 
     /**
+     * Reloads the configuration file from disk.
+     *
+     * @return True if the file was reloaded successfully, false otherwise.
+     */
+    boolean reload();
+
+    /**
      * Checks if the configuration file has unsaved changes.
      *
      * @return True if the configuration file is dirty, false otherwise.

@@ -23,6 +23,7 @@ package dev.stemcraft.config;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigFile;
 import lombok.Getter;
+import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.configuration.ConfigurationSection;
 import java.util.Set;
@@ -66,17 +67,21 @@ public class ConfigFileImpl extends ConfigSectionImpl implements ConfigFile {
 
         this.name = name;
         this.dirty = false;
+        if (parent != null && !parent.exists() && !parent.mkdirs()) {
+            this.file = null;
+            return false;
+        }
 
-        file = new File(parent, name);
+        File targetFile = new File(parent, name);
 
-        if (!file.exists()) {
+        if (!targetFile.exists()) {
             if (!createIfNotExist) {
                 this.file = null;
                 return false;
             }
 
             try {
-                if (!file.createNewFile()) {
+                if (!targetFile.createNewFile()) {
                     this.file = null;
                     return false;
                 }
@@ -86,7 +91,19 @@ public class ConfigFileImpl extends ConfigSectionImpl implements ConfigFile {
             }
         }
 
-        this.config = YamlConfiguration.loadConfiguration(file);
+        this.file = targetFile;
+        YamlConfiguration loaded = new YamlConfiguration();
+        try {
+            loaded.load(targetFile);
+        } catch (IOException | InvalidConfigurationException exception) {
+            this.file = null;
+            this.config = null;
+            return false;
+        }
+
+        this.config = loaded;
+        setConfigFile(this);
+        setSection(this.config);
         return true;
     }
 
@@ -97,6 +114,26 @@ public class ConfigFileImpl extends ConfigSectionImpl implements ConfigFile {
      */
     public boolean exists() {
         return file != null && file.exists();
+    }
+
+    @Override
+    public boolean reload() {
+        if (file == null) {
+            return false;
+        }
+
+        YamlConfiguration loaded = new YamlConfiguration();
+        try {
+            loaded.load(file);
+        } catch (IOException | InvalidConfigurationException exception) {
+            return false;
+        }
+
+        this.config = loaded;
+        this.dirty = false;
+        setConfigFile(this);
+        setSection(this.config);
+        return true;
     }
 
     /**
@@ -122,8 +159,15 @@ public class ConfigFileImpl extends ConfigSectionImpl implements ConfigFile {
             config.save(file);
             dirty = false;
         } catch (IOException e) {
-            STEMCraftAPI.api().messages().error("Could not save config file: " + name, e);
+            if (STEMCraftAPI.api() != null && STEMCraftAPI.api().messages() != null) {
+                STEMCraftAPI.api().messages().error("Could not save config file: " + name, e);
+            }
         }
+    }
+
+    @Override
+    public void save() {
+        save(true);
     }
 
     /**

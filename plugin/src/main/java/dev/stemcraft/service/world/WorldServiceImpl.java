@@ -36,6 +36,7 @@ import dev.stemcraft.service.world.setting.*;
 import lombok.Getter;
 import lombok.Setter;
 import org.bukkit.*;
+import org.bukkit.event.entity.EntityPortalEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.player.PlayerPortalEvent;
 import org.bukkit.event.world.WorldLoadEvent;
@@ -56,16 +57,18 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class WorldServiceImpl extends BaseService implements WorldService {
     private final Map<String, WorldSettingData> settings = new ConcurrentHashMap<>();
+    private final Map<String, String> lastWorldOperationErrors = new ConcurrentHashMap<>();
     private final WorldCommand worldCommand;
     private final WorldGenerationImpl worldGeneration;
     private final WorldChangeRecorder worldChangeRecorder;
+    private boolean startupLoadComplete = false;
 
     /**
      * Data holder for world setting and its command mode.
      */
     private record WorldSettingData(WorldBaseSetting setting, SettingCommandMode mode) {}
+    private record ConfiguredGeneratorSpec(String key, String options) {}
 
-    @Getter
     @Setter
     private World defaultWorld;
 
@@ -77,12 +80,13 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      */
     public WorldServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
+        setConfigKey("worlds");
 
         this.worldCommand = new WorldCommand(api, this);
         this.worldGeneration = new WorldGenerationImpl(api);
         this.worldChangeRecorder = new WorldChangeRecorder(api, this);
 
-        this.defaultWorld = Bukkit.getWorlds().getFirst();
+        this.defaultWorld = firstLoadedWorld();
     }
 
     /**
@@ -92,7 +96,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         worldCommand.onEnable();
         worldGeneration.onEnable();
 
-        loadWorlds();
+        api.tabComplete().register("world-any", (player, args) -> listWorlds());
 
         api.tabComplete().register("world-offline", (player, args) -> {
             List<String> suggestions = new ArrayList<>();
@@ -111,7 +115,19 @@ public class WorldServiceImpl extends BaseService implements WorldService {
             }
         }, EventPriority.HIGHEST, true);
 
+        api.events().register(EntityPortalEvent.class, event -> {
+            Location to = handlePortalRouting(event);
+            if (to != null) {
+                event.setTo(to);
+            }
+        }, EventPriority.HIGHEST, true);
+
         api.events().register(WorldLoadEvent.class, event -> {
+            if (defaultWorld == null) {
+                defaultWorld = event.getWorld();
+            }
+            ConfigSection worldConfig = getConfigSection(event.getWorld());
+            seedDefaultDimensionLinks(event.getWorld().getName(), worldConfig);
             getConfigSection().set(event.getWorld().getName() + ".load", true);
             loadWorldSettings(event.getWorld());
         }, EventPriority.MONITOR, false);
@@ -124,17 +140,31 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         api.events().register(WorldDeleteEvent.class, event -> {
             getConfigSection().set(event.getWorldName() + ".load", null);
             deleteWorldSettings(event.getWorldName());
+            purgeWorldScopedData(event.getWorldName());
         }, EventPriority.MONITOR, false);
 
         registerSettingHandler(worldChangeRecorder, SettingCommandMode.SUBCOMMAND);
         registerSettingHandler(new WorldDenySpawnSetting(), SettingCommandMode.FLAG);
         registerSettingHandler(new WorldForceSpawnSetting(), SettingCommandMode.FLAG);
         registerSettingHandler(new WorldGameModeSetting(), SettingCommandMode.SUBCOMMAND);
+        registerSettingHandler(new WorldNetherSetting(), SettingCommandMode.SUBCOMMAND);
         registerSettingHandler(new WorldNoDamageSetting(), SettingCommandMode.FLAG);
         registerSettingHandler(new WorldNoHungerSetting(), SettingCommandMode.FLAG);
+        registerSettingHandler(new WorldEndSetting(), SettingCommandMode.SUBCOMMAND);
+        registerSettingHandler(new WorldRandomSpawnSetting(), SettingCommandMode.SUBCOMMAND);
         registerSettingHandler(new WorldTickSpeedSetting(), SettingCommandMode.SUBCOMMAND);
         registerSettingHandler(new WorldTimeSetting(), SettingCommandMode.SUBCOMMAND);
         registerSettingHandler(new WorldWeatherSetting(), SettingCommandMode.SUBCOMMAND);
+    }
+
+    public void completeStartupLoad() {
+        if (startupLoadComplete) {
+            return;
+        }
+        startupLoadComplete = true;
+
+        loadWorlds();
+        api.tasks().runLater(1L, this::retryExternalGeneratorWorldLoads);
     }
 
     /**
@@ -160,6 +190,21 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         return worldCommand;
     }
 
+    @Override
+    public @NotNull World getDefaultWorld() {
+        if (defaultWorld != null) {
+            return defaultWorld;
+        }
+
+        World firstWorld = firstLoadedWorld();
+        if (firstWorld != null) {
+            defaultWorld = firstWorld;
+            return firstWorld;
+        }
+
+        throw new IllegalStateException("No worlds are loaded yet.");
+    }
+
     /**
      * Evict all players from the given world, teleporting them to the default world.
      *
@@ -167,7 +212,10 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      */
     @Override
     public void evictAllPlayers(@NotNull World world) {
-        World firstWorld = Bukkit.getWorlds().getFirst();
+        World firstWorld = firstLoadedWorld();
+        if (firstWorld == null) {
+            throw new IllegalStateException("Cannot evict players because no fallback world is loaded");
+        }
 
         if (world.equals(firstWorld)) {
             throw new IllegalStateException("Cannot evict players from the main world");
@@ -175,7 +223,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
 
         world.getPlayers().forEach(player -> {
             api.messages().info(player, "WORLD_EVICTED", "world", world.getName());
-            PlayerUtil.teleport(player, defaultWorld.getSpawnLocation());
+            PlayerUtil.teleport(player, getDefaultWorld().getSpawnLocation());
         });
     }
 
@@ -206,7 +254,15 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      * @return The loaded World instance.
      */
     @Override public @Nullable World loadWorld(@NotNull String name) {
-        return ensure(name, null);
+        clearLastWorldOperationError(name);
+
+        try {
+            return ensure(name, resolveStoredGenerator(name));
+        } catch (RuntimeException exception) {
+            rememberWorldOperationError(name, describeWorldOperationFailure(exception, true));
+            plugin.getLogger().warning("Failed to load world '" + name + "': " + getLastWorldOperationError(name, "unknown error"));
+            return null;
+        }
     }
 
     /**
@@ -238,7 +294,40 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      * @return The created World instance.
      */
     @Override public @Nullable World createWorld(@NotNull String name, @NotNull String generatorName, @NotNull String generatorOptions) {
-        return ensure(name, worldGeneration.get(generatorName, generatorOptions));
+        return createWorld(name, generatorName, generatorOptions, null);
+    }
+
+    @Override public @Nullable World createWorld(@NotNull String name,
+                                                 @NotNull String generatorName,
+                                                 @NotNull String generatorOptions,
+                                                 @Nullable Long seed) {
+        clearLastWorldOperationError(name);
+
+        String resolvedGeneratorName = generatorName.trim().isEmpty() ? "normal" : generatorName.trim();
+        String resolvedGeneratorOptions = generatorOptions == null ? "" : generatorOptions.trim();
+        try {
+            World world = ensure(
+                name,
+                resolveConfiguredGenerator(name, new ConfiguredGeneratorSpec(resolvedGeneratorName, resolvedGeneratorOptions)),
+                seed
+            );
+            if (world != null) {
+                ConfigSection config = getConfigSection(name);
+                config.set("generator.key", resolvedGeneratorName);
+                if (resolvedGeneratorOptions.isBlank()) {
+                    config.set("generator.options", null);
+                } else {
+                    config.set("generator.options", resolvedGeneratorOptions);
+                }
+                seedDefaultDimensionLinks(name, config);
+                config.save();
+            }
+            return world;
+        } catch (RuntimeException exception) {
+            rememberWorldOperationError(name, describeWorldOperationFailure(exception, false));
+            plugin.getLogger().warning("Failed to create world '" + name + "': " + getLastWorldOperationError(name, "unknown error"));
+            return null;
+        }
     }
 
     /**
@@ -317,6 +406,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
             throw new IllegalArgumentException("A world setting with the key '" + key + "' is already registered.");
         }
 
+        setting.onEnable(api, this);
         settings.put(key, new WorldSettingData(setting, commandMode));
 
         setting.tabCompletions().forEach(completions -> {
@@ -398,6 +488,83 @@ public class WorldServiceImpl extends BaseService implements WorldService {
     public @NotNull ConfigSection getConfigSection(@NotNull World world) {
         return getConfigSection(world.getName());
     }
+
+    @Nullable ConfigSection getExistingConfigSection(@NotNull String worldName) {
+        if (!getConfigSection().isSection(worldName)) {
+            return null;
+        }
+        return getConfigSection().getSection(worldName, false);
+    }
+
+    private @Nullable ChunkGenerator resolveStoredGenerator(@NotNull String worldName) {
+        return resolveConfiguredGenerator(worldName, readConfiguredGenerator(getExistingConfigSection(worldName)));
+    }
+
+    private @Nullable ConfiguredGeneratorSpec readConfiguredGenerator(@Nullable ConfigSection config) {
+        if (config == null) {
+            return null;
+        }
+
+        Object shorthand = config.get("generator");
+        if (shorthand instanceof String value) {
+            String generatorKey = value.trim();
+            if (!generatorKey.isEmpty()) {
+                return new ConfiguredGeneratorSpec(generatorKey, "");
+            }
+        }
+
+        ConfigSection generatorSection = config.getSection("generator", false);
+        if (generatorSection == null) {
+            return null;
+        }
+
+        Object rawKey = generatorSection.get("key");
+        String generatorKey = rawKey instanceof String value ? value.trim() : "";
+        if (generatorKey.isEmpty()) {
+            return null;
+        }
+
+        Object rawOptions = generatorSection.get("options");
+        String generatorOptions = rawOptions instanceof String value ? value.trim() : "";
+        return new ConfiguredGeneratorSpec(generatorKey, generatorOptions);
+    }
+
+    private @Nullable ChunkGenerator resolveConfiguredGenerator(
+        @NotNull String worldName,
+        @Nullable ConfiguredGeneratorSpec generator
+    ) {
+        if (generator == null) {
+            return null;
+        }
+
+        if (worldGeneration.isRegistered(generator.key())) {
+            return worldGeneration.get(generator.key(), generator.options());
+        }
+
+        String bukkitGeneratorName = toBukkitGeneratorSpec(generator.key(), generator.options());
+        ChunkGenerator resolved = WorldCreator.getGeneratorForName(worldName, bukkitGeneratorName, null);
+        if (resolved == null) {
+            throw new IllegalArgumentException("Unknown or unavailable Bukkit generator: " + bukkitGeneratorName);
+        }
+        return resolved;
+    }
+
+    private @NotNull String toBukkitGeneratorSpec(@NotNull String generatorKey, @NotNull String generatorOptions) {
+        String key = generatorKey.trim();
+        String options = generatorOptions.trim();
+        if (key.isEmpty()) {
+            throw new IllegalArgumentException("Generator name cannot be empty.");
+        }
+        if (options.isEmpty()) {
+            return key;
+        }
+        if (key.contains(":")) {
+            throw new IllegalArgumentException(
+                "Generator '" + key + "' already includes an id; remove generator options or use plugin:id only."
+            );
+        }
+        return key + ":" + options;
+    }
   
     /**
      * Load settings for the world.
@@ -406,8 +573,75 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      */
     private void loadWorldSettings(World world) {
         ConfigSection config = getConfigSection(world);
+        migrateLegacyNestedSettingConfig(config);
 
         settings.forEach((key, value) -> value.setting().onWorldLoad(world, config));
+    }
+
+    /**
+     * Migrates legacy nested setting paths created by older command dispatch logic
+     * that passed per-setting subsections instead of the world root config section.
+     *
+     * @param config Root config section for a world.
+     */
+    private void migrateLegacyNestedSettingConfig(@NotNull ConfigSection config) {
+        boolean changed = false;
+
+        changed |= migrateLegacyNestedString(config, "deny-spawn");
+        changed |= migrateLegacyNestedBoolean(config, "no-damage");
+        changed |= migrateLegacyNestedBoolean(config, "no-hunger");
+        changed |= migrateLegacyNestedString(config, "gamemode");
+        changed |= migrateLegacyNestedString(config, "tickspeed");
+
+        if (!config.contains("time.set") && config.contains("time.time.set")) {
+            config.set("time.set", config.getLong("time.time.set", -1L));
+            changed = true;
+        }
+        if (!config.contains("time.always") && config.contains("time.time.always")) {
+            config.set("time.always", config.getBoolean("time.time.always", false));
+            changed = true;
+        }
+        if (config.contains("time.time")) {
+            config.set("time.time", null);
+            changed = true;
+        }
+
+        if (!config.contains("weather.state") && config.contains("weather.weather.state")) {
+            config.set("weather.state", config.getString("weather.weather.state", "unset"));
+            changed = true;
+        }
+        if (!config.contains("weather.always") && config.contains("weather.weather.always")) {
+            config.set("weather.always", config.getBoolean("weather.weather.always", false));
+            changed = true;
+        }
+        if (config.contains("weather.weather")) {
+            config.set("weather.weather", null);
+            changed = true;
+        }
+
+        if (changed) {
+            config.save();
+        }
+    }
+
+    private boolean migrateLegacyNestedString(@NotNull ConfigSection config, @NotNull String key) {
+        String legacyPath = key + "." + key;
+        if (!config.contains(key) && config.contains(legacyPath)) {
+            config.set(key, config.getString(legacyPath, ""));
+            config.set(legacyPath, null);
+            return true;
+        }
+        return false;
+    }
+
+    private boolean migrateLegacyNestedBoolean(@NotNull ConfigSection config, @NotNull String key) {
+        String legacyPath = key + "." + key;
+        if (!config.contains(key) && config.contains(legacyPath)) {
+            config.set(key, config.getBoolean(legacyPath, false));
+            config.set(legacyPath, null);
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -432,39 +666,81 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         settings.forEach((key, value) -> value.setting().onWorldDeleted(worldName, config));
     }
 
+    private void purgeWorldScopedData(@NotNull String worldName) {
+        if (worldName.isBlank()) {
+            return;
+        }
+
+        purgeWorldRows("random_first_spawn_seen", worldName);
+        purgeWorldRows("random_first_spawn_spawns", worldName);
+        purgeWorldRows("player_world_last_locations", worldName);
+        purgeWorldRows("world_changes_blocks", worldName);
+        purgeWorldRows("world_changes_entities", worldName);
+    }
+
+    private void purgeWorldRows(@NotNull String table, @NotNull String worldName) {
+        if (!tableExists(table)) {
+            return;
+        }
+
+        api.database().update(
+            "DELETE FROM " + table + " WHERE lower(world) = lower(?)",
+            ps -> ps.setString(1, worldName)
+        );
+    }
+
+    private boolean tableExists(@NotNull String table) {
+        Integer exists = api.database().querySingleMapped(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1",
+            ps -> ps.setString(1, table),
+            rs -> rs.getInt(1)
+        );
+        return exists != null && exists == 1;
+    }
+
     /**
      * Handle portal routing for multi-world setups.
      *
      * @param event The PlayerPortalEvent to handle.
      * @return The target Location, or null if no special routing is needed.
      */
-    private Location handlePortalRouting(PlayerPortalEvent event) {
-        var cause = event.getCause();
-        if (cause != PlayerTeleportEvent.TeleportCause.NETHER_PORTAL
-                && cause != PlayerTeleportEvent.TeleportCause.END_PORTAL) return null;
+    private @Nullable Location handlePortalRouting(@NotNull PlayerPortalEvent event) {
+        return handlePortalRouting(event.getFrom(), portalTypeFrom(event.getCause()));
+    }
 
-        Location from = event.getFrom();
+    private @Nullable Location handlePortalRouting(@NotNull EntityPortalEvent event) {
+        return handlePortalRouting(event.getFrom(), event.getPortalType());
+    }
+
+    private @Nullable Location handlePortalRouting(@Nullable Location from, @Nullable PortalType portalType) {
+        if (from == null || (portalType != PortalType.NETHER && portalType != PortalType.ENDER)) {
+            return null;
+        }
+
         World fromWorld = from.getWorld();
-        if (fromWorld == null) return null;
+        if (fromWorld == null) {
+            return null;
+        }
 
         String base = WorldUtil.baseName(fromWorld.getName());
-        if (base == null || base.isEmpty()) return null;
+        if (base == null || base.isEmpty()) {
+            return null;
+        }
 
         String targetName;
-        if (cause == PlayerTeleportEvent.TeleportCause.NETHER_PORTAL) {
+        if (portalType == PortalType.NETHER) {
             if (fromWorld.getEnvironment() == World.Environment.NORMAL) {
-                targetName = base + "_nether";
+                targetName = resolveLinkedDimension(base, "nether-world", base + "_nether");
             } else if (fromWorld.getEnvironment() == World.Environment.NETHER) {
-                targetName = base;
+                targetName = resolveOverworldForDimension(fromWorld.getName(), "nether-world", "_nether", base);
             } else {
                 return null;
             }
         } else {
-            // END_PORTAL
             if (fromWorld.getEnvironment() == World.Environment.NORMAL) {
-                targetName = base + "_the_end";
+                targetName = resolveLinkedDimension(base, "end-world", base + "_the_end");
             } else if (fromWorld.getEnvironment() == World.Environment.THE_END) {
-                targetName = base;
+                targetName = resolveOverworldForDimension(fromWorld.getName(), "end-world", "_the_end", base);
             } else {
                 return null;
             }
@@ -472,30 +748,78 @@ public class WorldServiceImpl extends BaseService implements WorldService {
 
         World targetWorld = Bukkit.getWorld(targetName);
         if (targetWorld == null) {
-            // load if it exists on disk/config
-            if (worldExists(targetName) || Files.isDirectory(worldRoot(targetName))) {
-                targetWorld = loadWorld(targetName);
-            }
+            targetWorld = loadWorld(targetName);
         }
-        if (targetWorld == null) return null;
+        if (targetWorld == null) {
+            return null;
+        }
 
         Location to = from.clone();
         to.setWorld(targetWorld);
 
-        // Nether coordinate scaling
-        if (cause == PlayerTeleportEvent.TeleportCause.NETHER_PORTAL) {
+        if (portalType == PortalType.NETHER) {
             if (fromWorld.getEnvironment() == World.Environment.NORMAL
-                    && targetWorld.getEnvironment() == World.Environment.NETHER) {
+                && targetWorld.getEnvironment() == World.Environment.NETHER) {
                 to.setX(from.getX() / 8.0);
                 to.setZ(from.getZ() / 8.0);
             } else if (fromWorld.getEnvironment() == World.Environment.NETHER
-                    && targetWorld.getEnvironment() == World.Environment.NORMAL) {
+                && targetWorld.getEnvironment() == World.Environment.NORMAL) {
                 to.setX(from.getX() * 8.0);
                 to.setZ(from.getZ() * 8.0);
             }
         }
 
         return to;
+    }
+
+    private @NotNull String resolveLinkedDimension(@NotNull String baseWorld,
+                                                   @NotNull String configKey,
+                                                   @NotNull String defaultValue) {
+        ConfigSection worldConfig = getConfigSection(baseWorld);
+        String configured = worldConfig.getString(configKey, "").trim();
+        if (configured.isEmpty() || configured.equalsIgnoreCase("unset")) {
+            return defaultValue;
+        }
+        return configured;
+    }
+
+    private @NotNull String resolveOverworldForDimension(@NotNull String dimensionWorld,
+                                                         @NotNull String configKey,
+                                                         @NotNull String defaultSuffix,
+                                                         @NotNull String fallbackBase) {
+        for (String worldName : listWorlds()) {
+            if (WorldUtil.resolveEnvironment(worldName) != World.Environment.NORMAL) {
+                continue;
+            }
+
+            String linked = resolveLinkedDimension(worldName, configKey, worldName + defaultSuffix);
+            if (linked.equalsIgnoreCase(dimensionWorld)) {
+                return worldName;
+            }
+        }
+
+        return fallbackBase;
+    }
+
+    private @Nullable PortalType portalTypeFrom(@NotNull PlayerTeleportEvent.TeleportCause cause) {
+        return switch (cause) {
+            case NETHER_PORTAL -> PortalType.NETHER;
+            case END_PORTAL -> PortalType.ENDER;
+            default -> null;
+        };
+    }
+
+    private void seedDefaultDimensionLinks(@NotNull String worldName, @NotNull ConfigSection config) {
+        if (WorldUtil.resolveEnvironment(worldName) != World.Environment.NORMAL) {
+            return;
+        }
+
+        if (!config.contains("nether-world")) {
+            config.set("nether-world", worldName + "_nether");
+        }
+        if (!config.contains("end-world")) {
+            config.set("end-world", worldName + "_the_end");
+        }
     }
 
     /**
@@ -506,20 +830,40 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      * @return The World instance.
      */
     private World ensure(String name, ChunkGenerator gen) {
+        return ensure(name, gen, null);
+    }
+
+    private World ensure(String name, ChunkGenerator gen, @Nullable Long seed) {
+        clearLastWorldOperationError(name);
+
         World w = Bukkit.getWorld(name);
-        if (w != null) return w;
+        if (w != null) {
+            return w;
+        }
 
         World.Environment env = WorldUtil.resolveEnvironment(name);
 
         WorldCreator wc = new WorldCreator(name).environment(env);
         if (gen != null) wc.generator(gen);
+        if (seed != null) wc.seed(seed);
 
-        World world = wc.createWorld();
+        World world;
+        try {
+            world = wc.createWorld();
+        } catch (RuntimeException exception) {
+            boolean existingWorldFolder = Files.exists(worldRoot(name));
+            rememberWorldOperationError(name, describeWorldOperationFailure(exception, existingWorldFolder));
+            plugin.getLogger().warning("Failed to load world '" + name + "': " + getLastWorldOperationError(name, "unknown error"));
+            return null;
+        }
 
         if (world != null) {
             getConfigSection().set(name + ".load", true);
             saveConfig();
             loadWorldSettings(world);
+            clearLastWorldOperationError(name);
+        } else {
+            rememberWorldOperationError(name, "Bukkit returned null while creating or loading the world.");
         }
 
         return world;
@@ -647,6 +991,15 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         return worldGeneration;
     }
 
+    @Nullable String getLastWorldOperationError(@NotNull String worldName) {
+        return lastWorldOperationErrors.get(worldErrorKey(worldName));
+    }
+
+    @NotNull String getLastWorldOperationError(@NotNull String worldName, @NotNull String defaultValue) {
+        String error = getLastWorldOperationError(worldName);
+        return error == null || error.isBlank() ? defaultValue : error;
+    }
+
     /**
      * Require that the world with the given name is not loaded.
      *
@@ -706,13 +1059,42 @@ public class WorldServiceImpl extends BaseService implements WorldService {
                     if (load) {
                         World world = loadWorld(worldName);
                         if (world != null) {
-                            loadWorldSettings(world);
+                            api.messages().log("WORLD_CONFIG_LOADED", "world", worldName);
+                        } else {
+                            api.messages().warn("WORLD_CONFIG_FAILED_LOAD",
+                                "world", worldName,
+                                "reason", getLastWorldOperationError(worldName, "unknown error"));
                         }
-                        api.messages().log("WORLD_CONFIG_LOADED", "world", worldName);
                     }
                 } else {
                     api.messages().log("WORLD_CONFIG_UNLOADED", "world", worldName);
                 }
+            }
+        }
+    }
+
+    private void retryExternalGeneratorWorldLoads() {
+        ConfigSection worldsSection = getConfigSection();
+        for (String worldName : worldsSection.getKeys(false)) {
+            if (!worldExists(worldName) || isWorldLoaded(worldName)) {
+                continue;
+            }
+            if (!worldsSection.getBoolean(worldName + ".load", false)) {
+                continue;
+            }
+
+            ConfiguredGeneratorSpec configuredGenerator = readConfiguredGenerator(getExistingConfigSection(worldName));
+            if (configuredGenerator == null || worldGeneration.isRegistered(configuredGenerator.key())) {
+                continue;
+            }
+
+            World world = loadWorld(worldName);
+            if (world != null) {
+                api.messages().log("WORLD_CONFIG_LOADED", "world", worldName);
+            } else {
+                api.messages().warn("WORLD_CONFIG_FAILED_LOAD",
+                    "world", worldName,
+                    "reason", getLastWorldOperationError(worldName, "unknown error"));
             }
         }
     }
@@ -725,5 +1107,45 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      */
     public @NotNull WorldChangeSession changes(@NotNull World world) {
         return worldChangeRecorder.getSession(world);
+    }
+
+    private @Nullable World firstLoadedWorld() {
+        return Bukkit.getWorlds().isEmpty() ? null : Bukkit.getWorlds().getFirst();
+    }
+
+    private void rememberWorldOperationError(@NotNull String worldName, @NotNull String message) {
+        lastWorldOperationErrors.put(worldErrorKey(worldName), message);
+    }
+
+    private void clearLastWorldOperationError(@NotNull String worldName) {
+        lastWorldOperationErrors.remove(worldErrorKey(worldName));
+    }
+
+    private @NotNull String worldErrorKey(@NotNull String worldName) {
+        return worldName.toLowerCase(Locale.ROOT);
+    }
+
+    private @NotNull String describeWorldOperationFailure(@NotNull Throwable throwable, boolean existingWorldFolder) {
+        Throwable root = rootCause(throwable);
+        String detail = root.getMessage();
+        if (detail == null || detail.isBlank()) {
+            detail = root.getClass().getSimpleName();
+        }
+
+        String normalized = detail.trim();
+        if (normalized.equalsIgnoreCase("Overworld settings missing")) {
+            return existingWorldFolder
+                ? "existing world data is incomplete or invalid (missing overworld settings in level.dat)"
+                : "world data is incomplete or invalid (missing overworld settings)";
+        }
+        return normalized;
+    }
+
+    private @NotNull Throwable rootCause(@NotNull Throwable throwable) {
+        Throwable current = throwable;
+        while (current.getCause() != null && current.getCause() != current) {
+            current = current.getCause();
+        }
+        return current;
     }
 }

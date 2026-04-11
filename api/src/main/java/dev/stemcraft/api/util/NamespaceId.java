@@ -105,6 +105,28 @@ public final class NamespaceId {
     }
 
     /**
+     * Sanitizes a path fragment so it is safe to use in a namespaced ID path.
+     * Invalid characters are replaced with underscores and the result is lowercased.
+     *
+     * @param path The raw path fragment.
+     * @return A safe path fragment.
+     */
+    public static String sanitizePath(String path) {
+        if (path == null || path.isBlank()) {
+            return "id";
+        }
+
+        String sanitized = path.toLowerCase(Locale.ROOT)
+            .replaceAll("[^a-z0-9_.-/]+", "_")
+            .replaceAll("_{2,}", "_")
+            .replaceAll("/+", "/");
+
+        sanitized = sanitized.replaceAll("^[/_.-]+", "");
+        sanitized = sanitized.replaceAll("[/_.-]+$", "");
+        return sanitized.isEmpty() ? "id" : sanitized;
+    }
+
+    /**
      * Extracts the namespace from the given namespaced ID.
      *
      * @param id The namespaced ID.

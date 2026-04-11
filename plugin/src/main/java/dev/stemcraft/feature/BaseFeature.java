@@ -20,10 +20,16 @@
 
 package dev.stemcraft.feature;
 
+import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigFile;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.util.StringUtil;
+import dev.stemcraft.config.BundledConfigDefaults;
+
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
 
 /**
  * Base class for all features in the STEMCraft plugin.
@@ -31,7 +37,8 @@ import dev.stemcraft.api.util.StringUtil;
 public abstract class BaseFeature {
     protected final STEMCraftAPI api;
     private ConfigSection configSection;
-    private ConfigSection rootConfigSection;
+    private ConfigFile rootConfigSection;
+    private String resolvedConfigPath;
 
     /**
      * Constructor for BaseFeature.
@@ -46,6 +53,13 @@ public abstract class BaseFeature {
      * Called when the feature is being enabled.
      */
     public void onEnable() { }
+
+    /**
+     * Called when the feature should refresh its configuration-backed runtime state.
+     */
+    public void onReload() {
+        resetConfigCache();
+    }
 
     /**
      * Called when the feature is being disabled.
@@ -71,18 +85,65 @@ public abstract class BaseFeature {
     }
 
     /**
+     * Returns the config path candidates for this feature in priority order.
+     *
+     * @return Candidate config paths.
+     */
+    protected List<String> getConfigPathCandidates() {
+        String kebab = StringUtil.camelToKebab(id());
+        String snake = kebab.replace('-', '_');
+
+        LinkedHashSet<String> candidates = new LinkedHashSet<>();
+        candidates.add(kebab);
+        candidates.add(snake);
+        candidates.add("features." + kebab);
+        candidates.add("features." + snake);
+
+        return new ArrayList<>(candidates);
+    }
+
+    /**
+     * Returns the config path actually resolved for this feature.
+     *
+     * @return The resolved config path.
+     */
+    public String getResolvedConfigPath() {
+        if (resolvedConfigPath == null) {
+            resolvedConfigPath = getConfigPathCandidates().getFirst();
+        }
+        return resolvedConfigPath;
+    }
+
+    /**
      * Get the configuration section for this feature.
      *
      * @return The feature's configuration section.
      */
     public ConfigSection getConfigSection() {
         if(configSection == null) {
-            ConfigFile config = api.config().load("config.yml");
-            if(config == null) {
-                throw new IllegalStateException("Could not load config.yml");
+            ConfigFile root = getRootConfigSection();
+            List<String> candidates = getConfigPathCandidates();
+            for (String path : candidates) {
+                if (!root.isSection(path)) {
+                    continue;
+                }
+                configSection = root.getSection(path, false);
+                resolvedConfigPath = path;
+                break;
             }
 
-            configSection = config.getSection(StringUtil.camelToKebab(id()));
+            if (configSection == null) {
+                resolvedConfigPath = BundledConfigDefaults.restoreMissingSection(STEMCraft.getPlugin(), root, candidates);
+            }
+
+            if (configSection == null && resolvedConfigPath != null && root.isSection(resolvedConfigPath)) {
+                configSection = root.getSection(resolvedConfigPath, false);
+            }
+
+            if (configSection == null) {
+                resolvedConfigPath = candidates.getFirst();
+                configSection = root.getSection(resolvedConfigPath);
+            }
         }
 
         return configSection;
@@ -93,7 +154,7 @@ public abstract class BaseFeature {
      *
      * @return The root configuration section.
      */
-    public ConfigSection getRootConfigSection() {
+    public ConfigFile getRootConfigSection() {
         if(rootConfigSection == null) {
             rootConfigSection = api.config().load("config.yml");
             if (rootConfigSection == null) {
@@ -102,5 +163,14 @@ public abstract class BaseFeature {
         }
 
         return rootConfigSection;
+    }
+
+    /**
+     * Clears cached config handles so future lookups see updated disk state.
+     */
+    protected void resetConfigCache() {
+        configSection = null;
+        rootConfigSection = null;
+        resolvedConfigPath = null;
     }
 }

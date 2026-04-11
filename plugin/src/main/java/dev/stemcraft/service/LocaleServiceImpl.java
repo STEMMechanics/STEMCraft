@@ -60,9 +60,7 @@ public class LocaleServiceImpl extends BaseService implements LocaleService {
      */
     @Override
     public void onEnable() {
-        defaultLocale = getRootConfigSection().getString("default-locale", "en").toLowerCase(Locale.ROOT);
-        loadLocales();
-
+        reload();
     }
 
     /**
@@ -71,6 +69,7 @@ public class LocaleServiceImpl extends BaseService implements LocaleService {
     @Override
     public void onDisable() {
         locales.clear();
+        missingKeysLogged.clear();
     }
 
     /**
@@ -81,6 +80,13 @@ public class LocaleServiceImpl extends BaseService implements LocaleService {
     @Override
     public @NotNull String getDefaultLocale() {
         return defaultLocale;
+    }
+
+    @Override
+    public void reload() {
+        defaultLocale = getRootConfigSection().getString("default-locale", "en").toLowerCase(Locale.ROOT);
+        missingKeysLogged.clear();
+        loadLocales();
     }
 
     /**

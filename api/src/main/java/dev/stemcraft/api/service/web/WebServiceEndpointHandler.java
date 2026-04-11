@@ -23,7 +23,6 @@ package dev.stemcraft.api.service.web;
 import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
-import java.util.Map;
 
 /**
  * Functional interface for handling web service endpoints.
@@ -51,10 +50,8 @@ public interface WebServiceEndpointHandler {
      *   - body: any object; converted to String and used as the response body when
      *     "file" is not provided.
      *
-     * @param method The HTTP method (e.g., GET, POST).
-     * @param uri The request URI.
-     * @param queryParams The query parameters as a map.
+     * @param request The incoming HTTP request.
      * @return The response object as described above.
      */
-    @Nullable Object handle(@NotNull String method, @NotNull String uri, @NotNull Map<String, String> queryParams);
+    @Nullable Object handle(@NotNull WebServiceRequest request);
 }

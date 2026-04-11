@@ -23,12 +23,16 @@ package dev.stemcraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigFile;
 import dev.stemcraft.api.event.server.MaintenanceModeChangedEvent;
+import dev.stemcraft.api.factory.ChunkGeneratorFactory;
 import dev.stemcraft.api.util.PermissionUtil;
 import dev.stemcraft.command.BaseCommand;
+import dev.stemcraft.config.migration.HyphenatedConfigSchemaMigration;
+import dev.stemcraft.config.migration.LegacyServiceConfigMigration;
 import dev.stemcraft.minigame.BaseMiniGame;
 import dev.stemcraft.service.*;
 import dev.stemcraft.api.internal.InstanceHolder;
 import dev.stemcraft.chunkgen.FlatGenerator;
+import dev.stemcraft.chunkgen.WaterGenerator;
 import dev.stemcraft.chunkgen.VoidGenerator;
 import dev.stemcraft.feature.BaseFeature;
 import dev.stemcraft.service.command.CommandServiceImpl;
@@ -47,15 +51,26 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerKickEvent;
+import org.bukkit.event.server.ServerLoadEvent;
+import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import javax.annotation.Nullable;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Modifier;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Enumeration;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.jar.JarEntry;
@@ -74,27 +89,35 @@ public final class STEMCraft extends JavaPlugin {
     private ConfigServiceImpl config;
     private DatabaseServiceImpl database;
     private EventServiceImpl events;
-    private GatekeeperServiceImpl gatekeeper;
     private HologramServiceImpl holograms;
     private ItemServiceImpl items;
     private LocaleServiceImpl locales;
     private MessageServiceImpl messages;
     private MiniGameServiceImpl minigames;
     private MotdServiceImpl motd;
+    private PlaceholderServiceImpl placeholders;
     private PlayerServiceImpl players;
+    private PlayerStatsServiceImpl playerStats;
     private PunishmentServiceImpl punishments;
     private RecipeServiceImpl recipes;
     private RegionServiceImpl regions;
     private ResourcePackServiceImpl resourcePack;
+    private SelectionServiceImpl selections;
     private TabCompleteServiceImpl tabComplete;
     private TaskServiceImpl tasks;
+    private WebhookBridgeServiceImpl webhookBridge;
     private WebServiceImpl web;
     private WorldServiceImpl worlds;
 
     @Getter(AccessLevel.NONE)
     private ConfigFile configFile;
+    private final List<BaseFeature> loadedFeatures = new ArrayList<>();
+    private final List<String> loadedCommandIds = new ArrayList<>();
+    private final List<String> loadedMiniGameIds = new ArrayList<>();
+    private final Map<String, String> loadFailures = new LinkedHashMap<>();
 
     private boolean isMaintenanceMode = false;
+    private boolean postWorldStartupComplete = false;
 
     @Getter
     private boolean debugging = false;
@@ -103,12 +126,22 @@ public final class STEMCraft extends JavaPlugin {
     /** {@inheritDoc} */
     @Override
     public void onEnable() {
+
+        // Check we are running Paper
+        if(!isPaper()) {
+            getLogger().severe("STEMCraft requires Paper to run.");
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
+
         instance = this;
         api = new STEMCraftAPIImpl(this);
         InstanceHolder.set(api, this);
 
         // Load pre-early services
         config = new ConfigServiceImpl(this, api);
+        tasks = new TaskServiceImpl(this, api);
+        tasks.onEnable();
         config.onEnable();
 
         // Load configuration
@@ -123,18 +156,21 @@ public final class STEMCraft extends JavaPlugin {
             saveResource("config.yml", false);
         }
 
+        // Temporary migration for legacy service config paths. Remove after old configs are retired.
+        new LegacyServiceConfigMigration(this, configFile).apply();
+        // Temporary migration for known snake_case schema keys. Remove after configs have been rewritten in the field.
+        new HyphenatedConfigSchemaMigration(this, configFile).apply();
+
         // Load early services
         messages = new MessageServiceImpl(this, api);
         locales = new LocaleServiceImpl(this, api);
-        tasks = new TaskServiceImpl(this, api);
 
         messages.onEnable();
         locales.onEnable();
-        tasks.onEnable();
 
         // Check dependencies
         Plugin we = getServer().getPluginManager().getPlugin("WorldEdit");
-        if(we == null || !we.isEnabled()) {
+        if(we == null) {
             error("DEPENDENCY_WORLDEDIT_REQUIRED");
             getServer().getPluginManager().disablePlugin(this);
             return;
@@ -147,49 +183,48 @@ public final class STEMCraft extends JavaPlugin {
         commands = new CommandServiceImpl(this, api);
         database = new DatabaseServiceImpl(this, api);
         events = new EventServiceImpl(this, api);
-        gatekeeper = new GatekeeperServiceImpl(this, api);
         holograms = new HologramServiceImpl(this, api);
         items = new ItemServiceImpl(this, api);
         minigames = new MiniGameServiceImpl(this, api);
         motd = new MotdServiceImpl(this, api);
+        placeholders = new PlaceholderServiceImpl(this, api);
         players = new PlayerServiceImpl(this, api);
+        playerStats = new PlayerStatsServiceImpl(this, api);
         punishments = new PunishmentServiceImpl(this, api);
         recipes = new RecipeServiceImpl(this, api);
         regions = new RegionServiceImpl(this, api);
         resourcePack = new ResourcePackServiceImpl(this, api);
+        selections = new SelectionServiceImpl(this, api);
         tabComplete = new TabCompleteServiceImpl(this, api);
+        webhookBridge = new WebhookBridgeServiceImpl(this, api);
         web = new WebServiceImpl(this, api);
         worlds = new WorldServiceImpl(this, api);
+
+        registerBuiltInWorldGenerators();
 
         chat.onEnable();
         commands.onEnable();
         database.onEnable();
         events.onEnable();
-        gatekeeper.onEnable();
         holograms.onEnable();
         items.onEnable();
         minigames.onEnable();
         motd.onEnable();
+        placeholders.onEnable();
         players.onEnable();
+        playerStats.onEnable();
         punishments.onEnable();
         recipes.onEnable();
         regions.onEnable();
         resourcePack.onEnable();
+        selections.onEnable();
         tabComplete.onEnable();
+        webhookBridge.onEnable();
         web.onEnable();
         worlds.onEnable();
 
 
         info("STEMCRAFT_ENABLED");
-
-        // Register world generators
-        worlds.generator().register("void", (options) -> new VoidGenerator());
-        worlds.generator().register("flat",   FlatGenerator::fromOptions);
-        worlds.generator().register("normal", cfg -> null);
-
-        loadFeatures();
-        loadCommands();
-        loadMinigames();
 
         isMaintenanceMode = configFile.getBoolean("maintenance", false);
 
@@ -201,7 +236,7 @@ public final class STEMCraft extends JavaPlugin {
             .permission("stemcraft.command.maintenance")
             .executor((unused, cmd, ctx) -> {
                 if (ctx.args().isEmpty()) {
-                    ctx.returnInfo("MAINTENANCE_STATUS", isMaintenanceMode ? "on" : "off");
+                    ctx.returnInfo("MAINTENANCE_STATUS", "state", isMaintenanceMode ? "on" : "off");
                 }
 
                 String state = ctx.args().getFirst().toLowerCase();
@@ -218,7 +253,7 @@ public final class STEMCraft extends JavaPlugin {
 
                 Bukkit.getPluginManager().callEvent(new MaintenanceModeChangedEvent(isMaintenanceMode));
 
-                ctx.returnInfo("MAINTENANCE_STATUS", isMaintenanceMode ? "on" : "off");
+                ctx.returnInfo("MAINTENANCE_STATUS", "state", isMaintenanceMode ? "on" : "off");
             })
             .register(this);
 
@@ -253,6 +288,8 @@ public final class STEMCraft extends JavaPlugin {
                 }
             }
         });
+
+        api.events().register(ServerLoadEvent.class, event -> completePostWorldStartup());
     }
 
     @SuppressWarnings("UnstableApiUsage")
@@ -274,37 +311,142 @@ public final class STEMCraft extends JavaPlugin {
     /** {@inheritDoc} */
     @Override
     public void onDisable() {
-        worlds.onDisable();
-        web.onDisable();
-        tabComplete.onDisable();
-        resourcePack.onDisable();
-        regions.onDisable();
-        recipes.onDisable();
-        punishments.onDisable();
-        players.onDisable();
-        motd.onDisable();
-        minigames.onDisable();
-        items.onDisable();
-        holograms.onDisable();
-        gatekeeper.onDisable();
-        events.onDisable();
-        database.onDisable();
-        commands.onDisable();
-        chat.onDisable();
+        disableService(minigames);
+        disableService(worlds);
+        disableService(web);
+        disableService(webhookBridge);
+        disableService(tabComplete);
+        disableService(resourcePack);
+        disableService(selections);
+        disableService(regions);
+        disableService(recipes);
+        disableService(punishments);
+        disableService(playerStats);
+        disableService(placeholders);
+        disableService(players);
+        disableService(motd);
+        disableService(items);
+        disableService(holograms);
+        disableService(events);
+        disableService(database);
+        disableService(commands);
+        disableService(chat);
 
-        tasks.onDisable();
-        locales.onDisable();
-        messages.onDisable();
+        disableService(tasks);
+        disableService(locales);
+        disableService(messages);
     }
 
+    /** {@inheritDoc} */
+    @Override
+    public @Nullable ChunkGenerator getDefaultWorldGenerator(String worldName, @Nullable String id) {
+        BuiltInGeneratorSpec spec = parseBuiltInGeneratorSpec(id);
+        if (spec.key().isEmpty()) {
+            return null;
+        }
+
+        return createBuiltInGenerator(spec.key(), spec.options());
+    }
+
+    private void registerBuiltInWorldGenerators() {
+        worlds.generator().register("void", options -> createBuiltInGenerator("void", options));
+        worlds.generator().register("flat", options -> createBuiltInGenerator("flat", options));
+        worlds.generator().register("water", new ChunkGeneratorFactory() {
+            @Override
+            public ChunkGenerator create(String options) {
+                return createBuiltInGenerator("water", options);
+            }
+
+            @Override
+            public List<String> tabCompleteOptions(String options) {
+                return WaterGenerator.tabCompleteOptions(options);
+            }
+        });
+        worlds.generator().register("normal", options -> createBuiltInGenerator("normal", options));
+        worlds.generator().register("default", options -> createBuiltInGenerator("default", options));
+    }
+
+    private void completePostWorldStartup() {
+        if (postWorldStartupComplete) {
+            return;
+        }
+        postWorldStartupComplete = true;
+
+        worlds.completeStartupLoad();
+        loadFeatures();
+        loadCommands();
+        loadMinigames();
+    }
+
+    private void disableService(@Nullable BaseService service) {
+        if (service != null) {
+            service.onDisable();
+        }
+    }
+
+    private @Nullable ChunkGenerator createBuiltInGenerator(String key, @Nullable String options) {
+        String normalizedKey = key == null ? "" : key.trim().toLowerCase(Locale.ROOT);
+        String generatorOptions = options == null ? "" : options.trim();
+
+        return switch (normalizedKey) {
+            case "void" -> new VoidGenerator();
+            case "flat" -> FlatGenerator.fromOptions(generatorOptions);
+            case "water" -> WaterGenerator.fromOptions(generatorOptions);
+            case "normal", "default" -> null;
+            default -> null;
+        };
+    }
+
+    private BuiltInGeneratorSpec parseBuiltInGeneratorSpec(@Nullable String id) {
+        if (id == null) {
+            return new BuiltInGeneratorSpec("", "");
+        }
+
+        String raw = id.trim();
+        if (raw.isEmpty()) {
+            return new BuiltInGeneratorSpec("", "");
+        }
+
+        int separator = raw.indexOf(':');
+        if (separator < 0) {
+            return new BuiltInGeneratorSpec(raw, "");
+        }
+
+        String key = raw.substring(0, separator).trim();
+        String options = raw.substring(separator + 1).trim();
+        return new BuiltInGeneratorSpec(key, options);
+    }
+
+    private record BuiltInGeneratorSpec(String key, String options) {}
+
+    /**
+     * Get the main STEMCraft plugin instance.
+     *
+     * @return The STEMCraft plugin instance.
+     */
     public static STEMCraft getPlugin() {
         return instance;
+    }
+
+    /**
+     * Check if the server is running Paper.
+     *
+     * @return true if the server is running Paper, false otherwise.
+     */
+    private boolean isPaper() {
+        try {
+            Class.forName("io.papermc.paper.ServerBuildInfo");
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
     }
 
     /**
      * Load STEMCraft Features within dev.stemcraft.features.
      */
     private void loadFeatures() {
+        loadedFeatures.clear();
         iterateClasses(
                 "dev/stemcraft/feature",
                 BaseFeature.class,
@@ -317,12 +459,14 @@ public final class STEMCraft extends JavaPlugin {
      * Load a specific STEMCraft Feature if enabled.
      */
     private void loadFeature(BaseFeature feature) {
-        if(feature.getConfigSection().getBoolean("enabled", true)) {
+        var section = feature.getConfigSection();
+        if(section.contains("enabled") && !section.getBoolean("enabled", true)) {
             debug("STEMCRAFT_FEATURE_DISABLED", "name", feature.id());
             return;
         }
 
         feature.onEnable();
+        loadedFeatures.add(feature);
         debug("STEMCRAFT_FEATURE_LOADED", "name", feature.id());
     }
 
@@ -330,24 +474,36 @@ public final class STEMCraft extends JavaPlugin {
      * Load STEMCraft Commands within dev.stemcraft.command.
      */
     private void loadCommands() {
+        loadedCommandIds.clear();
         iterateClasses(
                 "dev/stemcraft/command",
                 BaseCommand.class,
-                BaseCommand::onLoad,
+                this::loadCommand,
                 new Class<?>[]{STEMCraft.class, STEMCraftAPI.class},
                 this, api);
+    }
+
+    private void loadCommand(BaseCommand command) {
+        command.onLoad();
+        loadedCommandIds.add(command.getClass().getSimpleName());
     }
 
     /**
      * Load STEMCraft Minigames within dev.stemcraft.minigame.
      */
     private void loadMinigames() {
+        loadedMiniGameIds.clear();
         iterateClasses(
                 "dev/stemcraft/minigame",
                 BaseMiniGame.class,
-                BaseMiniGame::onLoad,
+                this::loadMiniGame,
                 new Class<?>[]{STEMCraftAPI.class},
                 api);
+    }
+
+    private void loadMiniGame(BaseMiniGame miniGame) {
+        miniGame.onLoad();
+        loadedMiniGameIds.add(miniGame.getClass().getSimpleName());
     }
 
     /**
@@ -409,7 +565,8 @@ public final class STEMCraft extends JavaPlugin {
 
                     callback.accept(instance);
 
-                } catch (ReflectiveOperationException ex) {
+                } catch (ReflectiveOperationException | RuntimeException ex) {
+                    recordLoadFailure(className, ex.getClass().getSimpleName() + ": " + ex.getMessage());
                     error("STEMCRAFT_ERROR_LOAD_CLASS", ex,
                             "class", className,
                             "error", ex.getMessage());
@@ -421,6 +578,71 @@ public final class STEMCraft extends JavaPlugin {
     }
 
     private <T> void iterateClasses(String path, Class<T> typeFilter, Consumer<T> callback) { iterateClasses(path, typeFilter, callback, null); }
+
+    private void recordLoadFailure(String id, String reason) {
+        loadFailures.put(id, reason == null ? "unknown error" : reason);
+    }
+
+    public synchronized ReloadSummary reloadStemCraft(boolean localesOnly) {
+        boolean configReloaded = true;
+        if (!localesOnly && configFile != null) {
+            configReloaded = configFile.reload();
+            debugging = configFile.getBoolean("debug", false);
+        }
+
+        messages = new MessageServiceImpl(this, api);
+        messages.onEnable();
+
+        if (resourcePack != null) {
+            resourcePack.onReload();
+        }
+
+        if (locales == null) {
+            locales = new LocaleServiceImpl(this, api);
+            locales.onEnable();
+        } else {
+            locales.reload();
+        }
+
+        int reloadedFeatures = 0;
+        if (!localesOnly) {
+            if (selections != null) {
+                selections.onReload();
+            }
+            if (placeholders != null) {
+                placeholders.onReload();
+            }
+            for (BaseFeature feature : loadedFeatures) {
+                try {
+                    feature.onReload();
+                    reloadedFeatures++;
+                } catch (RuntimeException ex) {
+                    recordLoadFailure("reload:" + feature.id(), ex.getClass().getSimpleName() + ": " + ex.getMessage());
+                    error("STEMCRAFT_ERROR_LOAD_CLASS", ex,
+                        "class", feature.getClass().getName(),
+                        "error", ex.getMessage());
+                }
+            }
+        }
+
+        return new ReloadSummary(configReloaded, true, reloadedFeatures);
+    }
+
+    public List<String> loadedFeatureIds() {
+        return loadedFeatures.stream().map(BaseFeature::id).sorted().toList();
+    }
+
+    public List<String> loadedCommandIds() {
+        return Collections.unmodifiableList(loadedCommandIds);
+    }
+
+    public List<String> loadedMiniGameIds() {
+        return Collections.unmodifiableList(loadedMiniGameIds);
+    }
+
+    public Map<String, String> loadFailures() {
+        return Collections.unmodifiableMap(loadFailures);
+    }
 
     /**
      * Export a directory bundled within the JAR to the plugin's data folder.
@@ -458,7 +680,18 @@ public final class STEMCraft extends JavaPlugin {
                 }
 
                 if (!out.exists()) {
-                    saveResource(name, false); // never overwrite
+                    try (InputStream in = getResource(name)) {
+                        if (in == null) {
+                            getLogger().warning("Bundled resource not found: " + name);
+                            continue;
+                        }
+
+                        try (OutputStream outStream = Files.newOutputStream(out.toPath())) {
+                            in.transferTo(outStream);
+                        }
+                    } catch (IOException ioEx) {
+                        getLogger().warning("Failed to export bundled resource " + name + " -> " + out + ": " + ioEx.getMessage());
+                    }
                 }
             }
         } catch (Exception ex) {
@@ -471,11 +704,61 @@ public final class STEMCraft extends JavaPlugin {
     }
 
     // Messaging shortcuts
-    private void debug(String message, Object... placeholders) { this.messages.debug(message, placeholders); }
-    private void log(String message, Object... placeholders) { this.messages.log(message, placeholders); }
-    private void info(String message, Object... placeholders) { this.messages.info(message, placeholders); }
-    private void warn(String message, Object... placeholders) { this.messages.warn(message, placeholders); }
-    private void error(String message, Object... placeholders) { this.messages.error(message, placeholders); }
-    private void error(String message, Throwable ex, Object... placeholders) { this.messages.error(message, ex, placeholders); }
-    private void success(String message, Object... placeholders) { this.messages.success(message, placeholders); }
+    private void debug(String message, Object... placeholders) {
+        if (this.messages != null) {
+            this.messages.debug(message, placeholders);
+        } else {
+            getLogger().fine(String.valueOf(message));
+        }
+    }
+
+    private void log(String message, Object... placeholders) {
+        if (this.messages != null) {
+            this.messages.log(message, placeholders);
+        } else {
+            getLogger().info(String.valueOf(message));
+        }
+    }
+
+    private void info(String message, Object... placeholders) {
+        if (this.messages != null) {
+            this.messages.info(message, placeholders);
+        } else {
+            getLogger().info(String.valueOf(message));
+        }
+    }
+
+    private void warn(String message, Object... placeholders) {
+        if (this.messages != null) {
+            this.messages.warn(message, placeholders);
+        } else {
+            getLogger().warning(String.valueOf(message));
+        }
+    }
+
+    private void error(String message, Object... placeholders) {
+        if (this.messages != null) {
+            this.messages.error(message, placeholders);
+        } else {
+            getLogger().severe(String.valueOf(message));
+        }
+    }
+
+    private void error(String message, Throwable ex, Object... placeholders) {
+        if (this.messages != null) {
+            this.messages.error(message, ex, placeholders);
+        } else {
+            getLogger().severe(String.valueOf(message) + (ex != null ? ": " + ex.getMessage() : ""));
+        }
+    }
+
+    private void success(String message, Object... placeholders) {
+        if (this.messages != null) {
+            this.messages.success(message, placeholders);
+        } else {
+            getLogger().info(String.valueOf(message));
+        }
+    }
+
+    public record ReloadSummary(boolean configReloaded, boolean localesReloaded, int reloadedFeatures) { }
 }

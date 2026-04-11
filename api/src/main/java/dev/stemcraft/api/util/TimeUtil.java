@@ -99,6 +99,10 @@ public class TimeUtil {
         for (char c : durationStr.toCharArray()) {
             if (Character.isDigit(c)) {
                 number.append(c);
+            } else if (Character.isWhitespace(c)) {
+                if (!number.isEmpty()) {
+                    throw new IllegalArgumentException("Invalid duration format: " + durationStr);
+                }
             } else {
                 if (number.isEmpty()) {
                     throw new IllegalArgumentException("Invalid duration format: " + durationStr);

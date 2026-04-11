@@ -27,6 +27,7 @@ import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.service.web.WebService;
 import dev.stemcraft.api.service.web.WebServiceEndpointHandler;
+import dev.stemcraft.api.service.web.WebServiceRequest;
 import org.jspecify.annotations.NonNull;
 import org.jetbrains.annotations.NotNull;
 
@@ -35,8 +36,15 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -58,13 +66,15 @@ public class WebServiceImpl extends BaseService implements WebService {
      */
     public WebServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
-        setConfigKey("web-server");
+        setConfigKey("web_server");
     }
 
     /**
      * Enable the web service if configured to do so.
      */
     public void onEnable() {
+        loadSettings();
+
         if(getConfigSection().getBoolean("enabled", false)) {
             start();
         }
@@ -135,7 +145,13 @@ public class WebServiceImpl extends BaseService implements WebService {
      * Start the web server.
      */
     public void start() {
-        String wwwPath = plugin.getConfig().getString("path", "www");
+        if (httpServer != null) {
+            return;
+        }
+
+        loadSettings();
+
+        String wwwPath = getConfigSection().getString("path", "www");
         wwwPath = wwwPath
                 .replace("\\", "/")
                 .replaceAll("^/+", "")   // remove leading slashes
@@ -197,6 +213,8 @@ public class WebServiceImpl extends BaseService implements WebService {
      * Get the public URL of the web server.
      */
     public @NotNull String getPublicUrl() {
+        loadSettings();
+
         String publicUrl = getConfigSection().getString("public-url", "").trim();
         if(!publicUrl.isEmpty()) {
             if(!publicUrl.startsWith("http://") && !publicUrl.startsWith("https://")) {
@@ -219,6 +237,11 @@ public class WebServiceImpl extends BaseService implements WebService {
         return "http://" + host + ":" + port;
     }
 
+    private void loadSettings() {
+        port = getConfigSection().getInt("port", 8950);
+        ip = getConfigSection().getString("ip", "127.0.0.1");
+    }
+
     /**
      * Internal HTTP handler for processing requests.
      */
@@ -226,36 +249,72 @@ public class WebServiceImpl extends BaseService implements WebService {
         /** {@inheritDoc} */
         @Override
         public void handle(HttpExchange exchange) throws IOException {
-            String uri = exchange.getRequestURI().getPath();
-            Map<String, String> queryParams = getStringStringMap(exchange);
+            String path = exchange.getRequestURI().getPath();
+            String uri = exchange.getRequestURI().toString();
 
-            api.messages().info("WEB_SERVER_REQUEST", "method", exchange.getRequestMethod(), "path", uri, "ip", exchange.getRemoteAddress().toString());
+            // Decode once so %2e%2e etc can’t bypass checks
+            String decodedUri = URLDecoder.decode(path, StandardCharsets.UTF_8);
 
-            File file = new File(wwwRoot, uri.substring(1));
+            // Strip leading "/" so resolve treats it as relative
+            String rel = decodedUri.startsWith("/") ? decodedUri.substring(1) : decodedUri;
 
-            if (!file.getAbsolutePath().startsWith(wwwRoot.getAbsolutePath())) {
+            Map<String, String> queryParams = getQueryParams(exchange);
+            Map<String, List<String>> headers = new LinkedHashMap<>();
+            exchange.getRequestHeaders().forEach((key, values) -> headers.put(key, new ArrayList<>(values)));
+            byte[] requestBody = exchange.getRequestBody().readAllBytes();
+            WebServiceRequest request = new WebServiceRequest(
+                    exchange.getRequestMethod(),
+                    uri,
+                    path,
+                    queryParams,
+                    headers,
+                    requestBody,
+                    exchange.getRemoteAddress().toString()
+            );
+
+            api.messages().info("WEB_SERVER_REQUEST",
+                    "method", request.method(),
+                    "path", request.path(),
+                    "ip", exchange.getRemoteAddress().toString()
+            );
+
+            // Use canonical/real paths + normalization to prevent traversal
+            Path root = wwwRoot.toPath().toRealPath(LinkOption.NOFOLLOW_LINKS);
+            Path requested = root.resolve(rel).normalize();
+
+            if (!requested.startsWith(root)) {
                 sendErrorResponse(exchange, 403, "Forbidden");
                 return;
             }
 
             for (var e : endpointHandlers.entrySet()) {
-                if (uri.startsWith(e.getKey())) {
-                    Object result = e.getValue().handle("GET", uri, queryParams);
+                if (request.path().startsWith(e.getKey())) {
+                    Object result = e.getValue().handle(request);
 
                     int responseCode = 200;
                     byte[] bodyBytes = new byte[0];
                     File responseFile = null;
-                    String contentType = "text/html; charset=utf-8";
+                    String contentType = "text/plain; charset=utf-8";
+                    Map<String, String> responseHeaders = new LinkedHashMap<>();
 
-                    if (result instanceof Map<?,?> map) {
+                    if (result instanceof Map<?, ?> map) {
                         Object codeObj = map.get("responseCode");
-                        if (codeObj instanceof Number) {
-                            responseCode = ((Number) codeObj).intValue();
+                        if (codeObj == null) {
+                            codeObj = map.get("code");
                         }
+                        if (codeObj instanceof Number) responseCode = ((Number) codeObj).intValue();
 
                         Object ctObj = map.get("contentType");
-                        if (ctObj instanceof String) {
-                            contentType = (String) ctObj;
+                        if (ctObj instanceof String) contentType = (String) ctObj;
+
+                        Object headersObj = map.get("headers");
+                        if (headersObj instanceof Map<?, ?> mapHeaders) {
+                            for (Map.Entry<?, ?> headerEntry : mapHeaders.entrySet()) {
+                                if (headerEntry.getKey() == null || headerEntry.getValue() == null) {
+                                    continue;
+                                }
+                                responseHeaders.put(headerEntry.getKey().toString(), headerEntry.getValue().toString());
+                            }
                         }
 
                         Object fileObj = map.get("file");
@@ -264,13 +323,14 @@ public class WebServiceImpl extends BaseService implements WebService {
                         } else {
                             Object bodyObj = map.get("body");
                             String body = (bodyObj != null) ? bodyObj.toString() : "";
-                            bodyBytes = body.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                            bodyBytes = body.getBytes(StandardCharsets.UTF_8);
                         }
                     } else if (result != null) {
-                        bodyBytes = result.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                        bodyBytes = result.toString().getBytes(StandardCharsets.UTF_8);
                     }
 
-                    // send response
+                    responseHeaders.forEach((header, value) -> exchange.getResponseHeaders().set(header, value));
+
                     if (responseFile != null) {
                         exchange.getResponseHeaders().add("Content-Type", contentType);
                         exchange.sendResponseHeaders(responseCode, responseFile.length());
@@ -286,38 +346,45 @@ public class WebServiceImpl extends BaseService implements WebService {
                         }
                     }
 
-                    return;                }
+                    return;
+                }
             }
 
-            if (file.isDirectory()) {
+            if (Files.isDirectory(requested, LinkOption.NOFOLLOW_LINKS)) {
                 sendErrorResponse(exchange, 403, "Directory listing not permitted");
                 return;
             }
 
-            if (!file.exists()) {
+            if (!Files.exists(requested, LinkOption.NOFOLLOW_LINKS)) {
                 sendErrorResponse(exchange, 404, "File not found");
                 return;
             }
 
-            // Serve the requested file
-            byte[] fileBytes = Files.readAllBytes(file.toPath());
-            exchange.sendResponseHeaders(200, fileBytes.length);
+            // Serve the requested file (streaming, not readAllBytes)
+            String contentType = Files.probeContentType(requested);
+            if (contentType == null) contentType = "application/octet-stream";
+
+            exchange.getResponseHeaders().set("Content-Type", contentType);
+            long size = Files.size(requested);
+            exchange.sendResponseHeaders(200, size);
+
             try (OutputStream os = exchange.getResponseBody()) {
-                os.write(fileBytes);
+                Files.copy(requested, os);
             }
         }
 
-        private static @NonNull Map<String, String> getStringStringMap(HttpExchange exchange) {
+        private static @NonNull Map<String, String> getQueryParams(HttpExchange exchange) {
             Map<String, String> queryParams = new LinkedHashMap<>();
             String query = exchange.getRequestURI().getQuery();
             if (query != null) {
                 String[] pairs = query.split("&");
                 for (String pair : pairs) {
                     String[] keyValue = pair.split("=", 2);
+                    String key = URLDecoder.decode(keyValue[0], StandardCharsets.UTF_8);
                     if (keyValue.length == 2) {
-                        queryParams.put(keyValue[0], keyValue[1]);
+                        queryParams.put(key, URLDecoder.decode(keyValue[1], StandardCharsets.UTF_8));
                     } else if (keyValue.length == 1) {
-                        queryParams.put(keyValue[0], "");
+                        queryParams.put(key, "");
                     }
                 }
             }
@@ -325,9 +392,11 @@ public class WebServiceImpl extends BaseService implements WebService {
         }
 
         private void sendErrorResponse(HttpExchange exchange, int statusCode, String errorMessage) throws IOException {
-            exchange.sendResponseHeaders(statusCode, errorMessage.length());
+            byte[] errorBytes = errorMessage.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "text/plain; charset=utf-8");
+            exchange.sendResponseHeaders(statusCode, errorBytes.length);
             try (OutputStream os = exchange.getResponseBody()) {
-                os.write(errorMessage.getBytes());
+                os.write(errorBytes);
             }
         }
     }

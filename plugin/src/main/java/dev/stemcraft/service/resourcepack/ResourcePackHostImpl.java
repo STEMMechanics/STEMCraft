@@ -70,15 +70,15 @@ public class ResourcePackHostImpl implements ResourcePackHost {
      * Registers the HTTP endpoint for serving the resource pack.
      */
     private void registerPackEndpoint() {
-        api.web().registerEndpointHandler(DEFAULT_PACK_URL_PATH, (method, uri, queryParams) -> {
-            if (!"GET".equalsIgnoreCase(method)) {
+        api.web().registerEndpointHandler(DEFAULT_PACK_URL_PATH, request -> {
+            if (!"GET".equalsIgnoreCase(request.method())) {
                 return Map.of(
                         "responseCode", 405,
                         "body", "Method Not Allowed"
                 );
             }
 
-            if (!uri.equals(DEFAULT_PACK_URL_PATH)) {
+            if (!request.path().equals(DEFAULT_PACK_URL_PATH)) {
                 return Map.of(
                         "responseCode", 404,
                         "body", "File not found"

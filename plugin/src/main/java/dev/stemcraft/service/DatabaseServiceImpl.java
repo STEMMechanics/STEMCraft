@@ -316,7 +316,8 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
      */
     public boolean execute(@NotNull String sql) {
         try (Statement st = connection.createStatement()) {
-            return st.execute(sql);
+            st.execute(sql);
+            return true;
         } catch (SQLException e) {
             api.messages().error("Failed to execute SQL: " + sql, e);
         }

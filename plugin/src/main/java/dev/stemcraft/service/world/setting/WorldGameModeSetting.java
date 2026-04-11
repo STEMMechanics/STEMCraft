@@ -27,7 +27,7 @@ import dev.stemcraft.api.service.world.WorldBaseSetting;
 import dev.stemcraft.api.service.world.WorldService;
 import org.bukkit.*;
 import org.bukkit.entity.Player;
-import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
@@ -59,12 +59,9 @@ public class WorldGameModeSetting implements WorldBaseSetting {
     public void onEnable(@NotNull STEMCraftAPI api, @NotNull WorldService service) {
         this.service = service;
 
-        api.events().register(PlayerTeleportEvent.class, event -> {
+        api.events().register(PlayerChangedWorldEvent.class, event -> {
             Player player = event.getPlayer();
-            Location to = event.getTo();
-
-            World world = to.getWorld();
-            if (world == null) return;
+            World world = player.getWorld();
 
             GameMode mode = get(world);
             if (mode != null) player.setGameMode(mode);
@@ -134,7 +131,15 @@ public class WorldGameModeSetting implements WorldBaseSetting {
         ConfigSection config = service.getConfigSection(world);
         String gamemode = get(world, config);
 
-        return GameMode.valueOf(gamemode.toUpperCase(Locale.ROOT));
+        if (gamemode.equals("unset")) {
+            return null;
+        }
+
+        try {
+            return GameMode.valueOf(gamemode.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 
     /**

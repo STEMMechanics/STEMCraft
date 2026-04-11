@@ -53,6 +53,57 @@ public class ConfigSectionImpl implements ConfigSection {
 
     public ConfigSectionImpl() {}
 
+    private boolean pathExists(String path) {
+        return section.contains(path) || section.isConfigurationSection(path);
+    }
+
+    private boolean segmentExists(ConfigurationSection current, String segment) {
+        return current.contains(segment) || current.isConfigurationSection(segment);
+    }
+
+    private String resolveSegment(ConfigurationSection current, String segment) {
+        if (current == null || segment.isEmpty()) {
+            return segment;
+        }
+
+        if (segmentExists(current, segment)) {
+            return segment;
+        }
+
+        String hyphen = segment.replace('_', '-');
+        if (!hyphen.equals(segment) && segmentExists(current, hyphen)) {
+            return hyphen;
+        }
+
+        String snake = segment.replace('-', '_');
+        if (!snake.equals(segment) && segmentExists(current, snake)) {
+            return snake;
+        }
+
+        return segment;
+    }
+
+    private String resolvePath(String path) {
+        if (path == null || path.isEmpty()) {
+            return path;
+        }
+
+        String[] parts = path.split("\\.");
+        ConfigurationSection current = section;
+        StringBuilder resolved = new StringBuilder(path.length());
+
+        for (int i = 0; i < parts.length; i++) {
+            String chosen = resolveSegment(current, parts[i]);
+            if (i > 0) {
+                resolved.append('.');
+            }
+            resolved.append(chosen);
+            current = current == null ? null : current.getConfigurationSection(chosen);
+        }
+
+        return resolved.toString();
+    }
+
 
     /**
      * Determines if the default value should be persisted to the configuration.
@@ -61,7 +112,7 @@ public class ConfigSectionImpl implements ConfigSection {
      * @return true if the default value should be persisted, false otherwise.
      */
     private boolean shouldPersistDefault(String path) {
-        return configFile != null && configFile.getSaveDefaults() && !section.contains(path);
+        return configFile != null && configFile.getSaveDefaults() && !pathExists(resolvePath(path));
     }
 
     /**
@@ -96,7 +147,7 @@ public class ConfigSectionImpl implements ConfigSection {
      * @return true if the configuration contains a value at the specified path, false otherwise.
      */
     public boolean contains(@NonNull String path) {
-        return section.contains(path);
+        return pathExists(resolvePath(path));
     }
 
     /**
@@ -106,7 +157,7 @@ public class ConfigSectionImpl implements ConfigSection {
      * @return true if the configuration contains a section at the specified path, false otherwise.
      */
     public boolean isSection(@NonNull String path) {
-        return section.isConfigurationSection(path);
+        return section.isConfigurationSection(resolvePath(path));
     }
 
     /**
@@ -116,7 +167,7 @@ public class ConfigSectionImpl implements ConfigSection {
      * @return the object at the specified path, or null if not present.
      */
     public Object get(@NonNull String path) {
-        return section.get(path);
+        return section.get(resolvePath(path));
     }
 
     /**
@@ -128,7 +179,7 @@ public class ConfigSectionImpl implements ConfigSection {
      */
     public @NonNull String getString(@NonNull String path, String def) {
         persistDefault(path, def);
-        return section.getString(path, def);
+        return section.getString(resolvePath(path), def);
     }
 
     /**
@@ -140,7 +191,7 @@ public class ConfigSectionImpl implements ConfigSection {
      */
     public int getInt(@NonNull String path, int def) {
         persistDefault(path, def);
-        return section.getInt(path, def);
+        return section.getInt(resolvePath(path), def);
     }
 
     /**
@@ -152,7 +203,7 @@ public class ConfigSectionImpl implements ConfigSection {
      */
     public long getLong(@NonNull String path, long def) {
         persistDefault(path, def);
-        return section.getLong(path, def);
+        return section.getLong(resolvePath(path), def);
     }
 
     /**
@@ -164,7 +215,7 @@ public class ConfigSectionImpl implements ConfigSection {
      */
     public float getFloat(@NonNull String path, float def) {
         persistDefault(path, def);
-        return (float) section.getDouble(path, def);
+        return (float) section.getDouble(resolvePath(path), def);
     }
 
     /**
@@ -176,7 +227,7 @@ public class ConfigSectionImpl implements ConfigSection {
      */
     public double getDouble(@NonNull String path, double def) {
         persistDefault(path, def);
-        return section.getDouble(path, def);
+        return section.getDouble(resolvePath(path), def);
     }
 
     /**
@@ -188,7 +239,7 @@ public class ConfigSectionImpl implements ConfigSection {
      */
     public boolean getBoolean(@NonNull String path, boolean def) {
         persistDefault(path, def);
-        return section.getBoolean(path, def);
+        return section.getBoolean(resolvePath(path), def);
     }
 
     /**
@@ -198,7 +249,7 @@ public class ConfigSectionImpl implements ConfigSection {
      * @return A list of strings from the configuration.
      */
     public @NonNull List<String> getStringList(@NonNull String path) {
-        List<String> value = section.getStringList(path);
+        List<String> value = section.getStringList(resolvePath(path));
         persistDefault(path, value);
         return value;
     }
@@ -210,7 +261,7 @@ public class ConfigSectionImpl implements ConfigSection {
      * @return A list of integers from the configuration.
      */
     public @NonNull List<Integer> getIntegerList(@NonNull String path) {
-        List<Integer> value = section.getIntegerList(path);
+        List<Integer> value = section.getIntegerList(resolvePath(path));
         persistDefault(path, value);
         return value;
     }
@@ -222,7 +273,7 @@ public class ConfigSectionImpl implements ConfigSection {
      * @return A list of floats from the configuration.
      */
     public @NonNull List<Float> getFloatList(@NonNull String path) {
-        List<Float> value = section.getFloatList(path);
+        List<Float> value = section.getFloatList(resolvePath(path));
         persistDefault(path, value);
         return value;
     }
@@ -234,7 +285,7 @@ public class ConfigSectionImpl implements ConfigSection {
      * @return A list of doubles from the configuration.
      */
     public @NonNull List<Double> getDoubleList(@NonNull String path) {
-        List<Double> value = section.getDoubleList(path);
+        List<Double> value = section.getDoubleList(resolvePath(path));
         persistDefault(path, value);
         return value;
     }
@@ -246,7 +297,7 @@ public class ConfigSectionImpl implements ConfigSection {
      * @return A list of booleans from the configuration.
      */
     public @NonNull List<Boolean> getBooleanList(@NonNull String path) {
-        List<Boolean> value = section.getBooleanList(path);
+        List<Boolean> value = section.getBooleanList(resolvePath(path));
         persistDefault(path, value);
         return value;
     }
@@ -259,7 +310,7 @@ public class ConfigSectionImpl implements ConfigSection {
      * @return A list of objects from the configuration.
      */
     public List<?> getList(@NonNull String path, List<?> def) {
-        List<?> value = section.getList(path, def);
+        List<?> value = section.getList(resolvePath(path), def);
         persistDefault(path, value);
         return value;
     }
@@ -271,7 +322,7 @@ public class ConfigSectionImpl implements ConfigSection {
      * @param value The value to set.
      */
     public void set(String path, Object value) {
-        section.set(path, value);
+        section.set(resolvePath(path), value);
         configFile.setDirty();
     }
 
@@ -281,7 +332,7 @@ public class ConfigSectionImpl implements ConfigSection {
      * @param path The configuration path to remove.
      */
     public void remove(String path) {
-        section.set(path, null);
+        section.set(resolvePath(path), null);
         configFile.setDirty();
     }
 
@@ -293,13 +344,14 @@ public class ConfigSectionImpl implements ConfigSection {
      * @return The configuration section at the specified path, or null if it does not exist and createIfAbsent is false.
      */
     public ConfigSection getSection(String path, boolean createIfAbsent) {
-        ConfigurationSection subSection = section.getConfigurationSection(path);
+        String resolvedPath = resolvePath(path);
+        ConfigurationSection subSection = section.getConfigurationSection(resolvedPath);
         if (subSection == null) {
             if (!createIfAbsent) {
                 return null;
             }
 
-            subSection = section.createSection(path);
+            subSection = section.createSection(resolvedPath);
             if (configFile != null) {
                 configFile.setDirty();
             }
@@ -316,15 +368,16 @@ public class ConfigSectionImpl implements ConfigSection {
      * @return The newly created configuration section.
      */
     public ConfigSection createSection(String path, boolean overwriteIfExists) {
-        if (section.isConfigurationSection(path)) {
+        String resolvedPath = resolvePath(path);
+        if (section.isConfigurationSection(resolvedPath)) {
             if (!overwriteIfExists) {
-                return new ConfigSectionImpl(configFile, section.getConfigurationSection(path));
+                return new ConfigSectionImpl(configFile, section.getConfigurationSection(resolvedPath));
             }
 
-            section.set(path, null);
+            section.set(resolvedPath, null);
         }
 
-        return new ConfigSectionImpl(configFile, section.createSection(path));
+        return new ConfigSectionImpl(configFile, section.createSection(resolvedPath));
     }
 
     /**
@@ -345,7 +398,7 @@ public class ConfigSectionImpl implements ConfigSection {
      * @return A set of keys in the configuration section at the specified path.
      */
     public @NonNull Set<String> getSectionKeys(@NonNull String path, boolean deep) {
-        ConfigurationSection subSection = section.getConfigurationSection(path);
+        ConfigurationSection subSection = section.getConfigurationSection(resolvePath(path));
         if (subSection == null) {
             return Set.of();
         }
@@ -360,7 +413,7 @@ public class ConfigSectionImpl implements ConfigSection {
      * @return A map representation of the configuration section at the specified path.
      */
     public @NonNull Map<String, Object> getMap(@NonNull String path, boolean deep) {
-        ConfigurationSection subSection = section.getConfigurationSection(path);
+        ConfigurationSection subSection = section.getConfigurationSection(resolvePath(path));
         if (subSection == null) {
             return Map.of();
         }

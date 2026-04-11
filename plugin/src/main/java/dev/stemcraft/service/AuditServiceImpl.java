@@ -85,7 +85,12 @@ public class AuditServiceImpl extends BaseService implements AuditService {
      */
     public AuditServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
-        setConfigKey("auditing");
+        setConfigKey("player_logs");
+    }
+
+    @Override
+    protected List<String> getConfigPathCandidates() {
+        return List.of("player_logs", "player-logs", "auditing");
     }
 
     /**
@@ -93,7 +98,7 @@ public class AuditServiceImpl extends BaseService implements AuditService {
      */
     @Override
     public void onEnable() {
-        if(getConfigSection().getBoolean(".enabled", true)) {
+        if(!getConfigSection().getBoolean("enabled", true)) {
             return;
         }
 
@@ -103,11 +108,11 @@ public class AuditServiceImpl extends BaseService implements AuditService {
             return;
         }
 
-        maxDays = plugin.getConfig().getInt("player_log.max-days", 28);
-        tpsThreshold = plugin.getConfig().getInt("player_log.tps_threshold", 15);
-        memoryThreshold = ByteFormat.toBytes(plugin.getConfig().getString("player-log.memory_threshold", "5MB"));
-        trackedPlacePatterns = loadPatterns("player_log.blocks.place");
-        trackedBreakPatterns = loadPatterns("player_log.blocks.break");
+        maxDays = getConfigSection().getInt("max_days", 28);
+        tpsThreshold = getConfigSection().getInt("tps_threshold", 15);
+        memoryThreshold = ByteFormat.toBytes(getConfigSection().getString("memory_threshold", "5MB"));
+        trackedPlacePatterns = loadPatterns("blocks.place");
+        trackedBreakPatterns = loadPatterns("blocks.break");
 
 
 
@@ -306,7 +311,7 @@ public class AuditServiceImpl extends BaseService implements AuditService {
     private List<Pattern> loadPatterns(String path) {
         List<Pattern> list = new ArrayList<>();
 
-        for (String raw : plugin.getConfig().getStringList(path)) {
+        for (String raw : getConfigSection().getStringList(path)) {
             try {
                 list.add(Pattern.compile(raw, Pattern.CASE_INSENSITIVE));
             } catch (Exception e) {

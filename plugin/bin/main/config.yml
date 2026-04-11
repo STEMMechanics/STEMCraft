@@ -1,0 +1,386 @@
+logging:
+  prefixes:
+    log: "[STEMCraft] "
+    info: "<aqua><bold>[ i ]</bold></aqua> "
+    warn: "<gold><bold>[ ! ]</bold></gold> "
+    error: "<red>\uE132</red> "
+    success: "<dark_green><bold>[ \u2714 ]</bold></dark_green> "
+    broadcast: "<dark_purple><bold>[ ! ]</bold></dark_purple> "
+
+whitelist_message: |-
+  This server is for our workshop players only.
+  
+  If you believe you should have access, please contact STEMMechanics.
+
+
+motd:
+  title: "<blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple> <yellow><bold>STEMCRAFT</bold></yellow> <blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple>"
+  text: "                   <yellow>★</yellow> <aqua>Enjoy your stay!</aqua> <yellow>★</yellow>"
+
+hub:
+  world: world
+  exit_commands:
+    bw_*:
+      command: "bw leave"
+      as-player: true
+    PartyGames:
+      command: "pg leave"
+      as-player: true
+    tb_*:
+      command: "tb leave"
+      as-player: true
+
+web_server:
+    enabled: true
+    port: 8950
+    path: www
+
+webhook_bridge:
+  enabled: false
+  site_webhook_url: "http://127.0.0.1:8080/webhooks/minecraft/server"
+  shared_secret: ""
+  server_name: "STEMCraft"
+  # Incoming website webhooks are served by the shared web_server on this path.
+  listen_path: "/stemcraft/webhook"
+  connect_timeout_millis: 5000
+  request_timeout_millis: 10000
+  replay_window_seconds: 300
+  debug_logging: false
+  enforce_account_whitelist: true
+  whitelist_kick_message: "You are not whitelisted on this server."
+  drop_stale_sync_managed_events: true
+  drop_sync_managed_events_missing_occurred_at: true
+  allow_status_requests: true
+  allow_player_stats_requests: true
+  allow_remote_commands: false
+  remote_command_max_output_chars: 12000
+
+player_stats:
+  autosave_ticks: 1200
+  built_in:
+    - damage_dealt
+    - damage_taken
+    - deaths
+    - player_kills
+    - mob_kills
+    - fish_caught
+    - play_time
+    - jumps
+    - distance_walked_km
+    - distance_sprinted_km
+    - distance_boated_km
+    - distance_swam_km
+    - distance_fallen_m
+    - distance_flown_km
+    - distance_horse_km
+    - distance_minecart_km
+    - distance_pig_km
+    - distance_strider_km
+    - distance_total_moved_km
+    - food_eaten
+    - bucket_fills
+    - blocks_placed_survival
+    - blocks_placed_creative
+    - blocks_broken_survival
+    - blocks_broken_creative
+
+distance_difficulty:
+  range: 500
+  multiplier: 0.25
+
+chat:
+  format: "{prefix}{player}: {message}{suffix}"
+  filter_command: ""
+  spam_cooldown: 3
+  spam_message: "Please do not spam the chat"
+  content_filter:
+    enabled: true
+    timeout_millis: 10000
+    allow_filtered_message: false
+    blocked_message: "Your message was blocked by the content filter."
+    unavailable_message: "Chat is temporarily unavailable while the content filter service is offline."
+    actions:
+      "1":
+        count: 1
+        within: 5m
+        action: warn
+      "2":
+        count: 2
+        within: 5m
+        action: warn
+      "3":
+        count: 3
+        within: 10m
+        action: kick
+      "4":
+        count: 4
+        within: 30m
+        action: ban
+        duration: 7d
+
+player_logs:
+    enabled: true
+    max_days: 30
+    tps_threshold: 15
+    memory_threshold: 5MB
+    blocks:
+      place:
+        - ".*SHULKER_BOX"
+        - ".*COMMAND_BLOCK"
+        - "BARRIER"
+        - "LIGHT"
+        - ".*ANVIL"
+        - ".*_ORE"
+        - ".*DIAMOND_(BLOCK|ORE)"
+        - "STRUCTURE_BLOCK"
+        - "JIGSAW"
+        - ".*CHEST"
+        - "BARREL"
+        - ".*_TABLE"
+        - "BREWING_STAND"
+        - "GRINDSTONE"
+        - "RESPAWN_ANCHOR"
+        - "TNT.*"
+        - "ANCIENT_DEBRIS"
+        - ".*EMERALD_(BLOCK|ORE)"
+      break:
+        - "ANVIL"
+        - ".*_TABLE"
+        - "TNT"
+        - ".*CHEST"
+        - ".*SHULKER_BOX"
+        - ".*COMMAND_BLOCK"
+        - ".*BED"
+        - ".*_ORE"
+        - "ANCIENT_DEBRIS"
+
+recipes:
+  # Remove some annoying / useless recipes
+  remove:
+    - wooden_sword
+    - wooden_pickaxe
+    - wooden_shovel
+    - golden_sword
+    - golden_hoe
+
+  # Stonecutter QoL
+  stonecutter:
+    cobblestone:
+      gravel: 2              # 1 cobble -> 2 gravel
+    gravel:
+      sand: 1                # recycle gravel into sand
+    sandstone:
+      sand: 4                # sandstone back into sand
+    oak_log:
+      oak_planks: 6          # better log -> plank yield
+    spruce_log:
+      spruce_planks: 6
+
+  # Shaped recipes (crafting table)
+  shaped:
+    compact_cobble:          # example id, not used by MC itself
+      result: COBBLESTONE
+      amount: 16
+      shape:
+        - "SSS"
+        - "S S"
+        - "SSS"
+      ingredients:
+        S: STONE
+
+    big_torch:
+      result: TORCH
+      amount: 8
+      shape:
+        - " C "
+        - " S "
+        - " S "
+      ingredients:
+        C: COAL
+        S: STICK
+
+  # Shapeless recipes
+  shapeless:
+    recycle_dirt:
+      result: DIRT
+      amount: 4
+      ingredients:
+        - DIRT
+        - DIRT
+        - DIRT
+        - DIRT
+
+    emerald_from_items:
+      result: EMERALD
+      amount: 1
+      ingredients:
+        - DIAMOND
+        - GOLD_INGOT
+        - IRON_INGOT
+
+  # Furnace recipes
+  furnace:
+    cook_rotten_flesh:
+      input: ROTTEN_FLESH
+      result: LEATHER
+      amount: 1
+      exp: 0.35
+      time: 200
+
+  # Smoker recipes (faster food)
+  smoker:
+    cook_kelp_fast:
+      input: KELP
+      result: DRIED_KELP
+      amount: 1
+      exp: 0.1
+      time: 100
+
+  # Blast furnace recipes (faster ores)
+  blast_furnace:
+    fast_iron:
+      input: RAW_IRON
+      result: IRON_INGOT
+      amount: 1
+      exp: 0.7
+      time: 80
+
+  # Campfire recipes (free cooking)
+  campfire:
+    campfire_fish:
+      input: COD
+      result: COOKED_COD
+      amount: 1
+      exp: 0.35
+      time: 600
+
+  # Smithing Transform (1.20+)
+  smithing_transform:
+    fast_netherite_sword:
+      result: NETHERITE_SWORD
+      template: NETHERITE_UPGRADE_SMITHING_TEMPLATE
+      base: DIAMOND_SWORD
+      addition: NETHERITE_INGOT
+
+  # Smithing Trim (armor trims)
+  smithing_trim:
+    gold_trim_on_diamond:
+      template: COAST_ARMOR_TRIM_SMITHING_TEMPLATE
+      base: DIAMOND_CHESTPLATE
+      material: GOLD_INGOT
+
+features:
+  deny_spawn_eggs:
+    enabled: true
+  drop_player_heads:
+    enabled: true
+  no_anvil_repair_cost:
+      enabled: true
+  rebalance_iron_golem:
+    enabled: true
+    min_drops: 3
+    max_drops: 5
+  naughty:
+    allowed_commands:
+      - "hub"
+  skip_night:
+    required: 0.25
+    random_tick_speed: 300
+    worlds:
+      - "survival"
+  player_game_messages:
+    join:
+      enabled: true
+      list:
+        - '{player} has entered the lab. Safety goggles on.'
+        - '{player} spawned in. Someone hide the redstone.'
+        - '{player} joined. The server sighed deeply.'
+        - '{player} spawned in. Please remain seated.'
+        - '{player} logged in. Chaos warming up…'
+        - '{player} joined the game. Nothing exploded yet.'
+        - '{player} appeared. This was not in the plan.'
+        - '{player} joined. Someone hide the diamonds.'
+        - '{player} has entered the chat. Blame incoming.'
+        - '{player} loaded in. Expectations lowered.'
+        - '{player} joined. Redstone engineers on standby.'
+        - '{player} arrived. The villagers are concerned.'
+    quit:
+      enabled: true
+      list:
+        - '{player} left to "touch grass". Unconfirmed.'
+        - '{player} disconnected. The hamsters stopped running.'
+        - '{player} left. The server feels safer now.'
+        - '{player} disconnected. Probably their fault.'
+        - '{player} quit. Lets call it a tactical retreat.'
+        - '{player} left the game. Dramatic exit achieved.'
+        - '{player} vanished. No loot dropped.'
+        - '{player} logged out. Rage level unknown.'
+        - '{player} left. The creepers celebrate quietly.'
+        - '{player} disconnected. Keyboard survived.'
+        - '{player} quit. Minecraft remains undefeated.'
+        - '{player} left the server. This is fine.'
+    death:
+      enabled: true
+      list:
+        - "{player} became a cautionary tale."
+        - "{player} found out the hard way."
+
+      list_entity:
+        - "{player} was deleted by {killer}."
+        - "{player} lost an argument with {killer}."
+
+      list_cause:
+        FALL:
+          - "{player} discovered gravity."
+          - "{player} tried flying. Nailed the landing."
+        LAVA:
+          - "{player} tried to hug lava. Lava said no."
+        DROWNING:
+          - "{player} forgot lungs are optional only in mods."
+        FIRE:
+          - "{player} is now lightly toasted."
+        VOID:
+          - "{player} fell out of the world. Classic."
+        SUFFOCATION:
+          - "{player} phased into a wall. The wall won."
+  tab:
+    update_ticks: 40 # 2s
+    ping:
+      good_max: 80
+      warn_max: 160
+    header:
+      - ""
+      - "<gold>STEMCraft</gold>"
+      - ""
+
+    footer:
+      - ""
+      - "<gray>Ping:</gray> <aqua>{ping}ms</aqua> <gray>| Online:</gray> <green>{online}</green>/<green>{max}</green>"
+
+    name_format: "{prefix}{player}"
+    # optional: enforce max length (tab list name has limits)
+    max_name_len: 48
+
+
+bindings:
+  crafting_table: "\uE120"
+  enchantment_table: "\uE121"
+  skeleton_head_front: "\uE122"
+  chat_bubble: "\uE123"
+  info_purple: "\uE124"
+  info_blue: "\uE125"
+  info_green: "\uE126"
+  question_yellow: "\uE127"
+  question_blue: "\uE128"
+  question_green: "\uE129"
+  world: "\uE12a"
+  location: "\uE12b"
+  house: "\uE12c"
+  purple_bed: "\uE12d"
+  green_bed: "\uE12e"
+  discord: "\uE12f"
+  warning_yellow: "\uE131"
+  warning_red: "\uE132"
+  click_action_left: "\uE133"
+  click_action_right: "\uE134"
+  chest: "\uE135"

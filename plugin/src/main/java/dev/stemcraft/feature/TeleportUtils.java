@@ -26,7 +26,9 @@ import dev.stemcraft.api.command.Command;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.util.LocationUtil;
 import dev.stemcraft.api.util.PlayerUtil;
+import dev.stemcraft.api.util.WorldUtil;
 import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.World;
@@ -35,7 +37,10 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventPriority;
+import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import java.util.List;
 
@@ -48,8 +53,23 @@ import java.util.concurrent.ConcurrentHashMap;
  * Feature that provides various teleportation utilities such as /tpall, /tphere, /back, /warp, /setwarp, /delwarp, /spawn, /tpworld, /top, /jump, and /thru.
  */
 public class TeleportUtils extends BaseFeature {
+    private static final long DAMAGE_PROTECTION_MILLIS = 10_000L;
+    private static final long DAMAGE_PROTECTION_TICKS = DAMAGE_PROTECTION_MILLIS / 50L;
+
     private final Map<UUID, Location> backLocations = new ConcurrentHashMap<>();
+    private final Map<UUID, Map<String, WorldLastLocation>> worldLastLocations = new ConcurrentHashMap<>();
     private final Map<String, Location> warps = new ConcurrentHashMap<>();
+    private final Map<UUID, Long> damageProtectionUntil = new ConcurrentHashMap<>();
+
+    private record WorldLastLocation(
+            String worldName,
+            double x,
+            double y,
+            double z,
+            float yaw,
+            float pitch,
+            long updatedAt
+    ) { }
 
     /**
      * Constructor.
@@ -66,14 +86,52 @@ public class TeleportUtils extends BaseFeature {
     @Override
     public void onEnable() {
         loadWarpsFromConfig();
-        loadBackLocationsFromConfig();
+        ensureBackLocationStorage();
+        loadBackLocationsFromStorage();
+        loadWorldLastLocationsFromStorage();
 
         // Track previous locations for /back
         api.events().register(PlayerTeleportEvent.class, event -> {
             Player player = event.getPlayer();
+            grantDamageProtection(player);
             Location from = event.getFrom();
             setBackLocation(player.getUniqueId(), from);
+            setWorldLastLocation(player.getUniqueId(), from);
+
+            Location to = event.getTo();
+            if (to != null) {
+                setWorldLastLocation(player.getUniqueId(), to);
+            }
         });
+
+        api.events().register(PlayerJoinEvent.class, event -> {
+            Player player = event.getPlayer();
+            grantDamageProtection(player);
+            setWorldLastLocation(player.getUniqueId(), player.getLocation());
+        });
+        api.events().register(PlayerQuitEvent.class, event -> {
+            Player player = event.getPlayer();
+            damageProtectionUntil.remove(player.getUniqueId());
+            api.tasks().cancel(damageProtectionTaskId(player.getUniqueId()));
+            setWorldLastLocation(player.getUniqueId(), player.getLocation());
+        });
+
+        api.events().register(EntityDamageEvent.class, event -> {
+            if (!(event.getEntity() instanceof Player player)) {
+                return;
+            }
+
+            Long protectedUntil = damageProtectionUntil.get(player.getUniqueId());
+            if (protectedUntil == null) {
+                return;
+            }
+
+            if (System.currentTimeMillis() < protectedUntil) {
+                event.setCancelled(true);
+            } else {
+                damageProtectionUntil.remove(player.getUniqueId());
+            }
+        }, EventPriority.HIGHEST, false);
 
         // Run configured commands when a player teleports to a different world
         api.events().register(PlayerTeleportEvent.class, event -> {
@@ -118,6 +176,7 @@ public class TeleportUtils extends BaseFeature {
                 .usage("TPHERE_USAGE")
                 .permission("stemcraft.command.tphere")
                 .description("TPHERE_DESCRIPTION")
+                .tabCompletion("{player}")
                 .executor((plugin, cmd, ctx) -> {
                     if (!(ctx.getSender() instanceof Player sender)) {
                         cmd.error(ctx.getSender(), "COMMAND_PLAYER_ONLY");
@@ -129,7 +188,7 @@ public class TeleportUtils extends BaseFeature {
                         return;
                     }
 
-                    Player target = ctx.getPlayer(1);
+                    Player target = ctx.getPlayer(0);
                     if (target == null) {
                         cmd.error("PLAYER_NOT_FOUND", "player", ctx.args().getFirst());
                         return;
@@ -146,18 +205,44 @@ public class TeleportUtils extends BaseFeature {
                 .permission("stemcraft.command.tpspawn")
                 .description("TPSPAWN_DESCRIPTION")
                 .executor((plugin, cmd, ctx) -> {
-                    if(ctx.isConsole() && ctx.numArgs() < 2) {
+                    if (ctx.isConsole() && ctx.args().size() < 2) {
                         ctx.returnError("CONSOLE_PLAYER_REQUIRED");
+                        return;
                     }
 
-                    Player target = ctx.getPlayer(2);
+                    Player target;
+                    World world;
+
+                    if (ctx.args().isEmpty()) {
+                        if (!(ctx.getSender() instanceof Player sender)) {
+                            ctx.returnError("COMMAND_PLAYER_ONLY");
+                            return;
+                        }
+
+                        target = sender;
+                        world = sender.getWorld();
+                    } else {
+                        String worldName = ctx.getArg(0);
+                        World requestedWorld = Bukkit.getWorld(worldName);
+                        if (requestedWorld == null) {
+                            ctx.returnError("WORLD_NOT_FOUND", "world", worldName);
+                            return;
+                        }
+
+                        target = ctx.isConsole()
+                                ? ctx.getPlayer(1)
+                                : ctx.getPlayer(1, ctx.getSender());
+                        if (target == null) {
+                            ctx.returnError("PLAYER_NOT_FOUND", "player", ctx.getArg(1));
+                            return;
+                        }
+
+                        world = requestedWorld;
+                    }
+
                     if (target == null) {
-                        ctx.returnError("PLAYER_NOT_FOUND", "player", ctx.getArg(2));
-                    }
-
-                    World world = ctx.getArgAsWorld(1, target.getWorld());
-                    if (world == null) {
-                        ctx.returnError("WORLD_NOT_FOUND", "world", ctx.getArg(1));
+                        ctx.returnError("PLAYER_NOT_FOUND", "player", ctx.getArg(1));
+                        return;
                     }
 
                     setBackLocation(target.getUniqueId(), target.getLocation());
@@ -181,7 +266,7 @@ public class TeleportUtils extends BaseFeature {
                         }
                         target = sender;
                     } else {
-                        OfflinePlayer off = ctx.getArgAsOfflinePlayer(1);
+                        OfflinePlayer off = ctx.getArgAsOfflinePlayer(0);
                         if (off == null || !off.isOnline()) {
                             cmd.error("PLAYER_NOT_FOUND", "player", ctx.args().getFirst());
                             return;
@@ -229,7 +314,7 @@ public class TeleportUtils extends BaseFeature {
                         return;
                     }
 
-                    String name = ctx.getArg(1).toLowerCase(Locale.ROOT);
+                    String name = ctx.getArg(0).toLowerCase(Locale.ROOT);
                     Location loc = warps.get(name);
                     if (loc == null) {
                         cmd.error(player, "WARP_NOT_FOUND", "warp", name);
@@ -258,7 +343,7 @@ public class TeleportUtils extends BaseFeature {
                         return;
                     }
 
-                    String name = ctx.getArg(1).toLowerCase(Locale.ROOT);
+                    String name = ctx.getArg(0).toLowerCase(Locale.ROOT);
                     Location loc = player.getLocation();
 
                     warps.put(name, loc);
@@ -279,7 +364,7 @@ public class TeleportUtils extends BaseFeature {
                         return;
                     }
 
-                    String name = ctx.getArg(1).toLowerCase(Locale.ROOT);
+                    String name = ctx.getArg(0).toLowerCase(Locale.ROOT);
                     if (!warps.containsKey(name)) {
                         cmd.error(ctx.getSender(), "WARP_NOT_FOUND", "warp", name);
                         return;
@@ -309,7 +394,7 @@ public class TeleportUtils extends BaseFeature {
                         return;
                     }
 
-                    String worldName = ctx.getArg(1);
+                    String worldName = ctx.getArg(0);
                     World world = Bukkit.getWorld(worldName);
                     if (world == null) {
                         cmd.error(ctx.getSender(), "WORLD_NOT_FOUND", "world", worldName);
@@ -318,9 +403,9 @@ public class TeleportUtils extends BaseFeature {
 
                     Player target;
                     if (ctx.args().size() >= 2) {
-                        OfflinePlayer off = ctx.getArgAsOfflinePlayer(2);
+                        OfflinePlayer off = ctx.getArgAsOfflinePlayer(1);
                         if (off == null || !off.isOnline()) {
-                            cmd.error("PLAYER_NOT_FOUND", "player", ctx.getArg(2));
+                            cmd.error("PLAYER_NOT_FOUND", "player", ctx.getArg(1));
                             return;
                         }
                         target = off.getPlayer();
@@ -349,19 +434,95 @@ public class TeleportUtils extends BaseFeature {
                         ctx.returnError("CONSOLE_PLAYER_REQUIRED");
                     }
 
-                    String worldName = ctx.getArg(1);
+                    String worldName = ctx.getArg(0);
                     World world = Bukkit.getWorld(worldName);
                     if (world == null) {
                         ctx.returnError("WORLD_NOT_FOUND", "world", worldName);
                     }
 
-                    Player targetPlayer = ctx.getPlayer(2, ctx.getSender());
+                    Player targetPlayer = ctx.getPlayer(1, ctx.getSender());
                     if (targetPlayer == null) {
-                        ctx.returnError("PLAYER_NOT_FOUND", "player", ctx.getArg(2));
+                        ctx.returnError("PLAYER_NOT_FOUND", "player", ctx.getArg(1));
+                    }
+
+                    Location destination = getWorldLastLocation(targetPlayer.getUniqueId(), world.getName());
+                    if (destination == null) {
+                        destination = world.getSpawnLocation();
+                        PlayerUtil.teleport(targetPlayer, destination);
+                        ctx.returnInfo("TPWORLD_SUCCESS_SPAWN", "world", worldName);
+                        return;
+                    }
+
+                    PlayerUtil.teleport(targetPlayer, destination);
+                    ctx.returnInfo("TPWORLD_SUCCESS_LAST", "world", worldName);
+                })
+                .register(STEMCraft.getPlugin());
+
+        // /tpworldspawn <world> [player]
+        api.commands().create("tpworldspawn")
+                .usage("TPWORLDSPAWN_USAGE")
+                .permission("stemcraft.command.tpworldspawn")
+                .description("TPWORLDSPAWN_DESCRIPTION")
+                .tabCompletion("{world}", "{player}")
+                .executor((plugin, cmd, ctx) -> {
+                    ctx.checkArgsSizeAtLeast(1);
+
+                    if (ctx.isConsole() && ctx.args().size() < 2) {
+                        ctx.returnError("CONSOLE_PLAYER_REQUIRED");
+                    }
+
+                    String worldName = ctx.getArg(0);
+                    World world = Bukkit.getWorld(worldName);
+                    if (world == null) {
+                        ctx.returnError("WORLD_NOT_FOUND", "world", worldName);
+                    }
+
+                    Player targetPlayer = ctx.getPlayer(1, ctx.getSender());
+                    if (targetPlayer == null) {
+                        ctx.returnError("PLAYER_NOT_FOUND", "player", ctx.getArg(1));
                     }
 
                     PlayerUtil.teleport(targetPlayer, world.getSpawnLocation());
-                    ctx.returnInfo("TPWORLD_SUCCESS", "world", worldName);
+                    ctx.returnInfo("TPWORLDSPAWN_SUCCESS", "world", worldName);
+                })
+                .register(STEMCraft.getPlugin());
+
+        // /tpworldlast <world-base> [player]
+        api.commands().create("tpworldlast")
+                .usage("TPWORLDLAST_USAGE")
+                .permission("stemcraft.command.tpworldlast")
+                .description("TPWORLDLAST_DESCRIPTION")
+                .tabCompletion("{world}", "{player}")
+                .executor((plugin, cmd, ctx) -> {
+                    ctx.checkArgsSizeAtLeast(1);
+
+                    if (ctx.isConsole() && ctx.args().size() < 2) {
+                        ctx.returnError("CONSOLE_PLAYER_REQUIRED");
+                    }
+
+                    String worldBase = WorldUtil.baseName(ctx.getArg(0));
+                    Player targetPlayer = ctx.getPlayer(1, ctx.getSender());
+                    if (targetPlayer == null) {
+                        ctx.returnError("PLAYER_NOT_FOUND", "player", ctx.getArg(1));
+                    }
+
+                    Location destination = getLastLocationInWorldSet(targetPlayer.getUniqueId(), worldBase);
+                    if (destination == null || destination.getWorld() == null) {
+                        World fallbackWorld = Bukkit.getWorld(worldBase);
+                        if (fallbackWorld == null) {
+                            fallbackWorld = api.worlds().loadWorld(worldBase);
+                        }
+                        if (fallbackWorld == null) {
+                            ctx.returnError("WORLD_NOT_FOUND", "world", worldBase);
+                        }
+
+                        PlayerUtil.teleport(targetPlayer, fallbackWorld.getSpawnLocation());
+                        ctx.returnInfo("TPWORLDLAST_SUCCESS_SPAWN", "world", fallbackWorld.getName());
+                        return;
+                    }
+
+                    PlayerUtil.teleport(targetPlayer, destination);
+                    ctx.returnInfo("TPWORLDLAST_SUCCESS_LAST", "world", destination.getWorld().getName());
                 })
                 .register(STEMCraft.getPlugin());
 
@@ -466,6 +627,42 @@ public class TeleportUtils extends BaseFeature {
                 .register(STEMCraft.getPlugin());
     }
 
+    private void grantDamageProtection(Player player) {
+        if (player == null) {
+            return;
+        }
+        UUID uuid = player.getUniqueId();
+        if (player.getGameMode() != GameMode.SURVIVAL) {
+            damageProtectionUntil.remove(uuid);
+            api.tasks().cancel(damageProtectionTaskId(uuid));
+            return;
+        }
+
+        long protectionUntil = System.currentTimeMillis() + DAMAGE_PROTECTION_MILLIS;
+        damageProtectionUntil.put(uuid, protectionUntil);
+
+        api.tasks().runOnceDelay(damageProtectionTaskId(uuid), DAMAGE_PROTECTION_TICKS, () -> {
+            Long current = damageProtectionUntil.get(uuid);
+            if (current == null || current != protectionUntil) {
+                return;
+            }
+
+            if (System.currentTimeMillis() < current) {
+                return;
+            }
+
+            damageProtectionUntil.remove(uuid);
+            Player online = Bukkit.getPlayer(uuid);
+            if (online != null && online.isOnline() && online.getGameMode() == GameMode.SURVIVAL) {
+                api.messages().info(online, "TELEPORT_DAMAGE_PROTECTION_ENDED");
+            }
+        });
+    }
+
+    private String damageProtectionTaskId(UUID uuid) {
+        return "teleportutils:damage-protection-expire:" + uuid;
+    }
+
     /**
      * Load warps from configuration.
      */
@@ -508,45 +705,157 @@ public class TeleportUtils extends BaseFeature {
         getRootConfigSection().save();
     }
 
-    /**
-     * Load back locations from configuration.
-     */
-    private void loadBackLocationsFromConfig() {
-        ConfigSection section = getRootConfigSection().getSection("last-locations");
-        if (section == null) return;
+    private void ensureBackLocationStorage() {
+        int version = api.database().migrationVersion("teleport-utils");
+        if (version < 1) {
+            boolean created = api.database().execute(
+                    "CREATE TABLE IF NOT EXISTS player_last_locations (" +
+                    "uuid TEXT PRIMARY KEY," +
+                    "location TEXT NOT NULL," +
+                    "updated_at INTEGER NOT NULL" +
+                    ");"
+            );
+            if (!created) {
+                api.messages().error("Failed to create player_last_locations table.");
+                return;
+            }
+
+            migrateBackLocationsFromConfig();
+            api.database().setMigrationVersion("teleport-utils", 1);
+            version = 1;
+        }
+
+        if (version < 2) {
+            boolean created = api.database().execute(
+                    "CREATE TABLE IF NOT EXISTS player_world_last_locations (" +
+                    "uuid TEXT NOT NULL," +
+                    "world TEXT NOT NULL," +
+                    "x REAL NOT NULL," +
+                    "y REAL NOT NULL," +
+                    "z REAL NOT NULL," +
+                    "yaw REAL NOT NULL," +
+                    "pitch REAL NOT NULL," +
+                    "updated_at INTEGER NOT NULL," +
+                    "PRIMARY KEY(uuid, world)" +
+                    ");"
+            );
+            if (!created) {
+                api.messages().error("Failed to create player_world_last_locations table.");
+                return;
+            }
+
+            api.database().setMigrationVersion("teleport-utils", 2);
+        }
+    }
+
+    private void migrateBackLocationsFromConfig() {
+        ConfigSection section = getRootConfigSection().getSection("last-locations", false);
+        if (section == null) {
+            return;
+        }
 
         for (String key : section.getKeys(false)) {
             String value = section.getString(key);
-            if (value.isEmpty()) continue;
-
+            if (value.isEmpty()) {
+                continue;
+            }
             try {
                 UUID uuid = UUID.fromString(key);
-                Location loc = LocationUtil.deserialize(value);
-                if(loc == null) continue;
-                backLocations.put(uuid, loc);
+                saveBackLocation(uuid, LocationUtil.deserialize(value));
             } catch (IllegalArgumentException ignored) {
                 // ignored
             }
         }
+
+        getRootConfigSection().set("last-locations", null);
+        getRootConfigSection().save();
     }
 
     /**
-     * Save a back location to configuration.
+     * Load back locations from database.
+     */
+    private void loadBackLocationsFromStorage() {
+        backLocations.clear();
+
+        api.database().queryEach(
+            "SELECT uuid, location FROM player_last_locations",
+            null,
+            rs -> {
+                try {
+                    UUID uuid = UUID.fromString(rs.getString("uuid"));
+                    String serialized = rs.getString("location");
+                    Location location = LocationUtil.deserialize(serialized);
+                    if (location != null) {
+                        backLocations.put(uuid, location);
+                    }
+                } catch (IllegalArgumentException ignored) {
+                    // ignored
+                }
+            }
+        );
+    }
+
+    /**
+     * Load per-world last locations from database.
+     */
+    private void loadWorldLastLocationsFromStorage() {
+        worldLastLocations.clear();
+
+        api.database().queryEach(
+                "SELECT uuid, world, x, y, z, yaw, pitch, updated_at FROM player_world_last_locations",
+                null,
+                rs -> {
+                    try {
+                        UUID uuid = UUID.fromString(rs.getString("uuid"));
+                        String world = rs.getString("world");
+                        if (world == null || world.isBlank()) {
+                            return;
+                        }
+
+                        WorldLastLocation record = new WorldLastLocation(
+                                world.toLowerCase(Locale.ROOT),
+                                rs.getDouble("x"),
+                                rs.getDouble("y"),
+                                rs.getDouble("z"),
+                                (float) rs.getDouble("yaw"),
+                                (float) rs.getDouble("pitch"),
+                                rs.getLong("updated_at")
+                        );
+
+                        worldLastLocations
+                                .computeIfAbsent(uuid, ignored -> new ConcurrentHashMap<>())
+                                .put(record.worldName(), record);
+                    } catch (IllegalArgumentException ignored) {
+                        // ignored
+                    }
+                }
+        );
+    }
+
+    /**
+     * Save a back location to database.
      *
      * @param uuid The UUID of the player.
      * @param loc The location to save.
      */
     private void saveBackLocation(UUID uuid, Location loc) {
-        ConfigSection section = getRootConfigSection().getSection("last-locations");
-
         if (loc == null) {
-            section.set(uuid.toString(), null);
+            api.database().update(
+                "DELETE FROM player_last_locations WHERE uuid = ?",
+                ps -> ps.setString(1, uuid.toString())
+            );
         } else {
             String value = LocationUtil.serialize(loc, true, true);
-            section.set(uuid.toString(), value);
+            api.database().update(
+                "INSERT INTO player_last_locations (uuid, location, updated_at) VALUES (?, ?, ?) " +
+                "ON CONFLICT(uuid) DO UPDATE SET location = excluded.location, updated_at = excluded.updated_at",
+                ps -> {
+                    ps.setString(1, uuid.toString());
+                    ps.setString(2, value);
+                    ps.setLong(3, System.currentTimeMillis());
+                }
+            );
         }
-
-        getRootConfigSection().save();
     }
 
     /**
@@ -560,6 +869,122 @@ public class TeleportUtils extends BaseFeature {
         Location clone = loc.clone();
         backLocations.put(uuid, clone);
         saveBackLocation(uuid, clone);
+    }
+
+    /**
+     * Set the last known location for a specific world.
+     *
+     * @param uuid Player UUID.
+     * @param loc Current location.
+     */
+    private void setWorldLastLocation(UUID uuid, Location loc) {
+        if (uuid == null || loc == null || loc.getWorld() == null) {
+            return;
+        }
+
+        String worldName = loc.getWorld().getName().toLowerCase(Locale.ROOT);
+        long now = System.currentTimeMillis();
+
+        WorldLastLocation record = new WorldLastLocation(
+                worldName,
+                loc.getX(),
+                loc.getY(),
+                loc.getZ(),
+                loc.getYaw(),
+                loc.getPitch(),
+                now
+        );
+
+        worldLastLocations
+                .computeIfAbsent(uuid, ignored -> new ConcurrentHashMap<>())
+                .put(worldName, record);
+
+        api.database().update(
+                "INSERT INTO player_world_last_locations (uuid, world, x, y, z, yaw, pitch, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) " +
+                "ON CONFLICT(uuid, world) DO UPDATE SET x = excluded.x, y = excluded.y, z = excluded.z, yaw = excluded.yaw, pitch = excluded.pitch, updated_at = excluded.updated_at",
+                ps -> {
+                    ps.setString(1, uuid.toString());
+                    ps.setString(2, worldName);
+                    ps.setDouble(3, record.x());
+                    ps.setDouble(4, record.y());
+                    ps.setDouble(5, record.z());
+                    ps.setDouble(6, record.yaw());
+                    ps.setDouble(7, record.pitch());
+                    ps.setLong(8, record.updatedAt());
+                }
+        );
+    }
+
+    /**
+     * Get a player's last location in a specific world.
+     *
+     * @param uuid Player UUID.
+     * @param worldName World name.
+     * @return Last known location in the world, or null.
+     */
+    private Location getWorldLastLocation(UUID uuid, String worldName) {
+        if (uuid == null || worldName == null || worldName.isBlank()) {
+            return null;
+        }
+
+        Map<String, WorldLastLocation> byWorld = worldLastLocations.get(uuid);
+        if (byWorld == null) {
+            return null;
+        }
+
+        WorldLastLocation record = byWorld.get(worldName.toLowerCase(Locale.ROOT));
+        return record == null ? null : toLocation(record);
+    }
+
+    /**
+     * Get a player's most recent location across a world-set (overworld/nether/end).
+     *
+     * @param uuid Player UUID.
+     * @param worldBase Base world name.
+     * @return Most recently visited location in that world-set, or null.
+     */
+    private Location getLastLocationInWorldSet(UUID uuid, String worldBase) {
+        if (uuid == null || worldBase == null || worldBase.isBlank()) {
+            return null;
+        }
+
+        Map<String, WorldLastLocation> byWorld = worldLastLocations.get(uuid);
+        if (byWorld == null || byWorld.isEmpty()) {
+            return null;
+        }
+
+        String base = WorldUtil.baseName(worldBase).toLowerCase(Locale.ROOT);
+        String[] candidates = new String[]{base, base + "_nether", base + "_the_end"};
+
+        WorldLastLocation best = null;
+        for (String worldName : candidates) {
+            WorldLastLocation record = byWorld.get(worldName);
+            if (record == null) {
+                continue;
+            }
+
+            if (best == null || record.updatedAt() > best.updatedAt()) {
+                best = record;
+            }
+        }
+
+        return best == null ? null : toLocation(best);
+    }
+
+    private Location toLocation(WorldLastLocation record) {
+        if (record == null) {
+            return null;
+        }
+
+        World world = Bukkit.getWorld(record.worldName());
+        if (world == null) {
+            world = api.worlds().loadWorld(record.worldName());
+        }
+        if (world == null) {
+            return null;
+        }
+
+        return new Location(world, record.x(), record.y(), record.z(), record.yaw(), record.pitch());
     }
 
     /**

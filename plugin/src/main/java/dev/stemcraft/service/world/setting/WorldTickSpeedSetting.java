@@ -37,6 +37,8 @@ import java.util.Locale;
  * World setting to deny creature spawns based on configuration.
  */
 public class WorldTickSpeedSetting implements WorldBaseSetting {
+    private static final GameRule<Integer> RANDOM_TICK_SPEED_RULE = requireGameRule("RANDOM_TICK_SPEED", Integer.class);
+
 
     /**
      * Returns the unique key for this setting.
@@ -71,9 +73,9 @@ public class WorldTickSpeedSetting implements WorldBaseSetting {
 
         if(StringUtil.isInteger(value)) {
             int tickSpeed = Integer.parseInt(value);
-            world.setGameRule(GameRule.RANDOM_TICK_SPEED, tickSpeed);
+            setRandomTickSpeed(world, tickSpeed);
         } else {
-            world.setGameRule(GameRule.RANDOM_TICK_SPEED, 3);
+            setRandomTickSpeed(world, 3);
         }
     }
 
@@ -152,13 +154,31 @@ public class WorldTickSpeedSetting implements WorldBaseSetting {
 
         if(StringUtil.isInteger(value)) {
             int tickSpeed = Integer.parseInt(value);
-            world.setGameRule(GameRule.RANDOM_TICK_SPEED, tickSpeed);
+            setRandomTickSpeed(world, tickSpeed);
         } else {
-            world.setGameRule(GameRule.RANDOM_TICK_SPEED, 3);
+            setRandomTickSpeed(world, 3);
             value = null;
         }
 
         config.set("tickspeed", value);
         config.save();
+    }
+
+    private void setRandomTickSpeed(@NotNull World world, int tickSpeed) {
+        world.setGameRule(RANDOM_TICK_SPEED_RULE, tickSpeed);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> GameRule<T> requireGameRule(String name, Class<T> type) {
+        try {
+            Object value = GameRule.class.getField(name).get(null);
+            if (!(value instanceof GameRule<?> rule) || !type.equals(rule.getType())) {
+                throw new IllegalStateException("Missing expected gamerule " + name);
+            }
+
+            return (GameRule<T>) rule;
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException("Missing expected gamerule " + name, exception);
+        }
     }
 }

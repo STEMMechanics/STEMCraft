@@ -30,6 +30,7 @@ import org.bukkit.World;
 import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.world.WorldLoadEvent;
 
 import java.util.*;
 import java.util.regex.Pattern;
@@ -56,14 +57,24 @@ public class HubFeature extends BaseFeature {
     public void onEnable() {
         loadConfig();
 
-        api.worlds().setDefaultWorld(hubWorld);
+        if (hubWorld != null) {
+            api.worlds().setDefaultWorld(hubWorld);
+        }
+
+        api.events().register(WorldLoadEvent.class, event -> {
+            if (hubWorld != null) {
+                return;
+            }
+
+            hubWorld = resolveHubWorld();
+            if (hubWorld != null) {
+                api.worlds().setDefaultWorld(hubWorld);
+            }
+        });
+
         api.events().register(PlayerJoinEvent.class, event -> {
             if(hubWorld != null) {
                 Player player = event.getPlayer();
-
-                if(!api.gatekeeper().isWhitelisted(player)) {
-                    return;
-                }
 
                 api.tasks().runLater(10L, () -> player.teleport(hubWorld.getSpawnLocation()));
             }
@@ -105,15 +116,7 @@ public class HubFeature extends BaseFeature {
      * Load configuration data.
      */
     private void loadConfig() {
-        String hubWorldName = getConfigSection().getString("world", "world");
-
-        if (!hubWorldName.isEmpty()) {
-            hubWorld = Bukkit.getWorld(hubWorldName);
-        }
-
-        if (hubWorld == null) {
-            hubWorld = Bukkit.getWorlds().getFirst();
-        }
+        hubWorld = resolveHubWorld();
 
         worldExitCommands.clear();
         ConfigSection sec = getConfigSection().getSection("exit-commands");
@@ -123,5 +126,17 @@ public class HubFeature extends BaseFeature {
             Pattern worldPattern = PatternUtil.globToRegex(worldKey.toLowerCase(Locale.ROOT));
             worldExitCommands.put(worldPattern, sec.getStringList(worldKey));
         }
+    }
+
+    private World resolveHubWorld() {
+        String hubWorldName = getConfigSection().getString("world", "world");
+        if (!hubWorldName.isEmpty()) {
+            World configuredWorld = Bukkit.getWorld(hubWorldName);
+            if (configuredWorld != null) {
+                return configuredWorld;
+            }
+        }
+
+        return Bukkit.getWorlds().isEmpty() ? null : Bukkit.getWorlds().getFirst();
     }
 }

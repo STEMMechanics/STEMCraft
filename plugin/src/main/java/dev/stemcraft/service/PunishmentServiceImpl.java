@@ -23,11 +23,10 @@ package dev.stemcraft.service;
 import com.destroystokyo.paper.profile.PlayerProfile;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
-import dev.stemcraft.api.config.ConfigSection;
+import dev.stemcraft.api.config.ConfigFile;
 import dev.stemcraft.api.service.punishment.PunishmentAlertCallback;
 import dev.stemcraft.api.service.punishment.PunishmentRecord;
 import dev.stemcraft.api.service.punishment.PunishmentService;
-import dev.stemcraft.api.service.web.WebService;
 import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.api.util.TimeUtil;
 import io.papermc.paper.ban.BanListType;
@@ -35,7 +34,9 @@ import net.kyori.adventure.text.Component;
 import org.bukkit.BanList;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
+import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.event.player.AsyncPlayerPreLoginEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.jspecify.annotations.NonNull;
 import org.jetbrains.annotations.NotNull;
@@ -44,21 +45,22 @@ import javax.annotation.Nullable;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.io.File;
 
 /**
  * Implementation of the PunishmentService for managing player punishments.
  */
 public class PunishmentServiceImpl extends BaseService implements PunishmentService {
-
-    private ConfigSection config;
-
     private final List<PunishmentRecord> punishments = new ArrayList<>();
     private final AtomicLong nextId = new AtomicLong(1);
     private final Map<String, PunishmentAlertCallback> alerts = new HashMap<>();
+    private final List<Consumer<PunishmentRecord>> observers = new CopyOnWriteArrayList<>();
 
     private static final UUID SERVER_UUID = new UUID(0L, 0L);
 
@@ -77,10 +79,8 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
      */
     @Override
     public void onEnable() {
-        config = api.config().load("punishments.yml");
-
-        loadFromConfig();
-        registerWebEndpoint();
+        ensureStorage();
+        loadFromDatabase();
 
         registerAlert("warn", (type, player, record) -> {
             api.messages().info(player, "WARN_PLAYER", "reason", record.reason(), "actor", record.actorName());
@@ -113,6 +113,13 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
             }));
         });
 
+        api.events().register(AsyncPlayerPreLoginEvent.class, event -> {
+            PunishmentRecord activeBan = findActiveBan(event.getUniqueId());
+            if (activeBan != null) {
+                event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_BANNED, formatBanMessage(activeBan));
+            }
+        });
+
         // /kick <player> [duration] [reason...]
         api.commands().create("kick")
                 .description("PUNISHMENT_DESCRIPTION")
@@ -125,7 +132,7 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
                         return;
                     }
 
-                    Player target = ctx.getPlayer(1);
+                    Player target = ctx.getPlayer(0);
                     if (target == null) {
                         cmd.error(ctx.getSender(), "PLAYER_NOT_FOUND", "player", ctx.args().getFirst());
                         return;
@@ -155,7 +162,7 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
                         return;
                     }
 
-                    OfflinePlayer target = ctx.getArgAsOfflinePlayer(1);
+                    OfflinePlayer target = ctx.getArgAsOfflinePlayer(0);
                     if (target == null) {
                         cmd.error(ctx.getSender(), "PLAYER_NOT_FOUND", "player", ctx.args().getFirst());
                         return;
@@ -185,21 +192,22 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
                         return;
                     }
 
-                    OfflinePlayer target = ctx.getArgAsOfflinePlayer(1);
+                    OfflinePlayer target = ctx.getArgAsOfflinePlayer(0);
                     if(target == null) {
                         cmd.error(ctx.getSender(), "PLAYER_NOT_FOUND", "player", ctx.args().getFirst());
                         return;
                     }
 
                     int reasonIndex = 3;
+                    String durationArg = ctx.getArg(1, "");
 
-                    Duration duration = ctx.getArgAsDuration(2);
+                    Duration duration = ctx.getArgAsDuration(1);
                     if(duration == null) {
-                        if(!ctx.getArg(2).equalsIgnoreCase("perm") && !ctx.getArg(2).equalsIgnoreCase("unban")) {
+                        if(!durationArg.equalsIgnoreCase("perm") && !durationArg.equalsIgnoreCase("unban")) {
                             reasonIndex = 2;
                         }
 
-                        if(ctx.getArg(2).equalsIgnoreCase("unban")) {
+                        if(durationArg.equalsIgnoreCase("unban")) {
                             duration = Duration.ofSeconds(-1);
                             pardon = true;
                         }
@@ -209,42 +217,53 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
                     Player actor = ctx.asPlayer();
 
                     UUID targetUuid = target.getUniqueId();
-                    this.record(targetUuid, actor, duration, "ban", true, reason);
-
-                    Date expires = null;
-                    if (duration != null) {
-                        expires = Date.from(Instant.now().plus(duration));
-                    }
-
                     PlayerProfile profile = Bukkit.createProfile(
                             target.getUniqueId(),
                             target.getName()
                     );
 
                     if(pardon) {
-                        BanList<PlayerProfile> banList = Bukkit.getBanList(BanListType.PROFILE);
-
-                        if (!banList.isBanned(profile)) {
-                            cmd.error(ctx.getSender(), "PLAYER_NOT_BANNED", "player", target.getName());
-                            return;
-                        }
-
-                        banList.pardon(profile);
-                        api.messages().broadcast("BAN_EXPIRED_BROADCAST", target.getPlayer(), "reason", reason, "actor", ctx.getSenderName());
+                        pardonBan(cmd, ctx.getSender(), target, actor, reason, ctx.getSenderName());
                     } else {
+                        this.record(targetUuid, actor, duration, "ban", true, reason);
+                        Date expires = null;
+                        if (duration != null) {
+                            expires = Date.from(Instant.now().plus(duration));
+                        }
                         Bukkit.getBanList(BanListType.PROFILE)
                                 .addBan(profile, reason, expires, actor != null ? actor.getName() : "<server>");
 
                         if (target.isOnline()) {
                             Player online = target.getPlayer();
                             if (online != null) {
-                                online.kick(Component.text("You have been banned: " + reason));
+                                online.kick(Component.text(formatBanMessage(findActiveBan(targetUuid))));
                             }
                         }
 
                         String durationString = duration == null ? "permanently" : "for " + TimeUtil.formatDuration(duration.toSeconds());
-                        api.messages().broadcast("BAN_PLAYER_BROADCAST", target.getPlayer(), "reason", reason, "actor", ctx.getSenderName(), "duration", durationString);
+                        api.messages().broadcast("BAN_PLAYER_BROADCAST", target.getPlayer(), "player", target.getName(), "reason", reason, "actor", ctx.getSenderName(), "duration", durationString);
                     }
+                })
+                .register(STEMCraft.getPlugin());
+
+        api.commands().create("unban")
+                .permission("stemcraft.command.unban")
+                .usage("/unban <player> [reason]")
+                .tabCompletion("{player}", "{reason}")
+                .executor((ignored, cmd, ctx) -> {
+                    if (ctx.args().isEmpty()) {
+                        cmd.error(ctx.getSender(), cmd.getUsage());
+                        return;
+                    }
+
+                    OfflinePlayer target = ctx.getArgAsOfflinePlayer(0);
+                    if (target == null) {
+                        cmd.error(ctx.getSender(), "PLAYER_NOT_FOUND", "player", ctx.args().getFirst());
+                        return;
+                    }
+
+                    String reason = ctx.getArgsAsString(1, "Cancelled");
+                    pardonBan(cmd, ctx.getSender(), target, ctx.asPlayer(), reason, ctx.getSenderName());
                 })
                 .register(STEMCraft.getPlugin());
     }
@@ -278,6 +297,10 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
      */
     @Override
     public synchronized void record(@NotNull UUID playerUuid, @Nullable Player actor, @Nullable Duration duration, @NotNull String type, boolean alerted, @NotNull String reason) {
+        record(playerUuid, actor, duration, type, alerted, reason, true);
+    }
+
+    private synchronized void record(@NotNull UUID playerUuid, @Nullable Player actor, @Nullable Duration duration, @NotNull String type, boolean alerted, @NotNull String reason, boolean notifyObservers) {
         String playerName = PlayerUtil.name(playerUuid);
         if(playerName == null) {
             // ERROR PLAYER NOT FOUND!
@@ -302,12 +325,18 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
         );
 
         punishments.add(record);
-        writeRecordToConfig(record);
-        config.save();
+        writeRecordToDatabase(record);
+        if (notifyObservers) {
+            observers.forEach(observer -> observer.accept(record));
+        }
 
         if(!alerted) {
             alert(record);
         }
+    }
+
+    void registerObserver(@NotNull Consumer<PunishmentRecord> observer) {
+        observers.add(observer);
     }
 
     /**
@@ -361,344 +390,89 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
     }
 
     /**
-     * Load punishments from the configuration file.
+     * Load punishments from the database.
      */
-    private void loadFromConfig() {
+    private void loadFromDatabase() {
         punishments.clear();
+        long[] maxId = {0L};
 
-        ConfigSection section = config.getSection("punishments");
-        if (section == null) {
-            return;
-        }
+        api.database().queryEach(
+            "SELECT id, target_uuid, target_name, actor_uuid, actor_name, type, alerted, reason, created_at, duration_seconds " +
+                "FROM punishments ORDER BY id ASC",
+            null,
+            rs -> {
+                try {
+                    long id = rs.getLong("id");
+                    String targetUuidStr = rs.getString("target_uuid");
+                    String actorUuidStr = rs.getString("actor_uuid");
 
-        long maxId = 0;
+                    UUID targetUuid = targetUuidStr == null || targetUuidStr.isBlank() ? null : UUID.fromString(targetUuidStr);
+                    UUID actorUuid = actorUuidStr == null || actorUuidStr.isBlank() ? null : UUID.fromString(actorUuidStr);
+                    long durationRaw = rs.getLong("duration_seconds");
+                    Long durationSeconds = rs.wasNull() ? null : durationRaw;
 
-        for (String key : section.getKeys(false)) {
-            try {
-                long id = Long.parseLong(key);
-                ConfigSection pSec = section.getSection(key);
-                if (pSec == null) continue;
-
-                String targetUuidStr = pSec.getString("target.uuid");
-                UUID targetUuid = !targetUuidStr.isEmpty()
-                        ? UUID.fromString(targetUuidStr) : null;
-                String targetName = pSec.getString("target.name");
-
-                String actorUuidStr = pSec.getString("actor.uuid");
-                UUID actorUuid = !actorUuidStr.isEmpty()
-                        ? UUID.fromString(actorUuidStr) : null;
-                String actorName = pSec.getString("actor.name");
-
-                String type = pSec.getString("type");
-
-                boolean alerted = pSec.getBoolean("alerted", false);
-                String reason = pSec.getString("reason", "");
-
-                long createdAtMillis = pSec.getLong("createdAt");
-                Instant createdAt = Instant.ofEpochMilli(createdAtMillis);
-
-                Long durationSeconds = null;
-                if (pSec.contains("durationSeconds")) {
-                    durationSeconds = pSec.getLong("durationSeconds");
-                }
-
-                PunishmentRecord record = new PunishmentRecord(
+                    PunishmentRecord record = new PunishmentRecord(
                         id,
                         targetUuid,
-                        targetName,
+                        rs.getString("target_name"),
                         actorUuid,
-                        actorName,
-                        type,
-                        alerted,
-                        reason,
-                        createdAt,
+                        rs.getString("actor_name"),
+                        rs.getString("type"),
+                        rs.getInt("alerted") == 1,
+                        rs.getString("reason"),
+                        Instant.ofEpochMilli(rs.getLong("created_at")),
                         durationSeconds
-                );
+                    );
 
-                punishments.add(record);
-                if (id > maxId) {
-                    maxId = id;
+                    punishments.add(record);
+                    if (id > maxId[0]) {
+                        maxId[0] = id;
+                    }
+                } catch (Exception ex) {
+                    plugin.getLogger().warning("[PunishmentManager] Failed to load punishment row: " + ex.getMessage());
                 }
-            } catch (Exception ex) {
-                plugin.getLogger().warning("[PunishmentManager] Failed to load punishment " + key + ": " + ex.getMessage());
             }
-        }
+        );
 
-        nextId.set(maxId + 1);
+        nextId.set(maxId[0] + 1);
     }
 
     /**
-     * Write a punishment record to the configuration file.
+     * Write a punishment record to the database.
      *
      * @param record The punishment record to write.
      */
-    private void writeRecordToConfig(PunishmentRecord record) {
-        String path = "punishments." + record.id();
-
-        config.set(path + ".target.uuid",
-                record.targetUuid() != null ? record.targetUuid().toString() : null);
-        config.set(path + ".target.name", record.targetName());
-        config.set(path + ".actor.uuid",
-                record.actorUuid() != null ? record.actorUuid().toString() : null);
-        config.set(path + ".actor.name", record.actorName());
-        config.set(path + ".type", record.type());
-        config.set(path + ".alerted", record.alerted());
-        config.set(path + ".reason", record.reason());
-        config.set(path + ".createdAt", record.createdAt().toEpochMilli());
-        if (!record.permanent()) {
-            config.set(path + ".durationSeconds", record.durationSeconds());
-        } else {
-            config.set(path + ".durationSeconds", null);
-        }
-    }
-
-    /**
-     * Register a web endpoint for viewing punishments.
-     */
-    private void registerWebEndpoint() {
-        api.web().registerEndpointHandler("/punish", (method, uri, queryParams) -> {
-            // Parse URI and query string
-            java.net.URI parsed = java.net.URI.create(uri);
-            String path = parsed.getPath();           // /punish, /punish/type/ban, /punish/player/nomadjimbob
-
-            int page = 1;
-            int pageSize = 20;
-
-            String pageParam = queryParams.get("page");
-            if (pageParam != null) {
-                try {
-                    page = Integer.parseInt(pageParam);
-                    if (page < 1) {
-                        page = 1;
-                    }
-                } catch (NumberFormatException ignored) {
-                }
-            }
-
-            // Snapshot and sort punishments newest first
-            java.util.List<PunishmentRecord> all;
-            synchronized (this) {
-                all = new java.util.ArrayList<>(punishments);
-            }
-            all.sort(java.util.Comparator.comparing(PunishmentRecord::createdAt).reversed());
-
-            // Collect distinct punishment types for toolbar
-            java.util.Set<String> typeSet = all.stream()
-                    .map(PunishmentRecord::type)
-                    .filter(Objects::nonNull)
-                    .map(String::trim)
-                    .filter(s -> !s.isEmpty())
-                    .collect(java.util.stream.Collectors.toCollection(java.util.TreeSet::new));
-
-            // Routing: /punish, /punish/type/<type>, /punish/player[/<name-or-uuid>] or /punish/player?q=...
-            String[] parts = path.split("/"); // ["", "punish", ...]
-            java.util.List<PunishmentRecord> filtered = all;
-            String title;
-            String basePath;
-            boolean filteredMode = false;
-
-            if (parts.length == 2) {
-                // /punish -> all punishments
-                title = "All punishments";
-                basePath = "/punish";
-            } else if (parts.length >= 3 && "type".equalsIgnoreCase(parts[2])) {
-                if (parts.length < 4 || parts[3].isEmpty()) {
-                    return java.util.Map.of(
-                            "code", 404,
-                            "body", "<html><body><h1>404 Not Found</h1><p>Missing punishment type.</p></body></html>"
-                    );
-                }
-
-                String typeParam = parts[3];
-                String match = typeParam.trim().toLowerCase(Locale.ROOT);
-
-                filtered = all.stream()
-                        .filter(p -> p.type() != null && p.type().trim().toLowerCase(Locale.ROOT).equals(match))
-                        .toList();
-
-                title = "Punishments - type " + typeParam;
-                basePath = "/punish/type/" + typeParam;
-                filteredMode = true;
-            } else if (parts.length >= 3 && "player".equalsIgnoreCase(parts[2])) {
-                // /punish/player/<name-or-uuid> or /punish/player?q=...
-                String playerSpec;
-                if (parts.length >= 4 && !parts[3].isEmpty()) {
-                    playerSpec = parts[3];
+    private void writeRecordToDatabase(PunishmentRecord record) {
+        api.database().update(
+            "INSERT INTO punishments (id, target_uuid, target_name, actor_uuid, actor_name, type, alerted, reason, created_at, duration_seconds) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+                "ON CONFLICT(id) DO UPDATE SET " +
+                "target_uuid = excluded.target_uuid, " +
+                "target_name = excluded.target_name, " +
+                "actor_uuid = excluded.actor_uuid, " +
+                "actor_name = excluded.actor_name, " +
+                "type = excluded.type, " +
+                "alerted = excluded.alerted, " +
+                "reason = excluded.reason, " +
+                "created_at = excluded.created_at, " +
+                "duration_seconds = excluded.duration_seconds",
+            ps -> {
+                ps.setLong(1, record.id());
+                ps.setString(2, record.targetUuid() != null ? record.targetUuid().toString() : null);
+                ps.setString(3, record.targetName());
+                ps.setString(4, record.actorUuid() != null ? record.actorUuid().toString() : null);
+                ps.setString(5, record.actorName());
+                ps.setString(6, record.type());
+                ps.setInt(7, record.alerted() ? 1 : 0);
+                ps.setString(8, record.reason());
+                ps.setLong(9, record.createdAt().toEpochMilli());
+                if (record.permanent()) {
+                    ps.setNull(10, java.sql.Types.BIGINT);
                 } else {
-                    playerSpec = queryParams.get("q");
+                    ps.setLong(10, record.durationSeconds());
                 }
-
-                if (playerSpec == null || playerSpec.isBlank()) {
-                    return java.util.Map.of(
-                            "responseCode", 404,
-                            "body", "<html><body><h1>404 Not Found</h1><p>Missing player name or UUID.</p></body></html>"
-                    );
-                }
-
-                String rawSpec = playerSpec.trim();
-
-                // Try UUID first
-                UUID playerUuid = null;
-                try {
-                    playerUuid = UUID.fromString(rawSpec);
-                } catch (IllegalArgumentException ignored) {
-                }
-
-                if (playerUuid != null) {
-                    UUID finalPlayerUuid = playerUuid;
-                    filtered = all.stream()
-                            .filter(p -> finalPlayerUuid.equals(p.targetUuid()))
-                            .toList();
-                } else {
-                    String lowerName = rawSpec.toLowerCase(Locale.ROOT);
-                    filtered = all.stream()
-                            .filter(p -> p.targetName() != null && p.targetName().toLowerCase(Locale.ROOT).equals(lowerName))
-                            .toList();
-                }
-
-                title = "Punishments - player " + WebService.escapeHtml(rawSpec);
-                basePath = "/punish/player/" + URLEncoder.encode(rawSpec, StandardCharsets.UTF_8);
-                filteredMode = true;
-            } else {
-                return java.util.Map.of(
-                        "responseCode", 404,
-                        "body", "<html><body><h1>404 Not Found</h1><p>Unknown punish route: "
-                                + WebService.escapeHtml(path) + "</p></body></html>"
-                );
             }
-
-            int total = filtered.size();
-            int totalPages = (int) Math.ceil(total / (double) pageSize);
-            if (totalPages == 0) {
-                totalPages = 1;
-            }
-            if (page > totalPages) {
-                page = totalPages;
-            }
-
-            int from = (page - 1) * pageSize;
-            int to = Math.min(from + pageSize, total);
-            java.util.List<PunishmentRecord> pageData =
-                    total == 0 || from >= total ? java.util.List.of() : filtered.subList(from, to);
-
-            StringBuilder sb = new StringBuilder();
-            sb.append("<html><head><title>")
-                    .append(WebService.escapeHtml(title))
-                    .append("</title><style>")
-                    .append("body{font-family:Arial,Helvetica,sans-serif;font-size:13px;margin:10px;}")
-                    .append("table{border-collapse:collapse;width:100%;}")
-                    .append("th,td{border:1px solid #ccc;padding:4px;text-align:left;}")
-                    .append("th{background:#eee;}")
-                    .append("small{color:#777;}")
-                    .append("a{margin:0 4px;text-decoration:none;}")
-                    .append(".toolbar{margin-bottom:10px;padding:6px 8px;background:#f5f5f5;border:1px solid #ddd;}")
-                    .append(".toolbar form{display:inline-block;margin-right:16px;}")
-                    .append("</style></head><body>");
-
-            // toolbar with player search, type list, and clear link when filtered
-            sb.append("<div class=\"toolbar\">");
-            sb.append("<form method=\"GET\" action=\"/punish/player\" accept-charset=\"UTF-8\">");
-            sb.append("Player: <input type=\"text\" name=\"q\" size=\"16\" /> ");
-            sb.append("<button type=\"submit\">Search</button>");
-            sb.append("</form>");
-
-            sb.append("<span>Types: <a href=\"/punish\">All</a>");
-            for (String t : typeSet) {
-                String link = "/punish/type/" + URLEncoder.encode(t, StandardCharsets.UTF_8);
-                sb.append(" | <a href=\"").append(link).append("\">")
-                        .append(WebService.escapeHtml(t))
-                        .append("</a>");
-            }
-            sb.append("</span>");
-
-            if (filteredMode) {
-                sb.append("<span style=\"margin-left:16px;\"><a href=\"/punish\">Clear</a></span>");
-            }
-
-            sb.append("</div>");
-
-            sb.append("<h1>").append(WebService.escapeHtml(title)).append("</h1>");
-            sb.append("<p>Total ").append(total).append(", page ").append(page)
-                    .append(" of ").append(totalPages).append("</p>");
-
-            sb.append("<table>");
-            sb.append("<tr>")
-                    .append("<th>ID</th>")
-                    .append("<th>Date</th>")
-                    .append("<th>Target</th>")
-                    .append("<th>Actor</th>")
-                    .append("<th>Type</th>")
-                    .append("<th>Duration</th>")
-                    .append("<th>Reason</th>")
-                    .append("</tr>");
-
-            for (PunishmentRecord p : pageData) {
-                sb.append("<tr>");
-
-                sb.append("<td>").append(p.id()).append("</td>");
-
-                sb.append("<td>").append(TimeUtil.toFriendlyTime(p.createdAt())).append("</td>");
-
-                String playerLabel = p.targetName() != null ? p.targetName() : "Unknown";
-                String playerSpec = p.targetUuid() != null ? p.targetUuid().toString() : playerLabel;
-                String playerHref = "/punish/player/" + URLEncoder.encode(playerSpec, StandardCharsets.UTF_8);
-
-                sb.append("<td>")
-                        .append("<a href=\"")
-                        .append(playerHref)
-                        .append("\">")
-                        .append(WebService.escapeHtml(playerLabel))
-                        .append("</a>");
-
-                if (p.targetUuid() != null) {
-                    sb.append(" <small>(").append(p.targetUuid()).append(")</small>");
-                }
-
-                sb.append("</td>");
-
-                if(p.actorUuid().equals(SERVER_UUID)) {
-                    sb.append("<td>")
-                            .append(WebService.escapeHtml("SERVER"))
-                            .append("</td>");
-                } else {
-                    sb.append("<td>")
-                            .append(WebService.escapeHtml(p.actorName())).append(" <small>(").append(p.actorUuid()).append(")</small>")
-                            .append("</td>");
-                }
-
-                sb.append("<td>").append(p.type()).append("</td>");
-
-                if (p.permanent()) {
-                    sb.append("<td>PERMANENT</td>");
-                } else if(p.cancelled()) {
-                    sb.append("<td>CANCELLED</td>");
-                } else {
-                    sb.append("<td>").append(TimeUtil.formatDuration(p.durationSeconds())).append("</td>");
-                }
-
-                sb.append("<td>").append(WebService.escapeHtml(p.reason())).append("</td>");
-
-                sb.append("</tr>");
-            }
-            sb.append("</table>");
-
-            // pager
-            sb.append("<p>");
-            if (page > 1) {
-                sb.append("<a href=\"").append(basePath).append("?page=").append(page - 1)
-                        .append("\">&laquo; Prev</a>");
-            }
-            if (page < totalPages) {
-                sb.append("<a href=\"").append(basePath).append("?page=").append(page + 1)
-                        .append("\">Next &raquo;</a>");
-            }
-            sb.append("</p>");
-
-            sb.append("</body></html>");
-
-            // Return string so WebManager treats it as HTTP 200
-            return sb.toString();
-        });
+        );
     }
 
     /**
@@ -742,9 +516,172 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
             boolean result = alerts.get(record.type()).run(record.type(), player, record);
             if(result) {
                 record.setAlerted();
-                writeRecordToConfig(record);
-                config.save();
+                writeRecordToDatabase(record);
             }
         }
+    }
+
+    private void ensureStorage() {
+        api.database().execute(
+            "CREATE TABLE IF NOT EXISTS punishments (" +
+            "id INTEGER PRIMARY KEY," +
+            "target_uuid TEXT," +
+            "target_name TEXT," +
+            "actor_uuid TEXT," +
+            "actor_name TEXT," +
+            "type TEXT NOT NULL," +
+            "alerted INTEGER NOT NULL DEFAULT 0," +
+            "reason TEXT," +
+            "created_at INTEGER NOT NULL," +
+            "duration_seconds INTEGER" +
+            ");"
+        );
+        api.database().execute("CREATE INDEX IF NOT EXISTS punishments_target_uuid ON punishments(target_uuid);");
+        api.database().execute("CREATE INDEX IF NOT EXISTS punishments_type ON punishments(type);");
+
+        if (api.database().migrationVersion("punishments-state") >= 1) {
+            return;
+        }
+
+        File legacyFile = new File(plugin.getDataFolder(), "punishments.yml");
+        ConfigFile legacy = legacyFile.exists() ? api.config().load(legacyFile, false) : null;
+        if (legacy != null && legacy.isSection("punishments")) {
+            var section = legacy.getSection("punishments", false);
+            if (section != null) {
+                for (String key : section.getKeys(false)) {
+                    try {
+                        long id = Long.parseLong(key);
+                        var pSec = section.getSection(key, false);
+                        if (pSec == null) continue;
+
+                        String targetUuidStr = pSec.getString("target.uuid");
+                        String actorUuidStr = pSec.getString("actor.uuid");
+                        Long durationSeconds = pSec.contains("durationSeconds") ? pSec.getLong("durationSeconds") : null;
+
+                        PunishmentRecord record = new PunishmentRecord(
+                            id,
+                            targetUuidStr == null || targetUuidStr.isBlank() ? null : UUID.fromString(targetUuidStr),
+                            pSec.getString("target.name"),
+                            actorUuidStr == null || actorUuidStr.isBlank() ? null : UUID.fromString(actorUuidStr),
+                            pSec.getString("actor.name"),
+                            pSec.getString("type"),
+                            pSec.getBoolean("alerted", false),
+                            pSec.getString("reason", ""),
+                            Instant.ofEpochMilli(pSec.getLong("createdAt")),
+                            durationSeconds
+                        );
+                        writeRecordToDatabase(record);
+                    } catch (Exception ignored) {
+                        // ignored
+                    }
+                }
+            }
+        }
+
+        api.database().setMigrationVersion("punishments-state", 1);
+    }
+
+    private void pardonBan(dev.stemcraft.api.command.Command cmd, CommandSender sender, OfflinePlayer target, @Nullable Player actor, String reason, String actorName) {
+        UUID targetUuid = target.getUniqueId();
+        PlayerProfile profile = Bukkit.createProfile(targetUuid, target.getName());
+        BanList<PlayerProfile> banList = Bukkit.getBanList(BanListType.PROFILE);
+        boolean bridgeActiveBan = plugin.webhookBridge() != null
+            && plugin.webhookBridge().hasActivePenalty(targetUuid, target.getName(), "ban");
+
+        if (findActiveBan(targetUuid) == null && !banList.isBanned(profile) && !bridgeActiveBan) {
+            cmd.error(sender, "PLAYER_NOT_BANNED", "player", target.getName());
+            return;
+        }
+
+        this.record(targetUuid, actor, Duration.ofSeconds(-1), "ban", true, reason);
+        banList.pardon(profile);
+        api.messages().broadcast("BAN_EXPIRED_BROADCAST", target.getPlayer(), "player", target.getName(), "reason", reason, "actor", actorName);
+    }
+
+    void syncLiftBan(UUID targetUuid, @Nullable String reason) {
+        PunishmentRecord activeBan = findActiveBan(targetUuid);
+        if (activeBan == null) {
+            return;
+        }
+
+        this.record(targetUuid, null, Duration.ofSeconds(-1), "ban", true, reason == null || reason.isBlank() ? "Lifted by sync" : reason, false);
+        PlayerProfile profile = Bukkit.createProfile(targetUuid, activeBan.targetName());
+        Bukkit.getBanList(BanListType.PROFILE).pardon(profile);
+    }
+
+    void syncReconcileActiveBans(Set<UUID> activeBanUuids, @Nullable String reason) {
+        Set<UUID> staleLocalBans = new LinkedHashSet<>();
+        synchronized (this) {
+            for (PunishmentRecord record : punishments) {
+                if (!"ban".equalsIgnoreCase(record.type())) {
+                    continue;
+                }
+                UUID targetUuid = record.targetUuid();
+                if (targetUuid == null) {
+                    continue;
+                }
+                PunishmentRecord activeBan = findActiveBan(targetUuid);
+                if (activeBan == null || activeBan.id() != record.id()) {
+                    continue;
+                }
+                if (!activeBanUuids.contains(targetUuid)) {
+                    staleLocalBans.add(targetUuid);
+                }
+            }
+        }
+
+        for (UUID uuid : staleLocalBans) {
+            syncLiftBan(uuid, reason);
+        }
+    }
+
+    synchronized PunishmentRecord findActiveBan(UUID playerUuid) {
+        PunishmentRecord latest = null;
+        for (PunishmentRecord record : punishments) {
+            if (!playerUuid.equals(record.targetUuid())) {
+                continue;
+            }
+            if (!"ban".equalsIgnoreCase(record.type())) {
+                continue;
+            }
+            if (latest == null || record.createdAt().isAfter(latest.createdAt())) {
+                latest = record;
+            }
+        }
+
+        if (latest == null || latest.cancelled()) {
+            return null;
+        }
+        if (latest.permanent()) {
+            return latest;
+        }
+
+        Instant expiresAt = latest.expiresAt();
+        if (expiresAt == null || !expiresAt.isAfter(Instant.now())) {
+            return null;
+        }
+
+        return latest;
+    }
+
+    String formatBanMessage(PunishmentRecord record) {
+        if (record == null) {
+            return "You have been banned.";
+        }
+
+        StringBuilder message = new StringBuilder("You are banned from this server.");
+        if (record.reason() != null && !record.reason().isBlank()) {
+            message.append("\nReason: ").append(record.reason());
+        }
+        if (!record.permanent() && record.durationSeconds() != null && record.durationSeconds() > 0L) {
+            Instant expiresAt = record.expiresAt();
+            if (expiresAt != null) {
+                long remainingSeconds = Duration.between(Instant.now(), expiresAt).getSeconds();
+                if (remainingSeconds > 0L) {
+                    message.append("\nRemaining: ").append(TimeUtil.formatDuration(remainingSeconds));
+                }
+            }
+        }
+        return message.toString();
     }
 }
