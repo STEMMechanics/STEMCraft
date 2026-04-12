@@ -36,6 +36,7 @@ import org.bukkit.event.world.PortalCreateEvent;
  * Feature that restricts actions for players in creative mode without proper permission.
  */
 public class RestrictCreative extends BaseFeature {
+    private static final long PICKUP_WARNING_DEBOUNCE_TICKS = 30L;
     private final String PERMISSION_INTERACT = "stemcraft.creative.override.interact";
     private final String PERMISSION_INVENTORY = "stemcraft.creative.override.inventory";
     private final String PERMISSION_DROP_ITEMS_ON_DEATH = "stemcraft.creative.override.drop_items_on_death";
@@ -96,7 +97,11 @@ public class RestrictCreative extends BaseFeature {
         api.events().register(EntityPickupItemEvent.class, event -> {
             if (event.getEntity() instanceof Player player) {
                 if (player.getGameMode() == GameMode.CREATIVE && !player.hasPermission(PERMISSION_PICKUP_ITEMS)) {
-                    api.messages().error(player, "RESTRICT_CREATIVE_NO_PICKUPS");
+                    api.tasks().debounce(
+                            "restrict-creative:pickup-warning:" + player.getUniqueId(),
+                            PICKUP_WARNING_DEBOUNCE_TICKS,
+                            () -> api.messages().error(player, "RESTRICT_CREATIVE_NO_PICKUPS")
+                    );
                     event.setCancelled(true);
                 }
             }
