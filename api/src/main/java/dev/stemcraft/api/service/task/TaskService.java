@@ -119,6 +119,16 @@ public interface TaskService {
     void runOnceDelay(@NotNull String id, long delay, @NotNull Runnable task);
 
     /**
+     * Run a task immediately for a specific ID, then suppress repeated calls for the same ID
+     * until the debounce period has elapsed.
+     *
+     * @param id The unique identifier for the debounce window.
+     * @param period The debounce period in ticks.
+     * @param task The task to run immediately when the debounce window opens.
+     */
+    void debounce(@NotNull String id, long period, @NotNull Runnable task);
+
+    /**
      * Cancel a scheduled task by its ID.
      *
      * @param id The unique identifier of the task to cancel.

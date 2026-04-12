@@ -44,10 +44,12 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class TaskServiceImpl extends BaseService implements TaskService {
     private final static String DATA_FILE_NAME = "task-data.yml";
+    private static final String DEBOUNCE_TASK_PREFIX = "task-service:debounce:";
     private File dataFile;
     private final Map<String, TaskCallback> persistentCallbacks = new HashMap<>();
     private final Map<String, BukkitTask> tasks = new ConcurrentHashMap<>();
     private final Map<String, Long> tasksRunAt = new ConcurrentHashMap<>();
+    private final Map<String, Long> debounceUntil = new ConcurrentHashMap<>();
     private boolean storageReady = false;
 
     /**
@@ -253,6 +255,33 @@ public class TaskServiceImpl extends BaseService implements TaskService {
         tasksRunAt.put(id, System.currentTimeMillis() + (delay * 50L));
     }
 
+    /**
+     * Runs a task immediately and suppresses repeated calls with the same id until
+     * the debounce period has elapsed.
+     *
+     * @param id The unique debounce id.
+     * @param period The debounce period in ticks.
+     * @param task The task to run.
+     */
+    @Override
+    public void debounce(@NotNull String id, long period, @NotNull Runnable task) {
+        if (period <= 0L || id.isEmpty()) {
+            task.run();
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        Long activeUntil = debounceUntil.get(id);
+        if (activeUntil != null && activeUntil > now) {
+            return;
+        }
+
+        long expiresAt = now + (period * 50L);
+        debounceUntil.put(id, expiresAt);
+        runOnceDelay(debounceTaskId(id), period, () -> clearDebounce(id, expiresAt));
+        task.run();
+    }
+
 
     /**
      * Cancels a scheduled task by id.
@@ -284,8 +313,18 @@ public class TaskServiceImpl extends BaseService implements TaskService {
                     idList.add(item);
                 }
             }
+
+            for (String debounceId : debounceUntil.keySet()) {
+                if (debounceId.startsWith(prefix) && debounceId.endsWith(suffix)) {
+                    idList.add(debounceId);
+                    idList.add(debounceTaskId(debounceId));
+                }
+            }
         } else {
             idList.add(id);
+            if (debounceUntil.containsKey(id)) {
+                idList.add(debounceTaskId(id));
+            }
         }
 
         for(String item : idList) {
@@ -295,6 +334,11 @@ public class TaskServiceImpl extends BaseService implements TaskService {
 
             BukkitTask t = tasks.remove(item);
             tasksRunAt.remove(item);
+            if (item.startsWith(DEBOUNCE_TASK_PREFIX)) {
+                debounceUntil.remove(item.substring(DEBOUNCE_TASK_PREFIX.length()));
+            } else {
+                debounceUntil.remove(item);
+            }
 
             if (t != null) t.cancel();
         }
@@ -386,6 +430,8 @@ public class TaskServiceImpl extends BaseService implements TaskService {
             if (task != null) task.cancel();
         }
         tasks.clear();
+        tasksRunAt.clear();
+        debounceUntil.clear();
     }
 
     /**
@@ -418,6 +464,14 @@ public class TaskServiceImpl extends BaseService implements TaskService {
 
             retry0(remaining - 1, task, callback, intervalDelay, startDelay, false);
         }, first ? startDelay : intervalDelay);
+    }
+
+    private void clearDebounce(String id, long expectedExpiresAt) {
+        debounceUntil.computeIfPresent(id, (key, currentExpiresAt) -> currentExpiresAt.equals(expectedExpiresAt) ? null : currentExpiresAt);
+    }
+
+    private String debounceTaskId(String id) {
+        return DEBOUNCE_TASK_PREFIX + id;
     }
 
     /**
