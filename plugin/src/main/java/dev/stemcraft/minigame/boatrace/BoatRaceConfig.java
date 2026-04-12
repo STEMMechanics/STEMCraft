@@ -14,7 +14,10 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 public class BoatRaceConfig {
     private final STEMCraftAPI api;
@@ -49,9 +52,37 @@ public class BoatRaceConfig {
         SCRegion finishRegion = loadRegion(section, world, arenaId, "finish", "Finish");
         List<SCRegion> stages = loadRegions(section, world, arenaId, "stages", "Stage");
         List<Location> grid = loadLocations(section, world, arenaId, "starting-grid", true);
-        int minPlayers = section.getInt("min-players", 2);
-        int maxPlayers = section.getInt("max-players", Math.max(2, grid.size()));
+        int minPlayers = section.getInt("min-players", 1);
+        int maxPlayers = section.getInt("max-players", Math.max(1, grid.size()));
         String name = section.getString("name", StringUtil.beautify(arenaId));
+        Map<UUID, BoatRaceArenaRecord.BestTime> bestTimes = new LinkedHashMap<>();
+        ConfigSection records = section.getSection("records", false);
+        if (records != null) {
+            for (String uuidText : records.getKeys(false)) {
+                UUID uuid;
+                try {
+                    uuid = UUID.fromString(uuidText);
+                } catch (IllegalArgumentException exception) {
+                    continue;
+                }
+
+                ConfigSection recordSection = records.getSection(uuidText, false);
+                if (recordSection == null) {
+                    continue;
+                }
+
+                long timeMillis = recordSection.getLong("time", -1L);
+                if (timeMillis < 0L) {
+                    continue;
+                }
+
+                bestTimes.put(uuid, new BoatRaceArenaRecord.BestTime(
+                    uuid,
+                    recordSection.getString("name", "Unknown"),
+                    timeMillis
+                ));
+            }
+        }
 
         return new BoatRaceArenaRecord(
             arenaId,
@@ -65,7 +96,8 @@ public class BoatRaceConfig {
             stages,
             grid,
             minPlayers,
-            maxPlayers
+            maxPlayers,
+            bestTimes
         );
     }
 
@@ -85,6 +117,12 @@ public class BoatRaceConfig {
         arenaConfig.set("starting-grid", serializeGridLocations(startingGrid(arena), arena.id(), "starting-grid"));
         arenaConfig.set("min-players", arena.getMinPlayers());
         arenaConfig.set("max-players", arena.getMaxPlayers());
+        ConfigSection records = arenaConfig.createSection("records", true);
+        for (BoatRaceArenaRecord.BestTime bestTime : bestTimes(arena).values()) {
+            ConfigSection record = records.createSection(bestTime.playerId().toString(), true);
+            record.set("name", bestTime.playerName());
+            record.set("time", bestTime.timeMillis());
+        }
 
         config.save();
     }
@@ -134,6 +172,11 @@ public class BoatRaceConfig {
     @SuppressWarnings("unchecked")
     private List<Location> startingGrid(@NotNull MiniGameArena arena) {
         return arena.getOrCreate("startingGrid", List.class, ArrayList::new);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<UUID, BoatRaceArenaRecord.BestTime> bestTimes(@NotNull MiniGameArena arena) {
+        return arena.getOrCreate("bestTimes", Map.class, LinkedHashMap::new);
     }
 
     private void validateArenaForSave(@NotNull MiniGameArena arena) {

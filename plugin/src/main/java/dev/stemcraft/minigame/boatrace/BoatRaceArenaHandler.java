@@ -70,11 +70,11 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         if (startingGrid.isEmpty()) {
             result.addError("Starting grid locations are not defined.", "startingGrid");
         }
-        if (arena.getMinPlayers() < 2) {
-            result.addError("Boat Race arenas require at least 2 minimum players.", "minPlayers");
+        if (arena.getMinPlayers() < 1) {
+            result.addError("Boat Race arenas require at least 1 minimum player.", "minPlayers");
         }
-        if (arena.getMaxPlayers() < 2) {
-            result.addError("Boat Race arenas require at least 2 maximum players.", "maxPlayers");
+        if (arena.getMaxPlayers() < 1) {
+            result.addError("Boat Race arenas require at least 1 maximum player.", "maxPlayers");
         }
         if (!startingGrid.isEmpty() && arena.getMaxPlayers() > startingGrid.size()) {
             result.addError("Max players exceeds configured starting grid slots.", "maxPlayers");
@@ -412,6 +412,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
     }
 
     private void prepareRunningState(@NotNull MiniGameArena arena) {
+        boatRace.markRaceStarted(arena);
         for (Player player : arena.getPlayers()) {
             player.setGameMode(GameMode.ADVENTURE);
             player.setHealth(Math.min(player.getMaxHealth(), 20.0d));
@@ -434,6 +435,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         boatRace.stageProgress(arena).clear();
         boatRace.assignedGridSlots(arena).clear();
         boatRace.checkpointLocations(arena).clear();
+        boatRace.clearRaceTimer(arena);
         boatRace.setWinner(arena, null);
     }
 
@@ -466,6 +468,22 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
     private void finishRace(@NotNull MiniGameArena arena, @NotNull Player winner) {
         if (arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
             return;
+        }
+
+        long startedAt = boatRace.raceStartMillis(arena);
+        long durationMillis = startedAt <= 0L ? 0L : Math.max(0L, System.currentTimeMillis() - startedAt);
+        BoatRaceMiniGame.FinishRecord finishRecord = boatRace.recordFinish(arena, winner, durationMillis);
+        if (finishRecord.durationMillis() > 0L) {
+            if (finishRecord.arenaBest()) {
+                arena.success(winner, "Finished in " + boatRace.formatMillis(finishRecord.durationMillis()) + ". New arena record!");
+            } else if (finishRecord.personalBest()) {
+                arena.success(winner, "Finished in " + boatRace.formatMillis(finishRecord.durationMillis()) + ". New personal best!");
+            } else {
+                String personalBest = finishRecord.previousBestMillis() > 0L
+                    ? boatRace.formatMillis(finishRecord.previousBestMillis())
+                    : "-";
+                arena.success(winner, "Finished in " + boatRace.formatMillis(finishRecord.durationMillis()) + ". Personal best: " + personalBest);
+            }
         }
 
         boatRace.setWinner(arena, winner);

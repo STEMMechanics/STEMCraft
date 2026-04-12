@@ -204,6 +204,11 @@ public class BoatRaceCommand {
         ctx.info(" - Spectator: " + formatLocation(arena.getSpectatorSpawn()));
         ctx.info(" - Arena region: " + formatRegion(arena.get("arenaRegion", SCRegion.class)));
         ctx.info(" - Finish region: " + formatRegion(arena.get("finishRegion", SCRegion.class)));
+        if (boatRace.arenaBestMillis(arena) > 0L) {
+            ctx.info(" - Record: " + boatRace.formatMillis(boatRace.arenaBestMillis(arena)) + " by " + boatRace.arenaBestHolder(arena));
+        } else {
+            ctx.info(" - Record: none");
+        }
         ctx.info(" - Starting grid slots: " + boatRace.startingGrid(arena).size());
         for (int i = 0; i < boatRace.startingGrid(arena).size(); i++) {
             ctx.info("   - Grid " + (i + 1) + ": " + formatLocation(boatRace.startingGrid(arena).get(i)));
@@ -476,7 +481,7 @@ public class BoatRaceCommand {
             }
             case "minplayers" -> {
                 ctx.checkArgsSizeAtLeast(4);
-                int minPlayers = ctx.getArgAsInt(3, 2, 1, null);
+                int minPlayers = ctx.getArgAsInt(3, 1, 1, null);
                 arena.setMinPlayers(minPlayers);
                 ctx.success("Minimum players set to " + arena.getMinPlayers() + " for arena '" + arena.id() + "'.");
             }

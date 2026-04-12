@@ -8,10 +8,12 @@ import dev.stemcraft.api.minigame.MiniGame;
 import dev.stemcraft.api.minigame.MiniGameArena;
 import dev.stemcraft.api.minigame.MiniGamePlayer;
 import dev.stemcraft.api.model.SCRegion;
+import dev.stemcraft.api.service.hologram.HologramTypeHandler;
 import dev.stemcraft.api.util.StringUtil;
 import dev.stemcraft.exception.MiniGameInvalidArenaConfigException;
 import dev.stemcraft.minigame.BaseMiniGame;
 import dev.stemcraft.minigame.MiniGameHudConfigSupport;
+import dev.stemcraft.minigame.TimedRecordLeaderboard;
 import lombok.Getter;
 import lombok.experimental.Accessors;
 import org.bukkit.Color;
@@ -31,6 +33,7 @@ import java.util.UUID;
 
 public class ParkourMiniGame extends BaseMiniGame {
     private static final int DEFAULT_CAPACITY = 512;
+    private static final String RECORD_HOLOGRAM_TYPE = "parkour_records";
     private static final String RUN_START_MILLIS_KEY = "runStartMillis";
     private static final String LAST_RUN_MILLIS_KEY = "lastRunMillis";
     private static final String RUN_ARMED_KEY = "runArmed";
@@ -71,9 +74,9 @@ public class ParkourMiniGame extends BaseMiniGame {
         configFile.setAutoSave(true);
         config.onEnable(configFile);
         MiniGameHudConfigSupport.apply(minigame, configFile, defaultHudDefinitions());
-
-        new ParkourCommand(api, this).onEnable();
         loadArenas();
+        registerRecordHolograms();
+        new ParkourCommand(api, this).onEnable();
     }
 
     private @NotNull Map<MiniGameArena.ArenaStatus, MiniGameHudConfigSupport.HudDefinition> defaultHudDefinitions() {
@@ -117,10 +120,12 @@ public class ParkourMiniGame extends BaseMiniGame {
             minigame.removeArena(arenaId);
         }
         config.deleteArena(arenaId);
+        api.holograms().delete(RECORD_HOLOGRAM_TYPE, arenaId);
     }
 
     public void saveArena(@NotNull MiniGameArena arena) {
         config.saveArena(arena);
+        api.holograms().update(RECORD_HOLOGRAM_TYPE, arena.id());
     }
 
     public void persistArenaEnabled(@NotNull MiniGameArena arena, boolean enabled) {
@@ -140,6 +145,7 @@ public class ParkourMiniGame extends BaseMiniGame {
         MiniGameHudConfigSupport.apply(minigame, configFile, defaultHudDefinitions());
         unloadArenas(minigame);
         loadArenas();
+        api.holograms().update(RECORD_HOLOGRAM_TYPE, null);
         return true;
     }
 
@@ -334,23 +340,7 @@ public class ParkourMiniGame extends BaseMiniGame {
     }
 
     public String formatMillis(long durationMillis) {
-        if (durationMillis <= 0L) {
-            return "-";
-        }
-
-        long totalSeconds = durationMillis / 1000L;
-        if (totalSeconds < 60L) {
-            long millis = durationMillis % 1000L;
-            return String.format(Locale.ROOT, "%d.%03ds", totalSeconds, millis);
-        }
-
-        long hours = totalSeconds / 3600L;
-        long minutes = (totalSeconds % 3600L) / 60L;
-        long seconds = totalSeconds % 60L;
-        if (hours > 0L) {
-            return String.format(Locale.ROOT, "%dh %dm %ds", hours, minutes, seconds);
-        }
-        return String.format(Locale.ROOT, "%dm %ds", minutes, seconds);
+        return TimedRecordLeaderboard.formatMillis(durationMillis);
     }
 
     public String formatSeconds(long durationMillis) {
@@ -391,6 +381,36 @@ public class ParkourMiniGame extends BaseMiniGame {
         return bestTimes(arena).values().stream()
             .min(java.util.Comparator.comparingLong(ParkourArenaRecord.BestTime::timeMillis))
             .orElse(null);
+    }
+
+    private void registerRecordHolograms() {
+        api.holograms().registerType(RECORD_HOLOGRAM_TYPE, new HologramTypeHandler() {
+            @Override
+            public List<String> list(@NotNull String type) {
+                return minigame.arenas().stream()
+                    .map(MiniGameArena::id)
+                    .sorted(String.CASE_INSENSITIVE_ORDER)
+                    .toList();
+            }
+
+            @Override
+            public @NotNull List<String> lines(@NotNull String type, @NotNull String context, int id, @NotNull List<String> data) {
+                return renderRecordHologram(context, data);
+            }
+        });
+    }
+
+    private @NotNull List<String> renderRecordHologram(@NotNull String arenaId, @NotNull List<String> data) {
+        MiniGameArena arena = minigame.arena(arenaId);
+        if (arena == null) {
+            return List.of("<red>Unknown Parkour arena:</red> <yellow>" + arenaId + "</yellow>");
+        }
+
+        List<TimedRecordLeaderboard.Entry> entries = bestTimes(arena).values().stream()
+            .map(bestTime -> new TimedRecordLeaderboard.Entry(bestTime.playerName(), bestTime.timeMillis()))
+            .toList();
+
+        return TimedRecordLeaderboard.render("<gold>" + arena.getName() + " Records</gold>", data, entries);
     }
 
     private void createPlaceholderArena(@NotNull String arenaId, @NotNull ConfigSection arenaSection, @NotNull String error) {

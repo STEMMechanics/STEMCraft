@@ -8,10 +8,12 @@ import dev.stemcraft.api.minigame.MiniGame;
 import dev.stemcraft.api.minigame.MiniGameArena;
 import dev.stemcraft.api.minigame.MiniGamePlayer;
 import dev.stemcraft.api.model.SCRegion;
+import dev.stemcraft.api.service.hologram.HologramTypeHandler;
 import dev.stemcraft.api.util.StringUtil;
 import dev.stemcraft.exception.MiniGameInvalidArenaConfigException;
 import dev.stemcraft.minigame.BaseMiniGame;
 import dev.stemcraft.minigame.MiniGameHudConfigSupport;
+import dev.stemcraft.minigame.TimedRecordLeaderboard;
 import lombok.Getter;
 import lombok.experimental.Accessors;
 import org.bukkit.Location;
@@ -30,6 +32,8 @@ import java.util.UUID;
 
 public class BoatRaceMiniGame extends BaseMiniGame {
     private static final int HUD_LINE_HOLD_UPDATES = 3;
+    private static final String RECORD_HOLOGRAM_TYPE = "boatrace_records";
+    private static final String RACE_START_MILLIS_KEY = "raceStartMillis";
 
     @Getter
     @Accessors(fluent = true)
@@ -55,7 +59,10 @@ public class BoatRaceMiniGame extends BaseMiniGame {
         minigame = createMiniGame(namespace, handler)
             .registerArenaPlaceholder("leader", (arena, team, player) -> arena == null ? "-" : leaderName(arena))
             .registerArenaPlaceholder("winner", (arena, team, player) -> arena == null ? "-" : winnerName(arena))
+            .registerArenaPlaceholder("record-time", (arena, team, player) -> arena == null ? "-" : formatMillis(arenaBestMillis(arena)))
+            .registerArenaPlaceholder("record-holder", (arena, team, player) -> arena == null ? "-" : arenaBestHolder(arena))
             .registerArenaPlaceholder("stage-count", (arena, team, player) -> arena == null ? "0" : Integer.toString(stageCount(arena)))
+            .registerPlayerPlaceholder("best-time", (arena, team, player) -> player == null ? "-" : formatMillis(bestTimeMillis(player)))
             .registerPlayerPlaceholder("place", (arena, team, player) -> player == null ? "-" : placeText(player))
             .registerPlayerPlaceholder("progress", (arena, team, player) -> player == null ? "0/0" : progressText(player))
             .registerPlayerPlaceholder("next-target", (arena, team, player) -> player == null ? "-" : nextTargetLabel(player))
@@ -69,9 +76,9 @@ public class BoatRaceMiniGame extends BaseMiniGame {
         configFile.setAutoSave(true);
         config.onEnable(configFile);
         MiniGameHudConfigSupport.apply(minigame, configFile, defaultHudDefinitions());
-
-        new BoatRaceCommand(api, this).onEnable();
         loadArenas();
+        registerRecordHolograms();
+        new BoatRaceCommand(api, this).onEnable();
     }
 
     private @NotNull Map<MiniGameArena.ArenaStatus, MiniGameHudConfigSupport.HudDefinition> defaultHudDefinitions() {
@@ -79,13 +86,16 @@ public class BoatRaceMiniGame extends BaseMiniGame {
         definitions.put(MiniGameArena.ArenaStatus.WAITING, new MiniGameHudConfigSupport.HudDefinition(
             List.of(
                 "<gradient:#06b6d4:#3b82f6><bold>{arena:name}</bold></gradient>",
-                ":info_blue: <aqua>Waiting for racers</aqua> <dark_gray>•</dark_gray> <green>{arena:joined-players}</green>/<green>{arena:max-players}</green>"
+                ":info_blue: <aqua>Waiting for racers</aqua> <dark_gray>•</dark_gray> <green>{arena:joined-players}</green>/<green>{arena:max-players}</green>",
+                ":clock: <gray>Record</gray> <gold>{arena:record-time}</gold> <dark_gray>•</dark_gray> <gray>Holder</gray> <aqua>{arena:record-holder}</aqua>"
             ),
             List.of(
                 "<gradient:#06b6d4:#3b82f6><bold>{arena:name}</bold></gradient>",
                 "",
                 ":info_green: <gray>Players</gray> <green>{arena:joined-players}</green>/<green>{arena:max-players}</green>",
-                ":location: <gray>Leader</gray> <gold>{arena:leader}</gold>",
+                ":clock: <gray>Your Best</gray> <gold>{player:best-time}</gold>",
+                ":location: <gray>Record Holder</gray> <aqua>{arena:record-holder}</aqua>",
+                ":click_action_right: <gray>Record</gray> <gold>{arena:record-time}</gold>",
                 ":warning_yellow: <gray>Checkpoints</gray> <yellow>{arena:stage-count}</yellow>"
             ),
             HUD_LINE_HOLD_UPDATES
@@ -152,7 +162,7 @@ public class BoatRaceMiniGame extends BaseMiniGame {
             .setName(StringUtil.beautify(arenaId))
             .setLobbySpawn(world.getSpawnLocation())
             .setSpectatorSpawn(world.getSpawnLocation())
-            .setMinPlayers(2)
+            .setMinPlayers(1)
             .setMaxPlayers(8)
             .set("arenaRegion", null)
             .set("finishRegion", null)
@@ -162,7 +172,8 @@ public class BoatRaceMiniGame extends BaseMiniGame {
             .set("assignedGridSlots", new LinkedHashMap<UUID, Integer>())
             .set("boatAssignments", new LinkedHashMap<UUID, UUID>())
             .set("checkpointLocations", new LinkedHashMap<UUID, Location>())
-            .set("stageProgress", new LinkedHashMap<UUID, Integer>());
+            .set("stageProgress", new LinkedHashMap<UUID, Integer>())
+            .set("bestTimes", new LinkedHashMap<UUID, BoatRaceArenaRecord.BestTime>());
     }
 
     public void deleteArena(@NotNull String arenaId) {
@@ -171,10 +182,12 @@ public class BoatRaceMiniGame extends BaseMiniGame {
             minigame.removeArena(arenaId);
         }
         config.deleteArena(arenaId);
+        api.holograms().delete(RECORD_HOLOGRAM_TYPE, arenaId);
     }
 
     public void saveArena(@NotNull MiniGameArena arena) {
         config.saveArena(arena);
+        api.holograms().update(RECORD_HOLOGRAM_TYPE, arena.id());
     }
 
     public void persistArenaEnabled(@NotNull MiniGameArena arena, boolean enabled) {
@@ -194,6 +207,7 @@ public class BoatRaceMiniGame extends BaseMiniGame {
         MiniGameHudConfigSupport.apply(minigame, configFile, defaultHudDefinitions());
         unloadArenas(minigame);
         loadArenas();
+        api.holograms().update(RECORD_HOLOGRAM_TYPE, null);
         return true;
     }
 
@@ -226,7 +240,8 @@ public class BoatRaceMiniGame extends BaseMiniGame {
                     .set("assignedGridSlots", new LinkedHashMap<UUID, Integer>())
                     .set("boatAssignments", new LinkedHashMap<UUID, UUID>())
                     .set("checkpointLocations", new LinkedHashMap<UUID, Location>())
-                    .set("stageProgress", new LinkedHashMap<UUID, Integer>());
+                    .set("stageProgress", new LinkedHashMap<UUID, Integer>())
+                    .set("bestTimes", new LinkedHashMap<>(arenaDef.bestTimes()));
 
                 ArenaValidationResult result = arena.validate();
                 if (result.hasErrors()) {
@@ -280,6 +295,11 @@ public class BoatRaceMiniGame extends BaseMiniGame {
     @SuppressWarnings("unchecked")
     public @NotNull Map<UUID, Integer> stageProgress(@NotNull MiniGameArena arena) {
         return arena.getOrCreate("stageProgress", Map.class, LinkedHashMap::new);
+    }
+
+    @SuppressWarnings("unchecked")
+    public @NotNull Map<UUID, BoatRaceArenaRecord.BestTime> bestTimes(@NotNull MiniGameArena arena) {
+        return arena.getOrCreate("bestTimes", Map.class, LinkedHashMap::new);
     }
 
     public int stageCount(@NotNull MiniGameArena arena) {
@@ -346,6 +366,28 @@ public class BoatRaceMiniGame extends BaseMiniGame {
         return winnerName == null || winnerName.isBlank() ? "-" : winnerName;
     }
 
+    public long bestTimeMillis(@NotNull MiniGamePlayer player) {
+        MiniGameArena arena = player.arena();
+        if (arena == null) {
+            return 0L;
+        }
+        BoatRaceArenaRecord.BestTime bestTime = bestTimes(arena).get(player.getPlayer().getUniqueId());
+        return bestTime == null ? 0L : bestTime.timeMillis();
+    }
+
+    public long arenaBestMillis(@NotNull MiniGameArena arena) {
+        BoatRaceArenaRecord.BestTime bestTime = arenaBest(arena);
+        return bestTime == null ? 0L : bestTime.timeMillis();
+    }
+
+    public @NotNull String arenaBestHolder(@NotNull MiniGameArena arena) {
+        BoatRaceArenaRecord.BestTime bestTime = arenaBest(arena);
+        if (bestTime == null || bestTime.playerName() == null || bestTime.playerName().isBlank()) {
+            return "-";
+        }
+        return bestTime.playerName();
+    }
+
     public String placeText(@NotNull MiniGamePlayer player) {
         MiniGameArena arena = player.arena();
         if (arena == null) {
@@ -408,6 +450,37 @@ public class BoatRaceMiniGame extends BaseMiniGame {
         arena.set("winnerName", player.getName());
     }
 
+    public long raceStartMillis(@NotNull MiniGameArena arena) {
+        return arena.get(RACE_START_MILLIS_KEY, Long.class, 0L);
+    }
+
+    public void markRaceStarted(@NotNull MiniGameArena arena) {
+        arena.set(RACE_START_MILLIS_KEY, System.currentTimeMillis());
+    }
+
+    public void clearRaceTimer(@NotNull MiniGameArena arena) {
+        arena.remove(RACE_START_MILLIS_KEY);
+    }
+
+    public @NotNull FinishRecord recordFinish(@NotNull MiniGameArena arena, @NotNull Player player, long durationMillis) {
+        BoatRaceArenaRecord.BestTime existing = bestTimes(arena).get(player.getUniqueId());
+        BoatRaceArenaRecord.BestTime arenaRecord = arenaBest(arena);
+        long previousBestMillis = existing == null ? 0L : existing.timeMillis();
+        boolean personalBest = durationMillis > 0L && (existing == null || durationMillis < existing.timeMillis());
+        boolean arenaBest = durationMillis > 0L && (arenaRecord == null || durationMillis < arenaRecord.timeMillis());
+
+        if (personalBest) {
+            bestTimes(arena).put(player.getUniqueId(), new BoatRaceArenaRecord.BestTime(player.getUniqueId(), player.getName(), durationMillis));
+            saveArena(arena);
+        }
+
+        return new FinishRecord(durationMillis, personalBest, arenaBest, previousBestMillis);
+    }
+
+    public @NotNull String formatMillis(long durationMillis) {
+        return TimedRecordLeaderboard.formatMillis(durationMillis);
+    }
+
     private String ordinal(int value) {
         int mod100 = value % 100;
         if (mod100 >= 11 && mod100 <= 13) {
@@ -438,6 +511,44 @@ public class BoatRaceMiniGame extends BaseMiniGame {
         );
     }
 
+    private @Nullable BoatRaceArenaRecord.BestTime arenaBest(@NotNull MiniGameArena arena) {
+        return bestTimes(arena).values().stream()
+            .min(Comparator
+                .comparingLong(BoatRaceArenaRecord.BestTime::timeMillis)
+                .thenComparing(BoatRaceArenaRecord.BestTime::playerName, String.CASE_INSENSITIVE_ORDER))
+            .orElse(null);
+    }
+
+    private void registerRecordHolograms() {
+        api.holograms().registerType(RECORD_HOLOGRAM_TYPE, new HologramTypeHandler() {
+            @Override
+            public List<String> list(@NotNull String type) {
+                return minigame.arenas().stream()
+                    .map(MiniGameArena::id)
+                    .sorted(String.CASE_INSENSITIVE_ORDER)
+                    .toList();
+            }
+
+            @Override
+            public @NotNull List<String> lines(@NotNull String type, @NotNull String context, int id, @NotNull List<String> data) {
+                return renderRecordHologram(context, data);
+            }
+        });
+    }
+
+    private @NotNull List<String> renderRecordHologram(@NotNull String arenaId, @NotNull List<String> data) {
+        MiniGameArena arena = minigame.arena(arenaId);
+        if (arena == null) {
+            return List.of("<red>Unknown Boat Race arena:</red> <yellow>" + arenaId + "</yellow>");
+        }
+
+        List<TimedRecordLeaderboard.Entry> entries = bestTimes(arena).values().stream()
+            .map(bestTime -> new TimedRecordLeaderboard.Entry(bestTime.playerName(), bestTime.timeMillis()))
+            .toList();
+
+        return TimedRecordLeaderboard.render("<gold>" + arena.getName() + " Fastest Times</gold>", data, entries);
+    }
+
     public record RaceStanding(
         @NotNull UUID uuid,
         @NotNull Player player,
@@ -445,4 +556,11 @@ public class BoatRaceMiniGame extends BaseMiniGame {
         double distanceSquared,
         boolean finished
     ) {}
+
+    public record FinishRecord(
+        long durationMillis,
+        boolean personalBest,
+        boolean arenaBest,
+        long previousBestMillis
+    ) { }
 }
