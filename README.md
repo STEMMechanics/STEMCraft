@@ -1,5 +1,5 @@
 <!--suppress HtmlDeprecatedAttribute -->
-<p align="center"><img src="https://github.com/STEMMechanics/.github/blob/main/stemcraft-sky-logo.jpg?raw=true" width="666" height="198" alt="STEMMechanics"></p>
+<p align="center"><img src="https://git.stemmechanics.com.au/STEMMechanics/STEMCraft/raw/branch/main/docs/images/stemcraft.jpg" width="666" height="198" alt="STEMMechanics"></p>
 
 # STEMCraftLib
 
@@ -13,7 +13,7 @@ This is the core STEMCraft plugin that provides the core functionality and helpe
 
 ## Usage
 
-You can visit the [Wiki](https://github.com/STEMCraft/STEMCraftLib/wiki) for details on the plugin commands, classes, and using as a dependency.
+You can visit the [Wiki](https://git.stemmechanics.com.au/STEMCraft/wiki) for details on the plugin commands, classes, and using as a dependency.
 
 ## Builds & API
 

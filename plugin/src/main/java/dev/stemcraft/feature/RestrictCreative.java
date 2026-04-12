@@ -36,9 +36,13 @@ import org.bukkit.event.world.PortalCreateEvent;
  * Feature that restricts actions for players in creative mode without proper permission.
  */
 public class RestrictCreative extends BaseFeature {
-    private static final long PICKUP_WARNING_DEBOUNCE_TICKS = 30L;
-
-    private final String PERMISSION = "stemcraft.creative.override";
+    private final String PERMISSION_INTERACT = "stemcraft.creative.override.interact";
+    private final String PERMISSION_INVENTORY = "stemcraft.creative.override.inventory";
+    private final String PERMISSION_DROP_ITEMS_ON_DEATH = "stemcraft.creative.override.drop_items_on_death";
+    private final String PERMISSION_DROP_ITEMS = "stemcraft.creative.override.drop_items";
+    private final String PERMISSION_PICKUP_ITEMS = "stemcraft.creative.override.pickup_items";
+    private final String PERMISSION_PLACE_PORTALS = "stemcraft.creative.override.place_portals";
+    private final String PERMISSION_PLACE_RESTRICTED_BLOCKS = "stemcraft.creative.override.place_restricted_blocks";
 
     /**
      * Constructor for RestrictCreative.
@@ -57,7 +61,7 @@ public class RestrictCreative extends BaseFeature {
         api.events().register(PlayerInteractEntityEvent.class, event -> {
             Player player = event.getPlayer();
             if (player.getGameMode() == GameMode.CREATIVE
-                    && !event.getPlayer().hasPermission(this.PERMISSION)) {
+                    && !event.getPlayer().hasPermission(this.PERMISSION_INTERACT)) {
                 api.messages().error(player, "RESTRICT_CREATIVE_NO_INTERACT");
                 event.setCancelled(true);
             }
@@ -65,7 +69,7 @@ public class RestrictCreative extends BaseFeature {
 
         api.events().register(InventoryClickEvent.class, event -> {
             if (event.getWhoClicked() instanceof Player player) {
-                if (player.getGameMode() == GameMode.CREATIVE && !player.hasPermission(PERMISSION)) {
+                if (player.getGameMode() == GameMode.CREATIVE && !player.hasPermission(PERMISSION_INVENTORY)) {
                     if (!event.getView().title().equals(player.getOpenInventory().title())) {
                         event.setCancelled(true);
                     }
@@ -75,7 +79,7 @@ public class RestrictCreative extends BaseFeature {
 
         api.events().register(EntityDeathEvent.class, event -> {
             if (event.getEntity() instanceof Player player) {
-                if (player.getGameMode() == GameMode.CREATIVE && !player.hasPermission(PERMISSION)) {
+                if (player.getGameMode() == GameMode.CREATIVE && !player.hasPermission(PERMISSION_DROP_ITEMS_ON_DEATH)) {
                     event.getDrops().clear();
                 }
             }
@@ -83,7 +87,7 @@ public class RestrictCreative extends BaseFeature {
 
         api.events().register(PlayerDropItemEvent.class, event -> {
             Player player = event.getPlayer();
-            if (player.getGameMode() == GameMode.CREATIVE && !player.hasPermission(PERMISSION)) {
+            if (player.getGameMode() == GameMode.CREATIVE && !player.hasPermission(PERMISSION_DROP_ITEMS)) {
                 api.messages().error(player, "RESTRICT_CREATIVE_NO_DROPS");
                 event.setCancelled(true);
             }
@@ -91,12 +95,8 @@ public class RestrictCreative extends BaseFeature {
 
         api.events().register(EntityPickupItemEvent.class, event -> {
             if (event.getEntity() instanceof Player player) {
-                if (player.getGameMode() == GameMode.CREATIVE && !player.hasPermission(PERMISSION)) {
-                    api.tasks().debounce(
-                            "restrict-creative:pickup-warning:" + player.getUniqueId(),
-                            PICKUP_WARNING_DEBOUNCE_TICKS,
-                            () -> api.messages().error(player, "RESTRICT_CREATIVE_NO_PICKUPS")
-                    );
+                if (player.getGameMode() == GameMode.CREATIVE && !player.hasPermission(PERMISSION_PICKUP_ITEMS)) {
+                    api.messages().error(player, "RESTRICT_CREATIVE_NO_PICKUPS");
                     event.setCancelled(true);
                 }
             }
@@ -104,7 +104,7 @@ public class RestrictCreative extends BaseFeature {
 
         api.events().register(PortalCreateEvent.class, event -> {
             if (event.getEntity() instanceof Player player) {
-                if (player.getGameMode() == GameMode.CREATIVE && !player.hasPermission(PERMISSION)) {
+                if (player.getGameMode() == GameMode.CREATIVE && !player.hasPermission(PERMISSION_PLACE_PORTALS)) {
                     api.messages().error(player, "RESTRICT_CREATIVE_NO_PORTALS");
                     event.setCancelled(true);
                 }
@@ -113,7 +113,7 @@ public class RestrictCreative extends BaseFeature {
 
         api.events().register(BlockPlaceEvent.class, event -> {
             Player player = event.getPlayer();
-            if (player.getGameMode() == GameMode.CREATIVE && !player.hasPermission(PERMISSION)) {
+            if (player.getGameMode() == GameMode.CREATIVE && !player.hasPermission(PERMISSION_PLACE_RESTRICTED_BLOCKS)) {
                 Material blockType = event.getBlockPlaced().getType();
                 if (blockType == Material.END_PORTAL_FRAME) {
                     api.messages().error(player, "RESTRICT_CREATIVE_NO_PLACE");
