@@ -72,6 +72,13 @@ public interface CommandBuilder {
      *   Example: "{player}", "{world}", "{duration}"
      *   These are resolved via the TabCompletion service at runtime.
 
+     * - A permission-gated item using the format permission^value
+     *   Example: "stemcraft.command.example.admin^reload",
+     *            "stemcraft.command.example.others^{player}"
+     *   The item only participates in matching and suggestions when the sender
+     *   has the given permission. This wrapper can be used with literals,
+     *   placeholders, flags, key-value options, and empty-string wildcards.
+
      * - A flag option (starts with "-")
      *   Example: "-force", "-silent"
      *   These appear when the user types "-" and are removed once used.

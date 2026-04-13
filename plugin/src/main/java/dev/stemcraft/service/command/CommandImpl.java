@@ -307,6 +307,30 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
     }
 
     /**
+     * Helper class representing a tab completion item with optional permission gating.
+     */
+    private record TabCompleteTrackItem(String permission, String value) {
+        private static @NotNull TabCompleteTrackItem parse(String raw) {
+            if (raw == null) {
+                return new TabCompleteTrackItem(null, null);
+            }
+
+            int separator = raw.indexOf('^');
+            if (separator > 0) {
+                String permission = raw.substring(0, separator);
+                String value = raw.substring(separator + 1);
+                return new TabCompleteTrackItem(permission, value);
+            }
+
+            return new TabCompleteTrackItem(null, raw);
+        }
+
+        private boolean permitted(@NotNull CommandSender sender) {
+            return permission == null || permission.isBlank() || sender.hasPermission(permission);
+        }
+    }
+
+    /**
      * Helper class for parsing command arguments for tab completion.
      */
     private static class TabCompleteArgParser {
@@ -334,7 +358,7 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
         }
 
         public static TabCompleteValueOption getStringAsValueOption(String arg) {
-            if (arg.matches("^[a-zA-Z0-9-_]:.*")) {
+            if (arg.matches("^[a-zA-Z0-9_-]+:.*")) {
                 String option = arg.substring(0, arg.indexOf(':')).toLowerCase();
                 String value = arg.substring(arg.indexOf(':') + 1);
 
@@ -486,7 +510,21 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
 
             // iterate each tab completion list item
             for (listIndex = 0; listIndex < list.length; listIndex++) {
-                String listItem = list[listIndex];
+                TabCompleteTrackItem trackItem = TabCompleteTrackItem.parse(list[listIndex]);
+                String listItem = trackItem.value();
+
+                if (!trackItem.permitted(sender)) {
+                    if (listItem != null) {
+                        String option = TabCompleteArgParser.getStringAsOption(listItem);
+                        TabCompleteValueOption valueOption = option == null ? TabCompleteArgParser.getStringAsValueOption(listItem) : null;
+                        if (option != null || valueOption != null) {
+                            continue;
+                        }
+                    }
+
+                    matches = false;
+                    break;
+                }
 
                 if(listItem != null) {
                     // list item is an option
