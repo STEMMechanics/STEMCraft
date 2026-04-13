@@ -670,7 +670,7 @@ public final class STEMCraft extends JavaPlugin {
                     continue;
                 }
 
-                // name is like "resource-pack/minecraft-icons/config.yml"
+                // name is like "data-packs/minecraft-icons/config.yml"
                 String relative = name.substring(prefix.length()); // "minecraft-icons/config.yml"
                 File out = new File(targetRoot, relative);
 

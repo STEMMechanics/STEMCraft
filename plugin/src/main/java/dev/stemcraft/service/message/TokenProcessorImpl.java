@@ -23,16 +23,15 @@ package dev.stemcraft.service.message;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.message.TokenProcessor;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.regex.Pattern;
 
 /**
  * Implementation of the TokenProcessor interface.
  */
 public class TokenProcessorImpl implements TokenProcessor {
 
-    private final Map<Pattern, String> tokens = new HashMap<>();
+    private final Map<String, String> tokens = new LinkedHashMap<>();
 
     /**
      * Constructs a new TokenProcessor with the given configuration.
@@ -56,18 +55,13 @@ public class TokenProcessorImpl implements TokenProcessor {
      */
     @Override
     public void add(String placeholder, String value) {
-        if (placeholder == null || placeholder.isEmpty()) {
+        String marker = markerFor(placeholder);
+        if (marker == null) {
             return;
         }
 
         String safeValue = value == null ? "" : value;
-
-        // remove the leading and trailing colons if present
-        if (placeholder.startsWith(":") && placeholder.endsWith(":") && placeholder.length() > 2) {
-            placeholder = placeholder.substring(1, placeholder.length() - 1);
-        }
-
-        tokens.put(Pattern.compile(Pattern.quote(":" + placeholder + ":")), safeValue);
+        tokens.put(marker, safeValue);
     }
 
     /**
@@ -77,17 +71,11 @@ public class TokenProcessorImpl implements TokenProcessor {
      */
     @Override
     public void remove(String placeholder) {
-        if (placeholder == null || placeholder.isEmpty()) {
+        String marker = markerFor(placeholder);
+        if (marker == null) {
             return;
         }
-
-        // remove the leading and trailing colons if present
-        if (placeholder.startsWith(":") && placeholder.endsWith(":") && placeholder.length() > 2) {
-            placeholder = placeholder.substring(1, placeholder.length() - 1);
-        }
-
-        Pattern p = Pattern.compile(Pattern.quote(":" + placeholder + ":"));
-        tokens.remove(p);
+        tokens.remove(marker);
     }
 
     /**
@@ -117,8 +105,25 @@ public class TokenProcessorImpl implements TokenProcessor {
         }
         String out = str;
         for (var entry : tokens.entrySet()) {
-            out = entry.getKey().matcher(out).replaceAll(entry.getValue());
+            out = out.replace(entry.getKey(), entry.getValue());
         }
         return out;
+    }
+
+    private static String markerFor(String placeholder) {
+        if (placeholder == null || placeholder.isEmpty()) {
+            return null;
+        }
+
+        String normalized = placeholder;
+        if (normalized.startsWith(":") && normalized.endsWith(":") && normalized.length() > 2) {
+            normalized = normalized.substring(1, normalized.length() - 1);
+        }
+
+        if (normalized.isEmpty()) {
+            return null;
+        }
+
+        return ":" + normalized + ":";
     }
 }

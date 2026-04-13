@@ -91,6 +91,9 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
      */
     public void onEnable() {
         dataPacksDir = new File(plugin.getDataFolder(), "data-packs");
+        // Bundled starter packs and the runtime working directory now use the
+        // same path name for consistency. Existing files are not overwritten.
+        plugin.exportBundledDirectory("data-packs");
 
         host = new ResourcePackHostImpl(api, this);
         host.onEnable(getConfigSection());
