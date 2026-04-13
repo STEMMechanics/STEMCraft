@@ -242,6 +242,10 @@ public class ParkourCommand {
         }
 
         parkour.resetRun(arena, targetPlayer, "");
+        if(!ctx.equalsPlayer(targetPlayer)) {
+            // TODO: Use a better method? Feels rather fishy.
+            STEMCraftAPI.api().messages().success(targetPlayer, "Your run has been restarted.");
+        }
         ctx.success("Restarted " + targetPlayer.getName() + "'s run.");
     }
 
