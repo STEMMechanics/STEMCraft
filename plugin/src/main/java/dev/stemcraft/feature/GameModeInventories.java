@@ -33,6 +33,7 @@ import org.bukkit.event.player.PlayerGameModeChangeEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.potion.PotionEffect;
 
 import java.util.*;
 
@@ -281,6 +282,12 @@ public class GameModeInventories extends BaseFeature {
         final Map<String, PlayerState> states = new HashMap<>();
     }
 
+    private static void clearPotionEffects(Player player) {
+        for (PotionEffect effect : player.getActivePotionEffects()) {
+            player.removePotionEffect(effect.getType());
+        }
+    }
+
     private static class PlayerState {
         double health;
         int foodLevel;
@@ -292,6 +299,7 @@ public class GameModeInventories extends BaseFeature {
         ItemStack[] contents;
         ItemStack[] armor;
         ItemStack[] ender;
+        List<PotionEffect> effects;
 
         static PlayerState create(Player player) {
             PlayerState state = new PlayerState();
@@ -305,6 +313,7 @@ public class GameModeInventories extends BaseFeature {
             state.contents = new ItemStack[player.getInventory().getSize()];
             state.armor = new ItemStack[player.getInventory().getArmorContents().length];
             state.ender = new ItemStack[player.getEnderChest().getSize()];
+            state.effects = new ArrayList<>();
             return state;
         }
 
@@ -320,6 +329,7 @@ public class GameModeInventories extends BaseFeature {
             s.contents = player.getInventory().getContents();
             s.armor = player.getInventory().getArmorContents();
             s.ender = player.getEnderChest().getContents();
+            s.effects = new ArrayList<>(player.getActivePotionEffects());
             return s;
         }
 
@@ -332,6 +342,11 @@ public class GameModeInventories extends BaseFeature {
             player.setLevel(level);
             player.setExp(exp);
             player.setTotalExperience(totalExp);
+
+            clearPotionEffects(player);
+            for (PotionEffect effect : effects) {
+                player.addPotionEffect(effect);
+            }
 
             player.getInventory().setContents(contents);
             player.getInventory().setArmorContents(armor);
@@ -377,6 +392,15 @@ public class GameModeInventories extends BaseFeature {
             }
             state.ender = ender.toArray(new ItemStack[0]);
 
+            List<?> effectsList = s.getList("effects", List.of());
+            List<PotionEffect> effects = new ArrayList<>();
+            for (Object o : effectsList) {
+                if (o instanceof PotionEffect effect) {
+                    effects.add(effect);
+                }
+            }
+            state.effects = effects;
+
             return state;
         }
 
@@ -391,6 +415,7 @@ public class GameModeInventories extends BaseFeature {
             s.set("contents", contents);
             s.set("armor", armor);
             s.set("ender", ender);
+            s.set("effects", effects);
         }
 
         static PlayerState fromYaml(String yaml) {
