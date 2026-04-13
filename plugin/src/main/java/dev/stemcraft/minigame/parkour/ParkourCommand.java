@@ -37,7 +37,7 @@ public class ParkourCommand {
 
         api.commands().create("parkour")
             .permission("stemcraft.command.parkour")
-            .usage("/parkour <list|info|create|delete|join|joinall|leave|save|reload|validate|enable|disable|set|select|sel|show>")
+            .usage("/parkour <list|info|create|delete|join|joinall|restart|leave|save|reload|validate|enable|disable|set|select|sel|show>")
             .tabCompletion("list")
             .tabCompletion("list", "{int}")
             .tabCompletion("info", "{parkour-arenas}")
@@ -46,6 +46,7 @@ public class ParkourCommand {
             .tabCompletion("create", "", "{world}")
             .tabCompletion("delete", "{parkour-arenas}")
             .tabCompletion("join", "{parkour-arenas}", "{player}")
+            .tabCompletion("restart", "{player}")
             .tabCompletion("joinall", "{parkour-arenas}")
             .tabCompletion("leave", "{player}")
             .tabCompletion("save", "{parkour-arenas}")
@@ -74,6 +75,7 @@ public class ParkourCommand {
                     case "delete" -> commandDelete(ctx);
                     case "join" -> commandJoin(ctx);
                     case "joinall", "join-all" -> commandJoinAll(ctx);
+                    case "restart" -> commandRestart(ctx);
                     case "leave" -> commandLeave(ctx);
                     case "save" -> commandSave(ctx);
                     case "reload" -> commandReload(ctx);
@@ -226,6 +228,21 @@ public class ParkourCommand {
         }
 
         ctx.success("Arena '" + arena.id() + "': joined " + joined + ", skipped " + skipped + ".");
+    }
+
+    private void commandRestart(CommandContext ctx) {
+        Player targetPlayer = ctx.getArgAsPlayerOrSender(1);
+        if (targetPlayer == null) {
+            ctx.returnError("Player is required.");
+        }
+
+        MiniGameArena arena = parkour.minigame().findPlayer(targetPlayer);
+        if (arena == null) {
+            ctx.returnError("Player '" + targetPlayer.getName() + "' is not in a Parkour arena.");
+        }
+
+        parkour.resetRun(arena, targetPlayer, "Run restarted.");
+        ctx.success("Restarted " + targetPlayer.getName() + "'s run.");
     }
 
     private void commandLeave(CommandContext ctx) {
