@@ -241,9 +241,8 @@ public class ParkourCommand {
             ctx.returnError("Player '" + targetPlayer.getName() + "' is not in a Parkour arena.");
         }
 
-        parkour.resetRun(arena, targetPlayer, "Run restarted.");
-        if (ctx.asPlayer() != targetPlayer)
-            ctx.success("Restarted " + targetPlayer.getName() + "'s run.");
+        parkour.resetRun(arena, targetPlayer, "");
+        ctx.success("Restarted " + targetPlayer.getName() + "'s run.");
     }
 
     private void commandLeave(CommandContext ctx) {
