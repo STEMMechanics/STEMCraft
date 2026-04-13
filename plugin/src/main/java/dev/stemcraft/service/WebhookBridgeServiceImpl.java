@@ -567,17 +567,22 @@ public final class WebhookBridgeServiceImpl extends BaseService {
     }
 
     private void reportPunishmentLifted(PunishmentRecord record) {
-        PenaltyStateRecord existing = findPenalty(record.targetUuid(), record.targetName(), record.type());
         Instant occurredAt = record.createdAt();
-
-        if (existing == null) {
+        List<PenaltyStateRecord> penaltiesToLift = findActivePenalties(record.targetUuid(), record.targetName(), record.type());
+        if (penaltiesToLift.isEmpty()) {
             PunishmentRecord priorRecord = plugin.punishments().findLatestPriorPunishment(record.targetUuid(), record.type(), occurredAt);
             if (priorRecord != null) {
-                existing = penaltyStateRecord(null, priorRecord, null);
+                penaltiesToLift = List.of(penaltyStateRecord(null, priorRecord, null));
             }
         }
 
-        if (existing != null) {
+        if (penaltiesToLift.isEmpty()) {
+            sendWebhook(buildPenaltyLiftPayload(record, null, occurredAt));
+            return;
+        }
+
+        boolean stateChanged = false;
+        for (PenaltyStateRecord existing : penaltiesToLift) {
             PenaltyStateRecord liftedRecord = new PenaltyStateRecord(
                 existing.externalId,
                 existing.username,
@@ -591,10 +596,20 @@ public final class WebhookBridgeServiceImpl extends BaseService {
             );
             if (liftedRecord.key() != null) {
                 penaltiesByKey.put(liftedRecord.key(), liftedRecord);
-                savePenaltyState();
+                stateChanged = true;
             }
+
+            sendWebhook(buildPenaltyLiftPayload(record, existing, occurredAt));
         }
 
+        if (stateChanged) {
+            savePenaltyState();
+        }
+    }
+
+    private Map<String, Object> buildPenaltyLiftPayload(@NotNull PunishmentRecord record,
+                                                        @Nullable PenaltyStateRecord existing,
+                                                        @NotNull Instant occurredAt) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("event", "player.penalty.updated");
         payload.put("uuid", normalize(record.targetUuid()));
@@ -628,8 +643,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
         if (record.reason() != null && !record.reason().isBlank()) {
             payload.put("lift_reason", record.reason());
         }
-
-        sendWebhook(payload);
+        return payload;
     }
 
     private void rememberLocalPenalty(@NotNull PunishmentRecord record) {
@@ -2155,19 +2169,35 @@ public final class WebhookBridgeServiceImpl extends BaseService {
     }
 
     private PenaltyStateRecord findActivePenalty(UUID uuid, String username, String type) {
+        List<PenaltyStateRecord> activePenalties = findActivePenalties(uuid, username, type);
+        return activePenalties.isEmpty() ? null : activePenalties.getFirst();
+    }
+
+    boolean hasActivePenalty(UUID uuid, @Nullable String username, String type) {
+        return findActivePenalty(uuid, username, type) != null;
+    }
+
+    private List<PenaltyStateRecord> findActivePenalties(UUID uuid, String username, String type) {
+        List<PenaltyStateRecord> matches = new ArrayList<>();
         for (PenaltyStateRecord record : penaltiesByKey.values()) {
             if (!record.isActive() || !record.type.equalsIgnoreCase(type)) {
                 continue;
             }
             if (matchesPenalty(record, uuid, username)) {
-                return record;
+                matches.add(record);
             }
         }
-        return null;
-    }
 
-    boolean hasActivePenalty(UUID uuid, @Nullable String username, String type) {
-        return findActivePenalty(uuid, username, type) != null;
+        matches.sort((left, right) -> {
+            Instant leftCreatedAt = left.createdAt == null ? Instant.EPOCH : left.createdAt;
+            Instant rightCreatedAt = right.createdAt == null ? Instant.EPOCH : right.createdAt;
+            int createdAtCompare = rightCreatedAt.compareTo(leftCreatedAt);
+            if (createdAtCompare != 0) {
+                return createdAtCompare;
+            }
+            return Objects.requireNonNullElse(left.key(), "").compareTo(Objects.requireNonNullElse(right.key(), ""));
+        });
+        return matches;
     }
 
     private PenaltyStateRecord findPenalty(UUID uuid, String username, String type) {
