@@ -242,7 +242,8 @@ public class ParkourCommand {
         }
 
         parkour.resetRun(arena, targetPlayer, "Run restarted.");
-        ctx.success("Restarted " + targetPlayer.getName() + "'s run.");
+        if (ctx.asPlayer() != targetPlayer)
+            ctx.success("Restarted " + targetPlayer.getName() + "'s run.");
     }
 
     private void commandLeave(CommandContext ctx) {
