@@ -241,7 +241,11 @@ public class ParkourCommand {
             ctx.returnError("Player '" + targetPlayer.getName() + "' is not in a Parkour arena.");
         }
 
-        parkour.resetRun(arena, targetPlayer, "Run restarted.");
+        parkour.resetRun(arena, targetPlayer, "");
+        if(!ctx.equalsPlayer(targetPlayer)) {
+            // TODO: Use a better method? Feels rather fishy.
+            STEMCraftAPI.api().messages().success(targetPlayer, "Your run has been restarted.");
+        }
         ctx.success("Restarted " + targetPlayer.getName() + "'s run.");
     }
 
