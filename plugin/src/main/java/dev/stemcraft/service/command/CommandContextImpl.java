@@ -331,6 +331,16 @@ public class CommandContextImpl implements CommandContext {
     }
 
     /**
+     * Checks if the command sender is this player.
+     *
+     * @return true if the sender is this player, false otherwise.
+     */
+    @Override
+    public boolean equalsPlayer(Player player) {
+        return sender instanceof org.bukkit.entity.Player && sender.equals(player);
+    }
+
+    /**
      * Checks if the command sender has the specified permission.
      *
      * @param permission The permission to check.

@@ -200,6 +200,13 @@ public interface CommandContext {
     boolean isPlayer();
 
     /**
+     * Check if the sender is this player.
+     *
+     * @return True if the sender is this player.
+     */
+    boolean equalsPlayer(Player player);
+
+    /**
      * Check if the sender has the given permission.
      *
      * @param permission The permission to check.
