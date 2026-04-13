@@ -233,19 +233,10 @@ public class CustomBooks extends BaseFeature {
                             // Sub command - list
                         }
                         case "list" -> {
-                            if (ctx.isConsole()) {
-                                cmd.error("COMMAND_PLAYER_ONLY");
-                                return;
-                            }
                             buildCacheList();
 
-                            int page = ctx.getArgAsInt(2, 1);
-                            ChatMenuUtil.render(ctx.asPlayer(), "BOOK_LIST_TITLE", "book list", page, bookNames.size(), (start, count, isPlayer) -> {
-                                ctx.info("Start: {start}, Count: {count}",
-                                        "start", String.valueOf(start),
-                                        "count", String.valueOf(count)
-                                );
-
+                            int page = ctx.getArgAsInt(1, 1);
+                            ChatMenuUtil.render(ctx.getSender(), "BOOK_LIST_TITLE", "book list", page, bookNames.size(), (start, count, isPlayer) -> {
                                 List<Component> lines = new ArrayList<>();
                                 for (int i = 0; i < count; i++) {
                                     String bookName = bookNames.get(i + start);
