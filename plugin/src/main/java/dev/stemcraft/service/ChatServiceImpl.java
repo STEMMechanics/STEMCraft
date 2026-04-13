@@ -146,10 +146,6 @@ public class ChatServiceImpl extends BaseService {
             long now = System.currentTimeMillis();
             UUID uuid = event.getPlayer().getUniqueId();
 
-            if (!event.getPlayer().isWhitelisted()) {
-                return;
-            }
-
             String plain = PLAIN.serialize(event.message());
 
             if (spamCooldownMs > 0) {
@@ -204,7 +200,7 @@ public class ChatServiceImpl extends BaseService {
         });
 
         api.events().register(SignChangeEvent.class, event -> {
-            if (!contentFilterEnabled || !event.getPlayer().isWhitelisted()) {
+            if (!contentFilterEnabled) {
                 return;
             }
 
@@ -243,7 +239,7 @@ public class ChatServiceImpl extends BaseService {
         }, EventPriority.HIGH, true);
 
         api.events().register(PlayerEditBookEvent.class, event -> {
-            if (!contentFilterEnabled || !event.getPlayer().isWhitelisted()) {
+            if (!contentFilterEnabled) {
                 return;
             }
 

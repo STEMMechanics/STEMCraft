@@ -33,6 +33,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.SkullMeta;
 import org.geysermc.geyser.api.GeyserApi;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -201,6 +202,58 @@ public class PlayerUtil {
         }
 
         return geyserApi.isBedrockPlayer(uuid);
+    }
+
+    /**
+     * Check whether the given player is effectively whitelisted according to
+     * the active server whitelist authority.
+     *
+     * @param player The player to test.
+     * @return True if the player is whitelisted.
+     */
+    public static boolean isWhitelisted(Player player) {
+        if (player == null) {
+            return false;
+        }
+
+        return STEMCraftAPI.api().players().isWhitelisted(player);
+    }
+
+    /**
+     * Check whether the given identity is effectively whitelisted according to
+     * the active server whitelist authority.
+     *
+     * @param uuid The player UUID.
+     * @param username The player username.
+     * @param platform The player platform, such as java or bedrock.
+     * @return True if the identity is whitelisted.
+     */
+    public static boolean isWhitelisted(@Nullable UUID uuid, @Nullable String username, @Nullable String platform) {
+        return STEMCraftAPI.api().players().isWhitelisted(uuid, username, platform);
+    }
+
+    /**
+     * Check the vanilla Bukkit whitelist, respecting whether whitelist
+     * enforcement is enabled at all on the server.
+     *
+     * @param uuid The player UUID.
+     * @param username The player username.
+     * @return True if vanilla whitelist rules would allow the player.
+     */
+    public static boolean isWhitelistedVanilla(@Nullable UUID uuid, @Nullable String username) {
+        if (!Bukkit.hasWhitelist()) {
+            return true;
+        }
+
+        if (uuid != null) {
+            return Bukkit.getOfflinePlayer(uuid).isWhitelisted();
+        }
+
+        if (username != null && !username.isBlank()) {
+            return Bukkit.getOfflinePlayer(username).isWhitelisted();
+        }
+
+        return false;
     }
 
     /**

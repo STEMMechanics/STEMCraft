@@ -2132,13 +2132,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
 
     private boolean isWhitelistedByAccountState(UUID uuid, String username, String platform) {
         if (!config().getBoolean("enforce_account_whitelist", true)) {
-            if (uuid != null) {
-                return Bukkit.getOfflinePlayer(uuid).isWhitelisted();
-            }
-            if (username != null && !username.isBlank()) {
-                return Bukkit.getOfflinePlayer(username).isWhitelisted();
-            }
-            return false;
+            return PlayerUtil.isWhitelistedVanilla(uuid, username);
         }
 
         AccountRecord account = findAccount(uuid, username, platform);
@@ -2147,6 +2141,10 @@ public final class WebhookBridgeServiceImpl extends BaseService {
         }
 
         return false;
+    }
+
+    boolean isWhitelisted(@Nullable UUID uuid, @Nullable String username, @Nullable String platform) {
+        return isWhitelistedByAccountState(uuid, username, platform);
     }
 
     private AccountRecord findAccount(UUID uuid, String username, String platform) {

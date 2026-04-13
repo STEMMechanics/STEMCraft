@@ -23,9 +23,11 @@ package dev.stemcraft.service;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.service.player.PlayerService;
+import dev.stemcraft.api.util.PlayerUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 
@@ -75,5 +77,14 @@ public class PlayerServiceImpl extends BaseService implements PlayerService {
             if (other.getUniqueId().equals(player.getUniqueId())) continue;
             other.showPlayer(plugin, player);
         }
+    }
+
+    @Override
+    public boolean isWhitelisted(@Nullable UUID uuid, @Nullable String username, @Nullable String platform) {
+        if (plugin.webhookBridge() != null && plugin.webhookBridge().isWhitelistEnforcementActive()) {
+            return plugin.webhookBridge().isWhitelisted(uuid, username, platform);
+        }
+
+        return PlayerUtil.isWhitelistedVanilla(uuid, username);
     }
 }
