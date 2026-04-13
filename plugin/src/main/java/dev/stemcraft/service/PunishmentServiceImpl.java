@@ -664,6 +664,27 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
         return latest;
     }
 
+    synchronized @Nullable PunishmentRecord findLatestPriorPunishment(@NotNull UUID playerUuid,
+                                                                      @NotNull String type,
+                                                                      @NotNull Instant before) {
+        PunishmentRecord latest = null;
+        for (PunishmentRecord record : punishments) {
+            if (!playerUuid.equals(record.targetUuid())) {
+                continue;
+            }
+            if (!type.equalsIgnoreCase(record.type())) {
+                continue;
+            }
+            if (!record.createdAt().isBefore(before) || record.cancelled()) {
+                continue;
+            }
+            if (latest == null || record.createdAt().isAfter(latest.createdAt())) {
+                latest = record;
+            }
+        }
+        return latest;
+    }
+
     String formatBanMessage(PunishmentRecord record) {
         if (record == null) {
             return "You have been banned.";

@@ -48,6 +48,7 @@ import org.bukkit.event.player.PlayerLoginEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import com.destroystokyo.paper.profile.PlayerProfile;
+import org.jetbrains.annotations.NotNull;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -540,13 +541,17 @@ public final class WebhookBridgeServiceImpl extends BaseService {
             return;
         }
 
+        rememberLocalPenalty(record);
+
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("event", "player.penalty.created");
         payload.put("uuid", normalize(record.targetUuid()));
         payload.put("username", record.targetName());
         payload.put("type", record.type());
         payload.put("reason", record.reason());
+        payload.put("started_at", record.createdAt().toString());
         payload.put("occurred_at", record.createdAt().toString());
+        payload.put("updated_at", record.createdAt().toString());
         payload.put("is_permanent", record.permanent());
         if (record.durationSeconds() != null && record.durationSeconds() > 0L) {
             payload.put("duration_seconds", record.durationSeconds());
@@ -564,6 +569,13 @@ public final class WebhookBridgeServiceImpl extends BaseService {
     private void reportPunishmentLifted(PunishmentRecord record) {
         PenaltyStateRecord existing = findPenalty(record.targetUuid(), record.targetName(), record.type());
         Instant occurredAt = record.createdAt();
+
+        if (existing == null) {
+            PunishmentRecord priorRecord = plugin.punishments().findLatestPriorPunishment(record.targetUuid(), record.type(), occurredAt);
+            if (priorRecord != null) {
+                existing = penaltyStateRecord(null, priorRecord, null);
+            }
+        }
 
         if (existing != null) {
             PenaltyStateRecord liftedRecord = new PenaltyStateRecord(
@@ -584,25 +596,77 @@ public final class WebhookBridgeServiceImpl extends BaseService {
         }
 
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("event", "player.penalty.lifted");
+        payload.put("event", "player.penalty.updated");
+        payload.put("uuid", normalize(record.targetUuid()));
+        payload.put("username", existing != null && existing.username != null ? existing.username : record.targetName());
+        payload.put("type", record.type());
+        if (existing != null && existing.createdAt != null) {
+            payload.put("started_at", existing.createdAt.toString());
+        }
+        payload.put("occurred_at", occurredAt.toString());
+        payload.put("updated_at", occurredAt.toString());
+        payload.put("lifted_at", occurredAt.toString());
         if (existing != null && existing.externalId != null && !existing.externalId.isBlank()) {
             payload.put("penalty_key", existing.externalId);
-        } else {
-            payload.put("uuid", normalize(record.targetUuid()));
         }
-        payload.put("type", record.type());
-        payload.put("occurred_at", occurredAt.toString());
+        if (existing != null && existing.reason != null && !existing.reason.isBlank()) {
+            payload.put("reason", existing.reason);
+        }
+        if (existing != null) {
+            payload.put("is_permanent", existing.permanent);
+            Long durationSeconds = durationSeconds(existing);
+            if (durationSeconds != null && durationSeconds > 0L) {
+                payload.put("duration_seconds", durationSeconds);
+            }
+        }
         if (record.actorUuid() != null) {
-            payload.put("by_uuid", normalize(record.actorUuid()));
+            payload.put("lifted_by_uuid", normalize(record.actorUuid()));
         }
         if (record.actorName() != null && !record.actorName().isBlank()) {
-            payload.put("by_username", record.actorName());
+            payload.put("lifted_by_username", record.actorName());
         }
         if (record.reason() != null && !record.reason().isBlank()) {
-            payload.put("reason", record.reason());
+            payload.put("lift_reason", record.reason());
         }
 
         sendWebhook(payload);
+    }
+
+    private void rememberLocalPenalty(@NotNull PunishmentRecord record) {
+        PenaltyStateRecord localState = penaltyStateRecord(findPenalty(record.targetUuid(), record.targetName(), record.type()), record, null);
+        String key = localState.key();
+        if (key == null) {
+            return;
+        }
+
+        penaltiesByKey.put(key, localState);
+        savePenaltyState();
+    }
+
+    private @NotNull PenaltyStateRecord penaltyStateRecord(@Nullable PenaltyStateRecord existing,
+                                                           @NotNull PunishmentRecord record,
+                                                           @Nullable Instant liftedAt) {
+        Instant endsAt = record.permanent() ? null : record.expiresAt();
+        return new PenaltyStateRecord(
+            existing == null ? null : existing.externalId,
+            record.targetName(),
+            normalize(record.targetUuid()),
+            record.type(),
+            record.reason(),
+            record.createdAt(),
+            endsAt,
+            record.permanent(),
+            liftedAt
+        );
+    }
+
+    private static @Nullable Long durationSeconds(@NotNull PenaltyStateRecord record) {
+        if (record.permanent || record.createdAt == null || record.endsAt == null) {
+            return null;
+        }
+
+        long seconds = Duration.between(record.createdAt, record.endsAt).getSeconds();
+        return Math.max(seconds, 0L);
     }
 
     private void configureDefaults() {
