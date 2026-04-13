@@ -1,5 +1,5 @@
 String getGitHash() {
-    def command = Runtime.getRuntime().exec("git rev-parse --short HEAD")
+    def command = Runtime.getRuntime().exec("git rev-parse --short=10 HEAD")
     def result = command.waitFor()
     if (result != 0) {
         throw new IOException("Command 'getGitHash()' exited with " + result)
