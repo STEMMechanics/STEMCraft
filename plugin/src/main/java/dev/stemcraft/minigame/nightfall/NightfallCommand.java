@@ -41,7 +41,7 @@ public class NightfallCommand {
 
         api.commands().create("nightfall")
             .permission("stemcraft.command.nightfall")
-            .usage("/nightfall <list|info|create|delete|join|joinall|spectate|leave|start|stop|restart|cycle|save|reload|validate|enable|disable|set|select|sel|show|generators|addgenerator|setgenerator|removegenerator|dropblocks|adddropblock|setdropweight|removedropblock>")
+            .usage("/nightfall <list|info|create|delete|join|joinall|spectate|leave|start|stop|restart|cycle|respawn|save|reload|validate|enable|disable|set|select|sel|show|generators|addgenerator|setgenerator|removegenerator|dropblocks|adddropblock|setdropweight|removedropblock>")
             .tabCompletion("list")
             .tabCompletion("info")
             .tabCompletion("info", "{nightfall-arenas}")
@@ -57,6 +57,7 @@ public class NightfallCommand {
             .tabCompletion("stop", "{nightfall-arenas}")
             .tabCompletion("restart", "{nightfall-arenas}")
             .tabCompletion("cycle", "{nightfall-arenas}")
+            .tabCompletion("respawn", "{nightfall-arenas}")
             .tabCompletion("save", "{nightfall-arenas}")
             .tabCompletion("reload")
             .tabCompletion("validate", "{nightfall-arenas}")
@@ -121,6 +122,7 @@ public class NightfallCommand {
                     case "stop" -> commandStop(ctx);
                     case "restart" -> commandRestart(ctx);
                     case "cycle" -> commandCycle(ctx);
+                    case "respawn" -> commandRespawn(ctx);
                     case "save" -> commandSave(ctx);
                     case "reload" -> commandReload(ctx);
                     case "validate" -> commandValidate(ctx);
@@ -174,7 +176,7 @@ public class NightfallCommand {
         ctx.info(" - Spectator: " + formatLocation(arena.getSpectatorSpawn()));
         ctx.info(" - Spawn: " + formatLocation(nightfall.playSpawn(arena)));
         ctx.info(" - Arena region: " + formatRegion(arena.get("arenaRegion", SCRegion.class)));
-        ctx.info(" - Night deaths: creative spectator until sunrise");
+        ctx.info(" - Deaths: creative ghost until sunrise, then respawn at play spawn");
         ctx.info(" - Prep seconds: " + nightfall.prepSeconds(arena));
         ctx.info(" - Day time speed: " + String.format(Locale.ROOT, "%.2fx", nightfall.dayTimeSpeedMultiplier(arena)));
         ctx.info(" - Night time speed: " + String.format(Locale.ROOT, "%.2fx", nightfall.nightTimeSpeedMultiplier(arena)));
@@ -378,6 +380,25 @@ public class NightfallCommand {
         }
 
         ctx.success("Arena '" + arena.id() + "' advanced to " + target + ".");
+    }
+
+    private void commandRespawn(CommandContext ctx) {
+        MiniGameArena arena = requireArena(ctx, 1);
+        if (!(nightfall.minigame().handler() instanceof NightfallArenaHandler)) {
+            ctx.returnError("Nightfall respawn control is unavailable.");
+        }
+        NightfallArenaHandler handler = (NightfallArenaHandler) nightfall.minigame().handler();
+
+        int revived = handler.respawnDownedPlayers(arena);
+        if (revived < 0) {
+            ctx.returnError("Arena '" + arena.id() + "' must be in preparation or running to respawn dead players.");
+        }
+        if (revived == 0) {
+            ctx.info("Arena '" + arena.id() + "' has no dead players to respawn.");
+            return;
+        }
+
+        ctx.success("Respawned " + revived + " dead player" + (revived == 1 ? "" : "s") + " in arena '" + arena.id() + "'.");
     }
 
     private void commandSave(CommandContext ctx) {

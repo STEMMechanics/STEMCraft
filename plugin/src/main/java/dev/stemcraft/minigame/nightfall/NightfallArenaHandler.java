@@ -411,7 +411,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
             || arena.getStatus() == MiniGameArena.ArenaStatus.ENDING)
             && arena.getPlayers().isEmpty()) {
             arena.setStatus(MiniGameArena.ArenaStatus.RESETTING);
-        } else if (arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING) {
+        } else if (isActiveRoundStatus(arena)) {
             checkForMatchEnd(arena);
         }
     }
@@ -860,69 +860,47 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
     }
 
     private void handlePlayerDeath(@NotNull MiniGameArena arena, @NotNull Player player) {
+        handlePlayerDeath(arena, player, true);
+    }
+
+    private void handlePlayerDeath(@NotNull MiniGameArena arena, @NotNull Player player, boolean immediateTransition) {
         MiniGamePlayer miniGamePlayer = arena.getPlayer(player);
         if (miniGamePlayer == null || isNightEliminated(arena, player)) {
             return;
         }
 
         miniGamePlayer.addDeath();
-        dropInventory(player, player.getLocation().clone());
-
-        if (isNightPhase(arena)) {
-            miniGamePlayer.set("livesRemaining", 0);
-            prepareDormantParticipant(player);
-            nightEliminatedPlayers(arena).add(player.getUniqueId());
-            broadcastToOccupants(arena, nightfall.playerDownedMessage(player));
-            updateArenaStateCounters(arena);
-            checkForMatchEnd(arena);
+        Location deathLocation = player.getLocation().clone();
+        Location downedLocation = resolveDownedLocation(arena, deathLocation);
+        dropInventory(player, deathLocation);
+        markPlayerDowned(arena, player, miniGamePlayer);
+        broadcastToOccupants(arena, nightfall.playerDownedMessage(player));
+        if (!immediateTransition) {
+            if (downedLocation != null) {
+                pendingDeathRespawns(arena).put(player.getUniqueId(), downedLocation.clone());
+            }
             return;
         }
 
-        miniGamePlayer.set("livesRemaining", 1);
-        prepareParticipantForRound(player);
-        Location prepSpawn = assignedPreparationSpawn(arena, player);
-        if (prepSpawn != null) {
-            player.teleport(prepSpawn);
+        prepareDownedParticipant(player);
+        if (downedLocation != null) {
+            PlayerUtil.teleport(player, downedLocation);
         }
         player.setHealth(PlayerUtil.getMaxHealth(player));
-        broadcastToOccupants(arena, nightfall.playerReturnedMessage(player));
-        updateArenaStateCounters(arena);
     }
 
-    private void handlePlayerDeath(@NotNull MiniGameArena arena, @NotNull Player player, boolean immediateRespawn) {
-        MiniGamePlayer miniGamePlayer = arena.getPlayer(player);
-        if (miniGamePlayer == null) {
-            return;
-        }
-
-        miniGamePlayer.addDeath();
-        Location deathLocation = player.getLocation().clone();
-        dropInventory(player, deathLocation);
-        boolean downUntilDawn = isNightPhase(arena);
-        miniGamePlayer.set("livesRemaining", downUntilDawn ? 0 : 1);
-        if (downUntilDawn) {
-            nightEliminatedPlayers(arena).add(player.getUniqueId());
-        } else {
-            nightEliminatedPlayers(arena).remove(player.getUniqueId());
-        }
-        pendingDeathRespawns(arena).put(player.getUniqueId(), downUntilDawn);
-        broadcastToOccupants(arena, downUntilDawn
-            ? nightfall.playerDownedMessage(player)
-            : nightfall.playerRespawnMessage(player));
-        if (downUntilDawn) {
-            checkForMatchEnd(arena);
-        }
-        if (immediateRespawn) {
-            return;
-        }
+    private void markPlayerDowned(@NotNull MiniGameArena arena, @NotNull Player player, @NotNull MiniGamePlayer miniGamePlayer) {
+        nightEliminatedPlayers(arena).add(player.getUniqueId());
+        miniGamePlayer.set("livesRemaining", 0);
         updateArenaStateCounters(arena);
+        checkForMatchEnd(arena);
     }
 
     private void checkForMatchEnd(@NotNull MiniGameArena arena) {
-        if (arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
+        if (!isActiveRoundStatus(arena)) {
             return;
         }
-        if (arena.getPlayers().isEmpty() || (isNightPhase(arena) && activeSurvivorCount(arena) <= 0)) {
+        if (arena.getPlayers().isEmpty() || activeSurvivorCount(arena) <= 0) {
             arena.setStatus(MiniGameArena.ArenaStatus.COOLDOWN, ENDING_COUNTDOWN_SECONDS);
         }
     }
@@ -967,6 +945,8 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         for (PotionEffect effect : player.getActivePotionEffects()) {
             player.removePotionEffect(effect.getType());
         }
+        player.closeInventory();
+        clearSpectatorTargetIfNeeded(player);
         player.setGameMode(GameMode.SURVIVAL);
         player.setAllowFlight(false);
         player.setFlying(false);
@@ -980,11 +960,13 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         player.setHealth(Math.min(player.getMaxHealth(), 20.0d));
     }
 
-    private void prepareDormantParticipant(@NotNull Player player) {
+    private void prepareDownedParticipant(@NotNull Player player) {
         clearInventory(player);
         for (PotionEffect effect : player.getActivePotionEffects()) {
             player.removePotionEffect(effect.getType());
         }
+        player.closeInventory();
+        clearSpectatorTargetIfNeeded(player);
         player.setGameMode(GameMode.CREATIVE);
         player.setAllowFlight(true);
         player.setFlying(true);
@@ -996,6 +978,12 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         player.setLevel(0);
         player.setExp(0.0f);
         player.setHealth(Math.min(player.getMaxHealth(), 20.0d));
+    }
+
+    private void clearSpectatorTargetIfNeeded(@NotNull Player player) {
+        if (player.getGameMode() == GameMode.SPECTATOR) {
+            player.setSpectatorTarget(null);
+        }
     }
 
     private void resetRuntimeState(@NotNull MiniGameArena arena) {
@@ -1404,23 +1392,76 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
     }
 
     private void respawnNightEliminatedPlayers(@NotNull MiniGameArena arena) {
+        boolean revivedAny = false;
         for (Player player : arena.getPlayers()) {
             if (!isNightEliminated(arena, player)) {
                 continue;
             }
 
-            nightEliminatedPlayers(arena).remove(player.getUniqueId());
             MiniGamePlayer miniGamePlayer = arena.getPlayer(player);
-            if (miniGamePlayer != null) {
-                miniGamePlayer.set("livesRemaining", 1);
+            if (miniGamePlayer == null) {
+                continue;
             }
-            prepareParticipantForRound(player);
-            Location respawn = assignedPreparationSpawn(arena, player);
-            if (respawn != null) {
-                player.teleport(respawn);
-            }
-            player.setHealth(PlayerUtil.getMaxHealth(player));
+
+            revivePlayer(arena, player, miniGamePlayer);
+            broadcastToOccupants(arena, nightfall.playerReturnedMessage(player));
+            revivedAny = true;
         }
+
+        if (revivedAny) {
+            updateArenaStateCounters(arena);
+        }
+    }
+
+    public int respawnDownedPlayers(@NotNull MiniGameArena arena) {
+        if (!isActiveRoundStatus(arena)) {
+            return -1;
+        }
+
+        int revived = 0;
+        for (Player player : arena.getPlayers()) {
+            if (!isNightEliminated(arena, player)) {
+                continue;
+            }
+
+            MiniGamePlayer miniGamePlayer = arena.getPlayer(player);
+            if (miniGamePlayer == null) {
+                continue;
+            }
+
+            revivePlayer(arena, player, miniGamePlayer);
+            broadcastToOccupants(arena, nightfall.playerReturnedMessage(player));
+            revived++;
+        }
+
+        if (revived > 0) {
+            updateArenaStateCounters(arena);
+        }
+        return revived;
+    }
+
+    private void revivePlayer(@NotNull MiniGameArena arena, @NotNull Player player, @NotNull MiniGamePlayer miniGamePlayer) {
+        UUID playerId = player.getUniqueId();
+        nightEliminatedPlayers(arena).remove(playerId);
+        pendingDeathRespawns(arena).remove(playerId);
+        playerDropTargets(arena).remove(playerId);
+        playerDropDueAt(arena).put(playerId, System.currentTimeMillis() + randomDropDelayMillis(arena));
+        miniGamePlayer.set("livesRemaining", 1);
+        prepareParticipantForRound(player);
+        Location respawn = activeSpawn(arena);
+        if (respawn != null) {
+            PlayerUtil.teleport(player, respawn);
+        }
+        player.setHealth(PlayerUtil.getMaxHealth(player));
+    }
+
+    private @Nullable Location resolveDownedLocation(@NotNull MiniGameArena arena, @NotNull Location deathLocation) {
+        if (!isOutsideArena(arena, deathLocation)) {
+            return deathLocation.clone();
+        }
+
+        Location fallback = activeSpawn(arena);
+        return fallback != null ? fallback.clone() : deathLocation.clone();
     }
 
     private @Nullable Location assignedPreparationSpawn(@NotNull MiniGameArena arena, @NotNull Player player) {
@@ -1596,7 +1637,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
     }
 
     @SuppressWarnings("unchecked")
-    private Map<UUID, Boolean> pendingDeathRespawns(@NotNull MiniGameArena arena) {
+    private Map<UUID, Location> pendingDeathRespawns(@NotNull MiniGameArena arena) {
         return arena.getOrCreate("pendingDeathRespawns", Map.class, LinkedHashMap::new);
     }
 
@@ -1757,15 +1798,12 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
                 return;
             }
 
-            Boolean respawnAsDowned = pendingDeathRespawns(arena).remove(event.getPlayer().getUniqueId());
-            if (respawnAsDowned == null) {
+            Location respawnLocation = pendingDeathRespawns(arena).remove(event.getPlayer().getUniqueId());
+            if (respawnLocation == null) {
                 return;
             }
 
-            Location respawnLocation = assignedPreparationSpawn(arena, event.getPlayer());
-            if (respawnLocation != null) {
-                event.setRespawnLocation(respawnLocation);
-            }
+            event.setRespawnLocation(respawnLocation);
 
             api.tasks().nextTick(() -> {
                 if (arena.hasPlayer(event.getPlayer())) {
@@ -1774,18 +1812,12 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
                         return;
                     }
 
-                    if (respawnAsDowned) {
-                        nightEliminatedPlayers(arena).add(event.getPlayer().getUniqueId());
-                        miniGamePlayer.set("livesRemaining", 0);
-                        prepareDormantParticipant(event.getPlayer());
-                        checkForMatchEnd(arena);
-                    } else {
-                        nightEliminatedPlayers(arena).remove(event.getPlayer().getUniqueId());
-                        miniGamePlayer.set("livesRemaining", 1);
-                        prepareParticipantForRound(event.getPlayer());
+                    if (!isNightEliminated(arena, event.getPlayer())) {
+                        markPlayerDowned(arena, event.getPlayer(), miniGamePlayer);
                     }
+                    prepareDownedParticipant(event.getPlayer());
+                    PlayerUtil.teleport(event.getPlayer(), respawnLocation);
                     event.getPlayer().setHealth(PlayerUtil.getMaxHealth(event.getPlayer()));
-                    updateArenaStateCounters(arena);
                 }
             });
         }, EventPriority.HIGHEST, true);
