@@ -1,0 +1,17 @@
+name: Trigger Jenkins Build
+
+on:
+  push:
+    branches: [ main ]   # adjust as needed
+  workflow_dispatch:
+
+jobs:
+  trigger-jenkins:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger Jenkins
+        env:
+          JENKINS_TOKEN: ${{ secrets.JENKINS_TOKEN }}
+        run: |
+          curl -X POST "https://jenkins.stemmechanics.com.au/job/STEMCraft/build?token=${JENKINS_TOKEN}&cause=Triggered+from+Gitea"
