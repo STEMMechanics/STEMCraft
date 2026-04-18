@@ -297,6 +297,10 @@ rebalance_iron_golem:
   enabled: true
   min_drops: 3
   max_drops: 5
+leaf_decay_random_tick:
+  enabled: true
+  scan_radius: 7
+  candidate_retention_ticks: 1200
 naughty:
   allowed_commands:
     - "hub"
