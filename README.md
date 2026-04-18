@@ -13,7 +13,7 @@ This is the core STEMCraft plugin that provides the core functionality and helpe
 
 ## Usage
 
-You can visit the [Wiki](https://git.stemmechanics.com.au/STEMCraft/wiki) for details on the plugin commands, classes, and using as a dependency.
+You can visit the [Wiki](https://git.stemmechanics.com.au/STEMMechanics/STEMCraft/wiki) for details on the plugin commands, classes, and using as a dependency.
 
 ## Builds & API
 
