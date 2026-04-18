@@ -2,11 +2,9 @@ plugins {
     id 'base'   // root is just a container, no jar
 }
 
-apply from: "$rootDir/gitHash.gradle"
-
 subprojects {
     group = 'dev.stemcraft'
-    version = "1.0.0-SNAPSHOT+" + getGitHash()
+    version = "1.0.0-SNAPSHOT"
 
     repositories {
         mavenCentral()

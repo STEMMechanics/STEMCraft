@@ -3,6 +3,8 @@ plugins {
     id 'maven-publish'
 }
 
+apply from: "$rootDir/buildSource.gradle"
+
 repositories {
     mavenCentral()
     maven { url = uri("https://repo.papermc.io/repository/maven-public/") }
@@ -47,7 +49,6 @@ publishing {
 
 tasks.named("jar", Jar) {
     archiveBaseName.set("STEMCraft-API")
-    
-    def buildNumber = System.env.BUILD_NUMBER ?: "local"
-    archiveVersion.set("${project.version}-${buildNumber}")
+
+    archiveVersion.set("${project.version}${getArchiveBuildMetadata()}")
 }
