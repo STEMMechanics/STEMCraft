@@ -3,6 +3,8 @@ plugins {
     id("xyz.jpenilla.run-paper") version "2.3.1"
 }
 
+apply from: "$rootDir/buildSource.gradle"
+
 repositories {
     mavenCentral()
     maven { url 'https://jitpack.io' }
@@ -55,8 +57,7 @@ test {
 tasks.named("jar", Jar) {
     archiveBaseName.set("STEMCraft")
 
-    def buildNumber = System.env.BUILD_NUMBER ?: "local"
-    archiveVersion.set("${project.version}-${buildNumber}")
+    archiveVersion.set("${project.version}${getArchiveBuildMetadata()}")
 
     // include API classes inside the plugin jar
     from(project(":api").sourceSets.main.output)
@@ -64,7 +65,7 @@ tasks.named("jar", Jar) {
 
 // expand version into plugin.yml
 processResources {
-    def props = [version: version]
+    def props = [version: (version + getVersionCommandBuildMetadata())]
     inputs.properties props
     filteringCharset 'UTF-8'
     filesMatching('plugin.yml') {
