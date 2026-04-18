@@ -5,6 +5,10 @@ plugins {
 
 apply from: "$rootDir/buildSource.gradle"
 
+def apiMavenRepoDir = (findProperty("stemcraftApiRepoDir")
+    ?: System.getenv("MAVEN_REPO_DIR")
+    ?: "/repos/maven/maven-public").toString()
+
 repositories {
     mavenCentral()
     maven { url = uri("https://repo.papermc.io/repository/maven-public/") }
@@ -43,7 +47,7 @@ publishing {
         }
     }
     repositories {
-        maven { url = uri("file:/repos/maven/maven-public") }
+        maven { url = uri(new File(apiMavenRepoDir)) }
     }
 }
 
