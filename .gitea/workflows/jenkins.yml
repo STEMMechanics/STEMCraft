@@ -12,6 +12,7 @@ jobs:
     steps:
       - name: Trigger Jenkins
         env:
+          JENKINS_URL: ${{ secrets.JENKINS_URL }}
           JENKINS_TOKEN: ${{ secrets.JENKINS_TOKEN }}
         run: |
-          curl -X POST "https://jenkins.stemmechanics.com.au/job/STEMCraft/build?token=${JENKINS_TOKEN}&cause=Triggered+from+Gitea"
+          curl -X POST "${JENKINS_URL}/job/STEMCraft/build?token=${JENKINS_TOKEN}&cause=Triggered+from+Gitea"
