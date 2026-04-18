@@ -2,17 +2,17 @@ name: Trigger Jenkins Build
 
 on:
   push:
-    branches: [ main ]   # adjust as needed
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
   trigger-jenkins:
     runs-on: ubuntu-latest
-
     steps:
       - name: Trigger Jenkins
         env:
           JENKINS_URL: ${{ secrets.JENKINS_URL }}
-          JENKINS_TOKEN: ${{ secrets.JENKINS_TOKEN }}
+          JENKINS_JOB_TOKEN: ${{ secrets.JENKINS_JOB_TOKEN }}
         run: |
-          curl -X POST "${JENKINS_URL}/job/STEMCraft/build?token=${JENKINS_TOKEN}&cause=Triggered+from+Gitea"
+          curl --fail -X POST \
+            "${JENKINS_URL}/buildByToken/build?job=STEMCraft&token=${JENKINS_JOB_TOKEN}"
