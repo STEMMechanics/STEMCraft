@@ -22,7 +22,6 @@ package dev.stemcraft.feature;
 
 import dev.stemcraft.api.STEMCraftAPI;
 import net.kyori.adventure.text.Component;
-import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -32,14 +31,12 @@ import org.bukkit.block.Chest;
 import org.bukkit.block.Sign;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.PlayerDeathEvent;
-import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Grave rules:
@@ -48,14 +45,6 @@ import java.util.Map;
  * - If we can't safely place without wrecking blocks, fall back to vanilla drops.
  */
 public class Graves extends BaseFeature {
-    private static final BlockFace[] HORIZONTAL_FACES = {
-            BlockFace.NORTH,
-            BlockFace.SOUTH,
-            BlockFace.EAST,
-            BlockFace.WEST
-    };
-    private static final int SINGLE_CHEST_SIZE = 27;
-
     private static final int SEARCH_RADIUS = 10;
     private static final int SEARCH_Y_UP = 6;
     private static final int SEARCH_Y_DOWN = 12;
@@ -95,7 +84,7 @@ public class Graves extends BaseFeature {
 
             // If they died in liquid, force the "liquid grave" behaviour
             Material atDeath = death.getBlock().getType();
-            if (isLiquid(atDeath)) {
+            if (GraveStorageSupport.isLiquid(atDeath)) {
                 created = createLiquidGrave(api, death, player, drops);
             } else {
                 Location surfaceLoc = findSafeSurfaceLocation(death);
@@ -162,15 +151,15 @@ public class Graves extends BaseFeature {
 
         Material surfaceType = surface.getType();
         if (!surfaceType.isSolid()) return false;
-        if (isLiquid(surfaceType) || isHazard(surfaceType)) return false;
+        if (GraveStorageSupport.isLiquid(surfaceType) || GraveStorageSupport.isHazard(surfaceType)) return false;
 
         Material chestType = chestBlock.getType();
-        if (!isReplaceableForGrave(chestType)) return false;
-        if (isLiquid(chestType) || isHazard(chestType)) return false;
+        if (!GraveStorageSupport.isReplaceableForGrave(chestType)) return false;
+        if (GraveStorageSupport.isLiquid(chestType) || GraveStorageSupport.isHazard(chestType)) return false;
 
         Material signType = signBlock.getType();
-        if (!isReplaceableForGrave(signType)) return false;
-        return !isLiquid(signType) && !isHazard(signType);
+        if (!GraveStorageSupport.isReplaceableForGrave(signType)) return false;
+        return !GraveStorageSupport.isLiquid(signType) && !GraveStorageSupport.isHazard(signType);
     }
 
     /**
@@ -186,15 +175,15 @@ public class Graves extends BaseFeature {
         Block surface = surfaceLoc.getBlock();
         Block chestBlock = surface.getRelative(BlockFace.DOWN);
         Block signBlock = surface.getRelative(BlockFace.UP);
-        boolean needsDoubleChest = requiresDoubleChest(drops);
-        Block secondChestBlock = needsDoubleChest ? findDoubleChestPartner(chestBlock, false) : null;
+        boolean needsDoubleChest = GraveStorageSupport.requiresDoubleChest(drops);
+        Block secondChestBlock = needsDoubleChest ? GraveStorageSupport.findDoubleChestPartner(chestBlock, false) : null;
 
-        Chest chest = placeStorageChest(chestBlock, secondChestBlock);
+        Chest chest = GraveStorageSupport.placeStorageChest(chestBlock, secondChestBlock);
         if (chest == null) {
             return false;
         }
 
-        List<ItemStack> overflow = fillChest(chest, drops);
+        List<ItemStack> overflow = GraveStorageSupport.fillStorage(chest, secondChestBlock, drops);
 
         boolean signed = placeStandingSign(signBlock, player);
         if (!signed) {
@@ -238,31 +227,31 @@ public class Graves extends BaseFeature {
         Block cap = world.getBlockAt(x, liquidTopY, z);      // will become dirt cap
         Block chestBlock = world.getBlockAt(x, liquidTopY - 1, z);
         Block signBlock = world.getBlockAt(x, liquidTopY + 1, z);
-        boolean needsDoubleChest = requiresDoubleChest(drops);
-        Block secondChestBlock = needsDoubleChest ? findDoubleChestPartner(chestBlock, true) : null;
+        boolean needsDoubleChest = GraveStorageSupport.requiresDoubleChest(drops);
+        Block secondChestBlock = needsDoubleChest ? GraveStorageSupport.findDoubleChestPartner(chestBlock, true) : null;
 
         // We only replace "safe" blocks for this style to avoid griefing builds.
-        if (!isLiquid(cap.getType())) return false;
-        if (!canReplaceWithDirt(cap.getType())) return false;
-        if (!isReplaceableForGrave(chestBlock.getType()) && chestBlock.getType() != Material.WATER && chestBlock.getType() != Material.LAVA)
+        if (!GraveStorageSupport.isLiquid(cap.getType())) return false;
+        if (!GraveStorageSupport.canReplaceWithDirt(cap.getType())) return false;
+        if (!GraveStorageSupport.isReplaceableForGrave(chestBlock.getType()) && chestBlock.getType() != Material.WATER && chestBlock.getType() != Material.LAVA)
             return false;
-        if (!isReplaceableForGrave(signBlock.getType())) return false;
-        if (secondChestBlock != null && !canReplaceForChest(secondChestBlock.getType())) return false;
+        if (!GraveStorageSupport.isReplaceableForGrave(signBlock.getType())) return false;
+        if (secondChestBlock != null && !GraveStorageSupport.canReplaceForChest(secondChestBlock.getType())) return false;
 
         // Make the dirt cap at surface (replaces liquid)
         cap.setType(Material.DIRT, false);
 
         // Chest below the cap
-        if (!canReplaceForChest(chestBlock.getType())) return false;
-        Chest chest = placeStorageChest(chestBlock, secondChestBlock);
+        if (!GraveStorageSupport.canReplaceForChest(chestBlock.getType())) return false;
+        Chest chest = GraveStorageSupport.placeStorageChest(chestBlock, secondChestBlock);
         if (chest == null) {
             return false;
         }
 
         // Dirt around the chest if not solid
-        ensureSolidAroundChest(chestBlock, secondChestBlock);
+        GraveStorageSupport.ensureSolidAroundChest(chestBlock, secondChestBlock);
         if (secondChestBlock != null) {
-            ensureSolidAroundChest(secondChestBlock, chestBlock);
+            GraveStorageSupport.ensureSolidAroundChest(secondChestBlock, chestBlock);
         }
 
         // Standing sign above the dirt cap
@@ -271,7 +260,7 @@ public class Graves extends BaseFeature {
             api.messages().warn(player, "Liquid grave created but sign could not be placed.");
         }
 
-        List<ItemStack> overflow = fillChest(chest, drops);
+        List<ItemStack> overflow = GraveStorageSupport.fillStorage(chest, secondChestBlock, drops);
         dropOverflow(new Location(world, x, liquidTopY, z), overflow);
 
         return true;
@@ -293,42 +282,18 @@ public class Graves extends BaseFeature {
             int yUp = baseY + dy;
             int yDown = baseY - dy;
 
-            if (isLiquid(world.getBlockAt(x, yUp, z).getType())) { anyLiquidY = yUp; break; }
-            if (isLiquid(world.getBlockAt(x, yDown, z).getType())) { anyLiquidY = yDown; break; }
+            if (GraveStorageSupport.isLiquid(world.getBlockAt(x, yUp, z).getType())) { anyLiquidY = yUp; break; }
+            if (GraveStorageSupport.isLiquid(world.getBlockAt(x, yDown, z).getType())) { anyLiquidY = yDown; break; }
         }
         if (anyLiquidY == null) return null;
 
         // Walk upward to the topmost liquid block (surface)
         int y = anyLiquidY;
         int maxY = world.getMaxHeight() - 2;
-        while (y < maxY && isLiquid(world.getBlockAt(x, y + 1, z).getType())) {
+        while (y < maxY && GraveStorageSupport.isLiquid(world.getBlockAt(x, y + 1, z).getType())) {
             y++;
         }
         return y;
-    }
-
-    /**
-     * Ensures the blocks around the chest (sides and below) are solid by replacing non-solid blocks with dirt.
-     *
-     * @param chestBlock The block where the chest is placed.
-     */
-    private void ensureSolidAroundChest(Block chestBlock, Block partnerChestBlock) {
-        // Sides at chest level
-        for (BlockFace face : HORIZONTAL_FACES) {
-            Block side = chestBlock.getRelative(face);
-            if (side.equals(partnerChestBlock)) {
-                continue;
-            }
-            if (!side.getType().isSolid() && canReplaceWithDirt(side.getType())) {
-                side.setType(Material.DIRT, false);
-            }
-        }
-
-        // Below chest
-        Block below = chestBlock.getRelative(BlockFace.DOWN);
-        if (!below.getType().isSolid() && canReplaceWithDirt(below.getType())) {
-            below.setType(Material.DIRT, false);
-        }
     }
 
     /**
@@ -339,7 +304,7 @@ public class Graves extends BaseFeature {
      * @return True if the sign was placed successfully, false otherwise.
      */
     private boolean placeStandingSign(Block signBlock, Player player) {
-        if (!isReplaceableForGrave(signBlock.getType())) return false;
+        if (!GraveStorageSupport.isReplaceableForGrave(signBlock.getType())) return false;
 
         signBlock.setType(Material.OAK_SIGN, false);
         if (!(signBlock.getState() instanceof Sign sign)) return false;
@@ -354,91 +319,6 @@ public class Graves extends BaseFeature {
         }
         sign.update(true, false);
         return true;
-    }
-
-    /**
-     * Fills the chest with the given drops, returning any overflow items that couldn't fit.
-     *
-     * @param chest The chest to fill.
-     * @param drops The list of item drops to add to the chest.
-     * @return List of overflow items that couldn't fit in the chest.
-     */
-    private List<ItemStack> fillChest(Chest chest, List<ItemStack> drops) {
-        List<ItemStack> overflow = new ArrayList<>();
-        for (ItemStack stack : drops) {
-            if (stack == null || stack.getType() == Material.AIR) continue;
-            Map<Integer, ItemStack> notFit = chest.getInventory().addItem(stack);
-            if (!notFit.isEmpty()) overflow.addAll(notFit.values());
-        }
-        return overflow;
-    }
-
-    /**
-     * Checks whether the drops fit in a single chest or need double-chest storage.
-     *
-     * @param drops The drops to test.
-     * @return True when a single chest would overflow.
-     */
-    private boolean requiresDoubleChest(List<ItemStack> drops) {
-        Inventory probe = Bukkit.createInventory(null, SINGLE_CHEST_SIZE);
-        for (ItemStack stack : drops) {
-            if (stack == null || stack.getType() == Material.AIR) {
-                continue;
-            }
-
-            Map<Integer, ItemStack> overflow = probe.addItem(stack.clone());
-            if (!overflow.isEmpty()) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Finds a safe adjacent block to expand a grave into a double chest.
-     *
-     * @param primaryChestBlock The main chest block.
-     * @return A safe adjacent block, or null when the grave must remain single width.
-     */
-    private Block findDoubleChestPartner(Block primaryChestBlock, boolean allowLiquidPartner) {
-        for (BlockFace face : HORIZONTAL_FACES) {
-            Block candidate = primaryChestBlock.getRelative(face);
-            Material candidateType = candidate.getType();
-            if (!canReplaceForChest(candidateType)) {
-                continue;
-            }
-            if (!allowLiquidPartner && isLiquid(candidateType)) {
-                continue;
-            }
-            if (isHazard(candidateType)) {
-                continue;
-            }
-
-            return candidate;
-        }
-
-        return null;
-    }
-
-    /**
-     * Places the grave storage chest and optionally expands it into a double chest.
-     *
-     * @param primaryChestBlock The main chest block.
-     * @param secondChestBlock Optional adjacent chest block for larger graves.
-     * @return The primary chest state, or null when placement failed.
-     */
-    private Chest placeStorageChest(Block primaryChestBlock, Block secondChestBlock) {
-        primaryChestBlock.setType(Material.CHEST, false);
-        if (secondChestBlock != null) {
-            secondChestBlock.setType(Material.CHEST, false);
-        }
-
-        if (!(primaryChestBlock.getState() instanceof Chest chest)) {
-            return null;
-        }
-
-        return chest;
     }
 
     /**
@@ -458,78 +338,4 @@ public class Graves extends BaseFeature {
         }
     }
 
-    /**
-     * Checks if the material can be replaced when placing a chest.
-     *
-     * @param mat The material to check.
-     * @return True if it can be replaced, false otherwise.
-     */
-    private boolean canReplaceForChest(Material mat) {
-        // Allow replacing liquid/air/soft blocks, avoid overwriting valuable blocks.
-        if (mat == Material.AIR) return true;
-        if (isLiquid(mat)) return true;
-        return isReplaceableForGrave(mat);
-    }
-
-    /**
-     * Checks if the material can be replaced with dirt when creating a liquid grave.
-     *
-     * @param mat The material to check.
-     * @return True if it can be replaced with dirt, false otherwise.
-     */
-    private boolean canReplaceWithDirt(Material mat) {
-        // Dirt “patch” should only overwrite low-impact blocks.
-        if (mat == Material.AIR) return true;
-        if (isLiquid(mat)) return true;
-        return isReplaceableForGrave(mat);
-    }
-
-    /**
-     * Checks if the material is replaceable for grave placement.
-     *
-     * @param mat The material to check.
-     * @return True if replaceable, false otherwise.
-     */
-    private boolean isReplaceableForGrave(Material mat) {
-        if (mat == Material.AIR) return true;
-
-        // Do not overwrite solids
-        if (mat.isSolid()) return false;
-
-        // Avoid overwriting containers / important interactables (extend as needed)
-        return mat != Material.CHEST
-                && mat != Material.BARREL
-                && mat != Material.HOPPER
-                && mat != Material.FURNACE
-                && mat != Material.BLAST_FURNACE
-                && mat != Material.SMOKER
-                && mat != Material.SPAWNER;
-    }
-
-    /**
-     * Checks if the material is a liquid (water or lava).
-     *
-     * @param mat The material to check.
-     * @return True if liquid, false otherwise.
-     */
-    private boolean isLiquid(Material mat) {
-        return mat == Material.WATER || mat == Material.LAVA;
-    }
-
-    /**
-     * Checks if the material is a hazard (fire, cactus, etc.).
-     *
-     * @param mat The material to check.
-     * @return True if hazard, false otherwise.
-     */
-    private boolean isHazard(Material mat) {
-        return mat == Material.FIRE
-                || mat == Material.SOUL_FIRE
-                || mat == Material.CAMPFIRE
-                || mat == Material.SOUL_CAMPFIRE
-                || mat == Material.MAGMA_BLOCK
-                || mat == Material.CACTUS
-                || mat == Material.SWEET_BERRY_BUSH
-                || mat == Material.POWDER_SNOW;
-    }
 }

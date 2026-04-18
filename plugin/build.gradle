@@ -40,6 +40,12 @@ dependencies {
     compileOnly("com.fasterxml.jackson.core:jackson-databind:2.19.4")
 
     testImplementation "org.junit.jupiter:junit-jupiter:5.11.0"
+    testImplementation "io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT"
+    testImplementation("org.mockbukkit.mockbukkit:mockbukkit-v1.21:4.108.0") {
+        exclude group: "org.junit"
+        exclude group: "org.junit.jupiter"
+        exclude group: "org.junit.platform"
+    }
     testImplementation "org.yaml:snakeyaml:2.3"
 }
 
