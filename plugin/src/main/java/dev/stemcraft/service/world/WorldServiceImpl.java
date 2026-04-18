@@ -37,6 +37,7 @@ import lombok.Getter;
 import lombok.Setter;
 import org.bukkit.*;
 import org.bukkit.event.entity.EntityPortalEvent;
+import org.bukkit.event.block.BlockIgniteEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.player.PlayerPortalEvent;
 import org.bukkit.event.world.WorldLoadEvent;
@@ -150,11 +151,103 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         registerSettingHandler(new WorldNetherSetting(), SettingCommandMode.SUBCOMMAND);
         registerSettingHandler(new WorldNoDamageSetting(), SettingCommandMode.FLAG);
         registerSettingHandler(new WorldNoHungerSetting(), SettingCommandMode.FLAG);
+        registerNaturalFlagSettings();
         registerSettingHandler(new WorldEndSetting(), SettingCommandMode.SUBCOMMAND);
         registerSettingHandler(new WorldRandomSpawnSetting(), SettingCommandMode.SUBCOMMAND);
         registerSettingHandler(new WorldTickSpeedSetting(), SettingCommandMode.SUBCOMMAND);
         registerSettingHandler(new WorldTimeSetting(), SettingCommandMode.SUBCOMMAND);
         registerSettingHandler(new WorldWeatherSetting(), SettingCommandMode.SUBCOMMAND);
+    }
+
+    private void registerNaturalFlagSettings() {
+        registerSettingHandler(
+            WorldStateFlagSetting.blockIgnite("lava-fire", event -> event.getCause() == BlockIgniteEvent.IgniteCause.LAVA),
+            SettingCommandMode.FLAG
+        );
+        registerSettingHandler(
+            WorldStateFlagSetting.lightning("lightning", event -> true),
+            SettingCommandMode.FLAG
+        );
+        registerSettingHandler(
+            WorldStateFlagSetting.blockFromTo("water-flow", event -> event.getBlock().getType() == Material.WATER),
+            SettingCommandMode.FLAG
+        );
+        registerSettingHandler(
+            WorldStateFlagSetting.blockFromTo("lava-flow", event -> event.getBlock().getType() == Material.LAVA),
+            SettingCommandMode.FLAG
+        );
+        registerSettingHandler(
+            WorldStateFlagSetting.blockForm("snow-fall", WorldStateFlagSetting.formsMaterial(Material.SNOW)),
+            SettingCommandMode.FLAG
+        );
+        registerSettingHandler(
+            WorldStateFlagSetting.blockFade("snow-melt", WorldStateFlagSetting.fadesMaterial(Material.SNOW)),
+            SettingCommandMode.FLAG
+        );
+        registerSettingHandler(
+            WorldStateFlagSetting.blockForm("ice-form", WorldStateFlagSetting.formsMaterial(Material.ICE)),
+            SettingCommandMode.FLAG
+        );
+        registerSettingHandler(
+            WorldStateFlagSetting.blockFade("ice-melt", WorldStateFlagSetting.fadesMaterial(Material.ICE)),
+            SettingCommandMode.FLAG
+        );
+        registerSettingHandler(
+            WorldStateFlagSetting.blockFade("frosted-ice-melt", WorldStateFlagSetting.fadesMaterial(Material.FROSTED_ICE)),
+            SettingCommandMode.FLAG
+        );
+        registerSettingHandler(
+            WorldStateFlagSetting.combined(
+                "mushroom-growth",
+                WorldStateFlagSetting.blockSpread("mushroom-growth", WorldStateFlagSetting.spreadsMushroom()),
+                new WorldStateFlagSetting("mushroom-growth", WorldStateFlagSetting.structureGrow(WorldStateFlagSetting.growsHugeMushroom()))
+            ),
+            SettingCommandMode.FLAG
+        );
+        registerSettingHandler(
+            WorldStateFlagSetting.leavesDecay("leaf-decay"),
+            SettingCommandMode.FLAG
+        );
+        registerSettingHandler(
+            WorldStateFlagSetting.blockSpread("grass-growth", WorldStateFlagSetting.spreadsMaterial(Material.GRASS_BLOCK)),
+            SettingCommandMode.FLAG
+        );
+        registerSettingHandler(
+            WorldStateFlagSetting.blockSpread("mycelium-spread", WorldStateFlagSetting.spreadsMaterial(Material.MYCELIUM)),
+            SettingCommandMode.FLAG
+        );
+        registerSettingHandler(
+            WorldStateFlagSetting.combined(
+                "vine-growth",
+                WorldStateFlagSetting.blockGrow("vine-growth", WorldStateFlagSetting.growsVineLike()),
+                WorldStateFlagSetting.blockSpread("vine-growth", WorldStateFlagSetting.spreadsVineLike())
+            ),
+            SettingCommandMode.FLAG
+        );
+        registerSettingHandler(
+            WorldStateFlagSetting.blockGrow("rock-growth", WorldStateFlagSetting.growsRockLike()),
+            SettingCommandMode.FLAG
+        );
+        registerSettingHandler(
+            WorldStateFlagSetting.sculkBloom("sculk-growth"),
+            SettingCommandMode.FLAG
+        );
+        registerSettingHandler(
+            WorldStateFlagSetting.blockGrow("crop-growth", WorldStateFlagSetting.growsCropLike()),
+            SettingCommandMode.FLAG
+        );
+        registerSettingHandler(
+            WorldStateFlagSetting.blockFade("soil-dry", WorldStateFlagSetting.fadesMaterial(Material.FARMLAND)),
+            SettingCommandMode.FLAG
+        );
+        registerSettingHandler(
+            WorldStateFlagSetting.blockFade("coral-fade", WorldStateFlagSetting.fadesLiveCoral()),
+            SettingCommandMode.FLAG
+        );
+        registerSettingHandler(
+            WorldStateFlagSetting.blockForm("copper-fade", WorldStateFlagSetting.copperWeathering()),
+            SettingCommandMode.FLAG
+        );
     }
 
     public void completeStartupLoad() {
