@@ -22,6 +22,7 @@ package dev.stemcraft.feature;
 
 import dev.stemcraft.api.STEMCraftAPI;
 import net.kyori.adventure.text.Component;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -31,6 +32,7 @@ import org.bukkit.block.Chest;
 import org.bukkit.block.Sign;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
 import java.time.LocalDateTime;
@@ -46,6 +48,13 @@ import java.util.Map;
  * - If we can't safely place without wrecking blocks, fall back to vanilla drops.
  */
 public class Graves extends BaseFeature {
+    private static final BlockFace[] HORIZONTAL_FACES = {
+            BlockFace.NORTH,
+            BlockFace.SOUTH,
+            BlockFace.EAST,
+            BlockFace.WEST
+    };
+    private static final int SINGLE_CHEST_SIZE = 27;
 
     private static final int SEARCH_RADIUS = 10;
     private static final int SEARCH_Y_UP = 6;
@@ -177,9 +186,13 @@ public class Graves extends BaseFeature {
         Block surface = surfaceLoc.getBlock();
         Block chestBlock = surface.getRelative(BlockFace.DOWN);
         Block signBlock = surface.getRelative(BlockFace.UP);
+        boolean needsDoubleChest = requiresDoubleChest(drops);
+        Block secondChestBlock = needsDoubleChest ? findDoubleChestPartner(chestBlock, false) : null;
 
-        chestBlock.setType(Material.CHEST, false);
-        if (!(chestBlock.getState() instanceof Chest chest)) return false;
+        Chest chest = placeStorageChest(chestBlock, secondChestBlock);
+        if (chest == null) {
+            return false;
+        }
 
         List<ItemStack> overflow = fillChest(chest, drops);
 
@@ -225,6 +238,8 @@ public class Graves extends BaseFeature {
         Block cap = world.getBlockAt(x, liquidTopY, z);      // will become dirt cap
         Block chestBlock = world.getBlockAt(x, liquidTopY - 1, z);
         Block signBlock = world.getBlockAt(x, liquidTopY + 1, z);
+        boolean needsDoubleChest = requiresDoubleChest(drops);
+        Block secondChestBlock = needsDoubleChest ? findDoubleChestPartner(chestBlock, true) : null;
 
         // We only replace "safe" blocks for this style to avoid griefing builds.
         if (!isLiquid(cap.getType())) return false;
@@ -232,17 +247,23 @@ public class Graves extends BaseFeature {
         if (!isReplaceableForGrave(chestBlock.getType()) && chestBlock.getType() != Material.WATER && chestBlock.getType() != Material.LAVA)
             return false;
         if (!isReplaceableForGrave(signBlock.getType())) return false;
+        if (secondChestBlock != null && !canReplaceForChest(secondChestBlock.getType())) return false;
 
         // Make the dirt cap at surface (replaces liquid)
         cap.setType(Material.DIRT, false);
 
         // Chest below the cap
         if (!canReplaceForChest(chestBlock.getType())) return false;
-        chestBlock.setType(Material.CHEST, false);
-        if (!(chestBlock.getState() instanceof Chest chest)) return false;
+        Chest chest = placeStorageChest(chestBlock, secondChestBlock);
+        if (chest == null) {
+            return false;
+        }
 
         // Dirt around the chest if not solid
-        ensureSolidAroundChest(chestBlock);
+        ensureSolidAroundChest(chestBlock, secondChestBlock);
+        if (secondChestBlock != null) {
+            ensureSolidAroundChest(secondChestBlock, chestBlock);
+        }
 
         // Standing sign above the dirt cap
         boolean signed = placeStandingSign(signBlock, player);
@@ -291,10 +312,13 @@ public class Graves extends BaseFeature {
      *
      * @param chestBlock The block where the chest is placed.
      */
-    private void ensureSolidAroundChest(Block chestBlock) {
+    private void ensureSolidAroundChest(Block chestBlock, Block partnerChestBlock) {
         // Sides at chest level
-        for (BlockFace face : new BlockFace[]{BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST, BlockFace.WEST}) {
+        for (BlockFace face : HORIZONTAL_FACES) {
             Block side = chestBlock.getRelative(face);
+            if (side.equals(partnerChestBlock)) {
+                continue;
+            }
             if (!side.getType().isSolid() && canReplaceWithDirt(side.getType())) {
                 side.setType(Material.DIRT, false);
             }
@@ -347,6 +371,74 @@ public class Graves extends BaseFeature {
             if (!notFit.isEmpty()) overflow.addAll(notFit.values());
         }
         return overflow;
+    }
+
+    /**
+     * Checks whether the drops fit in a single chest or need double-chest storage.
+     *
+     * @param drops The drops to test.
+     * @return True when a single chest would overflow.
+     */
+    private boolean requiresDoubleChest(List<ItemStack> drops) {
+        Inventory probe = Bukkit.createInventory(null, SINGLE_CHEST_SIZE);
+        for (ItemStack stack : drops) {
+            if (stack == null || stack.getType() == Material.AIR) {
+                continue;
+            }
+
+            Map<Integer, ItemStack> overflow = probe.addItem(stack.clone());
+            if (!overflow.isEmpty()) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Finds a safe adjacent block to expand a grave into a double chest.
+     *
+     * @param primaryChestBlock The main chest block.
+     * @return A safe adjacent block, or null when the grave must remain single width.
+     */
+    private Block findDoubleChestPartner(Block primaryChestBlock, boolean allowLiquidPartner) {
+        for (BlockFace face : HORIZONTAL_FACES) {
+            Block candidate = primaryChestBlock.getRelative(face);
+            Material candidateType = candidate.getType();
+            if (!canReplaceForChest(candidateType)) {
+                continue;
+            }
+            if (!allowLiquidPartner && isLiquid(candidateType)) {
+                continue;
+            }
+            if (isHazard(candidateType)) {
+                continue;
+            }
+
+            return candidate;
+        }
+
+        return null;
+    }
+
+    /**
+     * Places the grave storage chest and optionally expands it into a double chest.
+     *
+     * @param primaryChestBlock The main chest block.
+     * @param secondChestBlock Optional adjacent chest block for larger graves.
+     * @return The primary chest state, or null when placement failed.
+     */
+    private Chest placeStorageChest(Block primaryChestBlock, Block secondChestBlock) {
+        primaryChestBlock.setType(Material.CHEST, false);
+        if (secondChestBlock != null) {
+            secondChestBlock.setType(Material.CHEST, false);
+        }
+
+        if (!(primaryChestBlock.getState() instanceof Chest chest)) {
+            return null;
+        }
+
+        return chest;
     }
 
     /**
