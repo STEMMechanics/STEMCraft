@@ -14,6 +14,10 @@ subprojects {
         }
     }
 
+    tasks.withType(JavaCompile).configureEach {
+        options.compilerArgs += ["-Xlint:all", "-Xlint:-processing"]
+    }
+
     plugins.withId("java") {
         java {
             toolchain.languageVersion = JavaLanguageVersion.of(21)
