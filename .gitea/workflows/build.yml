@@ -145,7 +145,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-          cache: gradle
 
       - name: Verify Maven repository path
         env:
