@@ -12,6 +12,7 @@ import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Sound;
 import org.bukkit.Material;
+import org.bukkit.attribute.Attribute;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.EntityDamageEvent;
@@ -460,7 +461,7 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
             player.setAllowFlight(false);
             player.setFlying(false);
             player.setWalkSpeed(0.0f);
-            player.setHealth(Math.min(player.getMaxHealth(), 20.0d));
+            player.setHealth(Math.min(player.getAttribute(Attribute.MAX_HEALTH).getValue(), 20.0d));
             player.setFoodLevel(20);
             player.setSaturation(20.0f);
             player.setFireTicks(0);

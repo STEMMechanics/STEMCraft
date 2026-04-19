@@ -21,6 +21,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.attribute.Attribute;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -228,7 +229,7 @@ public class ParkourMiniGame extends BaseMiniGame {
         mgPlayer.remove(RUN_START_MILLIS_KEY);
         mgPlayer.remove(LAST_RUN_MILLIS_KEY);
         mgPlayer.set(RUN_ARMED_KEY, true);
-        player.setHealth(Math.min(player.getMaxHealth(), 20.0d));
+        player.setHealth(Math.min(player.getAttribute(Attribute.MAX_HEALTH).getValue(), 20.0d));
         player.setFoodLevel(20);
         player.setSaturation(20.0f);
         player.setFireTicks(0);

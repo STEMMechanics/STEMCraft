@@ -11,6 +11,7 @@ import dev.stemcraft.api.util.NamespaceId;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Sound;
+import org.bukkit.attribute.Attribute;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.EntityDamageEvent;
@@ -181,7 +182,7 @@ public class ParkourArenaHandler implements MiniGameArenaHandler {
         parkour.clearRun(arena, player);
         parkour.armRun(arena, player);
         player.setGameMode(GameMode.ADVENTURE);
-        player.setHealth(Math.min(player.getMaxHealth(), 20.0d));
+        player.setHealth(Math.min(player.getAttribute(Attribute.MAX_HEALTH).getValue(), 20.0d));
         player.setFoodLevel(20);
         player.setSaturation(20.0f);
         player.setFireTicks(0);

@@ -37,6 +37,7 @@ import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
+import org.bukkit.GameRules;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.generator.ChunkGenerator;
@@ -559,7 +560,7 @@ public class WorldCommand {
         ctx.info(" - Spawn: " + formatLocation(world.getSpawnLocation()));
         ctx.info(" - Time: " + world.getTime() + " ticks");
         ctx.info(" - Weather: " + describeWeather(world));
-        ctx.info(" - PVP: " + yesNo(world.getPVP()));
+        ctx.info(" - PVP: " + yesNo(Boolean.TRUE.equals(world.getGameRuleValue(GameRules.PVP))));
         ctx.info(" - Height: " + world.getMinHeight() + " to " + world.getMaxHeight());
         ctx.info(" - Border: " + formatBorder(world));
         ctx.info(" - Folder: " + api.worlds().getWorldFolder(world.getName()).toAbsolutePath());

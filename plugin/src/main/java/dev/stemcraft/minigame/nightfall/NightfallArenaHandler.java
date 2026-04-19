@@ -12,11 +12,13 @@ import dev.stemcraft.api.service.region.RegionListener;
 import dev.stemcraft.api.service.world.WorldChangeSession;
 import dev.stemcraft.api.util.NamespaceId;
 import dev.stemcraft.api.util.PlayerUtil;
+import net.kyori.adventure.text.Component;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.World;
+import org.bukkit.attribute.Attribute;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.data.Bisected;
@@ -957,7 +959,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         player.setExhaustion(0.0f);
         player.setLevel(0);
         player.setExp(0.0f);
-        player.setHealth(Math.min(player.getMaxHealth(), 20.0d));
+        player.setHealth(Math.min(player.getAttribute(Attribute.MAX_HEALTH).getValue(), 20.0d));
     }
 
     private void prepareDownedParticipant(@NotNull Player player) {
@@ -977,7 +979,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         player.setExhaustion(0.0f);
         player.setLevel(0);
         player.setExp(0.0f);
-        player.setHealth(Math.min(player.getMaxHealth(), 20.0d));
+        player.setHealth(Math.min(player.getAttribute(Attribute.MAX_HEALTH).getValue(), 20.0d));
     }
 
     private void clearSpectatorTargetIfNeeded(@NotNull Player player) {
@@ -1784,7 +1786,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
                 return;
             }
 
-            event.setDeathMessage(null);
+            event.deathMessage(Component.empty());
             event.getDrops().clear();
             event.setDroppedExp(0);
             event.setKeepInventory(true);

@@ -31,6 +31,7 @@ import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.api.util.TimeUtil;
 import io.papermc.paper.ban.BanListType;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.BanList;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
@@ -236,7 +237,7 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
                         if (target.isOnline()) {
                             Player online = target.getPlayer();
                             if (online != null) {
-                                online.kick(Component.text(formatBanMessage(findActiveBan(targetUuid))));
+                                online.kick(formatBanMessage(findActiveBan(targetUuid)));
                             }
                         }
 
@@ -685,24 +686,29 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
         return latest;
     }
 
-    String formatBanMessage(PunishmentRecord record) {
+    Component formatBanMessage(PunishmentRecord record) {
         if (record == null) {
-            return "You have been banned.";
+            return Component.text("You have been banned.");
         }
 
-        StringBuilder message = new StringBuilder("You are banned from this server.");
+        Component message = Component.text("You are banned from this server.");
         if (record.reason() != null && !record.reason().isBlank()) {
-            message.append("\nReason: ").append(record.reason());
+            message = message.appendNewline().append(
+                    Component.text("Reason: " + record.reason())
+                    );
         }
         if (!record.permanent() && record.durationSeconds() != null && record.durationSeconds() > 0L) {
             Instant expiresAt = record.expiresAt();
             if (expiresAt != null) {
                 long remainingSeconds = Duration.between(Instant.now(), expiresAt).getSeconds();
                 if (remainingSeconds > 0L) {
-                    message.append("\nRemaining: ").append(TimeUtil.formatDuration(remainingSeconds));
+                    message = message.appendNewline()
+                            .append(
+                                    Component.text("\nRemaining: " + TimeUtil.formatDuration(remainingSeconds))
+                            );
                 }
             }
         }
-        return message.toString();
+        return message;
     }
 }
