@@ -100,7 +100,7 @@ jobs:
           run: ./gradlew --no-daemon :plugin:test :api:jar :plugin:jar
       
         - name: Upload build artifacts\
-          uses: actions/upload-artifact@v4
+          uses: actions/upload-artifact@v3.2.2
           with:
             name: stemcraft-jars
             if-no-files-found: error
