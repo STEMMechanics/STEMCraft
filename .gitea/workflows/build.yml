@@ -91,7 +91,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-          cache: gradle
 
       - name: Run plugin test suite
         run: ./gradlew --no-daemon :plugin:test
@@ -113,7 +112,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-          cache: gradle
 
       - name: Build plugin and API jars
         env:
