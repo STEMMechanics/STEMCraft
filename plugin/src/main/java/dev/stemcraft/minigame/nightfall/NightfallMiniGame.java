@@ -51,6 +51,11 @@ public class NightfallMiniGame extends BaseMiniGame {
     }
 
     @Override
+    protected boolean disablesHungerByDefault() {
+        return false;
+    }
+
+    @Override
     public void onLoad() {
         NightfallArenaHandler handler = new NightfallArenaHandler(api, this);
 

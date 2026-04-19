@@ -147,9 +147,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
 
             for (HologramData data : holograms.values()) {
                 Location loc = data.location;
-                if (loc == null || loc.getWorld() == null) continue;
-                if (!loc.getWorld().equals(world)) continue;
-                if (!chunk.equals(loc.getChunk())) continue;
+                if (!isLocationInChunk(loc, world, chunk.getX(), chunk.getZ())) continue;
 
                 // Only respawn if not already spawned
                 if (!entitiesById.containsKey(data.id)) {
@@ -164,9 +162,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
 
             for (HologramData data : holograms.values()) {
                 Location loc = data.location;
-                if (loc == null || loc.getWorld() == null) continue;
-                if (!loc.getWorld().equals(world)) continue;
-                if (!chunk.equals(loc.getChunk())) continue;
+                if (!isLocationInChunk(loc, world, chunk.getX(), chunk.getZ())) continue;
 
                 despawn(data.id); // clears entitiesById
             }
@@ -831,6 +827,18 @@ public class HologramServiceImpl extends BaseService implements HologramService 
             return Long.toString(Math.round(value));
         }
         return STAT_VALUE_FORMAT.format(value);
+    }
+
+    static boolean isLocationInChunk(@Nullable Location location, @NotNull World world, int chunkX, int chunkZ) {
+        if (location == null) {
+            return false;
+        }
+        World locationWorld = location.getWorld();
+        if (locationWorld == null || !locationWorld.equals(world)) {
+            return false;
+        }
+
+        return (location.getBlockX() >> 4) == chunkX && (location.getBlockZ() >> 4) == chunkZ;
     }
 
     private record StatLeaderboardOptions(
