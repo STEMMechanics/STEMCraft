@@ -118,6 +118,15 @@ jobs:
     if: needs.prepare.outputs.should_release == 'true'
 
     steps:
+      - name: Debug filesystem
+        run: |
+          pwd
+          whoami
+          ls -lah /
+          ls -lah /repos || true
+          ls -lah /repos/maven || true
+          ls -lah /repos/maven/maven-public || true
+
       - name: Check out repository
         uses: actions/checkout@v4
 
