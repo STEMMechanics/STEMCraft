@@ -34,6 +34,9 @@ import dev.stemcraft.api.service.web.WebServiceRequest;
 import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.api.util.TimeUtil;
 import io.papermc.paper.ban.BanListType;
+import io.papermc.paper.connection.PlayerGameConnection;
+import io.papermc.paper.connection.PlayerLoginConnection;
+import io.papermc.paper.event.connection.PlayerConnectionValidateLoginEvent;
 import io.papermc.paper.event.player.AsyncChatEvent;
 import net.kyori.adventure.text.Component;
 import org.bukkit.BanList;
@@ -45,7 +48,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.player.AsyncPlayerPreLoginEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.event.player.PlayerLoginEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import com.destroystokyo.paper.profile.PlayerProfile;
@@ -85,6 +87,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 /**
@@ -169,7 +172,8 @@ public final class WebhookBridgeServiceImpl extends BaseService {
 
     private void registerEvents() {
         api.events().register(AsyncPlayerPreLoginEvent.class, this::onAsyncPlayerPreLogin, EventPriority.HIGHEST, false);
-        api.events().register(PlayerLoginEvent.class, this::onPlayerLogin, EventPriority.HIGHEST, false);
+        //noinspection UnstableApiUsage
+        api.events().register(PlayerConnectionValidateLoginEvent.class, this::onPlayerConnect, EventPriority.HIGHEST, false);
         api.events().register(PlayerJoinEvent.class, this::onPlayerJoin);
         api.events().register(PlayerQuitEvent.class, this::onPlayerQuit);
         api.events().register(AsyncChatEvent.class, this::onAsyncChat);
@@ -416,32 +420,63 @@ public final class WebhookBridgeServiceImpl extends BaseService {
         sendPlayerLogin(player);
     }
 
-    private void onPlayerLogin(PlayerLoginEvent event) {
+    @SuppressWarnings("UnstableApiUsage")
+    private void onPlayerConnect(PlayerConnectionValidateLoginEvent event) {
         if (!isBridgeEnabled()) {
             return;
         }
 
-        Player player = event.getPlayer();
-        String loginPlatform = platformForLogin(player.getUniqueId(), player.getName());
+        PlayerProfile player = getPlayerProfile(event);
 
-        PenaltyStateRecord activeBan = findActivePenalty(player.getUniqueId(), player.getName(), "ban");
+        if (player == null) {
+            event.kickMessage(Component.text("An error occurred. Try restarting your launcher. If the issue persists, contact STEMCrew! (err: onPlayerConnect#1"));
+            STEMCraft.getPlugin().getLogger().log(Level.SEVERE, "A player could not be connected because all possible paths for the player profile returned null (onPlayerConnect#1).");
+            return;
+        }
+
+        if (player.getId() == null) {
+            event.kickMessage(Component.text("An error occurred. Try restarting your launcher. If the issue persists, contact STEMCrew! (err: onPlayerConnect#2)"));
+            STEMCraft.getPlugin().getLogger().log(Level.SEVERE, "A player could not be connected because they didn't have a UUID (onPlayerConnect#2).");
+        }
+
+        String loginPlatform = platformForLogin(player.getId(), player.getName());
+
+        PenaltyStateRecord activeBan = findActivePenalty(player.getId(), player.getName(), "ban");
         if (activeBan != null) {
-            event.disallow(PlayerLoginEvent.Result.KICK_BANNED, messageForPenalty(activeBan, "You are banned from this server."));
+            event.kickMessage(messageForPenalty(activeBan, "You are banned from this server."));
             return;
         }
 
-        BlacklistRecord blacklist = findBlacklist(player.getUniqueId(), player.getName());
+        BlacklistRecord blacklist = findBlacklist(player.getId(), player.getName());
         if (blacklist != null && blacklist.isActive()) {
-            event.disallow(PlayerLoginEvent.Result.KICK_BANNED, messageForBlacklist(player.getUniqueId(), player.getName()));
+            event.kickMessage(messageForBlacklist(player.getId(), player.getName()));
             return;
         }
 
-        if (!isWhitelistedByAccountStateStrict(player.getUniqueId(), player.getName(), loginPlatform)) {
-            event.disallow(PlayerLoginEvent.Result.KICK_WHITELIST, getWhitelistKickMessage());
+        if (!isWhitelistedByAccountStateStrict(player.getId(), player.getName(), loginPlatform)) {
+            event.kickMessage(getWhitelistKickMessage());
             return;
         }
 
         event.allow();
+    }
+
+    @SuppressWarnings("UnstableApiUsage")
+    private static PlayerProfile getPlayerProfile(PlayerConnectionValidateLoginEvent event) {
+        PlayerProfile player = null;
+
+        if (event.getConnection() instanceof PlayerLoginConnection) {
+            if (((PlayerLoginConnection) event.getConnection()).getAuthenticatedProfile() != null) {
+                player = ((PlayerLoginConnection) event.getConnection()).getAuthenticatedProfile();
+                // TODO: Should we really use `getUnsafeProfile()`? - ProjectHSI
+            } else if (((PlayerLoginConnection) event.getConnection()).getUnsafeProfile() != null) {
+                player = ((PlayerLoginConnection) event.getConnection()).getUnsafeProfile();
+            }
+        } else if (event.getConnection() instanceof PlayerGameConnection) {
+            player = ((PlayerGameConnection) event.getConnection()).getPlayer().getPlayerProfile();
+        }
+
+        return player;
     }
 
     private boolean isWhitelistedByAccountStateStrict(UUID uuid, String username, String platform) {
