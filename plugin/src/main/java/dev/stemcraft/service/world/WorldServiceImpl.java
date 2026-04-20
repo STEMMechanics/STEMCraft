@@ -33,7 +33,6 @@ import dev.stemcraft.api.util.WorldUtil;
 import dev.stemcraft.service.BaseService;
 import dev.stemcraft.service.world.recorder.WorldChangeRecorder;
 import dev.stemcraft.service.world.setting.*;
-import lombok.Getter;
 import lombok.Setter;
 import org.bukkit.*;
 import org.bukkit.event.entity.EntityPortalEvent;
@@ -397,7 +396,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         clearLastWorldOperationError(name);
 
         String resolvedGeneratorName = generatorName.trim().isEmpty() ? "normal" : generatorName.trim();
-        String resolvedGeneratorOptions = generatorOptions == null ? "" : generatorOptions.trim();
+        String resolvedGeneratorOptions = generatorOptions.trim();
         try {
             World world = ensure(
                 name,

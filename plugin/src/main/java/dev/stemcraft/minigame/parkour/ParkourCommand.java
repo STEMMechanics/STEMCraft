@@ -83,8 +83,7 @@ public class ParkourCommand {
                     case "enable" -> commandEnable(ctx);
                     case "disable" -> commandDisable(ctx);
                     case "set" -> commandSet(ctx);
-                    case "select" -> commandSelect(ctx);
-                    case "sel" -> commandSelect(ctx);
+                    case "select", "sel" -> commandSelect(ctx);
                     case "show" -> commandShow(ctx);
                     default -> ctx.returnUsage();
                 }
@@ -391,6 +390,7 @@ public class ParkourCommand {
             }
         }
 
+        // TODO: ... Huh? - ProjectHSI
         if (location != null) {
             if (!player.getWorld().equals(location.getWorld())) {
                 ctx.returnError("Move to world '" + location.getWorld().getName() + "' to preview that location.");

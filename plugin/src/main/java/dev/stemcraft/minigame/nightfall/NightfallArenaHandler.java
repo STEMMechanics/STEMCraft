@@ -25,7 +25,6 @@ import org.bukkit.block.data.Bisected;
 import org.bukkit.block.data.type.Door;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Item;
-import org.bukkit.entity.Monster;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
 import org.bukkit.entity.Zombie;
@@ -588,7 +587,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         respawnNightEliminatedPlayers(arena);
         resetTimeAnnouncements(arena);
 
-        if (arena.getPlayers().size() > 0) {
+        if (!arena.getPlayers().isEmpty()) {
             broadcastToOccupants(arena, nightfall.sunriseMessage(arena.get("currentNight", Integer.class, 0) + 1));
             playTimeAnnouncementSound(arena);
             playSoundToOccupants(arena, Sound.ENTITY_CHICKEN_AMBIENT, 0.8f, 0.85f);
@@ -691,7 +690,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
             int z = (int) Math.floor(player.getZ() + (Math.sin(angle) * radius));
 
             Block ground = world.getHighestBlockAt(x, z);
-            if (ground == null || !ground.getType().isSolid()) {
+            if (!ground.getType().isSolid()) {
                 continue;
             }
 
@@ -776,7 +775,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         }
 
         Block highest = arena.world().getHighestBlockAt(dropBlock.getX(), dropBlock.getZ());
-        if (highest == null || highest.getY() != ground.getY()) {
+        if (highest.getY() != ground.getY()) {
             return false;
         }
 
@@ -917,7 +916,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         dropItems(world, location, player.getInventory().getStorageContents());
         dropItems(world, location, player.getInventory().getArmorContents());
         ItemStack offHand = player.getInventory().getItemInOffHand();
-        if (offHand != null && !offHand.getType().isAir()) {
+        if (!offHand.getType().isAir()) {
             world.dropItemNaturally(location, offHand.clone());
         }
         clearInventory(player);
@@ -1173,9 +1172,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
             }
 
             zombie.setTarget(null);
-            if (zombie.getEquipment() != null) {
-                zombie.getEquipment().setHelmet(null);
-            }
+            zombie.getEquipment().setHelmet(null);
             zombie.setFireTicks(Math.max(zombie.getFireTicks(), 200));
         }
     }
@@ -1248,7 +1245,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
             int maxCountdown = Math.max(1, arena.getCountdownMax());
             return new PhaseCountdown(
                 "Sunset in " + formatCountdown(countdown),
-                Math.max(0.0d, Math.min(1.0d, (double) countdown / (double) maxCountdown))
+                    Math.clamp((double) countdown / (double) maxCountdown, 0.0d, 1.0d)
             );
         }
 
@@ -1267,7 +1264,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
 
         return new PhaseCountdown(
             (countdownToSunrise ? "Sunrise" : "Sunset") + " in " + formatCountdown(remainingSeconds),
-            totalTicks <= 0L ? 1.0d : Math.max(0.0d, Math.min(1.0d, (double) remainingTicks / (double) totalTicks))
+            totalTicks <= 0L ? 1.0d : Math.clamp((double) remainingTicks / (double) totalTicks, 0.0d, 1.0d)
         );
     }
 
@@ -1457,7 +1454,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         player.setHealth(PlayerUtil.getMaxHealth(player));
     }
 
-    private @Nullable Location resolveDownedLocation(@NotNull MiniGameArena arena, @NotNull Location deathLocation) {
+    private @NotNull Location resolveDownedLocation(@NotNull MiniGameArena arena, @NotNull Location deathLocation) {
         if (!isOutsideArena(arena, deathLocation)) {
             return deathLocation.clone();
         }
@@ -1610,7 +1607,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         }
 
         Block highest = arena.world().getHighestBlockAt(spawn.getBlockX(), spawn.getBlockZ());
-        return highest != null && highest.getY() == ground.getY();
+        return highest.getY() == ground.getY();
     }
 
     private boolean isTooCloseToPreparationSpawn(@NotNull Location candidate, @NotNull List<Location> occupied) {
@@ -1686,7 +1683,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
 
             Location destination = event.getTo();
             if (isOutsideArena(arena, destination)) {
-                if (isIntentionalExitTeleport(event.getCause()) && destination != null) {
+                if (isIntentionalExitTeleport(event.getCause())) {
                     event.setCancelled(true);
                     exitArenaViaTeleport(arena, event.getPlayer(), destination);
                     return;

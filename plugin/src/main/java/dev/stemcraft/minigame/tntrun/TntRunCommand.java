@@ -605,7 +605,6 @@ public class TntRunCommand {
                 api.selections().setWorldEditSelection(player, region);
                 showRegionPreview(player, "select-arena", region);
                 ctx.success("WorldEdit selection updated from arena '" + arena.id() + "' (arena).");
-                return;
             }
             case "floor" -> {
                 ctx.checkArgsSizeAtLeast(4);
@@ -615,7 +614,6 @@ public class TntRunCommand {
                 api.selections().setWorldEditSelection(player, region);
                 showRegionPreview(player, "select-floor-" + index, region);
                 ctx.success("WorldEdit selection updated from arena '" + arena.id() + "' (floor " + (index + 1) + ").");
-                return;
             }
             case "spawn" -> {
                 ctx.checkArgsSizeAtLeast(4);
@@ -625,7 +623,6 @@ public class TntRunCommand {
                 api.selections().setWorldEditSelection(player, location);
                 showLocationPreview(player, "select-spawn-" + index, location);
                 ctx.success("WorldEdit selection updated from arena '" + arena.id() + "' (spawn " + (index + 1) + ").");
-                return;
             }
             case "lobby" -> {
                 location = arena.getLobbySpawn();
@@ -633,7 +630,6 @@ public class TntRunCommand {
                 api.selections().setWorldEditSelection(player, location);
                 showLocationPreview(player, "select-lobby", location);
                 ctx.success("WorldEdit selection updated from arena '" + arena.id() + "' (lobby).");
-                return;
             }
             case "spectator" -> {
                 location = arena.getSpectatorSpawn();
@@ -641,7 +637,6 @@ public class TntRunCommand {
                 api.selections().setWorldEditSelection(player, location);
                 showLocationPreview(player, "select-spectator", location);
                 ctx.success("WorldEdit selection updated from arena '" + arena.id() + "' (spectator).");
-                return;
             }
             default -> ctx.returnError("Unknown TNT Run select target '" + target + "'.");
         }

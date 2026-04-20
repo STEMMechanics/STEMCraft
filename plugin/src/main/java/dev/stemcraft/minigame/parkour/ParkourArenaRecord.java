@@ -1,7 +1,6 @@
 package dev.stemcraft.minigame.parkour;
 
 import dev.stemcraft.api.model.SCRegion;
-import org.bukkit.Location;
 import org.bukkit.World;
 
 import java.util.Map;

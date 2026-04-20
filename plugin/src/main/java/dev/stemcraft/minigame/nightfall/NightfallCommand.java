@@ -762,7 +762,7 @@ public class NightfallCommand {
         MiniGameArena arena = requireArena(ctx, 1);
         Player player = requirePlayer(ctx);
         ItemStack heldItem = player.getInventory().getItemInMainHand();
-        if (heldItem == null || heldItem.getType().isAir()) {
+        if (heldItem.getType().isAir()) {
             ctx.returnError("Hold the block you want to add in your main hand.");
         }
 

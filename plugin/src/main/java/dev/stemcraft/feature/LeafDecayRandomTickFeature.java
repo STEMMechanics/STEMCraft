@@ -180,13 +180,7 @@ public final class LeafDecayRandomTickFeature extends BaseFeature {
     }
 
     private void purgeExpiredCandidates(World world, Map<Long, Long> candidates) {
-        Iterator<Map.Entry<Long, Long>> iterator = candidates.entrySet().iterator();
-        while (iterator.hasNext()) {
-            Map.Entry<Long, Long> entry = iterator.next();
-            if (entry.getValue() < tickCounter || !isTrackedLeaf(unpack(world, entry.getKey()))) {
-                iterator.remove();
-            }
-        }
+        candidates.entrySet().removeIf(entry -> entry.getValue() < tickCounter || !isTrackedLeaf(unpack(world, entry.getKey())));
     }
 
     private void trackFromLogRemoval(Block block) {

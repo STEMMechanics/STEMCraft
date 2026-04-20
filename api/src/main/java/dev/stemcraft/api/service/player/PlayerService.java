@@ -66,7 +66,7 @@ public interface PlayerService {
      * @return True if the player is allowed by the active whitelist policy.
      */
     default boolean isWhitelisted(@Nullable UUID uuid, @Nullable String username) {
-        String platform = uuid != null && PlayerUtil.isBedrock(uuid) ? "bedrock" : "java";
+        String platform = PlayerUtil.isBedrock(uuid) ? "bedrock" : "java";
         return isWhitelisted(uuid, username, platform);
     }
 

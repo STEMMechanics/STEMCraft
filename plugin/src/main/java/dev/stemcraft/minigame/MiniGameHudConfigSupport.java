@@ -70,7 +70,7 @@ public final class MiniGameHudConfigSupport {
             bossBarLines = List.copyOf(bossBarLines);
             scoreboardLines = List.copyOf(scoreboardLines);
             bossBarLineHoldUpdates = Math.max(1, bossBarLineHoldUpdates);
-            bossBarColor = bossBarColor == null || bossBarColor.isBlank() ? "PURPLE" : bossBarColor;
+            bossBarColor = bossBarColor.isBlank() ? "PURPLE" : bossBarColor;
         }
 
         public HudDefinition(@NotNull List<String> bossBarLines, @NotNull List<String> scoreboardLines, int bossBarLineHoldUpdates) {

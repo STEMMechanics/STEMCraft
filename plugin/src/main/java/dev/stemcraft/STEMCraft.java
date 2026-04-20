@@ -748,7 +748,7 @@ public final class STEMCraft extends JavaPlugin {
         if (this.messages != null) {
             this.messages.error(message, ex, placeholders);
         } else {
-            getLogger().severe(String.valueOf(message) + (ex != null ? ": " + ex.getMessage() : ""));
+            getLogger().severe(message + (ex != null ? ": " + ex.getMessage() : ""));
         }
     }
 

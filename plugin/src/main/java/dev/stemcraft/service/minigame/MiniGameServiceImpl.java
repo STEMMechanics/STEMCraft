@@ -156,7 +156,7 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
             }
 
             ItemStack placed = event.getItemInHand();
-            if (placed == null || placed.getType().isAir()) {
+            if (placed.getType().isAir()) {
                 return;
             }
 
@@ -295,7 +295,7 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
 
         api.events().register(PlayerTeleportEvent.class, event -> {
             Location to = event.getTo();
-            if (to == null || to.getWorld() == null) {
+            if (to.getWorld() == null) {
                 return;
             }
 
@@ -570,7 +570,8 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
         player.setHealth(Math.min(player.getAttribute(Attribute.MAX_HEALTH).getValue(), 20.0d));
         PlayerInventory inventory = player.getInventory();
         inventory.clear();
-        inventory.setArmorContents(null);
+        ItemStack[] emptyItemStacks = {};
+        inventory.setArmorContents(emptyItemStacks);
         inventory.setItemInOffHand(null);
     }
 
@@ -680,10 +681,7 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
     ) {
         static StoredPlayerState capture(@NotNull Player player) {
             PlayerInventory inventory = player.getInventory();
-            List<PotionEffect> effects = new ArrayList<>();
-            for (PotionEffect effect : player.getActivePotionEffects()) {
-                effects.add(effect);
-            }
+            List<PotionEffect> effects = new ArrayList<>(player.getActivePotionEffects());
 
             return new StoredPlayerState(
                 player.getLocation().clone(),

@@ -612,7 +612,7 @@ public class WorldCommand {
                 value = valueFromConfigSnapshot(worldName, config, key);
             }
 
-            if (value == null || value.isBlank() || "unset".equalsIgnoreCase(value)) {
+            if (value.isBlank() || "unset".equalsIgnoreCase(value)) {
                 continue;
             }
             lines.add(key + "=" + value);
@@ -635,8 +635,7 @@ public class WorldCommand {
         return switch (key) {
             case "deny-spawn", "gamemode", "tickspeed" ->
                 config.getString(key, "unset");
-            case "no-damage", "no-hunger" -> config.contains(key) ? Boolean.toString(config.getBoolean(key, false)) : "unset";
-            case "force-spawn-on-death" -> config.contains(key) ? Boolean.toString(config.getBoolean(key, false)) : "unset";
+            case "no-damage", "no-hunger", "force-spawn-on-death" -> config.contains(key) ? Boolean.toString(config.getBoolean(key, false)) : "unset";
             case "nether" -> baseConfig == null ? "unset" : baseConfig.getString("nether-world", "unset");
             case "end" -> baseConfig == null ? "unset" : baseConfig.getString("end-world", "unset");
             case "randomspawn" -> readRandomSpawnValue(baseName);
@@ -743,9 +742,6 @@ public class WorldCommand {
 
     private @NotNull String formatBorder(@NotNull World world) {
         var border = world.getWorldBorder();
-        if (border == null) {
-            return "unknown";
-        }
         return String.format(Locale.ROOT, "size %.1f at %.1f, %.1f",
             border.getSize(),
             border.getCenter().getX(),

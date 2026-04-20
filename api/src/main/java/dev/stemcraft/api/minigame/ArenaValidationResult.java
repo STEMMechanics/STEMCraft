@@ -1,7 +1,5 @@
 package dev.stemcraft.api.minigame;
 
-import lombok.Getter;
-
 import java.util.ArrayList;
 import java.util.List;
 
@@ -10,18 +8,9 @@ public class ArenaValidationResult {
     private List<Error> errors;
 
     /**
-     * Error class representing a validation error.
-     */
-    static class Error {
-        @Getter
-        private final String message;
-        @Getter
-        private final String field;
-
-        public Error(String message, String field) {
-            this.message = message;
-            this.field = field;
-        }
+         * Error class representing a validation error.
+         */
+        record Error(String message, String field) {
     }
 
     /**
@@ -84,7 +73,7 @@ public class ArenaValidationResult {
     public List<String> getErrors() {
         List<String> errorMessages = new ArrayList<>();
         for (Error error : errors) {
-            errorMessages.add(error.getMessage());
+            errorMessages.add(error.message());
         }
         return errorMessages;
     }

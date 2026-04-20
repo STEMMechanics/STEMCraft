@@ -290,23 +290,23 @@ Deprecated identity:
 To avoid state rollback during outages, plugin should implement:
 
 1. Communication error mode:
-- on repeated outbound failures/timeouts, mark link degraded
-- persist future outbound events in a durable queue (disk/db), do not drop
+   - on repeated outbound failures/timeouts, mark link degraded
+   - persist future outbound events in a durable queue (disk/db), do not drop
 
 2. Reconnect probing:
-- send `server.health.ping` until successful `server.health.pong`
+   - send `server.health.ping` until successful `server.health.pong`
 
 3. Reconnect reconciliation sequence:
-- run in this order:
-  - `server.sync.players`
-  - `server.sync.penalties`
-  - `server.sync.players.stats`
-- treat sync responses as source-of-truth
+   - run in this order:
+     - `server.sync.players`
+     - `server.sync.penalties`
+     - `server.sync.players.stats`
+   - treat sync responses as source-of-truth
 
 4. Queue replay discipline:
-- after successful sync sequence, do not replay stale state-changing events older than sync watermark
-- replay of observational/audit-only events is optional
+   - after successful sync sequence, do not replay stale state-changing events older than sync watermark
+   - replay of observational/audit-only events is optional
 
 5. Authority rule (players):
-- Laravel remains authority for `is_whitelisted`
-- plugin-side disconnected whitelist toggles are temporary and may be overwritten on sync
+   - Laravel remains authority for `is_whitelisted`
+   - plugin-side disconnected whitelist toggles are temporary and may be overwritten on sync

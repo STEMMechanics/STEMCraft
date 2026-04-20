@@ -1,23 +1,23 @@
 String getGitHash() {
-    def command = Runtime.getRuntime().exec("git rev-parse --short=10 HEAD");
-    def result = command.waitFor();
+    def command = Runtime.getRuntime().exec(["git", "rev-parse", "--short=10", "HEAD"] as String[])
+    def result = command.waitFor()
     if (result != 0) {
-        throw new IOException("Command 'git rev-parse [...]' exited with " + result);
+        throw new IOException("Command 'git rev-parse [...]' exited with " + result)
     }
 
-    String gitCommitHash = command.inputStream.text.trim();
+    String gitCommitHash = command.inputStream.text.trim()
 
-    return gitCommitHash;
+    return gitCommitHash
 }
 
 String getArchiveBuildMetadata() {
-    String buildMetadata = (System.env.BUILD_NUMBER == null) ? (getGitHash() + "-local") : ("b" + System.env.BUILD_NUMBER);
-    return "+" + buildMetadata;
+    String buildMetadata = (System.env.BUILD_NUMBER == null) ? (getGitHash() + "-local") : ("b" + System.env.BUILD_NUMBER)
+    return "+" + buildMetadata
 }
 
 String getVersionCommandBuildMetadata() {
-    String buildMetadata = (System.env.BUILD_NUMBER == null) ? (getGitHash() + "-local") : (getGitHash() + "-b" + System.env.BUILD_NUMBER);
-    return "+" + buildMetadata;
+    String buildMetadata = (System.env.BUILD_NUMBER == null) ? (getGitHash() + "-local") : (getGitHash() + "-b" + System.env.BUILD_NUMBER)
+    return "+" + buildMetadata
 }
 
 ext {

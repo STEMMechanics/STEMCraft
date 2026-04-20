@@ -294,9 +294,6 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
     private void registerMovementListener() {
         api.events().register(PlayerMoveEvent.class, event -> {
             Location to = event.getTo();
-            if (to == null) {
-                return;
-            }
 
             Player player = event.getPlayer();
             MiniGameArena arena = tntRun.minigame().findPlayer(player);

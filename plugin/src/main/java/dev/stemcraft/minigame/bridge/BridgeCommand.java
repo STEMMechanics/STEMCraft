@@ -135,8 +135,7 @@ public class BridgeCommand {
                     case "enable" -> commandEnable(ctx);
                     case "disable" -> commandDisable(ctx);
                     case "set" -> commandSet(ctx);
-                    case "select" -> commandSelect(ctx);
-                    case "sel" -> commandSelect(ctx);
+                    case "select", "sel" -> commandSelect(ctx);
                     case "show" -> commandShow(ctx);
                     case "dropitems" -> commandDropItems(ctx);
                     case "adddropitem" -> commandAddDropItem(ctx);
@@ -671,7 +670,7 @@ public class BridgeCommand {
         MiniGameArena arena = requireArena(ctx, 1);
         Player player = requirePlayer(ctx);
         ItemStack heldItem = player.getInventory().getItemInMainHand();
-        if (heldItem == null || heldItem.getType().isAir()) {
+        if (heldItem.getType().isAir()) {
             ctx.returnError("Hold the item you want to add as a drop in your main hand.");
         }
 

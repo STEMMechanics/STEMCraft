@@ -31,7 +31,6 @@ import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.api.util.TimeUtil;
 import io.papermc.paper.ban.BanListType;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.BanList;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
@@ -50,8 +49,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.io.File;
 
 /**
@@ -561,9 +558,9 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
 
                         PunishmentRecord record = new PunishmentRecord(
                             id,
-                            targetUuidStr == null || targetUuidStr.isBlank() ? null : UUID.fromString(targetUuidStr),
+                            targetUuidStr.isBlank() ? null : UUID.fromString(targetUuidStr),
                             pSec.getString("target.name"),
-                            actorUuidStr == null || actorUuidStr.isBlank() ? null : UUID.fromString(actorUuidStr),
+                            actorUuidStr.isBlank() ? null : UUID.fromString(actorUuidStr),
                             pSec.getString("actor.name"),
                             pSec.getString("type"),
                             pSec.getBoolean("alerted", false),

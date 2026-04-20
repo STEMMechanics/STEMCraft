@@ -1,5 +1,6 @@
 package dev.stemcraft.minigame.bedwars;
 
+import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.minigame.ArenaValidationResult;
 import dev.stemcraft.api.minigame.MiniGameArena;
@@ -394,7 +395,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
             return;
         }
 
-        Bukkit.getLogger().warning("[STEMCraft] BedWars arena '" + arena.id() + "' has drop items configured but no valid drop surfaces were found.");
+        STEMCraft.getPlugin().getLogger().warning("BedWars arena '" + arena.id() + "' has drop items configured but no valid drop surfaces were found.");
         broadcastInfoToOccupants(arena, "<yellow>Supply drops are enabled, but this arena has no valid drop surfaces.</yellow>");
     }
 
@@ -468,7 +469,8 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
 
     private void clearPlayerInventory(Player player) {
         player.getInventory().clear();
-        player.getInventory().setArmorContents(null);
+        ItemStack[] emptyItemStacks = {};
+        player.getInventory().setArmorContents(emptyItemStacks);
         player.getInventory().setItemInOffHand(null);
         player.updateInventory();
     }
@@ -527,7 +529,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
         int teamSize = teamSize(arena);
         int desiredTeams = Math.max(2, players / 3);
         int requiredTeams = Math.max(2, (players + teamSize - 1) / teamSize);
-        int activeTeams = Math.min(teams.size(), Math.max(desiredTeams, requiredTeams));
+        int activeTeams = Math.clamp(desiredTeams, requiredTeams, teams.size());
         return teams.subList(0, activeTeams);
     }
 

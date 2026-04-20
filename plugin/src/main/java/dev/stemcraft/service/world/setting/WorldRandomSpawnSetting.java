@@ -86,7 +86,7 @@ public class WorldRandomSpawnSetting implements WorldBaseSetting {
 
         String baseName = WorldUtil.baseName(world.getName());
         String path = "random-first-spawn.worlds." + baseName + ".enabled";
-        return root.getBoolean(path, false) ? "true" : "false";
+        return Boolean.toString(root.getBoolean(path, false));
     }
 
     @Override

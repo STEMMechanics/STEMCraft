@@ -330,7 +330,7 @@ public class AuditServiceImpl extends BaseService implements AuditService {
      * @return True if matches, false otherwise.
      */
     @SuppressWarnings("BooleanMethodIsAlwaysInverted")
-    private boolean matches(List<Pattern> list, Material material) {
+    private boolean matches(Collection<Pattern> list, Material material) {
         if (list.isEmpty()) return true; // empty = log everything
 
         String name = material.name();

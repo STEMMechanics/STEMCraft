@@ -44,7 +44,7 @@ public class WaterGenerator extends ChunkGenerator {
 
     private WaterGenerator(int waterLevel, int seabedY) {
         this.waterLevel = Math.max(2, waterLevel);
-        this.seabedY = Math.max(1, Math.min(seabedY, this.waterLevel - 1));
+        this.seabedY = Math.clamp(seabedY, 1, this.waterLevel - 1);
     }
 
     /**
