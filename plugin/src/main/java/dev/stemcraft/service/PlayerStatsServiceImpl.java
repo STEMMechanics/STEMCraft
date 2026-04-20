@@ -422,7 +422,8 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
             if (!isEnabled("times_slept")) {
                 return;
             }
-            if (event.getBedEnterResult() == PlayerBedEnterEvent.BedEnterResult.OK) {
+            //noinspection UnstableApiUsage
+            if (event.enterAction().canSleep().success()) {
                 increment(event.getPlayer().getUniqueId(), event.getPlayer().getName(), "times_slept", 1.0d);
             }
         });
