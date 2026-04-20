@@ -1,6 +1,7 @@
 package dev.stemcraft.service.resourcepack;
 
 import dev.stemcraft.api.STEMCraftAPI;
+import io.papermc.paper.event.connection.configuration.AsyncPlayerConnectionConfigureEvent;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.player.PlayerJoinEvent;
 
@@ -28,11 +29,12 @@ public class ResourcePackEvents {
      * Register event listeners for resource pack handling.
      */
     public void onEnable() {
-        api.events().register(PlayerJoinEvent.class, event -> {
+        //noinspection UnstableApiUsage
+        api.events().register(AsyncPlayerConnectionConfigureEvent.class, event -> {
             File resourcePack = service.getResourcePack();
 
             if (resourcePack != null && resourcePack.exists()) {
-                service.sendPack(event.getPlayer());
+                service.sendPack(event.getConnection().getAudience());
             }
         }, EventPriority.MONITOR, false);
     }

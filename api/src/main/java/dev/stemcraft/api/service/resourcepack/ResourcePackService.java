@@ -2,7 +2,7 @@ package dev.stemcraft.api.service.resourcepack;
 
 import dev.stemcraft.api.config.ConfigSectionView;
 import dev.stemcraft.api.service.resourcepack.generator.ResourcePackGenerator;
-import org.bukkit.entity.Player;
+import net.kyori.adventure.audience.Audience;
 import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
@@ -52,9 +52,9 @@ public interface ResourcePackService {
     /**
      * Sends the resource pack to the specified player.
      *
-     * @param player The player to send the resource pack to.
+     * @param audience The player to send the resource pack to.
      */
-    void sendPack(@NotNull Player player);
+    void sendPack(@NotNull Audience audience);
 
     /**
      * Sends the resource pack to all online players.
