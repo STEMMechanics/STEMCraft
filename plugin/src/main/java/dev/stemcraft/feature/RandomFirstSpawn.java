@@ -23,6 +23,8 @@ package dev.stemcraft.feature;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.util.PlayerUtil;
+import io.papermc.paper.registry.RegistryAccess;
+import io.papermc.paper.registry.RegistryKey;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -368,7 +370,7 @@ public class RandomFirstSpawn extends BaseFeature {
             }
 
             String normalized = item.trim().toLowerCase(Locale.ROOT);
-            Biome biome = Registry.BIOME.get(NamespacedKey.minecraft(normalized));
+            Biome biome = RegistryAccess.registryAccess().getRegistry(RegistryKey.BIOME).get(NamespacedKey.minecraft(normalized));
             if (biome == null) {
                 api.messages().warn("RANDOM_FIRST_SPAWN_INVALID_BIOME", "biome", item, "world", worldName);
                 continue;
