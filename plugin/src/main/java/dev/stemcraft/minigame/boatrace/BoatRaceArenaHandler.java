@@ -332,7 +332,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
             if (arena.getStatus() != MiniGameArena.ArenaStatus.STARTING && arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
                 return;
             }
-            if (!ownsBoat(arena, player, event.getVehicle().getUniqueId())) {
+            if (playerDoesntHaveBoat(arena, player, event.getVehicle().getUniqueId())) {
                 return;
             }
 
@@ -365,7 +365,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
             if (arena == null) {
                 return;
             }
-            if (!ownsBoat(arena, rider, boat.getUniqueId())) {
+            if (playerDoesntHaveBoat(arena, rider, boat.getUniqueId())) {
                 return;
             }
             if (arena.getStatus() != MiniGameArena.ArenaStatus.STARTING) {
@@ -374,7 +374,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
 
             Location gridLocation = assignedGridLocation(arena, rider);
             Location currentLocation = event.getTo();
-            if (gridLocation != null && currentLocation != null) {
+            if (gridLocation != null) {
                 if (hasDriftedFromGrid(currentLocation, gridLocation)) {
                     Location corrected = gridLocation.clone();
                     corrected.setYaw(currentLocation.getYaw());
@@ -667,9 +667,9 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         return Bukkit.getPlayer(winnerUuid);
     }
 
-    private boolean ownsBoat(@NotNull MiniGameArena arena, @NotNull Player player, @NotNull UUID boatId) {
+    private boolean playerDoesntHaveBoat(@NotNull MiniGameArena arena, @NotNull Player player, @NotNull UUID boatId) {
         UUID assigned = boatRace.boatAssignments(arena).get(player.getUniqueId());
-        return assigned != null && assigned.equals(boatId);
+        return assigned == null || !assigned.equals(boatId);
     }
 
     private @Nullable MiniGameArena arenaForBoat(@NotNull UUID boatId) {
