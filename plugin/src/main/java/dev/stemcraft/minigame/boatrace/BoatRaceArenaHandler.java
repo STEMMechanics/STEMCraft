@@ -1,6 +1,5 @@
 package dev.stemcraft.minigame.boatrace;
 
-import com.destroystokyo.paper.Title;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.minigame.ArenaValidationResult;
 import dev.stemcraft.api.minigame.MiniGameArena;
@@ -8,7 +7,6 @@ import dev.stemcraft.api.minigame.MiniGameArenaHandler;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.service.region.RegionListener;
 import dev.stemcraft.api.util.NamespaceId;
-import dev.stemcraft.api.util.TextUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.GameMode;
@@ -31,7 +29,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 public class BoatRaceArenaHandler implements MiniGameArenaHandler {
