@@ -49,7 +49,7 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
     @Getter
     private String name;
     private final World world;
-    private boolean validated = false;
+    private boolean validated;
     @Getter
     private SCRegion region;
     @Getter
@@ -77,6 +77,7 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
     private final Map<UUID, Long> protectionUntil = new HashMap<>();
     private final Map<String, Map<Material, Integer>> kits = new HashMap<>();
 
+    @Getter
     private ArenaValidationResult lastValidation = ArenaValidationResult.success();
 
     /**
@@ -187,7 +188,7 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
 
         this.status = newStatus;
         if (countdown >= 0) {
-            this.countdownMax = Math.max(0, countdown);
+            this.countdownMax = countdown;
             setCountdown(countdown);
         } else if (newStatus == ArenaStatus.WAITING || newStatus == ArenaStatus.IDLE || newStatus == ArenaStatus.SETUP
             || newStatus == ArenaStatus.DISABLED || newStatus == ArenaStatus.SHUTDOWN || newStatus == ArenaStatus.RESETTING) {
@@ -413,7 +414,7 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
      */
     @Override
     public void removePlayer(Player player) {
-        removeActivePlayer(player, true, true, false, true);
+        removeActivePlayer(player, true, false);
     }
 
     @Override
@@ -466,7 +467,7 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
 
     @Override
     public void removeSpectator(Player player) {
-        removeSpectatorInternal(player, true, true, false, true);
+        removeSpectatorInternal(player, true, false);
     }
 
     @Override
@@ -741,7 +742,7 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
 
         if (clearInventory) {
             player.getInventory().clear();
-            player.getInventory().setArmorContents(null);
+            player.getInventory().setArmorContents(new ItemStack[4]);
         }
 
         for (Map.Entry<Material, Integer> entry : kit.entrySet()) {
@@ -827,7 +828,7 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         }
 
         String taskId = celebrationTaskId(safeKey);
-        final int maxBursts = Math.max(1, durationSeconds);
+        final int maxBursts = durationSeconds;
         final int[] bursts = {0};
         final Color[] celebrationPalette = palette;
         activeCelebrationKeys.add(safeKey);
@@ -863,17 +864,17 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
 
     void handlePlayerQuit(Player player) {
         if (players.containsKey(player)) {
-            removeActivePlayer(player, false, true, true, true);
+            removeActivePlayer(player, false, true);
         } else if (spectators.contains(player)) {
-            removeSpectatorInternal(player, false, true, true, true);
+            removeSpectatorInternal(player, false, true);
         }
     }
 
     void handleExternalTeleport(Player player) {
         if (players.containsKey(player)) {
-            removeActivePlayer(player, false, true, false, true);
+            removeActivePlayer(player, false, false);
         } else if (spectators.contains(player)) {
-            removeSpectatorInternal(player, false, true, false, true);
+            removeSpectatorInternal(player, false, false);
         }
     }
 
@@ -929,26 +930,21 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         return NamespaceId.sanitizePath(key);
     }
 
-
-    public ArenaValidationResult getLastValidation() {
-        return lastValidation;
-    }
-
-    private void removeActivePlayer(Player player, boolean restoreLocation, boolean notifyHandler, boolean quitting, boolean consumePreviousState) {
-        MiniGamePlayerImpl mgPlayer = detachActiveProfile(player, notifyHandler, quitting);
+    private void removeActivePlayer(Player player, boolean restoreLocation, boolean quitting) {
+        MiniGamePlayerImpl mgPlayer = detachActiveProfile(player, true, quitting);
         if (mgPlayer == null) {
             return;
         }
 
-        service.restorePreviousPlayerState(player, restoreLocation, consumePreviousState);
+        service.restorePreviousPlayerState(player, restoreLocation, true);
     }
 
-    private void removeSpectatorInternal(Player player, boolean restoreLocation, boolean notifyHandler, boolean quitting, boolean consumePreviousState) {
-        MiniGamePlayerImpl spectatorProfile = detachSpectatorProfile(player, notifyHandler, quitting);
+    private void removeSpectatorInternal(Player player, boolean restoreLocation, boolean quitting) {
+        MiniGamePlayerImpl spectatorProfile = detachSpectatorProfile(player, true, quitting);
         if (spectatorProfile == null) {
             return;
         }
-        service.restorePreviousPlayerState(player, restoreLocation, consumePreviousState);
+        service.restorePreviousPlayerState(player, restoreLocation, true);
     }
 
     private @Nullable MiniGamePlayerImpl detachActiveProfile(Player player, boolean notifyHandler, boolean quitting) {

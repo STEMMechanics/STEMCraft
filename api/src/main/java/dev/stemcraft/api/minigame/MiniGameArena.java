@@ -23,7 +23,6 @@ package dev.stemcraft.api.minigame;
 import dev.stemcraft.api.capability.HasMeta;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.service.message.MessageService;
-import net.kyori.adventure.title.Title;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;
