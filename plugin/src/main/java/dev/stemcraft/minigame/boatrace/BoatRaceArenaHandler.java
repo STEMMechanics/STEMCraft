@@ -1,6 +1,5 @@
 package dev.stemcraft.minigame.boatrace;
 
-import com.destroystokyo.paper.Title;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.minigame.ArenaValidationResult;
 import dev.stemcraft.api.minigame.MiniGameArena;
@@ -8,7 +7,7 @@ import dev.stemcraft.api.minigame.MiniGameArenaHandler;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.service.region.RegionListener;
 import dev.stemcraft.api.util.NamespaceId;
-import dev.stemcraft.api.util.TextUtil;
+import dev.stemcraft.api.util.PlayerUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.GameMode;
@@ -31,7 +30,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 public class BoatRaceArenaHandler implements MiniGameArenaHandler {
@@ -202,7 +200,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
     @Override
     public void onArenaStatusChanged(MiniGameArena arena, MiniGameArena.ArenaStatus oldStatus, MiniGameArena.ArenaStatus newStatus) {
         if (newStatus == MiniGameArena.ArenaStatus.WAITING) {
-            resetTitles(arena);
+            arena.resetTitle();
             arena.stopWinnerCelebration();
             clearRaceState(arena);
             teleportPlayersToLobby(arena);
@@ -217,7 +215,12 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
 
         if (newStatus == MiniGameArena.ArenaStatus.RUNNING) {
             prepareRunningState(arena);
-            showRaceStartTitle(arena);
+            arena.showTitle(
+                "<gradient:#22c55e:#14b8a6><bold>GO!</bold></gradient>",
+                "<aqua>Paddle hard.</aqua>",
+                    0, 1000, 500
+            );
+
             playSoundToOccupants(arena, Sound.ENTITY_PLAYER_LEVELUP, 0.9f, 1.15f);
             broadcastToOccupants(arena, "<aqua>Go!</aqua> <gray>The race is on.</gray>");
             return;
@@ -252,7 +255,11 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
             float pitch = 1.0f + ((5 - secondsRemaining) * 0.1f);
             playSoundToOccupants(arena, Sound.BLOCK_NOTE_BLOCK_HAT, 0.7f, pitch);
             if (status == MiniGameArena.ArenaStatus.STARTING) {
-                showStartingCountdownTitle(arena, secondsRemaining);
+                arena.showTitle(
+                        "<gradient:#fde047:#f97316><bold>" + secondsRemaining + "</bold></gradient>",
+                        "<gold>Race starts in</gold>",
+                        0, 1000, 200
+                );
             }
         }
     }
@@ -291,12 +298,6 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
     }
 
     @Override
-    public Location onPlayerJoinSpectator(MiniGameArena arena, Player player) {
-        Location spectatorSpawn = arena.getSpectatorSpawn();
-        return spectatorSpawn != null ? spectatorSpawn : arena.getLobbySpawn();
-    }
-
-    @Override
     public void onPlayerLeaveArena(MiniGameArena arena, Player player) {
         removePlayerState(arena, player);
         if (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING && arena.numPlayers() < arena.getMinPlayers()) {
@@ -331,7 +332,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
             if (arena.getStatus() != MiniGameArena.ArenaStatus.STARTING && arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
                 return;
             }
-            if (!ownsBoat(arena, player, event.getVehicle().getUniqueId())) {
+            if (playerDoesntHaveBoat(arena, player, event.getVehicle().getUniqueId())) {
                 return;
             }
 
@@ -364,7 +365,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
             if (arena == null) {
                 return;
             }
-            if (!ownsBoat(arena, rider, boat.getUniqueId())) {
+            if (playerDoesntHaveBoat(arena, rider, boat.getUniqueId())) {
                 return;
             }
             if (arena.getStatus() != MiniGameArena.ArenaStatus.STARTING) {
@@ -373,7 +374,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
 
             Location gridLocation = assignedGridLocation(arena, rider);
             Location currentLocation = event.getTo();
-            if (gridLocation != null && currentLocation != null) {
+            if (gridLocation != null) {
                 if (hasDriftedFromGrid(currentLocation, gridLocation)) {
                     Location corrected = gridLocation.clone();
                     corrected.setYaw(currentLocation.getYaw());
@@ -395,7 +396,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         Location finishLookTarget = finishLookTarget(arena);
         for (int i = 0; i < players.size(); i++) {
             Player player = players.get(i);
-            int slot = Math.min(i, Math.max(0, grid.size() - 1));
+            int slot = Math.clamp(grid.size() - 1, 0, i);
             boatRace.assignedGridSlots(arena).put(player.getUniqueId(), slot);
             Location slotLocation = orientTowardFinish(grid.get(slot).clone(), finishLookTarget);
             boatRace.checkpointLocations(arena).put(player.getUniqueId(), slotLocation.clone());
@@ -415,7 +416,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         boatRace.markRaceStarted(arena);
         for (Player player : arena.getPlayers()) {
             player.setGameMode(GameMode.ADVENTURE);
-            player.setHealth(Math.min(player.getMaxHealth(), 20.0d));
+            player.setHealth(PlayerUtil.getMaxHealth(player));
             player.setFoodLevel(20);
             player.setSaturation(20.0f);
             player.setFireTicks(0);
@@ -502,7 +503,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
             return;
         }
 
-        player.setHealth(Math.min(player.getMaxHealth(), 20.0d));
+        player.setHealth(PlayerUtil.getMaxHealth(player));
         player.setFoodLevel(20);
         player.setSaturation(20.0f);
         player.setFireTicks(0);
@@ -666,9 +667,9 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         return Bukkit.getPlayer(winnerUuid);
     }
 
-    private boolean ownsBoat(@NotNull MiniGameArena arena, @NotNull Player player, @NotNull UUID boatId) {
+    private boolean playerDoesntHaveBoat(@NotNull MiniGameArena arena, @NotNull Player player, @NotNull UUID boatId) {
         UUID assigned = boatRace.boatAssignments(arena).get(player.getUniqueId());
-        return assigned != null && assigned.equals(boatId);
+        return assigned == null || !assigned.equals(boatId);
     }
 
     private @Nullable MiniGameArena arenaForBoat(@NotNull UUID boatId) {
@@ -716,40 +717,6 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
     private void playSoundToOccupants(@NotNull MiniGameArena arena, @NotNull Sound sound, float volume, float pitch) {
         for (Player occupant : arena.getOccupants()) {
             occupant.playSound(occupant.getLocation(), sound, volume, pitch);
-        }
-    }
-
-    private void showStartingCountdownTitle(@NotNull MiniGameArena arena, int secondsRemaining) {
-        Title title = new Title(
-            TextUtil.colouriseToSection("<gradient:#fde047:#f97316><bold>" + secondsRemaining + "</bold></gradient>"),
-            TextUtil.colouriseToSection("<gold>Race starts in</gold>"),
-            0,
-            20,
-            4
-        );
-        sendTitleToOccupants(arena, title);
-    }
-
-    private void showRaceStartTitle(@NotNull MiniGameArena arena) {
-        Title title = new Title(
-            TextUtil.colouriseToSection("<gradient:#22c55e:#14b8a6><bold>GO!</bold></gradient>"),
-            TextUtil.colouriseToSection("<aqua>Paddle hard.</aqua>"),
-            0,
-            20,
-            8
-        );
-        sendTitleToOccupants(arena, title);
-    }
-
-    private void sendTitleToOccupants(@NotNull MiniGameArena arena, @NotNull Title title) {
-        for (Player occupant : arena.getOccupants()) {
-            occupant.sendTitle(title);
-        }
-    }
-
-    private void resetTitles(@NotNull MiniGameArena arena) {
-        for (Player occupant : arena.getOccupants()) {
-            occupant.resetTitle();
         }
     }
 

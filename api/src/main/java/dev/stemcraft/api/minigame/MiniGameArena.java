@@ -29,6 +29,7 @@ import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 
+import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -612,6 +613,30 @@ public interface MiniGameArena extends MessageService, HasMeta<MiniGameArena> {
      * @param maxPlayers The maximum number of players.
      */
     MiniGameArena setMaxPlayers(int maxPlayers);
+
+    /**
+     * Show a title and subtitle to the arena players.
+     *
+     * @param title The title text.
+     * @param subtitle The subtitle text.
+     * @param fadeIn The duration to fade in.
+     * @param stay The duration to stay.
+     * @param fadeOut The duration to fade out.
+     */
+    void showTitle(String title, String subtitle, Duration fadeIn, Duration stay, Duration fadeOut);
+
+    default void showTitle(String title, String subtitle, int fadeIn, int stay, int fadeOut) {
+        showTitle(title, subtitle, Duration.ofMillis(fadeIn), Duration.ofMillis(stay), Duration.ofMillis(fadeOut));
+    }
+
+    default void showTitle(String title, String subtitle) {
+        showTitle(title, subtitle, Duration.ofMillis(500), Duration.ofSeconds(3), Duration.ofMillis(1000));
+    }
+
+    /**
+     * Reset the title to the default state for all players.
+     */
+    void resetTitle();
 
     /**
      * Check if the arena is currently active (waiting, countdown, or running).
