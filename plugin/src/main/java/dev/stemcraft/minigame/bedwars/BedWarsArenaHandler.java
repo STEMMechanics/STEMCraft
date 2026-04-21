@@ -467,14 +467,6 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
         }
     }
 
-    private void clearPlayerInventory(Player player) {
-        player.getInventory().clear();
-        ItemStack[] emptyItemStacks = {};
-        player.getInventory().setArmorContents(emptyItemStacks);
-        player.getInventory().setItemInOffHand(null);
-        player.updateInventory();
-    }
-
     private void checkForRoundEnd(MiniGameArena arena) {
         int activeTeams = activeTeamCount(arena);
         if (arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {

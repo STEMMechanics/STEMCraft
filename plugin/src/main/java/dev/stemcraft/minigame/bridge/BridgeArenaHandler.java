@@ -31,7 +31,6 @@ import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.service.region.RegionListener;
 import dev.stemcraft.api.util.NamespaceId;
 import dev.stemcraft.api.util.PlayerUtil;
-import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
@@ -494,14 +493,6 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
         if (team != null) {
             arena.giveKit(player, team.getName(), false);
         }
-    }
-
-    private void clearPlayerInventory(Player player) {
-        player.getInventory().clear();
-        ItemStack[] emptyItemStacks = {};
-        player.getInventory().setArmorContents(emptyItemStacks);
-        player.getInventory().setItemInOffHand(null);
-        player.updateInventory();
     }
 
     private void addTeamPoint(MiniGameArena arena, MiniGamePlayer player, MiniGameTeam targetTeam) {
