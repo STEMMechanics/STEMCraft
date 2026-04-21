@@ -2002,7 +2002,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         }
 
         MiniGameArena arena = nightfall.minigame().findPlayer(player);
-        if (arena == null || !arena.hasPlayer(player)) {
+        if (arena == null || !nightfall.minigame().arenas().contains(arena) || !arena.hasPlayer(player)) {
             return null;
         }
         return arena;
