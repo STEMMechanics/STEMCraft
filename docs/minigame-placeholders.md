@@ -25,21 +25,21 @@ Bossbar colour:
 
 These placeholders are registered for every minigame.
 
-| Placeholder | Meaning | Notes |
-| --- | --- | --- |
-| `{arena:name}` | The arena display name. | Uses the arena's configured `name`. |
-| `{arena:time-remaining}` | The arena countdown or remaining time. | Formatted as `mm:ss`. |
-| `{arena:id}` | The arena ID. | Usually the config key / internal arena identifier. |
-| `{arena:status}` | The current arena status. | Raw enum value such as `WAITING` or `RUNNING`. |
-| `{arena:players}` | The current joined player count. | Alias of `{arena:joined-players}`. |
-| `{arena:joined-players}` | The current joined player count. | Includes players currently in the arena. |
-| `{arena:min-players}` | The configured minimum player count. | |
-| `{arena:max-players}` | The configured maximum player count. | |
-| `{player:score}` | The current player's arena score. | Meaning depends on the minigame. |
-| `{player:kills}` | The current player's kill count. | |
-| `{player:deaths}` | The current player's death count. | |
-| `{team:<team-id>:name}` | The target team's internal name. | Example: `{team:red:name}`. |
-| `{team:<team-id>:display-name}` | The target team's display name. | Example: `{team:red:display-name}`. |
+| Placeholder                     | Meaning                                | Notes                                               |
+|---------------------------------|----------------------------------------|-----------------------------------------------------|
+| `{arena:name}`                  | The arena display name.                | Uses the arena's configured `name`.                 |
+| `{arena:time-remaining}`        | The arena countdown or remaining time. | Formatted as `mm:ss`.                               |
+| `{arena:id}`                    | The arena ID.                          | Usually the config key / internal arena identifier. |
+| `{arena:status}`                | The current arena status.              | Raw enum value such as `WAITING` or `RUNNING`.      |
+| `{arena:players}`               | The current joined player count.       | Alias of `{arena:joined-players}`.                  |
+| `{arena:joined-players}`        | The current joined player count.       | Includes players currently in the arena.            |
+| `{arena:min-players}`           | The configured minimum player count.   |                                                     |
+| `{arena:max-players}`           | The configured maximum player count.   |                                                     |
+| `{player:score}`                | The current player's arena score.      | Meaning depends on the minigame.                    |
+| `{player:kills}`                | The current player's kill count.       |                                                     |
+| `{player:deaths}`               | The current player's death count.      |                                                     |
+| `{team:<team-id>:name}`         | The target team's internal name.       | Example: `{team:red:name}`.                         |
+| `{team:<team-id>:display-name}` | The target team's display name.        | Example: `{team:red:display-name}`.                 |
 
 ## Bridge
 

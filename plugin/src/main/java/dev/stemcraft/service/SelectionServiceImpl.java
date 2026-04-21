@@ -263,13 +263,13 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
             }
 
             SCRegion selection = getWorldEditPreviewSelection(player);
-            if (selection != null && canRenderRegion(player, selection) && isNearSelection(player.getLocation(), selection, maxViewDistance)) {
+            if (canRenderRegion(player, selection) && isNearSelection(player.getLocation(), selection, maxViewDistance)) {
                 renderRegion(player, selection);
                 continue;
             }
 
             Location primary = getWorldEditPrimaryPosition(player);
-            if (primary == null || !canRenderLocation(player, primary) || !isNearLocation(player.getLocation(), primary, maxViewDistance)) {
+            if (!canRenderLocation(player, primary) || !isNearLocation(player.getLocation(), primary, maxViewDistance)) {
                 continue;
             }
             renderLocation(player, primary);
@@ -319,26 +319,24 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
             return true;
         }
 
-        return switch (highlight.kind) {
+        switch (highlight.kind) {
             case REGION -> {
                 if (highlight.region != null && canRenderRegion(player, highlight.region) && isNearSelection(player.getLocation(), highlight.region, maxViewDistance)) {
                     renderRegion(player, highlight.region);
                 }
-                yield true;
             }
             case LOCATION -> {
                 if (highlight.location != null && canRenderLocation(player, highlight.location) && isNearLocation(player.getLocation(), highlight.location, maxViewDistance)) {
                     renderLocation(player, highlight.location);
                 }
-                yield true;
             }
             case BLOCK -> {
                 if (highlight.location != null && canRenderLocation(player, highlight.location) && isNearLocation(player.getLocation(), highlight.location, maxViewDistance)) {
                     renderFlashingBlock(player, highlight.location, highlight.phase);
                 }
-                yield true;
             }
-        };
+        }
+        return true;
     }
 
     private boolean renderHighlightForWorld(Highlight highlight) {
@@ -358,12 +356,12 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
 
             switch (highlight.kind) {
                 case REGION -> {
-                    if (highlight.region != null && canRenderRegion(player, highlight.region) && isNearSelection(player.getLocation(), highlight.region, maxViewDistance)) {
+                    if (canRenderRegion(player, highlight.region) && isNearSelection(player.getLocation(), highlight.region, maxViewDistance)) {
                         renderRegion(player, highlight.region);
                     }
                 }
                 case LOCATION -> {
-                    if (highlight.location != null && canRenderLocation(player, highlight.location) && isNearLocation(player.getLocation(), highlight.location, maxViewDistance)) {
+                    if (canRenderLocation(player, highlight.location) && isNearLocation(player.getLocation(), highlight.location, maxViewDistance)) {
                         renderLocation(player, highlight.location);
                     }
                 }
@@ -628,7 +626,7 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
         }
 
         int steps = Math.max(1, (int) Math.ceil(length / pointSpacing));
-        steps = Math.min(steps, Math.max(1, lineMaxPoints));
+        steps = Math.clamp(lineMaxPoints, 1, steps);
 
         for (int i = 0; i <= steps; i++) {
             double t = (double) i / (double) steps;

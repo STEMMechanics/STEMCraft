@@ -13,7 +13,6 @@ import dev.stemcraft.api.util.FileUtil;
 import dev.stemcraft.exception.ResourcePackGeneratorException;
 
 import java.io.File;
-import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -158,7 +157,7 @@ public class GlyphGenerator extends ResourcePackGenerator {
             }
 
             String raw = Files.readString(fontJsonPath);
-            if (raw == null || raw.isBlank()) {
+            if (raw.isBlank()) {
                 return new JsonObject();
             }
 

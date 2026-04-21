@@ -9,7 +9,6 @@ import dev.stemcraft.minigame.MiniGameHudConfigSupport;
 import lombok.Getter;
 import lombok.experimental.Accessors;
 import org.bukkit.Bukkit;
-import org.bukkit.GameMode;
 import org.bukkit.GameRule;
 import org.bukkit.Location;
 import org.bukkit.Material;

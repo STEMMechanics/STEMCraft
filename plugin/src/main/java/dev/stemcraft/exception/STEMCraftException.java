@@ -22,6 +22,8 @@ package dev.stemcraft.exception;
 
 import dev.stemcraft.STEMCraft;
 
+import java.io.Serial;
+
 /**
  * Core runtime exception used throughout the STEMCraft plugin.
  *
@@ -30,6 +32,8 @@ import dev.stemcraft.STEMCraft;
  */
 @SuppressWarnings("unused")
 public class STEMCraftException extends RuntimeException {
+    @Serial
+    private static final long serialVersionUID = 0xBAC921DEF92ADBAL;
 
     /**
      * Creates a new {@link STEMCraftException} with no message or cause.

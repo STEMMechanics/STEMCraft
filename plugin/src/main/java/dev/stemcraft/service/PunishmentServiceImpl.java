@@ -49,8 +49,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.io.File;
 
 /**
@@ -236,7 +234,7 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
                         if (target.isOnline()) {
                             Player online = target.getPlayer();
                             if (online != null) {
-                                online.kick(Component.text(formatBanMessage(findActiveBan(targetUuid))));
+                                online.kick(formatBanMessage(findActiveBan(targetUuid)));
                             }
                         }
 
@@ -560,9 +558,9 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
 
                         PunishmentRecord record = new PunishmentRecord(
                             id,
-                            targetUuidStr == null || targetUuidStr.isBlank() ? null : UUID.fromString(targetUuidStr),
+                            targetUuidStr.isBlank() ? null : UUID.fromString(targetUuidStr),
                             pSec.getString("target.name"),
-                            actorUuidStr == null || actorUuidStr.isBlank() ? null : UUID.fromString(actorUuidStr),
+                            actorUuidStr.isBlank() ? null : UUID.fromString(actorUuidStr),
                             pSec.getString("actor.name"),
                             pSec.getString("type"),
                             pSec.getBoolean("alerted", false),
@@ -685,24 +683,29 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
         return latest;
     }
 
-    String formatBanMessage(PunishmentRecord record) {
+    Component formatBanMessage(PunishmentRecord record) {
         if (record == null) {
-            return "You have been banned.";
+            return Component.text("You have been banned.");
         }
 
-        StringBuilder message = new StringBuilder("You are banned from this server.");
+        Component message = Component.text("You are banned from this server.");
         if (record.reason() != null && !record.reason().isBlank()) {
-            message.append("\nReason: ").append(record.reason());
+            message = message.appendNewline().append(
+                    Component.text("Reason: " + record.reason())
+                    );
         }
         if (!record.permanent() && record.durationSeconds() != null && record.durationSeconds() > 0L) {
             Instant expiresAt = record.expiresAt();
             if (expiresAt != null) {
                 long remainingSeconds = Duration.between(Instant.now(), expiresAt).getSeconds();
                 if (remainingSeconds > 0L) {
-                    message.append("\nRemaining: ").append(TimeUtil.formatDuration(remainingSeconds));
+                    message = message.appendNewline()
+                            .append(
+                                    Component.text("\nRemaining: " + TimeUtil.formatDuration(remainingSeconds))
+                            );
                 }
             }
         }
-        return message.toString();
+        return message;
     }
 }

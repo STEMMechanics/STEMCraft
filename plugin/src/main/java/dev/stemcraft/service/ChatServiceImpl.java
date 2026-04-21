@@ -233,7 +233,8 @@ public class ChatServiceImpl extends BaseService {
             if (decision.filteredMessage() != null) {
                 List<String> filteredLines = splitSignLines(decision.filteredMessage());
                 for (int i = 0; i < 4; i++) {
-                    event.setLine(i, filteredLines.get(i));
+                    // HACK: variable "content" should be `Component`s. It's not. - ProjectHSI
+                    event.line(i, Component.text(filteredLines.get(i)));
                 }
             }
         }, EventPriority.HIGH, true);
@@ -558,7 +559,7 @@ public class ChatServiceImpl extends BaseService {
         PlayerProfile profile = Bukkit.createProfile(player.getUniqueId(), player.getName());
         var expires = duration == null ? null : java.util.Date.from(Instant.now().plus(duration));
         Bukkit.getBanList(BanListType.PROFILE).addBan(profile, reason, expires, "<server>");
-        api.tasks().nextTick(() -> player.kick(Component.text(plugin.punishments().formatBanMessage(plugin.punishments().findActiveBan(player.getUniqueId())))));
+        api.tasks().nextTick(() -> player.kick(plugin.punishments().formatBanMessage(plugin.punishments().findActiveBan(player.getUniqueId()))));
     }
 
     private BookMeta applyFilteredBook(BookMeta originalMeta, String originalTitle, String filteredMessage, boolean signing) {
@@ -567,13 +568,13 @@ public class ChatServiceImpl extends BaseService {
 
         if (signing) {
             if (decoded.title() == null || decoded.title().isBlank()) {
-                updatedMeta.setTitle(null);
+                updatedMeta.title(null);
             } else {
-                updatedMeta.setTitle(decoded.title());
+                updatedMeta.title(Component.text(decoded.title()));
             }
         }
-
-        updatedMeta.setPages(decoded.pages());
+        
+        updatedMeta = (BookMeta) updatedMeta.pages(decoded.pages().stream().map((bookString) -> (Component)Component.text(bookString)).toList());
         return updatedMeta;
     }
 

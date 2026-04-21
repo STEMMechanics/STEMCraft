@@ -1,6 +1,5 @@
 package dev.stemcraft.service.minigame;
 
-import dev.stemcraft.api.minigame.MiniGame;
 import dev.stemcraft.api.minigame.MiniGamePlayer;
 import dev.stemcraft.api.minigame.MiniGameTeam;
 import org.bukkit.boss.BarColor;
@@ -144,44 +143,35 @@ public class MiniGameHUD {
         return new CompiledLine(condition, segments, suppressIfBlank);
     }
 
-    private static final class CompiledLine {
-        private final Condition condition;
-        private final List<Segment> segments;
-        private final boolean suppressIfBlank;
-
-        public CompiledLine(Condition condition, List<Segment> segments, boolean suppressIfBlank) {
-            this.condition = condition;
-            this.segments = segments;
-            this.suppressIfBlank = suppressIfBlank;
-        }
+    private record CompiledLine(Condition condition, List<Segment> segments, boolean suppressIfBlank) {
 
         public String render(MiniGameImpl game, MiniGamePlayer player) {
-            if (condition != null && !condition.matches(game, player)) {
-                return null;
-            }
+                if (condition != null && !condition.matches(game, player)) {
+                    return null;
+                }
 
-            StringBuilder sb = new StringBuilder(64);
-            for (Segment s : segments) s.append(sb, game, player);
-            String rendered = sb.toString();
-            if (suppressIfBlank && rendered.isBlank()) {
-                return null;
+                StringBuilder sb = new StringBuilder(64);
+                for (Segment s : segments) s.append(sb, game, player);
+                String rendered = sb.toString();
+                if (suppressIfBlank && rendered.isBlank()) {
+                    return null;
+                }
+                return rendered;
             }
-            return rendered;
         }
-    }
 
     private interface Segment {
         void append(StringBuilder sb, MiniGameImpl game, MiniGamePlayer player);
     }
 
-    private static record TextSeg(String text) implements Segment {
+    private record TextSeg(String text) implements Segment {
         @Override
         public void append(StringBuilder sb, MiniGameImpl game, MiniGamePlayer player) {
             sb.append(text);
         }
     }
 
-    private static record PlaceholderSeg(PlaceholderToken token) implements Segment {
+    private record PlaceholderSeg(PlaceholderToken token) implements Segment {
         @Override
         public void append(StringBuilder sb, MiniGameImpl game, MiniGamePlayer player) {
             String value = resolveToken(game, player, token);
@@ -209,37 +199,30 @@ public class MiniGameHUD {
         };
     }
 
-    private static final class Condition {
-        private final PlaceholderToken token;
-        private final boolean negate;
-
-        private Condition(PlaceholderToken token, boolean negate) {
-            this.token = token;
-            this.negate = negate;
-        }
+    private record Condition(PlaceholderToken token, boolean negate) {
 
         private boolean matches(MiniGameImpl game, MiniGamePlayer player) {
-            boolean truthy = isTruthy(resolveToken(game, player, token));
-            return negate ? !truthy : truthy;
-        }
-
-        private boolean isTruthy(String value) {
-            if (value == null) {
-                return false;
+                boolean truthy = isTruthy(resolveToken(game, player, token));
+                return negate != truthy;
             }
 
-            String normalized = value.trim().toLowerCase(Locale.ROOT);
-            if (normalized.isEmpty()) {
-                return false;
-            }
+            private boolean isTruthy(String value) {
+                if (value == null) {
+                    return false;
+                }
 
-            return !normalized.equals("false")
-                && !normalized.equals("0")
-                && !normalized.equals("no")
-                && !normalized.equals("off")
-                && !normalized.equals("null");
+                String normalized = value.trim().toLowerCase(Locale.ROOT);
+                if (normalized.isEmpty()) {
+                    return false;
+                }
+
+                return !normalized.equals("false")
+                        && !normalized.equals("0")
+                        && !normalized.equals("no")
+                        && !normalized.equals("off")
+                        && !normalized.equals("null");
+            }
         }
-    }
 
     static final class PlaceholderToken {
         enum Scope { ARENA, TEAM, PLAYER }

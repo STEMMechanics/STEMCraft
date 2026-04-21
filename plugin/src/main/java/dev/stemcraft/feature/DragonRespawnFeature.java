@@ -45,7 +45,7 @@ public class DragonRespawnFeature extends BaseFeature {
         }
 
         api.tasks().registerPersistentCallback(PERSISTENT_TYPE, (type, id, data) -> {
-            String worldName = data == null ? "" : data.trim();
+            String worldName = data.trim();
             if (worldName.isEmpty()) {
                 return;
             }

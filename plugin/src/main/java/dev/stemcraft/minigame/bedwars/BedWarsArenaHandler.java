@@ -1,5 +1,6 @@
 package dev.stemcraft.minigame.bedwars;
 
+import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.minigame.ArenaValidationResult;
 import dev.stemcraft.api.minigame.MiniGameArena;
@@ -15,6 +16,7 @@ import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Sound;
+import org.bukkit.attribute.Attribute;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.data.BlockData;
@@ -393,7 +395,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
             return;
         }
 
-        Bukkit.getLogger().warning("[STEMCraft] BedWars arena '" + arena.id() + "' has drop items configured but no valid drop surfaces were found.");
+        STEMCraft.getPlugin().getLogger().warning("BedWars arena '" + arena.id() + "' has drop items configured but no valid drop surfaces were found.");
         broadcastInfoToOccupants(arena, "<yellow>Supply drops are enabled, but this arena has no valid drop surfaces.</yellow>");
     }
 
@@ -450,7 +452,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
 
     private void equipPlayer(MiniGameArena arena, Player player) {
         clearPlayerInventory(player);
-        player.setHealth(Math.min(player.getMaxHealth(), 20.0d));
+        player.setHealth(Math.min(player.getAttribute(Attribute.MAX_HEALTH).getValue(), 20.0d));
         player.setFoodLevel(20);
         player.setSaturation(20.0f);
         player.setFireTicks(0);
@@ -463,13 +465,6 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
         if (team != null) {
             arena.giveKit(player, team.getName(), false);
         }
-    }
-
-    private void clearPlayerInventory(Player player) {
-        player.getInventory().clear();
-        player.getInventory().setArmorContents(null);
-        player.getInventory().setItemInOffHand(null);
-        player.updateInventory();
     }
 
     private void checkForRoundEnd(MiniGameArena arena) {
@@ -526,7 +521,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
         int teamSize = teamSize(arena);
         int desiredTeams = Math.max(2, players / 3);
         int requiredTeams = Math.max(2, (players + teamSize - 1) / teamSize);
-        int activeTeams = Math.min(teams.size(), Math.max(desiredTeams, requiredTeams));
+        int activeTeams = Math.clamp(desiredTeams, requiredTeams, teams.size());
         return teams.subList(0, activeTeams);
     }
 

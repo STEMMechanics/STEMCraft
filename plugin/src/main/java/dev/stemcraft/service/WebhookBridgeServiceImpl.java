@@ -34,7 +34,11 @@ import dev.stemcraft.api.service.web.WebServiceRequest;
 import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.api.util.TimeUtil;
 import io.papermc.paper.ban.BanListType;
+import io.papermc.paper.connection.PlayerGameConnection;
+import io.papermc.paper.connection.PlayerLoginConnection;
+import io.papermc.paper.event.connection.PlayerConnectionValidateLoginEvent;
 import io.papermc.paper.event.player.AsyncChatEvent;
+import net.kyori.adventure.text.Component;
 import org.bukkit.BanList;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
@@ -44,7 +48,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.player.AsyncPlayerPreLoginEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.event.player.PlayerLoginEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import com.destroystokyo.paper.profile.PlayerProfile;
@@ -84,6 +87,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 /**
@@ -168,7 +172,8 @@ public final class WebhookBridgeServiceImpl extends BaseService {
 
     private void registerEvents() {
         api.events().register(AsyncPlayerPreLoginEvent.class, this::onAsyncPlayerPreLogin, EventPriority.HIGHEST, false);
-        api.events().register(PlayerLoginEvent.class, this::onPlayerLogin, EventPriority.HIGHEST, false);
+        //noinspection UnstableApiUsage
+        api.events().register(PlayerConnectionValidateLoginEvent.class, this::onPlayerConnect, EventPriority.HIGHEST, false);
         api.events().register(PlayerJoinEvent.class, this::onPlayerJoin);
         api.events().register(PlayerQuitEvent.class, this::onPlayerQuit);
         api.events().register(AsyncChatEvent.class, this::onAsyncChat);
@@ -208,9 +213,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
             .description("WEBHOOK_SYNC_COMMAND_DESCRIPTION")
             .usage("WEBHOOK_SYNC_COMMAND_USAGE")
             .permission("stemcraft.command.webhooksync")
-            .executor((unused, cmd, ctx) -> {
-                runManualSyncCommand(ctx);
-            })
+            .executor((unused, cmd, ctx) -> runManualSyncCommand(ctx))
             .register(plugin);
     }
 
@@ -311,7 +314,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
 
     private void sendWebhookHistory(dev.stemcraft.api.command.CommandContext ctx) {
         String scope = Objects.requireNonNullElse(ctx.getArgLower(1), "all");
-        int count = Math.max(1, Math.min(10, ctx.getArgAsInt(2, 3, 1, 10)));
+        int count = Math.clamp(ctx.getArgAsInt(2, 3, 1, 10), 1, 10);
 
         switch (scope) {
             case "send", "out", "outbound" -> sendHistorySection(ctx, "WEBHOOK_HISTORY_OUTBOUND", recentHistory(recentOutboundHistory, count));
@@ -396,18 +399,18 @@ public final class WebhookBridgeServiceImpl extends BaseService {
         Player player = event.getPlayer();
         PenaltyStateRecord activeBan = findActivePenalty(player.getUniqueId(), player.getName(), "ban");
         if (activeBan != null) {
-            api.tasks().nextTick(() -> player.kickPlayer(messageForPenalty(activeBan, "You are banned from this server.")));
+            api.tasks().nextTick(() -> player.kick(messageForPenalty(activeBan, "You are banned from this server.")));
             return;
         }
 
         if (isBlacklisted(player.getUniqueId(), player.getName())) {
-            api.tasks().nextTick(() -> player.kickPlayer(messageForBlacklist(player.getUniqueId(), player.getName())));
+            api.tasks().nextTick(() -> player.kick(messageForBlacklist(player.getUniqueId(), player.getName())));
             return;
         }
 
         String loginPlatform = platformForLogin(player.getUniqueId(), player.getName());
         if (!isWhitelistedByAccountStateStrict(player.getUniqueId(), player.getName(), loginPlatform)) {
-            api.tasks().nextTick(() -> player.kickPlayer(getWhitelistKickMessage()));
+            api.tasks().nextTick(() -> player.kick(getWhitelistKickMessage()));
             return;
         }
 
@@ -415,32 +418,60 @@ public final class WebhookBridgeServiceImpl extends BaseService {
         sendPlayerLogin(player);
     }
 
-    private void onPlayerLogin(PlayerLoginEvent event) {
+    @SuppressWarnings("UnstableApiUsage")
+    private void onPlayerConnect(PlayerConnectionValidateLoginEvent event) {
         if (!isBridgeEnabled()) {
             return;
         }
 
-        Player player = event.getPlayer();
-        String loginPlatform = platformForLogin(player.getUniqueId(), player.getName());
+        PlayerProfile player = getPlayerProfile(event);
 
-        PenaltyStateRecord activeBan = findActivePenalty(player.getUniqueId(), player.getName(), "ban");
+        if (player == null) {
+            event.kickMessage(Component.text("An error occurred. Try restarting your launcher. If the issue persists, contact STEMCrew! (err: onPlayerConnect#1"));
+            STEMCraft.getPlugin().getLogger().log(Level.SEVERE, "A player could not be connected because all possible paths for the player profile returned null (onPlayerConnect#1).");
+            return;
+        }
+
+        if (player.getId() == null) {
+            event.kickMessage(Component.text("An error occurred. Try restarting your launcher. If the issue persists, contact STEMCrew! (err: onPlayerConnect#2)"));
+            STEMCraft.getPlugin().getLogger().log(Level.SEVERE, "A player could not be connected because they didn't have a UUID (onPlayerConnect#2).");
+        }
+
+        String loginPlatform = platformForLogin(player.getId(), player.getName());
+
+        PenaltyStateRecord activeBan = findActivePenalty(player.getId(), player.getName(), "ban");
         if (activeBan != null) {
-            event.disallow(PlayerLoginEvent.Result.KICK_BANNED, messageForPenalty(activeBan, "You are banned from this server."));
+            event.kickMessage(messageForPenalty(activeBan, "You are banned from this server."));
             return;
         }
 
-        BlacklistRecord blacklist = findBlacklist(player.getUniqueId(), player.getName());
+        BlacklistRecord blacklist = findBlacklist(player.getId(), player.getName());
         if (blacklist != null && blacklist.isActive()) {
-            event.disallow(PlayerLoginEvent.Result.KICK_BANNED, messageForBlacklist(player.getUniqueId(), player.getName()));
+            event.kickMessage(messageForBlacklist(player.getId(), player.getName()));
             return;
         }
 
-        if (!isWhitelistedByAccountStateStrict(player.getUniqueId(), player.getName(), loginPlatform)) {
-            event.disallow(PlayerLoginEvent.Result.KICK_WHITELIST, getWhitelistKickMessage());
+        if (!isWhitelistedByAccountStateStrict(player.getId(), player.getName(), loginPlatform)) {
+            event.kickMessage(getWhitelistKickMessage());
             return;
         }
 
         event.allow();
+    }
+
+    @SuppressWarnings("UnstableApiUsage")
+    private static PlayerProfile getPlayerProfile(PlayerConnectionValidateLoginEvent event) {
+        PlayerProfile player = null;
+
+        if (event.getConnection() instanceof PlayerLoginConnection) {
+            if (((PlayerLoginConnection) event.getConnection()).getAuthenticatedProfile() != null) {
+                player = ((PlayerLoginConnection) event.getConnection()).getAuthenticatedProfile();
+            }
+        } else if (event.getConnection() instanceof PlayerGameConnection) {
+            player = ((PlayerGameConnection) event.getConnection()).getPlayer().getPlayerProfile();
+        }
+
+        return player;
     }
 
     private boolean isWhitelistedByAccountStateStrict(UUID uuid, String username, String platform) {
@@ -529,7 +560,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
         }
 
         event.setCancelled(true);
-        event.getPlayer().sendPlainMessage(messageForPenalty(activeMute, "You are muted and cannot chat right now."));
+        event.getPlayer().sendMessage(messageForPenalty(activeMute, "You are muted and cannot chat right now."));
     }
 
     private void reportPunishmentCreated(PunishmentRecord record) {
@@ -726,9 +757,9 @@ public final class WebhookBridgeServiceImpl extends BaseService {
         }
     }
 
-    private String getWhitelistKickMessage() {
+    private Component getWhitelistKickMessage() {
         String message = getRootConfigSection().getString("whitelist_message", "You are not whitelisted on this server.");
-        return message.isBlank() ? "You are not whitelisted on this server." : message;
+        return Component.text(message.isBlank() ? "You are not whitelisted on this server." : message);
     }
 
     private boolean setDefault(ConfigSection cfg, String path, Object value) {
@@ -891,7 +922,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
             Map<String, Object> pingPayload = new LinkedHashMap<>();
             pingPayload.put("event", "server.health.ping");
             pingPayload.put("server_name", config().getString("server_name", plugin.getServer().getName()));
-            pingPayload.put("plugin_version", plugin.getDescription().getVersion());
+            pingPayload.put("plugin_version", plugin.getPluginMeta().getVersion());
             JsonObject pingResponse = sendSyncEvent(siteWebhookUrl, secret, pingPayload);
             if (pingResponse == null || !booleanValue(pingResponse, "ok", false)) {
                 return SyncResult.failure("server.health.ping failed");
@@ -901,7 +932,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
             playersPayload.put("event", "server.sync.players");
             playersPayload.put("server_name", config().getString("server_name", plugin.getServer().getName()));
             playersPayload.put("reason", reason);
-            playersPayload.put("plugin_version", plugin.getDescription().getVersion());
+            playersPayload.put("plugin_version", plugin.getPluginMeta().getVersion());
             playersPayload.put("players", buildPlayersSyncPayload());
             JsonObject playersResponse = sendSyncEvent(siteWebhookUrl, secret, playersPayload);
             if (playersResponse == null || !booleanValue(playersResponse, "ok", false)) {
@@ -912,7 +943,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
             penaltiesPayload.put("event", "server.sync.penalties");
             penaltiesPayload.put("server_name", config().getString("server_name", plugin.getServer().getName()));
             penaltiesPayload.put("reason", reason);
-            penaltiesPayload.put("plugin_version", plugin.getDescription().getVersion());
+            penaltiesPayload.put("plugin_version", plugin.getPluginMeta().getVersion());
             penaltiesPayload.put("penalties", buildPenaltiesSyncPayload());
             JsonObject penaltiesResponse = sendSyncEvent(siteWebhookUrl, secret, penaltiesPayload);
             if (penaltiesResponse == null || !booleanValue(penaltiesResponse, "ok", false)) {
@@ -1057,7 +1088,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
         Map<String, Object> shutdownPayload = new LinkedHashMap<>();
         shutdownPayload.put("event", "server.shutdown");
         shutdownPayload.put("server_name", config().getString("server_name", plugin.getServer().getName()));
-        shutdownPayload.put("plugin_version", plugin.getDescription().getVersion());
+        shutdownPayload.put("plugin_version", plugin.getPluginMeta().getVersion());
         shutdownPayload.put("occurred_at", Instant.now().toString());
         shutdownPayload.put("online_players", onlinePlayers);
         sendWebhookSync(shutdownPayload);
@@ -1070,18 +1101,16 @@ public final class WebhookBridgeServiceImpl extends BaseService {
     private void sendPlayerStatsSync() {
         List<String> configured = config().getStringList("player_stats_sync_periods");
         List<String> periods = new ArrayList<>();
-        if (configured != null) {
-            for (String value : configured) {
-                if (value == null || value.isBlank()) {
-                    continue;
-                }
-                String period = value.trim().toLowerCase(Locale.ROOT);
-                if (!period.equals("day") && !period.equals("week") && !period.equals("month") && !period.equals("all")) {
-                    continue;
-                }
-                if (!periods.contains(period)) {
-                    periods.add(period);
-                }
+        for (String value : configured) {
+            if (value == null || value.isBlank()) {
+                continue;
+            }
+            String period = value.trim().toLowerCase(Locale.ROOT);
+            if (!period.equals("day") && !period.equals("week") && !period.equals("month") && !period.equals("all")) {
+                continue;
+            }
+            if (!periods.contains(period)) {
+                periods.add(period);
             }
         }
         if (periods.isEmpty()) {
@@ -1135,18 +1164,16 @@ public final class WebhookBridgeServiceImpl extends BaseService {
 
         List<String> configured = config().getStringList("player_stats_sync_periods");
         List<String> periods = new ArrayList<>();
-        if (configured != null) {
-            for (String value : configured) {
-                if (value == null || value.isBlank()) {
-                    continue;
-                }
-                String period = value.trim().toLowerCase(Locale.ROOT);
-                if (!period.equals("day") && !period.equals("week") && !period.equals("month") && !period.equals("all")) {
-                    continue;
-                }
-                if (!periods.contains(period)) {
-                    periods.add(period);
-                }
+        for (String value : configured) {
+            if (value == null || value.isBlank()) {
+                continue;
+            }
+            String period = value.trim().toLowerCase(Locale.ROOT);
+            if (!period.equals("day") && !period.equals("week") && !period.equals("month") && !period.equals("all")) {
+                continue;
+            }
+            if (!periods.contains(period)) {
+                periods.add(period);
             }
         }
         if (periods.isEmpty()) {
@@ -1217,7 +1244,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
     }
 
     private String inferPlatform(@Nullable UUID uuid, @Nullable String username) {
-        if (uuid != null && PlayerUtil.isBedrock(uuid)) {
+        if (PlayerUtil.isBedrock(uuid)) {
             return PLATFORM_BEDROCK;
         }
         if (looksLikePrefixedBedrockUsername(username)) {
@@ -1278,7 +1305,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
 
     private String bedrockUsernamePrefix() {
         String prefix = config().getString("bedrock_username_prefix", ".");
-        return prefix == null ? "." : prefix;
+        return prefix;
     }
 
     private void sendWebhook(Map<String, Object> payload) {
@@ -1377,7 +1404,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
                 }
                 yield null;
             }
-            case "player.penalty.deleted" -> {
+            case "player.penalty.deleted", "player.penalty.lifted" -> {
                 handlePenaltyLifted(payload);
                 yield null;
             }
@@ -1391,10 +1418,6 @@ public final class WebhookBridgeServiceImpl extends BaseService {
             }
             case "player.penalty.created" -> {
                 handlePenaltyCreated(payload);
-                yield null;
-            }
-            case "player.penalty.lifted" -> {
-                handlePenaltyLifted(payload);
                 yield null;
             }
             case "server.status.request" -> buildServerStatusResponse();
@@ -1920,12 +1943,12 @@ public final class WebhookBridgeServiceImpl extends BaseService {
     }
 
     private void kickIfNoLongerWhitelisted(AccountRecord record) {
-        String message = "You are no longer whitelisted on this server.";
+        Component message = Component.text("You are no longer whitelisted on this server.");
         for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
             boolean sameUuid = record.uuid != null && record.uuid.equalsIgnoreCase(normalize(onlinePlayer.getUniqueId()));
             boolean sameUsername = record.username != null && record.username.equalsIgnoreCase(onlinePlayer.getName());
             if (sameUuid || sameUsername) {
-                onlinePlayer.kickPlayer(message);
+                onlinePlayer.kick(message);
             }
         }
     }
@@ -1958,7 +1981,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
             boolean sameUuid = record.uuid != null && record.uuid.equalsIgnoreCase(normalize(onlinePlayer.getUniqueId()));
             boolean sameUsername = record.username != null && record.username.equalsIgnoreCase(onlinePlayer.getName());
             if ((sameUuid || sameUsername) && isBlacklisted(onlinePlayer.getUniqueId(), onlinePlayer.getName())) {
-                onlinePlayer.kickPlayer(messageForBlacklist(onlinePlayer.getUniqueId(), onlinePlayer.getName()));
+                onlinePlayer.kick(messageForBlacklist(onlinePlayer.getUniqueId(), onlinePlayer.getName()));
             }
         }
     }
@@ -1966,15 +1989,15 @@ public final class WebhookBridgeServiceImpl extends BaseService {
     private void kickIfBlacklisted(BlacklistRecord record) {
         for (Player player : Bukkit.getOnlinePlayers()) {
             if (matchesBlacklist(record, player.getUniqueId(), player.getName())) {
-                player.kickPlayer(messageForBlacklist(player.getUniqueId(), player.getName()));
+                player.kick(messageForBlacklist(player.getUniqueId(), player.getName()));
             }
         }
     }
 
-    private void kickMatchingPlayers(PenaltyStateRecord record, String message) {
+    private void kickMatchingPlayers(PenaltyStateRecord record, Component message) {
         for (Player player : Bukkit.getOnlinePlayers()) {
             if (matchesPenalty(record, player.getUniqueId(), player.getName())) {
-                player.kickPlayer(message);
+                player.kick(message);
             }
         }
     }
@@ -1985,7 +2008,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
             player.getName(),
             normalize(player.getUniqueId()),
             PlayerUtil.isBedrock(player) ? PLATFORM_BEDROCK : PLATFORM_JAVA,
-            existing == null ? false : existing.whitelisted,
+                existing != null && existing.whitelisted,
             existing == null ? Instant.now() : existing.occurredAt
         ));
     }
@@ -2276,10 +2299,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
         }
 
         if (looksLikePrefixedBedrockUsername(username)) {
-            AccountRecord prefixedBedrock = accountsByUsername.get(accountUsernameKey(username, PLATFORM_BEDROCK));
-            if (prefixedBedrock != null) {
-                return prefixedBedrock;
-            }
+            return accountsByUsername.get(accountUsernameKey(username, PLATFORM_BEDROCK));
         }
 
         return null;
@@ -2292,7 +2312,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
             }
             return record.uuid.equalsIgnoreCase(normalize(uuid));
         }
-        return record.username != null && username != null && record.username.equalsIgnoreCase(username);
+        return record.username != null && record.username.equalsIgnoreCase(username);
     }
 
     private boolean matchesBlacklist(BlacklistRecord record, UUID uuid, String username) {
@@ -2305,33 +2325,40 @@ public final class WebhookBridgeServiceImpl extends BaseService {
             }
             return record.uuid.equalsIgnoreCase(normalize(uuid));
         }
-        return record.username != null && username != null && record.username.equalsIgnoreCase(username);
+        return record.username != null && record.username.equalsIgnoreCase(username);
     }
 
-    private String messageForBlacklist(UUID uuid, String username) {
+    private Component messageForBlacklist(UUID uuid, String username) {
         BlacklistRecord blacklist = findBlacklist(uuid, username);
         if (blacklist == null || blacklist.reason == null || blacklist.reason.isBlank()) {
-            return "You are blacklisted from this server.";
+            return Component.text("You are blacklisted from this server.");
         }
-        return blacklist.reason;
+        return Component.text(blacklist.reason);
     }
 
-    private String messageForPenalty(PenaltyStateRecord penalty, String fallback) {
-        StringBuilder message = new StringBuilder();
-        message.append(fallback);
+    private Component messageForPenalty(PenaltyStateRecord penalty, String fallback) {
+        Component message = Component.text(fallback);
 
         if (penalty.reason != null && !penalty.reason.isBlank()) {
-            message.append("\nReason: ").append(penalty.reason);
+            message = message
+                    .appendNewline()
+                    .append(
+                            Component.text("Reason: " + penalty.reason)
+                            );
         }
 
         if (!penalty.permanent && penalty.endsAt != null) {
             long remainingSeconds = Duration.between(Instant.now(), penalty.endsAt).getSeconds();
             if (remainingSeconds > 0L) {
-                message.append("\nRemaining: ").append(formatRemainingDuration(remainingSeconds));
+                message = message
+                        .appendNewline()
+                        .append(
+                                Component.text("Remaining: " + formatRemainingDuration(remainingSeconds))
+                                );
             }
         }
 
-        return message.toString();
+        return message;
     }
 
     private String formatRemainingDuration(long remainingSeconds) {
@@ -2717,15 +2744,13 @@ public final class WebhookBridgeServiceImpl extends BaseService {
     private static boolean isSyncManagedEvent(String event) {
         return "player.profile.created".equals(event)
             || "player.profile.deleted".equals(event)
-            || "player.penalty.created".equals(event)
             || "player.penalty.updated".equals(event)
             || "player.penalty.deleted".equals(event)
+            || "player.penalty.lifted".equals(event)
             || "account.sync".equals(event)
             || "account.remove".equals(event)
             || "blacklist.sync".equals(event)
-            || "blacklist.remove".equals(event)
-            || "player.penalty.created".equals(event)
-            || "player.penalty.lifted".equals(event);
+            || "blacklist.remove".equals(event);
     }
 
     private static Instant parseInboundOccurredAt(JsonObject payload) {
@@ -2744,10 +2769,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
 
         JsonObject blacklist = objectValue(payload, "blacklist");
         if (blacklist != null) {
-            Instant blacklistOccurredAt = parseInstant(nullableString(blacklist, "occurred_at"));
-            if (blacklistOccurredAt != null) {
-                return blacklistOccurredAt;
-            }
+            return parseInstant(nullableString(blacklist, "occurred_at"));
         }
 
         return null;
@@ -2954,8 +2976,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
             return PLATFORM_JAVA;
         }
         String normalized = platform.trim().toLowerCase(Locale.ROOT);
-        if (normalized.equals(PLATFORM_BEDROCK)
-            || normalized.equals("floodgate")
+        if (normalized.equals("floodgate")
             || normalized.equals("geyser")
             || normalized.contains("bedrock")) {
             return PLATFORM_BEDROCK;
@@ -3147,7 +3168,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
                 return logInboundAndJsonResponse(request, event, deliveryId, 403, "rejected", "{\"ok\":false,\"error\":\"stale_timestamp\"}");
             }
 
-            String expected = sign(body, Objects.requireNonNullElse(timestamp, ""), getSharedSecret());
+            String expected = sign(body, timestamp, getSharedSecret());
             if (signature == null || !secureEquals(expected, signature)) {
                 plugin.getLogger().warning("Rejected webhook request: invalid signature for delivery " + Objects.requireNonNullElse(deliveryId, "<missing>"));
                 return logInboundAndJsonResponse(request, event, deliveryId, 403, "rejected", "{\"ok\":false,\"error\":\"forbidden\"}");
@@ -3172,9 +3193,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
                 return logInboundAndJsonResponse(request, event, deliveryId, 200, "ignored", "{\"ok\":true,\"ignored\":\"stale\"}");
             }
 
-            Future<Object> future = Bukkit.getScheduler().callSyncMethod(plugin, () -> {
-                return handleInboundEvent(payload);
-            });
+            Future<Object> future = Bukkit.getScheduler().callSyncMethod(plugin, () -> handleInboundEvent(payload));
             Object response = future.get(10, TimeUnit.SECONDS);
 
             if (response instanceof Map<?, ?> responseMap) {
@@ -3394,94 +3413,78 @@ public final class WebhookBridgeServiceImpl extends BaseService {
         }
     }
 
-    private static final class BlacklistRecord {
-        private final String username;
-        private final String uuid;
-        private final String reason;
-        private final Instant startsAt;
-        private final Instant endsAt;
-        private final boolean permanent;
-        private final Instant occurredAt;
+    private record BlacklistRecord(String username, String uuid, String reason, Instant startsAt, Instant endsAt,
+                                   boolean permanent, Instant occurredAt) {
+            private BlacklistRecord(String username, String uuid, String reason, Instant startsAt, Instant endsAt, boolean permanent, Instant occurredAt) {
+                this.username = username == null || username.isBlank() ? null : username;
+                this.uuid = uuid == null || uuid.isBlank() ? null : uuid.toLowerCase();
+                this.reason = reason;
+                this.startsAt = startsAt;
+                this.endsAt = endsAt;
+                this.permanent = permanent;
+                this.occurredAt = occurredAt;
+            }
 
-        private BlacklistRecord(String username, String uuid, String reason, Instant startsAt, Instant endsAt, boolean permanent, Instant occurredAt) {
-            this.username = username == null || username.isBlank() ? null : username;
-            this.uuid = uuid == null || uuid.isBlank() ? null : uuid.toLowerCase();
-            this.reason = reason;
-            this.startsAt = startsAt;
-            this.endsAt = endsAt;
-            this.permanent = permanent;
-            this.occurredAt = occurredAt;
+            private String key() {
+                if (this.uuid != null) {
+                    return "uuid:" + this.uuid;
+                }
+                if (this.username != null) {
+                    return "username:" + this.username.toLowerCase();
+                }
+                return null;
+            }
+
+            private boolean isActive() {
+                Instant now = Instant.now();
+                if (this.startsAt != null && this.startsAt.isAfter(now)) {
+                    return false;
+                }
+                if (this.permanent) {
+                    return true;
+                }
+                return this.endsAt == null || this.endsAt.isAfter(now);
+            }
         }
 
-        private String key() {
-            if (this.uuid != null) {
-                return "uuid:" + this.uuid;
+    private record PenaltyStateRecord(String externalId, String username, String uuid, String type, String reason,
+                                      Instant createdAt, Instant endsAt, boolean permanent, Instant liftedAt) {
+            private PenaltyStateRecord(String externalId, String username, String uuid, String type, String reason, Instant createdAt, Instant endsAt, boolean permanent, Instant liftedAt) {
+                this.externalId = externalId == null || externalId.isBlank() ? null : externalId;
+                this.username = username == null || username.isBlank() ? null : username;
+                this.uuid = uuid == null || uuid.isBlank() ? null : uuid.toLowerCase();
+                this.type = type == null || type.isBlank() ? "ban" : type.toLowerCase();
+                this.reason = reason;
+                this.createdAt = createdAt;
+                this.endsAt = endsAt;
+                this.permanent = permanent;
+                this.liftedAt = liftedAt;
             }
-            if (this.username != null) {
-                return "username:" + this.username.toLowerCase();
-            }
-            return null;
-        }
 
-        private boolean isActive() {
-            Instant now = Instant.now();
-            if (this.startsAt != null && this.startsAt.isAfter(now)) {
-                return false;
+            private String key() {
+                if (this.externalId != null) {
+                    return "external:" + this.externalId;
+                }
+                if (this.uuid != null) {
+                    return "type:" + this.type + ":uuid:" + this.uuid;
+                }
+                if (this.username != null) {
+                    return "type:" + this.type + ":username:" + this.username.toLowerCase();
+                }
+                return null;
             }
-            if (this.permanent) {
-                return true;
-            }
-            return this.endsAt == null || this.endsAt.isAfter(now);
-        }
-    }
 
-    private static final class PenaltyStateRecord {
-        private final String externalId;
-        private final String username;
-        private final String uuid;
-        private final String type;
-        private final String reason;
-        private final Instant createdAt;
-        private final Instant endsAt;
-        private final boolean permanent;
-        private final Instant liftedAt;
-
-        private PenaltyStateRecord(String externalId, String username, String uuid, String type, String reason, Instant createdAt, Instant endsAt, boolean permanent, Instant liftedAt) {
-            this.externalId = externalId == null || externalId.isBlank() ? null : externalId;
-            this.username = username == null || username.isBlank() ? null : username;
-            this.uuid = uuid == null || uuid.isBlank() ? null : uuid.toLowerCase();
-            this.type = type == null || type.isBlank() ? "ban" : type.toLowerCase();
-            this.reason = reason;
-            this.createdAt = createdAt;
-            this.endsAt = endsAt;
-            this.permanent = permanent;
-            this.liftedAt = liftedAt;
+            private boolean isActive() {
+                if ("kick".equals(this.type)) {
+                    return false;
+                }
+                if (this.liftedAt != null) {
+                    return false;
+                }
+                if (this.permanent) {
+                    return true;
+                }
+                return this.endsAt != null && this.endsAt.isAfter(Instant.now());
+            }
         }
-
-        private String key() {
-            if (this.externalId != null) {
-                return "external:" + this.externalId;
-            }
-            if (this.uuid != null) {
-                return "type:" + this.type + ":uuid:" + this.uuid;
-            }
-            if (this.username != null) {
-                return "type:" + this.type + ":username:" + this.username.toLowerCase();
-            }
-            return null;
-        }
-
-        private boolean isActive() {
-            if ("kick".equals(this.type)) {
-                return false;
-            }
-            if (this.liftedAt != null) {
-                return false;
-            }
-            if (this.permanent) {
-                return true;
-            }
-            return this.endsAt != null && this.endsAt.isAfter(Instant.now());
-        }
-    }
 }

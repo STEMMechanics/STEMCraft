@@ -31,6 +31,7 @@ import dev.stemcraft.service.BaseService;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.attribute.Attribute;
 import org.bukkit.entity.AbstractArrow;
 import org.bukkit.entity.Player;
 import org.bukkit.event.block.BlockBreakEvent;
@@ -155,7 +156,7 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
             }
 
             ItemStack placed = event.getItemInHand();
-            if (placed == null || placed.getType().isAir()) {
+            if (placed.getType().isAir()) {
                 return;
             }
 
@@ -294,7 +295,7 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
 
         api.events().register(PlayerTeleportEvent.class, event -> {
             Location to = event.getTo();
-            if (to == null || to.getWorld() == null) {
+            if (to.getWorld() == null) {
                 return;
             }
 
@@ -545,7 +546,7 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
         player.setExhaustion(state.exhaustion());
         player.setLevel(state.level());
         player.setExp(state.exp());
-        player.setHealth(Math.min(state.health(), player.getMaxHealth()));
+        player.setHealth(Math.min(state.health(), player.getAttribute(Attribute.MAX_HEALTH).getValue()));
         if (restoreLocation && state.location() != null) {
             player.teleport(state.location());
         }
@@ -566,10 +567,11 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
         player.setExhaustion(0.0f);
         player.setLevel(0);
         player.setExp(0.0f);
-        player.setHealth(Math.min(player.getMaxHealth(), 20.0d));
+        player.setHealth(Math.min(player.getAttribute(Attribute.MAX_HEALTH).getValue(), 20.0d));
         PlayerInventory inventory = player.getInventory();
         inventory.clear();
-        inventory.setArmorContents(null);
+        ItemStack[] emptyItemStacks = {};
+        inventory.setArmorContents(emptyItemStacks);
         inventory.setItemInOffHand(null);
     }
 
@@ -679,10 +681,7 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
     ) {
         static StoredPlayerState capture(@NotNull Player player) {
             PlayerInventory inventory = player.getInventory();
-            List<PotionEffect> effects = new ArrayList<>();
-            for (PotionEffect effect : player.getActivePotionEffects()) {
-                effects.add(effect);
-            }
+            List<PotionEffect> effects = new ArrayList<>(player.getActivePotionEffects());
 
             return new StoredPlayerState(
                 player.getLocation().clone(),

@@ -120,8 +120,7 @@ public class BoatRaceCommand {
                     case "addstage", "addcheckpoint" -> commandAddStage(ctx);
                     case "setstage", "setcheckpoint" -> commandSetStage(ctx);
                     case "removestage", "removecheckpoint" -> commandRemoveStage(ctx);
-                    case "select" -> commandSelect(ctx);
-                    case "sel" -> commandSelect(ctx);
+                    case "select", "sel" -> commandSelect(ctx);
                     case "show" -> commandShow(ctx);
                     default -> ctx.returnUsage();
                 }
@@ -589,7 +588,6 @@ public class BoatRaceCommand {
                 api.selections().setWorldEditSelection(player, region);
                 showRegionPreview(player, "select-arena", region);
                 ctx.success("WorldEdit selection updated from arena '" + arena.id() + "' (arena).");
-                return;
             }
             case "finish" -> {
                 region = arena.get("finishRegion", SCRegion.class);
@@ -600,7 +598,6 @@ public class BoatRaceCommand {
                 api.selections().setWorldEditSelection(player, region);
                 showRegionPreview(player, "select-finish", region);
                 ctx.success("WorldEdit selection updated from arena '" + arena.id() + "' (finish).");
-                return;
             }
             case "stage", "checkpoint" -> {
                 ctx.checkArgsSizeAtLeast(4);
@@ -610,7 +607,6 @@ public class BoatRaceCommand {
                 api.selections().setWorldEditSelection(player, region);
                 showRegionPreview(player, "select-stage-" + index, region);
                 ctx.success("WorldEdit selection updated from arena '" + arena.id() + "' (checkpoint " + (index + 1) + ").");
-                return;
             }
             case "grid" -> {
                 ctx.checkArgsSizeAtLeast(4);
@@ -620,7 +616,6 @@ public class BoatRaceCommand {
                 api.selections().setWorldEditSelection(player, location);
                 showLocationPreview(player, "select-grid-" + index, location);
                 ctx.success("WorldEdit selection updated from arena '" + arena.id() + "' (grid " + (index + 1) + ").");
-                return;
             }
             case "lobby" -> {
                 location = arena.getLobbySpawn();
@@ -628,7 +623,6 @@ public class BoatRaceCommand {
                 api.selections().setWorldEditSelection(player, location);
                 showLocationPreview(player, "select-lobby", location);
                 ctx.success("WorldEdit selection updated from arena '" + arena.id() + "' (lobby).");
-                return;
             }
             case "spectator" -> {
                 location = arena.getSpectatorSpawn();
@@ -636,7 +630,6 @@ public class BoatRaceCommand {
                 api.selections().setWorldEditSelection(player, location);
                 showLocationPreview(player, "select-spectator", location);
                 ctx.success("WorldEdit selection updated from arena '" + arena.id() + "' (spectator).");
-                return;
             }
             default -> ctx.returnError("Unknown Boat Race select target '" + target + "'.");
         }

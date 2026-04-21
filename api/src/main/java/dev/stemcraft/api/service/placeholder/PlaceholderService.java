@@ -12,12 +12,12 @@ public interface PlaceholderService {
     @Nullable String apply(@Nullable OfflinePlayer player, @Nullable String text);
 
     default @Nullable String apply(@Nullable String text) {
-        return apply((OfflinePlayer) null, text);
+        return apply(null, text);
     }
 
     @NotNull List<String> apply(@Nullable OfflinePlayer player, @NotNull List<String> lines);
 
     default @NotNull List<String> apply(@NotNull List<String> lines) {
-        return apply((OfflinePlayer) null, lines);
+        return apply(null, lines);
     }
 }

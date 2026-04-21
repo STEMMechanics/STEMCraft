@@ -8,6 +8,7 @@ import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.PlayerInventory;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -29,21 +30,24 @@ public interface MiniGameArenaHandler {
      * @param arena  The mini-game arena to validate.
      * @param result The result object to record validation issues.
      */
-    default void validate(@NotNull MiniGameArena arena, ArenaValidationResult result) {}
+    default void validate(@NotNull MiniGameArena arena, ArenaValidationResult result) {
+    }
 
     /**
      * Called when an arena is loaded.
      *
      * @param arena The mini-game arena that was loaded.
      */
-    default void onArenaLoad(MiniGameArena arena) {}
+    default void onArenaLoad(MiniGameArena arena) {
+    }
 
     /**
      * Called when an arena is unloaded.
      *
      * @param arena The mini-game arena that was unloaded.
      */
-    default void onArenaUnload(MiniGameArena arena) {}
+    default void onArenaUnload(MiniGameArena arena) {
+    }
 
     /**
      * Called when the arena status changes.
@@ -52,22 +56,25 @@ public interface MiniGameArenaHandler {
      * @param oldStatus The old status of the arena.
      * @param newStatus The new status of the arena.
      */
-    default void onArenaStatusChanged(MiniGameArena arena, ArenaStatus oldStatus, ArenaStatus newStatus) {}
+    default void onArenaStatusChanged(MiniGameArena arena, ArenaStatus oldStatus, ArenaStatus newStatus) {
+    }
 
     /**
      * Called every second while an arena countdown is active, after the countdown is decremented.
      *
-     * @param arena The mini-game arena whose countdown ticked.
+     * @param arena            The mini-game arena whose countdown ticked.
      * @param secondsRemaining The remaining countdown time in seconds after the tick.
      */
-    default void onArenaCountdownTick(MiniGameArena arena, int secondsRemaining) {}
+    default void onArenaCountdownTick(MiniGameArena arena, int secondsRemaining) {
+    }
 
     /**
      * Called when the arena countdown ends.
      *
      * @param arena The mini-game arena whose countdown ended.
      */
-    default void onArenaCountdownEnd(MiniGameArena arena) {}
+    default void onArenaCountdownEnd(MiniGameArena arena) {
+    }
 
     /**
      * Called when a player joins the arena.
@@ -77,9 +84,9 @@ public interface MiniGameArenaHandler {
      * @return The location to teleport the player to upon joining.
      */
     default Location onPlayerJoinArena(MiniGameArena arena, Player player) {
-        if(arena.getStatus() == ArenaStatus.IDLE) {
+        if (arena.getStatus() == ArenaStatus.IDLE) {
             arena.setStatus(ArenaStatus.WAITING);
-        } else if(arena.getStatus() == ArenaStatus.WAITING && arena.numPlayers() >= arena.getMinPlayers()) {
+        } else if (arena.getStatus() == ArenaStatus.WAITING && arena.numPlayers() >= arena.getMinPlayers()) {
             arena.setStatus(ArenaStatus.STARTING, 30);
         }
 
@@ -92,12 +99,13 @@ public interface MiniGameArenaHandler {
      * @param arena  The mini-game arena the player left.
      * @param player The player who left the arena.
      */
-    default void onPlayerLeaveArena(MiniGameArena arena, Player player) {}
+    default void onPlayerLeaveArena(MiniGameArena arena, Player player) {
+    }
 
     /**
      * Called when a spectator joins the arena.
      *
-     * @param arena The mini-game arena.
+     * @param arena  The mini-game arena.
      * @param player The spectator joining.
      * @return The location to teleport the spectator to.
      */
@@ -109,10 +117,11 @@ public interface MiniGameArenaHandler {
     /**
      * Called when a spectator leaves the arena.
      *
-     * @param arena The mini-game arena.
+     * @param arena  The mini-game arena.
      * @param player The spectator leaving.
      */
-    default void onPlayerLeaveSpectator(MiniGameArena arena, Player player) {}
+    default void onPlayerLeaveSpectator(MiniGameArena arena, Player player) {
+    }
 
     /**
      * Called when a player quits the arena.
@@ -120,15 +129,17 @@ public interface MiniGameArenaHandler {
      * @param arena  The mini-game arena the player quit.
      * @param player The player who quit the arena.
      */
-    default void onPlayerQuitArena(MiniGameArena arena, Player player) {}
+    default void onPlayerQuitArena(MiniGameArena arena, Player player) {
+    }
 
     /**
      * Called when a spectator quits the arena.
      *
-     * @param arena The mini-game arena.
+     * @param arena  The mini-game arena.
      * @param player The spectator who quit.
      */
-    default void onPlayerQuitSpectator(MiniGameArena arena, Player player) {}
+    default void onPlayerQuitSpectator(MiniGameArena arena, Player player) {
+    }
 
     /**
      * Called when a player breaks a block in the arena.
@@ -138,7 +149,9 @@ public interface MiniGameArenaHandler {
      * @param block  The block that was broken.
      * @return The result of the event handling.
      */
-    default HandlerEventResult onBlockPlace(MiniGameArena arena, Player player, Block block) { return HandlerEventResult.ALLOW; }
+    default HandlerEventResult onBlockPlace(MiniGameArena arena, Player player, Block block) {
+        return HandlerEventResult.ALLOW;
+    }
 
     /**
      * Called when a block is broken in the arena.
@@ -148,7 +161,9 @@ public interface MiniGameArenaHandler {
      * @param block  The block that was broken.
      * @return The result of the event handling.
      */
-    default HandlerEventResult onBlockBreak(MiniGameArena arena, Player player, Block block) { return HandlerEventResult.ALLOW; }
+    default HandlerEventResult onBlockBreak(MiniGameArena arena, Player player, Block block) {
+        return HandlerEventResult.ALLOW;
+    }
 
     /**
      * Called when an entity is damaged in the arena.
@@ -157,7 +172,9 @@ public interface MiniGameArenaHandler {
      * @param event The entity damage event.
      * @return The result of the event handling.
      */
-    default HandlerEventResult onEntityDamage(MiniGameArena arena, EntityDamageEvent event) { return HandlerEventResult.ALLOW; }
+    default HandlerEventResult onEntityDamage(MiniGameArena arena, EntityDamageEvent event) {
+        return HandlerEventResult.ALLOW;
+    }
 
     /**
      * Called when an entity explosion occurs inside or against an arena.
@@ -165,7 +182,8 @@ public interface MiniGameArenaHandler {
      * @param arena The mini-game arena impacted by the explosion.
      * @param event The explosion event.
      */
-    default void onEntityExplode(MiniGameArena arena, EntityExplodeEvent event) {}
+    default void onEntityExplode(MiniGameArena arena, EntityExplodeEvent event) {
+    }
 
     /**
      * Called when a block explosion occurs inside or against an arena.
@@ -173,7 +191,8 @@ public interface MiniGameArenaHandler {
      * @param arena The mini-game arena impacted by the explosion.
      * @param event The explosion event.
      */
-    default void onBlockExplode(MiniGameArena arena, BlockExplodeEvent event) {}
+    default void onBlockExplode(MiniGameArena arena, BlockExplodeEvent event) {
+    }
 
     /**
      * Called when a player drops an item in the arena.
@@ -183,7 +202,9 @@ public interface MiniGameArenaHandler {
      * @param item   The item that was dropped.
      * @return The result of the event handling.
      */
-    default HandlerEventResult onPlayerDropItem(MiniGameArena arena, Player player, ItemStack item) { return HandlerEventResult.ALLOW; }
+    default HandlerEventResult onPlayerDropItem(MiniGameArena arena, Player player, ItemStack item) {
+        return HandlerEventResult.ALLOW;
+    }
 
     /**
      * Check if the arena is currently active (waiting, countdown, or running).
@@ -207,5 +228,13 @@ public interface MiniGameArenaHandler {
     default boolean isJoinable(MiniGameArena arena) {
         ArenaStatus status = arena.getStatus();
         return status == ArenaStatus.WAITING || status == ArenaStatus.STARTING;
+    }
+
+    default void clearPlayerInventory(Player player) {
+        PlayerInventory inventory = player.getInventory();
+        inventory.clear();
+        ItemStack[] emptyItemStacks = {};
+        inventory.setArmorContents(emptyItemStacks);
+        inventory.setItemInOffHand(null);
     }
 }

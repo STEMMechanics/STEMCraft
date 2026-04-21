@@ -571,7 +571,7 @@ public class TaskServiceImpl extends BaseService implements TaskService {
                         ps.setString(1, id);
                         ps.setString(2, type);
                         ps.setLong(3, runAt);
-                        ps.setString(4, data == null ? "" : data);
+                        ps.setString(4, data);
                     }
                 );
             }

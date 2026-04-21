@@ -23,11 +23,12 @@ package dev.stemcraft.feature;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.util.PlayerUtil;
+import io.papermc.paper.registry.RegistryAccess;
+import io.papermc.paper.registry.RegistryKey;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
-import org.bukkit.Registry;
 import org.bukkit.Tag;
 import org.bukkit.World;
 import org.bukkit.WorldBorder;
@@ -131,23 +132,20 @@ public class RandomFirstSpawn extends BaseFeature {
             return;
         }
 
-        World targetWorld = world;
-        WorldRule rule = worldRules.get(targetWorld.getName().toLowerCase(Locale.ROOT));
+        WorldRule rule = worldRules.get(world.getName().toLowerCase(Locale.ROOT));
 
         if (rule == null) {
             return;
         }
 
-        World finalTargetWorld = targetWorld;
-        WorldRule finalRule = rule;
-        api.tasks().runLater(delayTicks, () -> applyRandomSpawn(player, finalTargetWorld, finalRule));
+        api.tasks().runLater(delayTicks, () -> applyRandomSpawn(player, world, rule));
     }
 
     private void applyRandomSpawn(Player player, World world, WorldRule rule) {
         if (!player.isOnline()) {
             return;
         }
-        if (player.getWorld() == null || !player.getWorld().getName().equalsIgnoreCase(world.getName())) {
+        if (!player.getWorld().getName().equalsIgnoreCase(world.getName())) {
             return;
         }
 
@@ -177,9 +175,6 @@ public class RandomFirstSpawn extends BaseFeature {
 
         Player player = event.getPlayer();
         World deathWorld = player.getWorld();
-        if (deathWorld == null) {
-            return;
-        }
 
         String forceSpawn = api.worlds().getSetting(deathWorld, "force-spawn-on-death");
         if ("true".equalsIgnoreCase(forceSpawn)) {
@@ -205,7 +200,7 @@ public class RandomFirstSpawn extends BaseFeature {
         int centerZ = center.getBlockZ();
         ThreadLocalRandom random = ThreadLocalRandom.current();
 
-        int minRadius = Math.max(0, Math.min(rule.minRadius(), rule.maxRadius()));
+        int minRadius = Math.clamp(rule.minRadius(), 0, rule.maxRadius());
         int maxRadius = Math.max(minRadius, rule.maxRadius());
 
         for (int i = 0; i < Math.max(1, rule.attempts()); i++) {
@@ -293,9 +288,6 @@ public class RandomFirstSpawn extends BaseFeature {
 
     private boolean isInsideWorldBorder(World world, int x, int z, int buffer) {
         WorldBorder border = world.getWorldBorder();
-        if (border == null) {
-            return true;
-        }
 
         double half = (border.getSize() / 2.0) - Math.max(0, buffer);
         if (half <= 0.0) {
@@ -368,7 +360,7 @@ public class RandomFirstSpawn extends BaseFeature {
             }
 
             String normalized = item.trim().toLowerCase(Locale.ROOT);
-            Biome biome = Registry.BIOME.get(NamespacedKey.minecraft(normalized));
+            Biome biome = RegistryAccess.registryAccess().getRegistry(RegistryKey.BIOME).get(NamespacedKey.minecraft(normalized));
             if (biome == null) {
                 api.messages().warn("RANDOM_FIRST_SPAWN_INVALID_BIOME", "biome", item, "world", worldName);
                 continue;

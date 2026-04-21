@@ -787,7 +787,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
                 case "first", "first-line", "top-line" -> firstLine = value;
                 case "limit" -> {
                     try {
-                        limit = Math.max(1, Math.min(Integer.parseInt(value), 100));
+                        limit = Math.clamp(Integer.parseInt(value), 1, 100);
                     } catch (NumberFormatException ignored) {
                         // Ignore invalid custom limit and keep default.
                     }

@@ -165,7 +165,7 @@ final class SkyBlockPlayerState {
         player.setExhaustion(exhaustion);
         player.setLevel(level);
         player.setExp(exp);
-        player.setHealth(Math.min(PlayerUtil.getMaxHealth(player), Math.max(1.0d, health)));
+        player.setHealth(Math.clamp(health, 1.0d, PlayerUtil.getMaxHealth(player)));
         if (restoreLocation && location != null) {
             player.teleport(location);
         }

@@ -315,7 +315,7 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
         }
 
         QueryWindow window = QueryWindow.parse(period);
-        int maxResults = Math.max(1, Math.min(limit, 100));
+        int maxResults = Math.clamp(limit, 1, 100);
 
         return players.values().stream()
             .sorted(Comparator
@@ -422,7 +422,8 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
             if (!isEnabled("times_slept")) {
                 return;
             }
-            if (event.getBedEnterResult() == PlayerBedEnterEvent.BedEnterResult.OK) {
+            //noinspection UnstableApiUsage
+            if (event.enterAction().canSleep().success()) {
                 increment(event.getPlayer().getUniqueId(), event.getPlayer().getName(), "times_slept", 1.0d);
             }
         });
@@ -502,7 +503,7 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
         UUID uuid = player.getUniqueId();
         String username = player.getName();
         Instant now = Instant.now();
-        String currentWorld = player.getWorld() == null ? null : player.getWorld().getName();
+        String currentWorld = player.getWorld().getName();
 
         Instant previousObservedAt = lastObservedAt.put(uuid, now);
         String previousWorld = elapsedWorldOverride != null ? elapsedWorldOverride : lastObservedWorld.get(uuid);
@@ -512,9 +513,7 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
                 recordTimeInWorld(uuid, username, previousWorld, elapsedMillis / 3_600_000.0d);
             }
         }
-        if (currentWorld != null) {
-            lastObservedWorld.put(uuid, currentWorld);
-        }
+        lastObservedWorld.put(uuid, currentWorld);
 
         rawBaselines.computeIfAbsent(uuid, ignored -> new ConcurrentHashMap<>());
 
@@ -962,29 +961,26 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
         private final Map<LocalDate, Double> dailyBuckets = new LinkedHashMap<>();
     }
 
-    private static final class QueryWindow {
-        private final String key;
-        private final Integer days;
-
-        private QueryWindow(String key, @Nullable Integer days) {
-            this.key = key;
-            this.days = days;
-        }
-
-        private static QueryWindow parse(@Nullable String raw) {
-            if (raw == null || raw.isBlank()) {
-                return new QueryWindow("all", null);
+    private record QueryWindow(String key, Integer days) {
+            private QueryWindow(String key, @Nullable Integer days) {
+                this.key = key;
+                this.days = days;
             }
 
-            return switch (raw.trim().toLowerCase(Locale.ROOT)) {
-                case "day", "today", "1d" -> new QueryWindow("day", 1);
-                case "week", "last_week", "7d" -> new QueryWindow("week", 7);
-                case "month", "last_month", "30d" -> new QueryWindow("month", 30);
-                case "year", "last_year", "365d" -> new QueryWindow("year", 365);
-                default -> new QueryWindow("all", null);
-            };
+            private static QueryWindow parse(@Nullable String raw) {
+                if (raw == null || raw.isBlank()) {
+                    return new QueryWindow("all", null);
+                }
+
+                return switch (raw.trim().toLowerCase(Locale.ROOT)) {
+                    case "day", "today", "1d" -> new QueryWindow("day", 1);
+                    case "week", "last_week", "7d" -> new QueryWindow("week", 7);
+                    case "month", "last_month", "30d" -> new QueryWindow("month", 30);
+                    case "year", "last_year", "365d" -> new QueryWindow("year", 365);
+                    default -> new QueryWindow("all", null);
+                };
+            }
         }
-    }
 
     private record TimeInDefinition(String statKey, Set<String> worlds) {}
 }

@@ -742,6 +742,11 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
 
         if (clearInventory) {
             player.getInventory().clear();
+            // TODO: I've been using ItemStack[0] for this, but when I was reading this line
+            //  for merging, nomad put in ItemStack[4]. ItemStack[0] seemed to work as intended
+            //  in my limited testing.
+            //  If ItemStack[0] works, it would at least be a bit smaller to allocate than ItemStack[4],
+            //  but that'd be pretty minor.
             player.getInventory().setArmorContents(new ItemStack[4]);
         }
 

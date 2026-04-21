@@ -35,6 +35,7 @@ import dev.stemcraft.service.BaseService;
 import dev.stemcraft.service.resourcepack.generators.GlyphGenerator;
 import dev.stemcraft.service.resourcepack.generators.MinecraftPackGenerator;
 import dev.stemcraft.service.resourcepack.generators.PackMetaGenerator;
+import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.resource.ResourcePackInfo;
 import net.kyori.adventure.resource.ResourcePackRequest;
 import net.kyori.adventure.text.Component;
@@ -180,9 +181,9 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
     /**
      * Ask a single player to download the resource pack.
      *
-     * @param player the player to send the pack to.
+     * @param audience the player to send the pack to.
      */
-    public void sendPack(@NotNull Player player) {
+    public void sendPack(@NotNull Audience audience) {
         File resPack = getResourcePack();
         if (resPack == null || !resPack.exists()) { return; }
 
@@ -197,7 +198,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
                 .prompt(Component.text("This server requires the STEMCraft resource pack"))
                 .build();
 
-        player.sendResourcePacks(request);
+        audience.sendResourcePacks(request);
     }
 
     /**
@@ -731,7 +732,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
         }
 
         String hash = FileUtil.sha1Hex(destination.toFile());
-        return hash == null || hash.isBlank() ? "present" : hash;
+        return hash.isBlank() ? "present" : hash;
     }
 
     private @Nullable Path resolvePackIconFromDataPacks() {
@@ -765,7 +766,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
         if (matchingPacks.size() > 1) {
             plugin.getLogger().warning(
                 "[resource-pack] Multiple data-pack icons found (" + matchingPacks
-                    + "). Using first pack icon from '" + matchingPacks.get(0) + "'."
+                    + "). Using first pack icon from '" + matchingPacks.getFirst() + "'."
             );
         }
 
@@ -905,9 +906,9 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
             int drawW = src.getWidth();
             int drawH = src.getHeight();
             if (entry.getValue().autoScale()) {
-                int targetHeight = Math.max(1, Math.min(cellSize, entry.getValue().bedrockHeight() > 0
-                    ? entry.getValue().bedrockHeight()
-                    : entry.getValue().javaHeight()));
+                int targetHeight = Math.clamp(entry.getValue().bedrockHeight() > 0
+                        ? entry.getValue().bedrockHeight()
+                        : entry.getValue().javaHeight(), 1, cellSize);
                 double fit = targetHeight / (double) Math.max(1, src.getHeight());
                 drawW = Math.max(1, (int) Math.round(src.getWidth() * fit));
                 drawH = Math.max(1, (int) Math.round(src.getHeight() * fit));
@@ -927,7 +928,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
             int y = (row * cellSize) + Math.max(0, (cellSize - drawH) / 2) + entry.getValue().yOffset();
             int minY = row * cellSize;
             int maxY = minY + (cellSize - drawH);
-            y = Math.max(minY, Math.min(maxY, y));
+            y = Math.clamp(y, minY, maxY);
 
             BufferedImage glyphImage = scaleBedrockGlyph(src, drawW, drawH);
 
@@ -1055,7 +1056,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
     }
 
     private int clampColour(int value) {
-        return Math.max(0, Math.min(255, value));
+        return Math.clamp(value, 0, 255);
     }
 
     private List<File> collectPackConfigFiles(File packDir) {

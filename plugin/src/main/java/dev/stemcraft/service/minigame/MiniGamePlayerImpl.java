@@ -174,9 +174,9 @@ class MiniGamePlayerImpl extends HasMetaImpl<MiniGamePlayer> implements MiniGame
             if (activeArena != null
                 && activeArena.getStatus() == MiniGameArena.ArenaStatus.RUNNING
                 && activeArena.contains("bossBarProgress")) {
-                progress = Math.max(0.0d, Math.min(1.0d, activeArena.get("bossBarProgress", Double.class, 1.0d)));
+                progress = Math.clamp(activeArena.get("bossBarProgress", Double.class, 1.0d), 0.0d, 1.0d);
             } else if (activeArena != null && activeArena.getCountdown() > 0 && activeArena.getCountdownMax() > 0) {
-                progress = Math.max(0.0d, Math.min(1.0d, (double) activeArena.getCountdown() / (double) activeArena.getCountdownMax()));
+                progress = Math.clamp((double) activeArena.getCountdown() / (double) activeArena.getCountdownMax(), 0.0d, 1.0d);
             }
             bossBar.setProgress(progress);
             bossBar.setVisible(true);

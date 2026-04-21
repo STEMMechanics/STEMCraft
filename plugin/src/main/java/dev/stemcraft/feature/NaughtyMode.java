@@ -39,7 +39,6 @@ import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.*;
 
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 

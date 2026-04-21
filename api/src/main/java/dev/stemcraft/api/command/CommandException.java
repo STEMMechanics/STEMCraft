@@ -24,10 +24,15 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.util.PlaceholderUtil;
 import lombok.Getter;
 
+import java.io.Serial;
+
 /**
  * Exception thrown to indicate a command error.
  */
 public class CommandException extends RuntimeException {
+    @Serial
+    private static final long serialVersionUID = 0xA7FB2A01DC01CF9AL;
+
     /**
      * The messages to send to the command sender.
      */

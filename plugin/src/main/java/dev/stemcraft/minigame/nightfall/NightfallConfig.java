@@ -394,7 +394,7 @@ public class NightfallConfig {
             index++;
             int threshold = (index == size)
                 ? 100
-                : Math.max(lastThreshold + 1, Math.min(100, (int) Math.round((cumulativeWeight / totalWeight) * 100.0d)));
+                : Math.clamp((int) Math.round((cumulativeWeight / totalWeight) * 100.0d), lastThreshold + 1, 100);
             tiers.computeIfAbsent(threshold, ignored -> new ArrayList<>()).add(entry.getKey());
             lastThreshold = threshold;
         }

@@ -506,7 +506,7 @@ public class NightfallMiniGame extends BaseMiniGame {
     }
 
     public int bloodMoonChancePercent(@NotNull MiniGameArena arena) {
-        return Math.max(0, Math.min(100, arena.get("bloodMoonChancePercent", Integer.class, 0)));
+        return Math.clamp(arena.get("bloodMoonChancePercent", Integer.class, 0), 0, 100);
     }
 
     public int currentNight(@NotNull MiniGameArena arena) {

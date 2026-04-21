@@ -28,7 +28,7 @@ public final class TimedRecordLeaderboard {
         lines.add(options.title());
 
         List<Entry> sorted = entries.stream()
-            .filter(entry -> entry != null && entry.timeMillis() > 0L && entry.playerName() != null && !entry.playerName().isBlank())
+            .filter(entry -> entry != null && entry.timeMillis() > 0L && !entry.playerName().isBlank())
             .sorted(Comparator
                 .comparingLong(Entry::timeMillis)
                 .thenComparing(Entry::playerName, String.CASE_INSENSITIVE_ORDER))
@@ -101,7 +101,7 @@ public final class TimedRecordLeaderboard {
                 case "first", "first-line", "top-line" -> firstLine = value;
                 case "limit" -> {
                     try {
-                        limit = Math.max(1, Math.min(Integer.parseInt(value), MAX_LIMIT));
+                        limit = Math.clamp(Integer.parseInt(value), 1, MAX_LIMIT);
                     } catch (NumberFormatException ignored) {
                         // Ignore invalid custom limits and keep the default.
                     }
