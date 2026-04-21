@@ -238,8 +238,7 @@ public class WorldDenySpawnSetting implements WorldBaseSetting {
     }
 
     private boolean isNaturalSpawn(@NotNull CreatureSpawnEvent.SpawnReason reason) {
-        return reason == CreatureSpawnEvent.SpawnReason.NATURAL
-            || reason == CreatureSpawnEvent.SpawnReason.CHUNK_GEN;
+        return reason == CreatureSpawnEvent.SpawnReason.NATURAL;
     }
 
     private @NotNull String normalizeMode(@NotNull String mode) {
