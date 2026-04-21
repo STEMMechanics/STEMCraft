@@ -468,9 +468,6 @@ public final class WebhookBridgeServiceImpl extends BaseService {
         if (event.getConnection() instanceof PlayerLoginConnection) {
             if (((PlayerLoginConnection) event.getConnection()).getAuthenticatedProfile() != null) {
                 player = ((PlayerLoginConnection) event.getConnection()).getAuthenticatedProfile();
-                // TODO: Should we really use `getUnsafeProfile()`? - ProjectHSI
-            } else if (((PlayerLoginConnection) event.getConnection()).getUnsafeProfile() != null) {
-                player = ((PlayerLoginConnection) event.getConnection()).getUnsafeProfile();
             }
         } else if (event.getConnection() instanceof PlayerGameConnection) {
             player = ((PlayerGameConnection) event.getConnection()).getPlayer().getPlayerProfile();
