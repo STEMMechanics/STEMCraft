@@ -28,11 +28,6 @@ jobs:
       release_name: ${{ steps.meta.outputs.release_name }}
 
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
       - name: Calculate build metadata
         id: meta
         env:
