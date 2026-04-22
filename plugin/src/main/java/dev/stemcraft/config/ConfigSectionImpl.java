@@ -26,10 +26,7 @@ import lombok.Setter;
 import org.bukkit.configuration.ConfigurationSection;
 import org.jspecify.annotations.NonNull;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Implementation of the ConfigSection interface for managing configuration sections.
@@ -179,7 +176,7 @@ public class ConfigSectionImpl implements ConfigSection {
      */
     public @NonNull String getString(@NonNull String path, @NonNull String def) {
         persistDefault(path, def);
-        return section.getString(resolvePath(path), def);
+        return Objects.requireNonNull(section.getString(resolvePath(path), def));
     }
 
     /**

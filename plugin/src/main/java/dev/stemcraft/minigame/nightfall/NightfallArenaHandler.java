@@ -46,15 +46,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jspecify.annotations.NonNull;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 
 public class NightfallArenaHandler implements MiniGameArenaHandler {
@@ -1163,7 +1155,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
             }
 
             zombie.setTarget(null);
-            var equipment = zombie.getEquipment();
+            var equipment = Objects.requireNonNull(zombie.getEquipment());
             equipment.setHelmet(null);
             zombie.setFireTicks(Math.max(zombie.getFireTicks(), 200));
         }

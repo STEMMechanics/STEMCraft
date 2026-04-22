@@ -36,14 +36,15 @@ subprojects {
 
         spotbugs {
             effort = Effort.valueOf('MAX')
-            reportLevel = Confidence.valueOf('MEDIUM')
+            reportLevel = Confidence.valueOf('HIGH')
             ignoreFailures = false
         }
 
-        tasks.withType(SpotBugsTask).configureEach {
-            reports {
-                html.required.set(true)
-                xml.required.set(true)
+        tasks.configureEach { task ->
+            if (task instanceof SpotBugsTask) {
+                SpotBugsTask spotBugsTask = task
+                spotBugsTask.reports.maybeCreate("html").required.set(true)
+                spotBugsTask.reports.maybeCreate("xml").required.set(true)
             }
         }
 

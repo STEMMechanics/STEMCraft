@@ -6,6 +6,7 @@ import dev.stemcraft.api.minigame.MiniGameArena;
 import dev.stemcraft.api.util.LocationUtil;
 import dev.stemcraft.exception.MiniGameInvalidArenaConfigException;
 import dev.stemcraft.minigame.MiniGameConfigSupport;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.jetbrains.annotations.NotNull;
@@ -102,6 +103,9 @@ public class SkyBlockConfig {
             if (worldName.isBlank()) {
                 throw new MiniGameInvalidArenaConfigException("SkyBlock arena '" + arenaId + "' is missing a world.");
             }
+            if (Bukkit.getWorld(worldName) == null) {
+                throw new MiniGameInvalidArenaConfigException("SkyBlock arena '" + arenaId + "' has an invalid world.");
+            }
 
             World world = MiniGameConfigSupport.requireWorld(api, arenaId, worldName);
             Location islandSpawn = loadLocation(arenaSection, world, arenaId);
@@ -115,7 +119,7 @@ public class SkyBlockConfig {
                 arenaId,
                 ownerUuid,
                 ownerName,
-                world,
+                worldName,
                 islandSpawn,
                 playerState
             ));

@@ -100,6 +100,26 @@ public class LocationUtil {
     }
 
     /**
+     * Copy a location.
+     *
+     * @param location The location to copy.
+     * @return The copied location.
+     */
+    public static Location copy(Location location) {
+        if (location == null) {
+            return null;
+        }
+        return new Location(
+                location.getWorld(),
+                location.getX(),
+                location.getY(),
+                location.getZ(),
+                location.getYaw(),
+                location.getPitch()
+        );
+    }
+
+    /**
      * Check if a string represents a valid number.
      * @param s The string to check.
      * @return True if the string is a valid number, false otherwise.

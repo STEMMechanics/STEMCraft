@@ -311,8 +311,7 @@ public class GameModeInventories extends BaseFeature {
             state.exp = 0.0f;
             state.totalExp = 0;
             state.contents = new ItemStack[player.getInventory().getSize()];
-            ItemStack[] armorContents = player.getInventory().getArmorContents();
-            state.armor = new ItemStack[armorContents.length];
+            state.armor = new ItemStack[PlayerUtil.getArmorLength(player)];
             state.ender = new ItemStack[player.getEnderChest().getSize()];
             state.effects = new ArrayList<>();
             return state;
@@ -364,7 +363,7 @@ public class GameModeInventories extends BaseFeature {
             state.exp = (float) s.getDouble("exp", 0.0F);
             state.totalExp = s.getInt("totalExp", 0);
 
-            List<?> contentsList = s.getList("contents", List.of());
+            List<?> contentsList = Objects.requireNonNull(s.getList("contents", List.of()));
             List<ItemStack> contents = new ArrayList<>();
 
             for (Object o : contentsList) {
@@ -375,7 +374,7 @@ public class GameModeInventories extends BaseFeature {
 
             state.contents = contents.toArray(new ItemStack[0]);
 
-            List<?> armorList = s.getList("armor", List.of());
+            List<?> armorList = Objects.requireNonNull(s.getList("armor", List.of()));
             List<ItemStack> armor = new ArrayList<>();
             for (Object o : armorList) {
                 if (o instanceof ItemStack item) {
@@ -384,7 +383,7 @@ public class GameModeInventories extends BaseFeature {
             }
             state.armor = armor.toArray(new ItemStack[0]);
 
-            List<?> enderList = s.getList("ender", List.of());
+            List<?> enderList = Objects.requireNonNull(s.getList("ender", List.of()));
             List<ItemStack> ender = new ArrayList<>();
             for (Object o : enderList) {
                 if (o instanceof ItemStack item) {
@@ -393,7 +392,7 @@ public class GameModeInventories extends BaseFeature {
             }
             state.ender = ender.toArray(new ItemStack[0]);
 
-            List<?> effectsList = s.getList("effects", List.of());
+            List<?> effectsList = Objects.requireNonNull(s.getList("effects", List.of()));
             List<PotionEffect> effects = new ArrayList<>();
             for (Object o : effectsList) {
                 if (o instanceof PotionEffect effect) {

@@ -189,7 +189,7 @@ public abstract class BaseService {
      *
      * @return The ConfigSection for this feature.
      */
-    public ConfigSection getConfigSection() {
+    protected ConfigSection getConfigSection() {
         if(configSection == null) {
             ConfigFile root = getRootConfigSection();
             List<String> candidates = getConfigPathCandidates();

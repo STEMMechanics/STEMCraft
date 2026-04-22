@@ -339,7 +339,7 @@ public final class STEMCraft extends JavaPlugin {
 
     /** {@inheritDoc} */
     @Override
-    public @Nullable ChunkGenerator getDefaultWorldGenerator(@NotNull String worldName, @Nullable String id) {
+    public @Nullable ChunkGenerator getDefaultWorldGenerator(@NotNull String worldName, String id) {
         BuiltInGeneratorSpec spec = parseBuiltInGeneratorSpec(id);
         if (spec.key().isEmpty()) {
             return null;
@@ -458,8 +458,7 @@ public final class STEMCraft extends JavaPlugin {
      * Load a specific STEMCraft Feature if enabled.
      */
     private void loadFeature(BaseFeature feature) {
-        var section = feature.getConfigSection();
-        if(section.contains("enabled") && !section.getBoolean("enabled", true)) {
+        if(!feature.isEnabled()) {
             debug("STEMCRAFT_FEATURE_DISABLED", "name", feature.id());
             return;
         }

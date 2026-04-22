@@ -8,6 +8,7 @@ import dev.stemcraft.api.util.LocationUtil;
 import dev.stemcraft.api.util.StringUtil;
 import dev.stemcraft.exception.MiniGameInvalidArenaConfigException;
 import dev.stemcraft.minigame.MiniGameConfigSupport;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -44,6 +45,9 @@ public class NightfallConfig {
         String worldName = section.getString("world");
         if (worldName.isEmpty()) {
             throw new MiniGameInvalidArenaConfigException("World not defined for arena '" + arenaId + "'.");
+        }
+        if (Bukkit.getWorld(worldName) == null) {
+            throw new MiniGameInvalidArenaConfigException("World '" + worldName + "' for arena '" + arenaId + "' does not exist.");
         }
 
         World world = MiniGameConfigSupport.requireWorld(api, arenaId, worldName);
@@ -86,7 +90,7 @@ public class NightfallConfig {
             arenaId,
             enabled,
             name,
-            world,
+            worldName,
             lobby,
             spectator,
             spawn,

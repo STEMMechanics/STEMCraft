@@ -8,6 +8,7 @@ import dev.stemcraft.api.util.LocationUtil;
 import dev.stemcraft.api.util.StringUtil;
 import dev.stemcraft.exception.MiniGameInvalidArenaConfigException;
 import dev.stemcraft.minigame.MiniGameConfigSupport;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.jetbrains.annotations.NotNull;
@@ -38,6 +39,9 @@ public class BoatRaceConfig {
         String worldName = section.getString("world");
         if (worldName.isEmpty()) {
             throw new MiniGameInvalidArenaConfigException("World not defined for arena '" + arenaId + "'.");
+        }
+        if (Bukkit.getWorld(worldName) == null) {
+            throw new MiniGameInvalidArenaConfigException("World '" + worldName + "' does not exist.");
         }
 
         World world = MiniGameConfigSupport.requireWorld(api, arenaId, worldName);
@@ -88,7 +92,7 @@ public class BoatRaceConfig {
             arenaId,
             enabled,
             name,
-            world,
+            worldName,
             lobby,
             spectator,
             arenaRegion,

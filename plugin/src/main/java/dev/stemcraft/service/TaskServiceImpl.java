@@ -557,7 +557,7 @@ public class TaskServiceImpl extends BaseService implements TaskService {
         ConfigurationSection tasksSection = legacy.getConfigurationSection("tasks");
         if (tasksSection != null) {
             for (String id : tasksSection.getKeys(false)) {
-                String type = legacy.getString("tasks." + id + ".type", "");
+                String type = Objects.requireNonNull(legacy.getString("tasks." + id + ".type", ""));
                 long runAt = legacy.getLong("tasks." + id + ".runAt", 0L);
                 String data = legacy.getString("tasks." + id + ".data", "");
                 if (type.isBlank()) {

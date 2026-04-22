@@ -16,6 +16,7 @@ import dev.stemcraft.minigame.MiniGameHudConfigSupport;
 import dev.stemcraft.minigame.TimedRecordLeaderboard;
 import lombok.Getter;
 import lombok.experimental.Accessors;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
@@ -427,7 +428,7 @@ public class BoatRaceMiniGame extends BaseMiniGame {
             Location nextTarget = nextTargetLocation(arena, uuid);
             double distance = nextTarget == null ? Double.MAX_VALUE : player.getLocation().distanceSquared(nextTarget);
             boolean finished = winner != null && winner.equals(uuid);
-            standings.add(new RaceStanding(uuid, player, progress, distance, finished));
+            standings.add(new RaceStanding(uuid, progress, distance, finished));
         }
 
         standings.sort(Comparator
@@ -549,11 +550,14 @@ public class BoatRaceMiniGame extends BaseMiniGame {
 
     public record RaceStanding(
         @NotNull UUID uuid,
-        @NotNull Player player,
         int progress,
         double distanceSquared,
         boolean finished
-    ) {}
+    ) {
+        public Player player() {
+            return Bukkit.getPlayer(uuid);
+        }
+    }
 
     public record FinishRecord(
         long durationMillis,

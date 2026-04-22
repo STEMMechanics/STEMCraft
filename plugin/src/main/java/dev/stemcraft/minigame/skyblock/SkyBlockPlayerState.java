@@ -171,6 +171,26 @@ public final class SkyBlockPlayerState {
         }
     }
 
+    public @NotNull SkyBlockPlayerState copy() {
+        return new SkyBlockPlayerState(
+                this.location,
+                this.gameMode,
+                this.allowFlight,
+                this.flying,
+                this.health,
+                this.foodLevel,
+                this.saturation,
+                this.exhaustion,
+                this.level,
+                this.exp,
+                this.fireTicks,
+                this.fallDistance,
+                this.storageContents,
+                this.armorContents,
+                this.offHand
+        );
+    }
+
     private static @Nullable Location loadLocation(@NotNull ConfigSection section, @Nullable World defaultWorld) {
         String serialized = section.getString("location");
         if (serialized.isBlank()) {
