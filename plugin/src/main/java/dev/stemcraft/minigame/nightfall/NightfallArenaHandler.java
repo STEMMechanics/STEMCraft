@@ -720,7 +720,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
             int z = (int) Math.floor(player.getZ() + (Math.sin(angle) * radius));
 
             Block ground = world.getHighestBlockAt(x, z);
-            if (ground == null || !ground.getType().isSolid()) {
+            if (!ground.getType().isSolid()) {
                 continue;
             }
 

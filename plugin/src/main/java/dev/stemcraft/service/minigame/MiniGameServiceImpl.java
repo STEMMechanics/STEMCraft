@@ -654,7 +654,8 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
 
         ItemStack[] cloned = new ItemStack[source.length];
         for (int i = 0; i < source.length; i++) {
-            cloned[i] = source[i] == null ? null : source[i].clone();
+            ItemStack sourceItemStack = source[i];
+            cloned[i] = sourceItemStack == null ? null : sourceItemStack.clone();
         }
         return cloned;
     }
@@ -698,7 +699,7 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
                 player.getFallDistance(),
                 cloneItems(inventory.getStorageContents()),
                 cloneItems(inventory.getArmorContents()),
-                inventory.getItemInOffHand() == null ? null : inventory.getItemInOffHand().clone(),
+                inventory.getItemInOffHand().clone(),
                 effects
             );
         }
