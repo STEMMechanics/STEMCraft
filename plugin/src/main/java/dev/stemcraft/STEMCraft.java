@@ -55,7 +55,7 @@ import org.bukkit.event.server.ServerLoadEvent;
 import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.jspecify.annotations.NonNull;
+import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
 import java.io.File;
@@ -81,7 +81,6 @@ import java.util.jar.JarFile;
 @Getter
 @Accessors(fluent = true)
 public final class STEMCraft extends JavaPlugin {
-    private static STEMCraft instance;
     private static STEMCraftAPI api;
     private File cacheDir;
 
@@ -117,12 +116,12 @@ public final class STEMCraft extends JavaPlugin {
     private final List<String> loadedMiniGameIds = new ArrayList<>();
     private final Map<String, String> loadFailures = new LinkedHashMap<>();
 
-    private boolean isMaintenanceMode = false;
+    private volatile boolean isMaintenanceMode = false;
     private boolean postWorldStartupComplete = false;
 
     @Getter
-    private boolean debugging = false;
-    private final String whiteListMessage = "This server is invite-only.";
+    private volatile boolean debugging = false;
+    private static final String WHITE_LIST_MESSAGE = "This server is invite-only.";
 
     /** {@inheritDoc} */
     @Override
@@ -135,8 +134,7 @@ public final class STEMCraft extends JavaPlugin {
             return;
         }
 
-        instance = this;
-        api = new STEMCraftAPIImpl(this);
+        initializeApi(this);
         InstanceHolder.set(api, this);
 
         // Load pre-early services
@@ -340,7 +338,7 @@ public final class STEMCraft extends JavaPlugin {
 
     /** {@inheritDoc} */
     @Override
-    public @Nullable ChunkGenerator getDefaultWorldGenerator(@NonNull String worldName, @Nullable String id) {
+    public @Nullable ChunkGenerator getDefaultWorldGenerator(@NotNull String worldName, @NotNull String id) {
         BuiltInGeneratorSpec spec = parseBuiltInGeneratorSpec(id);
         if (spec.key().isEmpty()) {
             return null;
@@ -359,7 +357,7 @@ public final class STEMCraft extends JavaPlugin {
             }
 
             @Override
-            public @NonNull List<String> tabCompleteOptions(@NonNull String options) {
+            public List<String> tabCompleteOptions(String options) {
                 return WaterGenerator.tabCompleteOptions(options);
             }
         });
@@ -393,8 +391,6 @@ public final class STEMCraft extends JavaPlugin {
             case "void" -> new VoidGenerator();
             case "flat" -> FlatGenerator.fromOptions(generatorOptions);
             case "water" -> WaterGenerator.fromOptions(generatorOptions);
-            case "normal", "default" -> //noinspection DuplicateBranchesInSwitch
-                    null;
             default -> null;
         };
     }
@@ -427,7 +423,7 @@ public final class STEMCraft extends JavaPlugin {
      * @return The STEMCraft plugin instance.
      */
     public static STEMCraft getPlugin() {
-        return instance;
+        return JavaPlugin.getPlugin(STEMCraft.class);
     }
 
     /**
@@ -512,7 +508,7 @@ public final class STEMCraft extends JavaPlugin {
      * Get the plugin version.
      */
     public static String getVersion() {
-        return instance.getPluginMeta().getVersion();
+        return getPlugin().getPluginMeta().getVersion();
     }
 
     /**
@@ -579,13 +575,11 @@ public final class STEMCraft extends JavaPlugin {
         }
     }
 
-    private <T> void iterateClasses(String path, Class<T> typeFilter, Consumer<T> callback) { iterateClasses(path, typeFilter, callback, null); }
-
     private void recordLoadFailure(String id, String reason) {
         loadFailures.put(id, reason == null ? "unknown error" : reason);
     }
 
-    public synchronized ReloadSummary reloadStemCraft(boolean localesOnly) {
+    public ReloadSummary reloadStemCraft(boolean localesOnly) {
         boolean configReloaded = true;
         if (!localesOnly && configFile != null) {
             configReloaded = configFile.reload();
@@ -696,7 +690,7 @@ public final class STEMCraft extends JavaPlugin {
                     }
                 }
             }
-        } catch (Exception ex) {
+        } catch (IOException ex) {
             error("Failed to export bundled directory {dir}: {error}", ex, "dir", jarPath, "error", ex.getMessage());
         }
     }
@@ -763,4 +757,8 @@ public final class STEMCraft extends JavaPlugin {
     }
 
     public record ReloadSummary(boolean configReloaded, boolean localesReloaded, int reloadedFeatures) { }
+
+    private static void initializeApi(STEMCraft plugin) {
+        api = new STEMCraftAPIImpl(plugin);
+    }
 }

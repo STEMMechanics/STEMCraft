@@ -88,7 +88,9 @@ public class ItemServiceImpl extends BaseService implements ItemService {
             PersistentDataType<Z, T> type = getPersistentDataType(value);
             if (type != null) {
                 meta.getPersistentDataContainer().set(namespacedKey, type, value);
-                item.setItemMeta(meta);
+                if (!item.setItemMeta(meta)) {
+                    throw new IllegalStateException("Failed to apply item metadata for key '" + key + "'");
+                }
             }
         }
     }
@@ -123,7 +125,9 @@ public class ItemServiceImpl extends BaseService implements ItemService {
         if (meta != null) {
             NamespacedKey namespacedKey = new NamespacedKey(plugin, key);
             meta.getPersistentDataContainer().remove(namespacedKey);
-            item.setItemMeta(meta);
+            if (!item.setItemMeta(meta)) {
+                throw new IllegalStateException("Failed to remove item metadata for key '" + key + "'");
+            }
         }
     }
 

@@ -1,6 +1,5 @@
 package dev.stemcraft.minigame.bedwars;
 
-import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.minigame.ArenaValidationResult;
 import dev.stemcraft.api.minigame.MiniGameArena;
@@ -109,7 +108,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
 
     @Override
     public void onArenaLoad(MiniGameArena arena) {
-        arena.getOrCreate("blocks", Set.class, HashSet::new);
+        placedBlocks(arena);
         arena.getOrCreate("eliminatedSpectators", Set.class, LinkedHashSet::new);
         arena.getOrCreate("trackedEntities", Set.class, HashSet::new);
         arena.getOrCreate("dropSurfaces", List.class, ArrayList::new);
@@ -150,7 +149,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
             return HandlerEventResult.DENY;
         }
 
-        arena.getOrCreate("blocks", Set.class, HashSet::new).add(block.getLocation());
+        placedBlocks(arena).add(block.getLocation());
         return HandlerEventResult.ALLOW;
     }
 
@@ -160,7 +159,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
             return HandlerEventResult.DENY;
         }
 
-        Set<Location> blockLocations = arena.getOrCreate("blocks", Set.class, HashSet::new);
+        Set<Location> blockLocations = placedBlocks(arena);
         if (blockLocations.remove(block.getLocation())) {
             return HandlerEventResult.ALLOW;
         }
@@ -181,7 +180,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
         destroyTeamBed(arena, bedOwner);
         MiniGamePlayer mgPlayer = arena.getPlayer(player);
         if (mgPlayer != null) {
-            bedWars.incrementStat("beds_broken", arena, mgPlayer, 1.0d);
+            bedWars.incrementStat("beds_broken", arena, mgPlayer);
         }
         arena.broadcast("The " + bedOwner.get("displayName", String.class, bedOwner.getName()) + " bed has been destroyed!");
         return HandlerEventResult.ALLOW;
@@ -236,7 +235,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
                 for (Player player : arena.getTeamPlayers(winner.getName())) {
                     MiniGamePlayer mgPlayer = arena.getPlayer(player);
                     if (mgPlayer != null) {
-                        bedWars.incrementStat("wins", arena, mgPlayer, 1.0d);
+                        bedWars.incrementStat("wins", arena, mgPlayer);
                     }
                 }
             }
@@ -387,7 +386,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
             return;
         }
 
-        STEMCraft.getPlugin().getLogger().warning("BedWars arena '" + arena.id() + "' has drop items configured but no valid drop surfaces were found.");
+        api.messages().warn("BedWars arena '" + arena.id() + "' has drop items configured but no valid drop surfaces were found.");
         broadcastInfoToOccupants(arena, "<yellow>Supply drops are enabled, but this arena has no valid drop surfaces.</yellow>");
     }
 
@@ -403,7 +402,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
             damager = arena.getPlayer(damagerPlayer);
             if (damager != null) {
                 damager.addKill();
-                bedWars.incrementStat("kills", arena, damager, 1.0d);
+                bedWars.incrementStat("kills", arena, damager);
             }
         }
 
@@ -418,7 +417,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
         if (damager != null) {
             int finalKills = damager.get("finalKills", Integer.class, 0) + 1;
             damager.set("finalKills", finalKills);
-            bedWars.incrementStat("final_kills", arena, damager, 1.0d);
+            bedWars.incrementStat("final_kills", arena, damager);
         }
 
         eliminatedSpectators(arena).add(player.getUniqueId());
@@ -444,7 +443,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
 
     private void equipPlayer(MiniGameArena arena, Player player) {
         clearPlayerInventory(player);
-        player.setHealth(Math.min(PlayerUtil.getMaxHealth(player), 20.0d));
+        player.setHealth(PlayerUtil.getMaxHealth(player));
         player.setFoodLevel(20);
         player.setSaturation(20.0f);
         player.setFireTicks(0);
@@ -729,6 +728,11 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
             }
         }
         return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private @NotNull Set<Location> placedBlocks(@NotNull MiniGameArena arena) {
+        return arena.getOrCreate("blocks", Set.class, HashSet::new);
     }
 
     private boolean containsBedBlock(SCRegion region) {

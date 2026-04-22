@@ -1,5 +1,8 @@
+import com.github.spotbugs.snom.SpotBugsTask
+
 plugins {
     id 'base'   // root is just a container, no jar
+    id 'com.github.spotbugs' version '6.2.5' apply false
 }
 
 subprojects {
@@ -19,12 +22,37 @@ subprojects {
     }
 
     plugins.withId("java") {
+        apply plugin: "com.github.spotbugs"
+
         java {
             toolchain.languageVersion = JavaLanguageVersion.of(21)
         }
 
         tasks.withType(JavaCompile).configureEach {
             options.encoding = 'UTF-8'
+        }
+
+        spotbugs {
+            effort = 'max'
+            reportLevel = 'medium'
+            ignoreFailures = false
+        }
+
+        tasks.withType(SpotBugsTask).configureEach {
+            reports.named("html") {
+                required = true
+            }
+            reports.named("xml") {
+                required = true
+            }
+        }
+
+        tasks.named("spotbugsTest") {
+            enabled = false
+        }
+
+        tasks.named("check") {
+            dependsOn(tasks.named("spotbugsMain"))
         }
     }
 }

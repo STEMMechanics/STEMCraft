@@ -11,7 +11,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.function.UnaryOperator;
 
 /**
@@ -30,14 +29,12 @@ public final class LegacyServiceConfigMigration {
 
     /**
      * Applies the legacy config migration once at startup.
-     *
-     * @return true if the config was changed.
      */
-    public boolean apply() {
+    public void apply() {
         File file = new File(plugin.getDataFolder(), configFile.getName());
         YamlConfiguration yaml = load(file);
         if (yaml == null) {
-            return false;
+            return;
         }
 
         boolean changed = false;
@@ -60,7 +57,6 @@ public final class LegacyServiceConfigMigration {
             plugin.getLogger().info("Migrated legacy config paths: " + String.join(", ", applied));
         }
 
-        return changed;
     }
 
     private YamlConfiguration load(File file) {
@@ -122,8 +118,9 @@ public final class LegacyServiceConfigMigration {
 
     private static String normalizeLegacyAuditKey(String key) {
         key = stripLeadingDots(key);
-        if (Objects.equals(key, "max-days"))
-            key = "max_days";
+        if(key.equalsIgnoreCase("max-days")) {
+            return "max_days";
+        }
         return key;
     }
 

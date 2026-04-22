@@ -513,14 +513,8 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
         prevPlayerStates.putIfAbsent(player.getUniqueId(), StoredPlayerState.capture(player));
     }
 
-    public void restorePreviousPlayerState(@NotNull Player player, boolean restoreLocation) {
-        restorePreviousPlayerState(player, restoreLocation, true);
-    }
-
-    void restorePreviousPlayerState(@NotNull Player player, boolean restoreLocation, boolean consume) {
-        StoredPlayerState state = consume
-            ? prevPlayerStates.remove(player.getUniqueId())
-            : prevPlayerStates.get(player.getUniqueId());
+    void restorePreviousPlayerState(@NotNull Player player, boolean restoreLocation) {
+        StoredPlayerState state = prevPlayerStates.remove(player.getUniqueId());
         if (state == null) {
             return;
         }
@@ -570,8 +564,7 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
         player.setHealth(Math.min(PlayerUtil.getMaxHealth(player), 20.0d));
         PlayerInventory inventory = player.getInventory();
         inventory.clear();
-        ItemStack[] emptyItemStacks = {};
-        inventory.setArmorContents(emptyItemStacks);
+        inventory.setArmorContents(new ItemStack[0]);
         inventory.setItemInOffHand(null);
     }
 
@@ -654,8 +647,8 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
 
         ItemStack[] cloned = new ItemStack[source.length];
         for (int i = 0; i < source.length; i++) {
-            ItemStack sourceItemStack = source[i];
-            cloned[i] = sourceItemStack == null ? null : sourceItemStack.clone();
+            ItemStack item = source[i];
+            cloned[i] = item == null ? null : item.clone();
         }
         return cloned;
     }

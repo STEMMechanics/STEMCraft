@@ -36,6 +36,8 @@ public final class InventoryUtil {
      */
     public static String toString(Inventory inv) {
         ItemStack[] contents = inv.getContents();
+        if (contents.length == 0) return "(empty)";
+
         StringBuilder out = new StringBuilder();
 
         for (ItemStack item : contents) {

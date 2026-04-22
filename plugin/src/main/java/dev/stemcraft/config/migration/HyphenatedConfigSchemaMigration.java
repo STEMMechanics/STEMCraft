@@ -92,11 +92,11 @@ public final class HyphenatedConfigSchemaMigration {
         this.configFile = configFile;
     }
 
-    public boolean apply() {
+    public void apply() {
         File file = new File(plugin.getDataFolder(), configFile.getName());
         YamlConfiguration yaml = load(file);
         if (yaml == null) {
-            return false;
+            return;
         }
 
         boolean changed = false;
@@ -111,7 +111,6 @@ public final class HyphenatedConfigSchemaMigration {
             plugin.getLogger().info("Converted config schema keys to kebab-case: " + String.join(", ", applied));
         }
 
-        return changed;
     }
 
     private YamlConfiguration load(File file) {

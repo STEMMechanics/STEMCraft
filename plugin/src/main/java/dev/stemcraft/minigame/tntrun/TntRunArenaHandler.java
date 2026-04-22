@@ -137,7 +137,7 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
         if (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING || arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING) {
             if (event.getCause() == EntityDamageEvent.DamageCause.VOID
                 || player.getHealth() - event.getFinalDamage() <= 0.0d) {
-                eliminatePlayer(arena, player, "fell out of the arena");
+                eliminatePlayer(arena, player);
             }
             return HandlerEventResult.DENY;
         }
@@ -275,7 +275,6 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
         onPlayerLeaveArena(arena, player);
     }
 
-    @Override
     public void onPlayerLeaveSpectator(MiniGameArena arena, Player player) {
         tntRun.eliminatedPlayers(arena).remove(player.getUniqueId());
     }
@@ -288,7 +287,6 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
     private void registerMovementListener() {
         api.events().register(PlayerMoveEvent.class, event -> {
             Location to = event.getTo();
-
             Player player = event.getPlayer();
             MiniGameArena arena = tntRun.minigame().findPlayer(player);
             if (arena == null || !TntRunMiniGame.namespace().equals(arena.namespace())) {
@@ -315,7 +313,7 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
             }
 
             if (to.getY() <= voidY(arena)) {
-                eliminatePlayer(arena, player, "fell out of the arena");
+                eliminatePlayer(arena, player);
                 return;
             }
 
@@ -408,7 +406,7 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
         });
     }
 
-    private void eliminatePlayer(@NotNull MiniGameArena arena, @NotNull Player player, @NotNull String reason) {
+    private void eliminatePlayer(@NotNull MiniGameArena arena, @NotNull Player player) {
         if (!arena.hasPlayer(player)) {
             return;
         }
@@ -420,7 +418,7 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
 
         tntRun.eliminatedPlayers(arena).add(player.getUniqueId());
         arena.addSpectator(player);
-        broadcastToOccupants(arena, "<red>" + player.getName() + "</red> <gray>" + reason + ".</gray>");
+        broadcastToOccupants(arena, "<red>" + player.getName() + "</red> <gray>" + "fell out of the arena" + ".</gray>");
         playSoundToOccupants(arena, Sound.ENTITY_WITHER_HURT, 0.6f, 1.25f);
         checkForRoundEnd(arena);
     }

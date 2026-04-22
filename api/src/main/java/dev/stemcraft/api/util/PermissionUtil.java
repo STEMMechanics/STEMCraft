@@ -46,9 +46,9 @@ public class PermissionUtil {
             if (Bukkit.getPluginManager().getPlugin("LuckPerms") != null) {
                 isLuckPermsInstalled = true;
                 luckPermsApi = LuckPermsProvider.get();
+            } else {
+                isLuckPermsInstalled = false;
             }
-
-            return false;
         }
 
         if(!isLuckPermsInstalled) {

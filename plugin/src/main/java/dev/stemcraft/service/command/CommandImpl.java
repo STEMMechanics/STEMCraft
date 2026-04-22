@@ -425,15 +425,21 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
         }
 
 
-        public Boolean hasRemainingArgs() {
+        public boolean hasRemainingArgs() {
             return argIndex < args.length - 1;
+        }
+
+        private enum MatchResult {
+            MATCHED,
+            NOT_MATCHED,
+            EXHAUSTED
         }
 
         public void next() {
             nextMatches(null);
         }
 
-        public Boolean nextMatches(String tabCompletionItem) {
+        public MatchResult nextMatches(String tabCompletionItem) {
             for (; argIndex < args.length; argIndex++) {
                 String arg = args[argIndex];
 
@@ -453,25 +459,25 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
 
                 if (tabCompletionItem == null) {
                     argIndex++;
-                    return true;
+                    return MatchResult.MATCHED;
                 }
 
                 if (tabCompletionItem.isEmpty()) {
                     argIndex++;
-                    return true;
+                    return MatchResult.MATCHED;
                 }
 
                 List<String> values = parseValue(tabCompletionItem, player, args);
                 if (values.contains(arg)) {
                     argIndex++;
-                    return true;
+                    return MatchResult.MATCHED;
                 }
 
-                return false;
+                return MatchResult.NOT_MATCHED;
             }
 
             // To get here we are out of args to parse
-            return null;
+            return MatchResult.EXHAUSTED;
         }
 
         public void processRemainingArgs() {
@@ -543,14 +549,14 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
                 }
 
                 // list item is a string or placeholder
-                Boolean nextMatches = argParser.nextMatches(listItem);
-                if (nextMatches == null) {
+                TabCompleteArgParser.MatchResult nextMatches = argParser.nextMatches(listItem);
+                if (nextMatches == TabCompleteArgParser.MatchResult.EXHAUSTED) {
                     if(listItem != null && !listItem.isEmpty()) {
                             tabCompletionResults.addAll(TabCompleteArgParser.parseValue(listItem, player, fullArgs));
                         }
 
                     break;
-                } else if (!nextMatches) {
+                } else if (nextMatches == TabCompleteArgParser.MatchResult.NOT_MATCHED) {
                     matches = false;
                     break;
                 }

@@ -170,7 +170,7 @@ public class BedWarsCommand {
     }
 
     private void commandInfo(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         ArenaValidationResult validation = arena.validate();
         ctx.info("Arena '" + arena.id() + "':");
         ctx.info(" - Name: " + arena.getName());
@@ -201,6 +201,7 @@ public class BedWarsCommand {
         String arenaId = ctx.getArg(1);
         if (bedWars.minigame().arena(arenaId) != null) {
             ctx.returnError("Arena '" + arenaId + "' already exists.");
+            return;
         }
 
         World world = ctx.getArgAsWorld(2);
@@ -208,6 +209,7 @@ public class BedWarsCommand {
             Player player = ctx.asPlayer();
             if (player == null) {
                 ctx.returnError("Specify a world when creating an arena from console.");
+                return;
             }
             world = player.getWorld();
         }
@@ -215,22 +217,24 @@ public class BedWarsCommand {
         MiniGameArena arena = bedWars.createArena(arenaId, world);
         if (arena == null) {
             ctx.returnError("Arena '" + arenaId + "' could not be created.");
+            return;
         }
         ctx.success("Created BedWars arena '" + arenaId + "' in world '" + world.getName() + "'.");
     }
 
     private void commandDelete(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         bedWars.deleteArena(arena.id());
         ctx.success("Deleted BedWars arena '" + arena.id() + "'.");
     }
 
     private void commandJoin(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         Player targetPlayer = ctx.getArgAsPlayerOrSender(2);
         if (targetPlayer == null) {
             ctx.returnError("Player is required.");
+            return;
         }
         ensureNotInArena(ctx, targetPlayer);
 
@@ -242,6 +246,7 @@ public class BedWarsCommand {
 
         if (!arena.isJoinable()) {
             ctx.returnError("Arena '" + arena.id() + "' is not joinable right now.");
+            return;
         }
 
         arena.addPlayer(targetPlayer);
@@ -250,7 +255,7 @@ public class BedWarsCommand {
 
     private void commandJoinAll(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         boolean spectateOnly = arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING
             || arena.getStatus() == MiniGameArena.ArenaStatus.ENDING;
         if (!spectateOnly && !arena.isJoinable()) {
@@ -296,10 +301,11 @@ public class BedWarsCommand {
 
     private void commandSpectate(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         Player targetPlayer = ctx.getArgAsPlayerOrSender(2);
         if (targetPlayer == null) {
             ctx.returnError("Player is required.");
+            return;
         }
         ensureNotInArena(ctx, targetPlayer);
 
@@ -311,11 +317,13 @@ public class BedWarsCommand {
         Player targetPlayer = ctx.getArgAsPlayerOrSender(1);
         if (targetPlayer == null) {
             ctx.returnError("Player is required.");
+            return;
         }
 
         MiniGameArena arena = bedWars.minigame().findPlayer(targetPlayer);
         if (arena == null) {
             ctx.returnError("Player '" + targetPlayer.getName() + "' is not in a BedWars arena.");
+            return;
         }
 
         arena.removeOccupant(targetPlayer);
@@ -323,7 +331,7 @@ public class BedWarsCommand {
     }
 
     private void commandStart(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         if (arena.numPlayers() < arena.getMinPlayers()) {
             ctx.returnError("Arena '" + arena.id() + "' needs at least " + arena.getMinPlayers() + " players to start.");
         }
@@ -336,13 +344,13 @@ public class BedWarsCommand {
     }
 
     private void commandStop(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         arena.setStatus(MiniGameArena.ArenaStatus.RESETTING);
         ctx.success("Arena '" + arena.id() + "' has been stopped and reset.");
     }
 
     private void commandRestart(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         arena.setStatus(MiniGameArena.ArenaStatus.RESETTING);
         if (arena.numPlayers() >= arena.getMinPlayers() && occupiedTeams(arena) >= 2) {
             arena.setStatus(MiniGameArena.ArenaStatus.STARTING, 5);
@@ -353,7 +361,7 @@ public class BedWarsCommand {
     }
 
     private void commandSave(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         try {
             bedWars.saveArena(arena);
         } catch (MiniGameInvalidArenaConfigException exception) {
@@ -370,7 +378,7 @@ public class BedWarsCommand {
     }
 
     private void commandValidate(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         ArenaValidationResult result = arena.validate();
         if (!result.hasErrors()) {
             ctx.returnSuccess("Arena '" + arena.id() + "' is valid.");
@@ -383,7 +391,7 @@ public class BedWarsCommand {
     }
 
     private void commandEnable(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         ArenaValidationResult result = arena.validate();
         if (result.hasErrors()) {
             ctx.warn("Arena '" + arena.id() + "' cannot be enabled until it is valid:");
@@ -403,7 +411,7 @@ public class BedWarsCommand {
     }
 
     private void commandDisable(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         for (Player player : new ArrayList<>(arena.getPlayers())) {
             arena.removePlayer(player);
         }
@@ -421,7 +429,7 @@ public class BedWarsCommand {
 
     private void commandAddTeam(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         String teamId = ctx.getArgLower(2);
         if (arena.numPlayers() > 0 || arena.numSpectators() > 0) {
             ctx.returnError("Arena '" + arena.id() + "' must be empty before editing teams.");
@@ -443,7 +451,7 @@ public class BedWarsCommand {
 
     private void commandRemoveTeam(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         MiniGameTeam team = requireTeam(ctx, arena, 2);
         if (arena.numPlayers() > 0 || arena.numSpectators() > 0) {
             ctx.returnError("Arena '" + arena.id() + "' must be empty before editing teams.");
@@ -462,7 +470,7 @@ public class BedWarsCommand {
 
     private void commandSet(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         String target = ctx.getArgLower(2);
 
         switch (target) {
@@ -548,7 +556,7 @@ public class BedWarsCommand {
     private void commandSelect(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
         Player player = requirePlayer(ctx);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         String target = ctx.getArgLower(2);
         SCRegion region;
 
@@ -567,9 +575,11 @@ public class BedWarsCommand {
 
         if (region == null) {
             ctx.returnError("No stored region is configured for '" + target + "' in arena '" + arena.id() + "'.");
+            return;
         }
         if (!player.getWorld().equals(region.getWorld())) {
             ctx.returnError("Move to world '" + region.getWorld().getName() + "' to preview that region.");
+            return;
         }
 
         api.selections().setWorldEditSelection(player, region);
@@ -580,7 +590,7 @@ public class BedWarsCommand {
     private void commandShow(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
         Player player = requirePlayer(ctx);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         String target = ctx.getArgLower(2);
         Location location;
 
@@ -600,9 +610,11 @@ public class BedWarsCommand {
 
         if (location == null) {
             ctx.returnError("No stored location is configured for '" + target + "' in arena '" + arena.id() + "'.");
+            return;
         }
         if (!player.getWorld().equals(location.getWorld())) {
             ctx.returnError("Move to world '" + location.getWorld().getName() + "' to preview that location.");
+            return;
         }
 
         showLocationPreview(player, "show-" + target, location);
@@ -610,7 +622,7 @@ public class BedWarsCommand {
     }
 
     private void commandDropItems(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         List<Material> dropItems = bedWars.dropItems(arena);
 
         ChatMenuUtil.render(
@@ -642,11 +654,12 @@ public class BedWarsCommand {
     }
 
     private void commandAddDropItem(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         Player player = requirePlayer(ctx);
         ItemStack heldItem = player.getInventory().getItemInMainHand();
         if (heldItem.getType().isAir()) {
             ctx.returnError("Hold the item you want to add as a drop in your main hand.");
+            return;
         }
 
         bedWars.dropItems(arena).add(heldItem.getType());
@@ -655,7 +668,7 @@ public class BedWarsCommand {
 
     private void commandRemoveDropItem(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         List<Material> dropItems = bedWars.dropItems(arena);
         if (dropItems.isEmpty()) {
             ctx.returnError("Arena '" + arena.id() + "' has no configured drop items.");
@@ -666,12 +679,13 @@ public class BedWarsCommand {
         ctx.success("Removed drop item '" + describeDropItem(removed) + "' from arena '" + arena.id() + "'.");
     }
 
-    private MiniGameArena requireArena(CommandContext ctx, int index) {
-        ctx.checkArgsSizeAtLeast(index + 1);
-        String arenaId = ctx.getArg(index);
+    private MiniGameArena requireArena(CommandContext ctx) {
+        ctx.checkArgsSizeAtLeast(1 + 1);
+        String arenaId = ctx.getArg(1);
         MiniGameArena arena = bedWars.minigame().arena(arenaId);
         if (arena == null) {
             ctx.returnError("Arena '" + arenaId + "' does not exist.");
+            throw new IllegalStateException("Arena '" + arenaId + "' does not exist.");
         }
         return arena;
     }

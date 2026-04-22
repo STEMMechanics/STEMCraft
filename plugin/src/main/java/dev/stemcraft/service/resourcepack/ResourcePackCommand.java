@@ -97,6 +97,7 @@ public class ResourcePackCommand {
 
         if(target == null) {
             ctx.returnError("RESOURCEPACK_PLAYER_NOT_FOUND");
+            return;
         }
 
         service.host().getUrl();
@@ -131,6 +132,8 @@ public class ResourcePackCommand {
                 case "complete" -> {
                     ctx.info("RESOURCEPACK_COMPLETE");
                     service.sendPackToAll();
+                }
+                default -> {
                 }
             }
         });

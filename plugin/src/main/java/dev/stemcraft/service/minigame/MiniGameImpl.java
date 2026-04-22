@@ -177,7 +177,7 @@ public class MiniGameImpl implements MiniGame {
         }
 
         // MiniGameArenaImpl(@NotNull MiniGameServiceImpl service, @NotNull STEMCraftAPI api, @NotNull String namespace, @NotNull String id, @NotNull World world, SCRegion region)
-        MiniGameArenaImpl arena = new MiniGameArenaImpl(service, STEMCraftAPI.api(), namespace, arenaId, world, null);
+        MiniGameArenaImpl arena = new MiniGameArenaImpl(service, STEMCraftAPI.api(), namespace, arenaId, world);
         service.addArena(this.namespace, arenaId, arena);
         return arena;
     }
