@@ -617,7 +617,8 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
             return;
         }
 
-        api.messages().warn("[STEMCraft] Bridge arena '" + arena.id() + "' has drop items configured but no valid drop surfaces were found.");
+        java.util.logging.Logger.getLogger(BridgeArenaHandler.class.getName())
+            .warning("[STEMCraft] Bridge arena '" + arena.id() + "' has drop items configured but no valid drop surfaces were found.");
         broadcastInfoToOccupants(arena, "<yellow>Supply drops are enabled, but this arena has no valid drop surfaces.</yellow>");
     }
 

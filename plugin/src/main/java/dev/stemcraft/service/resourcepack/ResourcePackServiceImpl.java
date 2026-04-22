@@ -913,9 +913,6 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
                     1,
                     cellSize
                 );
-                int targetHeight = Math.clamp(entry.getValue().bedrockHeight() > 0
-                        ? entry.getValue().bedrockHeight()
-                        : entry.getValue().javaHeight(), 1, cellSize);
                 double fit = targetHeight / (double) Math.max(1, src.getHeight());
                 drawW = Math.max(1, (int) Math.round(src.getWidth() * fit));
                 drawH = Math.max(1, (int) Math.round(src.getHeight() * fit));

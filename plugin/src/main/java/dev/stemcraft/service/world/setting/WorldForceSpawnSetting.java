@@ -71,7 +71,6 @@ public class WorldForceSpawnSetting implements WorldBaseSetting {
             Player player = event.getPlayer();
 
             World deathWorld = player.getWorld();
-
             if (isEnabledForWorld(deathWorld)) {
                 // Force respawn at world spawn
                 event.setRespawnLocation(resolveWorldSpawn(deathWorld));

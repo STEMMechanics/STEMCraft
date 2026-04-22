@@ -292,7 +292,6 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
         return arena.getLobbySpawn();
     }
 
-    @Override
     public void onPlayerLeaveArena(MiniGameArena arena, Player player) {
         if (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING
             && (arena.numPlayers() < arena.getMinPlayers() || activeTeamCount(arena) < 2)) {
@@ -386,7 +385,8 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
             return;
         }
 
-        api.messages().warn("BedWars arena '" + arena.id() + "' has drop items configured but no valid drop surfaces were found.");
+        java.util.logging.Logger.getLogger(BedWarsArenaHandler.class.getName())
+            .warning("[STEMCraft] BedWars arena '" + arena.id() + "' has drop items configured but no valid drop surfaces were found.");
         broadcastInfoToOccupants(arena, "<yellow>Supply drops are enabled, but this arena has no valid drop surfaces.</yellow>");
     }
 
@@ -443,7 +443,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
 
     private void equipPlayer(MiniGameArena arena, Player player) {
         clearPlayerInventory(player);
-        player.setHealth(PlayerUtil.getMaxHealth(player));
+        player.setHealth(Math.min(PlayerUtil.getMaxHealth(player), 20.0d));
         player.setFoodLevel(20);
         player.setSaturation(20.0f);
         player.setFireTicks(0);
@@ -456,6 +456,13 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
         if (team != null) {
             arena.giveKit(player, team.getName(), false);
         }
+    }
+
+    private void clearPlayerInventory(Player player) {
+        player.getInventory().clear();
+        player.getInventory().setArmorContents(new ItemStack[0]);
+        player.getInventory().setItemInOffHand(null);
+        player.updateInventory();
     }
 
     private void checkForRoundEnd(MiniGameArena arena) {
@@ -616,7 +623,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
     }
 
     private void clearPlacedBlocks(MiniGameArena arena) {
-        Set<Location> blocks = arena.getOrCreate("blocks", Set.class, HashSet::new);
+        Set<Location> blocks = placedBlocks(arena);
         for (Location loc : new LinkedHashSet<>(blocks)) {
             loc.getBlock().setType(Material.AIR);
         }
@@ -715,7 +722,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
             droppedItem.setPickupDelay(10);
             trackedEntities(arena).add(droppedItem.getUniqueId());
             announceSupplyDrop(arena, dropLocation);
-            playSoundToOccupants(arena, Sound.ENTITY_ITEM_PICKUP, 0.6f, 1.35f);
+            playSoundToOccupants(arena);
             return;
         }
     }
@@ -792,9 +799,9 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
         }
     }
 
-    private void playSoundToOccupants(@NotNull MiniGameArena arena, @NotNull Sound sound, float volume, float pitch) {
+    private void playSoundToOccupants(@NotNull MiniGameArena arena) {
         for (Player occupant : arena.getOccupants()) {
-            occupant.playSound(occupant.getLocation(), sound, volume, pitch);
+            occupant.playSound(occupant.getLocation(), Sound.ENTITY_ITEM_PICKUP, (float) 0.6, (float) 1.35);
         }
     }
 
