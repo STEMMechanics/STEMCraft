@@ -18,7 +18,6 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.World;
-import org.bukkit.attribute.Attribute;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.data.Bisected;
@@ -877,16 +876,12 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         markPlayerDowned(arena, player, miniGamePlayer);
         broadcastToOccupants(arena, nightfall.playerDownedMessage(player));
         if (!immediateTransition) {
-            if (downedLocation != null) {
-                pendingDeathRespawns(arena).put(player.getUniqueId(), downedLocation.clone());
-            }
+            pendingDeathRespawns(arena).put(player.getUniqueId(), downedLocation.clone());
             return;
         }
 
         prepareDownedParticipant(player);
-        if (downedLocation != null) {
-            PlayerUtil.teleport(player, downedLocation);
-        }
+        PlayerUtil.teleport(player, downedLocation);
         player.setHealth(PlayerUtil.getMaxHealth(player));
     }
 
@@ -936,7 +931,8 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
 
     private void clearInventory(@NotNull Player player) {
         player.getInventory().clear();
-        player.getInventory().setArmorContents(null);
+        ItemStack[] emptyItemStacks = {};
+        player.getInventory().setArmorContents(emptyItemStacks);
         player.getInventory().setItemInOffHand(null);
         player.updateInventory();
     }
@@ -1570,8 +1566,12 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
                                                            @Nullable SCRegion arenaRegion,
                                                            int x,
                                                            int z) {
+        if (arena.world() == null) {
+            return null;
+        }
+
         Block ground = arena.world().getHighestBlockAt(x, z);
-        if (ground == null || !ground.getType().isSolid()) {
+        if (!ground.getType().isSolid()) {
             return null;
         }
 

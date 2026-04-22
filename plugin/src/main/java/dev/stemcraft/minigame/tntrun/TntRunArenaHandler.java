@@ -13,7 +13,6 @@ import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Sound;
 import org.bukkit.Material;
-import org.bukkit.attribute.Attribute;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.EntityDamageEvent;
@@ -274,12 +273,6 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
     @Override
     public void onPlayerQuitArena(MiniGameArena arena, Player player) {
         onPlayerLeaveArena(arena, player);
-    }
-
-    @Override
-    public Location onPlayerJoinSpectator(MiniGameArena arena, Player player) {
-        Location spectatorSpawn = arena.getSpectatorSpawn();
-        return spectatorSpawn != null ? spectatorSpawn : arena.getLobbySpawn();
     }
 
     @Override

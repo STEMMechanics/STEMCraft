@@ -37,7 +37,6 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.World;
-import org.bukkit.attribute.Attribute;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.entity.Entity;
@@ -184,7 +183,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
 
             api.regions().addListener(listenerPrefix + "team_" + teamId, portalRegion, new RegionListener() {
                 @Override
-                public void onEnter(Player player, SCRegion region, Location from, Location to) {
+                public void onEnter(@NonNull Player player, @NonNull SCRegion region, Location from, Location to) {
                     if (!arena.hasPlayer(player) || arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
                         return;
                     }
