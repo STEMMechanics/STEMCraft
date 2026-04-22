@@ -59,9 +59,9 @@ public class WorldServiceImpl extends BaseService implements WorldService {
     private static final String DEFAULT_WORLD_OPERATION_ERROR = "unknown error";
     private final Map<String, WorldSettingData> settings = new ConcurrentHashMap<>();
     private final Map<String, String> lastWorldOperationErrors = new ConcurrentHashMap<>();
-    private final WorldCommand worldCommand;
-    private final WorldGenerationImpl worldGeneration;
-    private final WorldChangeRecorder worldChangeRecorder;
+    private WorldCommand worldCommand;
+    private WorldGenerationImpl worldGeneration;
+    private WorldChangeRecorder worldChangeRecorder;
     private boolean startupLoadComplete = false;
 
     /**
@@ -80,20 +80,19 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      * @param api The STEMCraft API instance.
      */
     public WorldServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
-        super(plugin, api);
-        setConfigKey("worlds");
-
-        this.worldCommand = new WorldCommand(api, this);
-        this.worldGeneration = new WorldGenerationImpl(api);
-        this.worldChangeRecorder = new WorldChangeRecorder(api, this);
-
-        this.defaultWorld = firstLoadedWorld();
+        super(plugin, api, "worlds");
     }
 
     /**
      * Called when the service is enabled.
      */
     public void onEnable() {
+        worldCommand = new WorldCommand(api, this);
+        worldGeneration = new WorldGenerationImpl(api);
+        worldChangeRecorder = new WorldChangeRecorder(api, this);
+
+        defaultWorld = firstLoadedWorld();
+
         worldCommand.onEnable();
         worldGeneration.onEnable();
 

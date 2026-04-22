@@ -35,6 +35,7 @@ import dev.stemcraft.service.BaseService;
 import dev.stemcraft.service.resourcepack.generators.GlyphGenerator;
 import dev.stemcraft.service.resourcepack.generators.MinecraftPackGenerator;
 import dev.stemcraft.service.resourcepack.generators.PackMetaGenerator;
+import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.resource.ResourcePackInfo;
 import net.kyori.adventure.resource.ResourcePackRequest;
 import net.kyori.adventure.text.Component;
@@ -180,9 +181,9 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
     /**
      * Ask a single player to download the resource pack.
      *
-     * @param player the player to send the pack to.
+     * @param audience the player to send the pack to.
      */
-    public void sendPack(@NotNull Player player) {
+    public void sendPack(@NotNull Audience audience) {
         File resPack = getResourcePack();
         if (resPack == null || !resPack.exists()) { return; }
 
@@ -197,7 +198,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
                 .prompt(Component.text("This server requires the STEMCraft resource pack"))
                 .build();
 
-        player.sendResourcePacks(request);
+        audience.sendResourcePacks(request);
     }
 
     /**

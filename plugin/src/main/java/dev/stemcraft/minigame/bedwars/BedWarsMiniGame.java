@@ -47,7 +47,7 @@ public class BedWarsMiniGame extends BaseMiniGame {
     @Accessors(fluent = true)
     private static final String namespace = "bedwars";
 
-    private final BedWarsConfig config;
+    private BedWarsConfig config;
 
     @Getter
     @Accessors(fluent = true)
@@ -58,11 +58,11 @@ public class BedWarsMiniGame extends BaseMiniGame {
 
     public BedWarsMiniGame(STEMCraftAPI api) {
         super(api);
-        this.config = new BedWarsConfig(api, this);
     }
 
     @Override
     public void onLoad() {
+        config = new BedWarsConfig(api, this);
         BedWarsArenaHandler handler = new BedWarsArenaHandler(api, this);
 
         minigame = createMiniGame(namespace, handler)

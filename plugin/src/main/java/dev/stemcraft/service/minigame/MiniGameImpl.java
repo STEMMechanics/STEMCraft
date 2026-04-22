@@ -30,7 +30,12 @@ public class MiniGameImpl implements MiniGame {
     public MiniGameImpl(MiniGameServiceImpl service, String namespace) {
         this.service = service;
         this.namespace = namespace;
+    }
 
+    /**
+     * Initializes the mini-game by registering default placeholders.
+     */
+    public void init() {
         registerArenaPlaceholder("name", (arena, team, player) -> arena != null ? arena.getName() : "");
         registerArenaPlaceholder("time-remaining", (arena, team, player) -> {
             if (arena != null) {

@@ -38,7 +38,7 @@ public class BoatRaceMiniGame extends BaseMiniGame {
     @Accessors(fluent = true)
     private static final String namespace = "boatrace";
 
-    private final BoatRaceConfig config;
+    private BoatRaceConfig config;
 
     @Getter
     @Accessors(fluent = true)
@@ -48,11 +48,11 @@ public class BoatRaceMiniGame extends BaseMiniGame {
 
     public BoatRaceMiniGame(STEMCraftAPI api) {
         super(api);
-        this.config = new BoatRaceConfig(api, this);
     }
 
     @Override
     public void onLoad() {
+        config = new BoatRaceConfig(api, this);
         BoatRaceArenaHandler handler = new BoatRaceArenaHandler(api, this);
 
         minigame = createMiniGame(namespace, handler)

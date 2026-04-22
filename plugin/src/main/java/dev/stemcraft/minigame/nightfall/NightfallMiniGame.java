@@ -36,7 +36,7 @@ public class NightfallMiniGame extends BaseMiniGame {
     @Accessors(fluent = true)
     private static final String namespace = "nightfall";
 
-    private final NightfallConfig config;
+    private NightfallConfig config;
 
     @Getter
     @Accessors(fluent = true)
@@ -47,7 +47,6 @@ public class NightfallMiniGame extends BaseMiniGame {
 
     public NightfallMiniGame(STEMCraftAPI api) {
         super(api);
-        this.config = new NightfallConfig(api, this);
     }
 
     @Override
@@ -57,6 +56,7 @@ public class NightfallMiniGame extends BaseMiniGame {
 
     @Override
     public void onLoad() {
+        config = new NightfallConfig(api, this);
         NightfallArenaHandler handler = new NightfallArenaHandler(api, this);
 
         minigame = createMiniGame(namespace, handler)

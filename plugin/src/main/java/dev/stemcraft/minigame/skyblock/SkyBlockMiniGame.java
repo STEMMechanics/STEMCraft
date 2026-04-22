@@ -41,7 +41,7 @@ public class SkyBlockMiniGame extends BaseMiniGame {
     @Accessors(fluent = true)
     private static final String namespace = "skyblock";
 
-    private final SkyBlockConfig config;
+    private SkyBlockConfig config;
     private final Set<String> standbyWorlds = new LinkedHashSet<>();
 
     @Getter
@@ -52,11 +52,11 @@ public class SkyBlockMiniGame extends BaseMiniGame {
 
     public SkyBlockMiniGame(STEMCraftAPI api) {
         super(api);
-        this.config = new SkyBlockConfig(api, this);
     }
 
     @Override
     public void onLoad() {
+        config = new SkyBlockConfig(api, this);
         if (!api.worlds().generator().isRegistered(VOID_GENERATOR_KEY)) {
             api.messages().warn("SkyBlock minigame is disabled because world generator '" + VOID_GENERATOR_KEY + "' is unavailable.");
             return;

@@ -89,8 +89,7 @@ public class AuditServiceImpl extends BaseService implements AuditService {
      * @param api The STEMCraft API instance.
      */
     public AuditServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
-        super(plugin, api);
-        setConfigKey("player_logs");
+        super(plugin, api, "player_logs");
     }
 
     @Override

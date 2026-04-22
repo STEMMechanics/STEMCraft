@@ -351,6 +351,7 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
         }
 
         MiniGameImpl miniGame = new MiniGameImpl(this, namespace);
+        miniGame.init();
         minigames.put(namespace, miniGame);
         handlers.put(namespace, handler);
         return miniGame;

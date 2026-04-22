@@ -35,8 +35,7 @@ public class TntRunMiniGame extends BaseMiniGame {
     @Getter
     @Accessors(fluent = true)
     private static final String namespace = "tntrun";
-
-    private final TntRunConfig config;
+    private  TntRunConfig config;
 
     @Getter
     @Accessors(fluent = true)
@@ -46,11 +45,11 @@ public class TntRunMiniGame extends BaseMiniGame {
 
     public TntRunMiniGame(STEMCraftAPI api) {
         super(api);
-        this.config = new TntRunConfig(api, this);
     }
 
     @Override
     public void onLoad() {
+        config = new TntRunConfig(api, this);
         TntRunArenaHandler handler = new TntRunArenaHandler(api, this);
 
         minigame = createMiniGame(namespace, handler)

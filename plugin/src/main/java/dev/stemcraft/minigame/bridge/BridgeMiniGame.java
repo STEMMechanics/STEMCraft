@@ -55,7 +55,7 @@ public class BridgeMiniGame extends BaseMiniGame {
     @Accessors(fluent = true)
     private static final String namespace = "bridge";
 
-    private final BridgeConfig config;
+    private BridgeConfig config;
 
     @Getter
     @Accessors(fluent = true)
@@ -65,11 +65,11 @@ public class BridgeMiniGame extends BaseMiniGame {
 
     public BridgeMiniGame(STEMCraftAPI api) {
         super(api);
-        this.config = new BridgeConfig(api, this);
     }
 
     @Override
     public void onLoad() {
+        config = new BridgeConfig(api, this);
         BridgeArenaHandler handler = new BridgeArenaHandler(api, this);
 
         minigame = createMiniGame(namespace, handler)

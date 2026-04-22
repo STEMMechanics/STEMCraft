@@ -10,8 +10,10 @@ import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.util.NamespaceId;
 import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.api.util.StringUtil;
+import dev.stemcraft.api.util.TextUtil;
 import dev.stemcraft.capability.HasMetaImpl;
 import lombok.Getter;
+import net.kyori.adventure.title.Title;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.FireworkEffect;
@@ -26,6 +28,7 @@ import org.bukkit.inventory.meta.FireworkMeta;
 import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
+import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -978,6 +981,23 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
 
         service.unregisterPlayerArena(player, this);
         return spectatorProfile;
+    }
+
+    @Override public void showTitle(String title, String subtitle, Duration fadeIn, Duration stay, Duration fadeOut) {
+        players.forEach((player, minigamePlayer) -> player.showTitle(Title.title(
+                TextUtil.colourise(title),
+                TextUtil.colourise(subtitle),
+                Title.Times.times(
+                        fadeIn,
+                        stay,
+                        fadeOut
+                )
+        )));
+    }
+
+    @Override
+    public void resetTitle() {
+        players.forEach((player, minigamePlayer) -> player.resetTitle());
     }
 
     @Override

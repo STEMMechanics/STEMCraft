@@ -55,6 +55,19 @@ public abstract class BaseService {
     }
 
     /**
+     * Constructor for BaseService.
+     *
+     * @param plugin The STEMCraft plugin instance.
+     * @param api The STEMCraft API instance.
+     * @param configKey The service config key.
+     */
+    protected BaseService(STEMCraft plugin, STEMCraftAPI api, String configKey) {
+        this.plugin = plugin;
+        this.api = api;
+        setConfigKey(configKey);
+    }
+
+    /**
      * Called when the service is enabled.
      */
     public void onEnable() {}
@@ -94,7 +107,7 @@ public abstract class BaseService {
      *
      * @param configKey The configuration key.
      */
-    public void setConfigKey(String configKey) {
+    protected final void setConfigKey(String configKey) {
         this.configKey = StringUtil.camelToKebab(configKey);
     }
 
@@ -160,7 +173,7 @@ public abstract class BaseService {
      *
      * @return The root ConfigSection.
      */
-    public ConfigFile getRootConfigSection() {
+    protected final ConfigFile getRootConfigSection() {
         if(rootConfigSection == null) {
             rootConfigSection = api.config().load("config.yml");
             if (rootConfigSection == null) {

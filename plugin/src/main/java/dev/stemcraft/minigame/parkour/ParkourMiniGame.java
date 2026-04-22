@@ -43,7 +43,7 @@ public class ParkourMiniGame extends BaseMiniGame {
     @Accessors(fluent = true)
     private static final String namespace = "parkour";
 
-    private final ParkourConfig config;
+    private ParkourConfig config;
 
     @Getter
     @Accessors(fluent = true)
@@ -53,11 +53,11 @@ public class ParkourMiniGame extends BaseMiniGame {
 
     public ParkourMiniGame(STEMCraftAPI api) {
         super(api);
-        this.config = new ParkourConfig(api, this);
     }
 
     @Override
     public void onLoad() {
+        config = new ParkourConfig(api, this);
         ParkourArenaHandler handler = new ParkourArenaHandler(api, this);
 
         minigame = createMiniGame(namespace, handler)

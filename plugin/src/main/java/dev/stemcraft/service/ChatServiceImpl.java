@@ -101,8 +101,7 @@ public class ChatServiceImpl extends BaseService {
     private boolean muted;
 
     public ChatServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
-        super(plugin, api);
-        setConfigKey("chat");
+        super(plugin, api, "chat");
     }
 
     @Override
