@@ -30,7 +30,6 @@ import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.service.region.RegionListener;
 import dev.stemcraft.api.util.NamespaceId;
 import dev.stemcraft.api.util.PlayerUtil;
-import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
@@ -146,7 +145,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
 
     @Override
     public void onArenaLoad(MiniGameArena arena) {
-        arena.getOrCreate("blocks", Set.class, HashSet::new);
+        placedBlocks(arena);
         arena.getOrCreate("trackedEntities", Set.class, HashSet::new);
         arena.getOrCreate("dropSurfaces", List.class, ArrayList::new);
         String listenerPrefix = regionListenerPrefix(arena.id());
@@ -183,7 +182,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
 
             api.regions().addListener(listenerPrefix + "team_" + teamId, portalRegion, new RegionListener() {
                 @Override
-                public void onEnter(Player player, SCRegion region, Location from, Location to) {
+                public void onEnter(@NotNull Player player, @NotNull SCRegion region, @NotNull Location from, @NotNull Location to) {
                     if (!arena.hasPlayer(player) || arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
                         return;
                     }
@@ -213,7 +212,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
             return HandlerEventResult.DENY;
         }
 
-        Set<Location> blockLocations = arena.getOrCreate("blocks", Set.class, HashSet::new);
+        Set<Location> blockLocations = placedBlocks(arena);
         if (blockLocations.remove(block.getLocation())) {
             return HandlerEventResult.ALLOW;
         }
@@ -237,7 +236,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
 
         SCRegion bridgeRegion = arena.get("bridgeRegion", SCRegion.class);
         if (bridgeRegion != null && bridgeRegion.contains(block.getLocation())) {
-            arena.getOrCreate("blocks", Set.class, HashSet::new).add(block.getLocation());
+            placedBlocks(arena).add(block.getLocation());
             return HandlerEventResult.ALLOW;
         }
         return HandlerEventResult.DENY;
@@ -260,15 +259,18 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
         Player damagerPlayer = null;
         if (event instanceof EntityDamageByEntityEvent byEntity) {
             Entity damager = byEntity.getDamager();
-            if (damager instanceof Player directDamager) {
-                damagerPlayer = directDamager;
-            } else if (damager instanceof Projectile projectile) {
-                ProjectileSource source = projectile.getShooter();
-                if (source instanceof Player shooter) {
-                    damagerPlayer = shooter;
+            switch (damager) {
+                case Player directDamager -> damagerPlayer = directDamager;
+                case Projectile projectile -> {
+                    ProjectileSource source = projectile.getShooter();
+                    if (source instanceof Player shooter) {
+                        damagerPlayer = shooter;
+                    }
                 }
-            } else if (damager instanceof TNTPrimed primedTnt && primedTnt.getSource() instanceof Player sourcePlayer) {
-                damagerPlayer = sourcePlayer;
+                case TNTPrimed primedTnt when primedTnt.getSource() instanceof Player sourcePlayer ->
+                        damagerPlayer = sourcePlayer;
+                default -> {
+                }
             }
         }
 
@@ -361,13 +363,6 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
         return arena.getLobbySpawn();
     }
 
-    @Override
-    public Location onPlayerJoinSpectator(MiniGameArena arena, Player player) {
-        Location spectatorSpawn = arena.getSpectatorSpawn();
-        return spectatorSpawn != null ? spectatorSpawn : arena.getLobbySpawn();
-    }
-
-    @Override
     public void onPlayerLeaveArena(MiniGameArena arena, Player player) {
         if (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING && arena.numPlayers() < arena.getMinPlayers()) {
             arena.setStatus(MiniGameArena.ArenaStatus.WAITING);
@@ -429,7 +424,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
     }
 
     private void clearPlacedBlocks(MiniGameArena arena) {
-        Set<Location> blocks = arena.getOrCreate("blocks", Set.class, HashSet::new);
+        Set<Location> blocks = placedBlocks(arena);
         for (Location loc : new LinkedHashSet<>(blocks)) {
             loc.getBlock().setType(Material.AIR);
         }
@@ -476,7 +471,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
 
     private void equipPlayer(MiniGameArena arena, Player player) {
         clearPlayerInventory(player);
-        player.setHealth(Math.min(player.getMaxHealth(), 20.0d));
+        player.setHealth(Math.min(PlayerUtil.getMaxHealth(player), 20.0d));
         player.setFoodLevel(20);
         player.setSaturation(20.0f);
         player.setFireTicks(0);
@@ -493,7 +488,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
 
     private void clearPlayerInventory(Player player) {
         player.getInventory().clear();
-        player.getInventory().setArmorContents(null);
+        player.getInventory().setArmorContents(new ItemStack[0]);
         player.getInventory().setItemInOffHand(null);
         player.updateInventory();
     }
@@ -622,7 +617,8 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
             return;
         }
 
-        Bukkit.getLogger().warning("[STEMCraft] Bridge arena '" + arena.id() + "' has drop items configured but no valid drop surfaces were found.");
+        java.util.logging.Logger.getLogger(BridgeArenaHandler.class.getName())
+            .warning("[STEMCraft] Bridge arena '" + arena.id() + "' has drop items configured but no valid drop surfaces were found.");
         broadcastInfoToOccupants(arena, "<yellow>Supply drops are enabled, but this arena has no valid drop surfaces.</yellow>");
     }
 
@@ -634,7 +630,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
 
         List<Location> celebrationAnchors = arena.getTeamPlayers(winner.getName()).stream()
             .map(Player::getLocation)
-            .filter(location -> location != null && location.getWorld() != null)
+            .filter(location -> location.getWorld() != null)
             .map(Location::clone)
             .toList();
         if (celebrationAnchors.isEmpty() && winner.getSpawn() != null) {
@@ -809,8 +805,13 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
             return;
         }
 
-        Set<Location> placedBlocks = arena.getOrCreate("blocks", Set.class, HashSet::new);
+        Set<Location> placedBlocks = placedBlocks(arena);
         blockList.removeIf(block -> !placedBlocks.remove(block.getLocation()));
+    }
+
+    @SuppressWarnings("unchecked")
+    private @NotNull Set<Location> placedBlocks(@NotNull MiniGameArena arena) {
+        return arena.getOrCreate("blocks", Set.class, HashSet::new);
     }
 
     private void rebuildDropSurfaces(@NotNull MiniGameArena arena) {

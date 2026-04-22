@@ -177,9 +177,10 @@ public class ConfigSectionImpl implements ConfigSection {
      * @param def The default value if the path does not exist.
      * @return the value at the specified path, or the default value if not present.
      */
-    public @NonNull String getString(@NonNull String path, String def) {
+    public @NonNull String getString(@NonNull String path, @NonNull String def) {
         persistDefault(path, def);
-        return section.getString(resolvePath(path), def);
+        String value = section.getString(resolvePath(path), def);
+        return value;
     }
 
     /**

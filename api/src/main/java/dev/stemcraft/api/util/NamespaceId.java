@@ -59,7 +59,7 @@ import java.util.regex.Pattern;
  */
 public final class NamespaceId {
     private static final Pattern PATTERN =
-            Pattern.compile("[a-z0-9_.-]+:[a-z0-9_.-/]+");
+            Pattern.compile("[a-z0-9_.-]+:[a-z0-9_./-]+");
 
     /**
      * Validates if the given string is a valid namespaced ID.

@@ -28,10 +28,10 @@ public final class MiniGameHudConfigSupport {
             ConfigSection bossbarSection = statusSection.getSection("bossbar");
             ConfigSection scoreboardSection = statusSection.getSection("scoreboard");
 
-            List<String> bossbarLines = resolveLines(bossbarSection, "lines", definition.bossBarLines());
-            List<String> scoreboardLines = resolveLines(scoreboardSection, "lines", definition.scoreboardLines());
+            List<String> bossbarLines = resolveLines(bossbarSection, definition.bossBarLines());
+            List<String> scoreboardLines = resolveLines(scoreboardSection, definition.scoreboardLines());
             int holdUpdates = resolveHoldUpdates(bossbarSection, definition.bossBarLineHoldUpdates());
-            String bossBarColor = resolveString(bossbarSection, "color", definition.bossBarColor());
+            String bossBarColor = resolveString(bossbarSection, definition.bossBarColor());
 
             minigame.registerHud(status, bossbarLines, scoreboardLines, holdUpdates, bossBarColor);
         }
@@ -39,11 +39,11 @@ public final class MiniGameHudConfigSupport {
         config.save();
     }
 
-    private static @NotNull List<String> resolveLines(@NotNull ConfigSection section, @NotNull String path, @NotNull List<String> defaults) {
-        if (!section.contains(path)) {
-            section.set(path, defaults);
+    private static @NotNull List<String> resolveLines(@NotNull ConfigSection section, @NotNull List<String> defaults) {
+        if (!section.contains("lines")) {
+            section.set("lines", defaults);
         }
-        return List.copyOf(section.getStringList(path));
+        return List.copyOf(section.getStringList("lines"));
     }
 
     private static int resolveHoldUpdates(@NotNull ConfigSection section, int defaults) {
@@ -53,11 +53,11 @@ public final class MiniGameHudConfigSupport {
         return Math.max(1, section.getInt("hold-updates", defaults));
     }
 
-    private static @NotNull String resolveString(@NotNull ConfigSection section, @NotNull String path, @NotNull String defaults) {
-        if (!section.contains(path)) {
-            section.set(path, defaults);
+    private static @NotNull String resolveString(@NotNull ConfigSection section, @NotNull String defaults) {
+        if (!section.contains("color")) {
+            section.set("color", defaults);
         }
-        return section.getString(path, defaults);
+        return section.getString("color", defaults);
     }
 
     public record HudDefinition(
@@ -70,7 +70,7 @@ public final class MiniGameHudConfigSupport {
             bossBarLines = List.copyOf(bossBarLines);
             scoreboardLines = List.copyOf(scoreboardLines);
             bossBarLineHoldUpdates = Math.max(1, bossBarLineHoldUpdates);
-            bossBarColor = bossBarColor == null || bossBarColor.isBlank() ? "PURPLE" : bossBarColor;
+            bossBarColor = bossBarColor.isBlank() ? "PURPLE" : bossBarColor;
         }
 
         public HudDefinition(@NotNull List<String> bossBarLines, @NotNull List<String> scoreboardLines, int bossBarLineHoldUpdates) {

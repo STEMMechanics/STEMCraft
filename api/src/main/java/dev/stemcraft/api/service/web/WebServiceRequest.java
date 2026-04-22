@@ -51,6 +51,11 @@ public record WebServiceRequest(
         body = body.clone();
     }
 
+    @Override
+    public byte @NotNull [] body() {
+        return body.clone();
+    }
+
     /**
      * Get a query parameter by name.
      *

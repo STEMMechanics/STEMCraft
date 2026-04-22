@@ -58,7 +58,7 @@ public class NightfallConfig {
             spectator = lobby;
         }
 
-        SCRegion arenaRegion = loadRegion(section, world, arenaId, "arena", "Arena");
+        SCRegion arenaRegion = loadRegion(section, world, arenaId);
         int minPlayers = section.getInt("min-players", 1);
         int maxPlayers = section.getInt("max-players", 8);
         int lives = section.getInt("lives", 3);
@@ -76,7 +76,7 @@ public class NightfallConfig {
         int zombieSpawnRadiusMax = section.getInt("zombie-spawn-radius-max", 30);
         int bloodMoonChancePercent = section.getInt("blood-moon-chance", 0);
         String name = section.getString("name", StringUtil.beautify(arenaId));
-        List<Location> generatorLocations = loadLocations(section, world, arenaId, "generator-locations", false);
+        List<Location> generatorLocations = loadLocations(section, world, arenaId);
         Map<Integer, List<Material>> dropItems = loadDropItems(section, arenaId);
         boolean pendingWorldRollback = section.getBoolean(RECOVERY_PENDING_KEY, false);
         String savedTimeSetting = normalizeRecoverySetting(section.getString(RECOVERY_TIME_KEY, "unset"));
@@ -128,7 +128,7 @@ public class NightfallConfig {
         arenaConfig.set("lobby", serializeLocation(lobbySpawn, arena.id(), "lobby"));
         arenaConfig.set("spectator", serializeLocation(spectatorSpawn, arena.id(), "spectator"));
         arenaConfig.set("spawn", serializeLocation(playSpawn, arena.id(), "spawn"));
-        arenaConfig.set("arena", serializeRegion(arena.get("arenaRegion", SCRegion.class), arena.id(), "arena"));
+        arenaConfig.set("arena", serializeRegion(arena.get("arenaRegion", SCRegion.class), arena.id()));
         arenaConfig.set("min-players", arena.getMinPlayers());
         arenaConfig.set("max-players", arena.getMaxPlayers());
         arenaConfig.set("lives", arena.get("lives", Integer.class, 3));
@@ -150,7 +150,7 @@ public class NightfallConfig {
         if (generatorLocations(arena).isEmpty()) {
             arenaConfig.set("generator-locations", new ArrayList<>());
         } else {
-            arenaConfig.set("generator-locations", serializeLocations(generatorLocations(arena), arena.id(), "generator locations"));
+            arenaConfig.set("generator-locations", serializeLocations(generatorLocations(arena), arena.id()));
         }
 
         arenaConfig.remove("drop-blocks");
@@ -187,24 +187,23 @@ public class NightfallConfig {
         return arenas != null && arenas.isSection(arenaId);
     }
 
-    public boolean setArenaEnabled(@NotNull String arenaId, boolean enabled) {
+    public void setArenaEnabled(@NotNull String arenaId, boolean enabled) {
         ensureLoaded();
         ConfigSection arenas = config.getSection("arenas", false);
         if (arenas == null || !arenas.isSection(arenaId)) {
-            return false;
+            return;
         }
 
         ConfigSection arenaConfig = arenas.getSection(arenaId, false);
         if (arenaConfig == null) {
-            return false;
+            return;
         }
 
         arenaConfig.set("enabled", enabled);
         config.save();
-        return true;
     }
 
-    public boolean setArenaRecoveryState(
+    public void setArenaRecoveryState(
         @NotNull String arenaId,
         boolean pendingWorldRollback,
         @Nullable String savedTimeSetting,
@@ -213,19 +212,18 @@ public class NightfallConfig {
         ensureLoaded();
         ConfigSection arenas = config.getSection("arenas", false);
         if (arenas == null || !arenas.isSection(arenaId)) {
-            return false;
+            return;
         }
 
         ConfigSection arenaConfig = arenas.getSection(arenaId, false);
         if (arenaConfig == null) {
-            return false;
+            return;
         }
 
         arenaConfig.set(RECOVERY_PENDING_KEY, pendingWorldRollback);
         arenaConfig.set(RECOVERY_TIME_KEY, normalizeRecoverySetting(savedTimeSetting));
         arenaConfig.set(RECOVERY_WEATHER_KEY, normalizeRecoverySetting(savedWeatherSetting));
         config.save();
-        return true;
     }
 
     public @Nullable ConfigSection getSection(String path) {
@@ -257,15 +255,15 @@ public class NightfallConfig {
         }
     }
 
-    private @NotNull SCRegion loadRegion(@NotNull ConfigSection section, @NotNull World world, @NotNull String arenaId, @NotNull String key, @NotNull String title) {
-        String regionString = section.getString(key);
+    private @NotNull SCRegion loadRegion(@NotNull ConfigSection section, @NotNull World world, @NotNull String arenaId) {
+        String regionString = section.getString("arena");
         if (regionString.isEmpty()) {
-            throw new MiniGameInvalidArenaConfigException(title + " region for arena '" + arenaId + "' is not defined.");
+            throw new MiniGameInvalidArenaConfigException("Arena" + " region for arena '" + arenaId + "' is not defined.");
         }
 
         SCRegion region = SCRegion.fromString(regionString, world);
         if (region == null) {
-            throw new MiniGameInvalidArenaConfigException(title + " region for arena '" + arenaId + "' is invalid.");
+            throw new MiniGameInvalidArenaConfigException("Arena" + " region for arena '" + arenaId + "' is invalid.");
         }
         return region;
     }
@@ -286,11 +284,8 @@ public class NightfallConfig {
         return location;
     }
 
-    private @NotNull List<Location> loadLocations(@NotNull ConfigSection section, @NotNull World world, @NotNull String arenaId, @NotNull String key, boolean required) {
-        List<String> values = section.getStringList(key);
-        if (values.isEmpty() && required) {
-            throw new MiniGameInvalidArenaConfigException("Location list '" + key + "' for arena '" + arenaId + "' is not defined.");
-        }
+    private @NotNull List<Location> loadLocations(@NotNull ConfigSection section, @NotNull World world, @NotNull String arenaId) {
+        List<String> values = section.getStringList("generator-locations");
 
         List<Location> locations = new ArrayList<>();
         int index = 1;
@@ -302,7 +297,7 @@ public class NightfallConfig {
 
             Location location = LocationUtil.deserialize(value, world);
             if (location == null) {
-                throw new MiniGameInvalidArenaConfigException("Location '" + key + "' #" + index + " for arena '" + arenaId + "' is invalid.");
+                throw new MiniGameInvalidArenaConfigException("Location '" + "generator-locations" + "' #" + index + " for arena '" + arenaId + "' is invalid.");
             }
             locations.add(location);
             index++;
@@ -394,7 +389,7 @@ public class NightfallConfig {
             index++;
             int threshold = (index == size)
                 ? 100
-                : Math.max(lastThreshold + 1, Math.min(100, (int) Math.round((cumulativeWeight / totalWeight) * 100.0d)));
+                : Math.clamp((int) Math.round((cumulativeWeight / totalWeight) * 100.0d), lastThreshold + 1, 100);
             tiers.computeIfAbsent(threshold, ignored -> new ArrayList<>()).add(entry.getKey());
             lastThreshold = threshold;
         }
@@ -431,20 +426,20 @@ public class NightfallConfig {
         return LocationUtil.serialize(location, false, true);
     }
 
-    private @NotNull List<String> serializeLocations(@NotNull List<Location> locations, @NotNull String arenaId, @NotNull String name) {
+    private @NotNull List<String> serializeLocations(@NotNull List<Location> locations, @NotNull String arenaId) {
         if (locations.isEmpty()) {
-            throw new MiniGameInvalidArenaConfigException("Arena '" + arenaId + "' is missing " + name + ".");
+            throw new MiniGameInvalidArenaConfigException("Arena '" + arenaId + "' is missing " + "generator locations" + ".");
         }
         List<String> values = new ArrayList<>();
         for (Location location : locations) {
-            values.add(serializeLocation(location, arenaId, name));
+            values.add(serializeLocation(location, arenaId, "generator locations"));
         }
         return values;
     }
 
-    private @NotNull String serializeRegion(@Nullable SCRegion region, @NotNull String arenaId, @NotNull String name) {
+    private @NotNull String serializeRegion(@Nullable SCRegion region, @NotNull String arenaId) {
         if (region == null) {
-            throw new MiniGameInvalidArenaConfigException("Arena '" + arenaId + "' is missing " + name + ".");
+            throw new MiniGameInvalidArenaConfigException("Arena '" + arenaId + "' is missing " + "arena" + ".");
         }
         return region.toString();
     }

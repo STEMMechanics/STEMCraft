@@ -742,12 +742,13 @@ public class HologramServiceImpl extends BaseService implements HologramService 
                 continue;
             }
 
-            String playerName = record.username() == null || record.username().isBlank()
+            String username = record.username();
+            String playerName = username == null || username.isBlank()
                 ? record.uuid().toString()
-                : record.username();
+                : username;
 
-            String template = rank == 1 && options.firstLine() != null
-                ? options.firstLine()
+            String template = rank == 1
+                ? Objects.requireNonNullElse(options.firstLine(), options.line())
                 : options.line();
 
             lines.add(template
@@ -787,7 +788,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
                 case "first", "first-line", "top-line" -> firstLine = value;
                 case "limit" -> {
                     try {
-                        limit = Math.max(1, Math.min(Integer.parseInt(value), 100));
+                        limit = Math.clamp(Integer.parseInt(value), 1, 100);
                     } catch (NumberFormatException ignored) {
                         // Ignore invalid custom limit and keep default.
                     }

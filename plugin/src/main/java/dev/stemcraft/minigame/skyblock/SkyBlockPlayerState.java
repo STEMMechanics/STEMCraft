@@ -95,7 +95,7 @@ final class SkyBlockPlayerState {
 
         String worldName = stateSection.getString("location-world", fallbackWorld == null ? "" : fallbackWorld.getName());
         World world = worldName.isBlank() ? fallbackWorld : Bukkit.getWorld(worldName);
-        Location location = loadLocation(stateSection, "location", world);
+        Location location = loadLocation(stateSection, world);
         if (location == null && fallbackWorld != null) {
             location = fallbackWorld.getSpawnLocation();
         }
@@ -148,7 +148,7 @@ final class SkyBlockPlayerState {
         stateSection.set("offhand", offHand == null ? null : offHand.clone());
     }
 
-    void apply(@NotNull Player player, boolean restoreLocation) {
+    void apply(@NotNull Player player) {
         PlayerInventory inventory = player.getInventory();
         inventory.clear();
         inventory.setStorageContents(cloneItems(storageContents));
@@ -165,14 +165,14 @@ final class SkyBlockPlayerState {
         player.setExhaustion(exhaustion);
         player.setLevel(level);
         player.setExp(exp);
-        player.setHealth(Math.min(PlayerUtil.getMaxHealth(player), Math.max(1.0d, health)));
-        if (restoreLocation && location != null) {
+        player.setHealth(Math.clamp(health, 1.0d, PlayerUtil.getMaxHealth(player)));
+        if (location != null) {
             player.teleport(location);
         }
     }
 
-    private static @Nullable Location loadLocation(@NotNull ConfigSection section, @NotNull String key, @Nullable World defaultWorld) {
-        String serialized = section.getString(key);
+    private static @Nullable Location loadLocation(@NotNull ConfigSection section, @Nullable World defaultWorld) {
+        String serialized = section.getString("location");
         if (serialized.isBlank()) {
             return null;
         }

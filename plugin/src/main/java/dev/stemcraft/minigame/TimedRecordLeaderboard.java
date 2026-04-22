@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 
 /**
  * Shared renderer for fastest-time leaderboard style holograms used by minigames.
@@ -28,7 +29,7 @@ public final class TimedRecordLeaderboard {
         lines.add(options.title());
 
         List<Entry> sorted = entries.stream()
-            .filter(entry -> entry != null && entry.timeMillis() > 0L && entry.playerName() != null && !entry.playerName().isBlank())
+            .filter(entry -> entry != null && entry.timeMillis() > 0L && !entry.playerName().isBlank())
             .sorted(Comparator
                 .comparingLong(Entry::timeMillis)
                 .thenComparing(Entry::playerName, String.CASE_INSENSITIVE_ORDER))
@@ -42,8 +43,8 @@ public final class TimedRecordLeaderboard {
 
         int rank = 1;
         for (Entry entry : sorted) {
-            String template = rank == 1 && options.firstLine() != null
-                ? options.firstLine()
+            String template = rank == 1
+                ? Objects.requireNonNullElse(options.firstLine(), options.line())
                 : options.line();
             String formattedTime = formatMillis(entry.timeMillis());
             lines.add(template
@@ -101,7 +102,7 @@ public final class TimedRecordLeaderboard {
                 case "first", "first-line", "top-line" -> firstLine = value;
                 case "limit" -> {
                     try {
-                        limit = Math.max(1, Math.min(Integer.parseInt(value), MAX_LIMIT));
+                        limit = Math.clamp(Integer.parseInt(value), 1, MAX_LIMIT);
                     } catch (NumberFormatException ignored) {
                         // Ignore invalid custom limits and keep the default.
                     }

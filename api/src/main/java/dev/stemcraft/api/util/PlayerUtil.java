@@ -40,6 +40,7 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -87,7 +88,9 @@ public class PlayerUtil {
         ItemStack playerHead = new ItemStack(Material.PLAYER_HEAD);
         SkullMeta skullMeta = (SkullMeta) playerHead.getItemMeta();
         skullMeta.setOwningPlayer(player);
-        playerHead.setItemMeta(skullMeta);
+        if (!playerHead.setItemMeta(skullMeta)) {
+            throw new IllegalStateException("Unable to apply skull metadata");
+        }
 
         return playerHead;
     }
@@ -161,16 +164,7 @@ public class PlayerUtil {
             return false;
         }
 
-        if(isGeyserInstalled == null) {
-            if (Bukkit.getPluginManager().getPlugin("Geyser-Spigot") != null) {
-                isGeyserInstalled = true;
-                geyserApi = GeyserApi.api();
-            } else {
-                isGeyserInstalled = false;
-            }
-        }
-
-        if(!isGeyserInstalled) {
+        if (!ensureGeyserInitialized()) {
             return false;
         }
 
@@ -188,16 +182,7 @@ public class PlayerUtil {
             return false;
         }
 
-        if(isGeyserInstalled == null) {
-            if (Bukkit.getPluginManager().getPlugin("Geyser-Spigot") != null) {
-                isGeyserInstalled = true;
-                geyserApi = GeyserApi.api();
-            } else {
-                isGeyserInstalled = false;
-            }
-        }
-
-        if(!isGeyserInstalled) {
+        if (!ensureGeyserInitialized()) {
             return false;
         }
 
@@ -336,14 +321,32 @@ public class PlayerUtil {
                 if (conn.getResponseCode() != 200) return null;
 
                 try (InputStream in = conn.getInputStream();
-                     InputStreamReader reader = new InputStreamReader(in)) {
+                     InputStreamReader reader = new InputStreamReader(in, StandardCharsets.UTF_8)) {
 
                     JsonObject json = JsonParser.parseReader(reader).getAsJsonObject();
                     return json.has("name") ? json.get("name").getAsString() : null;
                 }
-            } catch (Exception e) {
+            } catch (java.io.IOException | IllegalStateException e) {
                 return null;
             }
         });
+    }
+
+    private static boolean ensureGeyserInitialized() {
+        if (isGeyserInstalled != null) {
+            return isGeyserInstalled;
+        }
+
+        synchronized (PlayerUtil.class) {
+            if (isGeyserInstalled == null) {
+                if (Bukkit.getPluginManager().getPlugin("Geyser-Spigot") != null) {
+                    geyserApi = GeyserApi.api();
+                    isGeyserInstalled = true;
+                } else {
+                    isGeyserInstalled = false;
+                }
+            }
+            return isGeyserInstalled;
+        }
     }
 }

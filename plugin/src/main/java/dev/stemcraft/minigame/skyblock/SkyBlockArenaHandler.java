@@ -14,11 +14,9 @@ import org.jetbrains.annotations.NotNull;
 import org.jspecify.annotations.NonNull;
 
 public class SkyBlockArenaHandler implements MiniGameArenaHandler {
-    private final STEMCraftAPI api;
     private final SkyBlockMiniGame skyBlock;
 
     public SkyBlockArenaHandler(STEMCraftAPI api, SkyBlockMiniGame skyBlock) {
-        this.api = api;
         this.skyBlock = skyBlock;
     }
 
@@ -39,7 +37,7 @@ public class SkyBlockArenaHandler implements MiniGameArenaHandler {
     public Location onPlayerJoinArena(MiniGameArena arena, Player player) {
         SkyBlockPlayerState state = skyBlock.savedPlayerState(arena);
         if (skyBlock.isOwner(arena, player) && state != null) {
-            state.apply(player, true);
+            state.apply(player);
             return player.getLocation();
         }
 
@@ -53,12 +51,6 @@ public class SkyBlockArenaHandler implements MiniGameArenaHandler {
         player.setFireTicks(0);
         player.setFallDistance(0.0f);
         return arena.getLobbySpawn();
-    }
-
-    @Override
-    public Location onPlayerJoinSpectator(MiniGameArena arena, Player player) {
-        Location spectatorSpawn = arena.getSpectatorSpawn();
-        return spectatorSpawn != null ? spectatorSpawn : arena.getLobbySpawn();
     }
 
     @Override

@@ -94,10 +94,10 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Run tests and build jars
+      - name: Run analysis, tests, and build jars
         env:
           BUILD_NUMBER: ${{ needs.prepare.outputs.build_number }}
-        run: ./gradlew --no-daemon :plugin:test :api:jar :plugin:jar
+        run: ./gradlew --no-daemon check :api:jar :plugin:jar
 
   api-publish:
     name: Publish API Snapshot

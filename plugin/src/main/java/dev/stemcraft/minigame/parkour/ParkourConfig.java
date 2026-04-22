@@ -40,12 +40,12 @@ public class ParkourConfig {
 
         World world = MiniGameConfigSupport.requireWorld(api, arenaId, worldName);
 
-        SCRegion lobbyRegion = loadRegion(section, world, "lobby", false);
+        SCRegion lobbyRegion = loadRegion(section, world, "lobby");
         if (lobbyRegion == null) {
-            lobbyRegion = loadRegion(section, world, "start", false);
+            lobbyRegion = loadRegion(section, world, "start");
         }
         if (lobbyRegion == null) {
-            Location legacySpawn = loadLocation(section, world, arenaId, "spawn", false);
+            Location legacySpawn = loadLocation(section, world, arenaId);
             if (legacySpawn != null) {
                 lobbyRegion = singleBlockRegion(legacySpawn);
             }
@@ -134,21 +134,20 @@ public class ParkourConfig {
         return arenas != null && arenas.isSection(arenaId);
     }
 
-    public boolean setArenaEnabled(@NotNull String arenaId, boolean enabled) {
+    public void setArenaEnabled(@NotNull String arenaId, boolean enabled) {
         ensureLoaded();
         ConfigSection arenas = config.getSection("arenas", false);
         if (arenas == null || !arenas.isSection(arenaId)) {
-            return false;
+            return;
         }
 
         ConfigSection arenaConfig = arenas.getSection(arenaId, false);
         if (arenaConfig == null) {
-            return false;
+            return;
         }
 
         arenaConfig.set("enabled", enabled);
         config.save();
-        return true;
     }
 
     public @Nullable ConfigSection getSection(String path) {
@@ -188,32 +187,23 @@ public class ParkourConfig {
         return region;
     }
 
-    private @Nullable SCRegion loadRegion(@NotNull ConfigSection section, @NotNull World world, @NotNull String key, boolean required) {
+    private @Nullable SCRegion loadRegion(@NotNull ConfigSection section, @NotNull World world, @NotNull String key) {
         String regionString = section.getString(key);
         if (regionString.isEmpty()) {
             return null;
         }
 
         SCRegion region = SCRegion.fromString(regionString, world);
-        if (region == null && required) {
-            throw new MiniGameInvalidArenaConfigException("Region '" + key + "' is invalid.");
-        }
         return region;
     }
 
-    private @Nullable Location loadLocation(@NotNull ConfigSection section, @NotNull World world, @NotNull String arenaId, @NotNull String key, boolean required) {
-        String locationString = section.getString(key);
+    private @Nullable Location loadLocation(@NotNull ConfigSection section, @NotNull World world, @NotNull String arenaId) {
+        String locationString = section.getString("spawn");
         if (locationString.isEmpty()) {
-            if (required) {
-                throw new MiniGameInvalidArenaConfigException("Location '" + key + "' for arena '" + arenaId + "' is not defined.");
-            }
             return null;
         }
 
         Location location = LocationUtil.deserialize(locationString, world);
-        if (location == null && required) {
-            throw new MiniGameInvalidArenaConfigException("Location '" + key + "' for arena '" + arenaId + "' is invalid.");
-        }
         return location;
     }
 

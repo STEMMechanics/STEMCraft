@@ -99,9 +99,7 @@ public class TeleportUtils extends BaseFeature {
             setWorldLastLocation(player.getUniqueId(), from);
 
             Location to = event.getTo();
-            if (to != null) {
-                setWorldLastLocation(player.getUniqueId(), to);
-            }
+            setWorldLastLocation(player.getUniqueId(), to);
         });
 
         api.events().register(PlayerJoinEvent.class, event -> {
@@ -238,11 +236,6 @@ public class TeleportUtils extends BaseFeature {
                         }
 
                         world = requestedWorld;
-                    }
-
-                    if (target == null) {
-                        ctx.returnError("PLAYER_NOT_FOUND", "player", ctx.getArg(1));
-                        return;
                     }
 
                     setBackLocation(target.getUniqueId(), target.getLocation());

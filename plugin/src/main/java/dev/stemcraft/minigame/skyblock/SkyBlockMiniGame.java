@@ -9,7 +9,6 @@ import dev.stemcraft.minigame.MiniGameHudConfigSupport;
 import lombok.Getter;
 import lombok.experimental.Accessors;
 import org.bukkit.Bukkit;
-import org.bukkit.GameMode;
 import org.bukkit.GameRule;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -32,11 +31,11 @@ import java.util.UUID;
 public class SkyBlockMiniGame extends BaseMiniGame {
     private static final String STANDBY_TASK_ID = "skyblock-standby-maintainer";
     private static final String VOID_GENERATOR_KEY = "void";
-    private static final GameRule<Boolean> DO_DAYLIGHT_CYCLE_RULE = requireGameRule("DO_DAYLIGHT_CYCLE", Boolean.class);
-    private static final GameRule<Boolean> DO_WEATHER_CYCLE_RULE = requireGameRule("DO_WEATHER_CYCLE", Boolean.class);
-    private static final GameRule<Boolean> KEEP_INVENTORY_RULE = requireGameRule("KEEP_INVENTORY", Boolean.class);
-    private static final GameRule<Boolean> ANNOUNCE_ADVANCEMENTS_RULE = requireGameRule("ANNOUNCE_ADVANCEMENTS", Boolean.class);
-    private static final GameRule<Boolean> DO_INSOMNIA_RULE = requireGameRule("DO_INSOMNIA", Boolean.class);
+    private static final GameRule<Boolean> DO_DAYLIGHT_CYCLE_RULE = requireGameRule("DO_DAYLIGHT_CYCLE");
+    private static final GameRule<Boolean> DO_WEATHER_CYCLE_RULE = requireGameRule("DO_WEATHER_CYCLE");
+    private static final GameRule<Boolean> KEEP_INVENTORY_RULE = requireGameRule("KEEP_INVENTORY");
+    private static final GameRule<Boolean> ANNOUNCE_ADVANCEMENTS_RULE = requireGameRule("ANNOUNCE_ADVANCEMENTS");
+    private static final GameRule<Boolean> DO_INSOMNIA_RULE = requireGameRule("DO_INSOMNIA");
 
     @Getter
     @Accessors(fluent = true)
@@ -118,7 +117,7 @@ public class SkyBlockMiniGame extends BaseMiniGame {
             return arena;
         }
 
-        World standbyWorld = allocateStandbyWorld(true);
+        World standbyWorld = allocateStandbyWorld();
         if (standbyWorld == null) {
             throw new IllegalStateException("No SkyBlock standby worlds are available.");
         }
@@ -295,8 +294,8 @@ public class SkyBlockMiniGame extends BaseMiniGame {
         }
     }
 
-    private @Nullable World allocateStandbyWorld(boolean immediate) {
-        if (standbyWorlds.isEmpty() && immediate) {
+    private @Nullable World allocateStandbyWorld() {
+        if (standbyWorlds.isEmpty()) {
             World created = createStandbyWorld();
             if (created != null) {
                 standbyWorlds.add(created.getName());
@@ -421,10 +420,10 @@ public class SkyBlockMiniGame extends BaseMiniGame {
     }
 
     @SuppressWarnings("unchecked")
-    private static <T> GameRule<T> requireGameRule(String name, Class<T> type) {
+    private static <T> GameRule<T> requireGameRule(String name) {
         try {
             Object value = GameRule.class.getField(name).get(null);
-            if (!(value instanceof GameRule<?> rule) || !type.equals(rule.getType())) {
+            if (!(value instanceof GameRule<?> rule) || !Boolean.class.equals(rule.getType())) {
                 throw new IllegalStateException("Missing expected gamerule " + name);
             }
 

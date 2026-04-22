@@ -35,6 +35,8 @@ import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.api.util.TimeUtil;
 import io.papermc.paper.ban.BanListType;
 import io.papermc.paper.event.player.AsyncChatEvent;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.BanList;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
@@ -46,7 +48,6 @@ import org.bukkit.event.player.AsyncPlayerPreLoginEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerLoginEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import com.destroystokyo.paper.profile.PlayerProfile;
 import org.jetbrains.annotations.NotNull;
 
@@ -114,6 +115,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
     private final AtomicInteger syncAttemptCounter = new AtomicInteger(0);
     private final Deque<WebhookHistoryEntry> recentOutboundHistory = new ArrayDeque<>();
     private final Deque<WebhookHistoryEntry> recentInboundHistory = new ArrayDeque<>();
+    private final Object historyLock = new Object();
 
     private ConfigFile accountStateConfig;
     private HttpClient httpClient;
@@ -168,10 +170,15 @@ public final class WebhookBridgeServiceImpl extends BaseService {
 
     private void registerEvents() {
         api.events().register(AsyncPlayerPreLoginEvent.class, this::onAsyncPlayerPreLogin, EventPriority.HIGHEST, false);
-        api.events().register(PlayerLoginEvent.class, this::onPlayerLogin, EventPriority.HIGHEST, false);
+        registerLegacyPlayerLoginHandler();
         api.events().register(PlayerJoinEvent.class, this::onPlayerJoin);
         api.events().register(PlayerQuitEvent.class, this::onPlayerQuit);
         api.events().register(AsyncChatEvent.class, this::onAsyncChat);
+    }
+
+    @SuppressWarnings("deprecation")
+    private void registerLegacyPlayerLoginHandler() {
+        api.events().register(PlayerLoginEvent.class, this::onPlayerLogin, EventPriority.HIGHEST, false);
     }
 
     private void registerCommands() {
@@ -208,9 +215,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
             .description("WEBHOOK_SYNC_COMMAND_DESCRIPTION")
             .usage("WEBHOOK_SYNC_COMMAND_USAGE")
             .permission("stemcraft.command.webhooksync")
-            .executor((unused, cmd, ctx) -> {
-                runManualSyncCommand(ctx);
-            })
+            .executor((unused, cmd, ctx) -> runManualSyncCommand(ctx))
             .register(plugin);
     }
 
@@ -227,7 +232,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
         }
 
         ctx.info("WEBHOOK_SYNC_STARTING");
-        runSyncRequest("manual", result -> {
+        runSyncRequest(result -> {
             if (result.ok) {
                 ctx.success("WEBHOOK_SYNC_COMPLETE");
             } else {
@@ -292,7 +297,8 @@ public final class WebhookBridgeServiceImpl extends BaseService {
         ctx.info("WEBHOOK_STATUS_ENDPOINT", "value", yesNo(endpointRegistered.get()));
         ctx.info("WEBHOOK_STATUS_LISTEN_PATH", "value", config().getString("listen_path", "/stemcraft/webhook"));
         ctx.info("WEBHOOK_STATUS_PUBLIC_URL", "value", buildBridgeUrl());
-        ctx.info("WEBHOOK_STATUS_SITE_URL", "value", blankFallback(config().getString("site_webhook_url", "").trim(), "<unset>"));
+        String siteWebhookUrl = config().getString("site_webhook_url", "").trim();
+        ctx.info("WEBHOOK_STATUS_SITE_URL", "value", siteWebhookUrl.isBlank() ? "<unset>" : siteWebhookUrl);
         ctx.info("WEBHOOK_STATUS_SHARED_SECRET", "value", yesNo(!getSharedSecret().isBlank()));
         ctx.info("WEBHOOK_STATUS_WHITELIST", "value", yesNo(isWhitelistEnforcementActive()));
         ctx.info("WEBHOOK_STATUS_INITIAL_SYNC", "value", yesNo(initialSyncComplete.get()));
@@ -311,7 +317,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
 
     private void sendWebhookHistory(dev.stemcraft.api.command.CommandContext ctx) {
         String scope = Objects.requireNonNullElse(ctx.getArgLower(1), "all");
-        int count = Math.max(1, Math.min(10, ctx.getArgAsInt(2, 3, 1, 10)));
+        int count = Math.clamp(ctx.getArgAsInt(2, 3, 1, 10), 1, 10);
 
         switch (scope) {
             case "send", "out", "outbound" -> sendHistorySection(ctx, "WEBHOOK_HISTORY_OUTBOUND", recentHistory(recentOutboundHistory, count));
@@ -367,18 +373,18 @@ public final class WebhookBridgeServiceImpl extends BaseService {
 
         PenaltyStateRecord activeBan = findActivePenalty(event.getUniqueId(), event.getName(), "ban");
         if (activeBan != null) {
-            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_BANNED, messageForPenalty(activeBan, "You are banned from this server."));
+            disallowAsyncLogin(event, AsyncPlayerPreLoginEvent.Result.KICK_BANNED, messageForPenalty(activeBan, "You are banned from this server."));
             return;
         }
 
         BlacklistRecord blacklist = findBlacklist(event.getUniqueId(), event.getName());
         if (blacklist != null && blacklist.isActive()) {
-            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_BANNED, messageForBlacklist(event.getUniqueId(), event.getName()));
+            disallowAsyncLogin(event, AsyncPlayerPreLoginEvent.Result.KICK_BANNED, messageForBlacklist(event.getUniqueId(), event.getName()));
             return;
         }
 
         if (!isWhitelistedByAccountState(event.getUniqueId(), event.getName(), loginPlatform)) {
-            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_WHITELIST, getWhitelistKickMessage());
+            disallowAsyncLogin(event, AsyncPlayerPreLoginEvent.Result.KICK_WHITELIST, getWhitelistKickMessage());
             return;
         }
 
@@ -396,18 +402,18 @@ public final class WebhookBridgeServiceImpl extends BaseService {
         Player player = event.getPlayer();
         PenaltyStateRecord activeBan = findActivePenalty(player.getUniqueId(), player.getName(), "ban");
         if (activeBan != null) {
-            api.tasks().nextTick(() -> player.kickPlayer(messageForPenalty(activeBan, "You are banned from this server.")));
+            api.tasks().nextTick(() -> kickPlayer(player, messageForPenalty(activeBan, "You are banned from this server.")));
             return;
         }
 
         if (isBlacklisted(player.getUniqueId(), player.getName())) {
-            api.tasks().nextTick(() -> player.kickPlayer(messageForBlacklist(player.getUniqueId(), player.getName())));
+            api.tasks().nextTick(() -> kickPlayer(player, messageForBlacklist(player.getUniqueId(), player.getName())));
             return;
         }
 
         String loginPlatform = platformForLogin(player.getUniqueId(), player.getName());
-        if (!isWhitelistedByAccountStateStrict(player.getUniqueId(), player.getName(), loginPlatform)) {
-            api.tasks().nextTick(() -> player.kickPlayer(getWhitelistKickMessage()));
+        if (isDeniedByAccountStateStrict(player.getUniqueId(), player.getName(), loginPlatform)) {
+            api.tasks().nextTick(() -> kickPlayer(player, getWhitelistKickMessage()));
             return;
         }
 
@@ -415,6 +421,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
         sendPlayerLogin(player);
     }
 
+    @SuppressWarnings("deprecation")
     private void onPlayerLogin(PlayerLoginEvent event) {
         if (!isBridgeEnabled()) {
             return;
@@ -425,27 +432,27 @@ public final class WebhookBridgeServiceImpl extends BaseService {
 
         PenaltyStateRecord activeBan = findActivePenalty(player.getUniqueId(), player.getName(), "ban");
         if (activeBan != null) {
-            event.disallow(PlayerLoginEvent.Result.KICK_BANNED, messageForPenalty(activeBan, "You are banned from this server."));
+            disallowPlayerLogin(event, PlayerLoginEvent.Result.KICK_BANNED, messageForPenalty(activeBan, "You are banned from this server."));
             return;
         }
 
         BlacklistRecord blacklist = findBlacklist(player.getUniqueId(), player.getName());
         if (blacklist != null && blacklist.isActive()) {
-            event.disallow(PlayerLoginEvent.Result.KICK_BANNED, messageForBlacklist(player.getUniqueId(), player.getName()));
+            disallowPlayerLogin(event, PlayerLoginEvent.Result.KICK_BANNED, messageForBlacklist(player.getUniqueId(), player.getName()));
             return;
         }
 
-        if (!isWhitelistedByAccountStateStrict(player.getUniqueId(), player.getName(), loginPlatform)) {
-            event.disallow(PlayerLoginEvent.Result.KICK_WHITELIST, getWhitelistKickMessage());
+        if (isDeniedByAccountStateStrict(player.getUniqueId(), player.getName(), loginPlatform)) {
+            disallowPlayerLogin(event, PlayerLoginEvent.Result.KICK_WHITELIST, getWhitelistKickMessage());
             return;
         }
 
         event.allow();
     }
 
-    private boolean isWhitelistedByAccountStateStrict(UUID uuid, String username, String platform) {
+    private boolean isDeniedByAccountStateStrict(UUID uuid, String username, String platform) {
         if (!config().getBoolean("enforce_account_whitelist", true)) {
-            return isWhitelistedByAccountState(uuid, username, platform);
+            return !isWhitelistedByAccountState(uuid, username, platform);
         }
 
         String normalizedPlatform = normalizePlatform(platform);
@@ -454,23 +461,10 @@ public final class WebhookBridgeServiceImpl extends BaseService {
 
         Boolean byPrimary = queryAccountWhitelist(normalizedUuid, normalizedUsername, normalizedPlatform);
         if (byPrimary != null) {
-            return byPrimary;
+            return !byPrimary;
         }
 
-//        String altPlatform = PLATFORM_BEDROCK.equalsIgnoreCase(normalizedPlatform) ? PLATFORM_JAVA : PLATFORM_BEDROCK;
-//        Boolean byAlt = queryAccountWhitelist(normalizedUuid, normalizedUsername, altPlatform);
-//        if (byAlt != null) {
-//            return byAlt;
-//        }
-//
-//        if (looksLikePrefixedBedrockUsername(username)) {
-//            Boolean byBedrock = queryAccountWhitelist(normalizedUuid, username, PLATFORM_BEDROCK);
-//            if (byBedrock != null) {
-//                return byBedrock;
-//            }
-//        }
-
-        return false;
+        return true;
     }
 
     private @Nullable Boolean queryAccountWhitelist(@Nullable String uuid, @Nullable String username, String platform) {
@@ -572,7 +566,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
         if (penaltiesToLift.isEmpty()) {
             PunishmentRecord priorRecord = plugin.punishments().findLatestPriorPunishment(record.targetUuid(), record.type(), occurredAt);
             if (priorRecord != null) {
-                penaltiesToLift = List.of(penaltyStateRecord(null, priorRecord, null));
+                penaltiesToLift = List.of(penaltyStateRecord(null, priorRecord));
             }
         }
 
@@ -647,7 +641,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
     }
 
     private void rememberLocalPenalty(@NotNull PunishmentRecord record) {
-        PenaltyStateRecord localState = penaltyStateRecord(findPenalty(record.targetUuid(), record.targetName(), record.type()), record, null);
+        PenaltyStateRecord localState = penaltyStateRecord(findPenalty(record.targetUuid(), record.targetName(), record.type()), record);
         String key = localState.key();
         if (key == null) {
             return;
@@ -658,8 +652,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
     }
 
     private @NotNull PenaltyStateRecord penaltyStateRecord(@Nullable PenaltyStateRecord existing,
-                                                           @NotNull PunishmentRecord record,
-                                                           @Nullable Instant liftedAt) {
+                                                           @NotNull PunishmentRecord record) {
         Instant endsAt = record.permanent() ? null : record.expiresAt();
         return new PenaltyStateRecord(
             existing == null ? null : existing.externalId,
@@ -670,7 +663,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
             record.createdAt(),
             endsAt,
             record.permanent(),
-            liftedAt
+            null
         );
     }
 
@@ -782,12 +775,12 @@ public final class WebhookBridgeServiceImpl extends BaseService {
         });
     }
 
-    private void triggerImmediateSync(String reason) {
+    private void triggerImmediateSync() {
         if (!isBridgeEnabled() || initialSyncComplete.get()) {
             return;
         }
 
-        api.tasks().runAsync(() -> attemptSync(reason));
+        api.tasks().runAsync(() -> attemptSync("webhook-recovery"));
     }
 
     private void attemptSync(String reason) {
@@ -827,16 +820,16 @@ public final class WebhookBridgeServiceImpl extends BaseService {
         return STARTUP_SYNC_BACKOFF_SECONDS[attemptIndex];
     }
 
-    private void runSyncRequest(String reason, java.util.function.Consumer<SyncResult> callback) {
+    private void runSyncRequest(java.util.function.Consumer<SyncResult> callback) {
         if (!syncInProgress.compareAndSet(false, true)) {
             api.tasks().runSync(() -> callback.accept(SyncResult.failure("Sync already in progress.")));
             return;
         }
         api.tasks().runAsync(() -> {
-            SyncResult result = SyncResult.failure("Unknown sync result.");
+            SyncResult result;
             try {
-                result = executeSyncRequest(reason);
-                recordSyncResult(reason, result);
+                result = executeSyncRequest("manual");
+                recordSyncResult("manual", result);
                 if (result.ok) {
                     initialSyncComplete.set(true);
                     syncAttemptCounter.set(0);
@@ -891,7 +884,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
             Map<String, Object> pingPayload = new LinkedHashMap<>();
             pingPayload.put("event", "server.health.ping");
             pingPayload.put("server_name", config().getString("server_name", plugin.getServer().getName()));
-            pingPayload.put("plugin_version", plugin.getDescription().getVersion());
+            pingPayload.put("plugin_version", pluginVersion());
             JsonObject pingResponse = sendSyncEvent(siteWebhookUrl, secret, pingPayload);
             if (pingResponse == null || !booleanValue(pingResponse, "ok", false)) {
                 return SyncResult.failure("server.health.ping failed");
@@ -901,7 +894,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
             playersPayload.put("event", "server.sync.players");
             playersPayload.put("server_name", config().getString("server_name", plugin.getServer().getName()));
             playersPayload.put("reason", reason);
-            playersPayload.put("plugin_version", plugin.getDescription().getVersion());
+            playersPayload.put("plugin_version", pluginVersion());
             playersPayload.put("players", buildPlayersSyncPayload());
             JsonObject playersResponse = sendSyncEvent(siteWebhookUrl, secret, playersPayload);
             if (playersResponse == null || !booleanValue(playersResponse, "ok", false)) {
@@ -912,7 +905,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
             penaltiesPayload.put("event", "server.sync.penalties");
             penaltiesPayload.put("server_name", config().getString("server_name", plugin.getServer().getName()));
             penaltiesPayload.put("reason", reason);
-            penaltiesPayload.put("plugin_version", plugin.getDescription().getVersion());
+            penaltiesPayload.put("plugin_version", pluginVersion());
             penaltiesPayload.put("penalties", buildPenaltiesSyncPayload());
             JsonObject penaltiesResponse = sendSyncEvent(siteWebhookUrl, secret, penaltiesPayload);
             if (penaltiesResponse == null || !booleanValue(penaltiesResponse, "ok", false)) {
@@ -1015,8 +1008,8 @@ public final class WebhookBridgeServiceImpl extends BaseService {
 
     private SyncSnapshot parseStartupSyncSnapshot(JsonObject playersResponse, JsonObject penaltiesResponse) {
         try {
-            JsonObject playersSync = requiredObject(playersResponse, "sync");
-            JsonObject penaltiesSync = requiredObject(penaltiesResponse, "sync");
+            JsonObject playersSync = requiredSyncObject(playersResponse);
+            JsonObject penaltiesSync = requiredSyncObject(penaltiesResponse);
             List<AccountSnapshot> accounts = parseAccounts(requiredArray(playersSync, "players"));
             List<PenaltySnapshot> penalties = parsePenalties(requiredArray(penaltiesSync, "penalties"));
             return new SyncSnapshot("replace", Instant.now(), accounts, penalties, List.of());
@@ -1057,7 +1050,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
         Map<String, Object> shutdownPayload = new LinkedHashMap<>();
         shutdownPayload.put("event", "server.shutdown");
         shutdownPayload.put("server_name", config().getString("server_name", plugin.getServer().getName()));
-        shutdownPayload.put("plugin_version", plugin.getDescription().getVersion());
+        shutdownPayload.put("plugin_version", pluginVersion());
         shutdownPayload.put("occurred_at", Instant.now().toString());
         shutdownPayload.put("online_players", onlinePlayers);
         sendWebhookSync(shutdownPayload);
@@ -1068,29 +1061,9 @@ public final class WebhookBridgeServiceImpl extends BaseService {
     }
 
     private void sendPlayerStatsSync() {
-        List<String> configured = config().getStringList("player_stats_sync_periods");
-        List<String> periods = new ArrayList<>();
-        if (configured != null) {
-            for (String value : configured) {
-                if (value == null || value.isBlank()) {
-                    continue;
-                }
-                String period = value.trim().toLowerCase(Locale.ROOT);
-                if (!period.equals("day") && !period.equals("week") && !period.equals("month") && !period.equals("all")) {
-                    continue;
-                }
-                if (!periods.contains(period)) {
-                    periods.add(period);
-                }
-            }
-        }
-        if (periods.isEmpty()) {
-            periods = List.of("day", "week", "month", "all");
-        }
-
         Map<String, Object> baseSnapshot = api.playerStats().buildWebhookStatsResponse(null, null, null, "all");
         List<Map<String, Object>> periodSnapshots = new ArrayList<>();
-        for (String period : periods) {
+        for (String period : configuredStatsSyncPeriods()) {
             Map<String, Object> snapshot = api.playerStats().buildWebhookStatsResponse(null, null, null, period);
             Map<String, Object> periodPayload = new LinkedHashMap<>();
             periodPayload.put("period", snapshot.get("period"));
@@ -1114,7 +1087,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
             return;
         }
         api.tasks().runAsync(() -> {
-            SyncResult result = SyncResult.failure("Unknown sync result.");
+            SyncResult result;
             try {
                 result = executePlayerStatsSyncRequest();
                 recordSyncResult("manual-stats", result);
@@ -1133,29 +1106,9 @@ public final class WebhookBridgeServiceImpl extends BaseService {
             return SyncResult.failure("Missing site_webhook_url or shared_secret.");
         }
 
-        List<String> configured = config().getStringList("player_stats_sync_periods");
-        List<String> periods = new ArrayList<>();
-        if (configured != null) {
-            for (String value : configured) {
-                if (value == null || value.isBlank()) {
-                    continue;
-                }
-                String period = value.trim().toLowerCase(Locale.ROOT);
-                if (!period.equals("day") && !period.equals("week") && !period.equals("month") && !period.equals("all")) {
-                    continue;
-                }
-                if (!periods.contains(period)) {
-                    periods.add(period);
-                }
-            }
-        }
-        if (periods.isEmpty()) {
-            periods = List.of("day", "week", "month", "all");
-        }
-
         Map<String, Object> baseSnapshot = api.playerStats().buildWebhookStatsResponse(null, null, null, "all");
         List<Map<String, Object>> periodSnapshots = new ArrayList<>();
-        for (String period : periods) {
+        for (String period : configuredStatsSyncPeriods()) {
             Map<String, Object> snapshot = api.playerStats().buildWebhookStatsResponse(null, null, null, period);
             Map<String, Object> periodPayload = new LinkedHashMap<>();
             periodPayload.put("period", snapshot.get("period"));
@@ -1217,7 +1170,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
     }
 
     private String inferPlatform(@Nullable UUID uuid, @Nullable String username) {
-        if (uuid != null && PlayerUtil.isBedrock(uuid)) {
+        if (PlayerUtil.isBedrock(uuid)) {
             return PLATFORM_BEDROCK;
         }
         if (looksLikePrefixedBedrockUsername(username)) {
@@ -1277,8 +1230,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
     }
 
     private String bedrockUsernamePrefix() {
-        String prefix = config().getString("bedrock_username_prefix", ".");
-        return prefix == null ? "." : prefix;
+        return config().getString("bedrock_username_prefix", ".");
     }
 
     private void sendWebhook(Map<String, Object> payload) {
@@ -1377,7 +1329,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
                 }
                 yield null;
             }
-            case "player.penalty.deleted" -> {
+            case "player.penalty.deleted", "player.penalty.lifted" -> {
                 handlePenaltyLifted(payload);
                 yield null;
             }
@@ -1391,10 +1343,6 @@ public final class WebhookBridgeServiceImpl extends BaseService {
             }
             case "player.penalty.created" -> {
                 handlePenaltyCreated(payload);
-                yield null;
-            }
-            case "player.penalty.lifted" -> {
-                handlePenaltyLifted(payload);
                 yield null;
             }
             case "server.status.request" -> buildServerStatusResponse();
@@ -1519,7 +1467,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
         if (occurredAt == null) {
             occurredAt = Objects.requireNonNullElse(parseInstant(stringValue(payload, "occurred_at")), Instant.now());
         }
-        long durationSeconds = longValue(payload, "duration_seconds", 0L);
+        long durationSeconds = durationSecondsValue(payload);
         boolean isPermanent = booleanValue(payload, "is_permanent", false);
         Instant explicitEndsAt = parseInstant(stringValue(payload, "ends_at"));
         Instant endsAt = "kick".equals(type)
@@ -1788,12 +1736,14 @@ public final class WebhookBridgeServiceImpl extends BaseService {
                     accountUuid = preservedUuid;
                 }
             }
+
+            Instant occurredAt = (account.occurredAt == null ? snapshot.asOf : account.occurredAt);
             putAccount(new AccountRecord(
                 accountUsername,
                 accountUuid,
                 accountPlatform,
                 account.whitelisted,
-                account.occurredAt == null ? snapshot.asOf : account.occurredAt
+                occurredAt
             ), false);
             if (config().getBoolean("debug_logging", false)) {
                 plugin.getLogger().info("[webhook-sync] account uuid=" + Objects.requireNonNullElse(accountUuid, "<null>")
@@ -1801,7 +1751,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
                     + " platform=" + accountPlatform
                     + " whitelisted=" + account.whitelisted
                     + " occurred_at=" + Objects.requireNonNullElse(
-                        (account.occurredAt == null ? snapshot.asOf : account.occurredAt),
+                        occurredAt,
                         Instant.now()
                     ));
             }
@@ -1861,7 +1811,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
             }
 
             PenaltyStateRecord currentPenalty = previousPenalty.key() == null ? null : penaltiesByKey.get(previousPenalty.key());
-            if (currentPenalty == null || !currentPenalty.isActive()) {
+            if (currentPenalty == null || currentPenalty.isInactive()) {
                 pardonLocalBan(previousPenalty.uuid, previousPenalty.username);
                 UUID previousUuid = parseUuid(previousPenalty.uuid);
                 if (previousUuid != null && !snapshotBanUuids.contains(previousUuid)) {
@@ -1869,7 +1819,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
                 }
             }
         }
-        plugin.punishments().syncReconcileActiveBans(snapshotBanUuids, "Lifted by website sync");
+        plugin.punishments().syncReconcileActiveBans(snapshotBanUuids);
 
         blacklistByKey.clear();
         for (BlacklistSnapshot blacklist : snapshot.legacyBlacklist) {
@@ -1890,7 +1840,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
         saveBlacklistState();
 
         for (PenaltyStateRecord penalty : penaltiesByKey.values()) {
-            if (!penalty.isActive()) {
+            if (penalty.isInactive()) {
                 continue;
             }
             if ("ban".equalsIgnoreCase(penalty.type)) {
@@ -1925,11 +1875,12 @@ public final class WebhookBridgeServiceImpl extends BaseService {
             boolean sameUuid = record.uuid != null && record.uuid.equalsIgnoreCase(normalize(onlinePlayer.getUniqueId()));
             boolean sameUsername = record.username != null && record.username.equalsIgnoreCase(onlinePlayer.getName());
             if (sameUuid || sameUsername) {
-                onlinePlayer.kickPlayer(message);
+                kickPlayer(onlinePlayer, message);
             }
         }
     }
 
+    @SuppressWarnings("EmptyMethod")
     private void applyWhitelist(AccountRecord record, boolean whitelisted) {
         // Webhook bridge whitelist authority is in-memory/database account state only.
         // Do not mirror whitelist state into Bukkit or Gatekeeper allowlists.
@@ -1958,7 +1909,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
             boolean sameUuid = record.uuid != null && record.uuid.equalsIgnoreCase(normalize(onlinePlayer.getUniqueId()));
             boolean sameUsername = record.username != null && record.username.equalsIgnoreCase(onlinePlayer.getName());
             if ((sameUuid || sameUsername) && isBlacklisted(onlinePlayer.getUniqueId(), onlinePlayer.getName())) {
-                onlinePlayer.kickPlayer(messageForBlacklist(onlinePlayer.getUniqueId(), onlinePlayer.getName()));
+                kickPlayer(onlinePlayer, messageForBlacklist(onlinePlayer.getUniqueId(), onlinePlayer.getName()));
             }
         }
     }
@@ -1966,7 +1917,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
     private void kickIfBlacklisted(BlacklistRecord record) {
         for (Player player : Bukkit.getOnlinePlayers()) {
             if (matchesBlacklist(record, player.getUniqueId(), player.getName())) {
-                player.kickPlayer(messageForBlacklist(player.getUniqueId(), player.getName()));
+                kickPlayer(player, messageForBlacklist(player.getUniqueId(), player.getName()));
             }
         }
     }
@@ -1974,7 +1925,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
     private void kickMatchingPlayers(PenaltyStateRecord record, String message) {
         for (Player player : Bukkit.getOnlinePlayers()) {
             if (matchesPenalty(record, player.getUniqueId(), player.getName())) {
-                player.kickPlayer(message);
+                kickPlayer(player, message);
             }
         }
     }
@@ -1985,7 +1936,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
             player.getName(),
             normalize(player.getUniqueId()),
             PlayerUtil.isBedrock(player) ? PLATFORM_BEDROCK : PLATFORM_JAVA,
-            existing == null ? false : existing.whitelisted,
+            existing != null && existing.whitelisted,
             existing == null ? Instant.now() : existing.occurredAt
         ));
     }
@@ -2173,14 +2124,14 @@ public final class WebhookBridgeServiceImpl extends BaseService {
         return activePenalties.isEmpty() ? null : activePenalties.getFirst();
     }
 
-    boolean hasActivePenalty(UUID uuid, @Nullable String username, String type) {
-        return findActivePenalty(uuid, username, type) != null;
+    boolean hasActiveBan(UUID uuid, @Nullable String username) {
+        return findActivePenalty(uuid, username, "ban") != null;
     }
 
     private List<PenaltyStateRecord> findActivePenalties(UUID uuid, String username, String type) {
         List<PenaltyStateRecord> matches = new ArrayList<>();
         for (PenaltyStateRecord record : penaltiesByKey.values()) {
-            if (!record.isActive() || !record.type.equalsIgnoreCase(type)) {
+            if (record.isInactive() || !record.type.equalsIgnoreCase(type)) {
                 continue;
             }
             if (matchesPenalty(record, uuid, username)) {
@@ -2276,10 +2227,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
         }
 
         if (looksLikePrefixedBedrockUsername(username)) {
-            AccountRecord prefixedBedrock = accountsByUsername.get(accountUsernameKey(username, PLATFORM_BEDROCK));
-            if (prefixedBedrock != null) {
-                return prefixedBedrock;
-            }
+            return accountsByUsername.get(accountUsernameKey(username, PLATFORM_BEDROCK));
         }
 
         return null;
@@ -2292,7 +2240,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
             }
             return record.uuid.equalsIgnoreCase(normalize(uuid));
         }
-        return record.username != null && username != null && record.username.equalsIgnoreCase(username);
+        return record.username != null && record.username.equalsIgnoreCase(username);
     }
 
     private boolean matchesBlacklist(BlacklistRecord record, UUID uuid, String username) {
@@ -2305,7 +2253,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
             }
             return record.uuid.equalsIgnoreCase(normalize(uuid));
         }
-        return record.username != null && username != null && record.username.equalsIgnoreCase(username);
+        return record.username != null && record.username.equalsIgnoreCase(username);
     }
 
     private String messageForBlacklist(UUID uuid, String username) {
@@ -2480,9 +2428,6 @@ public final class WebhookBridgeServiceImpl extends BaseService {
             if (key != null && appliedAccounts.add(key)) {
                 applyWhitelist(account, account.whitelisted);
             }
-        }
-
-        for (BlacklistRecord blacklist : blacklistByKey.values()) {
         }
     }
 
@@ -2724,7 +2669,6 @@ public final class WebhookBridgeServiceImpl extends BaseService {
             || "account.remove".equals(event)
             || "blacklist.sync".equals(event)
             || "blacklist.remove".equals(event)
-            || "player.penalty.created".equals(event)
             || "player.penalty.lifted".equals(event);
     }
 
@@ -2744,10 +2688,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
 
         JsonObject blacklist = objectValue(payload, "blacklist");
         if (blacklist != null) {
-            Instant blacklistOccurredAt = parseInstant(nullableString(blacklist, "occurred_at"));
-            if (blacklistOccurredAt != null) {
-                return blacklistOccurredAt;
-            }
+            return parseInstant(nullableString(blacklist, "occurred_at"));
         }
 
         return null;
@@ -2768,7 +2709,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
                 return null;
             }
 
-            JsonObject sync = requiredObject(root, "sync");
+            JsonObject sync = requiredSyncObject(root);
             return new SyncSnapshot(
                 requireString(sync, "mode"),
                 parseInstant(nullableString(sync, "as_of")),
@@ -2853,10 +2794,10 @@ public final class WebhookBridgeServiceImpl extends BaseService {
         return legacyBlacklist;
     }
 
-    private static JsonObject requiredObject(JsonObject payload, String name) {
-        JsonElement element = payload.get(name);
+    private static JsonObject requiredSyncObject(JsonObject payload) {
+        JsonElement element = payload.get("sync");
         if (element == null || !element.isJsonObject()) {
-            throw new IllegalArgumentException("Missing object: " + name);
+            throw new IllegalArgumentException("Missing object: sync");
         }
         return element.getAsJsonObject();
     }
@@ -2914,15 +2855,15 @@ public final class WebhookBridgeServiceImpl extends BaseService {
         return element.getAsBoolean();
     }
 
-    private static long longValue(JsonObject payload, String name, long fallback) {
-        JsonElement element = payload.get(name);
+    private static long durationSecondsValue(JsonObject payload) {
+        JsonElement element = payload.get("duration_seconds");
         if (element == null || element.isJsonNull()) {
-            return fallback;
+            return 0L;
         }
         try {
             return element.getAsLong();
         } catch (RuntimeException ignored) {
-            return fallback;
+            return 0L;
         }
     }
 
@@ -2954,10 +2895,10 @@ public final class WebhookBridgeServiceImpl extends BaseService {
             return PLATFORM_JAVA;
         }
         String normalized = platform.trim().toLowerCase(Locale.ROOT);
-        if (normalized.equals(PLATFORM_BEDROCK)
+        if (normalized.contains("bedrock")
             || normalized.equals("floodgate")
             || normalized.equals("geyser")
-            || normalized.contains("bedrock")) {
+        ) {
             return PLATFORM_BEDROCK;
         }
         return PLATFORM_JAVA;
@@ -3147,7 +3088,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
                 return logInboundAndJsonResponse(request, event, deliveryId, 403, "rejected", "{\"ok\":false,\"error\":\"stale_timestamp\"}");
             }
 
-            String expected = sign(body, Objects.requireNonNullElse(timestamp, ""), getSharedSecret());
+            String expected = sign(body, timestamp, getSharedSecret());
             if (signature == null || !secureEquals(expected, signature)) {
                 plugin.getLogger().warning("Rejected webhook request: invalid signature for delivery " + Objects.requireNonNullElse(deliveryId, "<missing>"));
                 return logInboundAndJsonResponse(request, event, deliveryId, 403, "rejected", "{\"ok\":false,\"error\":\"forbidden\"}");
@@ -3165,16 +3106,14 @@ public final class WebhookBridgeServiceImpl extends BaseService {
             }
             if (shouldQueueSyncManagedEvent(payload)) {
                 queueSyncManagedEvent(payload, deliveryId);
-                triggerImmediateSync("webhook-recovery");
+                triggerImmediateSync();
                 return logInboundAndJsonResponse(request, event, deliveryId, 200, "queued", "{\"ok\":true,\"queued\":\"pending_sync\"}");
             }
             if (shouldDropStaleSyncManagedEvent(payload)) {
                 return logInboundAndJsonResponse(request, event, deliveryId, 200, "ignored", "{\"ok\":true,\"ignored\":\"stale\"}");
             }
 
-            Future<Object> future = Bukkit.getScheduler().callSyncMethod(plugin, () -> {
-                return handleInboundEvent(payload);
-            });
+            Future<Object> future = Bukkit.getScheduler().callSyncMethod(plugin, () -> handleInboundEvent(payload));
             Object response = future.get(10, TimeUnit.SECONDS);
 
             if (response instanceof Map<?, ?> responseMap) {
@@ -3263,7 +3202,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
     }
 
     private void pushHistory(Deque<WebhookHistoryEntry> history, WebhookHistoryEntry entry) {
-        synchronized (history) {
+        synchronized (historyLock) {
             history.addFirst(entry);
             while (history.size() > HISTORY_LIMIT) {
                 history.removeLast();
@@ -3272,7 +3211,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
     }
 
     private List<WebhookHistoryEntry> recentHistory(Deque<WebhookHistoryEntry> history, int limit) {
-        synchronized (history) {
+        synchronized (historyLock) {
             List<WebhookHistoryEntry> entries = new ArrayList<>();
             int remaining = Math.max(0, limit);
             for (WebhookHistoryEntry entry : history) {
@@ -3305,12 +3244,51 @@ public final class WebhookBridgeServiceImpl extends BaseService {
         return plugin.web().getPublicUrl() + config().getString("listen_path", "/stemcraft/webhook");
     }
 
-    private static String blankFallback(@Nullable String value, String fallback) {
-        return value == null || value.isBlank() ? fallback : value;
-    }
-
     private static String yesNo(boolean value) {
         return value ? "yes" : "no";
+    }
+
+    private @NotNull List<String> configuredStatsSyncPeriods() {
+        List<String> periods = new ArrayList<>();
+        for (String value : config().getStringList("player_stats_sync_periods")) {
+            if (value == null || value.isBlank()) {
+                continue;
+            }
+            String period = value.trim().toLowerCase(Locale.ROOT);
+            if (!period.equals("day") && !period.equals("week") && !period.equals("month") && !period.equals("all")) {
+                continue;
+            }
+            if (!periods.contains(period)) {
+                periods.add(period);
+            }
+        }
+        return periods.isEmpty() ? List.of("day", "week", "month", "all") : periods;
+    }
+
+    private @NotNull String pluginVersion() {
+        return plugin.getPluginMeta().getVersion();
+    }
+
+    private static void kickPlayer(@NotNull Player player, @NotNull String message) {
+        player.kick(Component.text(message));
+    }
+
+    @SuppressWarnings("deprecation")
+    private static void disallowAsyncLogin(
+        @NotNull AsyncPlayerPreLoginEvent event,
+        @NotNull AsyncPlayerPreLoginEvent.Result result,
+        @NotNull String message
+    ) {
+        event.disallow(result, message);
+    }
+
+    @SuppressWarnings("deprecation")
+    private static void disallowPlayerLogin(
+        @NotNull PlayerLoginEvent event,
+        @NotNull PlayerLoginEvent.Result result,
+        @NotNull String message
+    ) {
+        event.disallow(result, message);
     }
 
     private String formatHistoryEntry(WebhookHistoryEntry entry) {
@@ -3394,94 +3372,78 @@ public final class WebhookBridgeServiceImpl extends BaseService {
         }
     }
 
-    private static final class BlacklistRecord {
-        private final String username;
-        private final String uuid;
-        private final String reason;
-        private final Instant startsAt;
-        private final Instant endsAt;
-        private final boolean permanent;
-        private final Instant occurredAt;
+    private record BlacklistRecord(String username, String uuid, String reason, Instant startsAt, Instant endsAt,
+                                   boolean permanent, Instant occurredAt) {
+            private BlacklistRecord(String username, String uuid, String reason, Instant startsAt, Instant endsAt, boolean permanent, Instant occurredAt) {
+                this.username = username == null || username.isBlank() ? null : username;
+                this.uuid = uuid == null || uuid.isBlank() ? null : uuid.toLowerCase();
+                this.reason = reason;
+                this.startsAt = startsAt;
+                this.endsAt = endsAt;
+                this.permanent = permanent;
+                this.occurredAt = occurredAt;
+            }
 
-        private BlacklistRecord(String username, String uuid, String reason, Instant startsAt, Instant endsAt, boolean permanent, Instant occurredAt) {
-            this.username = username == null || username.isBlank() ? null : username;
-            this.uuid = uuid == null || uuid.isBlank() ? null : uuid.toLowerCase();
-            this.reason = reason;
-            this.startsAt = startsAt;
-            this.endsAt = endsAt;
-            this.permanent = permanent;
-            this.occurredAt = occurredAt;
+            private String key() {
+                if (this.uuid != null) {
+                    return "uuid:" + this.uuid;
+                }
+                if (this.username != null) {
+                    return "username:" + this.username.toLowerCase();
+                }
+                return null;
+            }
+
+            private boolean isActive() {
+                Instant now = Instant.now();
+                if (this.startsAt != null && this.startsAt.isAfter(now)) {
+                    return false;
+                }
+                if (this.permanent) {
+                    return true;
+                }
+                return this.endsAt == null || this.endsAt.isAfter(now);
+            }
         }
 
-        private String key() {
-            if (this.uuid != null) {
-                return "uuid:" + this.uuid;
+    private record PenaltyStateRecord(String externalId, String username, String uuid, String type, String reason,
+                                      Instant createdAt, Instant endsAt, boolean permanent, Instant liftedAt) {
+            private PenaltyStateRecord(String externalId, String username, String uuid, String type, String reason, Instant createdAt, Instant endsAt, boolean permanent, Instant liftedAt) {
+                this.externalId = externalId == null || externalId.isBlank() ? null : externalId;
+                this.username = username == null || username.isBlank() ? null : username;
+                this.uuid = uuid == null || uuid.isBlank() ? null : uuid.toLowerCase();
+                this.type = type == null || type.isBlank() ? "ban" : type.toLowerCase();
+                this.reason = reason;
+                this.createdAt = createdAt;
+                this.endsAt = endsAt;
+                this.permanent = permanent;
+                this.liftedAt = liftedAt;
             }
-            if (this.username != null) {
-                return "username:" + this.username.toLowerCase();
-            }
-            return null;
-        }
 
-        private boolean isActive() {
-            Instant now = Instant.now();
-            if (this.startsAt != null && this.startsAt.isAfter(now)) {
-                return false;
+            private String key() {
+                if (this.externalId != null) {
+                    return "external:" + this.externalId;
+                }
+                if (this.uuid != null) {
+                    return "type:" + this.type + ":uuid:" + this.uuid;
+                }
+                if (this.username != null) {
+                    return "type:" + this.type + ":username:" + this.username.toLowerCase();
+                }
+                return null;
             }
-            if (this.permanent) {
-                return true;
-            }
-            return this.endsAt == null || this.endsAt.isAfter(now);
-        }
-    }
 
-    private static final class PenaltyStateRecord {
-        private final String externalId;
-        private final String username;
-        private final String uuid;
-        private final String type;
-        private final String reason;
-        private final Instant createdAt;
-        private final Instant endsAt;
-        private final boolean permanent;
-        private final Instant liftedAt;
-
-        private PenaltyStateRecord(String externalId, String username, String uuid, String type, String reason, Instant createdAt, Instant endsAt, boolean permanent, Instant liftedAt) {
-            this.externalId = externalId == null || externalId.isBlank() ? null : externalId;
-            this.username = username == null || username.isBlank() ? null : username;
-            this.uuid = uuid == null || uuid.isBlank() ? null : uuid.toLowerCase();
-            this.type = type == null || type.isBlank() ? "ban" : type.toLowerCase();
-            this.reason = reason;
-            this.createdAt = createdAt;
-            this.endsAt = endsAt;
-            this.permanent = permanent;
-            this.liftedAt = liftedAt;
+            private boolean isInactive() {
+                if ("kick".equals(this.type)) {
+                    return true;
+                }
+                if (this.liftedAt != null) {
+                    return true;
+                }
+                if (this.permanent) {
+                    return false;
+                }
+                return this.endsAt == null || !this.endsAt.isAfter(Instant.now());
+            }
         }
-
-        private String key() {
-            if (this.externalId != null) {
-                return "external:" + this.externalId;
-            }
-            if (this.uuid != null) {
-                return "type:" + this.type + ":uuid:" + this.uuid;
-            }
-            if (this.username != null) {
-                return "type:" + this.type + ":username:" + this.username.toLowerCase();
-            }
-            return null;
-        }
-
-        private boolean isActive() {
-            if ("kick".equals(this.type)) {
-                return false;
-            }
-            if (this.liftedAt != null) {
-                return false;
-            }
-            if (this.permanent) {
-                return true;
-            }
-            return this.endsAt != null && this.endsAt.isAfter(Instant.now());
-        }
-    }
 }

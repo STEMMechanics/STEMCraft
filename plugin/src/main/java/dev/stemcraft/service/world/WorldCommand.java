@@ -222,7 +222,7 @@ public class WorldCommand {
         if (world == null) {
             ctx.returnError("WORLD_FAILED_CREATE_REASON",
                 "world", name,
-                "reason", worldService.getLastWorldOperationError(name, "unknown error"));
+                "reason", worldService.getLastWorldOperationErrorOrDefault(name));
         }
 
         ctx.returnSuccess("WORLD_CREATED_DURATION", "world", name, "duration", formatElapsed(System.nanoTime() - startedAt));
@@ -331,7 +331,7 @@ public class WorldCommand {
         if (world == null) {
             ctx.returnError("WORLD_FAILED_LOAD_REASON",
                 "world", name,
-                "reason", worldService.getLastWorldOperationError(name, "unknown error"));
+                "reason", worldService.getLastWorldOperationErrorOrDefault(name));
         } else {
             ctx.returnSuccess("WORLD_LOADED_DURATION", "world", name, "duration", formatElapsed(System.nanoTime() - startedAt));
         }
@@ -481,6 +481,7 @@ public class WorldCommand {
         World world = ctx.getArgAsWorld(1);
         if (world == null) {
             ctx.returnError("WORLD_NOT_FOUND", "world", ctx.getArg(1));
+            return;
         }
 
         String worldId = world.getUID().toString();
@@ -509,6 +510,7 @@ public class WorldCommand {
             WorldBaseSetting setting = worldService.getSettingHandler(flag, WorldService.SettingCommandMode.FLAG);
             if(setting == null) {
                 ctx.returnError("WORLD_COMMAND_UNKNOWN_FLAG", "flag", flag);
+                return;
             }
 
             ConfigSection config = worldService.getConfigSection(world);
@@ -527,6 +529,7 @@ public class WorldCommand {
         WorldBaseSetting setting = worldService.getSettingHandler(subCommand, WorldService.SettingCommandMode.SUBCOMMAND);
         if(setting == null) {
             ctx.returnError("WORLD_COMMAND_UNKNOWN_SUBCOMMAND", "command", subCommand);
+            return;
         }
 
         ConfigSection config = worldService.getConfigSection(world);
@@ -559,7 +562,7 @@ public class WorldCommand {
         ctx.info(" - Spawn: " + formatLocation(world.getSpawnLocation()));
         ctx.info(" - Time: " + world.getTime() + " ticks");
         ctx.info(" - Weather: " + describeWeather(world));
-        ctx.info(" - PVP: " + yesNo(world.getPVP()));
+        ctx.info(" - PVP: " + yesNo(isPvpEnabled(world)));
         ctx.info(" - Height: " + world.getMinHeight() + " to " + world.getMaxHeight());
         ctx.info(" - Border: " + formatBorder(world));
         ctx.info(" - Folder: " + api.worlds().getWorldFolder(world.getName()).toAbsolutePath());
@@ -611,7 +614,7 @@ public class WorldCommand {
                 value = valueFromConfigSnapshot(worldName, config, key);
             }
 
-            if (value == null || value.isBlank() || "unset".equalsIgnoreCase(value)) {
+            if (value.isBlank() || "unset".equalsIgnoreCase(value)) {
                 continue;
             }
             lines.add(key + "=" + value);
@@ -634,8 +637,7 @@ public class WorldCommand {
         return switch (key) {
             case "deny-spawn", "gamemode", "tickspeed" ->
                 config.getString(key, "unset");
-            case "no-damage", "no-hunger" -> config.contains(key) ? Boolean.toString(config.getBoolean(key, false)) : "unset";
-            case "force-spawn-on-death" -> config.contains(key) ? Boolean.toString(config.getBoolean(key, false)) : "unset";
+            case "no-damage", "no-hunger", "force-spawn-on-death" -> config.contains(key) ? Boolean.toString(config.getBoolean(key, false)) : "unset";
             case "nether" -> baseConfig == null ? "unset" : baseConfig.getString("nether-world", "unset");
             case "end" -> baseConfig == null ? "unset" : baseConfig.getString("end-world", "unset");
             case "randomspawn" -> readRandomSpawnValue(baseName);
@@ -742,9 +744,6 @@ public class WorldCommand {
 
     private @NotNull String formatBorder(@NotNull World world) {
         var border = world.getWorldBorder();
-        if (border == null) {
-            return "unknown";
-        }
         return String.format(Locale.ROOT, "size %.1f at %.1f, %.1f",
             border.getSize(),
             border.getCenter().getX(),
@@ -766,6 +765,11 @@ public class WorldCommand {
 
     private @NotNull String yesNo(boolean value) {
         return value ? "yes" : "no";
+    }
+
+    @SuppressWarnings("deprecation")
+    private static boolean isPvpEnabled(@NotNull World world) {
+        return world.getPVP();
     }
 
     private String formatElapsed(long elapsedNanos) {

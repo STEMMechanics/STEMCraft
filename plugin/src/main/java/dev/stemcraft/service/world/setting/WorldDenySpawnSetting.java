@@ -151,10 +151,8 @@ public class WorldDenySpawnSetting implements WorldBaseSetting {
 
         switch (value) {
             case "all", "mobs", "animals" -> removeDeniedEntities(world.getEntities(), value);
-            case "natural", "natural-mobs", "natural-animals", "unset" -> {
-                // Natural-only modes affect future natural spawns only.
-            }
-            case "all:natural", "mobs:natural", "animals:natural" -> {
+            case "natural", "natural-mobs", "natural-animals", "unset", "all:natural", "mobs:natural",
+                 "animals:natural" -> {
                 // Natural-only modes affect future natural spawns only.
             }
             default -> throw new IllegalArgumentException("Invalid deny-spawn value '" + value + "'.");

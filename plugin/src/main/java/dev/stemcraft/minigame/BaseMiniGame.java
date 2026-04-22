@@ -13,7 +13,7 @@ import java.util.ArrayList;
 import java.util.function.Consumer;
 
 public class BaseMiniGame {
-    protected STEMCraftAPI api;
+    protected final STEMCraftAPI api;
 
     public BaseMiniGame(STEMCraftAPI api) {
         this.api = api;
@@ -21,6 +21,8 @@ public class BaseMiniGame {
 
     public void onLoad() { }
 
+
+    @SuppressWarnings("SameReturnValue")
     public ConfigSection getConfig() { return null; }
 
     protected boolean disablesHungerByDefault() {

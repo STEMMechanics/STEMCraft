@@ -38,6 +38,11 @@ final class PlaceholderApiService extends PlaceholderExpansion {
     }
 
     @Override
+    public int hashCode() {
+        return getIdentifier().hashCode();
+    }
+
+    @Override
     public @Nullable String onRequest(OfflinePlayer player, @NotNull String params) {
         if (params.isBlank()) {
             return null;
@@ -74,17 +79,17 @@ final class PlaceholderApiService extends PlaceholderExpansion {
         return marker.equals(resolved) ? null : resolved;
     }
 
-    private @Nullable String arenaStatus(@NotNull String args) {
+    private @NotNull String arenaStatus(@NotNull String args) {
         MiniGameArena arena = resolveArena(args);
         return arena == null ? "unknown" : arena.getStatus().name().toLowerCase(Locale.ROOT);
     }
 
-    private @Nullable String arenaOpen(@NotNull String args) {
+    private @NotNull String arenaOpen(@NotNull String args) {
         MiniGameArena arena = resolveArena(args);
         return arena == null ? "false" : String.valueOf(arena.isJoinable());
     }
 
-    private @Nullable String arenaOpenClosed(@NotNull String args) {
+    private @NotNull String arenaOpenClosed(@NotNull String args) {
         MiniGameArena arena = resolveArena(args);
         return arena != null && arena.isJoinable() ? "open" : "closed";
     }

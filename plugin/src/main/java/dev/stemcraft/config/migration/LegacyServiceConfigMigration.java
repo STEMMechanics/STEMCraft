@@ -29,14 +29,12 @@ public final class LegacyServiceConfigMigration {
 
     /**
      * Applies the legacy config migration once at startup.
-     *
-     * @return true if the config was changed.
      */
-    public boolean apply() {
+    public void apply() {
         File file = new File(plugin.getDataFolder(), configFile.getName());
         YamlConfiguration yaml = load(file);
         if (yaml == null) {
-            return false;
+            return;
         }
 
         boolean changed = false;
@@ -59,7 +57,6 @@ public final class LegacyServiceConfigMigration {
             plugin.getLogger().info("Migrated legacy config paths: " + String.join(", ", applied));
         }
 
-        return changed;
     }
 
     private YamlConfiguration load(File file) {
@@ -121,10 +118,10 @@ public final class LegacyServiceConfigMigration {
 
     private static String normalizeLegacyAuditKey(String key) {
         key = stripLeadingDots(key);
-        return switch (key) {
-            case "max-days" -> "max_days";
-            default -> key;
-        };
+        if(key.equalsIgnoreCase("max-days")) {
+            return "max_days";
+        }
+        return key;
     }
 
     private static String stripLeadingDots(String key) {

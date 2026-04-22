@@ -8,6 +8,7 @@ import dev.stemcraft.api.minigame.MiniGameArenaHandler;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.service.region.RegionListener;
 import dev.stemcraft.api.util.NamespaceId;
+import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.api.util.TextUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
@@ -31,7 +32,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 public class BoatRaceArenaHandler implements MiniGameArenaHandler {
@@ -291,12 +291,6 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
     }
 
     @Override
-    public Location onPlayerJoinSpectator(MiniGameArena arena, Player player) {
-        Location spectatorSpawn = arena.getSpectatorSpawn();
-        return spectatorSpawn != null ? spectatorSpawn : arena.getLobbySpawn();
-    }
-
-    @Override
     public void onPlayerLeaveArena(MiniGameArena arena, Player player) {
         removePlayerState(arena, player);
         if (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING && arena.numPlayers() < arena.getMinPlayers()) {
@@ -373,7 +367,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
 
             Location gridLocation = assignedGridLocation(arena, rider);
             Location currentLocation = event.getTo();
-            if (gridLocation != null && currentLocation != null) {
+            if (gridLocation != null) {
                 if (hasDriftedFromGrid(currentLocation, gridLocation)) {
                     Location corrected = gridLocation.clone();
                     corrected.setYaw(currentLocation.getYaw());
@@ -395,7 +389,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         Location finishLookTarget = finishLookTarget(arena);
         for (int i = 0; i < players.size(); i++) {
             Player player = players.get(i);
-            int slot = Math.min(i, Math.max(0, grid.size() - 1));
+            int slot = Math.clamp(grid.size() - 1, 0, i);
             boatRace.assignedGridSlots(arena).put(player.getUniqueId(), slot);
             Location slotLocation = orientTowardFinish(grid.get(slot).clone(), finishLookTarget);
             boatRace.checkpointLocations(arena).put(player.getUniqueId(), slotLocation.clone());
@@ -415,7 +409,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         boatRace.markRaceStarted(arena);
         for (Player player : arena.getPlayers()) {
             player.setGameMode(GameMode.ADVENTURE);
-            player.setHealth(Math.min(player.getMaxHealth(), 20.0d));
+            player.setHealth(PlayerUtil.getMaxHealth(player));
             player.setFoodLevel(20);
             player.setSaturation(20.0f);
             player.setFireTicks(0);
@@ -502,7 +496,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
             return;
         }
 
-        player.setHealth(Math.min(player.getMaxHealth(), 20.0d));
+        player.setHealth(PlayerUtil.getMaxHealth(player));
         player.setFoodLevel(20);
         player.setSaturation(20.0f);
         player.setFireTicks(0);

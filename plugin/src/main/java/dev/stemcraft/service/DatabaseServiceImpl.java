@@ -146,7 +146,11 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
     @Override
     public void close() {
         if (connection != null) {
-            try { connection.close(); } catch (SQLException ignored) {}
+            try {
+                connection.close();
+            } catch (SQLException exception) {
+                plugin.getLogger().warning("Failed to close database connection: " + exception.getMessage());
+            }
             connection = null;
         }
     }

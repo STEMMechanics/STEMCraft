@@ -22,7 +22,6 @@ package dev.stemcraft.service;
 
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
-import dev.stemcraft.api.internal.InstanceHolder;
 import dev.stemcraft.api.service.task.TaskCallback;
 import dev.stemcraft.api.service.task.TaskRetryCallback;
 import dev.stemcraft.api.service.task.TaskRetryable;
@@ -69,7 +68,7 @@ public class TaskServiceImpl extends BaseService implements TaskService {
     public void onEnable() {
         File dataFolder = plugin.getDataFolder();
         if (!dataFolder.exists() && !dataFolder.mkdirs()) {
-            logBootstrapError("PERSISTENT_TIMER_CREATE_DATA_FILE_FAILED", new IOException("Unable to create data folder " + dataFolder.getPath()));
+            logBootstrapError(new IOException("Unable to create data folder " + dataFolder.getPath()));
             return;
         }
 
@@ -201,7 +200,7 @@ public class TaskServiceImpl extends BaseService implements TaskService {
      */
     @Override
     public void runLater(long delay, @NotNull Runnable task) {
-        BukkitTask bukkitTask = Bukkit.getScheduler().runTaskLater(InstanceHolder.plugin(), task, delay);
+        Bukkit.getScheduler().runTaskLater(plugin, task, delay);
     }
 
     /**
@@ -211,13 +210,13 @@ public class TaskServiceImpl extends BaseService implements TaskService {
      */
     @Override
     public void runAsync(@NotNull Runnable task) {
-        Bukkit.getScheduler().runTaskAsynchronously(InstanceHolder.plugin(), task);
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, task);
     }
 
     /** {@inheritDoc} */
     @Override
     public void runSync(@NotNull Runnable task) {
-        Bukkit.getScheduler().runTask(InstanceHolder.plugin(), task);
+        Bukkit.getScheduler().runTask(plugin, task);
     }
 
 
@@ -239,7 +238,7 @@ public class TaskServiceImpl extends BaseService implements TaskService {
         }
 
         BukkitTask bukkitTask = Bukkit.getScheduler().runTaskLater(
-                InstanceHolder.plugin(),
+                plugin,
                 () -> {
                     try {
                         task.run();
@@ -411,7 +410,7 @@ public class TaskServiceImpl extends BaseService implements TaskService {
         }
 
         BukkitTask bukkitTask = Bukkit.getScheduler().runTaskTimer(
-                InstanceHolder.plugin(),
+                plugin,
                 task,
                 delay,
                 period
@@ -571,7 +570,7 @@ public class TaskServiceImpl extends BaseService implements TaskService {
                         ps.setString(1, id);
                         ps.setString(2, type);
                         ps.setLong(3, runAt);
-                        ps.setString(4, data == null ? "" : data);
+                        ps.setString(4, data);
                     }
                 );
             }
@@ -594,12 +593,12 @@ public class TaskServiceImpl extends BaseService implements TaskService {
         return true;
     }
 
-    private void logBootstrapError(@NotNull String key, @NotNull Throwable error) {
+    private void logBootstrapError(@NotNull Throwable error) {
         if (api.messages() != null) {
-            api.messages().error(key, error);
+            api.messages().error("PERSISTENT_TIMER_CREATE_DATA_FILE_FAILED", error);
             return;
         }
 
-        plugin.getLogger().severe(key + ": " + error.getMessage());
+        plugin.getLogger().severe("PERSISTENT_TIMER_CREATE_DATA_FILE_FAILED: " + error.getMessage());
     }
 }

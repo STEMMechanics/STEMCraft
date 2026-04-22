@@ -20,8 +20,6 @@
 
 package dev.stemcraft.api.minigame;
 
-import java.util.Map;
-
 /**
  * Functional interface for providing HUD data for a player in a mini-game arena.
  */

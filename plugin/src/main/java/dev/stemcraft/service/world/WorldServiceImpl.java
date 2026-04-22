@@ -33,7 +33,6 @@ import dev.stemcraft.api.util.WorldUtil;
 import dev.stemcraft.service.BaseService;
 import dev.stemcraft.service.world.recorder.WorldChangeRecorder;
 import dev.stemcraft.service.world.setting.*;
-import lombok.Getter;
 import lombok.Setter;
 import org.bukkit.*;
 import org.bukkit.event.entity.EntityPortalEvent;
@@ -57,6 +56,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Implementation of the WorldService for managing worlds.
  */
 public class WorldServiceImpl extends BaseService implements WorldService {
+    private static final String DEFAULT_WORLD_OPERATION_ERROR = "unknown error";
     private final Map<String, WorldSettingData> settings = new ConcurrentHashMap<>();
     private final Map<String, String> lastWorldOperationErrors = new ConcurrentHashMap<>();
     private final WorldCommand worldCommand;
@@ -353,7 +353,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
             return ensure(name, resolveStoredGenerator(name));
         } catch (RuntimeException exception) {
             rememberWorldOperationError(name, describeWorldOperationFailure(exception, true));
-            plugin.getLogger().warning("Failed to load world '" + name + "': " + getLastWorldOperationError(name, "unknown error"));
+            plugin.getLogger().warning("Failed to load world '" + name + "': " + getLastWorldOperationErrorOrDefault(name));
             return null;
         }
     }
@@ -397,7 +397,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         clearLastWorldOperationError(name);
 
         String resolvedGeneratorName = generatorName.trim().isEmpty() ? "normal" : generatorName.trim();
-        String resolvedGeneratorOptions = generatorOptions == null ? "" : generatorOptions.trim();
+        String resolvedGeneratorOptions = generatorOptions.trim();
         try {
             World world = ensure(
                 name,
@@ -418,7 +418,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
             return world;
         } catch (RuntimeException exception) {
             rememberWorldOperationError(name, describeWorldOperationFailure(exception, false));
-            plugin.getLogger().warning("Failed to create world '" + name + "': " + getLastWorldOperationError(name, "unknown error"));
+            plugin.getLogger().warning("Failed to create world '" + name + "': " + getLastWorldOperationErrorOrDefault(name));
             return null;
         }
     }
@@ -946,7 +946,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         } catch (RuntimeException exception) {
             boolean existingWorldFolder = Files.exists(worldRoot(name));
             rememberWorldOperationError(name, describeWorldOperationFailure(exception, existingWorldFolder));
-            plugin.getLogger().warning("Failed to load world '" + name + "': " + getLastWorldOperationError(name, "unknown error"));
+            plugin.getLogger().warning("Failed to load world '" + name + "': " + getLastWorldOperationErrorOrDefault(name));
             return null;
         }
 
@@ -973,7 +973,9 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         Path root = worldRoot(name);
         if (!Files.exists(root)) return;
         try (var s = Files.walk(root)) {
-            s.sorted(Comparator.reverseOrder()).forEach(p -> { try { Files.deleteIfExists(p); } catch (IOException ignored) {} });
+            for (Path path : s.sorted(Comparator.reverseOrder()).toList()) {
+                Files.deleteIfExists(path);
+            }
         }
 
         // Remove from config
@@ -1054,10 +1056,15 @@ public class WorldServiceImpl extends BaseService implements WorldService {
                                 Files.isDirectory(p.resolve("DIM1").resolve("region"));
 
                 if (isWorld) {
-                    names.add(p.getFileName().toString());
+                    Path fileName = p.getFileName();
+                    if (fileName != null) {
+                        names.add(fileName.toString());
+                    }
                 }
             }
-        } catch (IOException ignored) {}
+        } catch (IOException exception) {
+            plugin.getLogger().warning("Failed to list worlds: " + exception.getMessage());
+        }
 
         List<String> out = new ArrayList<>(names);
         Collections.sort(out);
@@ -1088,9 +1095,9 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         return lastWorldOperationErrors.get(worldErrorKey(worldName));
     }
 
-    @NotNull String getLastWorldOperationError(@NotNull String worldName, @NotNull String defaultValue) {
+    @NotNull String getLastWorldOperationErrorOrDefault(@NotNull String worldName) {
         String error = getLastWorldOperationError(worldName);
-        return error == null || error.isBlank() ? defaultValue : error;
+        return error == null || error.isBlank() ? DEFAULT_WORLD_OPERATION_ERROR : error;
     }
 
     /**
@@ -1156,7 +1163,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
                         } else {
                             api.messages().warn("WORLD_CONFIG_FAILED_LOAD",
                                 "world", worldName,
-                                "reason", getLastWorldOperationError(worldName, "unknown error"));
+                                "reason", getLastWorldOperationErrorOrDefault(worldName));
                         }
                     }
                 } else {
@@ -1187,7 +1194,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
             } else {
                 api.messages().warn("WORLD_CONFIG_FAILED_LOAD",
                     "world", worldName,
-                    "reason", getLastWorldOperationError(worldName, "unknown error"));
+                    "reason", getLastWorldOperationErrorOrDefault(worldName));
             }
         }
     }

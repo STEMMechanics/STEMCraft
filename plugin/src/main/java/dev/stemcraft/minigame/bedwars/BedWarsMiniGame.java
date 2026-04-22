@@ -318,9 +318,9 @@ public class BedWarsMiniGame extends BaseMiniGame {
         }
     }
 
-    void incrementStat(@NotNull String suffix, @NotNull MiniGameArena arena, @NotNull MiniGamePlayer player, double amount) {
-        api.playerStats().increment(player.getPlayer().getUniqueId(), player.getPlayer().getName(), globalStatKey(suffix), amount);
-        api.playerStats().increment(player.getPlayer().getUniqueId(), player.getPlayer().getName(), arenaStatKey(suffix, arena.id()), amount);
+    void incrementStat(@NotNull String suffix, @NotNull MiniGameArena arena, @NotNull MiniGamePlayer player) {
+        api.playerStats().increment(player.getPlayer().getUniqueId(), player.getPlayer().getName(), globalStatKey(suffix), 1.0);
+        api.playerStats().increment(player.getPlayer().getUniqueId(), player.getPlayer().getName(), arenaStatKey(suffix, arena.id()), 1.0);
     }
 
     private String titleForStat(String suffix) {
@@ -374,7 +374,7 @@ public class BedWarsMiniGame extends BaseMiniGame {
         String displayName = team.get("displayName", String.class, StringUtil.beautify(team.getName()));
         boolean bedAlive = team.get("bedAlive", Boolean.class, true);
         int players = arena.getTeamPlayers(team.getName()).size();
-        boolean eliminated = players <= 0
+        boolean eliminated = players == 0
             && !bedAlive
             && arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING;
         return teamLineFormat.render(team, displayName, players, bedAlive, eliminated);
@@ -508,20 +508,16 @@ public class BedWarsMiniGame extends BaseMiniGame {
             return switch (teamId.toLowerCase(Locale.ROOT)) {
                 case TeamNames.TEAM_BLACK -> "&0" + name;
                 case TeamNames.TEAM_BLUE -> "&9" + name;
-                case TeamNames.TEAM_BROWN -> "&6" + name;
+                case TeamNames.TEAM_BROWN, TeamNames.TEAM_ORANGE -> "&6" + name;
                 case TeamNames.TEAM_CYAN -> "&3" + name;
                 case TeamNames.TEAM_GRAY -> "&8" + name;
                 case TeamNames.TEAM_GREEN -> "&2" + name;
                 case TeamNames.TEAM_LIGHT_BLUE -> "&b" + name;
                 case TeamNames.TEAM_LIGHT_GRAY -> "&7" + name;
                 case TeamNames.TEAM_LIME -> "&a" + name;
-                case TeamNames.TEAM_MAGENTA -> "&d" + name;
-                case TeamNames.TEAM_ORANGE -> "&6" + name;
-                case TeamNames.TEAM_PINK -> "&d" + name;
+                case TeamNames.TEAM_MAGENTA, TeamNames.TEAM_PINK -> "&d" + name;
                 case TeamNames.TEAM_PURPLE -> "&5" + name;
                 case TeamNames.TEAM_RED -> "&c" + name;
-                case TeamNames.TEAM_WHITE -> "&f" + name;
-                case TeamNames.TEAM_YELLOW -> "&e" + name;
                 default -> "&f" + name;
             };
         }

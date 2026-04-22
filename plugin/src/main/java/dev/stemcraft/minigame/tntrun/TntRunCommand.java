@@ -227,6 +227,7 @@ public class TntRunCommand {
         String arenaId = ctx.getArg(1);
         if (tntRun.minigame().arena(arenaId) != null) {
             ctx.returnError("Arena '" + arenaId + "' already exists.");
+            return;
         }
 
         World world = ctx.getArgAsWorld(2);
@@ -234,6 +235,7 @@ public class TntRunCommand {
             Player player = ctx.asPlayer();
             if (player == null) {
                 ctx.returnError("Specify a world when creating an arena from console.");
+                return;
             }
             world = player.getWorld();
         }
@@ -241,22 +243,24 @@ public class TntRunCommand {
         MiniGameArena arena = tntRun.createArena(arenaId, world);
         if (arena == null) {
             ctx.returnError("Arena '" + arenaId + "' could not be created.");
+            return;
         }
         ctx.success("Created TNT Run arena '" + arenaId + "' in world '" + world.getName() + "'.");
     }
 
     private void commandDelete(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         tntRun.deleteArena(arena.id());
         ctx.success("Deleted TNT Run arena '" + arena.id() + "'.");
     }
 
     private void commandJoin(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         Player targetPlayer = ctx.getArgAsPlayerOrSender(2);
         if (targetPlayer == null) {
             ctx.returnError("Player is required.");
+            return;
         }
         ensureNotInArena(ctx, targetPlayer);
 
@@ -268,6 +272,7 @@ public class TntRunCommand {
 
         if (!arena.isJoinable()) {
             ctx.returnError("Arena '" + arena.id() + "' is not joinable right now.");
+            return;
         }
 
         arena.addPlayer(targetPlayer);
@@ -276,11 +281,12 @@ public class TntRunCommand {
 
     private void commandJoinAll(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         boolean spectateOnly = arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING
             || arena.getStatus() == MiniGameArena.ArenaStatus.ENDING;
         if (!spectateOnly && !arena.isJoinable()) {
             ctx.returnError("Arena '" + arena.id() + "' is not joinable right now.");
+            return;
         }
 
         int joined = 0;
@@ -322,10 +328,11 @@ public class TntRunCommand {
 
     private void commandSpectate(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         Player targetPlayer = ctx.getArgAsPlayerOrSender(2);
         if (targetPlayer == null) {
             ctx.returnError("Player is required.");
+            return;
         }
         ensureNotInArena(ctx, targetPlayer);
 
@@ -337,11 +344,13 @@ public class TntRunCommand {
         Player targetPlayer = ctx.getArgAsPlayerOrSender(1);
         if (targetPlayer == null) {
             ctx.returnError("Player is required.");
+            return;
         }
 
         MiniGameArena arena = tntRun.minigame().findPlayer(targetPlayer);
         if (arena == null || !TntRunMiniGame.namespace().equals(arena.namespace())) {
             ctx.returnError("Player '" + targetPlayer.getName() + "' is not in a TNT Run arena.");
+            return;
         }
 
         arena.removeOccupant(targetPlayer);
@@ -349,7 +358,7 @@ public class TntRunCommand {
     }
 
     private void commandStart(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         if (arena.numPlayers() < arena.getMinPlayers()) {
             ctx.returnError("Arena '" + arena.id() + "' needs at least " + arena.getMinPlayers() + " players to start.");
         }
@@ -359,19 +368,19 @@ public class TntRunCommand {
     }
 
     private void commandStop(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         arena.setStatus(MiniGameArena.ArenaStatus.RESETTING);
         ctx.success("Arena '" + arena.id() + "' has been stopped and reset.");
     }
 
     private void commandRestart(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         arena.setStatus(MiniGameArena.ArenaStatus.RESETTING);
         ctx.success("Arena '" + arena.id() + "' has been reset.");
     }
 
     private void commandSave(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         try {
             tntRun.saveArena(arena);
         } catch (MiniGameInvalidArenaConfigException exception) {
@@ -388,7 +397,7 @@ public class TntRunCommand {
     }
 
     private void commandValidate(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         ArenaValidationResult result = arena.validate();
         if (!result.hasErrors()) {
             ctx.returnSuccess("Arena '" + arena.id() + "' is valid.");
@@ -401,7 +410,7 @@ public class TntRunCommand {
     }
 
     private void commandEnable(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         ArenaValidationResult result = arena.validate();
         if (result.hasErrors()) {
             ctx.warn("Arena '" + arena.id() + "' cannot be enabled until it is valid:");
@@ -421,7 +430,7 @@ public class TntRunCommand {
     }
 
     private void commandDisable(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         for (Player player : new ArrayList<>(arena.getOccupants())) {
             arena.removeOccupant(player);
         }
@@ -436,7 +445,7 @@ public class TntRunCommand {
 
     private void commandSet(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         String target = ctx.getArgLower(2);
 
         switch (target) {
@@ -521,9 +530,9 @@ public class TntRunCommand {
 
     private void commandAddSpawn(CommandContext ctx) {
         Player player = requirePlayer(ctx);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         ensureArenaWorld(ctx, arena, player.getLocation(), "Starting grid slot");
-        ensureLocationContained(ctx, player.getLocation(), arena.get("arenaRegion", SCRegion.class), "Starting grid slot", "arena region");
+        ensureLocationContained(ctx, player.getLocation(), arena.get("arenaRegion", SCRegion.class));
         tntRun.startingGrid(arena).add(player.getLocation().clone());
         if (arena.getMaxPlayers() < tntRun.startingGrid(arena).size()) {
             arena.setMaxPlayers(tntRun.startingGrid(arena).size());
@@ -535,10 +544,10 @@ public class TntRunCommand {
     private void commandSetSpawn(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
         Player player = requirePlayer(ctx);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         int index = requireOneBasedIndex(ctx, 2, tntRun.startingGrid(arena).size(), "spawn");
         ensureArenaWorld(ctx, arena, player.getLocation(), "Starting grid slot");
-        ensureLocationContained(ctx, player.getLocation(), arena.get("arenaRegion", SCRegion.class), "Starting grid slot", "arena region");
+        ensureLocationContained(ctx, player.getLocation(), arena.get("arenaRegion", SCRegion.class));
         tntRun.startingGrid(arena).set(index, player.getLocation().clone());
         showLocationPreview(player, "spawn-set-" + index, player.getLocation());
         ctx.success("Updated spawn " + (index + 1) + " for arena '" + arena.id() + "'.");
@@ -546,7 +555,7 @@ public class TntRunCommand {
 
     private void commandRemoveSpawn(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         int index = requireOneBasedIndex(ctx, 2, tntRun.startingGrid(arena).size(), "spawn");
         tntRun.startingGrid(arena).remove(index);
         if (!tntRun.startingGrid(arena).isEmpty() && arena.getMaxPlayers() > tntRun.startingGrid(arena).size()) {
@@ -557,10 +566,10 @@ public class TntRunCommand {
 
     private void commandAddFloor(CommandContext ctx) {
         Player player = requirePlayer(ctx);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         SCRegion selection = requireSelection(ctx, player);
         ensureArenaWorld(ctx, arena, selection, "Floor region");
-        ensureRegionContained(ctx, selection, arena.get("arenaRegion", SCRegion.class), "Floor region", "arena region");
+        ensureRegionContained(ctx, selection, arena.get("arenaRegion", SCRegion.class));
         tntRun.floorRegions(arena).add(selection.copy());
         showRegionPreview(player, "floor-add", selection);
         ctx.success("Added floor " + tntRun.floorRegions(arena).size() + " to arena '" + arena.id() + "'.");
@@ -569,11 +578,11 @@ public class TntRunCommand {
     private void commandSetFloor(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
         Player player = requirePlayer(ctx);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         int index = requireOneBasedIndex(ctx, 2, tntRun.floorRegions(arena).size(), "floor");
         SCRegion selection = requireSelection(ctx, player);
         ensureArenaWorld(ctx, arena, selection, "Floor region");
-        ensureRegionContained(ctx, selection, arena.get("arenaRegion", SCRegion.class), "Floor region", "arena region");
+        ensureRegionContained(ctx, selection, arena.get("arenaRegion", SCRegion.class));
         tntRun.floorRegions(arena).set(index, selection.copy());
         showRegionPreview(player, "floor-set-" + index, selection);
         ctx.success("Updated floor " + (index + 1) + " for arena '" + arena.id() + "'.");
@@ -581,7 +590,7 @@ public class TntRunCommand {
 
     private void commandRemoveFloor(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         int index = requireOneBasedIndex(ctx, 2, tntRun.floorRegions(arena).size(), "floor");
         tntRun.floorRegions(arena).remove(index);
         ctx.success("Removed floor " + (index + 1) + " from arena '" + arena.id() + "'.");
@@ -590,7 +599,7 @@ public class TntRunCommand {
     private void commandSelect(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
         Player player = requirePlayer(ctx);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         String target = ctx.getArgLower(2);
         SCRegion region;
         Location location;
@@ -600,12 +609,12 @@ public class TntRunCommand {
                 region = arena.get("arenaRegion", SCRegion.class);
                 if (region == null) {
                     ctx.returnError("No stored region is configured for 'arena' in arena '" + arena.id() + "'.");
+                    return;
                 }
                 requireSameWorld(ctx, player, region.getWorld().getName());
                 api.selections().setWorldEditSelection(player, region);
                 showRegionPreview(player, "select-arena", region);
                 ctx.success("WorldEdit selection updated from arena '" + arena.id() + "' (arena).");
-                return;
             }
             case "floor" -> {
                 ctx.checkArgsSizeAtLeast(4);
@@ -615,7 +624,6 @@ public class TntRunCommand {
                 api.selections().setWorldEditSelection(player, region);
                 showRegionPreview(player, "select-floor-" + index, region);
                 ctx.success("WorldEdit selection updated from arena '" + arena.id() + "' (floor " + (index + 1) + ").");
-                return;
             }
             case "spawn" -> {
                 ctx.checkArgsSizeAtLeast(4);
@@ -625,7 +633,6 @@ public class TntRunCommand {
                 api.selections().setWorldEditSelection(player, location);
                 showLocationPreview(player, "select-spawn-" + index, location);
                 ctx.success("WorldEdit selection updated from arena '" + arena.id() + "' (spawn " + (index + 1) + ").");
-                return;
             }
             case "lobby" -> {
                 location = arena.getLobbySpawn();
@@ -633,7 +640,6 @@ public class TntRunCommand {
                 api.selections().setWorldEditSelection(player, location);
                 showLocationPreview(player, "select-lobby", location);
                 ctx.success("WorldEdit selection updated from arena '" + arena.id() + "' (lobby).");
-                return;
             }
             case "spectator" -> {
                 location = arena.getSpectatorSpawn();
@@ -641,7 +647,6 @@ public class TntRunCommand {
                 api.selections().setWorldEditSelection(player, location);
                 showLocationPreview(player, "select-spectator", location);
                 ctx.success("WorldEdit selection updated from arena '" + arena.id() + "' (spectator).");
-                return;
             }
             default -> ctx.returnError("Unknown TNT Run select target '" + target + "'.");
         }
@@ -650,7 +655,7 @@ public class TntRunCommand {
     private void commandShow(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
         Player player = requirePlayer(ctx);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         String target = ctx.getArgLower(2);
         Location location;
 
@@ -673,37 +678,40 @@ public class TntRunCommand {
         ctx.success("Showing stored location for '" + target + "' in arena '" + arena.id() + "'.");
     }
 
-    private MiniGameArena requireArena(CommandContext ctx, int index) {
-        ctx.checkArgsSizeAtLeast(index + 1);
-        String arenaId = ctx.getArg(index);
+    private MiniGameArena requireArena(CommandContext ctx) {
+        ctx.checkArgsSizeAtLeast(1 + 1);
+        String arenaId = ctx.getArg(1);
         MiniGameArena arena = tntRun.minigame().arena(arenaId);
         if (arena == null) {
             ctx.returnError("Arena '" + arenaId + "' does not exist.");
+            throw new IllegalStateException("Arena '" + arenaId + "' does not exist.");
         }
         return arena;
     }
 
     private MiniGameArena requireArenaForInfo(CommandContext ctx) {
         if (ctx.numArgs() >= 2) {
-            return requireArena(ctx, 1);
+            return requireArena(ctx);
         }
 
         List<MiniGameArena> arenas = tntRun.minigame().arenas();
         if (arenas.isEmpty()) {
             ctx.returnError("No TNT Run arenas are loaded.");
+            throw new IllegalStateException("No TNT Run arenas are loaded.");
         }
         if (arenas.size() == 1) {
             return arenas.getFirst();
         }
 
         ctx.returnError("Specify an arena id. Use /tntrun list to choose one.");
-        return null;
+        throw new IllegalStateException("Specify an arena id.");
     }
 
     private Player requirePlayer(CommandContext ctx) {
         Player player = ctx.asPlayer();
         if (player == null) {
             ctx.returnError("This subcommand must be run in-game.");
+            throw new IllegalStateException("Player is required.");
         }
         return player;
     }
@@ -712,6 +720,7 @@ public class TntRunCommand {
         SCRegion selection = api.selections().getWorldEditSelection(player);
         if (selection == null) {
             ctx.returnError("No WorldEdit selection found. Make a selection first.");
+            throw new IllegalStateException("WorldEdit selection is required.");
         }
         return selection;
     }
@@ -719,6 +728,7 @@ public class TntRunCommand {
     private int requireOneBasedIndex(CommandContext ctx, int argIndex, int size, String label) {
         if (size <= 0) {
             ctx.returnError("No " + label + "s are configured yet.");
+            throw new IllegalStateException("No " + label + "s are configured.");
         }
         int oneBased = ctx.getArgAsInt(argIndex, 1, 1, size);
         return oneBased - 1;
@@ -727,6 +737,7 @@ public class TntRunCommand {
     private void ensureArenaWorld(CommandContext ctx, MiniGameArena arena, Location location, String label) {
         if (location == null || location.getWorld() == null) {
             ctx.returnError(label + " is not set in a valid world.");
+            return;
         }
         if (!arena.world().equals(location.getWorld())) {
             ctx.returnError(label + " must be in world '" + arena.world().getName() + "'.");
@@ -736,21 +747,22 @@ public class TntRunCommand {
     private void ensureArenaWorld(CommandContext ctx, MiniGameArena arena, SCRegion region, String label) {
         if (region == null || region.getWorld() == null) {
             ctx.returnError(label + " is not set in a valid world.");
+            return;
         }
         if (!arena.world().equals(region.getWorld())) {
             ctx.returnError(label + " must be in world '" + arena.world().getName() + "'.");
         }
     }
 
-    private void ensureRegionContained(CommandContext ctx, SCRegion child, SCRegion parent, String childLabel, String parentLabel) {
+    private void ensureRegionContained(CommandContext ctx, SCRegion child, SCRegion parent) {
         if (parent != null && !parent.contains(child)) {
-            ctx.returnError(childLabel + " must be fully inside the " + parentLabel + ".");
+            ctx.returnError("Floor region" + " must be fully inside the " + "arena region" + ".");
         }
     }
 
-    private void ensureLocationContained(CommandContext ctx, Location location, SCRegion parent, String childLabel, String parentLabel) {
+    private void ensureLocationContained(CommandContext ctx, Location location, SCRegion parent) {
         if (parent != null && !parent.contains(location)) {
-            ctx.returnError(childLabel + " must be inside the " + parentLabel + ".");
+            ctx.returnError("Starting grid slot" + " must be inside the " + "arena region" + ".");
         }
     }
 

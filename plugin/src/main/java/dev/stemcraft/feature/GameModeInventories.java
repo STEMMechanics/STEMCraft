@@ -311,7 +311,8 @@ public class GameModeInventories extends BaseFeature {
             state.exp = 0.0f;
             state.totalExp = 0;
             state.contents = new ItemStack[player.getInventory().getSize()];
-            state.armor = new ItemStack[player.getInventory().getArmorContents().length];
+            ItemStack[] armorContents = player.getInventory().getArmorContents();
+            state.armor = new ItemStack[armorContents.length];
             state.ender = new ItemStack[player.getEnderChest().getSize()];
             state.effects = new ArrayList<>();
             return state;

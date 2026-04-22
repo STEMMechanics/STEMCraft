@@ -166,21 +166,20 @@ public class BridgeConfig {
         return arenas != null && arenas.isSection(arenaId);
     }
 
-    public boolean setArenaEnabled(@NotNull String arenaId, boolean enabled) {
+    public void setArenaEnabled(@NotNull String arenaId, boolean enabled) {
         ensureLoaded();
         ConfigSection arenas = config.getSection("arenas", false);
         if (arenas == null || !arenas.isSection(arenaId)) {
-            return false;
+            return;
         }
 
         ConfigSection arenaConfig = arenas.getSection(arenaId, false);
         if (arenaConfig == null) {
-            return false;
+            return;
         }
 
         arenaConfig.set("enabled", enabled);
         config.save();
-        return true;
     }
 
     public @Nullable ConfigSection getSection(String path) {

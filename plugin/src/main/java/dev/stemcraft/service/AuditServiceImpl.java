@@ -50,7 +50,12 @@ import org.bukkit.event.world.PortalCreateEvent;
 import org.jspecify.annotations.NonNull;
 
 import javax.annotation.Nullable;
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -405,7 +410,7 @@ public class AuditServiceImpl extends BaseService implements AuditService {
 
         // 1) Load existing entries from disk (if any)
         if (file.exists()) {
-            try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+            try (BufferedReader reader = Files.newBufferedReader(file.toPath(), StandardCharsets.UTF_8)) {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     // Expect "yyyy-MM-dd HH:mm:ss <action>"
@@ -452,7 +457,7 @@ public class AuditServiceImpl extends BaseService implements AuditService {
         merged.sort(Comparator.comparing(PlayerLogEntry::timestamp).reversed());
 
         // 5) Rewrite file with merged entries
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(file, false))) {
+        try (BufferedWriter writer = Files.newBufferedWriter(file.toPath(), StandardCharsets.UTF_8)) {
             for (PlayerLogEntry entry : merged) {
                 String line = formatter.format(entry.timestamp()) + " " + entry.action();
                 writer.write(line);

@@ -26,7 +26,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -343,8 +342,7 @@ public class BoatRaceMiniGame extends BaseMiniGame {
         }
 
         Location nextTarget = nextTargetLocation(arena, player.getPlayer().getUniqueId());
-        if (nextTarget == null || nextTarget.getWorld() == null || player.getPlayer().getWorld() == null
-            || !nextTarget.getWorld().equals(player.getPlayer().getWorld())) {
+        if (nextTarget == null || nextTarget.getWorld() == null || !nextTarget.getWorld().equals(player.getPlayer().getWorld())) {
             return "-";
         }
 
@@ -355,7 +353,7 @@ public class BoatRaceMiniGame extends BaseMiniGame {
 
     public String leaderName(@NotNull MiniGameArena arena) {
         RaceStanding leader = standings(arena).stream().findFirst().orElse(null);
-        if (leader == null || leader.player() == null) {
+        if (leader == null) {
             return "-";
         }
         return leader.player().getName();

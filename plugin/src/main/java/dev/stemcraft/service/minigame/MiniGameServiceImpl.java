@@ -27,6 +27,7 @@ import dev.stemcraft.api.minigame.MiniGameArena;
 import dev.stemcraft.api.minigame.MiniGameArenaHandler;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.service.minigame.MiniGameService;
+import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.service.BaseService;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
@@ -155,7 +156,7 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
             }
 
             ItemStack placed = event.getItemInHand();
-            if (placed == null || placed.getType().isAir()) {
+            if (placed.getType().isAir()) {
                 return;
             }
 
@@ -294,7 +295,7 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
 
         api.events().register(PlayerTeleportEvent.class, event -> {
             Location to = event.getTo();
-            if (to == null || to.getWorld() == null) {
+            if (to.getWorld() == null) {
                 return;
             }
 
@@ -512,14 +513,8 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
         prevPlayerStates.putIfAbsent(player.getUniqueId(), StoredPlayerState.capture(player));
     }
 
-    public void restorePreviousPlayerState(@NotNull Player player, boolean restoreLocation) {
-        restorePreviousPlayerState(player, restoreLocation, true);
-    }
-
-    void restorePreviousPlayerState(@NotNull Player player, boolean restoreLocation, boolean consume) {
-        StoredPlayerState state = consume
-            ? prevPlayerStates.remove(player.getUniqueId())
-            : prevPlayerStates.get(player.getUniqueId());
+    void restorePreviousPlayerState(@NotNull Player player, boolean restoreLocation) {
+        StoredPlayerState state = prevPlayerStates.remove(player.getUniqueId());
         if (state == null) {
             return;
         }
@@ -545,7 +540,7 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
         player.setExhaustion(state.exhaustion());
         player.setLevel(state.level());
         player.setExp(state.exp());
-        player.setHealth(Math.min(state.health(), player.getMaxHealth()));
+        player.setHealth(Math.min(state.health(), PlayerUtil.getMaxHealth(player)));
         if (restoreLocation && state.location() != null) {
             player.teleport(state.location());
         }
@@ -566,10 +561,10 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
         player.setExhaustion(0.0f);
         player.setLevel(0);
         player.setExp(0.0f);
-        player.setHealth(Math.min(player.getMaxHealth(), 20.0d));
+        player.setHealth(Math.min(PlayerUtil.getMaxHealth(player), 20.0d));
         PlayerInventory inventory = player.getInventory();
         inventory.clear();
-        inventory.setArmorContents(null);
+        inventory.setArmorContents(new ItemStack[0]);
         inventory.setItemInOffHand(null);
     }
 
@@ -652,7 +647,8 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
 
         ItemStack[] cloned = new ItemStack[source.length];
         for (int i = 0; i < source.length; i++) {
-            cloned[i] = source[i] == null ? null : source[i].clone();
+            ItemStack item = source[i];
+            cloned[i] = item == null ? null : item.clone();
         }
         return cloned;
     }
@@ -679,10 +675,7 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
     ) {
         static StoredPlayerState capture(@NotNull Player player) {
             PlayerInventory inventory = player.getInventory();
-            List<PotionEffect> effects = new ArrayList<>();
-            for (PotionEffect effect : player.getActivePotionEffects()) {
-                effects.add(effect);
-            }
+            List<PotionEffect> effects = new ArrayList<>(player.getActivePotionEffects());
 
             return new StoredPlayerState(
                 player.getLocation().clone(),
@@ -699,7 +692,7 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
                 player.getFallDistance(),
                 cloneItems(inventory.getStorageContents()),
                 cloneItems(inventory.getArmorContents()),
-                inventory.getItemInOffHand() == null ? null : inventory.getItemInOffHand().clone(),
+                inventory.getItemInOffHand().clone(),
                 effects
             );
         }

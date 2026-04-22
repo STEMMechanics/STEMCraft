@@ -7,6 +7,7 @@ import dev.stemcraft.api.minigame.MiniGameArenaHandler;
 import dev.stemcraft.api.minigame.MiniGamePlayer;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.util.NamespaceId;
+import dev.stemcraft.api.util.PlayerUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
@@ -136,7 +137,7 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
         if (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING || arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING) {
             if (event.getCause() == EntityDamageEvent.DamageCause.VOID
                 || player.getHealth() - event.getFinalDamage() <= 0.0d) {
-                eliminatePlayer(arena, player, "fell out of the arena");
+                eliminatePlayer(arena, player);
             }
             return HandlerEventResult.DENY;
         }
@@ -274,13 +275,6 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
         onPlayerLeaveArena(arena, player);
     }
 
-    @Override
-    public Location onPlayerJoinSpectator(MiniGameArena arena, Player player) {
-        Location spectatorSpawn = arena.getSpectatorSpawn();
-        return spectatorSpawn != null ? spectatorSpawn : arena.getLobbySpawn();
-    }
-
-    @Override
     public void onPlayerLeaveSpectator(MiniGameArena arena, Player player) {
         tntRun.eliminatedPlayers(arena).remove(player.getUniqueId());
     }
@@ -293,10 +287,6 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
     private void registerMovementListener() {
         api.events().register(PlayerMoveEvent.class, event -> {
             Location to = event.getTo();
-            if (to == null) {
-                return;
-            }
-
             Player player = event.getPlayer();
             MiniGameArena arena = tntRun.minigame().findPlayer(player);
             if (arena == null || !TntRunMiniGame.namespace().equals(arena.namespace())) {
@@ -323,7 +313,7 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
             }
 
             if (to.getY() <= voidY(arena)) {
-                eliminatePlayer(arena, player, "fell out of the arena");
+                eliminatePlayer(arena, player);
                 return;
             }
 
@@ -416,7 +406,7 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
         });
     }
 
-    private void eliminatePlayer(@NotNull MiniGameArena arena, @NotNull Player player, @NotNull String reason) {
+    private void eliminatePlayer(@NotNull MiniGameArena arena, @NotNull Player player) {
         if (!arena.hasPlayer(player)) {
             return;
         }
@@ -428,7 +418,7 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
 
         tntRun.eliminatedPlayers(arena).add(player.getUniqueId());
         arena.addSpectator(player);
-        broadcastToOccupants(arena, "<red>" + player.getName() + "</red> <gray>" + reason + ".</gray>");
+        broadcastToOccupants(arena, "<red>" + player.getName() + "</red> <gray>" + "fell out of the arena" + ".</gray>");
         playSoundToOccupants(arena, Sound.ENTITY_WITHER_HURT, 0.6f, 1.25f);
         checkForRoundEnd(arena);
     }
@@ -460,7 +450,7 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
             player.setAllowFlight(false);
             player.setFlying(false);
             player.setWalkSpeed(0.0f);
-            player.setHealth(Math.min(player.getMaxHealth(), 20.0d));
+            player.setHealth(Math.min(PlayerUtil.getMaxHealth(player), 20.0d));
             player.setFoodLevel(20);
             player.setSaturation(20.0f);
             player.setFireTicks(0);

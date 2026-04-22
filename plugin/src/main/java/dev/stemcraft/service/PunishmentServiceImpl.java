@@ -49,8 +49,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.io.File;
 
 /**
@@ -241,7 +239,7 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
                         }
 
                         String durationString = duration == null ? "permanently" : "for " + TimeUtil.formatDuration(duration.toSeconds());
-                        api.messages().broadcast("BAN_PLAYER_BROADCAST", target.getPlayer(), "player", target.getName(), "reason", reason, "actor", ctx.getSenderName(), "duration", durationString);
+                        api.messages().broadcast("BAN_PLAYER_BROADCAST", target.getPlayer(), "player", Objects.requireNonNull(target.getName()), "reason", reason, "actor", ctx.getSenderName(), "duration", durationString);
                     }
                 })
                 .register(STEMCraft.getPlugin());
@@ -560,9 +558,9 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
 
                         PunishmentRecord record = new PunishmentRecord(
                             id,
-                            targetUuidStr == null || targetUuidStr.isBlank() ? null : UUID.fromString(targetUuidStr),
+                                targetUuidStr.isBlank() ? null : UUID.fromString(targetUuidStr),
                             pSec.getString("target.name"),
-                            actorUuidStr == null || actorUuidStr.isBlank() ? null : UUID.fromString(actorUuidStr),
+                                actorUuidStr.isBlank() ? null : UUID.fromString(actorUuidStr),
                             pSec.getString("actor.name"),
                             pSec.getString("type"),
                             pSec.getBoolean("alerted", false),
@@ -586,7 +584,7 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
         PlayerProfile profile = Bukkit.createProfile(targetUuid, target.getName());
         BanList<PlayerProfile> banList = Bukkit.getBanList(BanListType.PROFILE);
         boolean bridgeActiveBan = plugin.webhookBridge() != null
-            && plugin.webhookBridge().hasActivePenalty(targetUuid, target.getName(), "ban");
+            && plugin.webhookBridge().hasActiveBan(targetUuid, target.getName());
 
         if (findActiveBan(targetUuid) == null && !banList.isBanned(profile) && !bridgeActiveBan) {
             cmd.error(sender, "PLAYER_NOT_BANNED", "player", target.getName());
@@ -595,7 +593,7 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
 
         this.record(targetUuid, actor, Duration.ofSeconds(-1), "ban", true, reason);
         banList.pardon(profile);
-        api.messages().broadcast("BAN_EXPIRED_BROADCAST", target.getPlayer(), "player", target.getName(), "reason", reason, "actor", actorName);
+        api.messages().broadcast("BAN_EXPIRED_BROADCAST", target.getPlayer(), "player", Objects.requireNonNull(target.getName()), "reason", reason, "actor", actorName);
     }
 
     void syncLiftBan(UUID targetUuid, @Nullable String reason) {
@@ -609,7 +607,7 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
         Bukkit.getBanList(BanListType.PROFILE).pardon(profile);
     }
 
-    void syncReconcileActiveBans(Set<UUID> activeBanUuids, @Nullable String reason) {
+    void syncReconcileActiveBans(Set<UUID> activeBanUuids) {
         Set<UUID> staleLocalBans = new LinkedHashSet<>();
         synchronized (this) {
             for (PunishmentRecord record : punishments) {
@@ -631,7 +629,7 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
         }
 
         for (UUID uuid : staleLocalBans) {
-            syncLiftBan(uuid, reason);
+            syncLiftBan(uuid, "Lifted by website sync");
         }
     }
 
