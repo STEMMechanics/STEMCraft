@@ -34,7 +34,6 @@ import dev.stemcraft.api.service.web.WebServiceRequest;
 import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.api.util.TimeUtil;
 import io.papermc.paper.ban.BanListType;
-import io.papermc.paper.connection.PlayerGameConnection;
 import io.papermc.paper.connection.PlayerLoginConnection;
 import io.papermc.paper.event.connection.PlayerConnectionValidateLoginEvent;
 import io.papermc.paper.event.player.AsyncChatEvent;
@@ -51,6 +50,7 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import com.destroystokyo.paper.profile.PlayerProfile;
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jspecify.annotations.NonNull;
 
@@ -421,38 +421,38 @@ public final class WebhookBridgeServiceImpl extends BaseService {
 
     @SuppressWarnings("UnstableApiUsage")
     private void onPlayerConnect(PlayerConnectionValidateLoginEvent event) {
-        if (!isBridgeEnabled()) {
+        if (isBridgeEnabled() || isConnectionValidateEventInvalidForWhitelistChecking(event)) {
             return;
         }
 
-        PlayerProfile player = getPlayerProfile(event);
+        PlayerProfile playerProfile = getPlayerProfile(event);
 
-        if (player == null) {
+        if (playerProfile == null) {
             event.kickMessage(Component.text("An error occurred. Try restarting your launcher. If the issue persists, contact STEMCrew! (err: onPlayerConnect#1"));
             STEMCraft.getPlugin().getLogger().log(Level.SEVERE, "A player could not be connected because all possible paths for the player profile returned null (onPlayerConnect#1).");
             return;
         }
 
-        if (player.getId() == null) {
+        if (playerProfile.getId() == null) {
             event.kickMessage(Component.text("An error occurred. Try restarting your launcher. If the issue persists, contact STEMCrew! (err: onPlayerConnect#2)"));
             STEMCraft.getPlugin().getLogger().log(Level.SEVERE, "A player could not be connected because they didn't have a UUID (onPlayerConnect#2).");
         }
 
-        String loginPlatform = platformForLogin(player.getId(), player.getName());
+        String loginPlatform = platformForLogin(playerProfile.getId(), playerProfile.getName());
 
-        PenaltyStateRecord activeBan = findActivePenalty(player.getId(), player.getName(), "ban");
+        PenaltyStateRecord activeBan = findActivePenalty(playerProfile.getId(), playerProfile.getName(), "ban");
         if (activeBan != null) {
             event.kickMessage(messageForPenalty(activeBan, "You are banned from this server."));
             return;
         }
 
-        BlacklistRecord blacklist = findBlacklist(player.getId(), player.getName());
+        BlacklistRecord blacklist = findBlacklist(playerProfile.getId(), playerProfile.getName());
         if (blacklist != null && blacklist.isActive()) {
-            event.kickMessage(messageForBlacklist(player.getId(), player.getName()));
+            event.kickMessage(messageForBlacklist(playerProfile.getId(), playerProfile.getName()));
             return;
         }
 
-        if (!isWhitelistedByAccountStateStrict(player.getId(), player.getName(), loginPlatform)) {
+        if (!isWhitelistedByAccountStateStrict(playerProfile.getId(), playerProfile.getName(), loginPlatform)) {
             event.kickMessage(getWhitelistKickMessage());
             return;
         }
@@ -461,15 +461,20 @@ public final class WebhookBridgeServiceImpl extends BaseService {
     }
 
     @SuppressWarnings("UnstableApiUsage")
-    private static PlayerProfile getPlayerProfile(PlayerConnectionValidateLoginEvent event) {
+    @Contract(pure = true)
+    private static boolean isConnectionValidateEventInvalidForWhitelistChecking(@NotNull PlayerConnectionValidateLoginEvent event) {
+        return !(event.getConnection() instanceof PlayerLoginConnection);
+    }
+
+    @SuppressWarnings("UnstableApiUsage")
+    @Contract(pure = true)
+    private static @Nullable PlayerProfile getPlayerProfile(@NotNull PlayerConnectionValidateLoginEvent event) {
         PlayerProfile player = null;
 
         if (event.getConnection() instanceof PlayerLoginConnection) {
             if (((PlayerLoginConnection) event.getConnection()).getAuthenticatedProfile() != null) {
                 player = ((PlayerLoginConnection) event.getConnection()).getAuthenticatedProfile();
             }
-        } else if (event.getConnection() instanceof PlayerGameConnection) {
-            player = ((PlayerGameConnection) event.getConnection()).getPlayer().getPlayerProfile();
         }
 
         return player;
