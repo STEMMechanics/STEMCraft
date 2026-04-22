@@ -958,7 +958,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         player.setExhaustion(0.0f);
         player.setLevel(0);
         player.setExp(0.0f);
-        player.setHealth(Math.min(player.getAttribute(Attribute.MAX_HEALTH).getValue(), 20.0d));
+        player.setHealth(Math.min(PlayerUtil.getMaxHealth(player), 20.0d));
     }
 
     private void prepareDownedParticipant(@NotNull Player player) {
@@ -978,7 +978,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         player.setExhaustion(0.0f);
         player.setLevel(0);
         player.setExp(0.0f);
-        player.setHealth(Math.min(player.getAttribute(Attribute.MAX_HEALTH).getValue(), 20.0d));
+        player.setHealth(Math.min(PlayerUtil.getMaxHealth(player), 20.0d));
     }
 
     private void clearSpectatorTargetIfNeeded(@NotNull Player player) {

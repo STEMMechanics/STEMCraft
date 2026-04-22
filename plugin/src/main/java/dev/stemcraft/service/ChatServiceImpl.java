@@ -233,7 +233,7 @@ public class ChatServiceImpl extends BaseService {
             if (decision.filteredMessage() != null) {
                 List<String> filteredLines = splitSignLines(decision.filteredMessage());
                 for (int i = 0; i < 4; i++) {
-                    // HACK: variable "content" should be `Component`s. It's not. - ProjectHSI
+                    // HACK: variable "content" should be "Component"s. It's not. - ProjectHSI
                     event.line(i, Component.text(filteredLines.get(i)));
                 }
             }

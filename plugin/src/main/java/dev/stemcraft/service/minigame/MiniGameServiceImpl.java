@@ -27,6 +27,7 @@ import dev.stemcraft.api.minigame.MiniGameArena;
 import dev.stemcraft.api.minigame.MiniGameArenaHandler;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.service.minigame.MiniGameService;
+import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.service.BaseService;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
@@ -546,7 +547,7 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
         player.setExhaustion(state.exhaustion());
         player.setLevel(state.level());
         player.setExp(state.exp());
-        player.setHealth(Math.min(state.health(), player.getAttribute(Attribute.MAX_HEALTH).getValue()));
+        player.setHealth(Math.min(state.health(), PlayerUtil.getMaxHealth(player)));
         if (restoreLocation && state.location() != null) {
             player.teleport(state.location());
         }
@@ -567,7 +568,7 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
         player.setExhaustion(0.0f);
         player.setLevel(0);
         player.setExp(0.0f);
-        player.setHealth(Math.min(player.getAttribute(Attribute.MAX_HEALTH).getValue(), 20.0d));
+        player.setHealth(Math.min(PlayerUtil.getMaxHealth(player), 20.0d));
         PlayerInventory inventory = player.getInventory();
         inventory.clear();
         ItemStack[] emptyItemStacks = {};

@@ -9,6 +9,7 @@ import dev.stemcraft.api.minigame.MiniGameArena;
 import dev.stemcraft.api.minigame.MiniGamePlayer;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.service.hologram.HologramTypeHandler;
+import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.api.util.StringUtil;
 import dev.stemcraft.exception.MiniGameInvalidArenaConfigException;
 import dev.stemcraft.minigame.BaseMiniGame;
@@ -229,7 +230,7 @@ public class ParkourMiniGame extends BaseMiniGame {
         mgPlayer.remove(RUN_START_MILLIS_KEY);
         mgPlayer.remove(LAST_RUN_MILLIS_KEY);
         mgPlayer.set(RUN_ARMED_KEY, true);
-        player.setHealth(Math.min(player.getAttribute(Attribute.MAX_HEALTH).getValue(), 20.0d));
+        player.setHealth(Math.min(PlayerUtil.getMaxHealth(player), 20.0d));
         player.setFoodLevel(20);
         player.setSaturation(20.0f);
         player.setFireTicks(0);

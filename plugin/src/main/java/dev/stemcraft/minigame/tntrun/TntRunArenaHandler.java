@@ -7,6 +7,7 @@ import dev.stemcraft.api.minigame.MiniGameArenaHandler;
 import dev.stemcraft.api.minigame.MiniGamePlayer;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.util.NamespaceId;
+import dev.stemcraft.api.util.PlayerUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
@@ -458,7 +459,7 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
             player.setAllowFlight(false);
             player.setFlying(false);
             player.setWalkSpeed(0.0f);
-            player.setHealth(Math.min(player.getAttribute(Attribute.MAX_HEALTH).getValue(), 20.0d));
+            player.setHealth(Math.min(PlayerUtil.getMaxHealth(player), 20.0d));
             player.setFoodLevel(20);
             player.setSaturation(20.0f);
             player.setFireTicks(0);
