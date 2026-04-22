@@ -342,8 +342,7 @@ public class BoatRaceMiniGame extends BaseMiniGame {
         }
 
         Location nextTarget = nextTargetLocation(arena, player.getPlayer().getUniqueId());
-        if (nextTarget == null || nextTarget.getWorld() == null || player.getPlayer().getWorld() == null
-            || !nextTarget.getWorld().equals(player.getPlayer().getWorld())) {
+        if (nextTarget == null || nextTarget.getWorld() == null || !nextTarget.getWorld().equals(player.getPlayer().getWorld())) {
             return "-";
         }
 

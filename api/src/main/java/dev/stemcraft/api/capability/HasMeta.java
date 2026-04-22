@@ -49,7 +49,7 @@ public interface HasMeta<T extends HasMeta<T>> {
 
     /**
      * Get the metadata value for the given key, or create and store a new value using the supplier if not present.
-     *
+     * <p>
      * This overload allows type-safe retrieval of an existing value.
      *
      * @param key the metadata key.

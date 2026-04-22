@@ -7,11 +7,11 @@ import java.util.UUID;
 
 /**
  * Utility for safely extracting typed values from Map-shaped data.
- *
+ * <p>
  * Designed for deserialisation of YAML, JSON, or Bukkit-serialised structures
  * where values are provided as {@code Map<String, Object>} and runtime type
  * safety is required.
- *
+ * <p>
  * All failures result in {@link IllegalArgumentException} with a precise
  * logical path to aid debugging.
  */

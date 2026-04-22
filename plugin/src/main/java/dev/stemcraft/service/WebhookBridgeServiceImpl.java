@@ -52,6 +52,7 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import com.destroystokyo.paper.profile.PlayerProfile;
 import org.jetbrains.annotations.NotNull;
+import org.jspecify.annotations.NonNull;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -488,19 +489,6 @@ public final class WebhookBridgeServiceImpl extends BaseService {
             return byPrimary;
         }
 
-//        String altPlatform = PLATFORM_BEDROCK.equalsIgnoreCase(normalizedPlatform) ? PLATFORM_JAVA : PLATFORM_BEDROCK;
-//        Boolean byAlt = queryAccountWhitelist(normalizedUuid, normalizedUsername, altPlatform);
-//        if (byAlt != null) {
-//            return byAlt;
-//        }
-//
-//        if (looksLikePrefixedBedrockUsername(username)) {
-//            Boolean byBedrock = queryAccountWhitelist(normalizedUuid, username, PLATFORM_BEDROCK);
-//            if (byBedrock != null) {
-//                return byBedrock;
-//            }
-//        }
-
         return false;
     }
 
@@ -864,7 +852,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
             return;
         }
         api.tasks().runAsync(() -> {
-            SyncResult result = SyncResult.failure("Unknown sync result.");
+            SyncResult result;
             try {
                 result = executeSyncRequest(reason);
                 recordSyncResult(reason, result);
@@ -1100,22 +1088,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
 
     private void sendPlayerStatsSync() {
         List<String> configured = config().getStringList("player_stats_sync_periods");
-        List<String> periods = new ArrayList<>();
-        for (String value : configured) {
-            if (value == null || value.isBlank()) {
-                continue;
-            }
-            String period = value.trim().toLowerCase(Locale.ROOT);
-            if (!period.equals("day") && !period.equals("week") && !period.equals("month") && !period.equals("all")) {
-                continue;
-            }
-            if (!periods.contains(period)) {
-                periods.add(period);
-            }
-        }
-        if (periods.isEmpty()) {
-            periods = List.of("day", "week", "month", "all");
-        }
+        List<String> periods = normalisePeriods(configured);
 
         Map<String, Object> baseSnapshot = api.playerStats().buildWebhookStatsResponse(null, null, null, "all");
         List<Map<String, Object>> periodSnapshots = new ArrayList<>();
@@ -1137,13 +1110,33 @@ public final class WebhookBridgeServiceImpl extends BaseService {
         sendWebhook(payload);
     }
 
+    private static @NonNull List<String> normalisePeriods(List<String> configured) {
+        List<String> periods = new ArrayList<>();
+        for (String value : configured) {
+            if (value == null || value.isBlank()) {
+                continue;
+            }
+            String period = value.trim().toLowerCase(Locale.ROOT);
+            if (!period.equals("day") && !period.equals("week") && !period.equals("month") && !period.equals("all")) {
+                continue;
+            }
+            if (!periods.contains(period)) {
+                periods.add(period);
+            }
+        }
+        if (periods.isEmpty()) {
+            periods = List.of("day", "week", "month", "all");
+        }
+        return periods;
+    }
+
     private void runPlayerStatsSyncRequest(java.util.function.Consumer<SyncResult> callback) {
         if (!syncInProgress.compareAndSet(false, true)) {
             api.tasks().runSync(() -> callback.accept(SyncResult.failure("Sync already in progress.")));
             return;
         }
         api.tasks().runAsync(() -> {
-            SyncResult result = SyncResult.failure("Unknown sync result.");
+            SyncResult result;
             try {
                 result = executePlayerStatsSyncRequest();
                 recordSyncResult("manual-stats", result);
@@ -1163,22 +1156,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
         }
 
         List<String> configured = config().getStringList("player_stats_sync_periods");
-        List<String> periods = new ArrayList<>();
-        for (String value : configured) {
-            if (value == null || value.isBlank()) {
-                continue;
-            }
-            String period = value.trim().toLowerCase(Locale.ROOT);
-            if (!period.equals("day") && !period.equals("week") && !period.equals("month") && !period.equals("all")) {
-                continue;
-            }
-            if (!periods.contains(period)) {
-                periods.add(period);
-            }
-        }
-        if (periods.isEmpty()) {
-            periods = List.of("day", "week", "month", "all");
-        }
+        List<String> periods = normalisePeriods(configured);
 
         Map<String, Object> baseSnapshot = api.playerStats().buildWebhookStatsResponse(null, null, null, "all");
         List<Map<String, Object>> periodSnapshots = new ArrayList<>();
@@ -1304,8 +1282,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
     }
 
     private String bedrockUsernamePrefix() {
-        String prefix = config().getString("bedrock_username_prefix", ".");
-        return prefix;
+        return config().getString("bedrock_username_prefix", ".");
     }
 
     private void sendWebhook(Map<String, Object> payload) {
@@ -1811,12 +1788,13 @@ public final class WebhookBridgeServiceImpl extends BaseService {
                     accountUuid = preservedUuid;
                 }
             }
+            Instant occurredAt = account.occurredAt == null ? snapshot.asOf : account.occurredAt;
             putAccount(new AccountRecord(
                 accountUsername,
                 accountUuid,
                 accountPlatform,
                 account.whitelisted,
-                account.occurredAt == null ? snapshot.asOf : account.occurredAt
+                    occurredAt
             ), false);
             if (config().getBoolean("debug_logging", false)) {
                 plugin.getLogger().info("[webhook-sync] account uuid=" + Objects.requireNonNullElse(accountUuid, "<null>")
@@ -1824,7 +1802,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
                     + " platform=" + accountPlatform
                     + " whitelisted=" + account.whitelisted
                     + " occurred_at=" + Objects.requireNonNullElse(
-                        (account.occurredAt == null ? snapshot.asOf : account.occurredAt),
+                        occurredAt,
                         Instant.now()
                     ));
             }
@@ -2507,9 +2485,6 @@ public final class WebhookBridgeServiceImpl extends BaseService {
             if (key != null && appliedAccounts.add(key)) {
                 applyWhitelist(account, account.whitelisted);
             }
-        }
-
-        for (BlacklistRecord blacklist : blacklistByKey.values()) {
         }
     }
 

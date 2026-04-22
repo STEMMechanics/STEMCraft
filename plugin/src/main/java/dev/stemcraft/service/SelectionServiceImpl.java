@@ -306,7 +306,7 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
     }
 
     private boolean renderHighlightForPlayer(Highlight highlight) {
-        if (highlight.viewerId == null) {
+        if (highlight.viewerId == null || highlight.region == null) {
             return false;
         }
 
@@ -321,17 +321,17 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
 
         switch (highlight.kind) {
             case REGION -> {
-                if (highlight.region != null && canRenderRegion(player, highlight.region) && isNearSelection(player.getLocation(), highlight.region, maxViewDistance)) {
+                if (canRenderRegion(player, highlight.region) && isNearSelection(player.getLocation(), highlight.region, maxViewDistance)) {
                     renderRegion(player, highlight.region);
                 }
             }
             case LOCATION -> {
-                if (highlight.location != null && canRenderLocation(player, highlight.location) && isNearLocation(player.getLocation(), highlight.location, maxViewDistance)) {
+                if (canRenderLocation(player, highlight.location) && isNearLocation(player.getLocation(), highlight.location, maxViewDistance)) {
                     renderLocation(player, highlight.location);
                 }
             }
             case BLOCK -> {
-                if (highlight.location != null && canRenderLocation(player, highlight.location) && isNearLocation(player.getLocation(), highlight.location, maxViewDistance)) {
+                if (canRenderLocation(player, highlight.location) && isNearLocation(player.getLocation(), highlight.location, maxViewDistance)) {
                     renderFlashingBlock(player, highlight.location, highlight.phase);
                 }
             }

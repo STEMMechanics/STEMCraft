@@ -56,12 +56,6 @@ public class SkyBlockArenaHandler implements MiniGameArenaHandler {
     }
 
     @Override
-    public Location onPlayerJoinSpectator(MiniGameArena arena, Player player) {
-        Location spectatorSpawn = arena.getSpectatorSpawn();
-        return spectatorSpawn != null ? spectatorSpawn : arena.getLobbySpawn();
-    }
-
-    @Override
     public void onPlayerLeaveArena(MiniGameArena arena, Player player) {
         captureOwnerState(arena, player);
     }

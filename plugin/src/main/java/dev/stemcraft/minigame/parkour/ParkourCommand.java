@@ -377,8 +377,7 @@ public class ParkourCommand {
         Player player = requirePlayer(ctx);
         MiniGameArena arena = requireArena(ctx, 1);
         String target = ctx.getArgLower(2);
-        SCRegion region = null;
-        Location location = null;
+        SCRegion region;
 
         switch (target) {
             case "lobby", "spawn" -> region = arena.get("lobbyRegion", SCRegion.class);
@@ -388,18 +387,6 @@ public class ParkourCommand {
                 ctx.returnError("Unknown Parkour select target '" + target + "'.");
                 return;
             }
-        }
-
-        // TODO: ... Huh? - ProjectHSI
-        if (location != null) {
-            if (!player.getWorld().equals(location.getWorld())) {
-                ctx.returnError("Move to world '" + location.getWorld().getName() + "' to preview that location.");
-            }
-
-            api.selections().setWorldEditSelection(player, location);
-            showLocationPreview(player, "select-" + target, location);
-            ctx.success("WorldEdit selection updated from arena '" + arena.id() + "' (" + target + ").");
-            return;
         }
 
         if (region == null) {

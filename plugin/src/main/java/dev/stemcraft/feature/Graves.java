@@ -100,7 +100,7 @@ public class Graves extends BaseFeature {
      * LAND: Finds a "surface block" (solid) where:
      * - chest goes at y-1
      * - sign goes at y+1
-     *
+     * <p>
      * Searches in an expanding square around the death location, checking from
      * y+SEARCH_Y_UP down to y-SEARCH_Y_DOWN for each x,z position.
      *
@@ -197,7 +197,7 @@ public class Graves extends BaseFeature {
     /**
      * LIQUID: Build a dirt cap at the liquid surface, chest beneath, and dirt around chest where not solid.
      * Layout (approx):
-     *
+     * <p>
      * y+1  sign (air above)
      * y    dirt cap (replaces top liquid block)
      * y-1  chest

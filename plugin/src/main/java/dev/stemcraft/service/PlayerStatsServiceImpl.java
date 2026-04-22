@@ -408,9 +408,7 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
             increment(event.getPlayer().getUniqueId(), event.getPlayer().getName(), "bucket_fills", 1.0d);
         });
         api.events().register(PlayerItemConsumeEvent.class, event -> {
-            if (!isEnabled("food_eaten")) {
-                // continue to potion tracking
-            } else if (event.getItem().getType().isEdible()) {
+            if (isEnabled("food_eaten") && event.getItem().getType().isEdible()) {
                 increment(event.getPlayer().getUniqueId(), event.getPlayer().getName(), "food_eaten", 1.0d);
             }
 

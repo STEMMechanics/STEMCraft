@@ -53,6 +53,7 @@ import org.bukkit.projectiles.ProjectileSource;
 import org.bukkit.util.Vector;
 import org.jetbrains.annotations.NotNull;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -257,6 +258,13 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
             return HandlerEventResult.ALLOW;
         }
 
+        Player damagerPlayer = getPlayerDamagerByDamageEvent(event);
+
+        handleDeath(arena, player, damagerPlayer);
+        return HandlerEventResult.DENY;
+    }
+
+    private static @Nullable Player getPlayerDamagerByDamageEvent(EntityDamageEvent event) {
         Player damagerPlayer = null;
         if (event instanceof EntityDamageByEntityEvent byEntity) {
             Entity damager = byEntity.getDamager();
@@ -274,9 +282,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
                 }
             }
         }
-
-        handleDeath(arena, player, damagerPlayer);
-        return HandlerEventResult.DENY;
+        return damagerPlayer;
     }
 
     @Override

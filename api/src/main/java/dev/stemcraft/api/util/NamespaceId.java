@@ -25,21 +25,22 @@ import java.util.regex.Pattern;
 
 /**
  * Represents a namespaced identifier used throughout the STEMCraft API.
- *
+ * <p>
  * A namespaced ID follows the format:
- *
- *     namespace:path
- *
+ * <p>
+ *     <pre>namespace:path</pre>
+ * <p>
  * where {namespace} identifies the owning plugin or system, and
  * {path} identifies a resource within that namespace.
- * Hierarchy
+ * <p>
+ * <h2>Hierarchy</h2>
  * The {path} portion may be hierarchical using forward slashes ({/})
  * to represent sub-resources:
- *
+ * <p>
  *     bridge:fortress
  *     bridge:fortress/lobby
  *     stemcraft:minigames/bedwars/arena-1
- *
+ * <p>
  * Allowed Characters
  * Both the namespace and path must use lowercase characters and may contain:
  *   - letters {a-z}
@@ -48,12 +49,12 @@ import java.util.regex.Pattern;
  *   - hyphen ({-})
  *   - period ({.})
  *   - forward slash ({/}) in the path only
- *
+ * <p>
  * Design Notes
  *   - Commas, spaces, and special characters are not permitted
  *   - The format is intentionally similar to Minecraft and Bukkit resource locations
  *   - This class is API-safe and does not depend on Bukkit's {NamespacedKey}
- *
+ * <p>
  * Namespaced IDs are commonly used to identify regions, listeners, commands,
  * holograms, and other extensible resources.
  */

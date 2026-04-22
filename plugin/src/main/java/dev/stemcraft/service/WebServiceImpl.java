@@ -407,10 +407,10 @@ public class WebServiceImpl extends BaseService implements WebService {
      */
     private String findBestLocalAddress() {
         try {
-            for (var iface : java.util.Collections.list(java.net.NetworkInterface.getNetworkInterfaces())) {
-                if (!iface.isUp() || iface.isLoopback() || iface.isVirtual()) continue;
+            for (var networkInterface : java.util.Collections.list(java.net.NetworkInterface.getNetworkInterfaces())) {
+                if (!networkInterface.isUp() || networkInterface.isLoopback() || networkInterface.isVirtual()) continue;
 
-                for (var addr : java.util.Collections.list(iface.getInetAddresses())) {
+                for (var addr : java.util.Collections.list(networkInterface.getInetAddresses())) {
                     if (addr.isLoopbackAddress()) continue;
                     if (addr.isLinkLocalAddress()) continue;
                     if (addr.isAnyLocalAddress()) continue;

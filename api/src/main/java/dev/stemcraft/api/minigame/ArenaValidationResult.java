@@ -5,7 +5,7 @@ import java.util.List;
 
 public class ArenaValidationResult {
     private boolean valid;
-    private List<Error> errors;
+    private final List<Error> errors;
 
     /**
          * Error class representing a validation error.

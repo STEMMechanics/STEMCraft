@@ -164,7 +164,7 @@ public class NightfallCommand {
 
     private void commandInfo(CommandContext ctx) {
         MiniGameArena arena = requireArenaForInfo(ctx);
-        ArenaValidationResult validation = arena.validate();
+        @SuppressWarnings("DataFlowIssue") ArenaValidationResult validation = arena.validate();
 
         ctx.info("Nightfall arena '" + arena.id() + "':");
         ctx.info(" - Name: " + arena.getName());

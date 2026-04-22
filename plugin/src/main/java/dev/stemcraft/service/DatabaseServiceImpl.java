@@ -34,8 +34,10 @@ import java.util.*;
 
 /**
  * SQLite manager with integer schema version + ordered migrations.
- *
+ * <p>
  * Usage:
+ * <pre>
+ * {@code
  *   SQLiteManager db = new SQLiteManager(plugin, "data.db")
  *       .migration(1, """
  *           CREATE TABLE IF NOT EXISTS players (
@@ -50,7 +52,9 @@ import java.util.*;
  *
  *   db.init(); // opens + applies migrations
  *   try (Connection c = db.connection()) { ... }
- *   db.close();.
+ *   db.close();
+ * }
+ * </pre>
  */
 public class DatabaseServiceImpl extends BaseService implements DatabaseService, AutoCloseable {
     private static final String DATABASE_FILENAME = "database.db";

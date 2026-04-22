@@ -120,10 +120,6 @@ public class TokenProcessorImpl implements TokenProcessor {
             normalized = normalized.substring(1, normalized.length() - 1);
         }
 
-        if (normalized.isEmpty()) {
-            return null;
-        }
-
         return ":" + normalized + ":";
     }
 }

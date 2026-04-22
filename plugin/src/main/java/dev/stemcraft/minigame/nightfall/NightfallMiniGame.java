@@ -61,7 +61,7 @@ public class NightfallMiniGame extends BaseMiniGame {
 
         minigame = createMiniGame(namespace, handler)
             .registerArenaPlaceholder("active-players", (arena, team, player) -> arena == null ? "0" : Integer.toString(activeSurvivorCount(arena)))
-            .registerArenaPlaceholder("blood-moon", (arena, team, player) -> arena != null && isBloodMoonActive(arena) ? "true" : "false")
+            .registerArenaPlaceholder("blood-moon", (arena, team, player) -> Boolean.toString(arena != null && isBloodMoonActive(arena)))
             .registerArenaPlaceholder("bossbar-color", (arena, team, player) -> arena != null && isBloodMoonActive(arena) ? "RED" : "PURPLE")
             .registerArenaPlaceholder("cycle-countdown-line", (arena, team, player) -> arena == null ? "-" : arena.get("cycleCountdownLine", String.class, "-"))
             .registerArenaPlaceholder("generator-count", (arena, team, player) -> arena == null ? "0" : Integer.toString(generatorLocations(arena).size()))

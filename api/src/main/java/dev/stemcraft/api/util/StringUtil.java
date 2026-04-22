@@ -199,13 +199,13 @@ public final class StringUtil {
 
     /**
      * Converts a string to its plural form.
-     *
+     * <p>
      * Rules:
      * - If the string already appears plural, it is returned unchanged
      * - If multiple words exist, only the last word is pluralised
      * - Handles common English irregulars and suffix rules
      * - Preserves original casing
-     *
+     * <p>
      * Examples:
      * - "world" -> "worlds"
      * - "worlds" -> "worlds"

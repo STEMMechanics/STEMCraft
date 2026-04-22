@@ -26,11 +26,11 @@ import java.util.Set;
 
 /**
  * Utility class for working with predefined MiniGame team names.
- *
+ * <p>
  * This class provides helpers for validating and normalising the
  * built-in team identifiers exposed by {@link dev.stemcraft.api.minigame.MiniGameTeam}.
  * It does not restrict plugins from defining their own custom team names.
- *
+ * <p>
  * All checks are case-insensitive. Team names are stored internally
  * in lowercase form.
  */
@@ -107,7 +107,7 @@ public final class TeamNames {
 
     /**
      * Returns an immutable view of all predefined team identifiers.
-     *
+     * <p>
      * This can be used for UI, validation, or documentation purposes.
      *
      * @return an unmodifiable set of predefined team identifiers.

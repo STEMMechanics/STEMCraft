@@ -55,6 +55,7 @@ import org.bukkit.event.server.ServerLoadEvent;
 import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.jspecify.annotations.NonNull;
 
 import javax.annotation.Nullable;
 import java.io.File;
@@ -339,7 +340,7 @@ public final class STEMCraft extends JavaPlugin {
 
     /** {@inheritDoc} */
     @Override
-    public @Nullable ChunkGenerator getDefaultWorldGenerator(String worldName, @Nullable String id) {
+    public @Nullable ChunkGenerator getDefaultWorldGenerator(@NonNull String worldName, @Nullable String id) {
         BuiltInGeneratorSpec spec = parseBuiltInGeneratorSpec(id);
         if (spec.key().isEmpty()) {
             return null;
@@ -358,7 +359,7 @@ public final class STEMCraft extends JavaPlugin {
             }
 
             @Override
-            public List<String> tabCompleteOptions(String options) {
+            public @NonNull List<String> tabCompleteOptions(@NonNull String options) {
                 return WaterGenerator.tabCompleteOptions(options);
             }
         });
@@ -392,7 +393,8 @@ public final class STEMCraft extends JavaPlugin {
             case "void" -> new VoidGenerator();
             case "flat" -> FlatGenerator.fromOptions(generatorOptions);
             case "water" -> WaterGenerator.fromOptions(generatorOptions);
-            case "normal", "default" -> null;
+            case "normal", "default" -> //noinspection DuplicateBranchesInSwitch
+                    null;
             default -> null;
         };
     }

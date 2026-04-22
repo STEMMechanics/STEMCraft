@@ -283,6 +283,7 @@ public class CommandContextImpl implements CommandContext {
     @Override
     public void returnError(String message, Object... placeholders) {
         errorImpl(message, true, placeholders);
+        throw new CommandException();
     }
 
     /**

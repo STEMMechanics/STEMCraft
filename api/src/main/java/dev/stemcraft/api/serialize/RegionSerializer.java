@@ -81,17 +81,25 @@ public class RegionSerializer {
 
     /**
      * Deserializes an SCRegion from a map representation.
-     *
-     * Map Format -
-     * region.world: String (world name)
-     * region.type: String ("CUBOID" or "POLYGON")
-     * * For CUBOID:
-     *  region.min: Map { x: int, y: int, z: int }
-     *  region.max: Map { x: int, y: int, z: int }
-     *  * For POLYGON:
-     *  region.minY: int
-     *  region.maxY: int
-     *  region.points: List of Maps { x: int, z: int }.
+     * <p>
+     * Map Format:
+     * <ul>
+     *      <li>region.world: String (world name)</li>
+     *      <li>region.type: String ("CUBOID" or "POLYGON")</li>
+     *      <li>For CUBOID:
+     *          <ul>
+     *              <li>region.min: Map { x: int, y: int, z: int }</li>
+     *              <li>region.max: Map { x: int, y: int, z: int }</li>
+     *          </ul>
+     *      </li>
+     *      <li>For POLYGON:
+     *          <ul>
+     *              <li>region.minY: int</li>
+     *              <li>region.maxY: int</li>
+     *              <li>region.points: List of Maps { x: int, z: int }.</li>
+     *          </ul>
+     *      </li>
+     *  </ul>
      *
      * @param map The map representing the serialized region.
      * @return The deserialized SCRegion.

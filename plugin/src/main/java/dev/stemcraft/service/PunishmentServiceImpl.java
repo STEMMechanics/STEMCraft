@@ -239,7 +239,7 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
                         }
 
                         String durationString = duration == null ? "permanently" : "for " + TimeUtil.formatDuration(duration.toSeconds());
-                        api.messages().broadcast("BAN_PLAYER_BROADCAST", target.getPlayer(), "player", target.getName(), "reason", reason, "actor", ctx.getSenderName(), "duration", durationString);
+                        api.messages().broadcast("BAN_PLAYER_BROADCAST", target.getPlayer(), "player", Objects.requireNonNull(target.getName()), "reason", reason, "actor", ctx.getSenderName(), "duration", durationString);
                     }
                 })
                 .register(STEMCraft.getPlugin());
@@ -593,7 +593,7 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
 
         this.record(targetUuid, actor, Duration.ofSeconds(-1), "ban", true, reason);
         banList.pardon(profile);
-        api.messages().broadcast("BAN_EXPIRED_BROADCAST", target.getPlayer(), "player", target.getName(), "reason", reason, "actor", actorName);
+        api.messages().broadcast("BAN_EXPIRED_BROADCAST", target.getPlayer(), "player", Objects.requireNonNull(target.getName()), "reason", reason, "actor", actorName);
     }
 
     void syncLiftBan(UUID targetUuid, @Nullable String reason) {

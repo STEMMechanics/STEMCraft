@@ -3,7 +3,6 @@ package dev.stemcraft.service.resourcepack;
 import dev.stemcraft.api.STEMCraftAPI;
 import io.papermc.paper.event.connection.configuration.AsyncPlayerConnectionConfigureEvent;
 import org.bukkit.event.EventPriority;
-import org.bukkit.event.player.PlayerJoinEvent;
 
 import java.io.File;
 
@@ -34,6 +33,7 @@ public class ResourcePackEvents {
             File resourcePack = service.getResourcePack();
 
             if (resourcePack != null && resourcePack.exists()) {
+                //noinspection UnstableApiUsage
                 service.sendPack(event.getConnection().getAudience());
             }
         }, EventPriority.MONITOR, false);

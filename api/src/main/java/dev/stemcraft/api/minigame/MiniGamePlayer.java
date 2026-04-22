@@ -22,6 +22,7 @@ package dev.stemcraft.api.minigame;
 
 import dev.stemcraft.api.capability.HasMeta;
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.NotNull;
 
 /**
  * Represents a player participating in a mini-game.
@@ -33,7 +34,7 @@ public interface MiniGamePlayer extends HasMeta<MiniGamePlayer> {
      *
      * @return The Player object.
      */
-    Player getPlayer();
+    @NotNull Player getPlayer();
 
     /**
      * Gets the mini-game arena the player is currently in.

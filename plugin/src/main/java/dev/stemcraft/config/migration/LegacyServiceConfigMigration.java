@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.UnaryOperator;
 
 /**
@@ -121,10 +122,9 @@ public final class LegacyServiceConfigMigration {
 
     private static String normalizeLegacyAuditKey(String key) {
         key = stripLeadingDots(key);
-        return switch (key) {
-            case "max-days" -> "max_days";
-            default -> key;
-        };
+        if (Objects.equals(key, "max-days"))
+            key = "max_days";
+        return key;
     }
 
     private static String stripLeadingDots(String key) {

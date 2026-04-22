@@ -107,6 +107,7 @@ public class SkyBlockCommand {
 
     private void commandInfo(CommandContext ctx) {
         MiniGameArena arena = requireArenaByOwnerOrId(ctx, 1, true);
+        //noinspection DataFlowIssue
         ctx.info("SkyBlock '" + skyBlock.ownerName(arena) + "':");
         ctx.info(" - Arena id: " + arena.id());
         ctx.info(" - Status: " + arena.getStatus().name());
@@ -150,6 +151,7 @@ public class SkyBlockCommand {
             ctx.returnError("Player '" + spectator.getName() + "' is already in arena '" + existingArena.id() + "'.");
         }
 
+        //noinspection DataFlowIssue
         arena.addSpectator(spectator);
         ctx.success("Player '" + spectator.getName() + "' is now spectating SkyBlock '" + skyBlock.ownerName(arena) + "'.");
     }
@@ -172,10 +174,12 @@ public class SkyBlockCommand {
     private void commandReset(CommandContext ctx) {
         MiniGameArena arena = requireArenaByOwnerOrId(ctx, 1, true);
         Player sender = ctx.asPlayer();
+        //noinspection DataFlowIssue
         if ((sender == null || !skyBlock.isOwner(arena, sender)) && !ctx.hasPermission(PERMISSION_OTHERS)) {
             ctx.returnError("COMMAND_NO_PERMISSION_OTHERS");
         }
 
+        //noinspection DataFlowIssue
         skyBlock.endGame(arena, "Your SkyBlock island was reset.");
         ctx.success("SkyBlock '" + skyBlock.ownerName(arena) + "' was reset.");
     }

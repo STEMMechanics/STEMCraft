@@ -38,13 +38,14 @@ import org.bukkit.scoreboard.DisplaySlot;
 import org.bukkit.scoreboard.Objective;
 import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 
 @Getter
 class MiniGamePlayerImpl extends HasMetaImpl<MiniGamePlayer> implements MiniGamePlayer {
     private final MiniGameServiceImpl service;
-    private final Player player;
+    @NotNull private final Player player;
     private static final Criteria criteria = Criteria.DUMMY;
     @Setter
     private String team;
@@ -62,7 +63,7 @@ class MiniGamePlayerImpl extends HasMetaImpl<MiniGamePlayer> implements MiniGame
     private Objective objective;
     private boolean hudBedrockCompatibility;
 
-    MiniGamePlayerImpl(MiniGameServiceImpl service, Player player) {
+    MiniGamePlayerImpl(MiniGameServiceImpl service, @NotNull Player player) {
         this.service = service;
         this.player = player;
     }

@@ -517,7 +517,8 @@ public class BedWarsMiniGame extends BaseMiniGame {
                 case TeamNames.TEAM_LIME -> "&a" + name;
                 case TeamNames.TEAM_MAGENTA, TeamNames.TEAM_PURPLE -> "&d" + name;
                 case TeamNames.TEAM_RED -> "&c" + name;
-                case TeamNames.TEAM_WHITE -> "&f" + name;
+                case TeamNames.TEAM_WHITE -> //noinspection DuplicateBranchesInSwitch
+                        "&f" + name;
                 case TeamNames.TEAM_YELLOW -> "&e" + name;
                 default -> "&f" + name;
             };

@@ -153,8 +153,8 @@ public class RecordedBlockState {
     public byte[] getInventoryAsBytes() {
         if (inventory == null) return null;
 
-        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             DataOutputStream out = new DataOutputStream(baos)) {
+        try (ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+             DataOutputStream out = new DataOutputStream(byteArrayOutputStream)) {
 
             out.writeInt(inventory.length);
             for (ItemStack item : inventory) {
@@ -167,7 +167,7 @@ public class RecordedBlockState {
                 }
             }
 
-            return baos.toByteArray();
+            return byteArrayOutputStream.toByteArray();
         } catch (IOException e) {
             throw new RuntimeException("Failed to serialize ItemStack[]", e);
         }

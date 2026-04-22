@@ -26,7 +26,7 @@ import java.io.Serial;
 
 /**
  * Core runtime exception used throughout the STEMCraft plugin.
- *
+ * <p>
  * This exception automatically logs itself to the plugin logger when
  * instantiated, ensuring all thrown exceptions are consistently reported.
  */
@@ -37,7 +37,7 @@ public class ResourcePackGeneratorException extends RuntimeException {
 
     /**
      * Creates a new {@link ResourcePackGeneratorException} with no message or cause.
-     *
+     * <p>
      * The exception is immediately logged using the plugin logger.
      */
     public ResourcePackGeneratorException() {
@@ -46,7 +46,7 @@ public class ResourcePackGeneratorException extends RuntimeException {
 
     /**
      * Creates a new {@link ResourcePackGeneratorException} wrapping another throwable.
-     *
+     * <p>
      * The original throwable is set as the cause and logged automatically.
      *
      * @param t the underlying cause of this exception.
@@ -58,7 +58,7 @@ public class ResourcePackGeneratorException extends RuntimeException {
 
     /**
      * Creates a new {@link ResourcePackGeneratorException} with a custom message.
-     *
+     * <p>
      * The message is logged immediately when the exception is created.
      *
      * @param message a human-readable description of the error.
@@ -70,7 +70,7 @@ public class ResourcePackGeneratorException extends RuntimeException {
 
     /**
      * Creates a new {@link ResourcePackGeneratorException} with a custom message and cause.
-     *
+     * <p>
      * Both the message and the underlying cause are logged immediately.
      *
      * @param message a human-readable description of the error.

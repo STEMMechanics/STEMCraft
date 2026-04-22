@@ -32,7 +32,7 @@ import java.util.Random;
 
 /**
  * Chunk generator that creates a flat world with configurable layers.
- *
+ * <p>
  * Configuration string format: "material1:height1;material2:height2;..."
  * Example: "grass_block;dirt:3;bedrock" creates a world with
  * 1 layer of grass_block, 3 layers of dirt, and 1 layer of.
