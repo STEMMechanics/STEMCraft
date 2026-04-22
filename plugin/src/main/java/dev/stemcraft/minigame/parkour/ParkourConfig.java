@@ -193,8 +193,7 @@ public class ParkourConfig {
             return null;
         }
 
-        SCRegion region = SCRegion.fromString(regionString, world);
-        return region;
+        return SCRegion.fromString(regionString, world);
     }
 
     private @Nullable Location loadLocation(@NotNull ConfigSection section, @NotNull World world, @NotNull String arenaId) {
@@ -203,8 +202,7 @@ public class ParkourConfig {
             return null;
         }
 
-        Location location = LocationUtil.deserialize(locationString, world);
-        return location;
+        return LocationUtil.deserialize(locationString, world);
     }
 
     private @NotNull String serializeLocation(@Nullable Location location, @NotNull String arenaId, @NotNull String name) {

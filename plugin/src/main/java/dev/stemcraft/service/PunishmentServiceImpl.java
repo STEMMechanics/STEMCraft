@@ -234,7 +234,7 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
                         if (target.isOnline()) {
                             Player online = target.getPlayer();
                             if (online != null) {
-                                online.kick(Component.text(formatBanMessage(findActiveBan(targetUuid))));
+                                online.kick(formatBanMessage(findActiveBan(targetUuid)));
                             }
                         }
 
@@ -683,24 +683,29 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
         return latest;
     }
 
-    String formatBanMessage(PunishmentRecord record) {
+    Component formatBanMessage(PunishmentRecord record) {
         if (record == null) {
-            return "You have been banned.";
+            return Component.text("You have been banned.");
         }
 
-        StringBuilder message = new StringBuilder("You are banned from this server.");
+        Component message = Component.text("You are banned from this server.");
+
         if (record.reason() != null && !record.reason().isBlank()) {
-            message.append("\nReason: ").append(record.reason());
+            message = message.append(Component.text("\nReason: " + record.reason()));
         }
+
         if (!record.permanent() && record.durationSeconds() != null && record.durationSeconds() > 0L) {
             Instant expiresAt = record.expiresAt();
             if (expiresAt != null) {
                 long remainingSeconds = Duration.between(Instant.now(), expiresAt).getSeconds();
                 if (remainingSeconds > 0L) {
-                    message.append("\nRemaining: ").append(TimeUtil.formatDuration(remainingSeconds));
+                    message = message.append(
+                            Component.text("\nRemaining: " + TimeUtil.formatDuration(remainingSeconds))
+                    );
                 }
             }
         }
-        return message.toString();
+
+        return message;
     }
 }

@@ -51,6 +51,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.projectiles.ProjectileSource;
 import org.bukkit.util.Vector;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.jspecify.annotations.NonNull;
 
 import java.util.ArrayList;
@@ -182,7 +183,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
 
             api.regions().addListener(listenerPrefix + "team_" + teamId, portalRegion, new RegionListener() {
                 @Override
-                public void onEnter(@NotNull Player player, @NotNull SCRegion region, @NotNull Location from, @NotNull Location to) {
+                public void onEnter(@NotNull Player player, @NotNull SCRegion region, @Nullable Location from, @Nullable Location to) {
                     if (!arena.hasPlayer(player) || arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
                         return;
                     }
@@ -256,26 +257,28 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
             return HandlerEventResult.ALLOW;
         }
 
-        Player damagerPlayer = null;
-        if (event instanceof EntityDamageByEntityEvent byEntity) {
-            Entity damager = byEntity.getDamager();
-            switch (damager) {
-                case Player directDamager -> damagerPlayer = directDamager;
-                case Projectile projectile -> {
-                    ProjectileSource source = projectile.getShooter();
-                    if (source instanceof Player shooter) {
-                        damagerPlayer = shooter;
-                    }
-                }
-                case TNTPrimed primedTnt when primedTnt.getSource() instanceof Player sourcePlayer ->
-                        damagerPlayer = sourcePlayer;
-                default -> {
-                }
-            }
-        }
-
+        Player damagerPlayer = findDamagerPlayer(event);
         handleDeath(arena, player, damagerPlayer);
         return HandlerEventResult.DENY;
+    }
+
+    private Player findDamagerPlayer(EntityDamageEvent event) {
+        if (!(event instanceof EntityDamageByEntityEvent byEntity)) {
+            return null;
+        }
+
+        Entity damager = byEntity.getDamager();
+
+        return switch (damager) {
+            case Player directDamager -> directDamager;
+            case Projectile projectile -> {
+                ProjectileSource source = projectile.getShooter();
+                yield source instanceof Player shooter ? shooter : null;
+            }
+
+            case TNTPrimed primedTnt when primedTnt.getSource() instanceof Player sourcePlayer -> sourcePlayer;
+            default -> null;
+        };
     }
 
     @Override
@@ -484,13 +487,6 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
         if (team != null) {
             arena.giveKit(player, team.getName(), false);
         }
-    }
-
-    private void clearPlayerInventory(Player player) {
-        player.getInventory().clear();
-        player.getInventory().setArmorContents(new ItemStack[0]);
-        player.getInventory().setItemInOffHand(null);
-        player.updateInventory();
     }
 
     private void addTeamPoint(MiniGameArena arena, MiniGamePlayer player, MiniGameTeam targetTeam) {

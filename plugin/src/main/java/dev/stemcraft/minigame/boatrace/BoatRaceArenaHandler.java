@@ -1,6 +1,5 @@
 package dev.stemcraft.minigame.boatrace;
 
-import com.destroystokyo.paper.Title;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.minigame.ArenaValidationResult;
 import dev.stemcraft.api.minigame.MiniGameArena;
@@ -9,7 +8,6 @@ import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.service.region.RegionListener;
 import dev.stemcraft.api.util.NamespaceId;
 import dev.stemcraft.api.util.PlayerUtil;
-import dev.stemcraft.api.util.TextUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.GameMode;
@@ -202,7 +200,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
     @Override
     public void onArenaStatusChanged(MiniGameArena arena, MiniGameArena.ArenaStatus oldStatus, MiniGameArena.ArenaStatus newStatus) {
         if (newStatus == MiniGameArena.ArenaStatus.WAITING) {
-            resetTitles(arena);
+            arena.resetTitle();
             arena.stopWinnerCelebration();
             clearRaceState(arena);
             teleportPlayersToLobby(arena);
@@ -714,37 +712,23 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
     }
 
     private void showStartingCountdownTitle(@NotNull MiniGameArena arena, int secondsRemaining) {
-        Title title = new Title(
-            TextUtil.colouriseToSection("<gradient:#fde047:#f97316><bold>" + secondsRemaining + "</bold></gradient>"),
-            TextUtil.colouriseToSection("<gold>Race starts in</gold>"),
+        arena.showTitle(
+            "<gradient:#fde047:#f97316><bold>" + secondsRemaining + "</bold></gradient>",
+            "<gold>Race starts in</gold>",
             0,
-            20,
-            4
+            1000,
+            200
         );
-        sendTitleToOccupants(arena, title);
     }
 
     private void showRaceStartTitle(@NotNull MiniGameArena arena) {
-        Title title = new Title(
-            TextUtil.colouriseToSection("<gradient:#22c55e:#14b8a6><bold>GO!</bold></gradient>"),
-            TextUtil.colouriseToSection("<aqua>Paddle hard.</aqua>"),
+        arena.showTitle(
+            "<gradient:#22c55e:#14b8a6><bold>GO!</bold></gradient>",
+            "<aqua>Paddle hard.</aqua>",
             0,
-            20,
-            8
+            1000,
+            400
         );
-        sendTitleToOccupants(arena, title);
-    }
-
-    private void sendTitleToOccupants(@NotNull MiniGameArena arena, @NotNull Title title) {
-        for (Player occupant : arena.getOccupants()) {
-            occupant.sendTitle(title);
-        }
-    }
-
-    private void resetTitles(@NotNull MiniGameArena arena) {
-        for (Player occupant : arena.getOccupants()) {
-            occupant.resetTitle();
-        }
     }
 
     private boolean hasDriftedFromGrid(@NotNull Location currentLocation, @NotNull Location gridLocation) {

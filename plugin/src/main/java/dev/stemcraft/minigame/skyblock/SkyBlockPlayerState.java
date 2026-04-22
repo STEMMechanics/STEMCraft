@@ -16,7 +16,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 
-final class SkyBlockPlayerState {
+public final class SkyBlockPlayerState {
     private final Location location;
     private final GameMode gameMode;
     private final boolean allowFlight;

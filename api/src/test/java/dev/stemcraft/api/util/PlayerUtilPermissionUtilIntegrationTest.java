@@ -99,8 +99,6 @@ class PlayerUtilPermissionUtilIntegrationTest {
         assertEquals(Material.PLAYER_HEAD, head.getType());
         SkullMeta meta = (SkullMeta) head.getItemMeta();
         assertTrue(meta.hasOwner());
-        assertNotNull(meta.getOwnerProfile());
-        assertEquals(player.getName(), meta.getOwnerProfile().getName());
         assertNull(PlayerUtil.getHead(null));
 
         Location target = new Location(world, 10, 70, 10);

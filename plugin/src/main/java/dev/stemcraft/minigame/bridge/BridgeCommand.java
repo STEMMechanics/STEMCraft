@@ -218,7 +218,7 @@ public class BridgeCommand {
 
     private void commandInfo(CommandContext ctx) {
         MiniGameArena arena = requireArenaForInfo(ctx);
-        @SuppressWarnings("DataFlowIssue") ArenaValidationResult validation = arena.validate();
+        ArenaValidationResult validation = arena.validate();
         ctx.info("Arena '" + arena.id() + "':");
         ctx.info(" - Name: " + arena.getName());
         ctx.info(" - Status: " + arena.getStatus().name());

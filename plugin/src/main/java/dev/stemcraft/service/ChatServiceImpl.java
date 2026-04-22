@@ -507,6 +507,7 @@ public class ChatServiceImpl extends BaseService {
     private ModerationActionRule recordViolation(UUID playerUuid) {
         Instant now = Instant.now();
         Deque<Instant> timestamps = contentFilterViolations.computeIfAbsent(playerUuid, ignored -> new LinkedList<>());
+
         synchronized (timestamps) {
             timestamps.addLast(now);
             if (moderationMaxWindowSeconds > 0L) {
@@ -516,21 +517,27 @@ public class ChatServiceImpl extends BaseService {
                 }
             }
 
-            ModerationActionRule matchedRule = null;
-            for (ModerationActionRule rule : moderationActionRules) {
-                if (timestamps.size() < rule.count()) {
-                    continue;
-                }
+            return findMatchedRule(timestamps, now);
+        }
+    }
 
-                List<Instant> snapshot = new ArrayList<>(timestamps);
-                Instant thresholdInstant = snapshot.get(snapshot.size() - rule.count());
-                if (!thresholdInstant.isBefore(now.minusSeconds(rule.windowSeconds()))) {
-                    matchedRule = rule;
-                }
+    private ModerationActionRule findMatchedRule(Deque<Instant> timestamps, Instant now) {
+        ModerationActionRule matchedRule = null;
+
+        for (ModerationActionRule rule : moderationActionRules) {
+            if (timestamps.size() < rule.count()) {
+                continue;
             }
 
-            return matchedRule;
+            List<Instant> snapshot = new ArrayList<>(timestamps);
+            Instant thresholdInstant = snapshot.get(snapshot.size() - rule.count());
+
+            if (!thresholdInstant.isBefore(now.minusSeconds(rule.windowSeconds()))) {
+                matchedRule = rule;
+            }
         }
+
+        return matchedRule;
     }
 
     private String buildModerationReason(String messageType, ModerationDecision decision) {
@@ -559,7 +566,7 @@ public class ChatServiceImpl extends BaseService {
         PlayerProfile profile = Bukkit.createProfile(player.getUniqueId(), player.getName());
         var expires = duration == null ? null : java.util.Date.from(Instant.now().plus(duration));
         Bukkit.getBanList(BanListType.PROFILE).addBan(profile, reason, expires, "<server>");
-        api.tasks().nextTick(() -> player.kick(Component.text(plugin.punishments().formatBanMessage(plugin.punishments().findActiveBan(player.getUniqueId())))));
+        api.tasks().nextTick(() -> player.kick(plugin.punishments().formatBanMessage(plugin.punishments().findActiveBan(player.getUniqueId()))));
     }
 
     private BookMeta applyFilteredBook(BookMeta originalMeta, String originalTitle, String filteredMessage, boolean signing) {
