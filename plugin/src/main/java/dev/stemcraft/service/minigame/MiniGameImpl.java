@@ -30,7 +30,12 @@ public class MiniGameImpl implements MiniGame {
     public MiniGameImpl(MiniGameServiceImpl service, String namespace) {
         this.service = service;
         this.namespace = namespace;
+    }
 
+    /**
+     * Initializes the mini-game by registering default placeholders.
+     */
+    public void init() {
         registerArenaPlaceholder("name", (arena, team, player) -> arena != null ? arena.getName() : "");
         registerArenaPlaceholder("time-remaining", (arena, team, player) -> {
             if (arena != null) {
@@ -177,7 +182,7 @@ public class MiniGameImpl implements MiniGame {
         }
 
         // MiniGameArenaImpl(@NotNull MiniGameServiceImpl service, @NotNull STEMCraftAPI api, @NotNull String namespace, @NotNull String id, @NotNull World world, SCRegion region)
-        MiniGameArenaImpl arena = new MiniGameArenaImpl(service, STEMCraftAPI.api(), namespace, arenaId, world, null);
+        MiniGameArenaImpl arena = new MiniGameArenaImpl(service, STEMCraftAPI.api(), namespace, arenaId, world);
         service.addArena(this.namespace, arenaId, arena);
         return arena;
     }
@@ -198,13 +203,13 @@ public class MiniGameImpl implements MiniGame {
      * @return The MiniGameArena instance the player is in, or null if not found.
      */
     public MiniGameArena findPlayer(Player player) {
-        return service.findPlayerArena(player);
+        return service.findPlayerArena(player, this.namespace);
     }
 
-    public String renderArenaPlaceholder(MiniGameArena arena, String key) {
+    public String renderArenaPlaceholder(MiniGameArena arena, String key, MiniGamePlayer player) {
         MiniGamePlaceholderProvider provider = arenaPlaceholders.get(key);
         if (provider != null) {
-            return provider.provide(arena, null, null);
+            return provider.provide(arena, null, player);
         }
         return null;
     }

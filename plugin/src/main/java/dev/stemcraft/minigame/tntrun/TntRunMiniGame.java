@@ -35,8 +35,7 @@ public class TntRunMiniGame extends BaseMiniGame {
     @Getter
     @Accessors(fluent = true)
     private static final String namespace = "tntrun";
-
-    private final TntRunConfig config;
+    private TntRunConfig config;
 
     @Getter
     @Accessors(fluent = true)
@@ -46,17 +45,21 @@ public class TntRunMiniGame extends BaseMiniGame {
 
     public TntRunMiniGame(STEMCraftAPI api) {
         super(api);
-        this.config = new TntRunConfig(api, this);
     }
 
     @Override
     public void onLoad() {
+        config = new TntRunConfig(api, this);
         TntRunArenaHandler handler = new TntRunArenaHandler(api, this);
+        handler.initalize();
 
         minigame = createMiniGame(namespace, handler)
             .registerArenaPlaceholder("winner", (arena, team, player) -> arena == null ? "-" : winnerName(arena))
             .registerArenaPlaceholder("alive", (arena, team, player) -> arena == null ? "0" : Integer.toString(arena.numPlayers()))
-            .registerArenaPlaceholder("floor-count", (arena, team, player) -> arena == null ? "0" : Integer.toString(floorRegions(arena).size()))
+            .registerArenaPlaceholder("bottom-y", (arena, team, player) -> arena == null ? "0" : Integer.toString(bottomY(arena)))
+            .registerPlayerPlaceholder("height-to-bottom", (arena, team, player) -> player == null
+                ? "0"
+                : Integer.toString(heightToBottom(player)))
             .registerPlayerPlaceholder("state", (arena, team, player) -> player == null ? "out" : playerState(player))
             .registerPlayerPlaceholder("grid-slot", (arena, team, player) -> player == null ? "-" : gridSlot(player));
 
@@ -84,7 +87,7 @@ public class TntRunMiniGame extends BaseMiniGame {
                 "<gradient:#f97316:#ef4444><bold>{arena:name}</bold></gradient>",
                 "",
                 ":info_green: <gray>Players</gray> <yellow>{arena:joined-players}</yellow>/<yellow>{arena:max-players}</yellow>",
-                ":warning_yellow: <gray>Floors</gray> <gold>{arena:floor-count}</gold>",
+                ":warning_yellow: <gray>Bottom Y</gray> <gold>{arena:bottom-y}</gold>",
                 ":location: <gray>Status</gray> <green>Waiting</green>"
             ),
             HUD_LINE_HOLD_UPDATES,
@@ -111,14 +114,14 @@ public class TntRunMiniGame extends BaseMiniGame {
                 "<gradient:#f97316:#ef4444><bold>{arena:name}</bold></gradient>",
                 ":warning_yellow: <gray>Alive</gray> <gold>{arena:alive}</gold>",
                 ":click_action_right: <gray>Collapse</gray> <yellow>{arena:time-remaining}</yellow>",
-                ":location: <gray>You</gray> <gold>{player:state}</gold>"
+                ":location: <gray>Height</gray> <gold>{player:height-to-bottom}</gold>"
             ),
             List.of(
                 "<gradient:#f97316:#ef4444><bold>{arena:name}</bold></gradient>",
                 "",
                 ":warning_yellow: <gray>Alive</gray> <gold>{arena:alive}</gold>",
                 ":click_action_right: <gray>Time Left</gray> <yellow>{arena:time-remaining}</yellow>",
-                ":location: <gray>Status</gray> <gold>{player:state}</gold>"
+                ":location: <gray>Height</gray> <gold>{player:height-to-bottom}</gold>"
             ),
             HUD_LINE_HOLD_UPDATES,
             "RED"
@@ -154,11 +157,10 @@ public class TntRunMiniGame extends BaseMiniGame {
             .setMinPlayers(2)
             .setMaxPlayers(16)
             .set("arenaRegion", null)
-            .set("floorRegions", new ArrayList<SCRegion>())
             .set("startingGrid", new ArrayList<Location>())
-            .set("startCountdownSeconds", 10)
+            .set("startCountdownSeconds", TntRunConfig.DEFAULT_START_COUNTDOWN_SECONDS)
             .set("roundSeconds", 180)
-            .set("endingSeconds", 8)
+            .set("endingSeconds", TntRunConfig.DEFAULT_ENDING_SECONDS)
             .set("fadeDelayTicks", 8)
             .set("voidY", world.getMinHeight())
             .set("joinOrder", new ArrayList<UUID>())
@@ -221,7 +223,6 @@ public class TntRunMiniGame extends BaseMiniGame {
                     .setMinPlayers(arenaDef.minPlayers())
                     .setMaxPlayers(arenaDef.maxPlayers())
                     .set("arenaRegion", arenaDef.arenaRegion())
-                    .set("floorRegions", new ArrayList<>(arenaDef.floorRegions()))
                     .set("startingGrid", new ArrayList<>(arenaDef.startingGrid()))
                     .set("startCountdownSeconds", arenaDef.startCountdownSeconds())
                     .set("roundSeconds", arenaDef.roundSeconds())
@@ -253,13 +254,16 @@ public class TntRunMiniGame extends BaseMiniGame {
     }
 
     @SuppressWarnings("unchecked")
-    public @NotNull List<SCRegion> floorRegions(@NotNull MiniGameArena arena) {
-        return arena.getOrCreate("floorRegions", List.class, ArrayList::new);
-    }
-
-    @SuppressWarnings("unchecked")
     public @NotNull List<Location> startingGrid(@NotNull MiniGameArena arena) {
         return arena.getOrCreate("startingGrid", List.class, ArrayList::new);
+    }
+
+    public int startCountdownSeconds(@NotNull MiniGameArena arena) {
+        return Math.max(1, arena.get("startCountdownSeconds", Integer.class, TntRunConfig.DEFAULT_START_COUNTDOWN_SECONDS));
+    }
+
+    public int endingSeconds(@NotNull MiniGameArena arena) {
+        return Math.max(1, arena.get("endingSeconds", Integer.class, TntRunConfig.DEFAULT_ENDING_SECONDS));
     }
 
     @SuppressWarnings("unchecked")
@@ -313,6 +317,25 @@ public class TntRunMiniGame extends BaseMiniGame {
 
     public @NotNull String winnerName(@NotNull MiniGameArena arena) {
         return arena.get("winnerName", String.class, "-");
+    }
+
+    int bottomY(@NotNull MiniGameArena arena) {
+        SCRegion arenaRegion = arena.get("arenaRegion", SCRegion.class);
+        Location minimum = arenaRegion == null ? null : arenaRegion.getMinimumLocation();
+        return minimum == null ? 0 : minimum.getBlockY();
+    }
+
+    int heightToBottom(@NotNull MiniGameArena arena, @NotNull MiniGamePlayer player) {
+        return heightToBottom(bottomY(arena), player.getPlayer().getLocation().getBlockY());
+    }
+
+    int heightToBottom(@NotNull MiniGamePlayer player) {
+        MiniGameArena arena = player.arena();
+        return arena == null ? 0 : heightToBottom(arena, player);
+    }
+
+    int heightToBottom(int bottomY, int playerY) {
+        return Math.max(0, playerY - bottomY);
     }
 
     private @NotNull String playerState(@NotNull MiniGamePlayer player) {

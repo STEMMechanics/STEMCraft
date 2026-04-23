@@ -49,8 +49,7 @@ public class MotdServiceImpl extends BaseService implements MotdService {
      * @param api The STEMCraft API instance.
      */
     public MotdServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
-        super(plugin, api);
-        setConfigKey("motd");
+        super(plugin, api, "motd");
     }
 
     /**

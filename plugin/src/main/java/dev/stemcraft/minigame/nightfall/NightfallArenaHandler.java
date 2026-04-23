@@ -12,7 +12,6 @@ import dev.stemcraft.api.service.region.RegionListener;
 import dev.stemcraft.api.service.world.WorldChangeSession;
 import dev.stemcraft.api.util.NamespaceId;
 import dev.stemcraft.api.util.PlayerUtil;
-import net.kyori.adventure.text.Component;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -47,20 +46,10 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jspecify.annotations.NonNull;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 
 public class NightfallArenaHandler implements MiniGameArenaHandler {
-    private static final int STARTING_COUNTDOWN_SECONDS = 10;
-    private static final int ENDING_COUNTDOWN_SECONDS = 30;
     private static final long NOON_TIME = 6000L;
     private static final long THREE_PM_TIME = 9000L;
     private static final long SUNSET_TIME = 12000L;
@@ -257,7 +246,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
 
     @Override
     public void onArenaUnload(MiniGameArena arena) {
-        stopRecording(arena, false);
+        stopRecording(arena);
         rollbackWorld(arena);
         restoreWorldSettings(arena);
         clearTrackedZombies(arena);
@@ -267,7 +256,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
 
     @Override
     public HandlerEventResult onBlockPlace(MiniGameArena arena, Player player, Block block) {
-        if (!isPlayableRoundStatus(arena) || isNightEliminated(arena, player)) {
+        if (!isActiveRoundStatus(arena) || isNightEliminated(arena, player)) {
             return HandlerEventResult.DENY;
         }
 
@@ -283,7 +272,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
 
     @Override
     public HandlerEventResult onBlockBreak(MiniGameArena arena, Player player, Block block) {
-        if (!isPlayableRoundStatus(arena) || isNightEliminated(arena, player)) {
+        if (!isActiveRoundStatus(arena) || isNightEliminated(arena, player)) {
             return HandlerEventResult.DENY;
         }
 
@@ -302,7 +291,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         if (!(event.getEntity() instanceof Player player)) {
             return HandlerEventResult.ALLOW;
         }
-        if (!isPlayableRoundStatus(arena)) {
+        if (!isActiveRoundStatus(arena)) {
             return HandlerEventResult.DENY;
         }
         if (isNightEliminated(arena, player)) {
@@ -362,6 +351,9 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
             || status == MiniGameArena.ArenaStatus.ENDING) && secondsRemaining <= 5) {
             float pitch = 1.0f + ((5 - secondsRemaining) * 0.1f);
             playSoundToOccupants(arena, Sound.BLOCK_NOTE_BLOCK_HAT, 0.7f, pitch);
+            if (status == MiniGameArena.ArenaStatus.STARTING) {
+                arena.showStartingCountdownTitle(secondsRemaining);
+            }
         }
     }
 
@@ -381,7 +373,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
     @Override
     public Location onPlayerJoinArena(MiniGameArena arena, Player player) {
         if (arena.getStatus() == MiniGameArena.ArenaStatus.WAITING && arena.numPlayers() >= arena.getMinPlayers()) {
-            arena.setStatus(MiniGameArena.ArenaStatus.STARTING, STARTING_COUNTDOWN_SECONDS);
+            arena.setStatus(MiniGameArena.ArenaStatus.STARTING, nightfall.startCountdownSeconds(arena));
         }
         return assignedPreparationSpawn(arena, player);
     }
@@ -824,14 +816,14 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
     }
 
     private void endRound(@NotNull MiniGameArena arena) {
-        broadcastToOccupants(arena, nightfall.roundEndMessage(ENDING_COUNTDOWN_SECONDS));
+        broadcastToOccupants(arena, nightfall.roundEndMessage(nightfall.endingSeconds(arena)));
         playSoundToOccupants(arena, Sound.UI_TOAST_CHALLENGE_COMPLETE, 0.8f, 0.9f);
     }
 
     private void resetRound(@NotNull MiniGameArena arena) {
         debugArenaEvent(arena, "Resetting round. Rolling world back now.");
         clearTrackedZombies(arena);
-        stopRecording(arena, false);
+        stopRecording(arena);
         rollbackWorld(arena);
         restoreWorldSettings(arena);
         resetRuntimeState(arena);
@@ -897,7 +889,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
             return;
         }
         if (arena.getPlayers().isEmpty() || activeSurvivorCount(arena) <= 0) {
-            arena.setStatus(MiniGameArena.ArenaStatus.COOLDOWN, ENDING_COUNTDOWN_SECONDS);
+            arena.setStatus(MiniGameArena.ArenaStatus.COOLDOWN, nightfall.endingSeconds(arena));
         }
     }
 
@@ -931,8 +923,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
 
     private void clearInventory(@NotNull Player player) {
         player.getInventory().clear();
-        ItemStack[] emptyItemStacks = {};
-        player.getInventory().setArmorContents(emptyItemStacks);
+        player.getInventory().setArmorContents(new ItemStack[0]);
         player.getInventory().setItemInOffHand(null);
         player.updateInventory();
     }
@@ -1052,13 +1043,10 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         debugArenaEvent(arena, "World change recording started. recording=" + session.isRecording());
     }
 
-    private void stopRecording(@NotNull MiniGameArena arena, boolean clearOnly) {
+    private void stopRecording(@NotNull MiniGameArena arena) {
         WorldChangeSession session = api.worlds().changes(arena.world());
         session.stop();
-        debugArenaEvent(arena, "World change recording stopped. clearOnly=" + clearOnly + ", recording=" + session.isRecording());
-        if (clearOnly) {
-            session.clear();
-        }
+        debugArenaEvent(arena, "World change recording stopped. recording=" + session.isRecording());
     }
 
     private void rollbackWorld(@NotNull MiniGameArena arena) {
@@ -1168,7 +1156,8 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
             }
 
             zombie.setTarget(null);
-            zombie.getEquipment().setHelmet(null);
+            var equipment = Objects.requireNonNull(zombie.getEquipment());
+            equipment.setHelmet(null);
             zombie.setFireTicks(Math.max(zombie.getFireTicks(), 200));
         }
     }
@@ -1241,7 +1230,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
             int maxCountdown = Math.max(1, arena.getCountdownMax());
             return new PhaseCountdown(
                 "Sunset in " + formatCountdown(countdown),
-                    Math.clamp((double) countdown / (double) maxCountdown, 0.0d, 1.0d)
+                Math.clamp((double) countdown / (double) maxCountdown, 0.0d, 1.0d)
             );
         }
 
@@ -1566,10 +1555,6 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
                                                            @Nullable SCRegion arenaRegion,
                                                            int x,
                                                            int z) {
-        if (arena.world() == null) {
-            return null;
-        }
-
         Block ground = arena.world().getHighestBlockAt(x, z);
         if (!ground.getType().isSolid()) {
             return null;
@@ -1779,11 +1764,11 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
     private void registerDeathFallbacks() {
         api.events().register(PlayerDeathEvent.class, event -> {
             MiniGameArena arena = activeParticipantArena(event.getEntity());
-            if (arena == null || !isPlayableRoundStatus(arena)) {
+            if (arena == null || !isActiveRoundStatus(arena)) {
                 return;
             }
 
-            event.deathMessage(Component.empty());
+            event.deathMessage(null);
             event.getDrops().clear();
             event.setDroppedExp(0);
             event.setKeepInventory(true);
@@ -1957,10 +1942,6 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
             || arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING;
     }
 
-    private boolean isPlayableRoundStatus(@NotNull MiniGameArena arena) {
-        return isActiveRoundStatus(arena);
-    }
-
     private boolean isOutsideArena(@NotNull MiniGameArena arena, @Nullable Location location) {
         if (location == null || location.getWorld() == null) {
             return true;
@@ -2014,7 +1995,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
 
     private void debugArenaEvent(@NotNull MiniGameArena arena, @NotNull String message) {
         STEMCraft plugin = STEMCraft.getPlugin();
-        if (plugin == null || !plugin.debugging()) {
+        if (!plugin.debugging()) {
             return;
         }
 

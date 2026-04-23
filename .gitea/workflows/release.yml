@@ -1,23 +1,28 @@
-name: Release
+name: Build Plugin
 
 on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
   workflow_dispatch:
     inputs:
-      force_release:
-        description: "Force release"
+      release:
+        description: "Create release"
         required: false
         default: "false"
+      build_name:
+        description: "Optional build label"
+        required: false
+        default: ""
 
 permissions: read-all
 
 jobs:
   prepare:
     name: Prepare Build Metadata
-    if: >
-      gitea.event.workflow_run.conclusion == 'success' &&
-      gitea.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
     outputs:
+      should_release: ${{ steps.meta.outputs.should_release }}
       build_number: ${{ steps.meta.outputs.build_number }}
       tag: ${{ steps.meta.outputs.tag }}
       release_name: ${{ steps.meta.outputs.release_name }}
@@ -27,41 +32,85 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ gitea.event.workflow_run.head_sha }}
 
       - name: Calculate build metadata
         id: meta
         env:
-          SHA: ${{ gitea.event.workflow_run.head_sha }}
+          EVENT_NAME: ${{ gitea.event_name }}
+          REF_NAME: ${{ gitea.ref_name }}
+          RUN_NUMBER: ${{ gitea.run_number }}
+          INPUT_RELEASE: ${{ inputs.release || 'false' }}
+          INPUT_BUILD_NAME: ${{ inputs.build_name || '' }}
         run: |
           set -eu
 
-          LAST_TAG="$(git tag --list 'build-*' | sed 's/build-//' | sort -n | tail -1)"
-          if [ -z "$LAST_TAG" ]; then
-            BUILD_NUMBER=1
-          else
-            BUILD_NUMBER=$((LAST_TAG + 1))
+          SHOULD_RELEASE=false
+          if [ "$REF_NAME" = "main" ] && { [ "$EVENT_NAME" = "push" ] || [ "$INPUT_RELEASE" = "true" ]; }; then
+            SHOULD_RELEASE=true
           fi
 
-          TAG="build-$BUILD_NUMBER"
-          RELEASE_NAME="Build $BUILD_NUMBER"
+          if [ "$SHOULD_RELEASE" = "true" ]; then
+            LAST_TAG="$(git tag --list 'build-*' | sed 's/build-//' | sort -n | tail -1)"
+            if [ -z "$LAST_TAG" ]; then
+              BUILD_NUMBER=1
+            else
+              BUILD_NUMBER=$((LAST_TAG + 1))
+            fi
+            TAG="build-$BUILD_NUMBER"
+          else
+            BUILD_NUMBER="$RUN_NUMBER"
+            TAG=""
+          fi
+
+          if [ -n "$INPUT_BUILD_NAME" ]; then
+            RELEASE_NAME="$INPUT_BUILD_NAME"
+          elif [ "$SHOULD_RELEASE" = "true" ]; then
+            RELEASE_NAME="Build $BUILD_NUMBER"
+          else
+            RELEASE_NAME="Build $BUILD_NUMBER (CI)"
+          fi
 
           {
+            echo "should_release=$SHOULD_RELEASE"
             echo "build_number=$BUILD_NUMBER"
             echo "tag=$TAG"
             echo "release_name=$RELEASE_NAME"
           } >> "$GITHUB_OUTPUT"
 
+  build-and-test:
+    name: Test and Build Plugin and API JARs
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs:
+      - prepare
+    
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Run analysis, tests, and build jars
+        env:
+          BUILD_NUMBER: ${{ needs.prepare.outputs.build_number }}
+        run: ./gradlew --no-daemon check :api:jar :plugin:jar
+
   api-publish:
     name: Publish API Snapshot
     runs-on: ubuntu-latest
-    needs: prepare
+    timeout-minutes: 20
+    needs:
+      - prepare
+      - build-and-test
+    if: needs.prepare.outputs.should_release == 'true'
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ gitea.event.workflow_run.head_sha }}
 
       - name: Set up Java 21
         uses: actions/setup-java@v4
@@ -74,8 +123,16 @@ jobs:
           MAVEN_REPO_DIR: ${{ vars.MAVEN_REPO_DIR || '/repos/maven/maven-public' }}
         run: |
           set -eu
-          [ -d "$MAVEN_REPO_DIR" ] || { echo "Missing repo dir"; exit 1; }
-          [ -w "$MAVEN_REPO_DIR" ] || { echo "Repo dir not writable"; exit 1; }
+
+          if [ ! -d "$MAVEN_REPO_DIR" ]; then
+            echo "MAVEN_REPO_DIR does not exist: $MAVEN_REPO_DIR"
+            exit 1
+          fi
+
+          if [ ! -w "$MAVEN_REPO_DIR" ]; then
+            echo "MAVEN_REPO_DIR is not writable: $MAVEN_REPO_DIR"
+            exit 1
+          fi
 
       - name: Publish API snapshot
         env:
@@ -86,9 +143,12 @@ jobs:
   release:
     name: Create Release
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs:
       - prepare
+      - build-and-test
       - api-publish
+    if: needs.prepare.outputs.should_release == 'true'
     permissions:
       contents: write
       releases: write
@@ -96,8 +156,6 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ gitea.event.workflow_run.head_sha }}
 
       - name: Set up Java 21
         uses: actions/setup-java@v4

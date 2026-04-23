@@ -7,7 +7,6 @@ import me.clip.placeholderapi.expansion.PlaceholderExpansion;
 import org.bukkit.OfflinePlayer;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.jspecify.annotations.NonNull;
 
 import java.util.Locale;
 
@@ -36,6 +35,11 @@ final class PlaceholderApiService extends PlaceholderExpansion {
     @Override
     public boolean persist() {
         return true;
+    }
+
+    @Override
+    public int hashCode() {
+        return getIdentifier().hashCode();
     }
 
     @Override
@@ -75,17 +79,17 @@ final class PlaceholderApiService extends PlaceholderExpansion {
         return marker.equals(resolved) ? null : resolved;
     }
 
-    private @NonNull String arenaStatus(@NotNull String args) {
+    private @NotNull String arenaStatus(@NotNull String args) {
         MiniGameArena arena = resolveArena(args);
         return arena == null ? "unknown" : arena.getStatus().name().toLowerCase(Locale.ROOT);
     }
 
-    private @NonNull String arenaOpen(@NotNull String args) {
+    private @NotNull String arenaOpen(@NotNull String args) {
         MiniGameArena arena = resolveArena(args);
         return arena == null ? "false" : String.valueOf(arena.isJoinable());
     }
 
-    private @NonNull String arenaOpenClosed(@NotNull String args) {
+    private @NotNull String arenaOpenClosed(@NotNull String args) {
         MiniGameArena arena = resolveArena(args);
         return arena != null && arena.isJoinable() ? "open" : "closed";
     }

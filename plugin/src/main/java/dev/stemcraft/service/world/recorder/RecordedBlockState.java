@@ -38,7 +38,7 @@ import java.util.List;
 /**
  * Class representing the recorded state of a block, including its type, data, and inventory contents.
  */
-public class RecordedBlockState {
+public final class RecordedBlockState {
     @Getter
     final Material material;
     @Getter
