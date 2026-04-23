@@ -179,9 +179,9 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
     }
 
     /**
-     * Ask a single player to download the resource pack.
+     * Ask an audience to download the resource pack.
      *
-     * @param audience the player to send the pack to.
+     * @param audience the audience to send the pack to.
      */
     public void sendPack(@NotNull Audience audience) {
         File resPack = getResourcePack();
