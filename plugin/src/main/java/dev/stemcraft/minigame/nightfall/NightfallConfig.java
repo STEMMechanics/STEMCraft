@@ -22,6 +22,8 @@ import java.util.Map;
 import java.util.TreeMap;
 
 public class NightfallConfig {
+    static final int DEFAULT_START_COUNTDOWN_SECONDS = 30;
+    static final int DEFAULT_ENDING_SECONDS = 20;
     private static final String RECOVERY_PENDING_KEY = "pending-world-rollback";
     private static final String RECOVERY_TIME_KEY = "saved-time-setting";
     private static final String RECOVERY_WEATHER_KEY = "saved-weather-setting";
@@ -61,6 +63,8 @@ public class NightfallConfig {
         SCRegion arenaRegion = loadRegion(section, world, arenaId, "arena", "Arena");
         int minPlayers = section.getInt("min-players", 1);
         int maxPlayers = section.getInt("max-players", 8);
+        int startCountdownSeconds = section.getInt("start-countdown-seconds", DEFAULT_START_COUNTDOWN_SECONDS);
+        int endingSeconds = section.getInt("ending-seconds", DEFAULT_ENDING_SECONDS);
         int lives = section.getInt("lives", 3);
         int prepSeconds = section.getInt("prep-seconds", 300);
         double legacyTimeSpeedMultiplier = section.getDouble("time-speed-multiplier", 2.0d);
@@ -93,6 +97,8 @@ public class NightfallConfig {
             arenaRegion,
             minPlayers,
             maxPlayers,
+            startCountdownSeconds,
+            endingSeconds,
             lives,
             prepSeconds,
             dayTimeSpeedMultiplier,
@@ -131,6 +137,8 @@ public class NightfallConfig {
         arenaConfig.set("arena", serializeRegion(arena.get("arenaRegion", SCRegion.class), arena.id(), "arena"));
         arenaConfig.set("min-players", arena.getMinPlayers());
         arenaConfig.set("max-players", arena.getMaxPlayers());
+        arenaConfig.set("start-countdown-seconds", arena.get("startCountdownSeconds", Integer.class, DEFAULT_START_COUNTDOWN_SECONDS));
+        arenaConfig.set("ending-seconds", arena.get("endingSeconds", Integer.class, DEFAULT_ENDING_SECONDS));
         arenaConfig.set("lives", arena.get("lives", Integer.class, 3));
         arenaConfig.set("prep-seconds", arena.get("prepSeconds", Integer.class, 300));
         double dayTimeSpeed = arena.get("dayTimeSpeedMultiplier", Double.class, 2.0d);

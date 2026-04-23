@@ -672,7 +672,7 @@ public interface MiniGameArena extends MessageService, HasMeta<MiniGameArena> {
      * Track a supply-drop item so the arena can render and clean up a shared visual marker for it.
      *
      * @param item The dropped item entity.
-     * @param markerLocation The block location to use beneath the drop.
+     * @param markerLocation The anchor location to use for the drop signal.
      */
     void trackSupplyDrop(Item item, Location markerLocation);
 

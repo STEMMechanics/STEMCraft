@@ -59,8 +59,6 @@ import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
 public class NightfallArenaHandler implements MiniGameArenaHandler {
-    private static final int STARTING_COUNTDOWN_SECONDS = 10;
-    private static final int ENDING_COUNTDOWN_SECONDS = 30;
     private static final long NOON_TIME = 6000L;
     private static final long THREE_PM_TIME = 9000L;
     private static final long SUNSET_TIME = 12000L;
@@ -384,7 +382,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
     @Override
     public Location onPlayerJoinArena(MiniGameArena arena, Player player) {
         if (arena.getStatus() == MiniGameArena.ArenaStatus.WAITING && arena.numPlayers() >= arena.getMinPlayers()) {
-            arena.setStatus(MiniGameArena.ArenaStatus.STARTING, STARTING_COUNTDOWN_SECONDS);
+            arena.setStatus(MiniGameArena.ArenaStatus.STARTING, nightfall.startCountdownSeconds(arena));
         }
         return assignedPreparationSpawn(arena, player);
     }
@@ -827,7 +825,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
     }
 
     private void endRound(@NotNull MiniGameArena arena) {
-        broadcastToOccupants(arena, nightfall.roundEndMessage(ENDING_COUNTDOWN_SECONDS));
+        broadcastToOccupants(arena, nightfall.roundEndMessage(nightfall.endingSeconds(arena)));
         playSoundToOccupants(arena, Sound.UI_TOAST_CHALLENGE_COMPLETE, 0.8f, 0.9f);
     }
 
@@ -900,7 +898,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
             return;
         }
         if (arena.getPlayers().isEmpty() || activeSurvivorCount(arena) <= 0) {
-            arena.setStatus(MiniGameArena.ArenaStatus.COOLDOWN, ENDING_COUNTDOWN_SECONDS);
+            arena.setStatus(MiniGameArena.ArenaStatus.COOLDOWN, nightfall.endingSeconds(arena));
         }
     }
 

@@ -171,9 +171,12 @@ public class BedWarsMiniGame extends BaseMiniGame {
             .setSpectatorSpawn(world.getSpawnLocation())
             .setMinPlayers(2)
             .setMaxPlayers(8)
+            .set("startCountdownSeconds", BedWarsConfig.DEFAULT_START_COUNTDOWN_SECONDS)
+            .set("endingSeconds", BedWarsConfig.DEFAULT_ENDING_SECONDS)
             .set("teamSize", 1)
             .set("autoAssignTeams", false)
-            .set("dropItems", BedWarsConfig.defaultDropItems());
+            .set("dropItems", BedWarsConfig.defaultDropItems())
+            .set("dropSurfaceMaterials", BedWarsConfig.defaultDropSurfaceMaterials());
 
         registerArenaStats(arena);
         return arena;
@@ -237,9 +240,12 @@ public class BedWarsMiniGame extends BaseMiniGame {
                     .setMinPlayers(arenaDef.minPlayers())
                     .setMaxPlayers(arenaDef.maxPlayers())
                     .set("arenaRegion", arenaDef.arenaRegion())
+                    .set("startCountdownSeconds", arenaDef.startCountdownSeconds())
+                    .set("endingSeconds", arenaDef.endingSeconds())
                     .set("teamSize", arenaDef.teamSize())
                     .set("autoAssignTeams", false)
-                    .set("dropItems", new ArrayList<>(arenaDef.dropItems()));
+                    .set("dropItems", new ArrayList<>(arenaDef.dropItems()))
+                    .set("dropSurfaceMaterials", new ArrayList<>(arenaDef.dropSurfaceMaterials()));
 
                 for (BedWarsArenaRecord.TeamDef teamDef : arenaDef.teams().values()) {
                     MiniGameTeam team = arena.addTeam(teamDef.teamId(), teamDef.displayName(), teamDef.spawn());
@@ -284,6 +290,14 @@ public class BedWarsMiniGame extends BaseMiniGame {
     public String arenaStatKey(@NotNull String suffix, @NotNull String arenaId) {
         String normalized = arenaId.trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_.-]", "_");
         return namespace + "_" + suffix + "_" + normalized;
+    }
+
+    public int startCountdownSeconds(@NotNull MiniGameArena arena) {
+        return Math.max(1, arena.get("startCountdownSeconds", Integer.class, BedWarsConfig.DEFAULT_START_COUNTDOWN_SECONDS));
+    }
+
+    public int endingSeconds(@NotNull MiniGameArena arena) {
+        return Math.max(1, arena.get("endingSeconds", Integer.class, BedWarsConfig.DEFAULT_ENDING_SECONDS));
     }
 
     private void registerStats() {
@@ -348,14 +362,21 @@ public class BedWarsMiniGame extends BaseMiniGame {
         for (MiniGameTeam team : arena.getTeams()) {
             Map<Material, Integer> kit = new LinkedHashMap<>();
             kit.put(Material.WOODEN_SWORD, 1);
-            kit.put(TeamNames.getMaterial(team.getName()), 64);
-            arena.addKit(team.getName(), team.get("displayName", String.class, team.getName()) + " Kit", TeamNames.getMaterial(team.getName()), kit);
+            Material wool = TeamNames.getMaterial(team.getName());
+            kit.put(wool, 64);
+            arena.addKit(team.getName(), team.get("displayName", String.class, team.getName()) + " Kit", wool, kit);
+            arena.setUnlimitedPlacement(wool, true);
         }
     }
 
     @SuppressWarnings("unchecked")
     public @NotNull List<Material> dropItems(@NotNull MiniGameArena arena) {
         return arena.getOrCreate("dropItems", List.class, BedWarsConfig::defaultDropItems);
+    }
+
+    @SuppressWarnings("unchecked")
+    public @NotNull List<Material> dropSurfaceMaterials(@NotNull MiniGameArena arena) {
+        return arena.getOrCreate("dropSurfaceMaterials", List.class, BedWarsConfig::defaultDropSurfaceMaterials);
     }
 
     String renderTeamLine(@Nullable MiniGameArena arena, @Nullable MiniGamePlayer viewer, int index) {
@@ -395,8 +416,22 @@ public class BedWarsMiniGame extends BaseMiniGame {
         if (winner.isBlank()) {
             return "-";
         }
-        MiniGameTeam team = arena.getTeam(winner);
-        return team == null ? StringUtil.beautify(winner) : team.get("displayName", String.class, StringUtil.beautify(winner));
+        return teamDisplayName(arena.getTeam(winner), winner);
+    }
+
+    @NotNull String teamDisplayName(@Nullable MiniGameTeam team, @NotNull String fallbackTeamName) {
+        if (team == null) {
+            return defaultTeamDisplayName(fallbackTeamName);
+        }
+
+        String displayName = team.get("displayName", String.class, "");
+        return displayName.isBlank() || displayName.equalsIgnoreCase(team.getName())
+            ? defaultTeamDisplayName(team.getName())
+            : displayName;
+    }
+
+    private @NotNull String defaultTeamDisplayName(@NotNull String teamName) {
+        return StringUtil.capitalize(StringUtil.beautify(teamName));
     }
 
     private @NotNull TeamLineFormat loadTeamLineFormat(@NotNull ConfigSection root) {

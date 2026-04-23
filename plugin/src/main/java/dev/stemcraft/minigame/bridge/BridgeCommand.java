@@ -225,11 +225,14 @@ public class BridgeCommand {
         ctx.info(" - Players: " + arena.numPlayers() + "/" + arena.getMaxPlayers());
         ctx.info(" - Spectators: " + arena.numSpectators());
         ctx.info(" - Min players: " + arena.getMinPlayers());
+        ctx.info(" - Start countdown: " + bridge.startCountdownSeconds(arena) + " sec");
+        ctx.info(" - Reset countdown: " + bridge.endingSeconds(arena) + " sec");
         ctx.info(" - Lobby: " + formatLocation(arena.getLobbySpawn()));
         ctx.info(" - Spectator: " + formatLocation(arena.getSpectatorSpawn()));
         ctx.info(" - Arena region: " + formatRegion(arena.get("arenaRegion", SCRegion.class)));
         ctx.info(" - Bridge region: " + formatRegion(arena.get("bridgeRegion", SCRegion.class)));
         ctx.info(" - Drop items: " + bridge.dropItems(arena).size() + " configured");
+        ctx.info(" - Drop surfaces: " + bridge.dropSurfaceMaterials(arena).size() + " configured");
         for (String teamId : List.of("red", "blue")) {
             MiniGameTeam team = arena.getTeam(teamId);
             if (team == null) {
@@ -380,7 +383,7 @@ public class BridgeCommand {
             ctx.returnError("Arena '" + arena.id() + "' needs at least " + arena.getMinPlayers() + " players to start.");
         }
 
-        arena.setStatus(MiniGameArena.ArenaStatus.STARTING, 5);
+        arena.setStatus(MiniGameArena.ArenaStatus.STARTING, bridge.startCountdownSeconds(arena));
         ctx.success("Arena '" + arena.id() + "' is starting.");
     }
 
@@ -394,7 +397,7 @@ public class BridgeCommand {
         MiniGameArena arena = requireArena(ctx, 1);
         arena.setStatus(MiniGameArena.ArenaStatus.RESETTING);
         if (arena.numPlayers() >= arena.getMinPlayers()) {
-            arena.setStatus(MiniGameArena.ArenaStatus.STARTING, 5);
+            arena.setStatus(MiniGameArena.ArenaStatus.STARTING, bridge.startCountdownSeconds(arena));
             ctx.success("Arena '" + arena.id() + "' has been restarted.");
             return;
         }

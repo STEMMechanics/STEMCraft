@@ -147,8 +147,13 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
             if (arena == null) return;
             MiniGameArenaHandler handler = handlers.get(arena.namespace());
 
-            if (handler.onBlockBreak(arena, event.getPlayer(), event.getBlock()) == MiniGameArenaHandler.HandlerEventResult.DENY) {
+            MiniGameArenaHandler.HandlerEventResult result = handler.onBlockBreak(arena, event.getPlayer(), event.getBlock());
+            if (result == MiniGameArenaHandler.HandlerEventResult.DENY) {
                 event.setCancelled(true);
+                return;
+            }
+            if (result == MiniGameArenaHandler.HandlerEventResult.ALLOW_NO_DROPS) {
+                event.setDropItems(false);
             }
         });
 

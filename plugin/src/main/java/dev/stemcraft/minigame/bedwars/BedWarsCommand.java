@@ -178,8 +178,11 @@ public class BedWarsCommand {
         ctx.info(" - Players: " + arena.numPlayers() + "/" + arena.getMaxPlayers());
         ctx.info(" - Spectators: " + arena.numSpectators());
         ctx.info(" - Teams: " + arena.getTeams().size());
+        ctx.info(" - Start countdown: " + bedWars.startCountdownSeconds(arena) + " sec");
+        ctx.info(" - Reset countdown: " + bedWars.endingSeconds(arena) + " sec");
         ctx.info(" - Team size: " + arena.get("teamSize", Integer.class, 1));
         ctx.info(" - Drop items: " + bedWars.dropItems(arena).size() + " configured");
+        ctx.info(" - Drop surfaces: " + bedWars.dropSurfaceMaterials(arena).size() + " configured");
         ctx.info(" - Lobby: " + formatLocation(arena.getLobbySpawn()));
         ctx.info(" - Spectator: " + formatLocation(arena.getSpectatorSpawn()));
         ctx.info(" - Arena region: " + formatRegion(arena.get("arenaRegion", SCRegion.class)));
@@ -331,7 +334,7 @@ public class BedWarsCommand {
             ctx.returnError("Arena '" + arena.id() + "' needs players on at least two teams to start.");
         }
 
-        arena.setStatus(MiniGameArena.ArenaStatus.STARTING, 5);
+        arena.setStatus(MiniGameArena.ArenaStatus.STARTING, bedWars.startCountdownSeconds(arena));
         ctx.success("Arena '" + arena.id() + "' is starting.");
     }
 
@@ -345,7 +348,7 @@ public class BedWarsCommand {
         MiniGameArena arena = requireArena(ctx, 1);
         arena.setStatus(MiniGameArena.ArenaStatus.RESETTING);
         if (arena.numPlayers() >= arena.getMinPlayers() && occupiedTeams(arena) >= 2) {
-            arena.setStatus(MiniGameArena.ArenaStatus.STARTING, 5);
+            arena.setStatus(MiniGameArena.ArenaStatus.STARTING, bedWars.startCountdownSeconds(arena));
             ctx.success("Arena '" + arena.id() + "' has been restarted.");
             return;
         }
