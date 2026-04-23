@@ -19,13 +19,14 @@ class LeafDecayTickSpeedSettingTest {
     @TempDir
     Path tempDir;
 
+    private ServerMock server;
     private WorldMock world;
     private ConfigFileImpl config;
     private LeafDecayTickSpeedSetting setting;
 
     @BeforeEach
     void setUp() {
-        ServerMock server = MockBukkit.mock();
+        server = MockBukkit.mock();
         world = server.addSimpleWorld("leaf-decay-speed-tests");
         config = new ConfigFileImpl();
         assertTrue(config.load(tempDir.toFile(), "leaf-decay-speed-test.yml", true));

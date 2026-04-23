@@ -42,7 +42,6 @@ import java.util.*;
  * and the world group they are in. World groups are determined by stripping
  * "_nether" and "_the_end" suffixes from world names.
  */
-@SuppressWarnings("unused")
 public class GameModeInventories extends BaseFeature {
     private final Map<UUID, PlayerProfiles> profiles = new HashMap<>();
 
@@ -312,7 +311,7 @@ public class GameModeInventories extends BaseFeature {
             state.exp = 0.0f;
             state.totalExp = 0;
             state.contents = new ItemStack[player.getInventory().getSize()];
-            state.armor = new ItemStack[PlayerUtil.getArmorLength(player)];
+            state.armor = new ItemStack[player.getInventory().getArmorContents().length];
             state.ender = new ItemStack[player.getEnderChest().getSize()];
             state.effects = new ArrayList<>();
             return state;

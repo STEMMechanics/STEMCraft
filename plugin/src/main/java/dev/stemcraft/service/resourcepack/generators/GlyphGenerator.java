@@ -13,8 +13,8 @@ import dev.stemcraft.api.util.FileUtil;
 import dev.stemcraft.exception.ResourcePackGeneratorException;
 
 import java.io.File;
-import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -62,8 +62,9 @@ public class GlyphGenerator extends ResourcePackGenerator {
 
             // Ensure namespace textures base exists
             File texturesBase = new File(resourcePackDir, "assets/" + namespace + "/textures");
-            if (!texturesBase.exists() && !texturesBase.mkdirs() && !texturesBase.exists()) {
-                throw new ResourcePackGeneratorException("Failed to create textures directory " + texturesBase);
+            if (!texturesBase.exists()) {
+                //noinspection ResultOfMethodCallIgnored
+                texturesBase.mkdirs();
             }
 
             for (String glyphName : glyphsSection.getKeys()) {
@@ -123,10 +124,7 @@ public class GlyphGenerator extends ResourcePackGenerator {
             }
 
             try {
-                Path parent = fontJsonPath.getParent();
-                if (parent != null) {
-                    Files.createDirectories(parent);
-                }
+                Files.createDirectories(fontJsonPath.getParent());
                 Files.writeString(fontJsonPath, new GsonBuilder().setPrettyPrinting().create().toJson(json));
             } catch (Exception e) {
                 throw new ResourcePackGeneratorException("Failed to write font JSON " + fontJsonPath, e);
@@ -268,10 +266,7 @@ public class GlyphGenerator extends ResourcePackGenerator {
         }
 
         try {
-            Path parent = fontJsonPath.getParent();
-            if (parent != null) {
-                Files.createDirectories(parent);
-            }
+            Files.createDirectories(fontJsonPath.getParent());
             Files.writeString(fontJsonPath, new GsonBuilder().setPrettyPrinting().create().toJson(json));
         } catch (Exception e) {
             throw new ResourcePackGeneratorException("Failed to write generated font JSON " + fontJsonPath, e);

@@ -27,7 +27,6 @@ import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
-import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 
 import java.time.Duration;
@@ -635,51 +634,9 @@ public interface MiniGameArena extends MessageService, HasMeta<MiniGameArena> {
     }
 
     /**
-     * Show a standard start countdown title to the arena players.
-     *
-     * @param secondsRemaining The number of seconds remaining before the round starts.
-     * @param subtitle The subtitle text to show beneath the countdown.
-     */
-    default void showStartingCountdownTitle(int secondsRemaining, String subtitle) {
-        if (secondsRemaining <= 0) {
-            return;
-        }
-
-        showTitle(
-            "<gradient:#fde047:#f97316><bold>" + secondsRemaining + "</bold></gradient>",
-            subtitle,
-            0,
-            1000,
-            200
-        );
-    }
-
-    /**
-     * Show a standard start countdown title to the arena players.
-     *
-     * @param secondsRemaining The number of seconds remaining before the round starts.
-     */
-    default void showStartingCountdownTitle(int secondsRemaining) {
-        showStartingCountdownTitle(secondsRemaining, "<gold>Game starts in</gold>");
-    }
-
-    /**
      * Reset the title to the default state for all players.
      */
     void resetTitle();
-
-    /**
-     * Track a supply-drop item so the arena can render and clean up a shared visual marker for it.
-     *
-     * @param item The dropped item entity.
-     * @param markerLocation The anchor location to use for the drop signal.
-     */
-    void trackSupplyDrop(Item item, Location markerLocation);
-
-    /**
-     * Clear all active supply-drop markers in this arena.
-     */
-    void clearAllSupplyDrops();
 
     /**
      * Check if the arena is currently active (waiting, countdown, or running).

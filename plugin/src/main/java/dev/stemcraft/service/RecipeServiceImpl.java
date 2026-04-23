@@ -49,7 +49,8 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
      * @param api The STEMCraft API instance.
      */
     public RecipeServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
-        super(plugin, api, "recipes");
+        super(plugin, api);
+        setConfigKey("recipes");
     }
 
     /**
@@ -313,8 +314,6 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
                 case "smoker" -> addSmoker(id, inputMat, result, exp, time);
                 case "blast_furnace" -> addBlastFurnace(id, inputMat, result, exp, time);
                 case "campfire" -> addCampfire(id, inputMat, result, exp, time);
-                default -> {
-                }
             }
             api.messages().info("RECIPE_COOKING_LOADED", "type", type, "id", id);
         }

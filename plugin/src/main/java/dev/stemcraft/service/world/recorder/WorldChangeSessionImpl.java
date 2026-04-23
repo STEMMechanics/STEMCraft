@@ -101,9 +101,7 @@ public class WorldChangeSessionImpl implements WorldChangeSession {
             );
 
             // Just restore what we recorded
-            Material material = rbs.getMaterial();
-            if(material == null) continue;
-            block.setType(material, applyPhysics);
+            block.setType(rbs.getMaterial(), applyPhysics);
             BlockData data = Bukkit.createBlockData(rbs.getData());
             block.setBlockData(data, applyPhysics);
 

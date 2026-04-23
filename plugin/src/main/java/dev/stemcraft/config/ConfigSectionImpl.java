@@ -26,7 +26,10 @@ import lombok.Setter;
 import org.bukkit.configuration.ConfigurationSection;
 import org.jspecify.annotations.NonNull;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Implementation of the ConfigSection interface for managing configuration sections.
@@ -34,8 +37,8 @@ import java.util.*;
 public class ConfigSectionImpl implements ConfigSection {
     @Setter
     private ConfigFile configFile;
+    @Setter
     private ConfigurationSection section;
-    private String basePath = "";
 
     /**
      * Constructs a ConfigSectionImpl with the given ConfigFile and ConfigurationSection.
@@ -45,19 +48,10 @@ public class ConfigSectionImpl implements ConfigSection {
      */
     public ConfigSectionImpl(ConfigFile configFile, ConfigurationSection section) {
         this.configFile = configFile;
-        updateSection(section);
+        this.section = section;
     }
 
     public ConfigSectionImpl() {}
-
-    public void setSection(ConfigurationSection section) {
-        updateSection(section);
-    }
-
-    private void updateSection(ConfigurationSection section) {
-        this.section = section;
-        this.basePath = section == null || section.getCurrentPath() == null ? "" : section.getCurrentPath();
-    }
 
     private boolean pathExists(String path) {
         return section.contains(path) || section.isConfigurationSection(path);
@@ -110,35 +104,6 @@ public class ConfigSectionImpl implements ConfigSection {
         return resolved.toString();
     }
 
-    private String absolutePath(String path) {
-        if (path == null || path.isEmpty()) {
-            return basePath;
-        }
-
-        if (basePath == null || basePath.isEmpty()) {
-            return path;
-        }
-
-        return basePath + "." + path;
-    }
-
-    private void markDirty(String path) {
-        if (configFile == null) {
-            return;
-        }
-
-        if (configFile instanceof ConfigFileImpl configFileImpl) {
-            configFileImpl.setDirty(absolutePath(path));
-            return;
-        }
-
-        configFile.setDirty();
-    }
-
-    private void markDirty() {
-        markDirty("");
-    }
-
 
     /**
      * Determines if the default value should be persisted to the configuration.
@@ -163,7 +128,7 @@ public class ConfigSectionImpl implements ConfigSection {
 
         Object storedValue = value instanceof List ? new ArrayList<>((List<?>) value) : value;
         section.set(path, storedValue);
-        markDirty(path);
+        configFile.setDirty();
     }
 
     /**
@@ -212,7 +177,7 @@ public class ConfigSectionImpl implements ConfigSection {
      * @param def The default value if the path does not exist.
      * @return the value at the specified path, or the default value if not present.
      */
-    public @NonNull String getString(@NonNull String path, @NonNull String def) {
+    public @NonNull String getString(@NonNull String path, String def) {
         persistDefault(path, def);
         return section.getString(resolvePath(path), def);
     }
@@ -357,9 +322,8 @@ public class ConfigSectionImpl implements ConfigSection {
      * @param value The value to set.
      */
     public void set(String path, Object value) {
-        String resolvedPath = resolvePath(path);
-        section.set(resolvedPath, value);
-        markDirty(resolvedPath);
+        section.set(resolvePath(path), value);
+        configFile.setDirty();
     }
 
     /**
@@ -368,9 +332,8 @@ public class ConfigSectionImpl implements ConfigSection {
      * @param path The configuration path to remove.
      */
     public void remove(String path) {
-        String resolvedPath = resolvePath(path);
-        section.set(resolvedPath, null);
-        markDirty(resolvedPath);
+        section.set(resolvePath(path), null);
+        configFile.setDirty();
     }
 
     /**
@@ -389,7 +352,9 @@ public class ConfigSectionImpl implements ConfigSection {
             }
 
             subSection = section.createSection(resolvedPath);
-            markDirty(resolvedPath);
+            if (configFile != null) {
+                configFile.setDirty();
+            }
         }
 
         return new ConfigSectionImpl(configFile, subSection);
@@ -412,7 +377,6 @@ public class ConfigSectionImpl implements ConfigSection {
             section.set(resolvedPath, null);
         }
 
-        markDirty(resolvedPath);
         return new ConfigSectionImpl(configFile, section.createSection(resolvedPath));
     }
 
@@ -464,6 +428,8 @@ public class ConfigSectionImpl implements ConfigSection {
             section.set(key, null);
         }
 
-        markDirty();
+        if (configFile != null) {
+            configFile.setDirty();
+        }
     }
 }

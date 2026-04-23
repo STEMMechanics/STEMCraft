@@ -187,7 +187,7 @@ public class MiniGameHUD {
         return switch (token.scope) {
             case ARENA -> {
                 if (player.arena() == null) yield "";
-                yield game.renderArenaPlaceholder(player.arena(), token.key, player);
+                yield game.renderArenaPlaceholder(player.arena(), token.key);
             }
             case PLAYER -> game.renderPlayerPlaceholder(player, token.key);
             case TEAM -> {

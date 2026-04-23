@@ -130,7 +130,6 @@ public class WorldTimeSetting implements WorldBaseSetting {
                 long ticks = Long.parseLong(value);
                 validTicks = ticks >= 0L && ticks < 24000L;
             } catch (NumberFormatException ignored) {
-                // ignored. validTicks already false;
             }
         }
 

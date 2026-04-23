@@ -37,6 +37,7 @@ import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
+import org.bukkit.GameRules;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.generator.ChunkGenerator;
@@ -222,7 +223,7 @@ public class WorldCommand {
         if (world == null) {
             ctx.returnError("WORLD_FAILED_CREATE_REASON",
                 "world", name,
-                "reason", worldService.getLastWorldOperationErrorOrDefault(name));
+                "reason", worldService.getLastWorldOperationError(name, "unknown error"));
         }
 
         ctx.returnSuccess("WORLD_CREATED_DURATION", "world", name, "duration", formatElapsed(System.nanoTime() - startedAt));
@@ -331,7 +332,7 @@ public class WorldCommand {
         if (world == null) {
             ctx.returnError("WORLD_FAILED_LOAD_REASON",
                 "world", name,
-                "reason", worldService.getLastWorldOperationErrorOrDefault(name));
+                "reason", worldService.getLastWorldOperationError(name, "unknown error"));
         } else {
             ctx.returnSuccess("WORLD_LOADED_DURATION", "world", name, "duration", formatElapsed(System.nanoTime() - startedAt));
         }
@@ -481,7 +482,6 @@ public class WorldCommand {
         World world = ctx.getArgAsWorld(1);
         if (world == null) {
             ctx.returnError("WORLD_NOT_FOUND", "world", ctx.getArg(1));
-            return;
         }
 
         String worldId = world.getUID().toString();
@@ -510,7 +510,6 @@ public class WorldCommand {
             WorldBaseSetting setting = worldService.getSettingHandler(flag, WorldService.SettingCommandMode.FLAG);
             if(setting == null) {
                 ctx.returnError("WORLD_COMMAND_UNKNOWN_FLAG", "flag", flag);
-                return;
             }
 
             ConfigSection config = worldService.getConfigSection(world);
@@ -529,7 +528,6 @@ public class WorldCommand {
         WorldBaseSetting setting = worldService.getSettingHandler(subCommand, WorldService.SettingCommandMode.SUBCOMMAND);
         if(setting == null) {
             ctx.returnError("WORLD_COMMAND_UNKNOWN_SUBCOMMAND", "command", subCommand);
-            return;
         }
 
         ConfigSection config = worldService.getConfigSection(world);
@@ -562,7 +560,7 @@ public class WorldCommand {
         ctx.info(" - Spawn: " + formatLocation(world.getSpawnLocation()));
         ctx.info(" - Time: " + world.getTime() + " ticks");
         ctx.info(" - Weather: " + describeWeather(world));
-        ctx.info(" - PVP: " + yesNo(isPvpEnabled(world)));
+        ctx.info(" - PVP: " + yesNo(Boolean.TRUE.equals(world.getGameRuleValue(GameRules.PVP))));
         ctx.info(" - Height: " + world.getMinHeight() + " to " + world.getMaxHeight());
         ctx.info(" - Border: " + formatBorder(world));
         ctx.info(" - Folder: " + api.worlds().getWorldFolder(world.getName()).toAbsolutePath());
@@ -765,11 +763,6 @@ public class WorldCommand {
 
     private @NotNull String yesNo(boolean value) {
         return value ? "yes" : "no";
-    }
-
-    @SuppressWarnings("deprecation")
-    private static boolean isPvpEnabled(@NotNull World world) {
-        return world.getPVP();
     }
 
     private String formatElapsed(long elapsedNanos) {

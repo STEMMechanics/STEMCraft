@@ -41,7 +41,7 @@ public class STEMCraftException extends RuntimeException {
      * The exception is immediately logged using the plugin logger.
      */
     public STEMCraftException() {
-        super();
+        STEMCraft.getPlugin().messages().error(this.getMessage(), this);
     }
 
     /**
@@ -53,6 +53,7 @@ public class STEMCraftException extends RuntimeException {
      */
     public STEMCraftException(Throwable t) {
         super(t);
+        STEMCraft.getPlugin().messages().error(this.getMessage(), this);
     }
 
     /**
@@ -64,6 +65,7 @@ public class STEMCraftException extends RuntimeException {
      */
     public STEMCraftException(String message) {
         super(message);
+        STEMCraft.getPlugin().messages().error(message);
     }
 
     /**
@@ -76,16 +78,6 @@ public class STEMCraftException extends RuntimeException {
      */
     public STEMCraftException(String message, Throwable t) {
         super(message, t);
-    }
-
-    /**
-     * Logs the exception to the plugin logger.
-     */
-    public void log() {
-        if (getCause() != null) {
-            STEMCraft.getPlugin().messages().error(getMessage(), getCause());
-        } else {
-            STEMCraft.getPlugin().messages().error(getMessage());
-        }
+        STEMCraft.getPlugin().messages().error(message, t);
     }
 }

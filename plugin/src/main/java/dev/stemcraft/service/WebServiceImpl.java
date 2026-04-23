@@ -64,7 +64,8 @@ public class WebServiceImpl extends BaseService implements WebService {
      * @param api The STEMCraft API instance.
      */
     public WebServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
-        super(plugin, api, "web_server");
+        super(plugin, api);
+        setConfigKey("web_server");
     }
 
     /**

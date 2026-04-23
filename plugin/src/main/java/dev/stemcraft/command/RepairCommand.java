@@ -86,10 +86,7 @@ public class RepairCommand extends BaseCommand {
         ItemStack item = target.getInventory().getItemInMainHand();
         if (!item.getType().isAir() && item.getItemMeta() instanceof Damageable meta) {
             meta.setDamage(0);
-            if (!item.setItemMeta(meta)) {
-                error(ctx.getSender(), "REPAIR_NO_ITEM");
-                return;
-            }
+            item.setItemMeta(meta);
             cmd.info(target, "REPAIR_ITEM_REPAIRED");
             if(!ctx.args().isEmpty()) {
                 cmd.info(ctx.getSender(), "REPAIR_ITEM_REPAIRED_OTHER", "player", target.getName());

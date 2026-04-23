@@ -91,13 +91,12 @@ public class HubFeature extends BaseFeature {
     public void runExitCommands(Player player) {
         String currentWorldName = player.getWorld().getName();
 
-        for(Map.Entry<Pattern, List<String>> entry : worldExitCommands.entrySet()) {
-            Pattern pattern = entry.getKey();
+        for(Pattern pattern : worldExitCommands.keySet()) {
             if(!pattern.matcher(currentWorldName).matches()) {
                 continue;
             }
 
-            List<String> commandList = entry.getValue();
+            List<String> commandList = worldExitCommands.get(pattern);
             for(String command : commandList) {
                 command = command.replace("{hub-world}", hubWorld.getName());
                 command = command.replace("{world}", currentWorldName);

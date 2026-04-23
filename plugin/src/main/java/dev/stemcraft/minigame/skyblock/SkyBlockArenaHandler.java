@@ -14,9 +14,11 @@ import org.jetbrains.annotations.NotNull;
 import org.jspecify.annotations.NonNull;
 
 public class SkyBlockArenaHandler implements MiniGameArenaHandler {
+    private final STEMCraftAPI api;
     private final SkyBlockMiniGame skyBlock;
 
     public SkyBlockArenaHandler(STEMCraftAPI api, SkyBlockMiniGame skyBlock) {
+        this.api = api;
         this.skyBlock = skyBlock;
     }
 
@@ -37,7 +39,7 @@ public class SkyBlockArenaHandler implements MiniGameArenaHandler {
     public Location onPlayerJoinArena(MiniGameArena arena, Player player) {
         SkyBlockPlayerState state = skyBlock.savedPlayerState(arena);
         if (skyBlock.isOwner(arena, player) && state != null) {
-            state.apply(player);
+            state.apply(player, true);
             return player.getLocation();
         }
 

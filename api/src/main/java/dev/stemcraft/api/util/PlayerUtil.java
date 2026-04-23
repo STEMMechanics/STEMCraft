@@ -33,7 +33,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.SkullMeta;
 import org.geysermc.geyser.api.GeyserApi;
-import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.InputStream;
@@ -41,7 +40,6 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -89,9 +87,7 @@ public class PlayerUtil {
         ItemStack playerHead = new ItemStack(Material.PLAYER_HEAD);
         SkullMeta skullMeta = (SkullMeta) playerHead.getItemMeta();
         skullMeta.setOwningPlayer(player);
-        if (!playerHead.setItemMeta(skullMeta)) {
-            throw new IllegalStateException("Unable to apply skull metadata");
-        }
+        playerHead.setItemMeta(skullMeta);
 
         return playerHead;
     }
@@ -165,7 +161,16 @@ public class PlayerUtil {
             return false;
         }
 
-        if (!ensureGeyserInitialized()) {
+        if(isGeyserInstalled == null) {
+            if (Bukkit.getPluginManager().getPlugin("Geyser-Spigot") != null) {
+                isGeyserInstalled = true;
+                geyserApi = GeyserApi.api();
+            } else {
+                isGeyserInstalled = false;
+            }
+        }
+
+        if(!isGeyserInstalled) {
             return false;
         }
 
@@ -183,7 +188,16 @@ public class PlayerUtil {
             return false;
         }
 
-        if (!ensureGeyserInitialized()) {
+        if(isGeyserInstalled == null) {
+            if (Bukkit.getPluginManager().getPlugin("Geyser-Spigot") != null) {
+                isGeyserInstalled = true;
+                geyserApi = GeyserApi.api();
+            } else {
+                isGeyserInstalled = false;
+            }
+        }
+
+        if(!isGeyserInstalled) {
             return false;
         }
 
@@ -303,19 +317,6 @@ public class PlayerUtil {
         return name(uuid, null);
     }
 
-    public static @Nullable ItemStack @NotNull [] getArmor(Player player) {
-        return player.getInventory().getArmorContents();
-    }
-
-    public static int getArmorLength(@NotNull Player player) {
-        ItemStack[] armorContents = player.getInventory().getArmorContents();
-        return armorContents.length;
-    }
-
-    public static void clearArmor(@NotNull Player player) {
-        player.getInventory().setArmorContents(new ItemStack[4]);
-    }
-
     /**
      * Async lookup of player name from Mojang API.
      *
@@ -335,32 +336,14 @@ public class PlayerUtil {
                 if (conn.getResponseCode() != 200) return null;
 
                 try (InputStream in = conn.getInputStream();
-                     InputStreamReader reader = new InputStreamReader(in, StandardCharsets.UTF_8)) {
+                     InputStreamReader reader = new InputStreamReader(in)) {
 
                     JsonObject json = JsonParser.parseReader(reader).getAsJsonObject();
                     return json.has("name") ? json.get("name").getAsString() : null;
                 }
-            } catch (java.io.IOException | IllegalStateException e) {
+            } catch (Exception e) {
                 return null;
             }
         });
-    }
-
-    private static boolean ensureGeyserInitialized() {
-        if (isGeyserInstalled != null) {
-            return isGeyserInstalled;
-        }
-
-        synchronized (PlayerUtil.class) {
-            if (isGeyserInstalled == null) {
-                if (Bukkit.getPluginManager().getPlugin("Geyser-Spigot") != null) {
-                    geyserApi = GeyserApi.api();
-                    isGeyserInstalled = true;
-                } else {
-                    isGeyserInstalled = false;
-                }
-            }
-            return isGeyserInstalled;
-        }
     }
 }

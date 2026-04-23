@@ -46,10 +46,7 @@ public class PackMetaGenerator extends ResourcePackGenerator {
             root.add("pack", pack);
 
             Path out = new File(resourcePackDir, "pack.mcmeta").toPath();
-            Path parent = out.getParent();
-            if (parent != null) {
-                Files.createDirectories(parent);
-            }
+            Files.createDirectories(out.getParent());
             Files.writeString(out, new GsonBuilder().setPrettyPrinting().create().toJson(root));
         } catch (Exception e) {
             throw new ResourcePackGeneratorException("Failed to write pack.mcmeta", e);

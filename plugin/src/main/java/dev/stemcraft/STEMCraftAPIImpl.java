@@ -50,10 +50,10 @@ import java.io.File;
  * Implementation of the STEMCraftAPI interface.
  */
 public class STEMCraftAPIImpl extends HasMessagesImpl implements STEMCraftAPI {
-    private final STEMCraft plugin;
+    private static STEMCraft plugin;
 
     public STEMCraftAPIImpl(STEMCraft plugin) {
-        this.plugin = plugin;
+        STEMCraftAPIImpl.plugin = plugin;
     }
 
     /**

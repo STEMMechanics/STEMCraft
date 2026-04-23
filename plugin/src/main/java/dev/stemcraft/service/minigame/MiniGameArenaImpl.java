@@ -21,9 +21,7 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.command.CommandSender;
-import org.bukkit.entity.Entity;
 import org.bukkit.entity.Firework;
-import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.FireworkMeta;
@@ -43,7 +41,6 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         Color.LIME,
         Color.FUCHSIA
     };
-    private static final long SUPPLY_DROP_SIGNAL_PERIOD_TICKS = 40L;
 
     private final MiniGameServiceImpl service;
     private final STEMCraftAPI api;
@@ -77,7 +74,6 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
     private final Set<Material> unlimitedAmmo = EnumSet.noneOf(Material.class);
     private final Set<Material> unlimitedPlacements = EnumSet.noneOf(Material.class);
     private final Set<String> activeCelebrationKeys = new HashSet<>();
-    private final Map<UUID, SupplyDropMarker> supplyDropMarkers = new HashMap<>();
     private final Map<UUID, Long> protectionUntil = new HashMap<>();
     private final Map<String, Map<Material, Integer>> kits = new HashMap<>();
 
@@ -86,13 +82,13 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
 
     /**
      * Constructor
-     *
-     * @param api       STEMCraft API
+     * @param api STEMCraft API
      * @param namespace The arena namespace
-     * @param id        The arena ID
-     * @param world     The world the arena is in
+     * @param id The arena ID
+     * @param world The world the arena is in
+     * @param region The region of the arena
      */
-    MiniGameArenaImpl(@NotNull MiniGameServiceImpl service, @NotNull STEMCraftAPI api, @NotNull String namespace, @NotNull String id, @NotNull World world) {
+    MiniGameArenaImpl(@NotNull MiniGameServiceImpl service, @NotNull STEMCraftAPI api, @NotNull String namespace, @NotNull String id, @NotNull World world, SCRegion region) {
         this.service = service;
         this.api = api;
         this.namespace = namespace;
@@ -101,8 +97,9 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         this.world = world;
         this.lobbySpawn = world.getSpawnLocation();
         this.spectatorSpawn = this.lobbySpawn;
-        this.region = null;
+        this.region = region;
         this.status = ArenaStatus.SETUP;
+        this.validated = false;
     }
 
     /**
@@ -473,6 +470,26 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         removeSpectatorInternal(player, true, false);
     }
 
+    @Override
+    public void showTitle(String title, String subtitle, Duration fadeIn, Duration stay, Duration fadeOut) {
+        Title adventureTitle = Title.title(
+                TextUtil.colourise(api.messages().tokens().apply(title)),
+                TextUtil.colourise(api.messages().tokens().apply(subtitle)),
+                Title.Times.times(fadeIn, stay, fadeOut)
+        );
+
+        for (Player player : players.keySet()) {
+            player.showTitle(adventureTitle);
+        }
+    }
+
+    @Override
+    public void resetTitle() {
+        for (Player player : players.keySet()) {
+            player.resetTitle();
+        }
+    }
+
     /**
      * Get a list of teams in the arena.
      *
@@ -725,7 +742,12 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
 
         if (clearInventory) {
             player.getInventory().clear();
-            player.getInventory().setArmorContents(new ItemStack[0]);
+            // TODO: I've been using ItemStack[0] for this, but when I was reading this line
+            //  for merging, nomad put in ItemStack[4]. ItemStack[0] seemed to work as intended
+            //  in my limited testing.
+            //  If ItemStack[0] works, it would at least be a bit smaller to allocate than ItemStack[4],
+            //  but that'd be pretty minor.
+            player.getInventory().setArmorContents(new ItemStack[4]);
         }
 
         for (Map.Entry<Material, Integer> entry : kit.entrySet()) {
@@ -845,50 +867,6 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         }
     }
 
-    @Override
-    public void trackSupplyDrop(Item item, Location markerLocation) {
-        if (item == null || markerLocation == null || markerLocation.getWorld() == null) {
-            return;
-        }
-
-        UUID itemId = item.getUniqueId();
-        clearSupplyDrop(itemId);
-
-        String celebrationKey = "supply-drop-" + itemId;
-        Location signalLocation = markerLocation.clone();
-        supplyDropMarkers.put(itemId, new SupplyDropMarker(celebrationKey));
-        startCelebration(
-            celebrationKey,
-            signalLocation,
-            3,
-            Color.AQUA,
-            Color.YELLOW,
-            Color.WHITE
-        );
-        startSupplyDropSignal(itemId, signalLocation);
-    }
-
-    @Override
-    public void clearAllSupplyDrops() {
-        for (UUID itemId : new ArrayList<>(supplyDropMarkers.keySet())) {
-            clearSupplyDrop(itemId);
-        }
-    }
-
-    boolean tracksSupplyDrop(@NotNull UUID itemId) {
-        return supplyDropMarkers.containsKey(itemId);
-    }
-
-    void pruneSupplyDrops() {
-        for (UUID itemId : new ArrayList<>(supplyDropMarkers.keySet())) {
-            Entity entity = world.getEntity(itemId);
-            if (entity instanceof Item arenaItem && arenaItem.isValid() && !arenaItem.isDead()) {
-                continue;
-            }
-            clearSupplyDrop(itemId);
-        }
-    }
-
     void handlePlayerQuit(Player player) {
         if (players.containsKey(player)) {
             removeActivePlayer(player, false, true);
@@ -957,64 +935,13 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         return NamespaceId.sanitizePath(key);
     }
 
-    void clearSupplyDrop(@NotNull UUID itemId) {
-        SupplyDropMarker marker = supplyDropMarkers.remove(itemId);
-        if (marker == null) {
-            return;
-        }
-
-        api.tasks().cancel(supplyDropSignalTaskId(itemId));
-        stopCelebration(marker.celebrationKey());
-    }
-
-    private void startSupplyDropSignal(@NotNull UUID itemId, @NotNull Location signalLocation) {
-        String taskId = supplyDropSignalTaskId(itemId);
-        api.tasks().cancel(taskId);
-        api.tasks().repeating(taskId, 0L, SUPPLY_DROP_SIGNAL_PERIOD_TICKS, () -> {
-            Entity entity = world.getEntity(itemId);
-            if (!(entity instanceof Item item) || !item.isValid() || item.isDead()) {
-                clearSupplyDrop(itemId);
-                return;
-            }
-            launchSupplyDropSignalFirework(signalLocation);
-        });
-    }
-
-    private void launchSupplyDropSignalFirework(@NotNull Location signalLocation) {
-        World fireworkWorld = signalLocation.getWorld();
-        if (fireworkWorld == null) {
-            return;
-        }
-
-        Location launchLocation = signalLocation.clone();
-        ThreadLocalRandom random = ThreadLocalRandom.current();
-        fireworkWorld.spawn(launchLocation, Firework.class, firework -> {
-            FireworkMeta meta = firework.getFireworkMeta();
-            meta.clearEffects();
-            meta.addEffect(FireworkEffect.builder()
-                .with(random.nextBoolean() ? FireworkEffect.Type.BALL_LARGE : FireworkEffect.Type.BURST)
-                .trail(true)
-                .flicker(random.nextBoolean())
-                .withColor(Color.AQUA, Color.YELLOW)
-                .withFade(Color.WHITE)
-                .build());
-            int powerRoll = random.nextInt(100);
-            meta.setPower(powerRoll < 10 ? 4 : powerRoll < 30 ? 3 : powerRoll < 60 ? 2 : 1);
-            firework.setFireworkMeta(meta);
-        });
-    }
-
-    private String supplyDropSignalTaskId(@NotNull UUID itemId) {
-        return "minigame-supply-drop-signal-" + NamespaceId.sanitizePath(namespace) + "-" + NamespaceId.sanitizePath(id) + "-" + itemId.toString().replace('-', '_');
-    }
-
     private void removeActivePlayer(Player player, boolean restoreLocation, boolean quitting) {
         MiniGamePlayerImpl mgPlayer = detachActiveProfile(player, true, quitting);
         if (mgPlayer == null) {
             return;
         }
 
-        service.restorePreviousPlayerState(player, restoreLocation);
+        service.restorePreviousPlayerState(player, restoreLocation, true);
     }
 
     private void removeSpectatorInternal(Player player, boolean restoreLocation, boolean quitting) {
@@ -1022,7 +949,7 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         if (spectatorProfile == null) {
             return;
         }
-        service.restorePreviousPlayerState(player, restoreLocation);
+        service.restorePreviousPlayerState(player, restoreLocation, true);
     }
 
     private @Nullable MiniGamePlayerImpl detachActiveProfile(Player player, boolean notifyHandler, boolean quitting) {
@@ -1083,23 +1010,6 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         return spectatorProfile;
     }
 
-    @Override public void showTitle(String title, String subtitle, Duration fadeIn, Duration stay, Duration fadeOut) {
-        players.forEach((player, minigamePlayer) -> player.showTitle(Title.title(
-                TextUtil.colourise(title),
-                TextUtil.colourise(subtitle),
-                Title.Times.times(
-                        fadeIn,
-                        stay,
-                        fadeOut
-                )
-        )));
-    }
-
-    @Override
-    public void resetTitle() {
-        players.forEach((player, minigamePlayer) -> player.resetTitle());
-    }
-
     @Override
     public @NotNull dev.stemcraft.api.message.TokenProcessor tokens() {
         return api.messages().tokens();
@@ -1154,8 +1064,5 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
             }
         }
         api.messages().broadcast(message, excluded, placeholders);
-    }
-
-    private record SupplyDropMarker(@NotNull String celebrationKey) {
     }
 }

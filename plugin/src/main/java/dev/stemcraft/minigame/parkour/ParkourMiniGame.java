@@ -43,7 +43,7 @@ public class ParkourMiniGame extends BaseMiniGame {
     @Accessors(fluent = true)
     private static final String namespace = "parkour";
 
-    private ParkourConfig config;
+    private final ParkourConfig config;
 
     @Getter
     @Accessors(fluent = true)
@@ -53,11 +53,11 @@ public class ParkourMiniGame extends BaseMiniGame {
 
     public ParkourMiniGame(STEMCraftAPI api) {
         super(api);
+        this.config = new ParkourConfig(api, this);
     }
 
     @Override
     public void onLoad() {
-        config = new ParkourConfig(api, this);
         ParkourArenaHandler handler = new ParkourArenaHandler(api, this);
 
         minigame = createMiniGame(namespace, handler)
@@ -434,7 +434,7 @@ public class ParkourMiniGame extends BaseMiniGame {
             lobbyRegion = loadRegion(arenaSection, world, "start");
         }
         if (lobbyRegion == null) {
-            Location configuredSpawn = loadLocation(arenaSection, world);
+            Location configuredSpawn = loadLocation(arenaSection, world, "spawn");
             if (configuredSpawn != null) {
                 lobbyRegion = singleBlockRegion(configuredSpawn);
             }
@@ -472,8 +472,8 @@ public class ParkourMiniGame extends BaseMiniGame {
         return worlds.isEmpty() ? null : worlds.getFirst();
     }
 
-    private @Nullable Location loadLocation(@NotNull ConfigSection section, @NotNull World world) {
-        String serialized = section.getString("spawn");
+    private @Nullable Location loadLocation(@NotNull ConfigSection section, @NotNull World world, @NotNull String key) {
+        String serialized = section.getString(key);
         if (serialized.isBlank()) {
             return null;
         }

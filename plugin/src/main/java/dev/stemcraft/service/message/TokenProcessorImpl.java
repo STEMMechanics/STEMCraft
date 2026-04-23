@@ -35,15 +35,10 @@ public class TokenProcessorImpl implements TokenProcessor {
 
     /**
      * Constructs a new TokenProcessor with the given configuration.
-     */
-    public TokenProcessorImpl() {
-    }
-
-    /**
-     * Load tokens from config.
+     *
      * @param config The configuration section containing token definitions.
      */
-    public void fromConfig(ConfigSection config) {
+    public TokenProcessorImpl(ConfigSection config) {
         ConfigSection sec = config.getSection("tokens");
         if (sec != null) {
             for (String key : sec.getKeys(false)) {

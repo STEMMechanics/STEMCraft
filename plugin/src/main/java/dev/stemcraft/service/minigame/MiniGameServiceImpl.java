@@ -38,16 +38,12 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
-import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.entity.EntityShootBowEvent;
 import org.bukkit.event.entity.FoodLevelChangeEvent;
-import org.bukkit.event.entity.ItemDespawnEvent;
-import org.bukkit.event.entity.ItemMergeEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
-import org.bukkit.event.inventory.InventoryPickupItemEvent;
 import org.bukkit.event.world.WorldUnloadEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
@@ -88,9 +84,6 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
             for (MiniGame minigame : minigames.values()) {
                 MiniGameArenaHandler handler = minigame.handler();
                 for(MiniGameArena arena : minigame.arenas()) {
-                    if (arena instanceof MiniGameArenaImpl arenaImpl) {
-                        arenaImpl.pruneSupplyDrops();
-                    }
                     if (arena.getCountdown() > 0) {
                         int remaining = arena.decrementCountdown();
                         handler.onArenaCountdownTick(arena, remaining);
@@ -147,13 +140,8 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
             if (arena == null) return;
             MiniGameArenaHandler handler = handlers.get(arena.namespace());
 
-            MiniGameArenaHandler.HandlerEventResult result = handler.onBlockBreak(arena, event.getPlayer(), event.getBlock());
-            if (result == MiniGameArenaHandler.HandlerEventResult.DENY) {
+            if (handler.onBlockBreak(arena, event.getPlayer(), event.getBlock()) == MiniGameArenaHandler.HandlerEventResult.DENY) {
                 event.setCancelled(true);
-                return;
-            }
-            if (result == MiniGameArenaHandler.HandlerEventResult.ALLOW_NO_DROPS) {
-                event.setDropItems(false);
             }
         });
 
@@ -250,25 +238,6 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
             MiniGameArenaHandler handler = handlers.get(arena.namespace());
 
             if (handler.onPlayerDropItem(arena, event.getPlayer(), event.getItemDrop().getItemStack()) == MiniGameArenaHandler.HandlerEventResult.DENY) {
-                event.setCancelled(true);
-            }
-        });
-
-        api.events().register(EntityPickupItemEvent.class, event ->
-            clearTrackedSupplyDrop(event.getItem().getUniqueId())
-        );
-
-        api.events().register(InventoryPickupItemEvent.class, event ->
-            clearTrackedSupplyDrop(event.getItem().getUniqueId())
-        );
-
-        api.events().register(ItemDespawnEvent.class, event ->
-            clearTrackedSupplyDrop(event.getEntity().getUniqueId())
-        );
-
-        api.events().register(ItemMergeEvent.class, event -> {
-            if (findArenaTrackingSupplyDrop(event.getEntity().getUniqueId()) != null
-                || findArenaTrackingSupplyDrop(event.getTarget().getUniqueId()) != null) {
                 event.setCancelled(true);
             }
         });
@@ -382,7 +351,6 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
         }
 
         MiniGameImpl miniGame = new MiniGameImpl(this, namespace);
-        miniGame.init();
         minigames.put(namespace, miniGame);
         handlers.put(namespace, handler);
         return miniGame;
@@ -490,7 +458,6 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
         if (arenas != null) {
             MiniGameArenaImpl arena = arenas.remove(arenaId);
             if (arena != null) {
-                arena.clearAllSupplyDrops();
                 arena.stopAllCelebrations();
                 arena.removeAllOccupants();
 
@@ -542,30 +509,18 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
         return occupancy.arena();
     }
 
-    private void clearTrackedSupplyDrop(@NotNull UUID itemId) {
-        MiniGameArenaImpl arena = findArenaTrackingSupplyDrop(itemId);
-        if (arena != null) {
-            arena.clearSupplyDrop(itemId);
-        }
-    }
-
-    private @Nullable MiniGameArenaImpl findArenaTrackingSupplyDrop(@NotNull UUID itemId) {
-        for (Map<String, MiniGameArenaImpl> arenas : arenasByNamespace.values()) {
-            for (MiniGameArenaImpl arena : arenas.values()) {
-                if (arena.tracksSupplyDrop(itemId)) {
-                    return arena;
-                }
-            }
-        }
-        return null;
-    }
-
     public void storePreviousPlayerState(@NotNull Player player) {
         prevPlayerStates.putIfAbsent(player.getUniqueId(), StoredPlayerState.capture(player));
     }
 
-    void restorePreviousPlayerState(@NotNull Player player, boolean restoreLocation) {
-        StoredPlayerState state = prevPlayerStates.remove(player.getUniqueId());
+    public void restorePreviousPlayerState(@NotNull Player player, boolean restoreLocation) {
+        restorePreviousPlayerState(player, restoreLocation, true);
+    }
+
+    void restorePreviousPlayerState(@NotNull Player player, boolean restoreLocation, boolean consume) {
+        StoredPlayerState state = consume
+            ? prevPlayerStates.remove(player.getUniqueId())
+            : prevPlayerStates.get(player.getUniqueId());
         if (state == null) {
             return;
         }
@@ -615,7 +570,8 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
         player.setHealth(Math.min(PlayerUtil.getMaxHealth(player), 20.0d));
         PlayerInventory inventory = player.getInventory();
         inventory.clear();
-        inventory.setArmorContents(new ItemStack[0]);
+        ItemStack[] emptyItemStacks = {};
+        inventory.setArmorContents(emptyItemStacks);
         inventory.setItemInOffHand(null);
     }
 
@@ -698,8 +654,8 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
 
         ItemStack[] cloned = new ItemStack[source.length];
         for (int i = 0; i < source.length; i++) {
-            ItemStack item = source[i];
-            cloned[i] = item == null ? null : item.clone();
+            ItemStack sourceItemStack = source[i];
+            cloned[i] = sourceItemStack == null ? null : sourceItemStack.clone();
         }
         return cloned;
     }

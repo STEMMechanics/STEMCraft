@@ -103,13 +103,13 @@ public class RestrictCreative extends BaseFeature {
         BlockFace.UP,
         BlockFace.DOWN
     };
-    private static final String PERMISSION_INTERACT = "stemcraft.creative.override.interact";
-    private static final String PERMISSION_INVENTORY = "stemcraft.creative.override.inventory";
-    private static final String PERMISSION_DROP_ITEMS_ON_DEATH = "stemcraft.creative.override.drop_items_on_death";
-    private static final String PERMISSION_DROP_ITEMS = "stemcraft.creative.override.drop_items";
-    private static final String PERMISSION_PICKUP_ITEMS = "stemcraft.creative.override.pickup_items";
-    private static final String PERMISSION_PLACE_PORTALS = "stemcraft.creative.override.place_portals";
-    private static final String PERMISSION_PLACE_RESTRICTED_BLOCKS = "stemcraft.creative.override.place_restricted_blocks";
+    private final String PERMISSION_INTERACT = "stemcraft.creative.override.interact";
+    private final String PERMISSION_INVENTORY = "stemcraft.creative.override.inventory";
+    private final String PERMISSION_DROP_ITEMS_ON_DEATH = "stemcraft.creative.override.drop_items_on_death";
+    private final String PERMISSION_DROP_ITEMS = "stemcraft.creative.override.drop_items";
+    private final String PERMISSION_PICKUP_ITEMS = "stemcraft.creative.override.pickup_items";
+    private final String PERMISSION_PLACE_PORTALS = "stemcraft.creative.override.place_portals";
+    private final String PERMISSION_PLACE_RESTRICTED_BLOCKS = "stemcraft.creative.override.place_restricted_blocks";
     private final Map<BlockKey, Long> attributedPortalSetup = new HashMap<>();
 
     /**
@@ -129,7 +129,7 @@ public class RestrictCreative extends BaseFeature {
         api.events().register(PlayerInteractEntityEvent.class, event -> {
             Player player = event.getPlayer();
             if (player.getGameMode() == GameMode.CREATIVE
-                    && !event.getPlayer().hasPermission(PERMISSION_INTERACT)) {
+                    && !event.getPlayer().hasPermission(this.PERMISSION_INTERACT)) {
                 api.messages().error(player, "RESTRICT_CREATIVE_NO_INTERACT");
                 event.setCancelled(true);
             }

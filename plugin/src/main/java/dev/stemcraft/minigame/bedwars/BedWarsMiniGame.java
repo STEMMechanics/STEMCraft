@@ -47,7 +47,7 @@ public class BedWarsMiniGame extends BaseMiniGame {
     @Accessors(fluent = true)
     private static final String namespace = "bedwars";
 
-    private BedWarsConfig config;
+    private final BedWarsConfig config;
 
     @Getter
     @Accessors(fluent = true)
@@ -58,11 +58,11 @@ public class BedWarsMiniGame extends BaseMiniGame {
 
     public BedWarsMiniGame(STEMCraftAPI api) {
         super(api);
+        this.config = new BedWarsConfig(api, this);
     }
 
     @Override
     public void onLoad() {
-        config = new BedWarsConfig(api, this);
         BedWarsArenaHandler handler = new BedWarsArenaHandler(api, this);
 
         minigame = createMiniGame(namespace, handler)
@@ -73,7 +73,7 @@ public class BedWarsMiniGame extends BaseMiniGame {
 
         for (int i = 0; i < 8; i++) {
             final int index = i;
-            minigame.registerArenaPlaceholder("team-line-" + (i + 1), (arena, team, player) -> renderTeamLine(arena, player, index));
+            minigame.registerArenaPlaceholder("team-line-" + (i + 1), (arena, team, player) -> renderTeamLine(arena, index));
         }
 
         registerStats();
@@ -171,12 +171,9 @@ public class BedWarsMiniGame extends BaseMiniGame {
             .setSpectatorSpawn(world.getSpawnLocation())
             .setMinPlayers(2)
             .setMaxPlayers(8)
-            .set("startCountdownSeconds", BedWarsConfig.DEFAULT_START_COUNTDOWN_SECONDS)
-            .set("endingSeconds", BedWarsConfig.DEFAULT_ENDING_SECONDS)
             .set("teamSize", 1)
             .set("autoAssignTeams", false)
-            .set("dropItems", BedWarsConfig.defaultDropItems())
-            .set("dropSurfaceMaterials", BedWarsConfig.defaultDropSurfaceMaterials());
+            .set("dropItems", BedWarsConfig.defaultDropItems());
 
         registerArenaStats(arena);
         return arena;
@@ -240,12 +237,9 @@ public class BedWarsMiniGame extends BaseMiniGame {
                     .setMinPlayers(arenaDef.minPlayers())
                     .setMaxPlayers(arenaDef.maxPlayers())
                     .set("arenaRegion", arenaDef.arenaRegion())
-                    .set("startCountdownSeconds", arenaDef.startCountdownSeconds())
-                    .set("endingSeconds", arenaDef.endingSeconds())
                     .set("teamSize", arenaDef.teamSize())
                     .set("autoAssignTeams", false)
-                    .set("dropItems", new ArrayList<>(arenaDef.dropItems()))
-                    .set("dropSurfaceMaterials", new ArrayList<>(arenaDef.dropSurfaceMaterials()));
+                    .set("dropItems", new ArrayList<>(arenaDef.dropItems()));
 
                 for (BedWarsArenaRecord.TeamDef teamDef : arenaDef.teams().values()) {
                     MiniGameTeam team = arena.addTeam(teamDef.teamId(), teamDef.displayName(), teamDef.spawn());
@@ -292,14 +286,6 @@ public class BedWarsMiniGame extends BaseMiniGame {
         return namespace + "_" + suffix + "_" + normalized;
     }
 
-    public int startCountdownSeconds(@NotNull MiniGameArena arena) {
-        return Math.max(1, arena.get("startCountdownSeconds", Integer.class, BedWarsConfig.DEFAULT_START_COUNTDOWN_SECONDS));
-    }
-
-    public int endingSeconds(@NotNull MiniGameArena arena) {
-        return Math.max(1, arena.get("endingSeconds", Integer.class, BedWarsConfig.DEFAULT_ENDING_SECONDS));
-    }
-
     private void registerStats() {
         for (String suffix : STAT_SUFFIXES) {
             api.playerStats().register(new PlayerStatDefinition(
@@ -332,9 +318,9 @@ public class BedWarsMiniGame extends BaseMiniGame {
         }
     }
 
-    void incrementStat(@NotNull String suffix, @NotNull MiniGameArena arena, @NotNull MiniGamePlayer player) {
-        api.playerStats().increment(player.getPlayer().getUniqueId(), player.getPlayer().getName(), globalStatKey(suffix), 1.0);
-        api.playerStats().increment(player.getPlayer().getUniqueId(), player.getPlayer().getName(), arenaStatKey(suffix, arena.id()), 1.0);
+    void incrementStat(@NotNull String suffix, @NotNull MiniGameArena arena, @NotNull MiniGamePlayer player, double amount) {
+        api.playerStats().increment(player.getPlayer().getUniqueId(), player.getPlayer().getName(), globalStatKey(suffix), amount);
+        api.playerStats().increment(player.getPlayer().getUniqueId(), player.getPlayer().getName(), arenaStatKey(suffix, arena.id()), amount);
     }
 
     private String titleForStat(String suffix) {
@@ -362,10 +348,8 @@ public class BedWarsMiniGame extends BaseMiniGame {
         for (MiniGameTeam team : arena.getTeams()) {
             Map<Material, Integer> kit = new LinkedHashMap<>();
             kit.put(Material.WOODEN_SWORD, 1);
-            Material wool = TeamNames.getMaterial(team.getName());
-            kit.put(wool, 64);
-            arena.addKit(team.getName(), team.get("displayName", String.class, team.getName()) + " Kit", wool, kit);
-            arena.setUnlimitedPlacement(wool, true);
+            kit.put(TeamNames.getMaterial(team.getName()), 64);
+            arena.addKit(team.getName(), team.get("displayName", String.class, team.getName()) + " Kit", TeamNames.getMaterial(team.getName()), kit);
         }
     }
 
@@ -374,17 +358,14 @@ public class BedWarsMiniGame extends BaseMiniGame {
         return arena.getOrCreate("dropItems", List.class, BedWarsConfig::defaultDropItems);
     }
 
-    @SuppressWarnings("unchecked")
-    public @NotNull List<Material> dropSurfaceMaterials(@NotNull MiniGameArena arena) {
-        return arena.getOrCreate("dropSurfaceMaterials", List.class, BedWarsConfig::defaultDropSurfaceMaterials);
-    }
-
-    String renderTeamLine(@Nullable MiniGameArena arena, @Nullable MiniGamePlayer viewer, int index) {
+    private String renderTeamLine(@Nullable MiniGameArena arena, int index) {
         if (arena == null) {
             return "";
         }
 
-        List<MiniGameTeam> teams = scoreboardTeams(arena);
+        List<MiniGameTeam> teams = arena.getTeams().stream()
+            .sorted(Comparator.comparing(MiniGameTeam::getName))
+            .toList();
         if (index >= teams.size()) {
             return "";
         }
@@ -396,19 +377,7 @@ public class BedWarsMiniGame extends BaseMiniGame {
         boolean eliminated = players == 0
             && !bedAlive
             && arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING;
-        return teamLineFormat.render(team, displayName, players, bedAlive, eliminated, isViewerTeam(team, viewer));
-    }
-
-    @NotNull List<MiniGameTeam> scoreboardTeams(@NotNull MiniGameArena arena) {
-        return arena.getTeams().stream()
-            .filter(team -> !arena.getTeamPlayers(team.getName()).isEmpty()
-                || !team.get("bedAlive", Boolean.class, true))
-            .sorted(Comparator.comparing(MiniGameTeam::getName))
-            .toList();
-    }
-
-    private boolean isViewerTeam(@NotNull MiniGameTeam team, @Nullable MiniGamePlayer viewer) {
-        return viewer != null && team.getName().equalsIgnoreCase(viewer.getTeam());
+        return teamLineFormat.render(team, displayName, players, bedAlive, eliminated);
     }
 
     private String renderWinner(@NotNull MiniGameArena arena) {
@@ -416,22 +385,8 @@ public class BedWarsMiniGame extends BaseMiniGame {
         if (winner.isBlank()) {
             return "-";
         }
-        return teamDisplayName(arena.getTeam(winner), winner);
-    }
-
-    @NotNull String teamDisplayName(@Nullable MiniGameTeam team, @NotNull String fallbackTeamName) {
-        if (team == null) {
-            return defaultTeamDisplayName(fallbackTeamName);
-        }
-
-        String displayName = team.get("displayName", String.class, "");
-        return displayName.isBlank() || displayName.equalsIgnoreCase(team.getName())
-            ? defaultTeamDisplayName(team.getName())
-            : displayName;
-    }
-
-    private @NotNull String defaultTeamDisplayName(@NotNull String teamName) {
-        return StringUtil.capitalize(StringUtil.beautify(teamName));
+        MiniGameTeam team = arena.getTeam(winner);
+        return team == null ? StringUtil.beautify(winner) : team.get("displayName", String.class, StringUtil.beautify(winner));
     }
 
     private @NotNull TeamLineFormat loadTeamLineFormat(@NotNull ConfigSection root) {
@@ -511,8 +466,7 @@ public class BedWarsMiniGame extends BaseMiniGame {
             @NotNull String displayName,
             int playerCount,
             boolean bedAlive,
-            boolean eliminated,
-            boolean viewerTeam
+            boolean eliminated
         ) {
             String colour = teamColours.getOrDefault(team.getName().toLowerCase(Locale.ROOT), displayName);
             String state = eliminated
@@ -521,10 +475,9 @@ public class BedWarsMiniGame extends BaseMiniGame {
                     bedAlive ? bed : noBed,
                     PlaceholderUtil.apply(remainingPlayers, "count", Integer.toString(playerCount))
                 );
-            String you = viewerTeam ? " &7(You)" : "";
 
             return PlaceholderUtil.apply(
-                teamLine + you,
+                teamLine,
                 "colour", colour,
                 "color", colour,
                 "state", state,
@@ -555,16 +508,18 @@ public class BedWarsMiniGame extends BaseMiniGame {
             return switch (teamId.toLowerCase(Locale.ROOT)) {
                 case TeamNames.TEAM_BLACK -> "&0" + name;
                 case TeamNames.TEAM_BLUE -> "&9" + name;
-                case TeamNames.TEAM_BROWN, TeamNames.TEAM_ORANGE -> "&6" + name;
+                case TeamNames.TEAM_BROWN, TeamNames.TEAM_ORANGE, TeamNames.TEAM_PINK -> "&6" + name;
                 case TeamNames.TEAM_CYAN -> "&3" + name;
                 case TeamNames.TEAM_GRAY -> "&8" + name;
                 case TeamNames.TEAM_GREEN -> "&2" + name;
                 case TeamNames.TEAM_LIGHT_BLUE -> "&b" + name;
                 case TeamNames.TEAM_LIGHT_GRAY -> "&7" + name;
                 case TeamNames.TEAM_LIME -> "&a" + name;
-                case TeamNames.TEAM_MAGENTA, TeamNames.TEAM_PINK -> "&d" + name;
-                case TeamNames.TEAM_PURPLE -> "&5" + name;
+                case TeamNames.TEAM_MAGENTA, TeamNames.TEAM_PURPLE -> "&d" + name;
                 case TeamNames.TEAM_RED -> "&c" + name;
+                case TeamNames.TEAM_WHITE -> //noinspection DuplicateBranchesInSwitch
+                        "&f" + name;
+                case TeamNames.TEAM_YELLOW -> "&e" + name;
                 default -> "&f" + name;
             };
         }

@@ -142,25 +142,26 @@ public class RegionServiceImpl extends BaseService implements RegionService {
 
     private Location resolveEffectiveEnterLocation(Player player, Location from, Location requestedTo) {
         Location actual = player.getLocation();
-        if (differentBlockLocation(actual, from) && differentBlockLocation(actual, requestedTo)) {
+
+        if (!sameBlockLocation(actual, from) && !sameBlockLocation(actual, requestedTo)) {
             return actual;
         }
 
         return requestedTo;
     }
 
-    private boolean differentBlockLocation(Location left, Location right) {
+    private boolean sameBlockLocation(Location left, Location right) {
         if (left == null || right == null) {
-            return true;
+            return false;
         }
         if (left.getWorld() == null || right.getWorld() == null) {
-            return true;
+            return false;
         }
 
-        return !left.getWorld().equals(right.getWorld())
-            || left.getBlockX() != right.getBlockX()
-            || left.getBlockY() != right.getBlockY()
-            || left.getBlockZ() != right.getBlockZ();
+        return left.getWorld().equals(right.getWorld())
+            && left.getBlockX() == right.getBlockX()
+            && left.getBlockY() == right.getBlockY()
+            && left.getBlockZ() == right.getBlockZ();
     }
 
     /**

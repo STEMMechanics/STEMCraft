@@ -16,10 +16,7 @@ public class FileUtil {
      * Existing files are replaced.
      */
     public static void copyFile(Path src, Path dest) throws IOException {
-        Path parent = dest.getParent();
-        if (parent != null) {
-            Files.createDirectories(parent);
-        }
+        Files.createDirectories(dest.getParent());
         Files.copy(src, dest, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
     }
 
@@ -54,10 +51,7 @@ public class FileUtil {
                                                       @NonNull BasicFileAttributes attrs) throws IOException {
                 Path rel = srcDir.relativize(file);
                 Path target = destDir.resolve(rel);
-                Path parent = target.getParent();
-                if (parent != null) {
-                    Files.createDirectories(parent);
-                }
+                Files.createDirectories(target.getParent());
 
                 if (!overwrite && Files.exists(target)) {
                     return FileVisitResult.CONTINUE;

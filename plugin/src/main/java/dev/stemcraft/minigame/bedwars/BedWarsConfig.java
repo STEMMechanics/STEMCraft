@@ -10,7 +10,6 @@ import dev.stemcraft.api.util.LocationUtil;
 import dev.stemcraft.api.util.StringUtil;
 import dev.stemcraft.exception.MiniGameInvalidArenaConfigException;
 import dev.stemcraft.minigame.MiniGameConfigSupport;
-import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -25,8 +24,6 @@ import java.util.Map;
 import java.util.Set;
 
 public class BedWarsConfig {
-    static final int DEFAULT_START_COUNTDOWN_SECONDS = 30;
-    static final int DEFAULT_ENDING_SECONDS = 20;
     private static final int MIN_TEAMS = 2;
     private static final int MAX_TEAMS = 8;
 
@@ -49,9 +46,7 @@ public class BedWarsConfig {
         if (worldName.isEmpty()) {
             throw new MiniGameInvalidArenaConfigException("World not defined for arena '" + arenaId + "'.");
         }
-        if(Bukkit.getWorld(worldName) == null) {
-            throw new MiniGameInvalidArenaConfigException("World '" + worldName + "' does not exist.");
-        }
+
         World world = MiniGameConfigSupport.requireWorld(api, arenaId, worldName);
 
         Location lobby = loadLocation(section, world, arenaId, "lobby", true);
@@ -63,12 +58,9 @@ public class BedWarsConfig {
         SCRegion arenaRegion = loadRegion(section, world, arenaId, "arena", "Arena");
         int minPlayers = section.getInt("min-players", 2);
         int maxPlayers = section.getInt("max-players", 8);
-        int startCountdownSeconds = section.getInt("start-countdown-seconds", DEFAULT_START_COUNTDOWN_SECONDS);
-        int endingSeconds = section.getInt("ending-seconds", DEFAULT_ENDING_SECONDS);
         int teamSize = section.getInt("team-size", 1);
         String name = section.getString("name", StringUtil.beautify(arenaId));
         List<Material> dropItems = loadDropItems(section, arenaId);
-        List<Material> dropSurfaceMaterials = loadDropSurfaceMaterials(section, arenaId);
 
         ConfigSection teams = section.getSection("teams", false);
         if (teams == null) {
@@ -99,17 +91,14 @@ public class BedWarsConfig {
             arenaId,
             enabled,
             name,
-            worldName,
+            world,
             lobby,
             spectator,
             arenaRegion,
             minPlayers,
             maxPlayers,
-            startCountdownSeconds,
-            endingSeconds,
             teamSize,
             dropItems,
-            dropSurfaceMaterials,
             teamDefs
         );
     }
@@ -127,13 +116,9 @@ public class BedWarsConfig {
         arenaConfig.set("arena", serializeRegion(arena.get("arenaRegion", SCRegion.class), arena.id(), "arena"));
         arenaConfig.set("min-players", arena.getMinPlayers());
         arenaConfig.set("max-players", arena.getMaxPlayers());
-        arenaConfig.set("start-countdown-seconds", arena.get("startCountdownSeconds", Integer.class, DEFAULT_START_COUNTDOWN_SECONDS));
-        arenaConfig.set("ending-seconds", arena.get("endingSeconds", Integer.class, DEFAULT_ENDING_SECONDS));
         arenaConfig.set("team-size", arena.get("teamSize", Integer.class, 1));
         List<?> rawDropItems = arena.get("dropItems", List.class);
         arenaConfig.set("drop-items", serializeDropItems(rawDropItems, arena.id()));
-        List<?> rawDropSurfaceMaterials = arena.get("dropSurfaceMaterials", List.class);
-        arenaConfig.set("drop-surface-materials", serializeDropSurfaceMaterials(rawDropSurfaceMaterials, arena.id()));
 
         ConfigSection teamsConfig = arenaConfig.createSection("teams", true);
         for (MiniGameTeam team : arena.getTeams()) {
@@ -161,20 +146,21 @@ public class BedWarsConfig {
         return arenas != null && arenas.isSection(arenaId);
     }
 
-    public void setArenaEnabled(@NotNull String arenaId, boolean enabled) {
+    public boolean setArenaEnabled(@NotNull String arenaId, boolean enabled) {
         ensureLoaded();
         ConfigSection arenas = config.getSection("arenas", false);
         if (arenas == null || !arenas.isSection(arenaId)) {
-            return;
+            return false;
         }
 
         ConfigSection arenaConfig = arenas.getSection(arenaId, false);
         if (arenaConfig == null) {
-            return;
+            return false;
         }
 
         arenaConfig.set("enabled", enabled);
         config.save();
+        return true;
     }
 
     public @Nullable ConfigSection getSection(String path) {
@@ -193,10 +179,6 @@ public class BedWarsConfig {
         items.add(Material.TNT);
         items.add(Material.GOLDEN_APPLE);
         return items;
-    }
-
-    static @NotNull List<Material> defaultDropSurfaceMaterials() {
-        return List.of(Material.GRASS_BLOCK);
     }
 
     private void validateArenaForSave(@NotNull MiniGameArena arena) {
@@ -311,37 +293,6 @@ public class BedWarsConfig {
         return items;
     }
 
-    private @NotNull List<Material> loadDropSurfaceMaterials(@NotNull ConfigSection section, @NotNull String arenaId) {
-        if (!section.contains("drop-surface-materials")) {
-            List<Material> defaults = defaultDropSurfaceMaterials();
-            section.set("drop-surface-materials", serializeDropSurfaceMaterials(new ArrayList<>(defaults), arenaId));
-            section.save();
-            return new ArrayList<>(defaults);
-        }
-
-        List<Material> materials = new ArrayList<>();
-        boolean normalized = false;
-        for (Object raw : section.getList("drop-surface-materials")) {
-            Material material = parseDropMaterial(raw);
-            if (material != null && !material.isAir()) {
-                materials.add(material);
-                normalized |= !(raw instanceof String);
-                continue;
-            }
-
-            if (raw != null) {
-                throw new MiniGameInvalidArenaConfigException("Arena '" + arenaId + "' has an invalid drop surface material entry.");
-            }
-        }
-
-        if (normalized) {
-            section.set("drop-surface-materials", serializeDropSurfaceMaterials(new ArrayList<>(materials), arenaId));
-            section.save();
-        }
-
-        return materials;
-    }
-
     private @NotNull List<String> serializeDropItems(@Nullable List<?> rawDropItems, @NotNull String arenaId) {
         if (rawDropItems == null) {
             return List.of();
@@ -358,33 +309,12 @@ public class BedWarsConfig {
         return serialized;
     }
 
-    private @NotNull List<String> serializeDropSurfaceMaterials(@Nullable List<?> rawDropSurfaceMaterials, @NotNull String arenaId) {
-        if (rawDropSurfaceMaterials == null) {
-            return List.of();
-        }
-
-        List<String> serialized = new ArrayList<>(rawDropSurfaceMaterials.size());
-        for (Object raw : rawDropSurfaceMaterials) {
-            Material material = parseDropMaterial(raw);
-            if (material == null || material.isAir()) {
-                throw new MiniGameInvalidArenaConfigException("Arena '" + arenaId + "' has an invalid drop surface material entry.");
-            }
-            serialized.add(material.name());
-        }
-        return serialized;
-    }
-
     private @Nullable Material parseDropMaterial(@Nullable Object raw) {
         if (raw instanceof Material material) {
             return material;
         }
         if (raw instanceof String name) {
-            String normalized = name.trim();
-            Material material = Material.matchMaterial(normalized);
-            if (material == null && normalized.equalsIgnoreCase("grass")) {
-                return Material.GRASS_BLOCK;
-            }
-            return material;
+            return Material.matchMaterial(name.trim());
         }
         if (raw instanceof org.bukkit.inventory.ItemStack item) {
             return item.getType();
