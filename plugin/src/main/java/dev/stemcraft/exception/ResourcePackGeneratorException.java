@@ -41,7 +41,7 @@ public class ResourcePackGeneratorException extends RuntimeException {
      * The exception is immediately logged using the plugin logger.
      */
     public ResourcePackGeneratorException() {
-        STEMCraft.getPlugin().messages().error(this.getMessage(), this);
+        super();
     }
 
     /**
@@ -53,7 +53,6 @@ public class ResourcePackGeneratorException extends RuntimeException {
      */
     public ResourcePackGeneratorException(Throwable t) {
         super(t);
-        STEMCraft.getPlugin().messages().error(this.getMessage(), this);
     }
 
     /**
@@ -65,7 +64,6 @@ public class ResourcePackGeneratorException extends RuntimeException {
      */
     public ResourcePackGeneratorException(String message) {
         super(message);
-        STEMCraft.getPlugin().messages().error(message);
     }
 
     /**
@@ -78,6 +76,17 @@ public class ResourcePackGeneratorException extends RuntimeException {
      */
     public ResourcePackGeneratorException(String message, Throwable t) {
         super(message, t);
-        STEMCraft.getPlugin().messages().error(message, t);
+    }
+
+
+    /**
+     * Logs the exception to the plugin logger.
+     */
+    public void log() {
+        if (getCause() != null) {
+            STEMCraft.getPlugin().messages().error(getMessage(), getCause());
+        } else {
+            STEMCraft.getPlugin().messages().error(getMessage());
+        }
     }
 }

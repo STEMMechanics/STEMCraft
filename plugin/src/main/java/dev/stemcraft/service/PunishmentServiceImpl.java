@@ -558,9 +558,9 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
 
                         PunishmentRecord record = new PunishmentRecord(
                             id,
-                            targetUuidStr.isBlank() ? null : UUID.fromString(targetUuidStr),
+                                targetUuidStr.isBlank() ? null : UUID.fromString(targetUuidStr),
                             pSec.getString("target.name"),
-                            actorUuidStr.isBlank() ? null : UUID.fromString(actorUuidStr),
+                                actorUuidStr.isBlank() ? null : UUID.fromString(actorUuidStr),
                             pSec.getString("actor.name"),
                             pSec.getString("type"),
                             pSec.getBoolean("alerted", false),
@@ -584,7 +584,7 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
         PlayerProfile profile = Bukkit.createProfile(targetUuid, target.getName());
         BanList<PlayerProfile> banList = Bukkit.getBanList(BanListType.PROFILE);
         boolean bridgeActiveBan = plugin.webhookBridge() != null
-            && plugin.webhookBridge().hasActivePenalty(targetUuid, target.getName(), "ban");
+            && plugin.webhookBridge().hasActiveBan(targetUuid, target.getName());
 
         if (findActiveBan(targetUuid) == null && !banList.isBanned(profile) && !bridgeActiveBan) {
             cmd.error(sender, "PLAYER_NOT_BANNED", "player", target.getName());
@@ -607,7 +607,7 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
         Bukkit.getBanList(BanListType.PROFILE).pardon(profile);
     }
 
-    void syncReconcileActiveBans(Set<UUID> activeBanUuids, @Nullable String reason) {
+    void syncReconcileActiveBans(Set<UUID> activeBanUuids) {
         Set<UUID> staleLocalBans = new LinkedHashSet<>();
         synchronized (this) {
             for (PunishmentRecord record : punishments) {
@@ -629,7 +629,7 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
         }
 
         for (UUID uuid : staleLocalBans) {
-            syncLiftBan(uuid, reason);
+            syncLiftBan(uuid, "Lifted by website sync");
         }
     }
 
@@ -689,23 +689,23 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
         }
 
         Component message = Component.text("You are banned from this server.");
+
         if (record.reason() != null && !record.reason().isBlank()) {
-            message = message.appendNewline().append(
-                    Component.text("Reason: " + record.reason())
-                    );
+            message = message.append(Component.text("\nReason: " + record.reason()));
         }
+
         if (!record.permanent() && record.durationSeconds() != null && record.durationSeconds() > 0L) {
             Instant expiresAt = record.expiresAt();
             if (expiresAt != null) {
                 long remainingSeconds = Duration.between(Instant.now(), expiresAt).getSeconds();
                 if (remainingSeconds > 0L) {
-                    message = message.appendNewline()
-                            .append(
-                                    Component.text("\nRemaining: " + TimeUtil.formatDuration(remainingSeconds))
-                            );
+                    message = message.append(
+                            Component.text("\nRemaining: " + TimeUtil.formatDuration(remainingSeconds))
+                    );
                 }
             }
         }
+
         return message;
     }
 }

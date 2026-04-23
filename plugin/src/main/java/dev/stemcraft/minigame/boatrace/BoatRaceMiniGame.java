@@ -16,6 +16,7 @@ import dev.stemcraft.minigame.MiniGameHudConfigSupport;
 import dev.stemcraft.minigame.TimedRecordLeaderboard;
 import lombok.Getter;
 import lombok.experimental.Accessors;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
@@ -38,7 +39,7 @@ public class BoatRaceMiniGame extends BaseMiniGame {
     @Accessors(fluent = true)
     private static final String namespace = "boatrace";
 
-    private final BoatRaceConfig config;
+    private BoatRaceConfig config;
 
     @Getter
     @Accessors(fluent = true)
@@ -48,11 +49,11 @@ public class BoatRaceMiniGame extends BaseMiniGame {
 
     public BoatRaceMiniGame(STEMCraftAPI api) {
         super(api);
-        this.config = new BoatRaceConfig(api, this);
     }
 
     @Override
     public void onLoad() {
+        config = new BoatRaceConfig(api, this);
         BoatRaceArenaHandler handler = new BoatRaceArenaHandler(api, this);
 
         minigame = createMiniGame(namespace, handler)
@@ -163,6 +164,8 @@ public class BoatRaceMiniGame extends BaseMiniGame {
             .setSpectatorSpawn(world.getSpawnLocation())
             .setMinPlayers(1)
             .setMaxPlayers(8)
+            .set("startCountdownSeconds", BoatRaceConfig.DEFAULT_START_COUNTDOWN_SECONDS)
+            .set("endingSeconds", BoatRaceConfig.DEFAULT_ENDING_SECONDS)
             .set("arenaRegion", null)
             .set("finishRegion", null)
             .set("stageRegions", new ArrayList<SCRegion>())
@@ -231,6 +234,8 @@ public class BoatRaceMiniGame extends BaseMiniGame {
                     .setRegion(arenaDef.arenaRegion())
                     .setMinPlayers(arenaDef.minPlayers())
                     .setMaxPlayers(arenaDef.maxPlayers())
+                    .set("startCountdownSeconds", arenaDef.startCountdownSeconds())
+                    .set("endingSeconds", arenaDef.endingSeconds())
                     .set("arenaRegion", arenaDef.arenaRegion())
                     .set("finishRegion", arenaDef.finishRegion())
                     .set("stageRegions", new ArrayList<>(arenaDef.stages()))
@@ -303,6 +308,14 @@ public class BoatRaceMiniGame extends BaseMiniGame {
 
     public int stageCount(@NotNull MiniGameArena arena) {
         return stageRegions(arena).size();
+    }
+
+    public int startCountdownSeconds(@NotNull MiniGameArena arena) {
+        return Math.max(1, arena.get("startCountdownSeconds", Integer.class, BoatRaceConfig.DEFAULT_START_COUNTDOWN_SECONDS));
+    }
+
+    public int endingSeconds(@NotNull MiniGameArena arena) {
+        return Math.max(1, arena.get("endingSeconds", Integer.class, BoatRaceConfig.DEFAULT_ENDING_SECONDS));
     }
 
     public int stageProgress(@NotNull MiniGamePlayer player) {
@@ -427,7 +440,7 @@ public class BoatRaceMiniGame extends BaseMiniGame {
             Location nextTarget = nextTargetLocation(arena, uuid);
             double distance = nextTarget == null ? Double.MAX_VALUE : player.getLocation().distanceSquared(nextTarget);
             boolean finished = winner != null && winner.equals(uuid);
-            standings.add(new RaceStanding(uuid, player, progress, distance, finished));
+            standings.add(new RaceStanding(uuid, progress, distance, finished));
         }
 
         standings.sort(Comparator
@@ -549,11 +562,14 @@ public class BoatRaceMiniGame extends BaseMiniGame {
 
     public record RaceStanding(
         @NotNull UUID uuid,
-        @NotNull Player player,
         int progress,
         double distanceSquared,
         boolean finished
-    ) {}
+    ) {
+        public Player player() {
+            return Bukkit.getPlayer(uuid);
+        }
+    }
 
     public record FinishRecord(
         long durationMillis,

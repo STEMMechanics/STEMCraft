@@ -63,6 +63,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -100,8 +101,7 @@ public class ChatServiceImpl extends BaseService {
     private boolean muted;
 
     public ChatServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
-        super(plugin, api);
-        setConfigKey("chat");
+        super(plugin, api, "chat");
     }
 
     @Override
@@ -233,7 +233,6 @@ public class ChatServiceImpl extends BaseService {
             if (decision.filteredMessage() != null) {
                 List<String> filteredLines = splitSignLines(decision.filteredMessage());
                 for (int i = 0; i < 4; i++) {
-                    // HACK: variable "content" should be "Component"s. It's not. - ProjectHSI
                     event.line(i, Component.text(filteredLines.get(i)));
                 }
             }
@@ -412,9 +411,9 @@ public class ChatServiceImpl extends BaseService {
                     }
 
                     int count = ruleSection.getInt("count", 0);
-                    long windowSeconds = parseDurationSeconds(ruleSection.getString("within", "0s"), 0L);
+                    long windowSeconds = parseDurationSeconds(ruleSection.getString("within", "0s"));
                     String action = ruleSection.getString("action", "warn").trim().toLowerCase(Locale.ROOT);
-                    long durationSeconds = parseDurationSeconds(ruleSection.getString("duration", ""), 0L);
+                    long durationSeconds = parseDurationSeconds(ruleSection.getString("duration", ""));
 
                     if (count <= 0 || windowSeconds <= 0L || action.isBlank()) {
                         continue;
@@ -461,14 +460,14 @@ public class ChatServiceImpl extends BaseService {
         }
     }
 
-    private long parseDurationSeconds(String text, long defaultValue) {
+    private long parseDurationSeconds(String text) {
         if (text == null || text.isBlank()) {
-            return defaultValue;
+            return 0L;
         }
         try {
             return TimeUtil.parseDuration(text);
         } catch (IllegalArgumentException ignored) {
-            return defaultValue;
+            return 0L;
         }
     }
 
@@ -507,6 +506,7 @@ public class ChatServiceImpl extends BaseService {
     private ModerationActionRule recordViolation(UUID playerUuid) {
         Instant now = Instant.now();
         Deque<Instant> timestamps = contentFilterViolations.computeIfAbsent(playerUuid, ignored -> new LinkedList<>());
+
         synchronized (timestamps) {
             timestamps.addLast(now);
             if (moderationMaxWindowSeconds > 0L) {
@@ -516,21 +516,27 @@ public class ChatServiceImpl extends BaseService {
                 }
             }
 
-            ModerationActionRule matchedRule = null;
-            for (ModerationActionRule rule : moderationActionRules) {
-                if (timestamps.size() < rule.count()) {
-                    continue;
-                }
+            return findMatchedRule(timestamps, now);
+        }
+    }
 
-                List<Instant> snapshot = new ArrayList<>(timestamps);
-                Instant thresholdInstant = snapshot.get(snapshot.size() - rule.count());
-                if (!thresholdInstant.isBefore(now.minusSeconds(rule.windowSeconds()))) {
-                    matchedRule = rule;
-                }
+    private ModerationActionRule findMatchedRule(Deque<Instant> timestamps, Instant now) {
+        ModerationActionRule matchedRule = null;
+
+        for (ModerationActionRule rule : moderationActionRules) {
+            if (timestamps.size() < rule.count()) {
+                continue;
             }
 
-            return matchedRule;
+            List<Instant> snapshot = new ArrayList<>(timestamps);
+            Instant thresholdInstant = snapshot.get(snapshot.size() - rule.count());
+
+            if (!thresholdInstant.isBefore(now.minusSeconds(rule.windowSeconds()))) {
+                matchedRule = rule;
+            }
         }
+
+        return matchedRule;
     }
 
     private String buildModerationReason(String messageType, ModerationDecision decision) {
@@ -568,18 +574,20 @@ public class ChatServiceImpl extends BaseService {
 
         if (signing) {
             if (decoded.title() == null || decoded.title().isBlank()) {
-                updatedMeta.title(null);
+                updatedMeta.setTitle(null);
             } else {
-                updatedMeta.title(Component.text(decoded.title()));
+                updatedMeta.setTitle(decoded.title());
             }
         }
-        
-        updatedMeta = (BookMeta) updatedMeta.pages(decoded.pages().stream().map((bookString) -> (Component)Component.text(bookString)).toList());
+
+        for (int i = 0; i < decoded.pages().size(); i++) {
+            updatedMeta.page(i + 1, Component.text(decoded.pages().get(i)));
+        }
         return updatedMeta;
     }
 
     private EncodedBookContent encodeBookContent(BookMeta meta) {
-        String title = meta.hasTitle() && meta.getTitle() != null ? meta.getTitle() : "";
+        String title = meta.hasTitle() ? Objects.requireNonNullElse(meta.getTitle(), "") : "";
         List<String> pages = new ArrayList<>();
         for (Component page : meta.pages()) {
             pages.add(PLAIN.serialize(page));
@@ -587,7 +595,15 @@ public class ChatServiceImpl extends BaseService {
 
         String body = String.join(BOOK_PAGE_SEPARATOR, pages);
         String message = title + BOOK_TITLE_SEPARATOR + body;
-        if (title.isBlank() && pages.stream().allMatch(String::isBlank)) {
+        boolean allPagesBlank = true;
+        for (String page : pages) {
+            if (!page.isBlank()) {
+                allPagesBlank = false;
+                break;
+            }
+        }
+        boolean titleBlank = title.isEmpty();
+        if (titleBlank && allPagesBlank) {
             message = "";
         }
 

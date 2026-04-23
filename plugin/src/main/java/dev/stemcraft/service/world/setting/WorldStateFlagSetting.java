@@ -97,7 +97,6 @@ public final class WorldStateFlagSetting implements WorldBaseSetting {
         this.registrar = registrar;
     }
 
-    @SafeVarargs
     public static @NotNull WorldStateFlagSetting combined(@NotNull String key, @NotNull WorldStateFlagSetting... settings) {
         return new WorldStateFlagSetting(key, (setting, api, service) -> {
             for (WorldStateFlagSetting child : settings) {
@@ -297,11 +296,13 @@ public final class WorldStateFlagSetting implements WorldBaseSetting {
         String value = ctx.getArg(0, "").toLowerCase(Locale.ROOT);
         if (value.isEmpty()) {
             ctx.returnInfo("WORLD_SETTING_STATE_FLAG_STATUS", "setting", key(), "world", world.getName(), "value", get(world, config));
+            return;
         }
 
         String normalizedValue = normalizeStateValue(value);
         if (normalizedValue == null) {
             ctx.returnError("WORLD_SETTING_STATE_FLAG_INVALID", "setting", key(), "value", value);
+            return;
         }
 
         set(world, config, normalizedValue);

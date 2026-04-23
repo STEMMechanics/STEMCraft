@@ -12,13 +12,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class HologramServiceImplTest {
-    private ServerMock server;
     private WorldMock world;
     private WorldMock otherWorld;
 
     @BeforeEach
     void setUp() {
-        server = MockBukkit.mock();
+        ServerMock server = MockBukkit.mock();
         world = server.addSimpleWorld("hologram-tests");
         otherWorld = server.addSimpleWorld("other-world");
     }

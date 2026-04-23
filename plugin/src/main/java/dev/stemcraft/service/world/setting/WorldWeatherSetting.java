@@ -37,7 +37,7 @@ import java.util.Locale;
  * World setting to control weather conditions.
  */
 public class WorldWeatherSetting implements WorldBaseSetting {
-    private static final GameRule<Boolean> DO_WEATHER_CYCLE_RULE = requireGameRule("DO_WEATHER_CYCLE", Boolean.class);
+    private static final GameRule<Boolean> DO_WEATHER_CYCLE_RULE = requireWeatherCycleRule();
 
 
     /**
@@ -177,6 +177,8 @@ public class WorldWeatherSetting implements WorldBaseSetting {
                 world.setStorm(true);
                 world.setThundering(true);
             }
+            default -> {
+            }
         }
 
         world.setGameRule(DO_WEATHER_CYCLE_RULE, !always);
@@ -193,16 +195,16 @@ public class WorldWeatherSetting implements WorldBaseSetting {
     }
 
     @SuppressWarnings("unchecked")
-    private static <T> GameRule<T> requireGameRule(String name, Class<T> type) {
+    private static GameRule<Boolean> requireWeatherCycleRule() {
         try {
-            Object value = GameRule.class.getField(name).get(null);
-            if (!(value instanceof GameRule<?> rule) || !type.equals(rule.getType())) {
-                throw new IllegalStateException("Missing expected gamerule " + name);
+            Object value = GameRule.class.getField("DO_WEATHER_CYCLE").get(null);
+            if (!(value instanceof GameRule<?> rule) || !Boolean.class.equals(rule.getType())) {
+                throw new IllegalStateException("Missing expected gamerule DO_WEATHER_CYCLE");
             }
 
-            return (GameRule<T>) rule;
+            return (GameRule<Boolean>) rule;
         } catch (ReflectiveOperationException exception) {
-            throw new IllegalStateException("Missing expected gamerule " + name, exception);
+            throw new IllegalStateException("Missing expected gamerule DO_WEATHER_CYCLE", exception);
         }
     }
 }

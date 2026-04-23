@@ -218,18 +218,21 @@ public class BridgeCommand {
 
     private void commandInfo(CommandContext ctx) {
         MiniGameArena arena = requireArenaForInfo(ctx);
-        @SuppressWarnings("DataFlowIssue") ArenaValidationResult validation = arena.validate();
+        ArenaValidationResult validation = arena.validate();
         ctx.info("Arena '" + arena.id() + "':");
         ctx.info(" - Name: " + arena.getName());
         ctx.info(" - Status: " + arena.getStatus().name());
         ctx.info(" - Players: " + arena.numPlayers() + "/" + arena.getMaxPlayers());
         ctx.info(" - Spectators: " + arena.numSpectators());
         ctx.info(" - Min players: " + arena.getMinPlayers());
+        ctx.info(" - Start countdown: " + bridge.startCountdownSeconds(arena) + " sec");
+        ctx.info(" - Reset countdown: " + bridge.endingSeconds(arena) + " sec");
         ctx.info(" - Lobby: " + formatLocation(arena.getLobbySpawn()));
         ctx.info(" - Spectator: " + formatLocation(arena.getSpectatorSpawn()));
         ctx.info(" - Arena region: " + formatRegion(arena.get("arenaRegion", SCRegion.class)));
         ctx.info(" - Bridge region: " + formatRegion(arena.get("bridgeRegion", SCRegion.class)));
         ctx.info(" - Drop items: " + bridge.dropItems(arena).size() + " configured");
+        ctx.info(" - Drop surfaces: " + bridge.dropSurfaceMaterials(arena).size() + " configured");
         for (String teamId : List.of("red", "blue")) {
             MiniGameTeam team = arena.getTeam(teamId);
             if (team == null) {
@@ -253,6 +256,7 @@ public class BridgeCommand {
         String arenaId = ctx.getArg(1);
         if (bridge.minigame().arena(arenaId) != null) {
             ctx.returnError("Arena '" + arenaId + "' already exists.");
+            return;
         }
 
         World world = ctx.getArgAsWorld(2);
@@ -260,6 +264,7 @@ public class BridgeCommand {
             Player player = ctx.asPlayer();
             if (player == null) {
                 ctx.returnError("Specify a world when creating an arena from console.");
+                return;
             }
             world = player.getWorld();
         }
@@ -267,22 +272,24 @@ public class BridgeCommand {
         MiniGameArena arena = bridge.createArena(arenaId, world);
         if (arena == null) {
             ctx.returnError("Arena '" + arenaId + "' could not be created.");
+            return;
         }
         ctx.success("Created Bridge arena '" + arenaId + "' in world '" + world.getName() + "'.");
     }
 
     private void commandDelete(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         bridge.deleteArena(arena.id());
         ctx.success("Deleted Bridge arena '" + arena.id() + "'.");
     }
 
     private void commandJoin(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         Player targetPlayer = ctx.getArgAsPlayerOrSender(2);
         if (targetPlayer == null) {
             ctx.returnError("Player is required.");
+            return;
         }
         ensureNotInArena(ctx, targetPlayer);
 
@@ -294,6 +301,7 @@ public class BridgeCommand {
 
         if (!arena.isJoinable()) {
             ctx.returnError("Arena '" + arena.id() + "' is not joinable right now.");
+            return;
         }
 
         arena.addPlayer(targetPlayer);
@@ -302,11 +310,12 @@ public class BridgeCommand {
 
     private void commandJoinAll(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         boolean spectateOnly = arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING
             || arena.getStatus() == MiniGameArena.ArenaStatus.ENDING;
         if (!spectateOnly && !arena.isJoinable()) {
             ctx.returnError("Arena '" + arena.id() + "' is not joinable right now.");
+            return;
         }
 
         int joined = 0;
@@ -341,6 +350,7 @@ public class BridgeCommand {
 
         if (joined == 0 && spectating == 0) {
             ctx.returnError("No online players could be added to arena '" + arena.id() + "'.");
+            return;
         }
 
         ctx.success("Arena '" + arena.id() + "': joined " + joined + ", spectating " + spectating + ", skipped " + skipped + ".");
@@ -348,10 +358,11 @@ public class BridgeCommand {
 
     private void commandSpectate(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         Player targetPlayer = ctx.getArgAsPlayerOrSender(2);
         if (targetPlayer == null) {
             ctx.returnError("Player is required.");
+            return;
         }
         ensureNotInArena(ctx, targetPlayer);
 
@@ -363,11 +374,13 @@ public class BridgeCommand {
         Player targetPlayer = ctx.getArgAsPlayerOrSender(1);
         if (targetPlayer == null) {
             ctx.returnError("Player is required.");
+            return;
         }
 
         MiniGameArena arena = bridge.minigame().findPlayer(targetPlayer);
         if (arena == null) {
             ctx.returnError("Player '" + targetPlayer.getName() + "' is not in a Bridge arena.");
+            return;
         }
 
         arena.removeOccupant(targetPlayer);
@@ -375,26 +388,26 @@ public class BridgeCommand {
     }
 
     private void commandStart(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         if (arena.numPlayers() < arena.getMinPlayers()) {
             ctx.returnError("Arena '" + arena.id() + "' needs at least " + arena.getMinPlayers() + " players to start.");
         }
 
-        arena.setStatus(MiniGameArena.ArenaStatus.STARTING, 5);
+        arena.setStatus(MiniGameArena.ArenaStatus.STARTING, bridge.startCountdownSeconds(arena));
         ctx.success("Arena '" + arena.id() + "' is starting.");
     }
 
     private void commandStop(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         arena.setStatus(MiniGameArena.ArenaStatus.RESETTING);
         ctx.success("Arena '" + arena.id() + "' has been stopped and reset.");
     }
 
     private void commandRestart(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         arena.setStatus(MiniGameArena.ArenaStatus.RESETTING);
         if (arena.numPlayers() >= arena.getMinPlayers()) {
-            arena.setStatus(MiniGameArena.ArenaStatus.STARTING, 5);
+            arena.setStatus(MiniGameArena.ArenaStatus.STARTING, bridge.startCountdownSeconds(arena));
             ctx.success("Arena '" + arena.id() + "' has been restarted.");
             return;
         }
@@ -402,7 +415,7 @@ public class BridgeCommand {
     }
 
     private void commandSave(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         try {
             bridge.saveArena(arena);
         } catch (MiniGameInvalidArenaConfigException exception) {
@@ -419,7 +432,7 @@ public class BridgeCommand {
     }
 
     private void commandValidate(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         ArenaValidationResult result = arena.validate();
         if (!result.hasErrors()) {
             ctx.returnSuccess("Arena '" + arena.id() + "' is valid.");
@@ -432,7 +445,7 @@ public class BridgeCommand {
     }
 
     private void commandEnable(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         ArenaValidationResult result = arena.validate();
         if (result.hasErrors()) {
             ctx.warn("Arena '" + arena.id() + "' cannot be enabled until it is valid:");
@@ -452,7 +465,7 @@ public class BridgeCommand {
     }
 
     private void commandDisable(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         for (Player player : new ArrayList<>(arena.getPlayers())) {
             arena.removePlayer(player);
         }
@@ -470,7 +483,7 @@ public class BridgeCommand {
 
     private void commandSet(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         String target = ctx.getArgLower(2);
 
         switch (target) {
@@ -492,7 +505,7 @@ public class BridgeCommand {
                 Player player = requirePlayer(ctx);
                 SCRegion selection = requireSelection(ctx, player);
                 ensureArenaWorld(ctx, arena, selection, "Bridge region");
-                ensureRegionContained(ctx, selection, arena.get("arenaRegion", SCRegion.class), "Bridge region", "arena region");
+                ensureRegionContained(ctx, selection, arena.get("arenaRegion", SCRegion.class), "Bridge region");
                 arena.set("bridgeRegion", selection.copy());
                 showRegionPreview(player, "set-bridge", selection);
                 ctx.success("Bridge region updated for arena '" + arena.id() + "'.");
@@ -511,9 +524,9 @@ public class BridgeCommand {
             case "teamspawn" -> {
                 ctx.checkArgsSizeAtLeast(4);
                 Player player = requirePlayer(ctx);
-                MiniGameTeam team = requireTeam(ctx, arena, 3);
+                MiniGameTeam team = requireTeam(ctx, arena);
                 ensureArenaWorld(ctx, arena, player.getLocation(), "Team spawn");
-                ensureLocationContained(ctx, player.getLocation(), arena.get("arenaRegion", SCRegion.class), "Team spawn", "arena region");
+                ensureLocationContained(ctx, player.getLocation(), arena.get("arenaRegion", SCRegion.class));
                 team.setSpawn(player.getLocation());
                 showLocationPreview(player, "teamspawn-" + team.getName(), player.getLocation());
                 ctx.success("Spawn updated for team '" + team.getName() + "' in arena '" + arena.id() + "'.");
@@ -521,10 +534,10 @@ public class BridgeCommand {
             case "teamportal" -> {
                 ctx.checkArgsSizeAtLeast(4);
                 Player player = requirePlayer(ctx);
-                MiniGameTeam team = requireTeam(ctx, arena, 3);
+                MiniGameTeam team = requireTeam(ctx, arena);
                 SCRegion selection = requireSelection(ctx, player);
                 ensureArenaWorld(ctx, arena, selection, "Team portal");
-                ensureRegionContained(ctx, selection, arena.get("arenaRegion", SCRegion.class), "Team portal", "arena region");
+                ensureRegionContained(ctx, selection, arena.get("arenaRegion", SCRegion.class), "Team portal");
                 team.set("portalRegion", selection.copy());
                 showRegionPreview(player, "teamportal-" + team.getName(), selection);
                 ctx.success("Portal region updated for team '" + team.getName() + "' in arena '" + arena.id() + "'.");
@@ -553,7 +566,7 @@ public class BridgeCommand {
     private void commandSelect(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
         Player player = requirePlayer(ctx);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         String target = ctx.getArgLower(2);
         SCRegion region = null;
         Location location = null;
@@ -565,12 +578,12 @@ public class BridgeCommand {
             case "spectator" -> location = arena.getSpectatorSpawn();
             case "teamspawn" -> {
                 ctx.checkArgsSizeAtLeast(4);
-                MiniGameTeam team = requireTeam(ctx, arena, 3);
+                MiniGameTeam team = requireTeam(ctx, arena);
                 location = team.getSpawn();
             }
             case "teamportal" -> {
                 ctx.checkArgsSizeAtLeast(4);
-                MiniGameTeam team = requireTeam(ctx, arena, 3);
+                MiniGameTeam team = requireTeam(ctx, arena);
                 region = team.get("portalRegion", SCRegion.class);
             }
             default -> {
@@ -592,9 +605,11 @@ public class BridgeCommand {
 
         if (location == null) {
             ctx.returnError("No stored location is configured for '" + target + "' in arena '" + arena.id() + "'.");
+            return;
         }
         if (!player.getWorld().equals(location.getWorld())) {
             ctx.returnError("Move to world '" + location.getWorld().getName() + "' to preview that location.");
+            return;
         }
 
         api.selections().setWorldEditSelection(player, location);
@@ -605,7 +620,7 @@ public class BridgeCommand {
     private void commandShow(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
         Player player = requirePlayer(ctx);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         String target = ctx.getArgLower(2);
         Location location;
 
@@ -614,7 +629,7 @@ public class BridgeCommand {
             case "spectator" -> location = arena.getSpectatorSpawn();
             case "teamspawn" -> {
                 ctx.checkArgsSizeAtLeast(4);
-                MiniGameTeam team = requireTeam(ctx, arena, 3);
+                MiniGameTeam team = requireTeam(ctx, arena);
                 location = team.getSpawn();
             }
             default -> {
@@ -625,9 +640,11 @@ public class BridgeCommand {
 
         if (location == null) {
             ctx.returnError("No stored location is configured for '" + target + "' in arena '" + arena.id() + "'.");
+            return;
         }
         if (!player.getWorld().equals(location.getWorld())) {
             ctx.returnError("Move to world '" + location.getWorld().getName() + "' to preview that location.");
+            return;
         }
 
         showLocationPreview(player, "show-" + target, location);
@@ -635,7 +652,7 @@ public class BridgeCommand {
     }
 
     private void commandDropItems(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         List<Material> dropItems = bridge.dropItems(arena);
 
         ChatMenuUtil.render(
@@ -667,11 +684,12 @@ public class BridgeCommand {
     }
 
     private void commandAddDropItem(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         Player player = requirePlayer(ctx);
         ItemStack heldItem = player.getInventory().getItemInMainHand();
         if (heldItem.getType().isAir()) {
             ctx.returnError("Hold the item you want to add as a drop in your main hand.");
+            return;
         }
 
         bridge.dropItems(arena).add(heldItem.getType());
@@ -680,7 +698,7 @@ public class BridgeCommand {
 
     private void commandRemoveDropItem(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         List<Material> dropItems = bridge.dropItems(arena);
         if (dropItems.isEmpty()) {
             ctx.returnError("Arena '" + arena.id() + "' has no configured drop items.");
@@ -691,38 +709,41 @@ public class BridgeCommand {
         ctx.success("Removed drop item '" + describeDropItem(removed) + "' from arena '" + arena.id() + "'.");
     }
 
-    private MiniGameArena requireArena(CommandContext ctx, int index) {
-        ctx.checkArgsSizeAtLeast(index + 1);
-        String arenaId = ctx.getArg(index);
+    private MiniGameArena requireArena(CommandContext ctx) {
+        ctx.checkArgsSizeAtLeast(1 + 1);
+        String arenaId = ctx.getArg(1);
         MiniGameArena arena = bridge.minigame().arena(arenaId);
         if (arena == null) {
             ctx.returnError("Arena '" + arenaId + "' does not exist.");
+            throw new IllegalStateException("Arena '" + arenaId + "' does not exist.");
         }
         return arena;
     }
 
     private MiniGameArena requireArenaForInfo(CommandContext ctx) {
         if (ctx.numArgs() >= 2) {
-            return requireArena(ctx, 1);
+            return requireArena(ctx);
         }
 
         List<MiniGameArena> arenas = bridge.minigame().arenas();
         if (arenas.isEmpty()) {
             ctx.returnError("No Bridge arenas are loaded.");
+            throw new IllegalStateException("No Bridge arenas are loaded.");
         }
         if (arenas.size() == 1) {
             return arenas.getFirst();
         }
 
         ctx.returnError("Specify an arena id. Use /bridge list to choose one.");
-        return null;
+        throw new IllegalStateException("Specify an arena id.");
     }
 
-    private MiniGameTeam requireTeam(CommandContext ctx, MiniGameArena arena, int index) {
-        String teamId = ctx.getArgLower(index);
+    private MiniGameTeam requireTeam(CommandContext ctx, MiniGameArena arena) {
+        String teamId = ctx.getArgLower(3);
         MiniGameTeam team = arena.getTeam(teamId);
         if (team == null) {
             ctx.returnError("Arena '" + arena.id() + "' does not have team '" + teamId + "'.");
+            throw new IllegalStateException("Missing team '" + teamId + "'.");
         }
         return team;
     }
@@ -731,6 +752,7 @@ public class BridgeCommand {
         Player player = ctx.asPlayer();
         if (player == null) {
             ctx.returnError("This subcommand must be run in-game.");
+            throw new IllegalStateException("Player is required");
         }
         return player;
     }
@@ -739,6 +761,7 @@ public class BridgeCommand {
         SCRegion selection = api.selections().getWorldEditSelection(player);
         if (selection == null) {
             ctx.returnError("No WorldEdit selection found. Make a selection first.");
+            throw new IllegalStateException("WorldEdit selection is required");
         }
         return selection;
     }
@@ -746,6 +769,7 @@ public class BridgeCommand {
     private void ensureArenaWorld(CommandContext ctx, MiniGameArena arena, Location location, String label) {
         if (location == null || location.getWorld() == null) {
             ctx.returnError(label + " is not set in a valid world.");
+            return;
         }
         if (!arena.world().equals(location.getWorld())) {
             ctx.returnError(label + " must be in world '" + arena.world().getName() + "'.");
@@ -755,21 +779,22 @@ public class BridgeCommand {
     private void ensureArenaWorld(CommandContext ctx, MiniGameArena arena, SCRegion region, String label) {
         if (region == null || region.getWorld() == null) {
             ctx.returnError(label + " is not set in a valid world.");
+            return;
         }
         if (!arena.world().equals(region.getWorld())) {
             ctx.returnError(label + " must be in world '" + arena.world().getName() + "'.");
         }
     }
 
-    private void ensureRegionContained(CommandContext ctx, SCRegion child, SCRegion parent, String childLabel, String parentLabel) {
+    private void ensureRegionContained(CommandContext ctx, SCRegion child, SCRegion parent, String childLabel) {
         if (parent != null && !parent.contains(child)) {
-            ctx.returnError(childLabel + " must be fully inside the " + parentLabel + ".");
+            ctx.returnError(childLabel + " must be fully inside the " + "arena region" + ".");
         }
     }
 
-    private void ensureLocationContained(CommandContext ctx, Location location, SCRegion parent, String childLabel, String parentLabel) {
+    private void ensureLocationContained(CommandContext ctx, Location location, SCRegion parent) {
         if (parent != null && !parent.contains(location)) {
-            ctx.returnError(childLabel + " must be inside the " + parentLabel + ".");
+            ctx.returnError("Team spawn" + " must be inside the " + "arena region" + ".");
         }
     }
 

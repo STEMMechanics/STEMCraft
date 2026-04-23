@@ -31,6 +31,15 @@ import java.util.Random;
  * Chunk generator that creates a void world (all air).
  */
 public class VoidGenerator extends ChunkGenerator {
+    @Override
+    public boolean shouldGenerateBedrock() {
+        return false;
+    }
+
+    @Override
+    public boolean shouldGenerateBedrock() {
+        return false;
+    }
 
     @Override
     public Location getFixedSpawnLocation(@NotNull World world, @NotNull Random random) {

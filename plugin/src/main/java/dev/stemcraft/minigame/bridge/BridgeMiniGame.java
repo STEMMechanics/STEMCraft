@@ -55,7 +55,7 @@ public class BridgeMiniGame extends BaseMiniGame {
     @Accessors(fluent = true)
     private static final String namespace = "bridge";
 
-    private final BridgeConfig config;
+    private BridgeConfig config;
 
     @Getter
     @Accessors(fluent = true)
@@ -65,11 +65,11 @@ public class BridgeMiniGame extends BaseMiniGame {
 
     public BridgeMiniGame(STEMCraftAPI api) {
         super(api);
-        this.config = new BridgeConfig(api, this);
     }
 
     @Override
     public void onLoad() {
+        config = new BridgeConfig(api, this);
         BridgeArenaHandler handler = new BridgeArenaHandler(api, this);
 
         minigame = createMiniGame(namespace, handler)
@@ -178,10 +178,13 @@ public class BridgeMiniGame extends BaseMiniGame {
             .setLobbySpawn(world.getSpawnLocation())
             .setSpectatorSpawn(world.getSpawnLocation())
             .setMinPlayers(2)
-            .setMaxPlayers(16);
+            .setMaxPlayers(16)
+            .set("startCountdownSeconds", BridgeConfig.DEFAULT_START_COUNTDOWN_SECONDS)
+            .set("endingSeconds", BridgeConfig.DEFAULT_ENDING_SECONDS);
 
         ensureTeams(arena);
         arena.set("dropItems", BridgeConfig.defaultDropItems());
+        arena.set("dropSurfaceMaterials", BridgeConfig.defaultDropSurfaceMaterials());
         refreshArenaKits(arena);
         registerArenaStats(arena);
         return arena;
@@ -245,7 +248,10 @@ public class BridgeMiniGame extends BaseMiniGame {
                     .setMaxPlayers(arenaDef.maxPlayers())
                     .set("bridgeRegion", arenaDef.bridgeRegion())
                     .set("arenaRegion", arenaDef.arenaRegion())
-                    .set("dropItems", new ArrayList<>(arenaDef.dropItems()));
+                    .set("startCountdownSeconds", arenaDef.startCountdownSeconds())
+                    .set("endingSeconds", arenaDef.endingSeconds())
+                    .set("dropItems", new ArrayList<>(arenaDef.dropItems()))
+                    .set("dropSurfaceMaterials", new ArrayList<>(arenaDef.dropSurfaceMaterials()));
 
                 ensureTeams(arena);
                 for (BridgeArenaRecord.TeamDef teamDef : arenaDef.teams().values()) {
@@ -295,6 +301,14 @@ public class BridgeMiniGame extends BaseMiniGame {
 
     public String winStreakBestStatKey() {
         return WIN_STREAK_BEST_STAT_KEY;
+    }
+
+    public int startCountdownSeconds(@NotNull MiniGameArena arena) {
+        return Math.max(1, arena.get("startCountdownSeconds", Integer.class, BridgeConfig.DEFAULT_START_COUNTDOWN_SECONDS));
+    }
+
+    public int endingSeconds(@NotNull MiniGameArena arena) {
+        return Math.max(1, arena.get("endingSeconds", Integer.class, BridgeConfig.DEFAULT_ENDING_SECONDS));
     }
 
     private void registerStats() {
@@ -378,6 +392,11 @@ public class BridgeMiniGame extends BaseMiniGame {
     @SuppressWarnings("unchecked")
     public @NotNull List<Material> dropItems(@NotNull MiniGameArena arena) {
         return arena.getOrCreate("dropItems", List.class, BridgeConfig::defaultDropItems);
+    }
+
+    @SuppressWarnings("unchecked")
+    public @NotNull List<Material> dropSurfaceMaterials(@NotNull MiniGameArena arena) {
+        return arena.getOrCreate("dropSurfaceMaterials", List.class, BridgeConfig::defaultDropSurfaceMaterials);
     }
 
     private String renderTeamScore(@Nullable MiniGameTeam team) {

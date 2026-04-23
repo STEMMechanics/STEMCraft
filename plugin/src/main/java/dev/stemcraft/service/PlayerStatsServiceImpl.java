@@ -48,8 +48,8 @@ import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
-import javax.annotation.Nullable;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -420,8 +420,7 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
             if (!isEnabled("times_slept")) {
                 return;
             }
-            //noinspection UnstableApiUsage
-            if (event.enterAction().canSleep().success()) {
+            if (event.useBed() == org.bukkit.event.Event.Result.ALLOW) {
                 increment(event.getPlayer().getUniqueId(), event.getPlayer().getName(), "times_slept", 1.0d);
             }
         });

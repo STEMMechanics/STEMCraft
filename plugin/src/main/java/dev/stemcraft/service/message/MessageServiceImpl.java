@@ -43,8 +43,8 @@ import java.util.List;
  * Implementation of the MessageService interface.
  */
 public class MessageServiceImpl extends BaseService implements MessageService {
-    private final TokenProcessorImpl tokens;
-    private final MessagePrefixes prefixes;
+    private TokenProcessorImpl tokens;
+    private MessagePrefixes prefixes;
 
     /**
      * Constructor for MessageServiceImpl.
@@ -54,10 +54,13 @@ public class MessageServiceImpl extends BaseService implements MessageService {
      */
     public MessageServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
+    }
 
-        this.prefixes = MessagePrefixes.from(getRootConfigSection().getSection("logging.prefixes"));
-
-        tokens = new TokenProcessorImpl(getRootConfigSection());
+    @Override
+    public void onEnable() {
+        prefixes = MessagePrefixes.from(getRootConfigSection().getSection("logging.prefixes"));
+        tokens = new TokenProcessorImpl();
+        tokens.fromConfig(getRootConfigSection());
     }
 
     /**

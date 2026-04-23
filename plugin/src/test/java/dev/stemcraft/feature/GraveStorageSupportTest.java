@@ -15,18 +15,14 @@ import org.mockbukkit.mockbukkit.world.WorldMock;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class GraveStorageSupportTest {
-    private ServerMock server;
     private WorldMock world;
 
     @BeforeEach
     void setUp() {
-        server = MockBukkit.mock();
+        ServerMock server = MockBukkit.mock();
         world = server.addSimpleWorld("grave-tests");
     }
 
@@ -47,8 +43,8 @@ class GraveStorageSupportTest {
 
     @Test
     void fillChestUsesDoubleChestCapacityWhenPartnerPlaced() {
-        Block primary = supportedBlock(0, 65, 0);
-        Block partner = supportedBlock(1, 65, 0);
+        Block primary = supportedBlock(0);
+        Block partner = supportedBlock(1);
 
         Chest chest = GraveStorageSupport.placeStorageChest(primary, partner);
         assertNotNull(chest);
@@ -59,14 +55,14 @@ class GraveStorageSupportTest {
         assertEquals(Material.CHEST, primary.getType());
         assertEquals(Material.CHEST, partner.getType());
         assertEquals(27, chest.getBlockInventory().getSize());
-        assertTrue(partner.getState() instanceof Chest);
+        assertInstanceOf(Chest.class, partner.getState());
         Chest partnerChest = (Chest) partner.getState();
         assertEquals(28, occupiedSlots(chest) + occupiedSlots(partnerChest));
     }
 
     @Test
     void findDoubleChestPartnerSkipsLiquidForLandGraves() {
-        Block primary = supportedBlock(0, 65, 0);
+        Block primary = supportedBlock(0);
         primary.getRelative(BlockFace.NORTH).setType(Material.WATER);
         primary.getRelative(BlockFace.SOUTH).setType(Material.AIR);
 
@@ -78,7 +74,7 @@ class GraveStorageSupportTest {
 
     @Test
     void findDoubleChestPartnerAllowsLiquidForLiquidGraves() {
-        Block primary = supportedBlock(0, 65, 0);
+        Block primary = supportedBlock(0);
         primary.getRelative(BlockFace.NORTH).setType(Material.WATER);
         primary.getRelative(BlockFace.SOUTH).setType(Material.AIR);
 
@@ -88,9 +84,9 @@ class GraveStorageSupportTest {
         assertEquals(primary.getRelative(BlockFace.NORTH).getLocation(), partner.getLocation());
     }
 
-    private Block supportedBlock(int x, int y, int z) {
-        world.getBlockAt(x, y - 1, z).setType(Material.STONE);
-        return world.getBlockAt(x, y, z);
+    private Block supportedBlock(int x) {
+        world.getBlockAt(x, 65 - 1, 0).setType(Material.STONE);
+        return world.getBlockAt(x, 65, 0);
     }
 
     private List<ItemStack> nonStackableDrops(int count) {
