@@ -33,6 +33,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.SkullMeta;
 import org.geysermc.geyser.api.GeyserApi;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.InputStream;
@@ -303,16 +304,16 @@ public class PlayerUtil {
         return name(uuid, null);
     }
 
-    public static ItemStack[] getArmor(Player player) {
-        return Objects.requireNonNull(player.getInventory().getArmorContents());
+    public static @Nullable ItemStack @NotNull [] getArmor(Player player) {
+        return player.getInventory().getArmorContents();
     }
 
-    public static int getArmorLength(Player player) {
-        ItemStack[] armorContents = Objects.requireNonNull(player.getInventory().getArmorContents());
+    public static int getArmorLength(@NotNull Player player) {
+        ItemStack[] armorContents = player.getInventory().getArmorContents();
         return armorContents.length;
     }
 
-    public static void clearArmor(Player player) {
+    public static void clearArmor(@NotNull Player player) {
         player.getInventory().setArmorContents(new ItemStack[4]);
     }
 

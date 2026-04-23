@@ -23,6 +23,8 @@ package dev.stemcraft.api.util;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.jetbrains.annotations.Contract;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Utility class for serializing and deserializing Locations.
@@ -105,7 +107,8 @@ public class LocationUtil {
      * @param location The location to copy.
      * @return The copied location.
      */
-    public static Location copy(Location location) {
+    @Contract(value = "!null -> new; null -> null", pure = true)
+    public static @Nullable Location copy(Location location) {
         if (location == null) {
             return null;
         }
