@@ -183,10 +183,7 @@ public class CustomBooks extends BaseFeature {
                             meta.setAuthor(TextUtil.colouriseToSection(authorRaw));
                             meta.setTitle(TextUtil.colouriseToSection(titleRaw));
 
-                            if (!written.setItemMeta(meta)) {
-                                cmd.error(ctx.getSender(), "BOOK_SAVE_FAILED", "name", name);
-                                return;
-                            }
+                            written.setItemMeta(meta);
                             player.getInventory().setItemInMainHand(written);
 
                             try {
@@ -375,10 +372,7 @@ public class CustomBooks extends BaseFeature {
                             BookMeta outMeta = (BookMeta) book.getItemMeta();
                             outMeta.addPages(editablePages.toArray(Component[]::new));
 
-                            if (!book.setItemMeta(outMeta)) {
-                                cmd.error(ctx.getSender(), "BOOK_UNLOCK_FAILED");
-                                return;
-                            }
+                            book.setItemMeta(outMeta);
                             ctx.asPlayer().getInventory().setItemInMainHand(book);
                             cmd.success(ctx.getSender(), "BOOK_UNLOCK_SUCCESSFUL");
                         }
@@ -448,9 +442,7 @@ public class CustomBooks extends BaseFeature {
             meta.addPages(displayPages.toArray(Component[]::new));
         }
 
-        if (!book.setItemMeta(meta)) {
-            throw new IllegalStateException("Failed to apply book metadata");
-        }
+        book.setItemMeta(meta);
         return book;
     }
 

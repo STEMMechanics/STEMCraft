@@ -125,12 +125,10 @@ public class RegionSerializer {
             int maxY = MapParse.requireInt(maxMap, "y", "region.max");
             int maxZ = MapParse.requireInt(maxMap, "z", "region.max");
 
+            com.sk89q.worldedit.world.World weWorld = BukkitAdapter.adapt(world);
             BlockVector3 min = BlockVector3.at(minX, minY, minZ);
             BlockVector3 max = BlockVector3.at(maxX, maxY, maxZ);
-            com.sk89q.worldedit.world.World weWorld = adaptWorld(world);
-            Region region = weWorld != null
-                ? new CuboidRegion(weWorld, min, max)
-                : new CuboidRegion(min, max);
+            Region region = new CuboidRegion(weWorld, min, max);
             return new SCRegion(region, world);
         }
 
@@ -143,6 +141,7 @@ public class RegionSerializer {
                 throw new IllegalArgumentException("Missing points for polygon region");
             }
 
+            com.sk89q.worldedit.world.World weWorld = BukkitAdapter.adapt(world);
             List<BlockVector2> pts = new ArrayList<>(ptsMap.size());
 
             for (int i = 0; i < ptsMap.size(); i++) {
@@ -151,10 +150,8 @@ public class RegionSerializer {
                 int z = MapParse.requireInt(pm, "z", "region.points[" + i + "]");
                 pts.add(BlockVector2.at(x, z));
             }
-            com.sk89q.worldedit.world.World weWorld = adaptWorld(world);
-            Polygonal2DRegion poly = weWorld != null
-                ? new Polygonal2DRegion(weWorld, pts, minY, maxY)
-                : new Polygonal2DRegion(null, pts, minY, maxY);
+
+            Polygonal2DRegion poly = new Polygonal2DRegion(weWorld, pts, minY, maxY);
             return new SCRegion(poly, world);
         }
 
@@ -277,12 +274,12 @@ public class RegionSerializer {
         int maxY = Integer.parseInt(parts[4]);
         int maxZ = Integer.parseInt(parts[5]);
 
+        com.sk89q.worldedit.world.World weWorld = BukkitAdapter.adapt(world);
+
         BlockVector3 min = BlockVector3.at(minX, minY, minZ);
         BlockVector3 max = BlockVector3.at(maxX, maxY, maxZ);
-        com.sk89q.worldedit.world.World weWorld = adaptWorld(world);
-        Region region = weWorld != null
-            ? new CuboidRegion(weWorld, min, max)
-            : new CuboidRegion(min, max);
+
+        Region region = new CuboidRegion(weWorld, min, max);
 
         return new SCRegion(region, world);
     }
@@ -300,6 +297,8 @@ public class RegionSerializer {
 
         if (world == null) return null;
 
+        com.sk89q.worldedit.world.World weWorld = BukkitAdapter.adapt(world);
+
         List<BlockVector2> points = new ArrayList<>();
         // remaining parts are x,z pairs
         for (int i = 2; i + 1 < parts.length; i += 2) {
@@ -307,18 +306,8 @@ public class RegionSerializer {
             int z = Integer.parseInt(parts[i + 1]);
             points.add(BlockVector2.at(x, z));
         }
-        com.sk89q.worldedit.world.World weWorld = adaptWorld(world);
-        Polygonal2DRegion poly = weWorld != null
-            ? new Polygonal2DRegion(weWorld, points, minY, maxY)
-            : new Polygonal2DRegion(null, points, minY, maxY);
-        return new SCRegion(poly, world);
-    }
 
-    private static com.sk89q.worldedit.world.World adaptWorld(World world) {
-        try {
-            return BukkitAdapter.adapt(world);
-        } catch (RuntimeException ex) {
-            return null;
-        }
+        Polygonal2DRegion poly = new Polygonal2DRegion(weWorld, points, minY, maxY);
+        return new SCRegion(poly, world);
     }
 }

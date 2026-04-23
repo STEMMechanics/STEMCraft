@@ -10,8 +10,10 @@ import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.util.NamespaceId;
 import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.api.util.StringUtil;
+import dev.stemcraft.api.util.TextUtil;
 import dev.stemcraft.capability.HasMetaImpl;
 import lombok.Getter;
+import net.kyori.adventure.title.Title;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.FireworkEffect;
@@ -26,6 +28,7 @@ import org.bukkit.inventory.meta.FireworkMeta;
 import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
+import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -79,13 +82,13 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
 
     /**
      * Constructor
-     *
-     * @param api       STEMCraft API
+     * @param api STEMCraft API
      * @param namespace The arena namespace
-     * @param id        The arena ID
-     * @param world     The world the arena is in
+     * @param id The arena ID
+     * @param world The world the arena is in
+     * @param region The region of the arena
      */
-    MiniGameArenaImpl(@NotNull MiniGameServiceImpl service, @NotNull STEMCraftAPI api, @NotNull String namespace, @NotNull String id, @NotNull World world) {
+    MiniGameArenaImpl(@NotNull MiniGameServiceImpl service, @NotNull STEMCraftAPI api, @NotNull String namespace, @NotNull String id, @NotNull World world, SCRegion region) {
         this.service = service;
         this.api = api;
         this.namespace = namespace;
@@ -94,8 +97,9 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         this.world = world;
         this.lobbySpawn = world.getSpawnLocation();
         this.spectatorSpawn = this.lobbySpawn;
-        this.region = null;
+        this.region = region;
         this.status = ArenaStatus.SETUP;
+        this.validated = false;
     }
 
     /**
@@ -466,6 +470,26 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         removeSpectatorInternal(player, true, false);
     }
 
+    @Override
+    public void showTitle(String title, String subtitle, Duration fadeIn, Duration stay, Duration fadeOut) {
+        Title adventureTitle = Title.title(
+                TextUtil.colourise(api.messages().tokens().apply(title)),
+                TextUtil.colourise(api.messages().tokens().apply(subtitle)),
+                Title.Times.times(fadeIn, stay, fadeOut)
+        );
+
+        for (Player player : players.keySet()) {
+            player.showTitle(adventureTitle);
+        }
+    }
+
+    @Override
+    public void resetTitle() {
+        for (Player player : players.keySet()) {
+            player.resetTitle();
+        }
+    }
+
     /**
      * Get a list of teams in the arena.
      *
@@ -718,7 +742,12 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
 
         if (clearInventory) {
             player.getInventory().clear();
-            player.getInventory().setArmorContents(new ItemStack[0]);
+            // TODO: I've been using ItemStack[0] for this, but when I was reading this line
+            //  for merging, nomad put in ItemStack[4]. ItemStack[0] seemed to work as intended
+            //  in my limited testing.
+            //  If ItemStack[0] works, it would at least be a bit smaller to allocate than ItemStack[4],
+            //  but that'd be pretty minor.
+            player.getInventory().setArmorContents(new ItemStack[4]);
         }
 
         for (Map.Entry<Material, Integer> entry : kit.entrySet()) {
@@ -905,13 +934,14 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         }
         return NamespaceId.sanitizePath(key);
     }
+
     private void removeActivePlayer(Player player, boolean restoreLocation, boolean quitting) {
         MiniGamePlayerImpl mgPlayer = detachActiveProfile(player, true, quitting);
         if (mgPlayer == null) {
             return;
         }
 
-        service.restorePreviousPlayerState(player, restoreLocation);
+        service.restorePreviousPlayerState(player, restoreLocation, true);
     }
 
     private void removeSpectatorInternal(Player player, boolean restoreLocation, boolean quitting) {
@@ -919,7 +949,7 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         if (spectatorProfile == null) {
             return;
         }
-        service.restorePreviousPlayerState(player, restoreLocation);
+        service.restorePreviousPlayerState(player, restoreLocation, true);
     }
 
     private @Nullable MiniGamePlayerImpl detachActiveProfile(Player player, boolean notifyHandler, boolean quitting) {

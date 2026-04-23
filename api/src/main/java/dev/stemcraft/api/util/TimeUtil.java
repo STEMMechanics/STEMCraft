@@ -181,7 +181,7 @@ public class TimeUtil {
      * @param duration The duration to add to the current time.
      * @return The epoch milliseconds of the future time.
      */
-    public static long durationToRunAtMillis(Duration duration) {
+    public static long DurationToRunAtMillis(Duration duration) {
         Instant targetTime = Instant.now().plus(duration);
         return targetTime.toEpochMilli();
     }

@@ -7,7 +7,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
 
 /**
  * Shared renderer for fastest-time leaderboard style holograms used by minigames.
@@ -43,8 +42,8 @@ public final class TimedRecordLeaderboard {
 
         int rank = 1;
         for (Entry entry : sorted) {
-            String template = rank == 1
-                ? Objects.requireNonNullElse(options.firstLine(), options.line())
+            String template = rank == 1 && options.firstLine() != null
+                ? options.firstLine()
                 : options.line();
             String formattedTime = formatMillis(entry.timeMillis());
             lines.add(template

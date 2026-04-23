@@ -31,14 +31,13 @@ import org.bukkit.plugin.Plugin;
  */
 public class InstanceHolder {
     private static STEMCraftAPI api;
+    private static Plugin plugin;
 
     public static STEMCraftAPI api() { return api; }
-
-    public static void set(STEMCraftAPI api) {
-        InstanceHolder.api = api;
-    }
+    public static Plugin plugin() { return plugin; }
 
     public static void set(STEMCraftAPI api, Plugin plugin) {
-        set(api);
+        InstanceHolder.api = api;
+        InstanceHolder.plugin = plugin;
     }
 }

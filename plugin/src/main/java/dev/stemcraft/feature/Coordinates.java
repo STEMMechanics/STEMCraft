@@ -102,14 +102,13 @@ public class Coordinates extends BaseFeature {
             }).register(STEMCraft.getPlugin());
 
         api.tasks().repeating(5, () -> {
-            for (Map.Entry<Player, CoordData> entry : coordBars.entrySet()) {
-                Player player = entry.getKey();
+            for (Player player : coordBars.keySet()) {
                 if (!player.isOnline()) {
                     removeCoordBars(player);
                     continue;
                 }
 
-                CoordData coordData = entry.getValue();
+                CoordData coordData = coordBars.get(player);
                 if (coordData.bossBar == null && coordData.actionBar == false) {
                     return;
                 }

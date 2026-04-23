@@ -24,13 +24,8 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigFile;
 import lombok.Getter;
 import org.bukkit.configuration.InvalidConfigurationException;
-import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
-
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
+import org.bukkit.configuration.ConfigurationSection;
 import java.util.Set;
 
 import java.io.File;
@@ -49,8 +44,6 @@ public class ConfigFileImpl extends ConfigSectionImpl implements ConfigFile {
     @Getter
     private boolean autoSave = false;
     private boolean saveDefaults = true;
-    private final Set<String> dirtyPaths = new LinkedHashSet<>();
-    private boolean fullSaveRequired = false;
 
     /**
      * Loads the configuration file with the given name.
@@ -73,7 +66,7 @@ public class ConfigFileImpl extends ConfigSectionImpl implements ConfigFile {
         }
 
         this.name = name;
-        clearDirtyState();
+        this.dirty = false;
         if (parent != null && !parent.exists() && !parent.mkdirs()) {
             this.file = null;
             return false;
@@ -137,7 +130,7 @@ public class ConfigFileImpl extends ConfigSectionImpl implements ConfigFile {
         }
 
         this.config = loaded;
-        clearDirtyState();
+        this.dirty = false;
         setConfigFile(this);
         setSection(this.config);
         return true;
@@ -148,17 +141,6 @@ public class ConfigFileImpl extends ConfigSectionImpl implements ConfigFile {
      */
     public void setDirty() {
         this.dirty = true;
-        this.fullSaveRequired = true;
-    }
-
-    void setDirty(String path) {
-        this.dirty = true;
-        if (path == null) {
-            this.fullSaveRequired = true;
-            return;
-        }
-
-        this.dirtyPaths.add(path);
     }
 
     /**
@@ -167,26 +149,18 @@ public class ConfigFileImpl extends ConfigSectionImpl implements ConfigFile {
      * @param pruneEmptySections Whether to remove empty sections before saving.
      */
     public void save(boolean pruneEmptySections) {
-        if (file == null || !dirty) {
-            return;
-        }
+        if (file == null || !dirty) return;
 
         try {
-            YamlConfiguration saveTarget = buildSaveTarget();
-            if (pruneEmptySections) {
-                pruneEmptySections(saveTarget);
+            if(pruneEmptySections) {
+                pruneEmptySections(config);
             }
 
-            saveTarget.save(file);
-            syncCurrentConfig(saveTarget);
-            clearDirtyState();
+            config.save(file);
+            dirty = false;
         } catch (IOException e) {
             if (STEMCraftAPI.api() != null && STEMCraftAPI.api().messages() != null) {
                 STEMCraftAPI.api().messages().error("Could not save config file: " + name, e);
-            }
-        } catch (InvalidConfigurationException e) {
-            if (STEMCraftAPI.api() != null && STEMCraftAPI.api().messages() != null) {
-                STEMCraftAPI.api().messages().error("Could not merge config file before save: " + name, e);
             }
         }
     }
@@ -251,7 +225,7 @@ public class ConfigFileImpl extends ConfigSectionImpl implements ConfigFile {
      * @param section The configuration section to prune.
      */
     private static void pruneEmptySections(ConfigurationSection section) {
-        Set<String> keys = new LinkedHashSet<>(section.getKeys(false));
+        Set<String> keys = section.getKeys(false);
         for (String key : keys) {
             if (!section.isConfigurationSection(key)) {
                 continue;
@@ -269,104 +243,5 @@ public class ConfigFileImpl extends ConfigSectionImpl implements ConfigFile {
                 section.set(key, null);
             }
         }
-    }
-
-    private void clearDirtyState() {
-        this.dirty = false;
-        this.fullSaveRequired = false;
-        this.dirtyPaths.clear();
-    }
-
-    private YamlConfiguration buildSaveTarget() throws IOException, InvalidConfigurationException {
-        if (fullSaveRequired || dirtyPaths.isEmpty()) {
-            return config;
-        }
-
-        YamlConfiguration merged = new YamlConfiguration();
-        if (file.exists()) {
-            merged.load(file);
-        }
-
-        for (String path : dirtyPaths) {
-            applyDirtyPath(config, merged, path);
-        }
-
-        return merged;
-    }
-
-    private void syncCurrentConfig(YamlConfiguration saveTarget) {
-        if (saveTarget == config) {
-            return;
-        }
-
-        replaceSectionContents(config, saveTarget);
-        setConfigFile(this);
-        setSection(config);
-    }
-
-    private static void applyDirtyPath(ConfigurationSection source, YamlConfiguration target, String path) {
-        if (path == null || path.isEmpty()) {
-            replaceSectionContents(target, source);
-            return;
-        }
-
-        ConfigurationSection sourceSection = source.getConfigurationSection(path);
-        if (sourceSection != null) {
-            target.set(path, null);
-            ConfigurationSection targetSection = target.createSection(path);
-            replaceSectionContents(targetSection, sourceSection);
-            return;
-        }
-
-        if (!source.contains(path) && !source.isConfigurationSection(path)) {
-            target.set(path, null);
-            return;
-        }
-
-        target.set(path, cloneValue(source.get(path)));
-    }
-
-    private static void replaceSectionContents(ConfigurationSection target, ConfigurationSection source) {
-        for (String key : new LinkedHashSet<>(target.getKeys(false))) {
-            if (!source.contains(key) && !source.isConfigurationSection(key)) {
-                target.set(key, null);
-            }
-        }
-
-        for (String key : source.getKeys(false)) {
-            ConfigurationSection sourceSection = source.getConfigurationSection(key);
-            if (sourceSection != null) {
-                ConfigurationSection targetSection = target.getConfigurationSection(key);
-                if (targetSection == null) {
-                    target.set(key, null);
-                    targetSection = target.createSection(key);
-                }
-
-                replaceSectionContents(targetSection, sourceSection);
-                continue;
-            }
-
-            target.set(key, cloneValue(source.get(key)));
-        }
-    }
-
-    private static Object cloneValue(Object value) {
-        if (value instanceof List<?> list) {
-            List<Object> copy = new ArrayList<>(list.size());
-            for (Object item : list) {
-                copy.add(cloneValue(item));
-            }
-            return copy;
-        }
-
-        if (value instanceof Map<?, ?> map) {
-            Map<Object, Object> copy = new java.util.LinkedHashMap<>();
-            for (Map.Entry<?, ?> entry : map.entrySet()) {
-                copy.put(entry.getKey(), cloneValue(entry.getValue()));
-            }
-            return copy;
-        }
-
-        return value;
     }
 }

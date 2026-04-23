@@ -23,8 +23,6 @@ package dev.stemcraft.api.util;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
-import java.util.Objects;
-
 /**
  * Utility class for inventory-related operations.
  */
@@ -37,9 +35,7 @@ public final class InventoryUtil {
      * @return A string representation of the inventory contents.
      */
     public static String toString(Inventory inv) {
-        ItemStack[] contents = Objects.requireNonNull(inv.getContents());
-        if (contents.length == 0) return "(empty)";
-
+        ItemStack[] contents = inv.getContents();
         StringBuilder out = new StringBuilder();
 
         for (ItemStack item : contents) {

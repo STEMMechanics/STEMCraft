@@ -21,8 +21,6 @@ public class BaseMiniGame {
 
     public void onLoad() { }
 
-
-    @SuppressWarnings("SameReturnValue")
     public ConfigSection getConfig() { return null; }
 
     protected boolean disablesHungerByDefault() {

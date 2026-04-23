@@ -111,8 +111,6 @@ public class WorkbenchCommand extends BaseCommand {
             case "loom" -> workbench = Bukkit.createInventory(null, InventoryType.LOOM);
             case "smithingtable" -> workbench = Bukkit.createInventory(null, InventoryType.SMITHING);
             case "stonecutter" -> workbench = Bukkit.createInventory(null, InventoryType.STONECUTTER);
-            default -> {
-            }
         }
 
         if(workbench == null) {

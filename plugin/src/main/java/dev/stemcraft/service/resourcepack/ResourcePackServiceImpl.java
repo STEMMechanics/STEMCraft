@@ -41,8 +41,8 @@ import net.kyori.adventure.resource.ResourcePackRequest;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
-import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
+import org.jspecify.annotations.NonNull;
 
 import javax.imageio.ImageIO;
 import javax.annotation.Nullable;
@@ -180,9 +180,9 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
     }
 
     /**
-     * Ask an audience to download the resource pack.
+     * Ask a single player to download the resource pack.
      *
-     * @param audience the audience to send the pack to.
+     * @param audience the player to send the pack to.
      */
     public void sendPack(@NotNull Audience audience) {
         File resPack = getResourcePack();
@@ -477,8 +477,6 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
         }
     }
 
-    @SuppressWarnings("BooleanMethodIsAlwaysInverted") // This function's output is reasonable, so why bother changing it?
-    @Contract("null -> true")
     private static boolean deleteDirectory(Path root) {
         if (root == null || !Files.exists(root)) {
             return true;
@@ -487,13 +485,13 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
         try {
             Files.walkFileTree(root, new SimpleFileVisitor<>() {
                 @Override
-                public @NotNull FileVisitResult visitFile(@NotNull Path file, @NotNull BasicFileAttributes attrs) throws IOException {
+                public @NonNull FileVisitResult visitFile(@NonNull Path file, @NonNull BasicFileAttributes attrs) throws IOException {
                     Files.deleteIfExists(file);
                     return FileVisitResult.CONTINUE;
                 }
 
                 @Override
-                public @NotNull FileVisitResult postVisitDirectory(@NotNull Path dir, @Nullable IOException exc) throws IOException {
+                public @NonNull FileVisitResult postVisitDirectory(@NonNull Path dir, IOException exc) throws IOException {
                     Files.deleteIfExists(dir);
                     return FileVisitResult.CONTINUE;
                 }
@@ -617,10 +615,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
                 .resolve(safeToken + ".png");
 
             try {
-                Path parent = dest.getParent();
-                if (parent != null) {
-                    Files.createDirectories(parent);
-                }
+                Files.createDirectories(dest.getParent());
                 Files.copy(src, dest, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
             } catch (IOException e) {
                 plugin.getLogger().warning("[resource-pack] Failed to copy bedrock glyph '" + token + "': " + e.getMessage());
@@ -649,7 +644,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
                 .append("|scale=").append(tokenSection.getDouble("bedrock.scale", 1.0d))
                 .append("|yOffset=").append(tokenSection.getInt("bedrock.y_offset", 0));
 
-            int codepoint = parseUnicodeCodepoint(unicode);
+            int codepoint = parseUnicodeCodepoint(unicode, -1);
             if (codepoint >= 0 && codepoint <= 0xFFFF) {
                 String previousOwner = codepointOwners.putIfAbsent(codepoint, token);
                 if (previousOwner != null) {
@@ -840,9 +835,9 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
         return out;
     }
 
-    private int parseUnicodeCodepoint(String value) {
+    private int parseUnicodeCodepoint(String value, int fallback) {
         if (value == null || value.isBlank()) {
-            return -1;
+            return fallback;
         }
 
         String normalized = value.trim();
@@ -850,7 +845,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
             try {
                 return Integer.parseInt(normalized.substring(2), 16);
             } catch (NumberFormatException ignored) {
-                return -1;
+                return fallback;
             }
         }
 
@@ -858,7 +853,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
             try {
                 return Integer.parseInt(normalized.substring(2), 16);
             } catch (NumberFormatException ignored) {
-                return -1;
+                return fallback;
             }
         }
 
@@ -866,7 +861,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
             try {
                 return Integer.parseInt(normalized, 16);
             } catch (NumberFormatException ignored) {
-                return -1;
+                return fallback;
             }
         }
 
@@ -912,11 +907,9 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
             int drawW = src.getWidth();
             int drawH = src.getHeight();
             if (entry.getValue().autoScale()) {
-                int targetHeight = Math.clamp(
-                    entry.getValue().bedrockHeight() > 0 ? entry.getValue().bedrockHeight() : entry.getValue().javaHeight(),
-                    1,
-                    cellSize
-                );
+                int targetHeight = Math.clamp(entry.getValue().bedrockHeight() > 0
+                        ? entry.getValue().bedrockHeight()
+                        : entry.getValue().javaHeight(), 1, cellSize);
                 double fit = targetHeight / (double) Math.max(1, src.getHeight());
                 drawW = Math.max(1, (int) Math.round(src.getWidth() * fit));
                 drawH = Math.max(1, (int) Math.round(src.getHeight() * fit));

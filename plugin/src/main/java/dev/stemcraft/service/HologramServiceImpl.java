@@ -742,13 +742,12 @@ public class HologramServiceImpl extends BaseService implements HologramService 
                 continue;
             }
 
-            String username = record.username();
-            String playerName = username == null || username.isBlank()
+            String playerName = record.username() == null || record.username().isBlank()
                 ? record.uuid().toString()
-                : username;
+                : record.username();
 
-            String template = rank == 1
-                ? Objects.requireNonNullElse(options.firstLine(), options.line())
+            String template = rank == 1 && options.firstLine() != null
+                ? options.firstLine()
                 : options.line();
 
             lines.add(template

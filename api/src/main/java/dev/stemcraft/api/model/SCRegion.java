@@ -26,6 +26,8 @@ import com.sk89q.worldedit.regions.CuboidRegion;
 import com.sk89q.worldedit.regions.Polygonal2DRegion;
 import com.sk89q.worldedit.regions.Region;
 import dev.stemcraft.api.serialize.RegionSerializer;
+import lombok.Getter;
+import lombok.Setter;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -44,8 +46,11 @@ import java.util.concurrent.ThreadLocalRandom;
  * Wrapper around a WorldEdit Region with additional utility methods.
  */
 public class SCRegion implements ConfigurationSerializable {
+    @Getter
     private final Region region;
-    private String worldName;
+    @Getter
+    @Setter
+    private World world;
 
     private static final int RANDOM_SAMPLES_COUNT = 32;
 
@@ -56,20 +61,8 @@ public class SCRegion implements ConfigurationSerializable {
      * @param world The Bukkit world.
      */
     public SCRegion(Region region, World world) {
-        this.region = region.clone();
-        this.worldName = world == null ? null : world.getName();
-    }
-
-    public Region getRegion() {
-        return region.clone();
-    }
-
-    public World getWorld() {
-        return worldName == null ? null : Bukkit.getWorld(worldName);
-    }
-
-    public void setWorld(World world) {
-        this.worldName = world == null ? null : world.getName();
+        this.region = region;
+        this.world = world;
     }
 
     /**
@@ -80,8 +73,6 @@ public class SCRegion implements ConfigurationSerializable {
      * @return True if the location is inside the region, false otherwise.
      */
     public boolean contains(Location loc) {
-        World world = getWorld();
-        if (world == null || loc == null || loc.getWorld() == null) return false;
         if (!loc.getWorld().equals(world)) return false;
 
         BlockVector3 pos = BlockVector3.at(
@@ -101,7 +92,6 @@ public class SCRegion implements ConfigurationSerializable {
      * @return True if any sampled point along the path is inside the region.
      */
     public boolean intersectsPath(Location from, Location to) {
-        World world = getWorld();
         if (from == null || to == null || world == null) return false;
         if (from.getWorld() == null || to.getWorld() == null) return false;
         if (!world.equals(from.getWorld()) || !world.equals(to.getWorld())) return false;
@@ -138,10 +128,8 @@ public class SCRegion implements ConfigurationSerializable {
      */
     public boolean contains(SCRegion other) {
         if (other == null) return false;
-        World world = getWorld();
-        World otherWorld = other.getWorld();
-        if (world == null || otherWorld == null) return false;
-        if (!world.equals(otherWorld)) return false;
+        if (this.world == null || other.world == null) return false;
+        if (!this.world.equals(other.world)) return false;
 
         // Fast reject: if this AABB doesn't fully contain the other's AABB, it cannot contain it.
         BlockVector3 aMin = this.region.getMinimumPoint();
@@ -170,10 +158,8 @@ public class SCRegion implements ConfigurationSerializable {
      */
     public boolean intersects(SCRegion other) {
         if (other == null) return false;
-        World world = getWorld();
-        World otherWorld = other.getWorld();
-        if (world == null || otherWorld == null) return false;
-        if (!world.equals(otherWorld)) return false;
+        if (this.world == null || other.world == null) return false;
+        if (!this.world.equals(other.world)) return false;
 
         BlockVector3 aMin = this.region.getMinimumPoint();
         BlockVector3 aMax = this.region.getMaximumPoint();
@@ -361,10 +347,6 @@ public class SCRegion implements ConfigurationSerializable {
      * @return Random location inside the region, or null if none found.
      */
     public Location getRandomLocation() {
-        World world = getWorld();
-        if (world == null) {
-            return null;
-        }
         Random random = ThreadLocalRandom.current();
         BlockVector3 min = region.getMinimumPoint();
         BlockVector3 max = region.getMaximumPoint();
@@ -447,7 +429,6 @@ public class SCRegion implements ConfigurationSerializable {
      * @return Polygon vertices at the region minimum Y.
      */
     public List<Location> getPolygonVertices() {
-        World world = getWorld();
         if (!(region instanceof Polygonal2DRegion poly) || world == null) {
             return List.of();
         }
@@ -477,7 +458,6 @@ public class SCRegion implements ConfigurationSerializable {
      * @return The minimum corner location.
      */
     public Location getMinimumLocation() {
-        World world = getWorld();
         BlockVector3 min = region.getMinimumPoint();
         return new Location(world, min.x(), min.y(), min.z());
     }
@@ -488,7 +468,6 @@ public class SCRegion implements ConfigurationSerializable {
      * @return The maximum corner location.
      */
     public Location getMaximumLocation() {
-        World world = getWorld();
         BlockVector3 max = region.getMaximumPoint();
         return new Location(world, max.x(), max.y(), max.z());
     }
@@ -551,7 +530,6 @@ public class SCRegion implements ConfigurationSerializable {
      * @return A new SCRegion with the same serialized shape and world.
      */
     public SCRegion copy() {
-        World world = getWorld();
         if (world == null) {
             throw new IllegalStateException("Cannot copy a region without a world.");
         }

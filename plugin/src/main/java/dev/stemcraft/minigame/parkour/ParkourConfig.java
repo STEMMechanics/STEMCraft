@@ -8,7 +8,6 @@ import dev.stemcraft.api.util.LocationUtil;
 import dev.stemcraft.api.util.StringUtil;
 import dev.stemcraft.exception.MiniGameInvalidArenaConfigException;
 import dev.stemcraft.minigame.MiniGameConfigSupport;
-import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.jetbrains.annotations.NotNull;
@@ -38,18 +37,15 @@ public class ParkourConfig {
         if (worldName.isEmpty()) {
             throw new MiniGameInvalidArenaConfigException("World not defined for arena '" + arenaId + "'.");
         }
-        if (Bukkit.getWorld(worldName) == null) {
-            throw new MiniGameInvalidArenaConfigException("World '" + worldName + "' does not exist.");
-        }
 
         World world = MiniGameConfigSupport.requireWorld(api, arenaId, worldName);
 
-        SCRegion lobbyRegion = loadRegion(section, world, "lobby");
+        SCRegion lobbyRegion = loadRegion(section, world, "lobby", false);
         if (lobbyRegion == null) {
-            lobbyRegion = loadRegion(section, world, "start");
+            lobbyRegion = loadRegion(section, world, "start", false);
         }
         if (lobbyRegion == null) {
-            Location legacySpawn = loadLocation(section, world, arenaId);
+            Location legacySpawn = loadLocation(section, world, arenaId, "spawn", false);
             if (legacySpawn != null) {
                 lobbyRegion = singleBlockRegion(legacySpawn);
             }
@@ -91,7 +87,7 @@ public class ParkourConfig {
             arenaId,
             enabled,
             name,
-            worldName,
+            world,
             lobbyRegion,
             arenaRegion,
             finishRegion,
@@ -138,20 +134,21 @@ public class ParkourConfig {
         return arenas != null && arenas.isSection(arenaId);
     }
 
-    public void setArenaEnabled(@NotNull String arenaId, boolean enabled) {
+    public boolean setArenaEnabled(@NotNull String arenaId, boolean enabled) {
         ensureLoaded();
         ConfigSection arenas = config.getSection("arenas", false);
         if (arenas == null || !arenas.isSection(arenaId)) {
-            return;
+            return false;
         }
 
         ConfigSection arenaConfig = arenas.getSection(arenaId, false);
         if (arenaConfig == null) {
-            return;
+            return false;
         }
 
         arenaConfig.set("enabled", enabled);
         config.save();
+        return true;
     }
 
     public @Nullable ConfigSection getSection(String path) {
@@ -191,22 +188,33 @@ public class ParkourConfig {
         return region;
     }
 
-    private @Nullable SCRegion loadRegion(@NotNull ConfigSection section, @NotNull World world, @NotNull String key) {
+    private @Nullable SCRegion loadRegion(@NotNull ConfigSection section, @NotNull World world, @NotNull String key, boolean required) {
         String regionString = section.getString(key);
         if (regionString.isEmpty()) {
             return null;
         }
 
-        return SCRegion.fromString(regionString, world);
+        SCRegion region = SCRegion.fromString(regionString, world);
+        if (region == null && required) {
+            throw new MiniGameInvalidArenaConfigException("Region '" + key + "' is invalid.");
+        }
+        return region;
     }
 
-    private @Nullable Location loadLocation(@NotNull ConfigSection section, @NotNull World world, @NotNull String arenaId) {
-        String locationString = section.getString("spawn");
+    private @Nullable Location loadLocation(@NotNull ConfigSection section, @NotNull World world, @NotNull String arenaId, @NotNull String key, boolean required) {
+        String locationString = section.getString(key);
         if (locationString.isEmpty()) {
+            if (required) {
+                throw new MiniGameInvalidArenaConfigException("Location '" + key + "' for arena '" + arenaId + "' is not defined.");
+            }
             return null;
         }
 
-        return LocationUtil.deserialize(locationString, world);
+        Location location = LocationUtil.deserialize(locationString, world);
+        if (location == null && required) {
+            throw new MiniGameInvalidArenaConfigException("Location '" + key + "' for arena '" + arenaId + "' is invalid.");
+        }
+        return location;
     }
 
     private @NotNull String serializeLocation(@Nullable Location location, @NotNull String arenaId, @NotNull String name) {

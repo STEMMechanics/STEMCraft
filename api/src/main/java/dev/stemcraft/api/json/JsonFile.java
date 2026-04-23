@@ -30,7 +30,7 @@ public final class JsonFile {
 
     public Path path() { return file; }
 
-    public ObjectNode root() { return root.deepCopy(); }
+    public ObjectNode root() { return root; }
 
     public JsonFile load() throws IOException {
         if (!Files.exists(file)) {
@@ -45,10 +45,7 @@ public final class JsonFile {
     }
 
     public JsonFile save() throws IOException {
-        Path parent = file.getParent();
-        if (parent != null) {
-            Files.createDirectories(parent);
-        }
+        Files.createDirectories(file.getParent());
         MAPPER.writeValue(file.toFile(), root);
         return this;
     }

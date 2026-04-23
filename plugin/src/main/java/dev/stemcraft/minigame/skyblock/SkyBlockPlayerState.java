@@ -16,7 +16,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 
-public final class SkyBlockPlayerState {
+final class SkyBlockPlayerState {
     private final Location location;
     private final GameMode gameMode;
     private final boolean allowFlight;
@@ -95,7 +95,7 @@ public final class SkyBlockPlayerState {
 
         String worldName = stateSection.getString("location-world", fallbackWorld == null ? "" : fallbackWorld.getName());
         World world = worldName.isBlank() ? fallbackWorld : Bukkit.getWorld(worldName);
-        Location location = loadLocation(stateSection, world);
+        Location location = loadLocation(stateSection, "location", world);
         if (location == null && fallbackWorld != null) {
             location = fallbackWorld.getSpawnLocation();
         }
@@ -148,7 +148,7 @@ public final class SkyBlockPlayerState {
         stateSection.set("offhand", offHand == null ? null : offHand.clone());
     }
 
-    void apply(@NotNull Player player) {
+    void apply(@NotNull Player player, boolean restoreLocation) {
         PlayerInventory inventory = player.getInventory();
         inventory.clear();
         inventory.setStorageContents(cloneItems(storageContents));
@@ -166,33 +166,13 @@ public final class SkyBlockPlayerState {
         player.setLevel(level);
         player.setExp(exp);
         player.setHealth(Math.clamp(health, 1.0d, PlayerUtil.getMaxHealth(player)));
-        if (location != null) {
+        if (restoreLocation && location != null) {
             player.teleport(location);
         }
     }
 
-    public @NotNull SkyBlockPlayerState copy() {
-        return new SkyBlockPlayerState(
-                this.location,
-                this.gameMode,
-                this.allowFlight,
-                this.flying,
-                this.health,
-                this.foodLevel,
-                this.saturation,
-                this.exhaustion,
-                this.level,
-                this.exp,
-                this.fireTicks,
-                this.fallDistance,
-                this.storageContents,
-                this.armorContents,
-                this.offHand
-        );
-    }
-
-    private static @Nullable Location loadLocation(@NotNull ConfigSection section, @Nullable World defaultWorld) {
-        String serialized = section.getString("location");
+    private static @Nullable Location loadLocation(@NotNull ConfigSection section, @NotNull String key, @Nullable World defaultWorld) {
+        String serialized = section.getString(key);
         if (serialized.isBlank()) {
             return null;
         }

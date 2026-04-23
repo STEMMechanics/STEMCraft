@@ -19,13 +19,14 @@ class WorldStateFlagSettingTest {
     @TempDir
     Path tempDir;
 
+    private ServerMock server;
     private WorldMock world;
     private ConfigFileImpl config;
     private WorldStateFlagSetting setting;
 
     @BeforeEach
     void setUp() {
-        ServerMock server = MockBukkit.mock();
+        server = MockBukkit.mock();
         world = server.addSimpleWorld("state-flag-tests");
         config = new ConfigFileImpl();
         assertTrue(config.load(tempDir.toFile(), "world-flags-test.yml", true));

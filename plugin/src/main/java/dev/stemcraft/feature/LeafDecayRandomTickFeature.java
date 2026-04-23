@@ -128,7 +128,7 @@ public final class LeafDecayRandomTickFeature extends BaseFeature {
 
         for (World world : Bukkit.getWorlds()) {
             String configured = api.worlds().getSetting(world, LeafDecayTickSpeedSetting.KEY);
-            if (configured == null || !isOverrideActive(world)) {
+            if (!isOverrideActive(world)) {
                 decayCandidates.remove(world.getUID());
                 allowedDecayTicks.remove(world.getUID());
                 continue;

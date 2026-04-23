@@ -29,7 +29,6 @@ import dev.stemcraft.api.util.LocationUtil;
 import dev.stemcraft.api.util.StringUtil;
 import dev.stemcraft.exception.MiniGameInvalidArenaConfigException;
 import dev.stemcraft.minigame.MiniGameConfigSupport;
-import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -44,8 +43,6 @@ import java.util.Map;
 import java.util.Set;
 
 public class BridgeConfig {
-    static final int DEFAULT_START_COUNTDOWN_SECONDS = 30;
-    static final int DEFAULT_ENDING_SECONDS = 20;
     private static final List<String> REQUIRED_TEAM_IDS = List.of("red", "blue");
 
     private final STEMCraftAPI api;
@@ -67,9 +64,6 @@ public class BridgeConfig {
         if (worldName.isEmpty()) {
             throw new MiniGameInvalidArenaConfigException("World not defined for arena '" + arenaId + "'.");
         }
-        if (Bukkit.getWorld(worldName) == null) {
-            throw new MiniGameInvalidArenaConfigException("World '" + worldName + "' for arena '" + arenaId + "' does not exist.");
-        }
 
         World world = MiniGameConfigSupport.requireWorld(api, arenaId, worldName);
 
@@ -84,11 +78,8 @@ public class BridgeConfig {
 
         int minPlayers = section.getInt("min-players", 2);
         int maxPlayers = section.getInt("max-players", 16);
-        int startCountdownSeconds = section.getInt("start-countdown-seconds", DEFAULT_START_COUNTDOWN_SECONDS);
-        int endingSeconds = section.getInt("ending-seconds", DEFAULT_ENDING_SECONDS);
         String name = section.getString("name", StringUtil.beautify(arenaId));
         List<Material> dropItems = loadDropItems(section, arenaId);
-        List<Material> dropSurfaceMaterials = loadDropSurfaceMaterials(section, arenaId);
 
         ConfigSection teams = section.getSection("teams", false);
         if (teams == null) {
@@ -117,17 +108,14 @@ public class BridgeConfig {
             arenaId,
             enabled,
             name,
-            worldName,
+            world,
             lobby,
             spectator,
             bridgeRegion,
             arenaRegion,
             minPlayers,
             maxPlayers,
-            startCountdownSeconds,
-            endingSeconds,
             dropItems,
-            dropSurfaceMaterials,
             teamDefs
         );
     }
@@ -146,12 +134,8 @@ public class BridgeConfig {
         arenaConfig.set("arena", serializeRegion(arena.get("arenaRegion", SCRegion.class), arena.id(), "arena"));
         arenaConfig.set("min-players", arena.getMinPlayers());
         arenaConfig.set("max-players", arena.getMaxPlayers());
-        arenaConfig.set("start-countdown-seconds", arena.get("startCountdownSeconds", Integer.class, DEFAULT_START_COUNTDOWN_SECONDS));
-        arenaConfig.set("ending-seconds", arena.get("endingSeconds", Integer.class, DEFAULT_ENDING_SECONDS));
         List<?> rawDropItems = arena.get("dropItems", List.class);
         arenaConfig.set("drop-items", serializeDropItems(rawDropItems, arena.id()));
-        List<?> rawDropSurfaceMaterials = arena.get("dropSurfaceMaterials", List.class);
-        arenaConfig.set("drop-surface-materials", serializeDropSurfaceMaterials(rawDropSurfaceMaterials, arena.id()));
 
         ConfigSection teamsConfig = arenaConfig.createSection("teams", true);
         for (String teamId : REQUIRED_TEAM_IDS) {
@@ -182,20 +166,21 @@ public class BridgeConfig {
         return arenas != null && arenas.isSection(arenaId);
     }
 
-    public void setArenaEnabled(@NotNull String arenaId, boolean enabled) {
+    public boolean setArenaEnabled(@NotNull String arenaId, boolean enabled) {
         ensureLoaded();
         ConfigSection arenas = config.getSection("arenas", false);
         if (arenas == null || !arenas.isSection(arenaId)) {
-            return;
+            return false;
         }
 
         ConfigSection arenaConfig = arenas.getSection(arenaId, false);
         if (arenaConfig == null) {
-            return;
+            return false;
         }
 
         arenaConfig.set("enabled", enabled);
         config.save();
+        return true;
     }
 
     public @Nullable ConfigSection getSection(String path) {
@@ -214,10 +199,6 @@ public class BridgeConfig {
         items.add(Material.TNT);
         items.add(Material.GOLDEN_APPLE);
         return items;
-    }
-
-    static @NotNull List<Material> defaultDropSurfaceMaterials() {
-        return List.of(Material.GRASS_BLOCK);
     }
 
     private void validateArenaForSave(@NotNull MiniGameArena arena) {
@@ -319,37 +300,6 @@ public class BridgeConfig {
         return items;
     }
 
-    private @NotNull List<Material> loadDropSurfaceMaterials(@NotNull ConfigSection section, @NotNull String arenaId) {
-        if (!section.contains("drop-surface-materials")) {
-            List<Material> defaults = defaultDropSurfaceMaterials();
-            section.set("drop-surface-materials", serializeDropSurfaceMaterials(new ArrayList<>(defaults), arenaId));
-            section.save();
-            return new ArrayList<>(defaults);
-        }
-
-        List<Material> materials = new ArrayList<>();
-        boolean normalized = false;
-        for (Object raw : section.getList("drop-surface-materials")) {
-            Material material = parseDropMaterial(raw);
-            if (material != null && !material.isAir()) {
-                materials.add(material);
-                normalized |= !(raw instanceof String);
-                continue;
-            }
-
-            if (raw != null) {
-                throw new MiniGameInvalidArenaConfigException("Arena '" + arenaId + "' has an invalid drop surface material entry.");
-            }
-        }
-
-        if (normalized) {
-            section.set("drop-surface-materials", serializeDropSurfaceMaterials(new ArrayList<>(materials), arenaId));
-            section.save();
-        }
-
-        return materials;
-    }
-
     private @NotNull List<String> serializeDropItems(@Nullable List<?> rawDropItems, @NotNull String arenaId) {
         if (rawDropItems == null) {
             return List.of();
@@ -366,33 +316,12 @@ public class BridgeConfig {
         return serialized;
     }
 
-    private @NotNull List<String> serializeDropSurfaceMaterials(@Nullable List<?> rawDropSurfaceMaterials, @NotNull String arenaId) {
-        if (rawDropSurfaceMaterials == null) {
-            return List.of();
-        }
-
-        List<String> serialized = new ArrayList<>(rawDropSurfaceMaterials.size());
-        for (Object raw : rawDropSurfaceMaterials) {
-            Material material = parseDropMaterial(raw);
-            if (material == null || material.isAir()) {
-                throw new MiniGameInvalidArenaConfigException("Arena '" + arenaId + "' has an invalid drop surface material entry.");
-            }
-            serialized.add(material.name());
-        }
-        return serialized;
-    }
-
     private @Nullable Material parseDropMaterial(@Nullable Object raw) {
         if (raw instanceof Material material) {
             return material;
         }
         if (raw instanceof String name) {
-            String normalized = name.trim();
-            Material material = Material.matchMaterial(normalized);
-            if (material == null && normalized.equalsIgnoreCase("grass")) {
-                return Material.GRASS_BLOCK;
-            }
-            return material;
+            return Material.matchMaterial(name.trim());
         }
         if (raw instanceof org.bukkit.inventory.ItemStack item) {
             return item.getType();
