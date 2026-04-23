@@ -22,6 +22,7 @@ package dev.stemcraft.config;
 
 import dev.stemcraft.api.config.ConfigFile;
 import dev.stemcraft.api.config.ConfigSection;
+import lombok.Setter;
 import org.bukkit.configuration.ConfigurationSection;
 import org.jspecify.annotations.NonNull;
 
@@ -31,6 +32,7 @@ import java.util.*;
  * Implementation of the ConfigSection interface for managing configuration sections.
  */
 public class ConfigSectionImpl implements ConfigSection {
+    @Setter
     private ConfigFile configFile;
     private ConfigurationSection section;
     private String basePath = "";
@@ -47,10 +49,6 @@ public class ConfigSectionImpl implements ConfigSection {
     }
 
     public ConfigSectionImpl() {}
-
-    public void setConfigFile(ConfigFile configFile) {
-        this.configFile = configFile;
-    }
 
     public void setSection(ConfigurationSection section) {
         updateSection(section);
