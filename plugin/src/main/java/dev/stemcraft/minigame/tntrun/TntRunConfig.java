@@ -94,7 +94,7 @@ public class TntRunConfig {
         arenaConfig.set("name", arena.getName());
         arenaConfig.set("lobby", serializeLocation(arena.getLobbySpawn(), arena.id(), "lobby"));
         arenaConfig.set("spectator", serializeLocation(arena.getSpectatorSpawn(), arena.id(), "spectator"));
-        arenaConfig.set("arena", serializeRegion(arena.get("arenaRegion", SCRegion.class), arena.id(), "arena"));
+        arenaConfig.set("arena", serializeRegion(arena.get("arenaRegion", SCRegion.class), arena.id()));
         arenaConfig.set("starting-grid", serializeLocations(startingGrid(arena), arena.id()));
         arenaConfig.set("min-players", arena.getMinPlayers());
         arenaConfig.set("max-players", arena.getMaxPlayers());
@@ -234,9 +234,9 @@ public class TntRunConfig {
         return values;
     }
 
-    private @NotNull String serializeRegion(@Nullable SCRegion region, @NotNull String arenaId, @NotNull String name) {
+    private @NotNull String serializeRegion(@Nullable SCRegion region, @NotNull String arenaId) {
         if (region == null) {
-            throw new MiniGameInvalidArenaConfigException("Arena '" + arenaId + "' is missing " + name + ".");
+            throw new MiniGameInvalidArenaConfigException("Arena '" + arenaId + "' is missing " + "arena" + ".");
         }
         return region.toString();
     }

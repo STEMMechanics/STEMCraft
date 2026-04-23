@@ -8,11 +8,13 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
+import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.Test;
 import org.mockbukkit.mockbukkit.MockBukkit;
 import org.mockbukkit.mockbukkit.ServerMock;
 import org.mockbukkit.mockbukkit.world.WorldMock;
 
+import java.io.Serial;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Random;
@@ -198,7 +200,7 @@ class BedWarsArenaHandlerTest {
 
         BedWarsArenaHandler handler = new BedWarsArenaHandler(api, game) {
             @Override
-            void clearTeamBedBlocks(MiniGameTeam team) {
+            void clearTeamBedBlocks(@NonNull MiniGameTeam team) {
                 cleared[0] = true;
             }
         };
@@ -212,6 +214,7 @@ class BedWarsArenaHandlerTest {
     }
 
     private static final class ZeroRandom extends Random {
+        @Serial
         private static final long serialVersionUID = 1L;
 
         @Override

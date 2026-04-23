@@ -475,7 +475,7 @@ public class TntRunCommand {
             case "arena" -> {
                 Player player = requirePlayer(ctx);
                 SCRegion selection = requireSelection(ctx, player);
-                ensureArenaWorld(ctx, arena, selection, "Arena region");
+                ensureArenaWorld(ctx, arena, selection);
                 ensureArenaRegionAcceptsExistingGeometry(ctx, arena, selection);
                 SCRegion copy = selection.copy();
                 arena.setRegion(copy);
@@ -554,7 +554,7 @@ public class TntRunCommand {
         ctx.checkArgsSizeAtLeast(3);
         Player player = requirePlayer(ctx);
         MiniGameArena arena = requireArena(ctx);
-        int index = requireOneBasedIndex(ctx, 2, tntRun.startingGrid(arena).size(), "spawn");
+        int index = requireOneBasedIndex(ctx, 2, tntRun.startingGrid(arena).size());
         ensureArenaWorld(ctx, arena, player.getLocation(), "Starting grid slot");
         ensureLocationContained(ctx, player.getLocation(), arena.get("arenaRegion", SCRegion.class));
         tntRun.startingGrid(arena).set(index, player.getLocation().clone());
@@ -565,7 +565,7 @@ public class TntRunCommand {
     private void commandRemoveSpawn(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
         MiniGameArena arena = requireArena(ctx);
-        int index = requireOneBasedIndex(ctx, 2, tntRun.startingGrid(arena).size(), "spawn");
+        int index = requireOneBasedIndex(ctx, 2, tntRun.startingGrid(arena).size());
         tntRun.startingGrid(arena).remove(index);
         if (!tntRun.startingGrid(arena).isEmpty() && arena.getMaxPlayers() > tntRun.startingGrid(arena).size()) {
             arena.setMaxPlayers(tntRun.startingGrid(arena).size());
@@ -595,7 +595,7 @@ public class TntRunCommand {
             }
             case "spawn" -> {
                 ctx.checkArgsSizeAtLeast(4);
-                int index = requireOneBasedIndex(ctx, 3, tntRun.startingGrid(arena).size(), "spawn");
+                int index = requireOneBasedIndex(ctx, 3, tntRun.startingGrid(arena).size());
                 location = tntRun.startingGrid(arena).get(index);
                 requireSameWorld(ctx, player, location.getWorld().getName());
                 api.selections().setWorldEditSelection(player, location);
@@ -632,7 +632,7 @@ public class TntRunCommand {
             case "spectator" -> location = arena.getSpectatorSpawn();
             case "spawn" -> {
                 ctx.checkArgsSizeAtLeast(4);
-                int index = requireOneBasedIndex(ctx, 3, tntRun.startingGrid(arena).size(), "spawn");
+                int index = requireOneBasedIndex(ctx, 3, tntRun.startingGrid(arena).size());
                 location = tntRun.startingGrid(arena).get(index);
             }
             default -> {
@@ -693,10 +693,10 @@ public class TntRunCommand {
         return selection;
     }
 
-    private int requireOneBasedIndex(CommandContext ctx, int argIndex, int size, String label) {
+    private int requireOneBasedIndex(CommandContext ctx, int argIndex, int size) {
         if (size <= 0) {
-            ctx.returnError("No " + label + "s are configured yet.");
-            throw new IllegalStateException("No " + label + "s are configured.");
+            ctx.returnError("No " + "spawn" + "s are configured yet.");
+            throw new IllegalStateException("No " + "spawn" + "s are configured.");
         }
         int oneBased = ctx.getArgAsInt(argIndex, 1, 1, size);
         return oneBased - 1;
@@ -712,13 +712,13 @@ public class TntRunCommand {
         }
     }
 
-    private void ensureArenaWorld(CommandContext ctx, MiniGameArena arena, SCRegion region, String label) {
+    private void ensureArenaWorld(CommandContext ctx, MiniGameArena arena, SCRegion region) {
         if (region == null || region.getWorld() == null) {
-            ctx.returnError(label + " is not set in a valid world.");
+            ctx.returnError("Arena region" + " is not set in a valid world.");
             return;
         }
         if (!arena.world().equals(region.getWorld())) {
-            ctx.returnError(label + " must be in world '" + arena.world().getName() + "'.");
+            ctx.returnError("Arena region" + " must be in world '" + arena.world().getName() + "'.");
         }
     }
 

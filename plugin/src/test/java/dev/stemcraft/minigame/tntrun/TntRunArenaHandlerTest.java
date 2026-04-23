@@ -10,9 +10,9 @@ import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.BlockData;
-import org.bukkit.entity.Player;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.Listener;
+import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -276,18 +276,18 @@ class TntRunArenaHandlerTest {
         when(events.register(any(), any())).thenReturn(mock(Listener.class));
         when(game.minigame()).thenReturn(minigame);
         when(game.startCountdownSeconds(any())).thenReturn(30);
-        when(game.joinOrder(any())).thenReturn(new ArrayList<UUID>());
-        when(game.startingGrid(any())).thenReturn(new ArrayList<Location>());
-        when(game.assignedSpawnSlots(any())).thenReturn(new LinkedHashMap<UUID, Integer>());
+        when(game.joinOrder(any())).thenReturn(new ArrayList<>());
+        when(game.startingGrid(any())).thenReturn(new ArrayList<>());
+        when(game.assignedSpawnSlots(any())).thenReturn(new LinkedHashMap<>());
 
         return new TntRunArenaHandler(api, game) {
             @Override
-            void captureArenaSnapshot(MiniGameArena arena) {
+            void captureArenaSnapshot(@NonNull MiniGameArena arena) {
                 captureCalled[0] = true;
             }
 
             @Override
-            void resetArenaBlocks(MiniGameArena arena) {
+            void resetArenaBlocks(@NonNull MiniGameArena arena) {
                 resetCalled[0] = true;
             }
         };
@@ -308,7 +308,7 @@ class TntRunArenaHandlerTest {
 
         return new TntRunArenaHandler(api, game) {
             @Override
-            org.bukkit.block.data.BlockData createBlockData(String blockData) {
+            org.bukkit.block.data.BlockData createBlockData(@NonNull String blockData) {
                 return blockDataByString.get(blockData);
             }
         };
@@ -328,7 +328,7 @@ class TntRunArenaHandlerTest {
 
         return new TntRunArenaHandler(api, game) {
             @Override
-            void scheduleDecayUnderActivePlayers(MiniGameArena arena) {
+            void scheduleDecayUnderActivePlayers(@NonNull MiniGameArena arena) {
                 if (scanned != null) {
                     scanned[0] = true;
                 }
