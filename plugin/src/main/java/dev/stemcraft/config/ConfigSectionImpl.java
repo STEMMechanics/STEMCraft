@@ -176,7 +176,7 @@ public class ConfigSectionImpl implements ConfigSection {
      */
     public @NonNull String getString(@NonNull String path, @NonNull String def) {
         persistDefault(path, def);
-        return Objects.requireNonNull(section.getString(resolvePath(path), def));
+        return section.getString(resolvePath(path), def);
     }
 
     /**
