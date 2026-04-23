@@ -51,6 +51,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.projectiles.ProjectileSource;
 import org.bukkit.util.Vector;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.jspecify.annotations.NonNull;
 
 import java.util.ArrayList;
@@ -154,7 +155,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
         if (arenaRegion != null) {
             api.regions().addListener(listenerPrefix + "boundary", arenaRegion, new RegionListener() {
                 @Override
-                public void onExit(@NotNull Player player, @NotNull SCRegion region, Location from, Location to) {
+                public void onExit(@NotNull Player player, @NotNull SCRegion region, @Nullable Location from, @Nullable Location to) {
                     if (arena.hasPlayer(player) && arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING) {
                         if (tryHandlePortalScore(arena, player, from, to)) {
                             return;
@@ -182,7 +183,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
 
             api.regions().addListener(listenerPrefix + "team_" + teamId, portalRegion, new RegionListener() {
                 @Override
-                public void onEnter(@NotNull Player player, @NotNull SCRegion region, @NotNull Location from, @NotNull Location to) {
+                public void onEnter(@NotNull Player player, @NotNull SCRegion region, @Nullable Location from, @Nullable Location to) {
                     if (!arena.hasPlayer(player) || arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
                         return;
                     }
@@ -486,7 +487,8 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
         }
     }
 
-    private void clearPlayerInventory(Player player) {
+    @Override
+    public void clearPlayerInventory(Player player) {
         player.getInventory().clear();
         player.getInventory().setArmorContents(new ItemStack[0]);
         player.getInventory().setItemInOffHand(null);
@@ -678,7 +680,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
         return respawningPlayers(arena).contains(player.getUniqueId());
     }
 
-    private boolean tryHandlePortalScore(@NotNull MiniGameArena arena, @NotNull Player player, Location from, Location to) {
+    private boolean tryHandlePortalScore(@NotNull MiniGameArena arena, @NotNull Player player, @Nullable Location from, @Nullable Location to) {
         if (from == null || to == null || !arena.hasPlayer(player) || arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
             return false;
         }
