@@ -200,8 +200,6 @@ public final class STEMCraft extends JavaPlugin {
         web = new WebServiceImpl(this, api);
         worlds = new WorldServiceImpl(this, api);
 
-        registerBuiltInWorldGenerators();
-
         chat.onEnable();
         commands.onEnable();
         database.onEnable();
@@ -223,6 +221,7 @@ public final class STEMCraft extends JavaPlugin {
         web.onEnable();
         worlds.onEnable();
 
+        registerBuiltInWorldGenerators();
 
         info("STEMCRAFT_ENABLED");
 

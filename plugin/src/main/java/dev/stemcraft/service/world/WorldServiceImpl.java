@@ -268,9 +268,9 @@ public class WorldServiceImpl extends BaseService implements WorldService {
 
         settings.clear();
 
-        worldChangeRecorder.onDisable();
-        worldGeneration.onDisable();
-        worldCommand.onDisable();
+        if(worldChangeRecorder != null) worldChangeRecorder.onDisable();
+        if(worldGeneration != null) worldGeneration.onDisable();
+        if(worldCommand != null) worldCommand.onDisable();
     }
 
     /**
