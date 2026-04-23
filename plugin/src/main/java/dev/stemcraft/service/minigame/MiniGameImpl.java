@@ -203,7 +203,7 @@ public class MiniGameImpl implements MiniGame {
      * @return The MiniGameArena instance the player is in, or null if not found.
      */
     public MiniGameArena findPlayer(Player player) {
-        return service.findPlayerArena(player);
+        return service.findPlayerArena(player, this.namespace);
     }
 
     public String renderArenaPlaceholder(MiniGameArena arena, String key) {
