@@ -254,8 +254,17 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
 
     @Override
     public void onArenaCountdownTick(MiniGameArena arena, int secondsRemaining) {
+        if (secondsRemaining <= 0) {
+            return;
+        }
+
+        if (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING && secondsRemaining <= 5) {
+            float pitch = 1.0f + ((5 - secondsRemaining) * 0.1f);
+            playSoundToOccupants(arena, Sound.BLOCK_NOTE_BLOCK_HAT, 0.7f, pitch);
+            arena.showStartingCountdownTitle(secondsRemaining);
+        }
+
         if (arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING
-            && secondsRemaining > 0
             && secondsRemaining % DROP_INTERVAL_SECONDS == 0) {
             spawnRandomDrop(arena);
         }
@@ -624,6 +633,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
     }
 
     private void clearTrackedEntities(MiniGameArena arena) {
+        arena.clearAllSupplyDrops();
         Set<UUID> trackedEntities = trackedEntities(arena);
         for (UUID entityId : new LinkedHashSet<>(trackedEntities)) {
             Entity entity = arena.world().getEntity(entityId);
@@ -714,6 +724,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
             Item droppedItem = surface.getWorld().dropItem(dropLocation, item);
             droppedItem.setPickupDelay(10);
             trackedEntities(arena).add(droppedItem.getUniqueId());
+            arena.trackSupplyDrop(droppedItem, surface);
             announceSupplyDrop(arena, dropLocation);
             playSoundToOccupants(arena);
             return;
@@ -793,8 +804,12 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
     }
 
     private void playSoundToOccupants(@NotNull MiniGameArena arena) {
+        playSoundToOccupants(arena, Sound.ENTITY_ITEM_PICKUP, 0.6f, 1.35f);
+    }
+
+    private void playSoundToOccupants(@NotNull MiniGameArena arena, @NotNull Sound sound, float volume, float pitch) {
         for (Player occupant : arena.getOccupants()) {
-            occupant.playSound(occupant.getLocation(), Sound.ENTITY_ITEM_PICKUP, (float) 0.6, (float) 1.35);
+            occupant.playSound(occupant.getLocation(), sound, volume, pitch);
         }
     }
 

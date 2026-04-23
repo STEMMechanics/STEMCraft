@@ -712,13 +712,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
     }
 
     private void showStartingCountdownTitle(@NotNull MiniGameArena arena, int secondsRemaining) {
-        arena.showTitle(
-            "<gradient:#fde047:#f97316><bold>" + secondsRemaining + "</bold></gradient>",
-            "<gold>Race starts in</gold>",
-            0,
-            1000,
-            200
-        );
+        arena.showStartingCountdownTitle(secondsRemaining, "<gold>Race starts in</gold>");
     }
 
     private void showRaceStartTitle(@NotNull MiniGameArena arena) {

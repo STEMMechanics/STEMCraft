@@ -353,6 +353,9 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
             || status == MiniGameArena.ArenaStatus.ENDING) && secondsRemaining <= 5) {
             float pitch = 1.0f + ((5 - secondsRemaining) * 0.1f);
             playSoundToOccupants(arena, Sound.BLOCK_NOTE_BLOCK_HAT, 0.7f, pitch);
+            if (status == MiniGameArena.ArenaStatus.STARTING) {
+                arena.showStartingCountdownTitle(secondsRemaining);
+            }
         }
     }
 

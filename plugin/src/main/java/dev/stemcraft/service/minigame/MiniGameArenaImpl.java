@@ -20,8 +20,12 @@ import org.bukkit.FireworkEffect;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
+import org.bukkit.block.Block;
+import org.bukkit.block.data.BlockData;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Firework;
+import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.FireworkMeta;
@@ -74,6 +78,8 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
     private final Set<Material> unlimitedAmmo = EnumSet.noneOf(Material.class);
     private final Set<Material> unlimitedPlacements = EnumSet.noneOf(Material.class);
     private final Set<String> activeCelebrationKeys = new HashSet<>();
+    private final Map<UUID, SupplyDropMarker> supplyDropMarkers = new HashMap<>();
+    private final Map<String, SupplyDropBlockMarker> supplyDropBlocks = new HashMap<>();
     private final Map<UUID, Long> protectionUntil = new HashMap<>();
     private final Map<String, Map<Material, Integer>> kits = new HashMap<>();
 
@@ -841,6 +847,63 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         }
     }
 
+    @Override
+    public void trackSupplyDrop(Item item, Location markerLocation) {
+        if (item == null || markerLocation == null || markerLocation.getWorld() == null) {
+            return;
+        }
+
+        UUID itemId = item.getUniqueId();
+        clearSupplyDrop(itemId);
+
+        Block markerBlock = markerLocation.getBlock();
+        Location blockLocation = markerBlock.getLocation().clone();
+        String blockKey = supplyDropBlockKey(blockLocation);
+        SupplyDropBlockMarker blockMarker = supplyDropBlocks.get(blockKey);
+        if (blockMarker == null) {
+            blockMarker = new SupplyDropBlockMarker(
+                blockLocation,
+                markerBlock.getType(),
+                markerBlock.getBlockData().clone()
+            );
+            supplyDropBlocks.put(blockKey, blockMarker);
+            markerBlock.setType(Material.BEACON, false);
+        }
+        blockMarker.references++;
+
+        String celebrationKey = "supply-drop-" + itemId;
+        supplyDropMarkers.put(itemId, new SupplyDropMarker(blockKey, celebrationKey));
+        startCelebration(
+            celebrationKey,
+            item.getLocation().clone(),
+            3,
+            Color.AQUA,
+            Color.YELLOW,
+            Color.WHITE
+        );
+    }
+
+    @Override
+    public void clearAllSupplyDrops() {
+        for (UUID itemId : new ArrayList<>(supplyDropMarkers.keySet())) {
+            clearSupplyDrop(itemId);
+        }
+    }
+
+    boolean tracksSupplyDrop(@NotNull UUID itemId) {
+        return supplyDropMarkers.containsKey(itemId);
+    }
+
+    void pruneSupplyDrops() {
+        for (UUID itemId : new ArrayList<>(supplyDropMarkers.keySet())) {
+            Entity entity = world.getEntity(itemId);
+            if (entity instanceof Item arenaItem && arenaItem.isValid() && !arenaItem.isDead()) {
+                continue;
+            }
+            clearSupplyDrop(itemId);
+        }
+    }
+
     void handlePlayerQuit(Player player) {
         if (players.containsKey(player)) {
             removeActivePlayer(player, false, true);
@@ -908,6 +971,33 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         }
         return NamespaceId.sanitizePath(key);
     }
+
+    void clearSupplyDrop(@NotNull UUID itemId) {
+        SupplyDropMarker marker = supplyDropMarkers.remove(itemId);
+        if (marker == null) {
+            return;
+        }
+
+        stopCelebration(marker.celebrationKey());
+
+        SupplyDropBlockMarker blockMarker = supplyDropBlocks.get(marker.blockKey());
+        if (blockMarker == null) {
+            return;
+        }
+
+        blockMarker.references--;
+        if (blockMarker.references > 0) {
+            return;
+        }
+
+        blockMarker.restore();
+        supplyDropBlocks.remove(marker.blockKey());
+    }
+
+    private String supplyDropBlockKey(@NotNull Location location) {
+        return location.getWorld().getUID() + ":" + location.getBlockX() + ":" + location.getBlockY() + ":" + location.getBlockZ();
+    }
+
     private void removeActivePlayer(Player player, boolean restoreLocation, boolean quitting) {
         MiniGamePlayerImpl mgPlayer = detachActiveProfile(player, true, quitting);
         if (mgPlayer == null) {
@@ -1054,5 +1144,27 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
             }
         }
         api.messages().broadcast(message, excluded, placeholders);
+    }
+
+    private record SupplyDropMarker(@NotNull String blockKey, @NotNull String celebrationKey) {
+    }
+
+    private static final class SupplyDropBlockMarker {
+        private final Location location;
+        private final Material originalMaterial;
+        private final BlockData originalBlockData;
+        private int references = 0;
+
+        private SupplyDropBlockMarker(@NotNull Location location, @NotNull Material originalMaterial, @NotNull BlockData originalBlockData) {
+            this.location = location;
+            this.originalMaterial = originalMaterial;
+            this.originalBlockData = originalBlockData;
+        }
+
+        private void restore() {
+            Block block = location.getBlock();
+            block.setType(originalMaterial, false);
+            block.setBlockData(originalBlockData.clone(), false);
+        }
     }
 }
