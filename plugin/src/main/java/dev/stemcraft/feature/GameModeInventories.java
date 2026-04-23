@@ -42,6 +42,7 @@ import java.util.*;
  * and the world group they are in. World groups are determined by stripping
  * "_nether" and "_the_end" suffixes from world names.
  */
+@SuppressWarnings("unused")
 public class GameModeInventories extends BaseFeature {
     private final Map<UUID, PlayerProfiles> profiles = new HashMap<>();
 
