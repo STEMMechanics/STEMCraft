@@ -41,6 +41,7 @@ import net.kyori.adventure.resource.ResourcePackRequest;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
 import javax.imageio.ImageIO;
@@ -476,6 +477,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
         }
     }
 
+    @SuppressWarnings("BooleanMethodIsAlwaysInverted") // This function's output is reasonable, so why bother changing it?
     private static boolean deleteDirectory(Path root) {
         if (root == null || !Files.exists(root)) {
             return true;
