@@ -201,10 +201,10 @@ public class MiniGameImpl implements MiniGame {
         return service.findPlayerArena(player);
     }
 
-    public String renderArenaPlaceholder(MiniGameArena arena, String key) {
+    public String renderArenaPlaceholder(MiniGameArena arena, String key, MiniGamePlayer player) {
         MiniGamePlaceholderProvider provider = arenaPlaceholders.get(key);
         if (provider != null) {
-            return provider.provide(arena, null, null);
+            return provider.provide(arena, null, player);
         }
         return null;
     }

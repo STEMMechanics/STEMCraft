@@ -347,6 +347,9 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
         if ((status == MiniGameArena.ArenaStatus.STARTING || status == MiniGameArena.ArenaStatus.ENDING) && secondsRemaining <= 5) {
             float pitch = 1.0f + ((5 - secondsRemaining) * 0.1f);
             playSoundToOccupants(arena, Sound.BLOCK_NOTE_BLOCK_HAT, 0.7f, pitch);
+            if (status == MiniGameArena.ArenaStatus.STARTING) {
+                arena.showStartingCountdownTitle(secondsRemaining);
+            }
         }
     }
 
@@ -440,6 +443,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
     }
 
     private void clearTrackedEntities(MiniGameArena arena) {
+        arena.clearAllSupplyDrops();
         Set<UUID> trackedEntities = trackedEntities(arena);
         World world = arena.world();
         for (UUID entityId : new LinkedHashSet<>(trackedEntities)) {
@@ -889,6 +893,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
             Item droppedItem = surface.getWorld().dropItem(dropLocation, item);
             droppedItem.setPickupDelay(10);
             trackedEntities(arena).add(droppedItem.getUniqueId());
+            arena.trackSupplyDrop(droppedItem, surface);
             announceSupplyDrop(arena, dropLocation);
             playSoundToOccupants(arena, Sound.ENTITY_ITEM_PICKUP, 0.6f, 1.35f);
             return;

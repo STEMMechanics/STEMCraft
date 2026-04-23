@@ -73,7 +73,7 @@ public class BedWarsMiniGame extends BaseMiniGame {
 
         for (int i = 0; i < 8; i++) {
             final int index = i;
-            minigame.registerArenaPlaceholder("team-line-" + (i + 1), (arena, team, player) -> renderTeamLine(arena, index));
+            minigame.registerArenaPlaceholder("team-line-" + (i + 1), (arena, team, player) -> renderTeamLine(arena, player, index));
         }
 
         registerStats();
@@ -358,14 +358,12 @@ public class BedWarsMiniGame extends BaseMiniGame {
         return arena.getOrCreate("dropItems", List.class, BedWarsConfig::defaultDropItems);
     }
 
-    private String renderTeamLine(@Nullable MiniGameArena arena, int index) {
+    String renderTeamLine(@Nullable MiniGameArena arena, @Nullable MiniGamePlayer viewer, int index) {
         if (arena == null) {
             return "";
         }
 
-        List<MiniGameTeam> teams = arena.getTeams().stream()
-            .sorted(Comparator.comparing(MiniGameTeam::getName))
-            .toList();
+        List<MiniGameTeam> teams = scoreboardTeams(arena);
         if (index >= teams.size()) {
             return "";
         }
@@ -377,7 +375,19 @@ public class BedWarsMiniGame extends BaseMiniGame {
         boolean eliminated = players == 0
             && !bedAlive
             && arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING;
-        return teamLineFormat.render(team, displayName, players, bedAlive, eliminated);
+        return teamLineFormat.render(team, displayName, players, bedAlive, eliminated, isViewerTeam(team, viewer));
+    }
+
+    @NotNull List<MiniGameTeam> scoreboardTeams(@NotNull MiniGameArena arena) {
+        return arena.getTeams().stream()
+            .filter(team -> !arena.getTeamPlayers(team.getName()).isEmpty()
+                || !team.get("bedAlive", Boolean.class, true))
+            .sorted(Comparator.comparing(MiniGameTeam::getName))
+            .toList();
+    }
+
+    private boolean isViewerTeam(@NotNull MiniGameTeam team, @Nullable MiniGamePlayer viewer) {
+        return viewer != null && team.getName().equalsIgnoreCase(viewer.getTeam());
     }
 
     private String renderWinner(@NotNull MiniGameArena arena) {
@@ -466,7 +476,8 @@ public class BedWarsMiniGame extends BaseMiniGame {
             @NotNull String displayName,
             int playerCount,
             boolean bedAlive,
-            boolean eliminated
+            boolean eliminated,
+            boolean viewerTeam
         ) {
             String colour = teamColours.getOrDefault(team.getName().toLowerCase(Locale.ROOT), displayName);
             String state = eliminated
@@ -475,9 +486,10 @@ public class BedWarsMiniGame extends BaseMiniGame {
                     bedAlive ? bed : noBed,
                     PlaceholderUtil.apply(remainingPlayers, "count", Integer.toString(playerCount))
                 );
+            String you = viewerTeam ? " &7(You)" : "";
 
             return PlaceholderUtil.apply(
-                teamLine,
+                teamLine + you,
                 "colour", colour,
                 "color", colour,
                 "state", state,

@@ -210,6 +210,9 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
             && secondsRemaining <= COUNTDOWN_BEEP_THRESHOLD) {
             float pitch = 1.0f + ((COUNTDOWN_BEEP_THRESHOLD - secondsRemaining) * 0.1f);
             playSoundToOccupants(arena, Sound.BLOCK_NOTE_BLOCK_HAT, 0.7f, pitch);
+            if (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING) {
+                arena.showStartingCountdownTitle(secondsRemaining);
+            }
         }
     }
 
