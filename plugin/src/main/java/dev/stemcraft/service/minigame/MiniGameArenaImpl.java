@@ -20,6 +20,8 @@ import org.bukkit.FireworkEffect;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
+import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Firework;
@@ -27,14 +29,27 @@ import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.FireworkMeta;
+import org.bukkit.util.BoundingBox;
 import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Predicate;
 
 public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements MiniGameArena {
+    private static final double SUPPLY_DROP_SPAWN_ABOVE_SURFACE_OFFSET = 0.15d;
+    private static final BlockFace[] SUPPLY_DROP_SUPPORT_FACES = new BlockFace[] {
+        BlockFace.NORTH,
+        BlockFace.SOUTH,
+        BlockFace.EAST,
+        BlockFace.WEST,
+        BlockFace.NORTH_EAST,
+        BlockFace.NORTH_WEST,
+        BlockFace.SOUTH_EAST,
+        BlockFace.SOUTH_WEST
+    };
     private static final Color[] DEFAULT_CELEBRATION_COLORS = new Color[] {
         Color.RED,
         Color.ORANGE,
@@ -875,6 +890,62 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         }
     }
 
+    @Override
+    public Location findRandomSupplyDropLocation(List<Material> allowedSurfaceMaterials, int attempts) {
+        if (allowedSurfaceMaterials == null || allowedSurfaceMaterials.isEmpty() || attempts <= 0) {
+            return null;
+        }
+
+        SCRegion arenaRegion = get("arenaRegion", SCRegion.class);
+        if (arenaRegion == null) {
+            return null;
+        }
+
+        return findRandomSupplyDropLocation(
+            arenaRegion.getMinimumLocation(),
+            arenaRegion.getMaximumLocation(),
+            arenaRegion::contains,
+            allowedSurfaceMaterials,
+            attempts
+        );
+    }
+
+    @Nullable Location findRandomSupplyDropLocation(
+        @NotNull Location min,
+        @NotNull Location max,
+        @NotNull Predicate<Location> contains,
+        @NotNull List<Material> allowedSurfaceMaterials,
+        int attempts
+    ) {
+        if (allowedSurfaceMaterials.isEmpty() || attempts <= 0) {
+            return null;
+        }
+
+        int width = (max.getBlockX() - min.getBlockX()) + 1;
+        int depth = (max.getBlockZ() - min.getBlockZ()) + 1;
+        if (width <= 0 || depth <= 0) {
+            return null;
+        }
+
+        World regionWorld = min.getWorld();
+        if (regionWorld == null) {
+            return null;
+        }
+
+        Set<Material> allowedMaterials = EnumSet.copyOf(allowedSurfaceMaterials);
+        ThreadLocalRandom random = ThreadLocalRandom.current();
+        for (int attempt = 0; attempt < attempts; attempt++) {
+            int x = min.getBlockX() + random.nextInt(width);
+            int z = min.getBlockZ() + random.nextInt(depth);
+            Location dropLocation = highestSupplyDropLocation(regionWorld, min.getBlockY(), max.getBlockY(), x, z, contains, allowedMaterials);
+            if (dropLocation != null) {
+                return dropLocation;
+            }
+        }
+
+        return null;
+    }
+
     boolean tracksSupplyDrop(@NotNull UUID itemId) {
         return supplyDropMarkers.containsKey(itemId);
     }
@@ -1008,6 +1079,56 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         return "minigame-supply-drop-signal-" + NamespaceId.sanitizePath(namespace)
             + "-" + NamespaceId.sanitizePath(id)
             + "-" + itemId.toString().replace('-', '_');
+    }
+
+    private @Nullable Location highestSupplyDropLocation(
+        @NotNull World regionWorld,
+        int minY,
+        int maxY,
+        int x,
+        int z,
+        @NotNull Predicate<Location> contains,
+        @NotNull Set<Material> allowedMaterials
+    ) {
+        for (int y = maxY; y >= minY; y--) {
+            Block block = regionWorld.getBlockAt(x, y, z);
+            if (!contains.test(block.getLocation()) || block.getType().isAir()) {
+                continue;
+            }
+
+            return supplyDropSpawnLocation(block, allowedMaterials);
+        }
+
+        return null;
+    }
+
+    private @Nullable Location supplyDropSpawnLocation(@NotNull Block block, @NotNull Set<Material> allowedMaterials) {
+        if (!allowedMaterials.contains(block.getType()) || !hasSolidSupplyDropSupport(block)) {
+            return null;
+        }
+
+        Block above = block.getRelative(BlockFace.UP);
+        Block aboveTwo = above.getRelative(BlockFace.UP);
+        if (!above.isPassable() || !aboveTwo.isPassable()) {
+            return null;
+        }
+
+        BoundingBox blockBox = block.getBoundingBox();
+        return new Location(
+            block.getWorld(),
+            block.getX() + 0.5d,
+            blockBox.getMaxY() + SUPPLY_DROP_SPAWN_ABOVE_SURFACE_OFFSET,
+            block.getZ() + 0.5d
+        );
+    }
+
+    private boolean hasSolidSupplyDropSupport(@NotNull Block block) {
+        for (BlockFace face : SUPPLY_DROP_SUPPORT_FACES) {
+            if (!block.getRelative(face).getType().isSolid()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private void removeActivePlayer(Player player, boolean restoreLocation, boolean quitting) {

@@ -4,14 +4,22 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.minigame.MiniGameArena;
 import dev.stemcraft.api.service.task.TaskService;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.entity.Item;
 import org.junit.jupiter.api.Test;
+import org.mockbukkit.mockbukkit.MockBukkit;
+import org.mockbukkit.mockbukkit.ServerMock;
+import org.mockbukkit.mockbukkit.world.WorldMock;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.contains;
@@ -77,5 +85,106 @@ class MiniGameArenaSharedTest {
             () -> verify(tasks, times(4)).cancel(contains(firstTaskToken)),
             () -> verify(tasks, times(4)).cancel(contains(secondTaskToken))
         );
+    }
+
+    @Test
+    void findRandomSupplyDropLocationUsesHighestAllowedConfiguredSurface() {
+        ServerMock server = MockBukkit.mock();
+        try {
+            WorldMock world = server.addSimpleWorld("shared-bedwars-drop-test");
+            world.getBlockAt(0, 64, 0).setType(Material.YELLOW_BED);
+            world.getBlockAt(0, 73, 0).setType(Material.GRASS_BLOCK);
+            world.getBlockAt(1, 73, 0).setType(Material.STONE);
+            world.getBlockAt(-1, 73, 0).setType(Material.STONE);
+            world.getBlockAt(0, 73, 1).setType(Material.STONE);
+            world.getBlockAt(0, 73, -1).setType(Material.STONE);
+            world.getBlockAt(1, 73, 1).setType(Material.STONE);
+            world.getBlockAt(1, 73, -1).setType(Material.STONE);
+            world.getBlockAt(-1, 73, 1).setType(Material.STONE);
+            world.getBlockAt(-1, 73, -1).setType(Material.STONE);
+            world.getBlockAt(0, 74, 0).setType(Material.AIR);
+            world.getBlockAt(0, 75, 0).setType(Material.AIR);
+
+            MiniGameArenaImpl arena = createArena(world);
+            Location dropLocation = arena.findRandomSupplyDropLocation(
+                new Location(world, 0.0d, 70.0d, 0.0d),
+                new Location(world, 0.0d, 75.0d, 0.0d),
+                location -> true,
+                List.of(Material.GRASS_BLOCK),
+                1
+            );
+
+            assertNotNull(dropLocation);
+            assertAll(
+                () -> assertEquals(world, dropLocation.getWorld()),
+                () -> assertEquals(0.5d, dropLocation.getX(), 0.0001d),
+                () -> assertEquals(74.15d, dropLocation.getY(), 0.0001d),
+                () -> assertEquals(0.5d, dropLocation.getZ(), 0.0001d)
+            );
+        } finally {
+            MockBukkit.unmock();
+        }
+    }
+
+    @Test
+    void findRandomSupplyDropLocationRejectsColumnWhenHighestBlockIsNotAllowed() {
+        ServerMock server = MockBukkit.mock();
+        try {
+            WorldMock world = server.addSimpleWorld("shared-drop-disallowed-test");
+            world.getBlockAt(0, 72, 0).setType(Material.GRASS_BLOCK);
+            world.getBlockAt(0, 73, 0).setType(Material.STONE);
+            world.getBlockAt(0, 74, 0).setType(Material.AIR);
+            world.getBlockAt(0, 75, 0).setType(Material.AIR);
+
+            MiniGameArenaImpl arena = createArena(world);
+
+            assertNull(arena.findRandomSupplyDropLocation(
+                new Location(world, 0.0d, 70.0d, 0.0d),
+                new Location(world, 0.0d, 75.0d, 0.0d),
+                location -> true,
+                List.of(Material.GRASS_BLOCK),
+                1
+            ));
+        } finally {
+            MockBukkit.unmock();
+        }
+    }
+
+    @Test
+    void findRandomSupplyDropLocationRejectsColumnWhenSurroundingBlocksAreNotSolid() {
+        ServerMock server = MockBukkit.mock();
+        try {
+            WorldMock world = server.addSimpleWorld("shared-drop-support-test");
+            world.getBlockAt(0, 73, 0).setType(Material.GRASS_BLOCK);
+            world.getBlockAt(1, 73, 0).setType(Material.STONE);
+            world.getBlockAt(-1, 73, 0).setType(Material.STONE);
+            world.getBlockAt(0, 73, 1).setType(Material.STONE);
+            world.getBlockAt(0, 73, -1).setType(Material.AIR);
+            world.getBlockAt(1, 73, 1).setType(Material.STONE);
+            world.getBlockAt(1, 73, -1).setType(Material.STONE);
+            world.getBlockAt(-1, 73, 1).setType(Material.STONE);
+            world.getBlockAt(-1, 73, -1).setType(Material.STONE);
+            world.getBlockAt(0, 74, 0).setType(Material.AIR);
+            world.getBlockAt(0, 75, 0).setType(Material.AIR);
+
+            MiniGameArenaImpl arena = createArena(world);
+
+            assertNull(arena.findRandomSupplyDropLocation(
+                new Location(world, 0.0d, 70.0d, 0.0d),
+                new Location(world, 0.0d, 75.0d, 0.0d),
+                location -> true,
+                List.of(Material.GRASS_BLOCK),
+                1
+            ));
+        } finally {
+            MockBukkit.unmock();
+        }
+    }
+
+    private MiniGameArenaImpl createArena(World world) {
+        MiniGameServiceImpl service = mock(MiniGameServiceImpl.class);
+        STEMCraftAPI api = mock(STEMCraftAPI.class);
+
+        return new MiniGameArenaImpl(service, api, "bedwars", "test", world);
     }
 }

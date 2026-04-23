@@ -8,31 +8,94 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
+import org.bukkit.inventory.PlayerInventory;
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.Test;
-import org.mockbukkit.mockbukkit.MockBukkit;
-import org.mockbukkit.mockbukkit.ServerMock;
-import org.mockbukkit.mockbukkit.world.WorldMock;
-
-import java.io.Serial;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Random;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class BedWarsArenaHandlerTest {
+    @Test
+    void onArenaCountdownTickShowsSharedStartingTitleForFinalFiveSeconds() {
+        STEMCraftAPI api = mock(STEMCraftAPI.class);
+        EventService events = mock(EventService.class);
+        BedWarsMiniGame game = mock(BedWarsMiniGame.class);
+        MiniGameArena arena = mock(MiniGameArena.class);
+
+        when(api.events()).thenReturn(events);
+        when(events.register(any(), any())).thenReturn(mock(Listener.class));
+        when(arena.getStatus()).thenReturn(MiniGameArena.ArenaStatus.STARTING);
+        when(arena.getOccupants()).thenReturn(List.of());
+
+        BedWarsArenaHandler handler = new BedWarsArenaHandler(api, game);
+        handler.onArenaCountdownTick(arena, 5);
+
+        verify(arena).showStartingCountdownTitle(5);
+    }
+
+    @Test
+    void onArenaCountdownEndUsesConfiguredEndingCountdown() {
+        STEMCraftAPI api = mock(STEMCraftAPI.class);
+        EventService events = mock(EventService.class);
+        BedWarsMiniGame game = mock(BedWarsMiniGame.class);
+        MiniGameArena arena = mock(MiniGameArena.class);
+
+        when(api.events()).thenReturn(events);
+        when(events.register(any(), any())).thenReturn(mock(Listener.class));
+        when(arena.getStatus()).thenReturn(MiniGameArena.ArenaStatus.RUNNING);
+        when(game.endingSeconds(arena)).thenReturn(41);
+
+        BedWarsArenaHandler handler = new BedWarsArenaHandler(api, game);
+        handler.onArenaCountdownEnd(arena);
+
+        verify(arena).setStatus(MiniGameArena.ArenaStatus.ENDING, 41);
+    }
+
+    @Test
+    void onPlayerJoinArenaUsesConfiguredStartCountdownWhenArenaReady() {
+        STEMCraftAPI api = mock(STEMCraftAPI.class);
+        EventService events = mock(EventService.class);
+        BedWarsMiniGame game = mock(BedWarsMiniGame.class);
+        MiniGameArena arena = mock(MiniGameArena.class);
+        MiniGameTeam red = mock(MiniGameTeam.class);
+        MiniGameTeam blue = mock(MiniGameTeam.class);
+        Player player = mock(Player.class);
+        PlayerInventory inventory = mock(PlayerInventory.class);
+
+        when(api.events()).thenReturn(events);
+        when(events.register(any(), any())).thenReturn(mock(Listener.class));
+        when(red.getName()).thenReturn("red");
+        when(blue.getName()).thenReturn("blue");
+        when(arena.getTeams()).thenReturn(List.of(red, blue));
+        when(arena.get("teamSize", Integer.class, 1)).thenReturn(2);
+        when(arena.getTeamPlayers("red")).thenReturn(List.of(mock(Player.class)));
+        when(arena.getTeamPlayers("blue")).thenReturn(List.of(mock(Player.class)));
+        when(arena.getStatus()).thenReturn(MiniGameArena.ArenaStatus.WAITING);
+        when(arena.numPlayers()).thenReturn(2);
+        when(arena.getMinPlayers()).thenReturn(2);
+        when(arena.getLobbySpawn()).thenReturn(new Location(null, 0.0d, 0.0d, 0.0d));
+        when(game.startCountdownSeconds(arena)).thenReturn(42);
+        when(player.getInventory()).thenReturn(inventory);
+
+        BedWarsArenaHandler handler = new BedWarsArenaHandler(api, game);
+        handler.onPlayerJoinArena(arena, player);
+
+        verify(arena).setStatus(MiniGameArena.ArenaStatus.STARTING, 42);
+        verify(arena, times(1)).setPlayerTeam(eq(player), eq("red"));
+    }
+
     @Test
     void captureParticipatingTeamsIgnoresConfiguredTeamsWithNoPlayers() {
         STEMCraftAPI api = mock(STEMCraftAPI.class);
@@ -56,127 +119,6 @@ class BedWarsArenaHandlerTest {
 
         assertTrue(handler.isParticipatingTeam(arena, activeTeam));
         assertFalse(handler.isParticipatingTeam(arena, unusedTeam));
-    }
-
-    @Test
-    void findRandomDropLocationUsesHighestAllowedConfiguredSurface() {
-        STEMCraftAPI api = mock(STEMCraftAPI.class);
-        EventService events = mock(EventService.class);
-        BedWarsMiniGame game = mock(BedWarsMiniGame.class);
-        MiniGameArena arena = mock(MiniGameArena.class);
-        ServerMock server = MockBukkit.mock();
-        try {
-            WorldMock world = server.addSimpleWorld("bedwars-drop-test");
-            world.getBlockAt(0, 64, 0).setType(Material.YELLOW_BED);
-            world.getBlockAt(0, 73, 0).setType(Material.GRASS_BLOCK);
-            world.getBlockAt(1, 73, 0).setType(Material.STONE);
-            world.getBlockAt(-1, 73, 0).setType(Material.STONE);
-            world.getBlockAt(0, 73, 1).setType(Material.STONE);
-            world.getBlockAt(0, 73, -1).setType(Material.STONE);
-            world.getBlockAt(1, 73, 1).setType(Material.STONE);
-            world.getBlockAt(1, 73, -1).setType(Material.STONE);
-            world.getBlockAt(-1, 73, 1).setType(Material.STONE);
-            world.getBlockAt(-1, 73, -1).setType(Material.STONE);
-            world.getBlockAt(0, 74, 0).setType(Material.AIR);
-            world.getBlockAt(0, 75, 0).setType(Material.AIR);
-
-            when(api.events()).thenReturn(events);
-            when(events.register(any(), any())).thenReturn(mock(Listener.class));
-            when(game.dropSurfaceMaterials(arena)).thenReturn(List.of(Material.GRASS_BLOCK));
-
-            BedWarsArenaHandler handler = new BedWarsArenaHandler(api, game);
-            Location dropLocation = handler.findRandomDropLocation(
-                new Location(world, 0.0d, 70.0d, 0.0d),
-                new Location(world, 0.0d, 75.0d, 0.0d),
-                location -> true,
-                game.dropSurfaceMaterials(arena),
-                new ZeroRandom(),
-                1
-            );
-
-            assertNotNull(dropLocation);
-            assertEquals(world, dropLocation.getWorld());
-            assertEquals(0.5d, dropLocation.getX(), 0.0001d);
-            assertEquals(74.15d, dropLocation.getY(), 0.0001d);
-            assertEquals(0.5d, dropLocation.getZ(), 0.0001d);
-        } finally {
-            MockBukkit.unmock();
-        }
-    }
-
-    @Test
-    void findRandomDropLocationRejectsColumnWhenHighestBlockIsNotAllowed() {
-        STEMCraftAPI api = mock(STEMCraftAPI.class);
-        EventService events = mock(EventService.class);
-        BedWarsMiniGame game = mock(BedWarsMiniGame.class);
-        MiniGameArena arena = mock(MiniGameArena.class);
-        ServerMock server = MockBukkit.mock();
-        try {
-            WorldMock world = server.addSimpleWorld("bedwars-drop-test");
-            world.getBlockAt(0, 72, 0).setType(Material.GRASS_BLOCK);
-            world.getBlockAt(0, 73, 0).setType(Material.STONE);
-            world.getBlockAt(0, 74, 0).setType(Material.AIR);
-            world.getBlockAt(0, 75, 0).setType(Material.AIR);
-
-            when(api.events()).thenReturn(events);
-            when(events.register(any(), any())).thenReturn(mock(Listener.class));
-            when(game.dropSurfaceMaterials(arena)).thenReturn(List.of(Material.GRASS_BLOCK));
-
-            BedWarsArenaHandler handler = new BedWarsArenaHandler(api, game);
-            Location dropLocation = handler.findRandomDropLocation(
-                new Location(world, 0.0d, 70.0d, 0.0d),
-                new Location(world, 0.0d, 75.0d, 0.0d),
-                location -> true,
-                game.dropSurfaceMaterials(arena),
-                new ZeroRandom(),
-                1
-            );
-
-            assertNull(dropLocation);
-        } finally {
-            MockBukkit.unmock();
-        }
-    }
-
-    @Test
-    void findRandomDropLocationRejectsColumnWhenSurroundingBlocksAreNotSolid() {
-        STEMCraftAPI api = mock(STEMCraftAPI.class);
-        EventService events = mock(EventService.class);
-        BedWarsMiniGame game = mock(BedWarsMiniGame.class);
-        MiniGameArena arena = mock(MiniGameArena.class);
-        ServerMock server = MockBukkit.mock();
-        try {
-            WorldMock world = server.addSimpleWorld("bedwars-drop-test");
-            world.getBlockAt(0, 73, 0).setType(Material.GRASS_BLOCK);
-            world.getBlockAt(1, 73, 0).setType(Material.STONE);
-            world.getBlockAt(-1, 73, 0).setType(Material.STONE);
-            world.getBlockAt(0, 73, 1).setType(Material.STONE);
-            world.getBlockAt(0, 73, -1).setType(Material.AIR);
-            world.getBlockAt(1, 73, 1).setType(Material.STONE);
-            world.getBlockAt(1, 73, -1).setType(Material.STONE);
-            world.getBlockAt(-1, 73, 1).setType(Material.STONE);
-            world.getBlockAt(-1, 73, -1).setType(Material.STONE);
-            world.getBlockAt(0, 74, 0).setType(Material.AIR);
-            world.getBlockAt(0, 75, 0).setType(Material.AIR);
-
-            when(api.events()).thenReturn(events);
-            when(events.register(any(), any())).thenReturn(mock(Listener.class));
-            when(game.dropSurfaceMaterials(arena)).thenReturn(List.of(Material.GRASS_BLOCK));
-
-            BedWarsArenaHandler handler = new BedWarsArenaHandler(api, game);
-            Location dropLocation = handler.findRandomDropLocation(
-                new Location(world, 0.0d, 70.0d, 0.0d),
-                new Location(world, 0.0d, 75.0d, 0.0d),
-                location -> true,
-                game.dropSurfaceMaterials(arena),
-                new ZeroRandom(),
-                1
-            );
-
-            assertNull(dropLocation);
-        } finally {
-            MockBukkit.unmock();
-        }
     }
 
     @Test
@@ -213,13 +155,4 @@ class BedWarsArenaHandlerTest {
         verify(arena, never()).broadcast(any());
     }
 
-    private static final class ZeroRandom extends Random {
-        @Serial
-        private static final long serialVersionUID = 1L;
-
-        @Override
-        public int nextInt(int bound) {
-            return 0;
-        }
-    }
 }

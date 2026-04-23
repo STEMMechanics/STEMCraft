@@ -682,6 +682,19 @@ public interface MiniGameArena extends MessageService, HasMeta<MiniGameArena> {
     void clearAllSupplyDrops();
 
     /**
+     * Find a valid supply-drop spawn location inside this arena's configured arena region.
+     *
+     * The search uses random columns inside {@code arenaRegion}, chooses the highest non-air block
+     * in that column, and accepts it only when the block material is allowed, the surrounding
+     * support blocks are solid, and there is enough passable space above it for the drop.
+     *
+     * @param allowedSurfaceMaterials Allowed surface materials from the minigame config.
+     * @param attempts Number of random columns to try before giving up.
+     * @return The drop spawn location, or {@code null} if none was found.
+     */
+    Location findRandomSupplyDropLocation(List<Material> allowedSurfaceMaterials, int attempts);
+
+    /**
      * Check if the arena is currently active (waiting, countdown, or running).
      *
      * @return True if the arena is active, false otherwise.
