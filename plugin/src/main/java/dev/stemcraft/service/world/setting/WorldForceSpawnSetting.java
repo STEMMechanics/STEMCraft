@@ -71,7 +71,6 @@ public class WorldForceSpawnSetting implements WorldBaseSetting {
             Player player = event.getPlayer();
 
             World deathWorld = player.getWorld();
-
             if (isEnabledForWorld(deathWorld)) {
                 // Force respawn at world spawn
                 event.setRespawnLocation(resolveWorldSpawn(deathWorld));
@@ -85,10 +84,11 @@ public class WorldForceSpawnSetting implements WorldBaseSetting {
             }
 
             Location respawn = event.getRespawnLocation();
-            if (respawn.getWorld() == null) {
+            World respawnWorld = respawn.getWorld();
+            if (respawnWorld == null) {
                 return;
             }
-            if (!respawn.getWorld().equals(deathWorld)) {
+            if (!respawnWorld.equals(deathWorld)) {
                 event.setRespawnLocation(resolveWorldSpawn(deathWorld));
             }
         }, EventPriority.HIGHEST, true);

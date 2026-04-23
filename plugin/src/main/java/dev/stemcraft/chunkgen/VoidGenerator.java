@@ -31,7 +31,6 @@ import java.util.Random;
  * Chunk generator that creates a void world (all air).
  */
 public class VoidGenerator extends ChunkGenerator {
-
     @Override
     public Location getFixedSpawnLocation(@NotNull World world, @NotNull Random random) {
         return new Location(world, 0.5d, 64.0d, 0.5d);

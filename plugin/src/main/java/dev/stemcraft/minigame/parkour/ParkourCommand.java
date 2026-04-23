@@ -128,7 +128,7 @@ public class ParkourCommand {
     }
 
     private void commandInfo(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         ArenaValidationResult validation = arena.validate();
         ctx.info("Arena '" + arena.id() + "':");
         ctx.info(" - Name: " + arena.getName());
@@ -157,6 +157,7 @@ public class ParkourCommand {
         String arenaId = ctx.getArg(1);
         if (parkour.minigame().arena(arenaId) != null) {
             ctx.returnError("Arena '" + arenaId + "' already exists.");
+            return;
         }
 
         World world = ctx.getArgAsWorld(2);
@@ -164,6 +165,7 @@ public class ParkourCommand {
             Player player = ctx.asPlayer();
             if (player == null) {
                 ctx.returnError("Specify a world when creating an arena from console.");
+                return;
             }
             world = player.getWorld();
         }
@@ -171,27 +173,30 @@ public class ParkourCommand {
         MiniGameArena arena = parkour.createArena(arenaId, world);
         if (arena == null) {
             ctx.returnError("Arena '" + arenaId + "' could not be created.");
+            return;
         }
         ctx.success("Created Parkour arena '" + arenaId + "' in world '" + world.getName() + "'.");
     }
 
     private void commandDelete(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         parkour.deleteArena(arena.id());
         ctx.success("Deleted Parkour arena '" + arena.id() + "'.");
     }
 
     private void commandJoin(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         Player targetPlayer = ctx.getArgAsPlayerOrSender(2);
         if (targetPlayer == null) {
             ctx.returnError("Player is required.");
+            return;
         }
         ensureNotInArena(ctx, targetPlayer);
 
         if (!arena.isJoinable()) {
             ctx.returnError("Arena '" + arena.id() + "' is not joinable right now.");
+            return;
         }
 
         arena.addPlayer(targetPlayer);
@@ -200,9 +205,10 @@ public class ParkourCommand {
 
     private void commandJoinAll(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         if (!arena.isJoinable()) {
             ctx.returnError("Arena '" + arena.id() + "' is not joinable right now.");
+            return;
         }
 
         int joined = 0;
@@ -233,11 +239,13 @@ public class ParkourCommand {
         Player targetPlayer = ctx.getArgAsPlayerOrSender(1);
         if (targetPlayer == null) {
             ctx.returnError("Player is required.");
+            return;
         }
 
         MiniGameArena arena = parkour.minigame().findPlayer(targetPlayer);
         if (arena == null) {
             ctx.returnError("Player '" + targetPlayer.getName() + "' is not in a Parkour arena.");
+            return;
         }
 
         parkour.resetRun(arena, targetPlayer, "");
@@ -252,11 +260,13 @@ public class ParkourCommand {
         Player targetPlayer = ctx.getArgAsPlayerOrSender(1);
         if (targetPlayer == null) {
             ctx.returnError("Player is required.");
+            return;
         }
 
         MiniGameArena arena = parkour.minigame().findPlayer(targetPlayer);
         if (arena == null) {
             ctx.returnError("Player '" + targetPlayer.getName() + "' is not in a Parkour arena.");
+            return;
         }
 
         arena.removePlayer(targetPlayer);
@@ -264,7 +274,7 @@ public class ParkourCommand {
     }
 
     private void commandSave(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         try {
             arena.remove("loadError");
             parkour.saveArena(arena);
@@ -282,7 +292,7 @@ public class ParkourCommand {
     }
 
     private void commandValidate(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         ArenaValidationResult result = arena.validate();
         if (!result.hasErrors()) {
             ctx.returnSuccess("Arena '" + arena.id() + "' is valid.");
@@ -295,7 +305,7 @@ public class ParkourCommand {
     }
 
     private void commandEnable(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         ArenaValidationResult result = arena.validate();
         if (result.hasErrors()) {
             ctx.warn("Arena '" + arena.id() + "' cannot be enabled until it is valid:");
@@ -311,12 +321,13 @@ public class ParkourCommand {
             parkour.persistArenaEnabled(arena, true);
         } catch (MiniGameInvalidArenaConfigException exception) {
             ctx.returnError(exception.getMessage());
+            return;
         }
         ctx.success("Arena '" + arena.id() + "' is now enabled.");
     }
 
     private void commandDisable(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         for (Player player : new ArrayList<>(arena.getPlayers())) {
             arena.removePlayer(player);
         }
@@ -331,7 +342,7 @@ public class ParkourCommand {
 
     private void commandSet(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         String target = ctx.getArgLower(2);
 
         switch (target) {
@@ -375,7 +386,7 @@ public class ParkourCommand {
     private void commandSelect(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
         Player player = requirePlayer(ctx);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         String target = ctx.getArgLower(2);
         SCRegion region;
 
@@ -391,9 +402,11 @@ public class ParkourCommand {
 
         if (region == null) {
             ctx.returnError("No stored region is configured for '" + target + "' in arena '" + arena.id() + "'.");
+            return;
         }
         if (!player.getWorld().equals(region.getWorld())) {
             ctx.returnError("Move to world '" + region.getWorld().getName() + "' to preview that region.");
+            return;
         }
 
         api.selections().setWorldEditSelection(player, region);
@@ -404,7 +417,7 @@ public class ParkourCommand {
     private void commandShow(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
         Player player = requirePlayer(ctx);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         String target = ctx.getArgLower(2);
         SCRegion region;
 
@@ -420,21 +433,24 @@ public class ParkourCommand {
 
         if (region == null) {
             ctx.returnError("No stored region is configured for '" + target + "' in arena '" + arena.id() + "'.");
+            return;
         }
         if (!player.getWorld().equals(region.getWorld())) {
             ctx.returnError("Move to world '" + region.getWorld().getName() + "' to preview that region.");
+            return;
         }
 
         showRegionPreview(player, "show-" + target, region);
         ctx.success("Showing stored region for '" + target + "' in arena '" + arena.id() + "'.");
     }
 
-    private MiniGameArena requireArena(CommandContext ctx, int index) {
-        ctx.checkArgsSizeAtLeast(index + 1);
-        String arenaId = ctx.getArg(index);
+    private MiniGameArena requireArena(CommandContext ctx) {
+        ctx.checkArgsSizeAtLeast(1 + 1);
+        String arenaId = ctx.getArg(1);
         MiniGameArena arena = parkour.minigame().arena(arenaId);
         if (arena == null) {
             ctx.returnError("Arena '" + arenaId + "' does not exist.");
+            throw new IllegalStateException("Arena '" + arenaId + "' does not exist.");
         }
         return arena;
     }

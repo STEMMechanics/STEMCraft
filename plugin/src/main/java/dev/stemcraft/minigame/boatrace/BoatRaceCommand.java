@@ -192,13 +192,15 @@ public class BoatRaceCommand {
 
     private void commandInfo(CommandContext ctx) {
         MiniGameArena arena = requireArenaForInfo(ctx);
-        @SuppressWarnings("DataFlowIssue") ArenaValidationResult validation = arena.validate();
+        ArenaValidationResult validation = arena.validate();
         ctx.info("Arena '" + arena.id() + "':");
         ctx.info(" - Name: " + arena.getName());
         ctx.info(" - Status: " + arena.getStatus().name());
         ctx.info(" - Players: " + arena.numPlayers() + "/" + arena.getMaxPlayers());
         ctx.info(" - Spectators: " + arena.numSpectators());
         ctx.info(" - Min players: " + arena.getMinPlayers());
+        ctx.info(" - Start countdown: " + boatRace.startCountdownSeconds(arena) + " sec");
+        ctx.info(" - Reset countdown: " + boatRace.endingSeconds(arena) + " sec");
         ctx.info(" - Lobby: " + formatLocation(arena.getLobbySpawn()));
         ctx.info(" - Spectator: " + formatLocation(arena.getSpectatorSpawn()));
         ctx.info(" - Arena region: " + formatRegion(arena.get("arenaRegion", SCRegion.class)));
@@ -231,6 +233,7 @@ public class BoatRaceCommand {
         String arenaId = ctx.getArg(1);
         if (boatRace.minigame().arena(arenaId) != null) {
             ctx.returnError("Arena '" + arenaId + "' already exists.");
+            return;
         }
 
         World world = ctx.getArgAsWorld(2);
@@ -238,6 +241,7 @@ public class BoatRaceCommand {
             Player player = ctx.asPlayer();
             if (player == null) {
                 ctx.returnError("Specify a world when creating an arena from console.");
+                return;
             }
             world = player.getWorld();
         }
@@ -245,22 +249,24 @@ public class BoatRaceCommand {
         MiniGameArena arena = boatRace.createArena(arenaId, world);
         if (arena == null) {
             ctx.returnError("Arena '" + arenaId + "' could not be created.");
+            return;
         }
         ctx.success("Created Boat Race arena '" + arenaId + "' in world '" + world.getName() + "'.");
     }
 
     private void commandDelete(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         boatRace.deleteArena(arena.id());
         ctx.success("Deleted Boat Race arena '" + arena.id() + "'.");
     }
 
     private void commandJoin(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         Player targetPlayer = ctx.getArgAsPlayerOrSender(2);
         if (targetPlayer == null) {
             ctx.returnError("Player is required.");
+            return;
         }
         ensureNotInArena(ctx, targetPlayer);
 
@@ -272,6 +278,7 @@ public class BoatRaceCommand {
 
         if (!arena.isJoinable()) {
             ctx.returnError("Arena '" + arena.id() + "' is not joinable right now.");
+            return;
         }
 
         arena.addPlayer(targetPlayer);
@@ -280,7 +287,7 @@ public class BoatRaceCommand {
 
     private void commandJoinAll(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         boolean spectateOnly = arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING
             || arena.getStatus() == MiniGameArena.ArenaStatus.ENDING;
         if (!spectateOnly && !arena.isJoinable()) {
@@ -326,10 +333,11 @@ public class BoatRaceCommand {
 
     private void commandSpectate(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         Player targetPlayer = ctx.getArgAsPlayerOrSender(2);
         if (targetPlayer == null) {
             ctx.returnError("Player is required.");
+            return;
         }
         ensureNotInArena(ctx, targetPlayer);
 
@@ -341,11 +349,13 @@ public class BoatRaceCommand {
         Player targetPlayer = ctx.getArgAsPlayerOrSender(1);
         if (targetPlayer == null) {
             ctx.returnError("Player is required.");
+            return;
         }
 
         MiniGameArena arena = boatRace.minigame().findPlayer(targetPlayer);
         if (arena == null) {
             ctx.returnError("Player '" + targetPlayer.getName() + "' is not in a Boat Race arena.");
+            return;
         }
 
         arena.removeOccupant(targetPlayer);
@@ -353,29 +363,29 @@ public class BoatRaceCommand {
     }
 
     private void commandStart(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         if (arena.numPlayers() < arena.getMinPlayers()) {
             ctx.returnError("Arena '" + arena.id() + "' needs at least " + arena.getMinPlayers() + " players to start.");
         }
 
-        arena.setStatus(MiniGameArena.ArenaStatus.STARTING, 5);
+        arena.setStatus(MiniGameArena.ArenaStatus.STARTING, boatRace.startCountdownSeconds(arena));
         ctx.success("Arena '" + arena.id() + "' is starting.");
     }
 
     private void commandStop(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         arena.setStatus(MiniGameArena.ArenaStatus.RESETTING);
         ctx.success("Arena '" + arena.id() + "' has been stopped and reset.");
     }
 
     private void commandRestart(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         arena.setStatus(MiniGameArena.ArenaStatus.RESETTING);
         ctx.success("Arena '" + arena.id() + "' has been reset.");
     }
 
     private void commandSave(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         try {
             boatRace.saveArena(arena);
         } catch (MiniGameInvalidArenaConfigException exception) {
@@ -392,7 +402,7 @@ public class BoatRaceCommand {
     }
 
     private void commandValidate(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         ArenaValidationResult result = arena.validate();
         if (!result.hasErrors()) {
             ctx.returnSuccess("Arena '" + arena.id() + "' is valid.");
@@ -405,7 +415,7 @@ public class BoatRaceCommand {
     }
 
     private void commandEnable(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         ArenaValidationResult result = arena.validate();
         if (result.hasErrors()) {
             ctx.warn("Arena '" + arena.id() + "' cannot be enabled until it is valid:");
@@ -425,7 +435,7 @@ public class BoatRaceCommand {
     }
 
     private void commandDisable(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         for (Player player : new ArrayList<>(arena.getOccupants())) {
             arena.removeOccupant(player);
         }
@@ -440,7 +450,7 @@ public class BoatRaceCommand {
 
     private void commandSet(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         String target = ctx.getArgLower(2);
 
         switch (target) {
@@ -473,7 +483,7 @@ public class BoatRaceCommand {
                 Player player = requirePlayer(ctx);
                 SCRegion selection = requireSelection(ctx, player);
                 ensureArenaWorld(ctx, arena, selection, "Finish region");
-                ensureRegionContained(ctx, selection, arena.get("arenaRegion", SCRegion.class), "Finish region", "arena region");
+                ensureRegionContained(ctx, selection, arena.get("arenaRegion", SCRegion.class), "Finish region");
                 arena.set("finishRegion", selection.copy());
                 showRegionPreview(player, "finish", selection);
                 ctx.success("Finish region updated for arena '" + arena.id() + "'.");
@@ -504,9 +514,9 @@ public class BoatRaceCommand {
 
     private void commandAddGrid(CommandContext ctx) {
         Player player = requirePlayer(ctx);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         ensureArenaWorld(ctx, arena, player.getLocation(), "Starting grid slot");
-        ensureLocationContained(ctx, player.getLocation(), arena.get("arenaRegion", SCRegion.class), "Starting grid slot", "arena region");
+        ensureLocationContained(ctx, player.getLocation(), arena.get("arenaRegion", SCRegion.class));
         boatRace.startingGrid(arena).add(player.getLocation().clone());
         if (arena.getMaxPlayers() < boatRace.startingGrid(arena).size()) {
             arena.setMaxPlayers(boatRace.startingGrid(arena).size());
@@ -518,10 +528,10 @@ public class BoatRaceCommand {
     private void commandSetGrid(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
         Player player = requirePlayer(ctx);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         int index = requireOneBasedIndex(ctx, 2, boatRace.startingGrid(arena).size(), "grid slot");
         ensureArenaWorld(ctx, arena, player.getLocation(), "Starting grid slot");
-        ensureLocationContained(ctx, player.getLocation(), arena.get("arenaRegion", SCRegion.class), "Starting grid slot", "arena region");
+        ensureLocationContained(ctx, player.getLocation(), arena.get("arenaRegion", SCRegion.class));
         boatRace.startingGrid(arena).set(index, player.getLocation().clone());
         showLocationPreview(player, "grid-set-" + index, player.getLocation());
         ctx.success("Updated starting grid slot " + (index + 1) + " for arena '" + arena.id() + "'.");
@@ -529,7 +539,7 @@ public class BoatRaceCommand {
 
     private void commandRemoveGrid(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         int index = requireOneBasedIndex(ctx, 2, boatRace.startingGrid(arena).size(), "grid slot");
         boatRace.startingGrid(arena).remove(index);
         if (!boatRace.startingGrid(arena).isEmpty() && arena.getMaxPlayers() > boatRace.startingGrid(arena).size()) {
@@ -540,10 +550,10 @@ public class BoatRaceCommand {
 
     private void commandAddStage(CommandContext ctx) {
         Player player = requirePlayer(ctx);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         SCRegion selection = requireSelection(ctx, player);
         ensureArenaWorld(ctx, arena, selection, "Checkpoint region");
-        ensureRegionContained(ctx, selection, arena.get("arenaRegion", SCRegion.class), "Checkpoint region", "arena region");
+        ensureRegionContained(ctx, selection, arena.get("arenaRegion", SCRegion.class), "Checkpoint region");
         boatRace.stageRegions(arena).add(selection.copy());
         showRegionPreview(player, "stage-add", selection);
         ctx.success("Added checkpoint " + boatRace.stageRegions(arena).size() + " to arena '" + arena.id() + "'.");
@@ -552,11 +562,11 @@ public class BoatRaceCommand {
     private void commandSetStage(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
         Player player = requirePlayer(ctx);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         int index = requireOneBasedIndex(ctx, 2, boatRace.stageRegions(arena).size(), "checkpoint");
         SCRegion selection = requireSelection(ctx, player);
         ensureArenaWorld(ctx, arena, selection, "Checkpoint region");
-        ensureRegionContained(ctx, selection, arena.get("arenaRegion", SCRegion.class), "Checkpoint region", "arena region");
+        ensureRegionContained(ctx, selection, arena.get("arenaRegion", SCRegion.class), "Checkpoint region");
         boatRace.stageRegions(arena).set(index, selection.copy());
         showRegionPreview(player, "stage-set-" + index, selection);
         ctx.success("Updated checkpoint " + (index + 1) + " for arena '" + arena.id() + "'.");
@@ -564,7 +574,7 @@ public class BoatRaceCommand {
 
     private void commandRemoveStage(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         int index = requireOneBasedIndex(ctx, 2, boatRace.stageRegions(arena).size(), "checkpoint");
         boatRace.stageRegions(arena).remove(index);
         ctx.success("Removed checkpoint " + (index + 1) + " from arena '" + arena.id() + "'.");
@@ -573,7 +583,7 @@ public class BoatRaceCommand {
     private void commandSelect(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
         Player player = requirePlayer(ctx);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         String target = ctx.getArgLower(2);
         SCRegion region;
         Location location;
@@ -583,6 +593,7 @@ public class BoatRaceCommand {
                 region = arena.get("arenaRegion", SCRegion.class);
                 if (region == null) {
                     ctx.returnError("No stored region is configured for 'arena' in arena '" + arena.id() + "'.");
+                    return;
                 }
                 requireSameWorld(ctx, player, region.getWorld().getName());
                 api.selections().setWorldEditSelection(player, region);
@@ -593,6 +604,7 @@ public class BoatRaceCommand {
                 region = arena.get("finishRegion", SCRegion.class);
                 if (region == null) {
                     ctx.returnError("No stored region is configured for 'finish' in arena '" + arena.id() + "'.");
+                    return;
                 }
                 requireSameWorld(ctx, player, region.getWorld().getName());
                 api.selections().setWorldEditSelection(player, region);
@@ -638,7 +650,7 @@ public class BoatRaceCommand {
     private void commandShow(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
         Player player = requirePlayer(ctx);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         String target = ctx.getArgLower(2);
         Location location;
 
@@ -661,37 +673,40 @@ public class BoatRaceCommand {
         ctx.success("Showing stored location for '" + target + "' in arena '" + arena.id() + "'.");
     }
 
-    private MiniGameArena requireArena(CommandContext ctx, int index) {
-        ctx.checkArgsSizeAtLeast(index + 1);
-        String arenaId = ctx.getArg(index);
+    private MiniGameArena requireArena(CommandContext ctx) {
+        ctx.checkArgsSizeAtLeast(1 + 1);
+        String arenaId = ctx.getArg(1);
         MiniGameArena arena = boatRace.minigame().arena(arenaId);
         if (arena == null) {
             ctx.returnError("Arena '" + arenaId + "' does not exist.");
+            throw new IllegalStateException("Arena '" + arenaId + "' does not exist.");
         }
         return arena;
     }
 
     private MiniGameArena requireArenaForInfo(CommandContext ctx) {
         if (ctx.numArgs() >= 2) {
-            return requireArena(ctx, 1);
+            return requireArena(ctx);
         }
 
         List<MiniGameArena> arenas = boatRace.minigame().arenas();
         if (arenas.isEmpty()) {
             ctx.returnError("No Boat Race arenas are loaded.");
+            throw new IllegalStateException("No Boat Race arenas are loaded.");
         }
         if (arenas.size() == 1) {
             return arenas.getFirst();
         }
 
         ctx.returnError("Specify an arena id. Use /boatrace list to choose one.");
-        return null;
+        throw new IllegalStateException("Specify an arena id.");
     }
 
     private Player requirePlayer(CommandContext ctx) {
         Player player = ctx.asPlayer();
         if (player == null) {
             ctx.returnError("This subcommand must be run in-game.");
+            throw new IllegalStateException("Player is required.");
         }
         return player;
     }
@@ -700,6 +715,7 @@ public class BoatRaceCommand {
         SCRegion selection = api.selections().getWorldEditSelection(player);
         if (selection == null) {
             ctx.returnError("No WorldEdit selection found. Make a selection first.");
+            throw new IllegalStateException("WorldEdit selection is required.");
         }
         return selection;
     }
@@ -707,6 +723,7 @@ public class BoatRaceCommand {
     private int requireOneBasedIndex(CommandContext ctx, int argIndex, int size, String label) {
         if (size <= 0) {
             ctx.returnError("No " + label + "s are configured yet.");
+            throw new IllegalStateException("No " + label + "s are configured.");
         }
         int oneBased = ctx.getArgAsInt(argIndex, 1, 1, size);
         return oneBased - 1;
@@ -715,6 +732,7 @@ public class BoatRaceCommand {
     private void ensureArenaWorld(CommandContext ctx, MiniGameArena arena, Location location, String label) {
         if (location == null || location.getWorld() == null) {
             ctx.returnError(label + " is not set in a valid world.");
+            return;
         }
         if (!arena.world().equals(location.getWorld())) {
             ctx.returnError(label + " must be in world '" + arena.world().getName() + "'.");
@@ -724,21 +742,22 @@ public class BoatRaceCommand {
     private void ensureArenaWorld(CommandContext ctx, MiniGameArena arena, SCRegion region, String label) {
         if (region == null || region.getWorld() == null) {
             ctx.returnError(label + " is not set in a valid world.");
+            return;
         }
         if (!arena.world().equals(region.getWorld())) {
             ctx.returnError(label + " must be in world '" + arena.world().getName() + "'.");
         }
     }
 
-    private void ensureRegionContained(CommandContext ctx, SCRegion child, SCRegion parent, String childLabel, String parentLabel) {
+    private void ensureRegionContained(CommandContext ctx, SCRegion child, SCRegion parent, String childLabel) {
         if (parent != null && !parent.contains(child)) {
-            ctx.returnError(childLabel + " must be fully inside the " + parentLabel + ".");
+            ctx.returnError(childLabel + " must be fully inside the " + "arena region" + ".");
         }
     }
 
-    private void ensureLocationContained(CommandContext ctx, Location location, SCRegion parent, String childLabel, String parentLabel) {
+    private void ensureLocationContained(CommandContext ctx, Location location, SCRegion parent) {
         if (parent != null && !parent.contains(location)) {
-            ctx.returnError(childLabel + " must be inside the " + parentLabel + ".");
+            ctx.returnError("Starting grid slot" + " must be inside the " + "arena region" + ".");
         }
     }
 

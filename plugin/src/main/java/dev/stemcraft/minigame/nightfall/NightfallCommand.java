@@ -164,7 +164,7 @@ public class NightfallCommand {
 
     private void commandInfo(CommandContext ctx) {
         MiniGameArena arena = requireArenaForInfo(ctx);
-        @SuppressWarnings("DataFlowIssue") ArenaValidationResult validation = arena.validate();
+        ArenaValidationResult validation = arena.validate();
 
         ctx.info("Nightfall arena '" + arena.id() + "':");
         ctx.info(" - Name: " + arena.getName());
@@ -172,6 +172,8 @@ public class NightfallCommand {
         ctx.info(" - Players: " + arena.numPlayers() + "/" + arena.getMaxPlayers());
         ctx.info(" - Spectators: " + arena.numSpectators());
         ctx.info(" - Min players: " + arena.getMinPlayers());
+        ctx.info(" - Start countdown: " + nightfall.startCountdownSeconds(arena) + " sec");
+        ctx.info(" - Reset countdown: " + nightfall.endingSeconds(arena) + " sec");
         ctx.info(" - Lobby: " + formatLocation(arena.getLobbySpawn()));
         ctx.info(" - Spectator: " + formatLocation(arena.getSpectatorSpawn()));
         ctx.info(" - Spawn: " + formatLocation(nightfall.playSpawn(arena)));
@@ -204,6 +206,7 @@ public class NightfallCommand {
         String arenaId = ctx.getArg(1);
         if (nightfall.minigame().arena(arenaId) != null) {
             ctx.returnError("Arena '" + arenaId + "' already exists.");
+            return;
         }
 
         World world = ctx.getArgAsWorld(2);
@@ -211,6 +214,7 @@ public class NightfallCommand {
             Player player = ctx.asPlayer();
             if (player == null) {
                 ctx.returnError("Specify a world when creating an arena from console.");
+                return;
             }
             world = player.getWorld();
         }
@@ -218,22 +222,24 @@ public class NightfallCommand {
         MiniGameArena arena = nightfall.createArena(arenaId, world);
         if (arena == null) {
             ctx.returnError("Arena '" + arenaId + "' could not be created.");
+            return;
         }
         ctx.success("Created Nightfall arena '" + arenaId + "' in world '" + world.getName() + "'.");
     }
 
     private void commandDelete(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         nightfall.deleteArena(arena.id());
         ctx.success("Deleted Nightfall arena '" + arena.id() + "'.");
     }
 
     private void commandJoin(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         Player targetPlayer = ctx.getArgAsPlayerOrSender(2);
         if (targetPlayer == null) {
             ctx.returnError("Player is required.");
+            return;
         }
         ensureNotInArena(ctx, targetPlayer);
 
@@ -248,6 +254,7 @@ public class NightfallCommand {
 
         if (!arena.isJoinable()) {
             ctx.returnError("Arena '" + arena.id() + "' is not joinable right now.");
+            return;
         }
 
         arena.addPlayer(targetPlayer);
@@ -256,13 +263,14 @@ public class NightfallCommand {
 
     private void commandJoinAll(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         boolean spectateOnly = arena.getStatus() == MiniGameArena.ArenaStatus.PREPARATION
             || arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING
             || arena.getStatus() == MiniGameArena.ArenaStatus.COOLDOWN
             || arena.getStatus() == MiniGameArena.ArenaStatus.ENDING;
         if (!spectateOnly && !arena.isJoinable()) {
             ctx.returnError("Arena '" + arena.id() + "' is not joinable right now.");
+            return;
         }
 
         int joined = 0;
@@ -304,10 +312,11 @@ public class NightfallCommand {
 
     private void commandSpectate(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         Player targetPlayer = ctx.getArgAsPlayerOrSender(2);
         if (targetPlayer == null) {
             ctx.returnError("Player is required.");
+            return;
         }
         ensureNotInArena(ctx, targetPlayer);
 
@@ -319,11 +328,13 @@ public class NightfallCommand {
         Player targetPlayer = ctx.getArgAsPlayerOrSender(1);
         if (targetPlayer == null) {
             ctx.returnError("Player is required.");
+            return;
         }
 
         MiniGameArena arena = nightfall.minigame().findPlayer(targetPlayer);
         if (arena == null) {
             ctx.returnError("Player '" + targetPlayer.getName() + "' is not in a Nightfall arena.");
+            return;
         }
 
         boolean wasLastPlayer = arena.hasPlayer(targetPlayer) && arena.numPlayers() == 1;
@@ -341,26 +352,27 @@ public class NightfallCommand {
     }
 
     private void commandStart(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         if (arena.numPlayers() < arena.getMinPlayers()) {
             ctx.returnError("Arena '" + arena.id() + "' needs at least " + arena.getMinPlayers() + " players to start.");
+            return;
         }
 
-        arena.setStatus(MiniGameArena.ArenaStatus.STARTING, 5);
+        arena.setStatus(MiniGameArena.ArenaStatus.STARTING, nightfall.startCountdownSeconds(arena));
         ctx.success("Arena '" + arena.id() + "' is starting.");
     }
 
     private void commandStop(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         arena.setStatus(MiniGameArena.ArenaStatus.RESETTING);
         ctx.success("Arena '" + arena.id() + "' has been stopped and reset.");
     }
 
     private void commandRestart(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         arena.setStatus(MiniGameArena.ArenaStatus.RESETTING);
         if (arena.numPlayers() >= arena.getMinPlayers()) {
-            arena.setStatus(MiniGameArena.ArenaStatus.STARTING, 5);
+            arena.setStatus(MiniGameArena.ArenaStatus.STARTING, nightfall.startCountdownSeconds(arena));
             ctx.success("Arena '" + arena.id() + "' has been restarted.");
             return;
         }
@@ -368,26 +380,27 @@ public class NightfallCommand {
     }
 
     private void commandCycle(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
-        if (!(nightfall.minigame().handler() instanceof NightfallArenaHandler)) {
+        MiniGameArena arena = requireArena(ctx);
+        if (!(nightfall.minigame().handler() instanceof NightfallArenaHandler handler)) {
             ctx.returnError("Nightfall cycle control is unavailable.");
+            return;
         }
-        NightfallArenaHandler handler = (NightfallArenaHandler) nightfall.minigame().handler();
 
         String target = handler.advanceToNextCycle(arena);
         if (target == null) {
             ctx.returnError("Arena '" + arena.id() + "' must be in preparation or running to advance its cycle.");
+            return;
         }
 
         ctx.success("Arena '" + arena.id() + "' advanced to " + target + ".");
     }
 
     private void commandRespawn(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
-        if (!(nightfall.minigame().handler() instanceof NightfallArenaHandler)) {
+        MiniGameArena arena = requireArena(ctx);
+        if (!(nightfall.minigame().handler() instanceof NightfallArenaHandler handler)) {
             ctx.returnError("Nightfall respawn control is unavailable.");
+            return;
         }
-        NightfallArenaHandler handler = (NightfallArenaHandler) nightfall.minigame().handler();
 
         int revived = handler.respawnDownedPlayers(arena);
         if (revived < 0) {
@@ -402,7 +415,7 @@ public class NightfallCommand {
     }
 
     private void commandSave(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         try {
             nightfall.saveArena(arena);
         } catch (MiniGameInvalidArenaConfigException exception) {
@@ -419,7 +432,7 @@ public class NightfallCommand {
     }
 
     private void commandValidate(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         ArenaValidationResult result = arena.validate();
         if (!result.hasErrors()) {
             ctx.returnSuccess("Arena '" + arena.id() + "' is valid.");
@@ -432,7 +445,7 @@ public class NightfallCommand {
     }
 
     private void commandEnable(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         ArenaValidationResult result = arena.validate();
         if (result.hasErrors()) {
             ctx.warn("Arena '" + arena.id() + "' cannot be enabled until it is valid:");
@@ -452,7 +465,7 @@ public class NightfallCommand {
     }
 
     private void commandDisable(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         for (Player player : new ArrayList<>(arena.getOccupants())) {
             arena.removeOccupant(player);
         }
@@ -467,7 +480,7 @@ public class NightfallCommand {
 
     private void commandSet(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         String target = ctx.getArgLower(2);
 
         switch (target) {
@@ -488,7 +501,7 @@ public class NightfallCommand {
             case "spawn" -> {
                 Player player = requirePlayer(ctx);
                 ensureArenaWorld(ctx, arena, player.getLocation(), "Play spawn");
-                ensureLocationContained(ctx, player.getLocation(), arena.get("arenaRegion", SCRegion.class), "Play spawn", "arena region");
+                ensureLocationContained(ctx, player.getLocation(), arena.get("arenaRegion", SCRegion.class), "Play spawn");
                 arena.set("playSpawn", player.getLocation());
                 showLocationPreview(player, "spawn", player.getLocation());
                 ctx.success("Play spawn updated for arena '" + arena.id() + "'.");
@@ -496,7 +509,7 @@ public class NightfallCommand {
             case "arena" -> {
                 Player player = requirePlayer(ctx);
                 SCRegion selection = requireSelection(ctx, player);
-                ensureArenaWorld(ctx, arena, selection, "Arena region");
+                ensureArenaWorld(ctx, arena, selection);
                 ensureArenaRegionAcceptsExistingGeometry(ctx, arena, selection);
                 SCRegion copy = selection.copy();
                 arena.setRegion(copy);
@@ -628,7 +641,7 @@ public class NightfallCommand {
     private void commandSelect(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
         Player player = requirePlayer(ctx);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         String target = ctx.getArgLower(2);
         SCRegion region = null;
         Location location = null;
@@ -659,6 +672,7 @@ public class NightfallCommand {
 
         if (location == null) {
             ctx.returnError("No stored location is configured for '" + target + "' in arena '" + arena.id() + "'.");
+            return;
         }
         requireSameWorld(ctx, player, location.getWorld().getName());
         api.selections().setWorldEditSelection(player, location);
@@ -669,7 +683,7 @@ public class NightfallCommand {
     private void commandShow(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
         Player player = requirePlayer(ctx);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         String target = ctx.getArgLower(2);
         Location location;
 
@@ -690,6 +704,7 @@ public class NightfallCommand {
 
         if (location == null) {
             ctx.returnError("No stored location is configured for '" + target + "' in arena '" + arena.id() + "'.");
+            return;
         }
         requireSameWorld(ctx, player, location.getWorld().getName());
         showLocationPreview(player, "show-" + target, location);
@@ -697,7 +712,7 @@ public class NightfallCommand {
     }
 
     private void commandGenerators(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         List<Location> generators = nightfall.generatorLocations(arena);
         if (generators.isEmpty()) {
             ctx.info("Arena '" + arena.id() + "' has no generator locations.");
@@ -712,9 +727,9 @@ public class NightfallCommand {
 
     private void commandAddGenerator(CommandContext ctx) {
         Player player = requirePlayer(ctx);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         ensureArenaWorld(ctx, arena, player.getLocation(), "Generator location");
-        ensureLocationContained(ctx, player.getLocation(), arena.get("arenaRegion", SCRegion.class), "Generator location", "arena region");
+        ensureLocationContained(ctx, player.getLocation(), arena.get("arenaRegion", SCRegion.class), "Generator location");
         nightfall.generatorLocations(arena).add(player.getLocation().clone());
         showLocationPreview(player, "generator-add", player.getLocation());
         ctx.success("Added generator location " + nightfall.generatorLocations(arena).size() + " to arena '" + arena.id() + "'.");
@@ -723,10 +738,10 @@ public class NightfallCommand {
     private void commandSetGenerator(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
         Player player = requirePlayer(ctx);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         int index = requireOneBasedIndex(ctx, 2, nightfall.generatorLocations(arena).size(), "generator");
         ensureArenaWorld(ctx, arena, player.getLocation(), "Generator location");
-        ensureLocationContained(ctx, player.getLocation(), arena.get("arenaRegion", SCRegion.class), "Generator location", "arena region");
+        ensureLocationContained(ctx, player.getLocation(), arena.get("arenaRegion", SCRegion.class), "Generator location");
         nightfall.generatorLocations(arena).set(index, player.getLocation().clone());
         showLocationPreview(player, "generator-set-" + index, player.getLocation());
         ctx.success("Updated generator location " + (index + 1) + " for arena '" + arena.id() + "'.");
@@ -734,14 +749,14 @@ public class NightfallCommand {
 
     private void commandRemoveGenerator(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         int index = requireOneBasedIndex(ctx, 2, nightfall.generatorLocations(arena).size(), "generator");
         nightfall.generatorLocations(arena).remove(index);
         ctx.success("Removed generator location " + (index + 1) + " from arena '" + arena.id() + "'.");
     }
 
     private void commandDropBlocks(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         Map<Integer, List<Material>> dropItems = nightfall.dropItems(arena);
         if (dropItems.isEmpty()) {
             ctx.info("Arena '" + arena.id() + "' has no configured drop item tiers.");
@@ -759,11 +774,12 @@ public class NightfallCommand {
     }
 
     private void commandAddDropBlock(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         Player player = requirePlayer(ctx);
         ItemStack heldItem = player.getInventory().getItemInMainHand();
         if (heldItem.getType().isAir()) {
             ctx.returnError("Hold the block you want to add in your main hand.");
+            return;
         }
 
         int threshold = ctx.getArgAsInt(2, 100, 1, 100);
@@ -777,7 +793,7 @@ public class NightfallCommand {
 
     private void commandSetDropWeight(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(4);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         List<DropItemEntry> dropItems = flattenedDropItems(arena);
         int index = requireOneBasedIndex(ctx, 2, dropItems.size(), "drop item");
         int threshold = ctx.getArgAsInt(3, 100, 1, 100);
@@ -797,7 +813,7 @@ public class NightfallCommand {
 
     private void commandRemoveDropBlock(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
-        MiniGameArena arena = requireArena(ctx, 1);
+        MiniGameArena arena = requireArena(ctx);
         List<DropItemEntry> dropItems = flattenedDropItems(arena);
         int index = requireOneBasedIndex(ctx, 2, dropItems.size(), "drop item");
         DropItemEntry entry = dropItems.get(index);
@@ -813,37 +829,40 @@ public class NightfallCommand {
             + " in arena '" + arena.id() + "'.");
     }
 
-    private MiniGameArena requireArena(CommandContext ctx, int index) {
-        ctx.checkArgsSizeAtLeast(index + 1);
-        String arenaId = ctx.getArg(index);
+    private MiniGameArena requireArena(CommandContext ctx) {
+        ctx.checkArgsSizeAtLeast(1 + 1);
+        String arenaId = ctx.getArg(1);
         MiniGameArena arena = nightfall.minigame().arena(arenaId);
         if (arena == null) {
             ctx.returnError("Arena '" + arenaId + "' does not exist.");
+            throw new IllegalStateException("Arena '" + arenaId + "' does not exist.");
         }
         return arena;
     }
 
     private MiniGameArena requireArenaForInfo(CommandContext ctx) {
         if (ctx.numArgs() >= 2) {
-            return requireArena(ctx, 1);
+            return requireArena(ctx);
         }
 
         List<MiniGameArena> arenas = nightfall.minigame().arenas();
         if (arenas.isEmpty()) {
             ctx.returnError("No Nightfall arenas are loaded.");
+            throw new IllegalStateException("No Nightfall arenas are loaded.");
         }
         if (arenas.size() == 1) {
             return arenas.getFirst();
         }
 
         ctx.returnError("Specify an arena id. Use /nightfall list to choose one.");
-        return null;
+        throw new IllegalStateException("Specify an arena id.");
     }
 
     private Player requirePlayer(CommandContext ctx) {
         Player player = ctx.asPlayer();
         if (player == null) {
             ctx.returnError("This subcommand must be run in-game.");
+            throw new IllegalStateException("Player is required.");
         }
         return player;
     }
@@ -852,6 +871,7 @@ public class NightfallCommand {
         SCRegion selection = api.selections().getWorldEditSelection(player);
         if (selection == null) {
             ctx.returnError("No WorldEdit selection found. Make a selection first.");
+            throw new IllegalStateException("WorldEdit selection is required.");
         }
         return selection;
     }
@@ -859,6 +879,7 @@ public class NightfallCommand {
     private int requireOneBasedIndex(CommandContext ctx, int argIndex, int size, String label) {
         if (size <= 0) {
             ctx.returnError("No " + label + "s are configured yet.");
+            throw new IllegalStateException("No " + label + "s are configured.");
         }
         return ctx.getArgAsInt(argIndex, 1, 1, size) - 1;
     }
@@ -866,24 +887,26 @@ public class NightfallCommand {
     private void ensureArenaWorld(CommandContext ctx, MiniGameArena arena, Location location, String label) {
         if (location == null || location.getWorld() == null) {
             ctx.returnError(label + " is not set in a valid world.");
+            return;
         }
         if (!arena.world().equals(location.getWorld())) {
             ctx.returnError(label + " must be in world '" + arena.world().getName() + "'.");
         }
     }
 
-    private void ensureArenaWorld(CommandContext ctx, MiniGameArena arena, SCRegion region, String label) {
+    private void ensureArenaWorld(CommandContext ctx, MiniGameArena arena, SCRegion region) {
         if (region == null || region.getWorld() == null) {
-            ctx.returnError(label + " is not set in a valid world.");
+            ctx.returnError("Arena region" + " is not set in a valid world.");
+            return;
         }
         if (!arena.world().equals(region.getWorld())) {
-            ctx.returnError(label + " must be in world '" + arena.world().getName() + "'.");
+            ctx.returnError("Arena region" + " must be in world '" + arena.world().getName() + "'.");
         }
     }
 
-    private void ensureLocationContained(CommandContext ctx, Location location, SCRegion parent, String childLabel, String parentLabel) {
+    private void ensureLocationContained(CommandContext ctx, Location location, SCRegion parent, String childLabel) {
         if (parent != null && !parent.contains(location)) {
-            ctx.returnError(childLabel + " must be inside the " + parentLabel + ".");
+            ctx.returnError(childLabel + " must be inside the " + "arena region" + ".");
         }
     }
 

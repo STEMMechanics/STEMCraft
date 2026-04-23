@@ -20,8 +20,9 @@ public interface MiniGameArenaHandler {
      * Result of a handler event, indicating whether to allow or deny the action.
      */
     enum HandlerEventResult {
-        ALLOW,  // Allow the action to proceed
-        DENY    // Deny the action
+        ALLOW,           // Allow the action to proceed
+        ALLOW_NO_DROPS,  // Allow the action but suppress default block drops
+        DENY             // Deny the action
     }
 
     /**

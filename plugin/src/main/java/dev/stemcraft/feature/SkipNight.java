@@ -40,7 +40,7 @@ import java.util.List;
  * Feature that allows skipping the night when enough players are sleeping.
  */
 public class SkipNight extends BaseFeature {
-    private static final GameRule<Integer> RANDOM_TICK_SPEED_RULE = requireGameRule("RANDOM_TICK_SPEED", Integer.class);
+    private static final GameRule<Integer> RANDOM_TICK_SPEED_RULE = requireGameRule();
 
     private double skipPercentage = 1d;
     private int skipRandomTickSpeed = 3;
@@ -294,16 +294,16 @@ public class SkipNight extends BaseFeature {
     }
 
     @SuppressWarnings("unchecked")
-    private static <T> GameRule<T> requireGameRule(String name, Class<T> type) {
+    private static <T> GameRule<T> requireGameRule() {
         try {
-            Object value = GameRule.class.getField(name).get(null);
-            if (!(value instanceof GameRule<?> rule) || !type.equals(rule.getType())) {
-                throw new IllegalStateException("Missing expected gamerule " + name);
+            Object value = GameRule.class.getField("RANDOM_TICK_SPEED").get(null);
+            if (!(value instanceof GameRule<?> rule) || !Integer.class.equals(rule.getType())) {
+                throw new IllegalStateException("Missing expected gamerule " + "RANDOM_TICK_SPEED");
             }
 
             return (GameRule<T>) rule;
         } catch (ReflectiveOperationException exception) {
-            throw new IllegalStateException("Missing expected gamerule " + name, exception);
+            throw new IllegalStateException("Missing expected gamerule " + "RANDOM_TICK_SPEED", exception);
         }
     }
 

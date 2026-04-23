@@ -23,12 +23,11 @@ package dev.stemcraft.feature;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.util.PlayerUtil;
-import io.papermc.paper.registry.RegistryAccess;
-import io.papermc.paper.registry.RegistryKey;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
+import org.bukkit.Registry;
 import org.bukkit.Tag;
 import org.bukkit.World;
 import org.bukkit.WorldBorder;
@@ -175,7 +174,6 @@ public class RandomFirstSpawn extends BaseFeature {
 
         Player player = event.getPlayer();
         World deathWorld = player.getWorld();
-
         String forceSpawn = api.worlds().getSetting(deathWorld, "force-spawn-on-death");
         if ("true".equalsIgnoreCase(forceSpawn)) {
             return;
@@ -200,8 +198,8 @@ public class RandomFirstSpawn extends BaseFeature {
         int centerZ = center.getBlockZ();
         ThreadLocalRandom random = ThreadLocalRandom.current();
 
-        int minRadius = Math.clamp(rule.minRadius(), 0, rule.maxRadius());
-        int maxRadius = Math.max(minRadius, rule.maxRadius());
+        int maxRadius = Math.max(0, rule.maxRadius());
+        int minRadius = Math.clamp(rule.minRadius(), 0, maxRadius);
 
         for (int i = 0; i < Math.max(1, rule.attempts()); i++) {
             double angle = random.nextDouble(0.0, Math.PI * 2.0);
@@ -288,7 +286,6 @@ public class RandomFirstSpawn extends BaseFeature {
 
     private boolean isInsideWorldBorder(World world, int x, int z, int buffer) {
         WorldBorder border = world.getWorldBorder();
-
         double half = (border.getSize() / 2.0) - Math.max(0, buffer);
         if (half <= 0.0) {
             return false;
@@ -360,7 +357,7 @@ public class RandomFirstSpawn extends BaseFeature {
             }
 
             String normalized = item.trim().toLowerCase(Locale.ROOT);
-            Biome biome = RegistryAccess.registryAccess().getRegistry(RegistryKey.BIOME).get(NamespacedKey.minecraft(normalized));
+            Biome biome = resolveBiome(normalized);
             if (biome == null) {
                 api.messages().warn("RANDOM_FIRST_SPAWN_INVALID_BIOME", "biome", item, "world", worldName);
                 continue;
@@ -369,6 +366,11 @@ public class RandomFirstSpawn extends BaseFeature {
             out.add(biome);
         }
         return out;
+    }
+
+    @SuppressWarnings("deprecation")
+    private Biome resolveBiome(String normalized) {
+        return Registry.BIOME.get(NamespacedKey.minecraft(normalized));
     }
 
     private Set<Material> parseMaterials(List<String> raw, String worldName) {

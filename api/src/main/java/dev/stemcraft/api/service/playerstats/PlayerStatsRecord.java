@@ -33,4 +33,12 @@ public record PlayerStatsRecord(
     @Nullable Instant updatedAt,
     @NotNull java.util.List<PlayerStatValue> stats
 ) {
+    public PlayerStatsRecord {
+        stats = java.util.List.copyOf(stats);
+    }
+
+    @Override
+    public @NotNull java.util.List<PlayerStatValue> stats() {
+        return java.util.List.copyOf(stats);
+    }
 }

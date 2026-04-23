@@ -1,6 +1,5 @@
 package dev.stemcraft.minigame.bedwars;
 
-import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.minigame.ArenaValidationResult;
 import dev.stemcraft.api.minigame.MiniGameArena;
@@ -11,6 +10,7 @@ import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.service.region.RegionListener;
 import dev.stemcraft.api.util.NamespaceId;
 import dev.stemcraft.api.util.PlayerUtil;
+import dev.stemcraft.api.util.StringUtil;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -29,29 +29,42 @@ import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.projectiles.ProjectileSource;
+import org.bukkit.util.BoundingBox;
 import org.bukkit.util.Vector;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jspecify.annotations.NonNull;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Predicate;
 import java.util.UUID;
 
 public class BedWarsArenaHandler implements MiniGameArenaHandler {
-    private static final int STARTING_COUNTDOWN_SECONDS = 30;
     private static final int RUNNING_COUNTDOWN_SECONDS = 1800;
-    private static final int ENDING_COUNTDOWN_SECONDS = 15;
     private static final int DROP_INTERVAL_SECONDS = 30;
-    private static final double DROP_SPAWN_Y_OFFSET = 1.15d;
+    private static final double DROP_SPAWN_Y_OFFSET = 0.15d;
+    private static final int DROP_LOCATION_ATTEMPTS = 64;
+    private static final int DROP_AVAILABILITY_CHECK_ATTEMPTS = 256;
+    private static final BlockFace[] DROP_SUPPORT_FACES = new BlockFace[] {
+        BlockFace.NORTH,
+        BlockFace.SOUTH,
+        BlockFace.EAST,
+        BlockFace.WEST,
+        BlockFace.NORTH_EAST,
+        BlockFace.NORTH_WEST,
+        BlockFace.SOUTH_EAST,
+        BlockFace.SOUTH_WEST
+    };
 
     private final STEMCraftAPI api;
     private final BedWarsMiniGame bedWars;
@@ -109,10 +122,9 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
 
     @Override
     public void onArenaLoad(MiniGameArena arena) {
-        arena.getOrCreate("blocks", Set.class, HashSet::new);
+        placedBlocks(arena);
         arena.getOrCreate("eliminatedSpectators", Set.class, LinkedHashSet::new);
         arena.getOrCreate("trackedEntities", Set.class, HashSet::new);
-        arena.getOrCreate("dropSurfaces", List.class, ArrayList::new);
         captureBedSnapshots(arena);
         restoreBeds(arena);
 
@@ -150,7 +162,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
             return HandlerEventResult.DENY;
         }
 
-        arena.getOrCreate("blocks", Set.class, HashSet::new).add(block.getLocation());
+        placedBlocks(arena).add(block.getLocation());
         return HandlerEventResult.ALLOW;
     }
 
@@ -160,31 +172,12 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
             return HandlerEventResult.DENY;
         }
 
-        Set<Location> blockLocations = arena.getOrCreate("blocks", Set.class, HashSet::new);
+        Set<Location> blockLocations = placedBlocks(arena);
         if (blockLocations.remove(block.getLocation())) {
             return HandlerEventResult.ALLOW;
         }
 
-        MiniGameTeam bedOwner = findBedOwner(arena, block.getLocation());
-        if (bedOwner == null || !isBedBlock(block.getType())) {
-            return HandlerEventResult.DENY;
-        }
-
-        MiniGameTeam playerTeam = arena.getPlayerTeam(player);
-        if (playerTeam == null || playerTeam.getName().equals(bedOwner.getName())) {
-            return HandlerEventResult.DENY;
-        }
-        if (!bedOwner.get("bedAlive", Boolean.class, true)) {
-            return HandlerEventResult.DENY;
-        }
-
-        destroyTeamBed(arena, bedOwner);
-        MiniGamePlayer mgPlayer = arena.getPlayer(player);
-        if (mgPlayer != null) {
-            bedWars.incrementStat("beds_broken", arena, mgPlayer, 1.0d);
-        }
-        arena.broadcast("The " + bedOwner.get("displayName", String.class, bedOwner.getName()) + " bed has been destroyed!");
-        return HandlerEventResult.ALLOW;
+        return handleBedBreak(arena, player, block.getType(), findBedOwner(arena, block.getLocation()));
     }
 
     @Override
@@ -236,14 +229,14 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
                 for (Player player : arena.getTeamPlayers(winner.getName())) {
                     MiniGamePlayer mgPlayer = arena.getPlayer(player);
                     if (mgPlayer != null) {
-                        bedWars.incrementStat("wins", arena, mgPlayer, 1.0d);
+                        bedWars.incrementStat("wins", arena, mgPlayer);
                     }
                 }
             }
 
             String winnerName = winner == null
                 ? "No winner"
-                : winner.get("displayName", String.class, winner.getName());
+                : teamDisplayName(winner);
             for (Player player : arena.getPlayers()) {
                 arena.info(player, "Game Over! " + winnerName + " wins!");
             }
@@ -255,8 +248,17 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
 
     @Override
     public void onArenaCountdownTick(MiniGameArena arena, int secondsRemaining) {
+        if (secondsRemaining <= 0) {
+            return;
+        }
+
+        if (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING && secondsRemaining <= 5) {
+            float pitch = 1.0f + ((5 - secondsRemaining) * 0.1f);
+            playSoundToOccupants(arena, Sound.BLOCK_NOTE_BLOCK_HAT, 0.7f, pitch);
+            arena.showStartingCountdownTitle(secondsRemaining);
+        }
+
         if (arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING
-            && secondsRemaining > 0
             && secondsRemaining % DROP_INTERVAL_SECONDS == 0) {
             spawnRandomDrop(arena);
         }
@@ -267,7 +269,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
         if (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING) {
             arena.setStatus(MiniGameArena.ArenaStatus.RUNNING, RUNNING_COUNTDOWN_SECONDS);
         } else if (arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING) {
-            arena.setStatus(MiniGameArena.ArenaStatus.ENDING, ENDING_COUNTDOWN_SECONDS);
+            arena.setStatus(MiniGameArena.ArenaStatus.ENDING, bedWars.endingSeconds(arena));
         } else if (arena.getStatus() == MiniGameArena.ArenaStatus.ENDING) {
             arena.setStatus(MiniGameArena.ArenaStatus.RESETTING);
         }
@@ -286,14 +288,13 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
         if (arena.getStatus() == MiniGameArena.ArenaStatus.WAITING
             && arena.numPlayers() >= arena.getMinPlayers()
             && activeTeamCount(arena) >= 2) {
-            arena.setStatus(MiniGameArena.ArenaStatus.STARTING, STARTING_COUNTDOWN_SECONDS);
+            arena.setStatus(MiniGameArena.ArenaStatus.STARTING, bedWars.startCountdownSeconds(arena));
         }
 
         clearPlayerInventory(player);
         return arena.getLobbySpawn();
     }
 
-    @Override
     public void onPlayerLeaveArena(MiniGameArena arena, Player player) {
         if (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING
             && (arena.numPlayers() < arena.getMinPlayers() || activeTeamCount(arena) < 2)) {
@@ -326,7 +327,6 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
         restoreBeds(arena);
         resetRuntimeState(arena);
         clearTrackedEntities(arena);
-        rebuildDropSurfaces(arena);
         announceDropAvailability(arena);
         arena.set("winnerTeam", "");
 
@@ -337,6 +337,11 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
                     arena.setPlayerTeam(player, teamId);
                 }
             }
+        }
+
+        captureParticipatingTeams(arena);
+
+        for (Player player : arena.getPlayers()) {
             equipPlayer(arena, player);
             arena.teleportToTeamSpawn(player);
         }
@@ -358,6 +363,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
     }
 
     private void resetRuntimeState(MiniGameArena arena) {
+        participatingTeams(arena).clear();
         for (MiniGameTeam team : arena.getTeams()) {
             team.set("bedAlive", true);
             team.setScore(0);
@@ -383,12 +389,18 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
             return;
         }
 
-        if (!dropSurfaces(arena).isEmpty()) {
+        if (bedWars.dropSurfaceMaterials(arena).isEmpty()) {
+            broadcastInfoToOccupants(arena, "<yellow>Supply drops are disabled for this arena because no drop surface materials are configured.</yellow>");
             return;
         }
 
-        STEMCraft.getPlugin().getLogger().warning("BedWars arena '" + arena.id() + "' has drop items configured but no valid drop surfaces were found.");
-        broadcastInfoToOccupants(arena, "<yellow>Supply drops are enabled, but this arena has no valid drop surfaces.</yellow>");
+        if (findRandomDropLocation(arena, ThreadLocalRandom.current(), DROP_AVAILABILITY_CHECK_ATTEMPTS) != null) {
+            return;
+        }
+
+        java.util.logging.Logger.getLogger(BedWarsArenaHandler.class.getName())
+            .warning("[STEMCraft] BedWars arena '" + arena.id() + "' has drop items configured but no valid drop locations matched the configured drop surface materials.");
+        broadcastInfoToOccupants(arena, "<yellow>Supply drops are enabled, but this arena has no valid drop locations for the configured drop surface materials.</yellow>");
     }
 
     private void handleDeath(MiniGameArena arena, Player player, @Nullable Player damagerPlayer) {
@@ -403,7 +415,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
             damager = arena.getPlayer(damagerPlayer);
             if (damager != null) {
                 damager.addKill();
-                bedWars.incrementStat("kills", arena, damager, 1.0d);
+                bedWars.incrementStat("kills", arena, damager);
             }
         }
 
@@ -418,7 +430,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
         if (damager != null) {
             int finalKills = damager.get("finalKills", Integer.class, 0) + 1;
             damager.set("finalKills", finalKills);
-            bedWars.incrementStat("final_kills", arena, damager, 1.0d);
+            bedWars.incrementStat("final_kills", arena, damager);
         }
 
         eliminatedSpectators(arena).add(player.getUniqueId());
@@ -468,7 +480,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
             return;
         }
         if (activeTeams == 1) {
-            arena.setStatus(MiniGameArena.ArenaStatus.ENDING, ENDING_COUNTDOWN_SECONDS);
+            arena.setStatus(MiniGameArena.ArenaStatus.ENDING, bedWars.endingSeconds(arena));
         } else {
             arena.setStatus(MiniGameArena.ArenaStatus.RESETTING);
         }
@@ -559,8 +571,8 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
     }
 
     @SuppressWarnings("unchecked")
-    private List<Location> dropSurfaces(MiniGameArena arena) {
-        return arena.getOrCreate("dropSurfaces", List.class, ArrayList::new);
+    private @NotNull Set<String> participatingTeams(@NotNull MiniGameArena arena) {
+        return arena.getOrCreate("participatingTeams", Set.class, LinkedHashSet::new);
     }
 
     @SuppressWarnings("unchecked")
@@ -603,6 +615,11 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
     }
 
     private void destroyTeamBed(MiniGameArena arena, MiniGameTeam team) {
+        clearTeamBedBlocks(team);
+        team.set("bedAlive", false);
+    }
+
+    void clearTeamBedBlocks(@NotNull MiniGameTeam team) {
         SCRegion bedRegion = team.get("bedRegion", SCRegion.class);
         if (bedRegion == null) {
             return;
@@ -613,11 +630,10 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
                 block.setType(Material.AIR, false);
             }
         });
-        team.set("bedAlive", false);
     }
 
     private void clearPlacedBlocks(MiniGameArena arena) {
-        Set<Location> blocks = arena.getOrCreate("blocks", Set.class, HashSet::new);
+        Set<Location> blocks = placedBlocks(arena);
         for (Location loc : new LinkedHashSet<>(blocks)) {
             loc.getBlock().setType(Material.AIR);
         }
@@ -625,6 +641,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
     }
 
     private void clearTrackedEntities(MiniGameArena arena) {
+        arena.clearAllSupplyDrops();
         Set<UUID> trackedEntities = trackedEntities(arena);
         for (UUID entityId : new LinkedHashSet<>(trackedEntities)) {
             Entity entity = arena.world().getEntity(entityId);
@@ -635,56 +652,102 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
         trackedEntities.clear();
     }
 
-    private void rebuildDropSurfaces(@NotNull MiniGameArena arena) {
-        List<Location> surfaces = dropSurfaces(arena);
-        surfaces.clear();
-
+    @Nullable Location findRandomDropLocation(@NotNull MiniGameArena arena, @NotNull Random random, int attempts) {
         SCRegion arenaRegion = arena.get("arenaRegion", SCRegion.class);
         if (arenaRegion == null) {
-            return;
+            return null;
         }
 
-        Location min = arenaRegion.getMinimumLocation();
-        Location max = arenaRegion.getMaximumLocation();
-        for (int x = min.getBlockX(); x <= max.getBlockX(); x++) {
-            for (int z = min.getBlockZ(); z <= max.getBlockZ(); z++) {
-                Location surface = findSurfaceDropLocation(arenaRegion, x, z);
-                if (surface != null) {
-                    surfaces.add(surface);
-                }
-            }
+        List<Material> allowedMaterials = bedWars.dropSurfaceMaterials(arena);
+        if (allowedMaterials.isEmpty()) {
+            return null;
         }
+
+        return findRandomDropLocation(
+            arenaRegion.getMinimumLocation(),
+            arenaRegion.getMaximumLocation(),
+            arenaRegion::contains,
+            allowedMaterials,
+            random,
+            attempts
+        );
     }
 
-    private @Nullable Location findSurfaceDropLocation(@NotNull SCRegion arenaRegion, int x, int z) {
-        Location min = arenaRegion.getMinimumLocation();
-        Location max = arenaRegion.getMaximumLocation();
-        for (int y = max.getBlockY(); y >= min.getBlockY(); y--) {
-            Block block = arenaRegion.getWorld().getBlockAt(x, y, z);
-            if (isValidDropSurface(arenaRegion, block)) {
-                return block.getLocation();
+    @Nullable Location findRandomDropLocation(
+        @NotNull Location min,
+        @NotNull Location max,
+        @NotNull Predicate<Location> contains,
+        @NotNull List<Material> allowedMaterials,
+        @NotNull Random random,
+        int attempts
+    ) {
+        int width = (max.getBlockX() - min.getBlockX()) + 1;
+        int depth = (max.getBlockZ() - min.getBlockZ()) + 1;
+        if (width <= 0 || depth <= 0) {
+            return null;
+        }
+
+        for (int attempt = 0; attempt < attempts; attempt++) {
+            int x = min.getBlockX() + random.nextInt(width);
+            int z = min.getBlockZ() + random.nextInt(depth);
+            Location dropLocation = highestDropLocation(min, max, contains, x, z, allowedMaterials);
+            if (dropLocation != null) {
+                return dropLocation;
             }
         }
         return null;
     }
 
-    private boolean isValidDropSurface(@NotNull SCRegion arenaRegion, @NotNull Block block) {
-        if (!arenaRegion.contains(block.getLocation())) {
-            return false;
+    private @Nullable Location highestDropLocation(
+        @NotNull Location min,
+        @NotNull Location max,
+        @NotNull Predicate<Location> contains,
+        int x,
+        int z,
+        @NotNull List<Material> allowedMaterials
+    ) {
+        if (min.getWorld() == null) {
+            return null;
         }
-
-        Material type = block.getType();
-        if (type.isAir() || !type.isSolid() || type.name().contains("GLASS")) {
-            return false;
+        for (int y = max.getBlockY(); y >= min.getBlockY(); y--) {
+            Block block = min.getWorld().getBlockAt(x, y, z);
+            if (!contains.test(block.getLocation())) {
+                continue;
+            }
+            if (block.getType().isAir()) {
+                continue;
+            }
+            return dropSpawnLocation(block, allowedMaterials);
         }
+        return null;
+    }
 
+    private @Nullable Location dropSpawnLocation(@NotNull Block block, @NotNull List<Material> allowedMaterials) {
+        if (!allowedMaterials.contains(block.getType())) {
+            return null;
+        }
+        if (!hasSolidDropSupport(block)) {
+            return null;
+        }
         Block above = block.getRelative(BlockFace.UP);
         Block aboveTwo = above.getRelative(BlockFace.UP);
-        Location dropLocation = block.getLocation().add(0.5d, DROP_SPAWN_Y_OFFSET, 0.5d);
-        return above.isPassable()
-            && aboveTwo.isPassable()
-            && arenaRegion.contains(above.getLocation())
-            && arenaRegion.contains(dropLocation);
+        BoundingBox blockBox = block.getBoundingBox();
+        Location dropLocation = new Location(
+            block.getWorld(),
+            block.getX() + 0.5d,
+            blockBox.getMaxY() + DROP_SPAWN_Y_OFFSET,
+            block.getZ() + 0.5d
+        );
+        return above.isPassable() && aboveTwo.isPassable() ? dropLocation : null;
+    }
+
+    private boolean hasSolidDropSupport(@NotNull Block block) {
+        for (BlockFace face : DROP_SUPPORT_FACES) {
+            if (!block.getRelative(face).getType().isSolid()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private void spawnRandomDrop(@NotNull MiniGameArena arena) {
@@ -693,32 +756,18 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
             return;
         }
 
-        List<Location> surfaces = dropSurfaces(arena);
-        if (surfaces.isEmpty()) {
-            rebuildDropSurfaces(arena);
-            surfaces = dropSurfaces(arena);
-            if (surfaces.isEmpty()) {
-                return;
-            }
-        }
-
-        List<Location> candidates = new ArrayList<>(surfaces);
-        Collections.shuffle(candidates, ThreadLocalRandom.current());
-        for (Location surface : candidates) {
-            SCRegion arenaRegion = arena.get("arenaRegion", SCRegion.class);
-            if (arenaRegion == null || !isValidDropSurface(arenaRegion, surface.getBlock())) {
-                continue;
-            }
-
-            ItemStack item = new ItemStack(configuredDrops.get(ThreadLocalRandom.current().nextInt(configuredDrops.size())));
-            Location dropLocation = surface.clone().add(0.5d, DROP_SPAWN_Y_OFFSET, 0.5d);
-            Item droppedItem = surface.getWorld().dropItem(dropLocation, item);
-            droppedItem.setPickupDelay(10);
-            trackedEntities(arena).add(droppedItem.getUniqueId());
-            announceSupplyDrop(arena, dropLocation);
-            playSoundToOccupants(arena, Sound.ENTITY_ITEM_PICKUP, 0.6f, 1.35f);
+        Location dropLocation = findRandomDropLocation(arena, ThreadLocalRandom.current(), DROP_LOCATION_ATTEMPTS);
+        if (dropLocation == null) {
             return;
         }
+
+        ItemStack item = new ItemStack(configuredDrops.get(ThreadLocalRandom.current().nextInt(configuredDrops.size())));
+        Item droppedItem = dropLocation.getWorld().dropItem(dropLocation, item);
+        droppedItem.setPickupDelay(10);
+        trackedEntities(arena).add(droppedItem.getUniqueId());
+        arena.trackSupplyDrop(droppedItem, dropLocation);
+        announceSupplyDrop(arena, dropLocation);
+        playSoundToOccupants(arena);
     }
 
     private @Nullable MiniGameTeam findBedOwner(MiniGameArena arena, Location location) {
@@ -729,6 +778,11 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
             }
         }
         return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private @NotNull Set<Location> placedBlocks(@NotNull MiniGameArena arena) {
+        return arena.getOrCreate("blocks", Set.class, HashSet::new);
     }
 
     private boolean containsBedBlock(SCRegion region) {
@@ -788,6 +842,10 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
         }
     }
 
+    private void playSoundToOccupants(@NotNull MiniGameArena arena) {
+        playSoundToOccupants(arena, Sound.ENTITY_ITEM_PICKUP, 0.6f, 1.35f);
+    }
+
     private void playSoundToOccupants(@NotNull MiniGameArena arena, @NotNull Sound sound, float volume, float pitch) {
         for (Player occupant : arena.getOccupants()) {
             occupant.playSound(occupant.getLocation(), sound, volume, pitch);
@@ -798,6 +856,58 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
         for (Player occupant : arena.getOccupants()) {
             arena.info(occupant, supplyDropHint(occupant, dropLocation));
         }
+    }
+
+    void captureParticipatingTeams(@NotNull MiniGameArena arena) {
+        Set<String> participatingTeams = participatingTeams(arena);
+        participatingTeams.clear();
+        for (MiniGameTeam team : arena.getTeams()) {
+            if (!arena.getTeamPlayers(team.getName()).isEmpty()) {
+                participatingTeams.add(team.getName().toLowerCase(Locale.ROOT));
+            }
+        }
+    }
+
+    boolean isParticipatingTeam(@NotNull MiniGameArena arena, @NotNull MiniGameTeam team) {
+        return participatingTeams(arena).contains(team.getName().toLowerCase(Locale.ROOT));
+    }
+
+    HandlerEventResult handleBedBreak(
+        @NotNull MiniGameArena arena,
+        @NotNull Player player,
+        @Nullable Material blockType,
+        @Nullable MiniGameTeam bedOwner
+    ) {
+        if (bedOwner == null || !isBedBlock(blockType)) {
+            return HandlerEventResult.DENY;
+        }
+
+        MiniGameTeam playerTeam = arena.getPlayerTeam(player);
+        if (playerTeam == null || playerTeam.getName().equals(bedOwner.getName())) {
+            return HandlerEventResult.DENY;
+        }
+        if (!bedOwner.get("bedAlive", Boolean.class, true)) {
+            return HandlerEventResult.DENY;
+        }
+        if (!isParticipatingTeam(arena, bedOwner)) {
+            clearTeamBedBlocks(bedOwner);
+            return HandlerEventResult.ALLOW_NO_DROPS;
+        }
+
+        destroyTeamBed(arena, bedOwner);
+        MiniGamePlayer mgPlayer = arena.getPlayer(player);
+        if (mgPlayer != null) {
+            bedWars.incrementStat("beds_broken", arena, mgPlayer);
+        }
+        arena.broadcast("The " + teamDisplayName(bedOwner) + " bed has been destroyed!");
+        return HandlerEventResult.ALLOW;
+    }
+
+    @NotNull String teamDisplayName(@NotNull MiniGameTeam team) {
+        String displayName = team.get("displayName", String.class, "");
+        return displayName.isBlank() || displayName.equalsIgnoreCase(team.getName())
+            ? StringUtil.capitalize(StringUtil.beautify(team.getName()))
+            : displayName;
     }
 
     private @NotNull String supplyDropHint(@NotNull Player player, @NotNull Location dropLocation) {

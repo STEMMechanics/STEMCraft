@@ -6,6 +6,7 @@ import dev.stemcraft.api.minigame.MiniGameArena;
 import dev.stemcraft.api.util.LocationUtil;
 import dev.stemcraft.exception.MiniGameInvalidArenaConfigException;
 import dev.stemcraft.minigame.MiniGameConfigSupport;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.jetbrains.annotations.NotNull;
@@ -102,9 +103,12 @@ public class SkyBlockConfig {
             if (worldName.isBlank()) {
                 throw new MiniGameInvalidArenaConfigException("SkyBlock arena '" + arenaId + "' is missing a world.");
             }
+            if (Bukkit.getWorld(worldName) == null) {
+                throw new MiniGameInvalidArenaConfigException("SkyBlock arena '" + arenaId + "' has an invalid world.");
+            }
 
             World world = MiniGameConfigSupport.requireWorld(api, arenaId, worldName);
-            Location islandSpawn = loadLocation(arenaSection, world, arenaId, "spawn", true);
+            Location islandSpawn = loadLocation(arenaSection, world, arenaId);
             SkyBlockPlayerState playerState = null;
             ConfigSection stateSection = arenaSection.getSection("state", false);
             if (stateSection != null) {
@@ -115,7 +119,7 @@ public class SkyBlockConfig {
                 arenaId,
                 ownerUuid,
                 ownerName,
-                world,
+                worldName,
                 islandSpawn,
                 playerState
             ));
@@ -136,7 +140,7 @@ public class SkyBlockConfig {
         arenaSection.set("owner-uuid", ownerUuid);
         arenaSection.set("owner-name", arena.get("ownerName", String.class, arena.id()));
         arenaSection.set("world", arena.world().getName());
-        arenaSection.set("spawn", serializeLocation(arena.getLobbySpawn(), arena.id(), "spawn"));
+        arenaSection.set("spawn", serializeLocation(arena.getLobbySpawn(), arena.id()));
 
         ConfigSection stateSection = arenaSection.createSection("state", true);
         stateSection.removeAll();
@@ -154,25 +158,22 @@ public class SkyBlockConfig {
         config.save();
     }
 
-    private @Nullable Location loadLocation(@NotNull ConfigSection section, @NotNull World world, @NotNull String arenaId, @NotNull String key, boolean required) {
-        String locationString = section.getString(key);
+    private Location loadLocation(@NotNull ConfigSection section, @NotNull World world, @NotNull String arenaId) {
+        String locationString = section.getString("spawn");
         if (locationString.isEmpty()) {
-            if (required) {
-                throw new MiniGameInvalidArenaConfigException("Location '" + key + "' for arena '" + arenaId + "' is not defined.");
-            }
-            return null;
+            throw new MiniGameInvalidArenaConfigException("Location '" + "spawn" + "' for arena '" + arenaId + "' is not defined.");
         }
 
         Location location = LocationUtil.deserialize(locationString, world);
-        if (location == null && required) {
-            throw new MiniGameInvalidArenaConfigException("Location '" + key + "' for arena '" + arenaId + "' is invalid.");
+        if (location == null) {
+            throw new MiniGameInvalidArenaConfigException("Location '" + "spawn" + "' for arena '" + arenaId + "' is invalid.");
         }
         return location;
     }
 
-    private @NotNull String serializeLocation(@Nullable Location location, @NotNull String arenaId, @NotNull String name) {
+    private @NotNull String serializeLocation(@Nullable Location location, @NotNull String arenaId) {
         if (location == null) {
-            throw new MiniGameInvalidArenaConfigException("SkyBlock arena '" + arenaId + "' is missing " + name + ".");
+            throw new MiniGameInvalidArenaConfigException("SkyBlock arena '" + arenaId + "' is missing " + "spawn" + ".");
         }
         return LocationUtil.serialize(location, false, true);
     }

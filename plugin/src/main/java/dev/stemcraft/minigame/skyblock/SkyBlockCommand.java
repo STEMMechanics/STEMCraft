@@ -106,8 +106,10 @@ public class SkyBlockCommand {
     }
 
     private void commandInfo(CommandContext ctx) {
-        MiniGameArena arena = requireArenaByOwnerOrId(ctx, 1, true);
-        //noinspection DataFlowIssue
+        MiniGameArena arena = requireArenaByOwnerOrId(ctx, true);
+        if (arena == null) {
+            return;
+        }
         ctx.info("SkyBlock '" + skyBlock.ownerName(arena) + "':");
         ctx.info(" - Arena id: " + arena.id());
         ctx.info(" - Status: " + arena.getStatus().name());
@@ -122,6 +124,7 @@ public class SkyBlockCommand {
         Player targetPlayer = ctx.getArgAsPlayerOrSender(1);
         if (targetPlayer == null) {
             ctx.returnError("Player is required.");
+            return;
         }
 
         MiniGameArena existingArena = skyBlock.minigame().findPlayer(targetPlayer);
@@ -132,6 +135,7 @@ public class SkyBlockCommand {
         }
         if (existingArena != null) {
             ctx.returnError("Player '" + targetPlayer.getName() + "' is already in arena '" + existingArena.id() + "'.");
+            return;
         }
 
         targetArena.addPlayer(targetPlayer);
@@ -140,18 +144,22 @@ public class SkyBlockCommand {
 
     private void commandSpectate(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2);
-        MiniGameArena arena = requireArenaByOwnerOrId(ctx, 1, false);
+        MiniGameArena arena = requireArenaByOwnerOrId(ctx, false);
+        if (arena == null) {
+            return;
+        }
         Player spectator = ctx.getArgAsPlayerOrSender(2);
         if (spectator == null) {
             ctx.returnError("Player is required.");
+            return;
         }
 
         MiniGameArena existingArena = skyBlock.minigame().findPlayer(spectator);
         if (existingArena != null) {
             ctx.returnError("Player '" + spectator.getName() + "' is already in arena '" + existingArena.id() + "'.");
+            return;
         }
 
-        //noinspection DataFlowIssue
         arena.addSpectator(spectator);
         ctx.success("Player '" + spectator.getName() + "' is now spectating SkyBlock '" + skyBlock.ownerName(arena) + "'.");
     }
@@ -160,11 +168,13 @@ public class SkyBlockCommand {
         Player targetPlayer = ctx.getArgAsPlayerOrSender(1);
         if (targetPlayer == null) {
             ctx.returnError("Player is required.");
+            return;
         }
 
         MiniGameArena arena = skyBlock.minigame().findPlayer(targetPlayer);
         if (arena == null || !SkyBlockMiniGame.namespace().equals(arena.namespace())) {
             ctx.returnError("Player '" + targetPlayer.getName() + "' is not in a SkyBlock game.");
+            return;
         }
 
         arena.removeOccupant(targetPlayer);
@@ -172,14 +182,16 @@ public class SkyBlockCommand {
     }
 
     private void commandReset(CommandContext ctx) {
-        MiniGameArena arena = requireArenaByOwnerOrId(ctx, 1, true);
+        MiniGameArena arena = requireArenaByOwnerOrId(ctx, true);
+        if (arena == null) {
+            return;
+        }
         Player sender = ctx.asPlayer();
-        //noinspection DataFlowIssue
         if ((sender == null || !skyBlock.isOwner(arena, sender)) && !ctx.hasPermission(PERMISSION_OTHERS)) {
             ctx.returnError("COMMAND_NO_PERMISSION_OTHERS");
+            return;
         }
 
-        //noinspection DataFlowIssue
         skyBlock.endGame(arena, "Your SkyBlock island was reset.");
         ctx.success("SkyBlock '" + skyBlock.ownerName(arena) + "' was reset.");
     }
@@ -199,15 +211,17 @@ public class SkyBlockCommand {
         }
     }
 
-    private MiniGameArena requireArenaByOwnerOrId(CommandContext ctx, int index, boolean allowCurrentPlayerDefault) {
-        if (ctx.numArgs() <= index) {
+    private MiniGameArena requireArenaByOwnerOrId(CommandContext ctx, boolean allowCurrentPlayerDefault) {
+        if (ctx.numArgs() <= 1) {
             if (!allowCurrentPlayerDefault) {
                 ctx.returnError("Specify a SkyBlock owner or arena id.");
+                return null;
             }
 
             Player player = ctx.asPlayer();
             if (player == null) {
                 ctx.returnError("Specify a SkyBlock owner or arena id when running from console.");
+                return null;
             }
 
             MiniGameArena ownerArena = skyBlock.findArenaByOwner(player.getUniqueId());
@@ -223,7 +237,7 @@ public class SkyBlockCommand {
             ctx.returnError("No SkyBlock game was found for '" + player.getName() + "'.");
         }
 
-        String token = ctx.getArg(index);
+        String token = ctx.getArg(1);
         MiniGameArena direct = skyBlock.minigame().arena(token);
         if (direct != null) {
             return direct;

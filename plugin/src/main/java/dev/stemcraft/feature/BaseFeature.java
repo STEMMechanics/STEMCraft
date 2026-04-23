@@ -119,7 +119,7 @@ public abstract class BaseFeature {
      *
      * @return The feature's configuration section.
      */
-    public ConfigSection getConfigSection() {
+    protected ConfigSection getConfigSection() {
         if(configSection == null) {
             ConfigFile root = getRootConfigSection();
             List<String> candidates = getConfigPathCandidates();
@@ -154,7 +154,7 @@ public abstract class BaseFeature {
      *
      * @return The root configuration section.
      */
-    public ConfigFile getRootConfigSection() {
+    protected ConfigFile getRootConfigSection() {
         if(rootConfigSection == null) {
             rootConfigSection = api.config().load("config.yml");
             if (rootConfigSection == null) {
@@ -172,5 +172,14 @@ public abstract class BaseFeature {
         configSection = null;
         rootConfigSection = null;
         resolvedConfigPath = null;
+    }
+
+    /**
+     * Check if the feature is enabled.
+     *
+     * @return true if the feature is enabled, false otherwise.
+     */
+    public boolean isEnabled() {
+        return getConfigSection().getBoolean("enabled", true);
     }
 }
