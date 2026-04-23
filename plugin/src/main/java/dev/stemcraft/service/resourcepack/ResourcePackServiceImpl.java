@@ -478,6 +478,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
     }
 
     @SuppressWarnings("BooleanMethodIsAlwaysInverted") // This function's output is reasonable, so why bother changing it?
+    @Contract("null -> true")
     private static boolean deleteDirectory(Path root) {
         if (root == null || !Files.exists(root)) {
             return true;
