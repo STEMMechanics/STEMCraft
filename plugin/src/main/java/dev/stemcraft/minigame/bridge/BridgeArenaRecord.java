@@ -21,7 +21,10 @@ public record BridgeArenaRecord(
         SCRegion arenaRegion,
         int minPlayers,
         int maxPlayers,
+        int startCountdownSeconds,
+        int endingSeconds,
         List<Material> dropItems,
+        List<Material> dropSurfaceMaterials,
         Map<String, TeamDef> teams
 ) {
     public BridgeArenaRecord {
@@ -30,6 +33,7 @@ public record BridgeArenaRecord(
         bridgeRegion = copyRegion(bridgeRegion);
         arenaRegion = copyRegion(arenaRegion);
         dropItems = dropItems == null ? List.of() : List.copyOf(dropItems);
+        dropSurfaceMaterials = dropSurfaceMaterials == null ? List.of() : List.copyOf(dropSurfaceMaterials);
         teams = teams == null ? Map.of() : Map.copyOf(teams);
     }
 

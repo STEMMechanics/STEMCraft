@@ -33,9 +33,7 @@ import java.util.Map;
 import java.util.UUID;
 
 public class BoatRaceArenaHandler implements MiniGameArenaHandler {
-    private static final int STARTING_COUNTDOWN_SECONDS = 10;
     private static final int RUNNING_COUNTDOWN_SECONDS = 600;
-    private static final int ENDING_COUNTDOWN_SECONDS = 12;
 
     private final STEMCraftAPI api;
     private final BoatRaceMiniGame boatRace;
@@ -262,7 +260,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         } else if (arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING) {
             Player leader = currentLeader(arena);
             boatRace.setWinner(arena, leader);
-            arena.setStatus(MiniGameArena.ArenaStatus.ENDING, ENDING_COUNTDOWN_SECONDS);
+            arena.setStatus(MiniGameArena.ArenaStatus.ENDING, boatRace.endingSeconds(arena));
         } else if (arena.getStatus() == MiniGameArena.ArenaStatus.ENDING) {
             arena.setStatus(MiniGameArena.ArenaStatus.RESETTING);
         }
@@ -278,7 +276,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         if (arena.getStatus() == MiniGameArena.ArenaStatus.WAITING && arena.numPlayers() >= arena.getMinPlayers()) {
             api.tasks().nextTick(() -> {
                 if (arena.getStatus() == MiniGameArena.ArenaStatus.WAITING && arena.numPlayers() >= arena.getMinPlayers()) {
-                    arena.setStatus(MiniGameArena.ArenaStatus.STARTING, STARTING_COUNTDOWN_SECONDS);
+                    arena.setStatus(MiniGameArena.ArenaStatus.STARTING, boatRace.startCountdownSeconds(arena));
                 }
             });
         } else if (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING) {
@@ -298,7 +296,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
             if (arena.numPlayers() == 1) {
                 Player remaining = arena.getPlayers().getFirst();
                 boatRace.setWinner(arena, remaining);
-                arena.setStatus(MiniGameArena.ArenaStatus.ENDING, ENDING_COUNTDOWN_SECONDS);
+                arena.setStatus(MiniGameArena.ArenaStatus.ENDING, boatRace.endingSeconds(arena));
             } else if (arena.numPlayers() < arena.getMinPlayers()) {
                 arena.setStatus(MiniGameArena.ArenaStatus.RESETTING);
             }
@@ -479,7 +477,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         }
 
         boatRace.setWinner(arena, winner);
-        arena.setStatus(MiniGameArena.ArenaStatus.ENDING, ENDING_COUNTDOWN_SECONDS);
+        arena.setStatus(MiniGameArena.ArenaStatus.ENDING, boatRace.endingSeconds(arena));
     }
 
     private void resetToCheckpoint(@NotNull MiniGameArena arena, @NotNull Player player, @Nullable String message) {
@@ -696,7 +694,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
 
     private void startWinnerCelebration(@NotNull MiniGameArena arena, @NotNull Player winner) {
         List<Location> anchors = List.of(winner.getLocation().clone());
-        arena.startWinnerCelebration(anchors, ENDING_COUNTDOWN_SECONDS, Color.AQUA, Color.BLUE, Color.WHITE);
+        arena.startWinnerCelebration(anchors, boatRace.endingSeconds(arena), Color.AQUA, Color.BLUE, Color.WHITE);
     }
 
     private void broadcastToOccupants(@NotNull MiniGameArena arena, @NotNull String message) {

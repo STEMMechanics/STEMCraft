@@ -20,8 +20,6 @@ import org.bukkit.FireworkEffect;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
-import org.bukkit.block.Block;
-import org.bukkit.block.data.BlockData;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Firework;
@@ -45,6 +43,7 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         Color.LIME,
         Color.FUCHSIA
     };
+    private static final long SUPPLY_DROP_SIGNAL_PERIOD_TICKS = 40L;
 
     private final MiniGameServiceImpl service;
     private final STEMCraftAPI api;
@@ -79,7 +78,6 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
     private final Set<Material> unlimitedPlacements = EnumSet.noneOf(Material.class);
     private final Set<String> activeCelebrationKeys = new HashSet<>();
     private final Map<UUID, SupplyDropMarker> supplyDropMarkers = new HashMap<>();
-    private final Map<String, SupplyDropBlockMarker> supplyDropBlocks = new HashMap<>();
     private final Map<UUID, Long> protectionUntil = new HashMap<>();
     private final Map<String, Map<Material, Integer>> kits = new HashMap<>();
 
@@ -856,31 +854,18 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         UUID itemId = item.getUniqueId();
         clearSupplyDrop(itemId);
 
-        Block markerBlock = markerLocation.getBlock();
-        Location blockLocation = markerBlock.getLocation().clone();
-        String blockKey = supplyDropBlockKey(blockLocation);
-        SupplyDropBlockMarker blockMarker = supplyDropBlocks.get(blockKey);
-        if (blockMarker == null) {
-            blockMarker = new SupplyDropBlockMarker(
-                blockLocation,
-                markerBlock.getType(),
-                markerBlock.getBlockData().clone()
-            );
-            supplyDropBlocks.put(blockKey, blockMarker);
-            markerBlock.setType(Material.BEACON, false);
-        }
-        blockMarker.references++;
-
         String celebrationKey = "supply-drop-" + itemId;
-        supplyDropMarkers.put(itemId, new SupplyDropMarker(blockKey, celebrationKey));
+        Location signalLocation = markerLocation.clone();
+        supplyDropMarkers.put(itemId, new SupplyDropMarker(celebrationKey));
         startCelebration(
             celebrationKey,
-            item.getLocation().clone(),
+            signalLocation,
             3,
             Color.AQUA,
             Color.YELLOW,
             Color.WHITE
         );
+        startSupplyDropSignal(itemId, signalLocation);
     }
 
     @Override
@@ -978,24 +963,49 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
             return;
         }
 
+        api.tasks().cancel(supplyDropSignalTaskId(itemId));
         stopCelebration(marker.celebrationKey());
-
-        SupplyDropBlockMarker blockMarker = supplyDropBlocks.get(marker.blockKey());
-        if (blockMarker == null) {
-            return;
-        }
-
-        blockMarker.references--;
-        if (blockMarker.references > 0) {
-            return;
-        }
-
-        blockMarker.restore();
-        supplyDropBlocks.remove(marker.blockKey());
     }
 
-    private String supplyDropBlockKey(@NotNull Location location) {
-        return location.getWorld().getUID() + ":" + location.getBlockX() + ":" + location.getBlockY() + ":" + location.getBlockZ();
+    private void startSupplyDropSignal(@NotNull UUID itemId, @NotNull Location signalLocation) {
+        String taskId = supplyDropSignalTaskId(itemId);
+        api.tasks().cancel(taskId);
+        api.tasks().repeating(taskId, 0L, SUPPLY_DROP_SIGNAL_PERIOD_TICKS, () -> {
+            Entity entity = world.getEntity(itemId);
+            if (!(entity instanceof Item item) || !item.isValid() || item.isDead()) {
+                clearSupplyDrop(itemId);
+                return;
+            }
+            launchSupplyDropSignalFirework(signalLocation);
+        });
+    }
+
+    private void launchSupplyDropSignalFirework(@NotNull Location signalLocation) {
+        World fireworkWorld = signalLocation.getWorld();
+        if (fireworkWorld == null) {
+            return;
+        }
+
+        Location launchLocation = signalLocation.clone();
+        ThreadLocalRandom random = ThreadLocalRandom.current();
+        fireworkWorld.spawn(launchLocation, Firework.class, firework -> {
+            FireworkMeta meta = firework.getFireworkMeta();
+            meta.clearEffects();
+            meta.addEffect(FireworkEffect.builder()
+                .with(random.nextBoolean() ? FireworkEffect.Type.BALL_LARGE : FireworkEffect.Type.BURST)
+                .trail(true)
+                .flicker(random.nextBoolean())
+                .withColor(Color.AQUA, Color.YELLOW)
+                .withFade(Color.WHITE)
+                .build());
+            int powerRoll = random.nextInt(100);
+            meta.setPower(powerRoll < 10 ? 4 : powerRoll < 30 ? 3 : powerRoll < 60 ? 2 : 1);
+            firework.setFireworkMeta(meta);
+        });
+    }
+
+    private String supplyDropSignalTaskId(@NotNull UUID itemId) {
+        return "minigame-supply-drop-signal-" + NamespaceId.sanitizePath(namespace) + "-" + NamespaceId.sanitizePath(id) + "-" + itemId.toString().replace('-', '_');
     }
 
     private void removeActivePlayer(Player player, boolean restoreLocation, boolean quitting) {
@@ -1146,25 +1156,6 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         api.messages().broadcast(message, excluded, placeholders);
     }
 
-    private record SupplyDropMarker(@NotNull String blockKey, @NotNull String celebrationKey) {
-    }
-
-    private static final class SupplyDropBlockMarker {
-        private final Location location;
-        private final Material originalMaterial;
-        private final BlockData originalBlockData;
-        private int references = 0;
-
-        private SupplyDropBlockMarker(@NotNull Location location, @NotNull Material originalMaterial, @NotNull BlockData originalBlockData) {
-            this.location = location;
-            this.originalMaterial = originalMaterial;
-            this.originalBlockData = originalBlockData;
-        }
-
-        private void restore() {
-            Block block = location.getBlock();
-            block.setType(originalMaterial, false);
-            block.setBlockData(originalBlockData.clone(), false);
-        }
+    private record SupplyDropMarker(@NotNull String celebrationKey) {
     }
 }

@@ -23,6 +23,8 @@ public record BoatRaceArenaRecord(
         List<Location> startingGrid,
         int minPlayers,
         int maxPlayers,
+        int startCountdownSeconds,
+        int endingSeconds,
         Map<UUID, BestTime> bestTimes
 ) {
     public BoatRaceArenaRecord {

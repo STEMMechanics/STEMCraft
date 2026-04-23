@@ -21,6 +21,8 @@ public record NightfallArenaRecord(
         SCRegion arenaRegion,
         int minPlayers,
         int maxPlayers,
+        int startCountdownSeconds,
+        int endingSeconds,
         int lives,
         int prepSeconds,
         double dayTimeSpeedMultiplier,

@@ -164,6 +164,8 @@ public class BoatRaceMiniGame extends BaseMiniGame {
             .setSpectatorSpawn(world.getSpawnLocation())
             .setMinPlayers(1)
             .setMaxPlayers(8)
+            .set("startCountdownSeconds", BoatRaceConfig.DEFAULT_START_COUNTDOWN_SECONDS)
+            .set("endingSeconds", BoatRaceConfig.DEFAULT_ENDING_SECONDS)
             .set("arenaRegion", null)
             .set("finishRegion", null)
             .set("stageRegions", new ArrayList<SCRegion>())
@@ -232,6 +234,8 @@ public class BoatRaceMiniGame extends BaseMiniGame {
                     .setRegion(arenaDef.arenaRegion())
                     .setMinPlayers(arenaDef.minPlayers())
                     .setMaxPlayers(arenaDef.maxPlayers())
+                    .set("startCountdownSeconds", arenaDef.startCountdownSeconds())
+                    .set("endingSeconds", arenaDef.endingSeconds())
                     .set("arenaRegion", arenaDef.arenaRegion())
                     .set("finishRegion", arenaDef.finishRegion())
                     .set("stageRegions", new ArrayList<>(arenaDef.stages()))
@@ -304,6 +308,14 @@ public class BoatRaceMiniGame extends BaseMiniGame {
 
     public int stageCount(@NotNull MiniGameArena arena) {
         return stageRegions(arena).size();
+    }
+
+    public int startCountdownSeconds(@NotNull MiniGameArena arena) {
+        return Math.max(1, arena.get("startCountdownSeconds", Integer.class, BoatRaceConfig.DEFAULT_START_COUNTDOWN_SECONDS));
+    }
+
+    public int endingSeconds(@NotNull MiniGameArena arena) {
+        return Math.max(1, arena.get("endingSeconds", Integer.class, BoatRaceConfig.DEFAULT_ENDING_SECONDS));
     }
 
     public int stageProgress(@NotNull MiniGamePlayer player) {

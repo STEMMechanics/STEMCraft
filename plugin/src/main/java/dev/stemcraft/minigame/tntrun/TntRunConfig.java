@@ -18,9 +18,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class TntRunConfig {
-    private static final int DEFAULT_START_COUNTDOWN_SECONDS = 10;
+    static final int DEFAULT_START_COUNTDOWN_SECONDS = 30;
     private static final int DEFAULT_ROUND_SECONDS = 180;
-    private static final int DEFAULT_ENDING_SECONDS = 8;
+    static final int DEFAULT_ENDING_SECONDS = 20;
     private static final int DEFAULT_FADE_DELAY_TICKS = 8;
 
     private final STEMCraftAPI api;
@@ -55,7 +55,6 @@ public class TntRunConfig {
         }
 
         SCRegion arenaRegion = loadRegion(section, world, arenaId);
-        List<SCRegion> floorRegions = loadRegions(section, world, arenaId);
         List<Location> startingGrid = loadLocations(section, world, arenaId);
         int minPlayers = section.getInt("min-players", 2);
         int maxPlayers = section.getInt("max-players", Math.max(2, startingGrid.size()));
@@ -74,7 +73,6 @@ public class TntRunConfig {
             lobby,
             spectator,
             arenaRegion,
-            floorRegions,
             startingGrid,
             minPlayers,
             maxPlayers,
@@ -97,7 +95,6 @@ public class TntRunConfig {
         arenaConfig.set("lobby", serializeLocation(arena.getLobbySpawn(), arena.id(), "lobby"));
         arenaConfig.set("spectator", serializeLocation(arena.getSpectatorSpawn(), arena.id(), "spectator"));
         arenaConfig.set("arena", serializeRegion(arena.get("arenaRegion", SCRegion.class), arena.id(), "arena"));
-        arenaConfig.set("floors", serializeRegions(floorRegions(arena), arena.id()));
         arenaConfig.set("starting-grid", serializeLocations(startingGrid(arena), arena.id()));
         arenaConfig.set("min-players", arena.getMinPlayers());
         arenaConfig.set("max-players", arena.getMaxPlayers());
@@ -147,13 +144,8 @@ public class TntRunConfig {
     }
 
     @SuppressWarnings("unchecked")
-    private @NotNull List<SCRegion> floorRegions(@NotNull MiniGameArena arena) {
-        return arena.getOrCreate("floorRegions", List.class, ArrayList::new);
-    }
-
-    @SuppressWarnings("unchecked")
     private @NotNull List<Location> startingGrid(@NotNull MiniGameArena arena) {
-        return arena.getOrCreate("startingGrid", List.class, ArrayList::new);
+        return arena.getOrCreate("startingGrid", List.class, java.util.ArrayList::new);
     }
 
     private void validateArenaForSave(@NotNull MiniGameArena arena) {
@@ -165,9 +157,6 @@ public class TntRunConfig {
         }
         if (arena.get("arenaRegion", SCRegion.class) == null) {
             throw new MiniGameInvalidArenaConfigException("Arena '" + arena.id() + "' is missing an arena region.");
-        }
-        if (floorRegions(arena).isEmpty()) {
-            throw new MiniGameInvalidArenaConfigException("Arena '" + arena.id() + "' is missing floor regions.");
         }
         if (startingGrid(arena).isEmpty()) {
             throw new MiniGameInvalidArenaConfigException("Arena '" + arena.id() + "' is missing starting grid locations.");
@@ -185,26 +174,6 @@ public class TntRunConfig {
             throw new MiniGameInvalidArenaConfigException("Arena" + " region for arena '" + arenaId + "' is invalid.");
         }
         return region;
-    }
-
-    private @NotNull List<SCRegion> loadRegions(@NotNull ConfigSection section, @NotNull World world, @NotNull String arenaId) {
-        List<SCRegion> regions = new ArrayList<>();
-        List<String> values = section.getStringList("floors");
-        int index = 1;
-        for (String value : values) {
-            if (value == null || value.isBlank()) {
-                index++;
-                continue;
-            }
-
-            SCRegion region = SCRegion.fromString(value, world);
-            if (region == null) {
-                throw new MiniGameInvalidArenaConfigException("Floor" + " region #" + index + " for arena '" + arenaId + "' is invalid.");
-            }
-            regions.add(region);
-            index++;
-        }
-        return regions;
     }
 
     private @Nullable Location loadLocation(@NotNull ConfigSection section, @NotNull World world, @NotNull String arenaId, @NotNull String key, boolean required) {
@@ -270,17 +239,6 @@ public class TntRunConfig {
             throw new MiniGameInvalidArenaConfigException("Arena '" + arenaId + "' is missing " + name + ".");
         }
         return region.toString();
-    }
-
-    private @NotNull List<String> serializeRegions(@NotNull List<SCRegion> regions, @NotNull String arenaId) {
-        if (regions.isEmpty()) {
-            throw new MiniGameInvalidArenaConfigException("Arena '" + arenaId + "' is missing " + "floors" + ".");
-        }
-        List<String> values = new ArrayList<>();
-        for (SCRegion region : regions) {
-            values.add(serializeRegion(region, arenaId, "floors"));
-        }
-        return values;
     }
 
     private void ensureLoaded() {

@@ -40,7 +40,7 @@ public class TntRunCommand {
 
         api.commands().create("tntrun")
             .permission("stemcraft.command.tntrun")
-            .usage("/tntrun <list|info|create|delete|join|joinall|spectate|leave|start|stop|restart|save|reload|validate|enable|disable|set|addspawn|setspawn|removespawn|addfloor|setfloor|removefloor|select|sel|show>")
+            .usage("/tntrun <list|info|create|delete|join|joinall|spectate|leave|start|stop|restart|save|reload|validate|enable|disable|set|addspawn|setspawn|removespawn|select|sel|show>")
             .tabCompletion("list")
             .tabCompletion("list", "{int}")
             .tabCompletion("info", "{tntrun-arenas}")
@@ -74,16 +74,11 @@ public class TntRunCommand {
             .tabCompletion("addspawn", "{tntrun-arenas}")
             .tabCompletion("setspawn", "{tntrun-arenas}", "{int}")
             .tabCompletion("removespawn", "{tntrun-arenas}", "{int}")
-            .tabCompletion("addfloor", "{tntrun-arenas}")
-            .tabCompletion("setfloor", "{tntrun-arenas}", "{int}")
-            .tabCompletion("removefloor", "{tntrun-arenas}", "{int}")
             .tabCompletion("select", "{tntrun-arenas}", "arena")
-            .tabCompletion("select", "{tntrun-arenas}", "floor", "{int}")
             .tabCompletion("select", "{tntrun-arenas}", "spawn", "{int}")
             .tabCompletion("select", "{tntrun-arenas}", "lobby")
             .tabCompletion("select", "{tntrun-arenas}", "spectator")
             .tabCompletion("sel", "{tntrun-arenas}", "arena")
-            .tabCompletion("sel", "{tntrun-arenas}", "floor", "{int}")
             .tabCompletion("sel", "{tntrun-arenas}", "spawn", "{int}")
             .tabCompletion("sel", "{tntrun-arenas}", "lobby")
             .tabCompletion("sel", "{tntrun-arenas}", "spectator")
@@ -114,9 +109,6 @@ public class TntRunCommand {
                     case "addspawn" -> commandAddSpawn(ctx);
                     case "setspawn" -> commandSetSpawn(ctx);
                     case "removespawn" -> commandRemoveSpawn(ctx);
-                    case "addfloor" -> commandAddFloor(ctx);
-                    case "setfloor" -> commandSetFloor(ctx);
-                    case "removefloor" -> commandRemoveFloor(ctx);
                     case "select", "sel" -> commandSelect(ctx);
                     case "show" -> commandShow(ctx);
                     default -> ctx.returnUsage();
@@ -199,10 +191,9 @@ public class TntRunCommand {
         ctx.info(" - Lobby: " + formatLocation(arena.getLobbySpawn()));
         ctx.info(" - Spectator: " + formatLocation(arena.getSpectatorSpawn()));
         ctx.info(" - Arena region: " + formatRegion(arena.get("arenaRegion", SCRegion.class)));
-        ctx.info(" - Floor regions: " + tntRun.floorRegions(arena).size());
-        for (int i = 0; i < tntRun.floorRegions(arena).size(); i++) {
-            ctx.info("   - Floor " + (i + 1) + ": " + formatRegion(tntRun.floorRegions(arena).get(i)));
-        }
+        SCRegion arenaRegion = arena.get("arenaRegion", SCRegion.class);
+        int bottomY = arenaRegion == null ? 0 : arenaRegion.getMinimumLocation().getBlockY();
+        ctx.info(" - Bottom Y: " + bottomY);
         ctx.info(" - Starting grid slots: " + tntRun.startingGrid(arena).size());
         for (int i = 0; i < tntRun.startingGrid(arena).size(); i++) {
             ctx.info("   - Spawn " + (i + 1) + ": " + formatLocation(tntRun.startingGrid(arena).get(i)));
@@ -210,8 +201,8 @@ public class TntRunCommand {
         ctx.info(" - Void Y: " + arena.get("voidY", Integer.class, arena.world().getMinHeight()));
         ctx.info(" - Fade delay ticks: " + arena.get("fadeDelayTicks", Integer.class, 8));
         ctx.info(" - Round seconds: " + arena.get("roundSeconds", Integer.class, 180));
-        ctx.info(" - Start countdown: " + arena.get("startCountdownSeconds", Integer.class, 10));
-        ctx.info(" - Ending seconds: " + arena.get("endingSeconds", Integer.class, 8));
+        ctx.info(" - Start countdown: " + tntRun.startCountdownSeconds(arena) + " sec");
+        ctx.info(" - Reset countdown: " + tntRun.endingSeconds(arena) + " sec");
         if (validation.hasErrors()) {
             ctx.warn(" - Validation: failed");
             for (String error : validation.getErrors()) {
@@ -292,30 +283,48 @@ public class TntRunCommand {
         int joined = 0;
         int spectating = 0;
         int skipped = 0;
-        for (Player targetPlayer : Bukkit.getOnlinePlayers()) {
-            MiniGameArena existingArena = tntRun.minigame().findPlayer(targetPlayer);
-            if (existingArena != null) {
-                skipped++;
-                continue;
-            }
+        boolean suppressAutoStart = !spectateOnly && arena.getStatus() == MiniGameArena.ArenaStatus.WAITING;
+        if (suppressAutoStart) {
+            arena.set("suppressAutoStart", true);
+        }
+        try {
+            for (Player targetPlayer : Bukkit.getOnlinePlayers()) {
+                MiniGameArena existingArena = tntRun.minigame().findPlayer(targetPlayer);
+                if (existingArena != null) {
+                    skipped++;
+                    continue;
+                }
 
-            if (spectateOnly) {
-                arena.addSpectator(targetPlayer);
-                if (arena.hasSpectator(targetPlayer)) {
+                if (spectateOnly) {
+                    arena.addSpectator(targetPlayer);
+                    if (arena.hasSpectator(targetPlayer)) {
+                        spectating++;
+                    } else {
+                        skipped++;
+                    }
+                    continue;
+                }
+
+                arena.addPlayer(targetPlayer);
+                if (arena.hasPlayer(targetPlayer)) {
+                    joined++;
+                } else if (arena.hasSpectator(targetPlayer)) {
                     spectating++;
                 } else {
                     skipped++;
                 }
-                continue;
             }
+        } finally {
+            if (suppressAutoStart) {
+                arena.set("suppressAutoStart", false);
+            }
+        }
 
-            arena.addPlayer(targetPlayer);
-            if (arena.hasPlayer(targetPlayer)) {
-                joined++;
-            } else if (arena.hasSpectator(targetPlayer)) {
-                spectating++;
-            } else {
-                skipped++;
+        if (!spectateOnly && tntRun.minigame().handler() instanceof TntRunArenaHandler handler) {
+            if (arena.getStatus() == MiniGameArena.ArenaStatus.WAITING) {
+                api.tasks().runLater(2L, () -> handler.queueAutoStartIfReady(arena));
+            } else if (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING) {
+                handler.scheduleStartingGridRefresh(arena, 2L);
             }
         }
 
@@ -363,7 +372,7 @@ public class TntRunCommand {
             ctx.returnError("Arena '" + arena.id() + "' needs at least " + arena.getMinPlayers() + " players to start.");
         }
 
-        arena.setStatus(MiniGameArena.ArenaStatus.STARTING, arena.get("startCountdownSeconds", Integer.class, 10));
+        arena.setStatus(MiniGameArena.ArenaStatus.STARTING, tntRun.startCountdownSeconds(arena));
         ctx.success("Arena '" + arena.id() + "' is starting.");
     }
 
@@ -509,13 +518,13 @@ public class TntRunCommand {
             }
             case "startcountdown" -> {
                 ctx.checkArgsSizeAtLeast(4);
-                int seconds = ctx.getArgAsInt(3, 10, 1, null);
+                int seconds = ctx.getArgAsInt(3, TntRunConfig.DEFAULT_START_COUNTDOWN_SECONDS, 1, null);
                 arena.set("startCountdownSeconds", seconds);
                 ctx.success("Start countdown set to " + seconds + " seconds for arena '" + arena.id() + "'.");
             }
             case "endingseconds" -> {
                 ctx.checkArgsSizeAtLeast(4);
-                int seconds = ctx.getArgAsInt(3, 8, 1, null);
+                int seconds = ctx.getArgAsInt(3, TntRunConfig.DEFAULT_ENDING_SECONDS, 1, null);
                 arena.set("endingSeconds", seconds);
                 ctx.success("Ending countdown set to " + seconds + " seconds for arena '" + arena.id() + "'.");
             }
@@ -564,38 +573,6 @@ public class TntRunCommand {
         ctx.success("Removed spawn " + (index + 1) + " from arena '" + arena.id() + "'.");
     }
 
-    private void commandAddFloor(CommandContext ctx) {
-        Player player = requirePlayer(ctx);
-        MiniGameArena arena = requireArena(ctx);
-        SCRegion selection = requireSelection(ctx, player);
-        ensureArenaWorld(ctx, arena, selection, "Floor region");
-        ensureRegionContained(ctx, selection, arena.get("arenaRegion", SCRegion.class));
-        tntRun.floorRegions(arena).add(selection.copy());
-        showRegionPreview(player, "floor-add", selection);
-        ctx.success("Added floor " + tntRun.floorRegions(arena).size() + " to arena '" + arena.id() + "'.");
-    }
-
-    private void commandSetFloor(CommandContext ctx) {
-        ctx.checkArgsSizeAtLeast(3);
-        Player player = requirePlayer(ctx);
-        MiniGameArena arena = requireArena(ctx);
-        int index = requireOneBasedIndex(ctx, 2, tntRun.floorRegions(arena).size(), "floor");
-        SCRegion selection = requireSelection(ctx, player);
-        ensureArenaWorld(ctx, arena, selection, "Floor region");
-        ensureRegionContained(ctx, selection, arena.get("arenaRegion", SCRegion.class));
-        tntRun.floorRegions(arena).set(index, selection.copy());
-        showRegionPreview(player, "floor-set-" + index, selection);
-        ctx.success("Updated floor " + (index + 1) + " for arena '" + arena.id() + "'.");
-    }
-
-    private void commandRemoveFloor(CommandContext ctx) {
-        ctx.checkArgsSizeAtLeast(3);
-        MiniGameArena arena = requireArena(ctx);
-        int index = requireOneBasedIndex(ctx, 2, tntRun.floorRegions(arena).size(), "floor");
-        tntRun.floorRegions(arena).remove(index);
-        ctx.success("Removed floor " + (index + 1) + " from arena '" + arena.id() + "'.");
-    }
-
     private void commandSelect(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
         Player player = requirePlayer(ctx);
@@ -615,15 +592,6 @@ public class TntRunCommand {
                 api.selections().setWorldEditSelection(player, region);
                 showRegionPreview(player, "select-arena", region);
                 ctx.success("WorldEdit selection updated from arena '" + arena.id() + "' (arena).");
-            }
-            case "floor" -> {
-                ctx.checkArgsSizeAtLeast(4);
-                int index = requireOneBasedIndex(ctx, 3, tntRun.floorRegions(arena).size(), "floor");
-                region = tntRun.floorRegions(arena).get(index);
-                requireSameWorld(ctx, player, region.getWorld().getName());
-                api.selections().setWorldEditSelection(player, region);
-                showRegionPreview(player, "select-floor-" + index, region);
-                ctx.success("WorldEdit selection updated from arena '" + arena.id() + "' (floor " + (index + 1) + ").");
             }
             case "spawn" -> {
                 ctx.checkArgsSizeAtLeast(4);
@@ -754,12 +722,6 @@ public class TntRunCommand {
         }
     }
 
-    private void ensureRegionContained(CommandContext ctx, SCRegion child, SCRegion parent) {
-        if (parent != null && !parent.contains(child)) {
-            ctx.returnError("Floor region" + " must be fully inside the " + "arena region" + ".");
-        }
-    }
-
     private void ensureLocationContained(CommandContext ctx, Location location, SCRegion parent) {
         if (parent != null && !parent.contains(location)) {
             ctx.returnError("Starting grid slot" + " must be inside the " + "arena region" + ".");
@@ -769,12 +731,6 @@ public class TntRunCommand {
     private void ensureArenaRegionAcceptsExistingGeometry(CommandContext ctx, MiniGameArena arena, SCRegion arenaRegion) {
         List<String> errors = new ArrayList<>();
 
-        for (int i = 0; i < tntRun.floorRegions(arena).size(); i++) {
-            SCRegion floor = tntRun.floorRegions(arena).get(i);
-            if (floor != null && !arenaRegion.contains(floor)) {
-                errors.add("floor " + (i + 1));
-            }
-        }
         for (int i = 0; i < tntRun.startingGrid(arena).size(); i++) {
             Location spawn = tntRun.startingGrid(arena).get(i);
             if (spawn != null && !arenaRegion.contains(spawn)) {

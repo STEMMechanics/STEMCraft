@@ -172,6 +172,8 @@ public class NightfallCommand {
         ctx.info(" - Players: " + arena.numPlayers() + "/" + arena.getMaxPlayers());
         ctx.info(" - Spectators: " + arena.numSpectators());
         ctx.info(" - Min players: " + arena.getMinPlayers());
+        ctx.info(" - Start countdown: " + nightfall.startCountdownSeconds(arena) + " sec");
+        ctx.info(" - Reset countdown: " + nightfall.endingSeconds(arena) + " sec");
         ctx.info(" - Lobby: " + formatLocation(arena.getLobbySpawn()));
         ctx.info(" - Spectator: " + formatLocation(arena.getSpectatorSpawn()));
         ctx.info(" - Spawn: " + formatLocation(nightfall.playSpawn(arena)));
@@ -356,7 +358,7 @@ public class NightfallCommand {
             return;
         }
 
-        arena.setStatus(MiniGameArena.ArenaStatus.STARTING, 5);
+        arena.setStatus(MiniGameArena.ArenaStatus.STARTING, nightfall.startCountdownSeconds(arena));
         ctx.success("Arena '" + arena.id() + "' is starting.");
     }
 
@@ -370,7 +372,7 @@ public class NightfallCommand {
         MiniGameArena arena = requireArena(ctx);
         arena.setStatus(MiniGameArena.ArenaStatus.RESETTING);
         if (arena.numPlayers() >= arena.getMinPlayers()) {
-            arena.setStatus(MiniGameArena.ArenaStatus.STARTING, 5);
+            arena.setStatus(MiniGameArena.ArenaStatus.STARTING, nightfall.startCountdownSeconds(arena));
             ctx.success("Arena '" + arena.id() + "' has been restarted.");
             return;
         }

@@ -16,7 +16,6 @@ public record TntRunArenaRecord(
         Location lobby,
         Location spectator,
         SCRegion arenaRegion,
-        List<SCRegion> floorRegions,
         List<Location> startingGrid,
         int minPlayers,
         int maxPlayers,
@@ -30,14 +29,12 @@ public record TntRunArenaRecord(
         lobby = clone(lobby);
         spectator = clone(spectator);
         arenaRegion = copy(arenaRegion);
-        floorRegions = copyRegions(floorRegions);
         startingGrid = copyLocations(startingGrid);
     }
 
     @Override public Location lobby() { return clone(lobby); }
     @Override public Location spectator() { return clone(spectator); }
     @Override public SCRegion arenaRegion() { return copy(arenaRegion); }
-    @Override public List<SCRegion> floorRegions() { return copyRegions(floorRegions); }
     @Override public List<Location> startingGrid() { return copyLocations(startingGrid); }
 
     public World world() {
@@ -57,15 +54,6 @@ public record TntRunArenaRecord(
         List<Location> copy = new ArrayList<>(list.size());
         for (Location l : list) {
             copy.add(l == null ? null : l.clone());
-        }
-        return List.copyOf(copy);
-    }
-
-    private static List<SCRegion> copyRegions(List<SCRegion> list) {
-        if (list == null) return List.of();
-        List<SCRegion> copy = new ArrayList<>(list.size());
-        for (SCRegion r : list) {
-            copy.add(r == null ? null : r.copy()); // implement if needed
         }
         return List.copyOf(copy);
     }

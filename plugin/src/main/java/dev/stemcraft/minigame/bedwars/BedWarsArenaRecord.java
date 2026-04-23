@@ -20,8 +20,11 @@ public record BedWarsArenaRecord(
         SCRegion arenaRegion,
         int minPlayers,
         int maxPlayers,
+        int startCountdownSeconds,
+        int endingSeconds,
         int teamSize,
         List<Material> dropItems,
+        List<Material> dropSurfaceMaterials,
         Map<String, TeamDef> teams
 ) {
     public BedWarsArenaRecord {
@@ -29,6 +32,7 @@ public record BedWarsArenaRecord(
         spectator = LocationUtil.copy(spectator);
         arenaRegion = copyRegion(arenaRegion);
         dropItems = dropItems == null ? List.of() : List.copyOf(dropItems);
+        dropSurfaceMaterials = dropSurfaceMaterials == null ? List.of() : List.copyOf(dropSurfaceMaterials);
         teams = teams == null ? Map.of() : Map.copyOf(teams);
     }
 

@@ -266,6 +266,8 @@ public class NightfallMiniGame extends BaseMiniGame {
             .setRegion(null)
             .set("arenaRegion", null)
             .set("playSpawn", world.getSpawnLocation())
+            .set("startCountdownSeconds", NightfallConfig.DEFAULT_START_COUNTDOWN_SECONDS)
+            .set("endingSeconds", NightfallConfig.DEFAULT_ENDING_SECONDS)
             .set("lives", 3)
             .set("prepSeconds", 300)
             .set("dayTimeSpeedMultiplier", 2.0d)
@@ -340,6 +342,8 @@ public class NightfallMiniGame extends BaseMiniGame {
                     .setMaxPlayers(arenaDef.maxPlayers())
                     .set("arenaRegion", arenaDef.arenaRegion())
                     .set("playSpawn", arenaDef.spawn())
+                    .set("startCountdownSeconds", arenaDef.startCountdownSeconds())
+                    .set("endingSeconds", arenaDef.endingSeconds())
                     .set("lives", arenaDef.lives())
                     .set("prepSeconds", arenaDef.prepSeconds())
                     .set("dayTimeSpeedMultiplier", arenaDef.dayTimeSpeedMultiplier())
@@ -459,6 +463,14 @@ public class NightfallMiniGame extends BaseMiniGame {
 
     public int totalLives(@NotNull MiniGameArena arena) {
         return Math.max(1, arena.get("lives", Integer.class, 3));
+    }
+
+    public int startCountdownSeconds(@NotNull MiniGameArena arena) {
+        return Math.max(1, arena.get("startCountdownSeconds", Integer.class, NightfallConfig.DEFAULT_START_COUNTDOWN_SECONDS));
+    }
+
+    public int endingSeconds(@NotNull MiniGameArena arena) {
+        return Math.max(1, arena.get("endingSeconds", Integer.class, NightfallConfig.DEFAULT_ENDING_SECONDS));
     }
 
     public int prepSeconds(@NotNull MiniGameArena arena) {

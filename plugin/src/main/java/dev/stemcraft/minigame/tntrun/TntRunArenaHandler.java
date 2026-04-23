@@ -23,15 +23,19 @@ import org.jetbrains.annotations.Nullable;
 import org.jspecify.annotations.NonNull;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Predicate;
 
 public class TntRunArenaHandler implements MiniGameArenaHandler {
     private static final int COUNTDOWN_BEEP_THRESHOLD = 5;
+    private static final long DECAY_SCAN_PERIOD_TICKS = 2L;
+    private static final long STATIONARY_DECAY_GRACE_TICKS = 8L;
 
     private final STEMCraftAPI api;
     private final TntRunMiniGame tntRun;
@@ -39,13 +43,15 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
     public TntRunArenaHandler(STEMCraftAPI api, TntRunMiniGame tntRun) {
         this.api = api;
         this.tntRun = tntRun;
+    }
+
+    public void initalize() {
         registerMovementListener();
     }
 
     @Override
     public void validate(@NonNull MiniGameArena arena, ArenaValidationResult result) {
         SCRegion arenaRegion = arena.get("arenaRegion", SCRegion.class);
-        List<SCRegion> floorRegions = tntRun.floorRegions(arena);
         List<Location> startingGrid = tntRun.startingGrid(arena);
 
         if (arena.getLobbySpawn() == null) {
@@ -56,9 +62,6 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
         }
         if (arenaRegion == null) {
             result.addError("Arena region is not defined.", "arenaRegion");
-        }
-        if (floorRegions.isEmpty()) {
-            result.addError("At least one floor region must be configured.", "floors");
         }
         if (startingGrid.isEmpty()) {
             result.addError("Starting grid locations are not defined.", "startingGrid");
@@ -74,13 +77,6 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
         }
 
         if (arenaRegion != null) {
-            for (int i = 0; i < floorRegions.size(); i++) {
-                SCRegion floor = floorRegions.get(i);
-                if (!arenaRegion.contains(floor)) {
-                    result.addError("Floor region " + (i + 1) + " must be inside the arena region.", "floors." + i);
-                }
-            }
-
             for (int i = 0; i < startingGrid.size(); i++) {
                 Location grid = startingGrid.get(i);
                 if (grid == null || grid.getWorld() == null) {
@@ -95,23 +91,26 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
             }
 
             if (voidY(arena) >= arenaRegion.getMinimumLocation().getBlockY()) {
-                result.addError("Void Y must be below the arena floor.", "voidY");
+                result.addError("Void Y must be below the arena minimum Y.", "voidY");
             }
         }
     }
 
     @Override
     public void onArenaLoad(MiniGameArena arena) {
-        captureFloorSnapshot(arena);
+        captureArenaSnapshot(arena);
         clearRoundState(arena);
-        resetFloor(arena);
+        resetArenaBlocks(arena);
     }
 
     @Override
     public void onArenaUnload(MiniGameArena arena) {
         clearRoundState(arena);
-        resetFloor(arena);
+        if (shouldRestoreSnapshotOnUnload(arena.getStatus())) {
+            resetArenaBlocks(arena);
+        }
         clearPendingDecayTasks(arena);
+        cancelDecayTracker(arena);
     }
 
     @Override
@@ -135,11 +134,14 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
         }
 
         if (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING || arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING) {
-            if (event.getCause() == EntityDamageEvent.DamageCause.VOID
-                || player.getHealth() - event.getFinalDamage() <= 0.0d) {
-                eliminatePlayer(arena, player);
+            if (event.getCause() == EntityDamageEvent.DamageCause.FALL) {
+                return HandlerEventResult.DENY;
             }
-            return HandlerEventResult.DENY;
+            if (shouldEliminateOnDamage(player, event)) {
+                eliminatePlayer(arena, player);
+                return HandlerEventResult.DENY;
+            }
+            return allowsLiveDamage(event) ? HandlerEventResult.ALLOW : HandlerEventResult.DENY;
         }
 
         return HandlerEventResult.DENY;
@@ -155,30 +157,38 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
         if (newStatus == MiniGameArena.ArenaStatus.WAITING) {
             arena.stopWinnerCelebration();
             clearPendingDecayTasks(arena);
-            resetFloor(arena);
+            cancelDecayTracker(arena);
+            clearOccupiedSupportTracking(arena);
+            resetArenaBlocks(arena);
             reviveEliminatedSpectators(arena);
             teleportPlayersToLobby(arena);
             teleportSpectators(arena);
+            queueAutoStartIfReady(arena);
             return;
         }
 
         if (newStatus == MiniGameArena.ArenaStatus.STARTING) {
             tntRun.setWinner(arena, null);
             clearPendingDecayTasks(arena);
-            resetFloor(arena);
+            cancelDecayTracker(arena);
+            clearOccupiedSupportTracking(arena);
+            captureArenaSnapshot(arena);
             prepareStartingGrid(arena);
+            scheduleStartingGridRefresh(arena, 1L);
             broadcastToOccupants(arena, "<gold>TNT Run is starting.</gold>");
             return;
         }
 
         if (newStatus == MiniGameArena.ArenaStatus.RUNNING) {
             prepareRunningPlayers(arena);
-            broadcastToOccupants(arena, "<red>Run!</red> <gray>The floor is collapsing.</gray>");
+            startDecayTracker(arena);
+            broadcastToOccupants(arena, "<red>Run!</red> <gray>The arena is collapsing.</gray>");
             playSoundToOccupants(arena, Sound.ENTITY_ENDER_DRAGON_GROWL, 0.5f, 1.5f);
             return;
         }
 
         if (newStatus == MiniGameArena.ArenaStatus.ENDING) {
+            cancelDecayTracker(arena);
             Player winner = resolveWinnerPlayer(arena);
             tntRun.setWinner(arena, winner);
             if (winner != null) {
@@ -194,8 +204,7 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
         }
 
         if (newStatus == MiniGameArena.ArenaStatus.RESETTING) {
-            clearPendingDecayTasks(arena);
-            resetFloor(arena);
+            resetArenaAfterRound(arena);
             arena.setStatus(MiniGameArena.ArenaStatus.WAITING);
         }
     }
@@ -246,14 +255,10 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
             return arena.getLobbySpawn();
         }
 
-        if (arena.getStatus() == MiniGameArena.ArenaStatus.WAITING && arena.numPlayers() >= arena.getMinPlayers()) {
-            api.tasks().nextTick(() -> {
-                if (arena.getStatus() == MiniGameArena.ArenaStatus.WAITING && arena.numPlayers() >= arena.getMinPlayers()) {
-                    arena.setStatus(MiniGameArena.ArenaStatus.STARTING, startCountdownSeconds(arena));
-                }
-            });
+        if (arena.getStatus() == MiniGameArena.ArenaStatus.WAITING) {
+            queueAutoStartIfReady(arena);
         } else if (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING) {
-            api.tasks().nextTick(() -> prepareStartingGrid(arena));
+            api.tasks().runLater(1L, () -> prepareStartingGrid(arena));
         }
 
         return arena.getLobbySpawn();
@@ -296,8 +301,10 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
                 return;
             }
 
+            SCRegion arenaRegion = arena.get("arenaRegion", SCRegion.class);
+            Predicate<Location> insideArena = arenaRegion == null ? null : arenaRegion::contains;
             if (arena.hasSpectator(player)) {
-                if (player.getY() <= voidY(arena)) {
+                if (shouldResetSpectatorPosition(to, insideArena, voidY(arena))) {
                     Location spectatorSpawn = arena.getSpectatorSpawn() != null ? arena.getSpectatorSpawn() : arena.getLobbySpawn();
                     if (spectatorSpawn != null) {
                         player.teleport(spectatorSpawn);
@@ -315,7 +322,7 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
                 return;
             }
 
-            if (to.getY() <= voidY(arena)) {
+            if (shouldEliminateRunner(to, insideArena, voidY(arena))) {
                 eliminatePlayer(arena, player);
                 return;
             }
@@ -353,11 +360,54 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
 
     private void scheduleDecayUnderLocation(@NotNull MiniGameArena arena, @NotNull Location location) {
         for (Block block : supportingBlocks(location)) {
-            if (!isFloorBlock(arena, block)) {
+            if (!isDecayBlock(arena, block)) {
                 continue;
             }
             scheduleBlockDecay(arena, block);
         }
+    }
+
+    void scheduleDecayUnderActivePlayers(@NotNull MiniGameArena arena) {
+        Map<String, Block> occupiedSupports = occupiedSupportBlocks(arena);
+        for (String blockKey : updateOccupiedSupportAges(arena, occupiedSupports.keySet())) {
+            Block block = occupiedSupports.get(blockKey);
+            if (block != null) {
+                scheduleBlockDecay(arena, block);
+            }
+        }
+    }
+
+    private @NotNull Map<String, Block> occupiedSupportBlocks(@NotNull MiniGameArena arena) {
+        Map<String, Block> occupiedSupports = new LinkedHashMap<>();
+        for (Player player : arena.getPlayers()) {
+            for (Block block : supportingBlocks(player.getLocation())) {
+                if (!isDecayBlock(arena, block)) {
+                    continue;
+                }
+                occupiedSupports.put(blockKey(block), block);
+            }
+        }
+        return occupiedSupports;
+    }
+
+    @SuppressWarnings("unchecked")
+    private @NotNull Map<String, Long> occupiedSupportAges(@NotNull MiniGameArena arena) {
+        return arena.getOrCreate("occupiedSupportAges", Map.class, LinkedHashMap::new);
+    }
+
+    @NotNull Set<String> updateOccupiedSupportAges(@NotNull MiniGameArena arena, @NotNull Set<String> occupiedKeys) {
+        Map<String, Long> ages = occupiedSupportAges(arena);
+        ages.keySet().removeIf(key -> !occupiedKeys.contains(key));
+
+        Set<String> ready = new LinkedHashSet<>();
+        for (String key : occupiedKeys) {
+            long ticks = ages.getOrDefault(key, 0L) + DECAY_SCAN_PERIOD_TICKS;
+            ages.put(key, ticks);
+            if (ticks >= STATIONARY_DECAY_GRACE_TICKS) {
+                ready.add(key);
+            }
+        }
+        return ready;
     }
 
     private @NotNull Set<Block> supportingBlocks(@NotNull Location location) {
@@ -380,16 +430,26 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
         return blocks;
     }
 
-    private boolean isFloorBlock(@NotNull MiniGameArena arena, @NotNull Block block) {
-        if (block.getType().isAir()) {
+    boolean shouldEliminateRunner(@Nullable Location to, @Nullable Predicate<Location> insideArena, int voidY) {
+        if (to == null) {
             return false;
         }
-        for (SCRegion floor : tntRun.floorRegions(arena)) {
-            if (floor.contains(block.getLocation())) {
-                return true;
-            }
+        if (to.getY() <= voidY) {
+            return true;
         }
-        return false;
+        return insideArena != null && !insideArena.test(to);
+    }
+
+    boolean shouldResetSpectatorPosition(@Nullable Location to, @Nullable Predicate<Location> insideArena, int voidY) {
+        return shouldEliminateRunner(to, insideArena, voidY);
+    }
+
+    private boolean isDecayBlock(@NotNull MiniGameArena arena, @NotNull Block block) {
+        if (block.getType().isAir() || !block.getType().isSolid()) {
+            return false;
+        }
+        SCRegion arenaRegion = arena.get("arenaRegion", SCRegion.class);
+        return arenaRegion != null && arenaRegion.contains(block.getLocation());
     }
 
     private void scheduleBlockDecay(@NotNull MiniGameArena arena, @NotNull Block block) {
@@ -401,7 +461,7 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
 
         api.tasks().runOnceDelay(decayTaskId(arena, locationKey), fadeDelayTicks(arena), () -> {
             pending.remove(locationKey);
-            if (!isFloorBlock(arena, block)) {
+            if (!isDecayBlock(arena, block)) {
                 return;
             }
             block.setType(org.bukkit.Material.AIR, false);
@@ -534,43 +594,44 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
         }
     }
 
-    private void captureFloorSnapshot(@NotNull MiniGameArena arena) {
-        Map<String, BlockSnapshot> snapshot = floorSnapshot(arena);
+    void captureArenaSnapshot(@NotNull MiniGameArena arena) {
+        SCRegion arenaRegion = arena.get("arenaRegion", SCRegion.class);
+        Map<String, BlockSnapshot> snapshot = arenaSnapshot(arena);
         snapshot.clear();
+        if (arenaRegion == null) {
+            return;
+        }
 
-        for (SCRegion floor : tntRun.floorRegions(arena)) {
-            Location min = floor.getMinimumLocation();
-            Location max = floor.getMaximumLocation();
-            for (int x = min.getBlockX(); x <= max.getBlockX(); x++) {
-                for (int y = min.getBlockY(); y <= max.getBlockY(); y++) {
-                    for (int z = min.getBlockZ(); z <= max.getBlockZ(); z++) {
-                        Location location = new Location(arena.world(), x, y, z);
-                        if (!floor.contains(location)) {
-                            continue;
-                        }
-                        Block block = arena.world().getBlockAt(x, y, z);
-                        snapshot.put(blockKey(block), new BlockSnapshot(block.getType().name(), block.getBlockData().getAsString()));
+        Location min = arenaRegion.getMinimumLocation();
+        Location max = arenaRegion.getMaximumLocation();
+        for (int x = min.getBlockX(); x <= max.getBlockX(); x++) {
+            for (int y = min.getBlockY(); y <= max.getBlockY(); y++) {
+                for (int z = min.getBlockZ(); z <= max.getBlockZ(); z++) {
+                    Location location = new Location(arena.world(), x, y, z);
+                    if (!arenaRegion.contains(location)) {
+                        continue;
                     }
+                    snapshotBlock(snapshot, arena.world().getBlockAt(x, y, z));
                 }
             }
         }
     }
 
-    private void resetFloor(@NotNull MiniGameArena arena) {
-        for (Map.Entry<String, BlockSnapshot> entry : floorSnapshot(arena).entrySet()) {
+    void resetArenaBlocks(@NotNull MiniGameArena arena) {
+        for (Map.Entry<String, BlockSnapshot> entry : arenaSnapshot(arena).entrySet()) {
             String[] coords = entry.getKey().split(",");
             Block block = arena.world().getBlockAt(
                 Integer.parseInt(coords[0]),
                 Integer.parseInt(coords[1]),
                 Integer.parseInt(coords[2])
             );
-            entry.getValue().apply(block);
+            applySnapshot(block, entry.getValue());
         }
     }
 
     @SuppressWarnings("unchecked")
-    private @NotNull Map<String, BlockSnapshot> floorSnapshot(@NotNull MiniGameArena arena) {
-        return arena.getOrCreate("floorSnapshot", Map.class, LinkedHashMap::new);
+    private @NotNull Map<String, BlockSnapshot> arenaSnapshot(@NotNull MiniGameArena arena) {
+        return arena.getOrCreate("arenaSnapshot", Map.class, LinkedHashMap::new);
     }
 
     @SuppressWarnings("unchecked")
@@ -581,7 +642,15 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
     private void clearRoundState(@NotNull MiniGameArena arena) {
         clearPendingDecayTasks(arena);
         pendingDecays(arena).clear();
+        clearOccupiedSupportTracking(arena);
         tntRun.resetRoundState(arena);
+    }
+
+    void resetArenaAfterRound(@NotNull MiniGameArena arena) {
+        arena.stopWinnerCelebration();
+        clearRoundState(arena);
+        resetArenaBlocks(arena);
+        arena.removeAllOccupants();
     }
 
     private void clearPendingDecayTasks(@NotNull MiniGameArena arena) {
@@ -591,12 +660,55 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
         pendingDecays(arena).clear();
     }
 
-    private @Nullable Player resolveWinnerPlayer(@NotNull MiniGameArena arena) {
-        return arena.numPlayers() == 1 ? arena.getPlayers().getFirst() : null;
+    private void clearOccupiedSupportTracking(@NotNull MiniGameArena arena) {
+        occupiedSupportAges(arena).clear();
     }
 
-    private int startCountdownSeconds(@NotNull MiniGameArena arena) {
-        return arena.get("startCountdownSeconds", Integer.class, 10);
+    void startDecayTracker(@NotNull MiniGameArena arena) {
+        String taskId = decayScanTaskId(arena);
+        api.tasks().cancel(taskId);
+        api.tasks().repeating(taskId, 0L, DECAY_SCAN_PERIOD_TICKS, () -> {
+            if (arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
+                api.tasks().cancel(taskId);
+                return;
+            }
+
+            scheduleDecayUnderActivePlayers(arena);
+        });
+    }
+
+    void cancelDecayTracker(@NotNull MiniGameArena arena) {
+        api.tasks().cancel(decayScanTaskId(arena));
+    }
+
+    void scheduleStartingGridRefresh(@NotNull MiniGameArena arena, long delayTicks) {
+        api.tasks().runLater(delayTicks, () -> {
+            if (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING) {
+                prepareStartingGrid(arena);
+            }
+        });
+    }
+
+    void queueAutoStartIfReady(@NotNull MiniGameArena arena) {
+        if (arena.get("suppressAutoStart", Boolean.class, false)) {
+            return;
+        }
+        if (arena.getStatus() != MiniGameArena.ArenaStatus.WAITING || arena.numPlayers() < arena.getMinPlayers()) {
+            return;
+        }
+
+        api.tasks().runLater(1L, () -> {
+            if (arena.get("suppressAutoStart", Boolean.class, false)) {
+                return;
+            }
+            if (arena.getStatus() == MiniGameArena.ArenaStatus.WAITING && arena.numPlayers() >= arena.getMinPlayers()) {
+                arena.setStatus(MiniGameArena.ArenaStatus.STARTING, tntRun.startCountdownSeconds(arena));
+            }
+        });
+    }
+
+    private @Nullable Player resolveWinnerPlayer(@NotNull MiniGameArena arena) {
+        return arena.numPlayers() == 1 ? arena.getPlayers().getFirst() : null;
     }
 
     private int roundSeconds(@NotNull MiniGameArena arena) {
@@ -604,15 +716,55 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
     }
 
     private int endingSeconds(@NotNull MiniGameArena arena) {
-        return arena.get("endingSeconds", Integer.class, 8);
+        return tntRun.endingSeconds(arena);
     }
 
     private int fadeDelayTicks(@NotNull MiniGameArena arena) {
         return arena.get("fadeDelayTicks", Integer.class, 8);
     }
 
-    private int voidY(@NotNull MiniGameArena arena) {
-        return arena.get("voidY", Integer.class, arena.world().getMinHeight());
+    boolean shouldEliminateOnDamage(@NotNull Player player, @NotNull EntityDamageEvent event) {
+        return event.getCause() == EntityDamageEvent.DamageCause.VOID
+            || player.getHealth() - event.getFinalDamage() <= 0.0d;
+    }
+
+    boolean allowsLiveDamage(@NotNull EntityDamageEvent event) {
+        return switch (event.getCause()) {
+            case LAVA, FIRE, FIRE_TICK, HOT_FLOOR -> true;
+            default -> false;
+        };
+    }
+
+    int voidY(@NotNull MiniGameArena arena) {
+        SCRegion arenaRegion = arena.get("arenaRegion", SCRegion.class);
+        int configured = arena.get("voidY", Integer.class, Integer.MIN_VALUE);
+        int worldMinHeight = arena.world().getMinHeight();
+        Location arenaMinimum = arenaRegion == null ? null : arenaRegion.getMinimumLocation();
+        return resolveVoidY(arenaMinimum, configured, worldMinHeight);
+    }
+
+    int resolveVoidY(@Nullable Location arenaMinimum, int configuredVoidY, int worldMinHeight) {
+        int defaultVoidY = arenaMinimum == null
+            ? worldMinHeight
+            : arenaMinimum.getBlockY() - 6;
+
+        if (configuredVoidY == Integer.MIN_VALUE) {
+            return defaultVoidY;
+        }
+
+        // Older arenas persisted the create-time sentinel of world min-height.
+        if (arenaMinimum != null && configuredVoidY == worldMinHeight) {
+            return defaultVoidY;
+        }
+
+        return configuredVoidY;
+    }
+
+    boolean shouldRestoreSnapshotOnUnload(@NotNull MiniGameArena.ArenaStatus status) {
+        return switch (status) {
+            case STARTING, PREPARATION, RUNNING, COOLDOWN, ENDING, RESETTING -> true;
+            default -> false;
+        };
     }
 
     private void broadcastToOccupants(@NotNull MiniGameArena arena, @NotNull String message) {
@@ -631,15 +783,28 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
         return NamespaceId.of(TntRunMiniGame.namespace(), arena.id() + "_decay_" + locationKey.replace(',', '_'));
     }
 
+    private @NotNull String decayScanTaskId(@NotNull MiniGameArena arena) {
+        return NamespaceId.of(TntRunMiniGame.namespace(), arena.id() + "_decay_scan");
+    }
+
     private @NotNull String blockKey(@NotNull Block block) {
         return block.getX() + "," + block.getY() + "," + block.getZ();
     }
 
+    void applySnapshot(@NotNull Block block, @NotNull BlockSnapshot snapshot) {
+        Material material = Material.matchMaterial(snapshot.materialName());
+        block.setType(material == null ? Material.AIR : material, false);
+        block.setBlockData(createBlockData(snapshot.blockData()), false);
+    }
+
+    void snapshotBlock(@NotNull Map<String, BlockSnapshot> snapshot, @NotNull Block block) {
+        snapshot.put(blockKey(block), new BlockSnapshot(block.getType().name(), block.getBlockData().getAsString()));
+    }
+
+    org.bukkit.block.data.BlockData createBlockData(@NotNull String blockData) {
+        return Bukkit.createBlockData(blockData);
+    }
+
     private record BlockSnapshot(@NotNull String materialName, @NotNull String blockData) {
-        private void apply(@NotNull Block block) {
-            Material material = Material.matchMaterial(materialName);
-            block.setType(material == null ? Material.AIR : material, false);
-            block.setBlockData(Bukkit.createBlockData(blockData), false);
-        }
     }
 }

@@ -21,6 +21,8 @@ import java.util.Map;
 import java.util.UUID;
 
 public class BoatRaceConfig {
+    static final int DEFAULT_START_COUNTDOWN_SECONDS = 30;
+    static final int DEFAULT_ENDING_SECONDS = 20;
     private final STEMCraftAPI api;
     private ConfigSection config;
 
@@ -58,6 +60,8 @@ public class BoatRaceConfig {
         List<Location> grid = loadLocations(section, world, arenaId);
         int minPlayers = section.getInt("min-players", 1);
         int maxPlayers = section.getInt("max-players", Math.max(1, grid.size()));
+        int startCountdownSeconds = section.getInt("start-countdown-seconds", DEFAULT_START_COUNTDOWN_SECONDS);
+        int endingSeconds = section.getInt("ending-seconds", DEFAULT_ENDING_SECONDS);
         String name = section.getString("name", StringUtil.beautify(arenaId));
         Map<UUID, BoatRaceArenaRecord.BestTime> bestTimes = new LinkedHashMap<>();
         ConfigSection records = section.getSection("records", false);
@@ -101,6 +105,8 @@ public class BoatRaceConfig {
             grid,
             minPlayers,
             maxPlayers,
+            startCountdownSeconds,
+            endingSeconds,
             bestTimes
         );
     }
@@ -121,6 +127,8 @@ public class BoatRaceConfig {
         arenaConfig.set("starting-grid", serializeGridLocations(startingGrid(arena), arena.id()));
         arenaConfig.set("min-players", arena.getMinPlayers());
         arenaConfig.set("max-players", arena.getMaxPlayers());
+        arenaConfig.set("start-countdown-seconds", arena.get("startCountdownSeconds", Integer.class, DEFAULT_START_COUNTDOWN_SECONDS));
+        arenaConfig.set("ending-seconds", arena.get("endingSeconds", Integer.class, DEFAULT_ENDING_SECONDS));
         ConfigSection records = arenaConfig.createSection("records", true);
         for (BoatRaceArenaRecord.BestTime bestTime : bestTimes(arena).values()) {
             ConfigSection record = records.createSection(bestTime.playerId().toString(), true);

@@ -49,28 +49,39 @@ import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.projectiles.ProjectileSource;
+import org.bukkit.util.BoundingBox;
 import org.bukkit.util.Vector;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jspecify.annotations.NonNull;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.UUID;
 
 public class BridgeArenaHandler implements MiniGameArenaHandler {
     private static final int TEAM_SCORE_START = 7;
-    private static final int STARTING_COUNTDOWN_SECONDS = 30;
     private static final int RUNNING_COUNTDOWN_SECONDS = 300;
-    private static final int ENDING_COUNTDOWN_SECONDS = 15;
     private static final int DROP_INTERVAL_SECONDS = 30;
     private static final int TNT_FUSE_TICKS = 60;
-    private static final double DROP_SPAWN_Y_OFFSET = 1.15d;
+    private static final double DROP_SPAWN_Y_OFFSET = 0.15d;
+    private static final int DROP_LOCATION_ATTEMPTS = 64;
+    private static final int DROP_AVAILABILITY_CHECK_ATTEMPTS = 256;
+    private static final BlockFace[] DROP_SUPPORT_FACES = new BlockFace[] {
+        BlockFace.NORTH,
+        BlockFace.SOUTH,
+        BlockFace.EAST,
+        BlockFace.WEST,
+        BlockFace.NORTH_EAST,
+        BlockFace.NORTH_WEST,
+        BlockFace.SOUTH_EAST,
+        BlockFace.SOUTH_WEST
+    };
 
     private final STEMCraftAPI api;
     private final BridgeMiniGame bridge;
@@ -148,7 +159,6 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
     public void onArenaLoad(MiniGameArena arena) {
         placedBlocks(arena);
         arena.getOrCreate("trackedEntities", Set.class, HashSet::new);
-        arena.getOrCreate("dropSurfaces", List.class, ArrayList::new);
         String listenerPrefix = regionListenerPrefix(arena.id());
 
         SCRegion arenaRegion = arena.get("arenaRegion", SCRegion.class);
@@ -354,7 +364,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
         if (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING) {
             arena.setStatus(MiniGameArena.ArenaStatus.RUNNING, RUNNING_COUNTDOWN_SECONDS);
         } else if (arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING) {
-            arena.setStatus(MiniGameArena.ArenaStatus.ENDING, ENDING_COUNTDOWN_SECONDS);
+            arena.setStatus(MiniGameArena.ArenaStatus.ENDING, bridge.endingSeconds(arena));
         } else if (arena.getStatus() == MiniGameArena.ArenaStatus.ENDING) {
             arena.setStatus(MiniGameArena.ArenaStatus.RESETTING);
         }
@@ -363,7 +373,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
     @Override
     public Location onPlayerJoinArena(MiniGameArena arena, Player player) {
         if (arena.getStatus() == MiniGameArena.ArenaStatus.WAITING && arena.numPlayers() >= arena.getMinPlayers()) {
-            arena.setStatus(MiniGameArena.ArenaStatus.STARTING, STARTING_COUNTDOWN_SECONDS);
+            arena.setStatus(MiniGameArena.ArenaStatus.STARTING, bridge.startCountdownSeconds(arena));
         }
         clearPlayerInventory(player);
         return arena.getLobbySpawn();
@@ -387,7 +397,6 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
         arena.stopWinnerCelebration();
         clearPlacedBlocks(arena);
         clearTrackedEntities(arena);
-        rebuildDropSurfaces(arena);
         announceDropAvailability(arena);
         resetScores(arena);
         for (Player player : arena.getPlayers()) {
@@ -510,7 +519,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
         playSoundToOccupants(arena, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.85f, 1.2f);
 
         if (targetTeam.getScore() <= 0) {
-            arena.setStatus(MiniGameArena.ArenaStatus.ENDING, ENDING_COUNTDOWN_SECONDS);
+            arena.setStatus(MiniGameArena.ArenaStatus.ENDING, bridge.endingSeconds(arena));
             return;
         }
 
@@ -613,13 +622,18 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
             return;
         }
 
-        if (!dropSurfaces(arena).isEmpty()) {
+        if (bridge.dropSurfaceMaterials(arena).isEmpty()) {
+            broadcastInfoToOccupants(arena, "<yellow>Supply drops are disabled for this arena because no drop surface materials are configured.</yellow>");
+            return;
+        }
+
+        if (findRandomDropLocation(arena, ThreadLocalRandom.current(), DROP_AVAILABILITY_CHECK_ATTEMPTS) != null) {
             return;
         }
 
         java.util.logging.Logger.getLogger(BridgeArenaHandler.class.getName())
-            .warning("[STEMCraft] Bridge arena '" + arena.id() + "' has drop items configured but no valid drop surfaces were found.");
-        broadcastInfoToOccupants(arena, "<yellow>Supply drops are enabled, but this arena has no valid drop surfaces.</yellow>");
+            .warning("[STEMCraft] Bridge arena '" + arena.id() + "' has drop items configured but no valid drop locations matched the configured drop surface materials.");
+        broadcastInfoToOccupants(arena, "<yellow>Supply drops are enabled, but this arena has no valid drop locations for the configured drop surface materials.</yellow>");
     }
 
     private void startWinnerCelebration(MiniGameArena arena, MiniGameTeam winner) {
@@ -641,11 +655,11 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
         }
 
         if ("red".equalsIgnoreCase(winner.getName())) {
-            arena.startWinnerCelebration(celebrationAnchors, ENDING_COUNTDOWN_SECONDS, Color.RED, Color.ORANGE, Color.YELLOW);
+            arena.startWinnerCelebration(celebrationAnchors, bridge.endingSeconds(arena), Color.RED, Color.ORANGE, Color.YELLOW);
         } else if ("blue".equalsIgnoreCase(winner.getName())) {
-            arena.startWinnerCelebration(celebrationAnchors, ENDING_COUNTDOWN_SECONDS, Color.AQUA, Color.BLUE, Color.WHITE);
+            arena.startWinnerCelebration(celebrationAnchors, bridge.endingSeconds(arena), Color.AQUA, Color.BLUE, Color.WHITE);
         } else {
-            arena.startWinnerCelebration(celebrationAnchors, ENDING_COUNTDOWN_SECONDS);
+            arena.startWinnerCelebration(celebrationAnchors, bridge.endingSeconds(arena));
         }
     }
 
@@ -656,11 +670,6 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
     @SuppressWarnings("unchecked")
     private Set<UUID> trackedEntities(MiniGameArena arena) {
         return arena.getOrCreate("trackedEntities", Set.class, HashSet::new);
-    }
-
-    @SuppressWarnings("unchecked")
-    private List<Location> dropSurfaces(MiniGameArena arena) {
-        return arena.getOrCreate("dropSurfaces", List.class, ArrayList::new);
     }
 
     @SuppressWarnings("unchecked")
@@ -814,56 +823,78 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
         return arena.getOrCreate("blocks", Set.class, HashSet::new);
     }
 
-    private void rebuildDropSurfaces(@NotNull MiniGameArena arena) {
-        List<Location> surfaces = dropSurfaces(arena);
-        surfaces.clear();
-
+    @Nullable Location findRandomDropLocation(@NotNull MiniGameArena arena, @NotNull Random random, int attempts) {
         SCRegion arenaRegion = arena.get("arenaRegion", SCRegion.class);
         if (arenaRegion == null) {
-            return;
+            return null;
+        }
+
+        List<Material> allowedMaterials = bridge.dropSurfaceMaterials(arena);
+        if (allowedMaterials.isEmpty()) {
+            return null;
         }
 
         Location min = arenaRegion.getMinimumLocation();
         Location max = arenaRegion.getMaximumLocation();
-        for (int x = min.getBlockX(); x <= max.getBlockX(); x++) {
-            for (int z = min.getBlockZ(); z <= max.getBlockZ(); z++) {
-                Location surface = findSurfaceDropLocation(arenaRegion, x, z);
-                if (surface != null) {
-                    surfaces.add(surface);
-                }
-            }
+        int width = (max.getBlockX() - min.getBlockX()) + 1;
+        int depth = (max.getBlockZ() - min.getBlockZ()) + 1;
+        if (width <= 0 || depth <= 0) {
+            return null;
         }
-    }
 
-    private Location findSurfaceDropLocation(@NotNull SCRegion arenaRegion, int x, int z) {
-        Location min = arenaRegion.getMinimumLocation();
-        Location max = arenaRegion.getMaximumLocation();
-        for (int y = max.getBlockY(); y >= min.getBlockY(); y--) {
-            Block block = arenaRegion.getWorld().getBlockAt(x, y, z);
-            if (isValidDropSurface(arenaRegion, block)) {
-                return block.getLocation();
+        for (int attempt = 0; attempt < attempts; attempt++) {
+            int x = min.getBlockX() + random.nextInt(width);
+            int z = min.getBlockZ() + random.nextInt(depth);
+            Location dropLocation = highestDropLocation(arenaRegion, x, z, allowedMaterials);
+            if (dropLocation != null) {
+                return dropLocation;
             }
         }
         return null;
     }
 
-    private boolean isValidDropSurface(@NotNull SCRegion arenaRegion, @NotNull Block block) {
-        if (!arenaRegion.contains(block.getLocation())) {
-            return false;
+    private @Nullable Location highestDropLocation(@NotNull SCRegion arenaRegion, int x, int z, @NotNull List<Material> allowedMaterials) {
+        Location min = arenaRegion.getMinimumLocation();
+        Location max = arenaRegion.getMaximumLocation();
+        for (int y = max.getBlockY(); y >= min.getBlockY(); y--) {
+            Block block = arenaRegion.getWorld().getBlockAt(x, y, z);
+            if (!arenaRegion.contains(block.getLocation())) {
+                continue;
+            }
+            if (block.getType().isAir()) {
+                continue;
+            }
+            return dropSpawnLocation(block, allowedMaterials);
         }
+        return null;
+    }
 
-        Material type = block.getType();
-        if (type.isAir() || !type.isSolid() || type.name().contains("GLASS")) {
-            return false;
+    private @Nullable Location dropSpawnLocation(@NotNull Block block, @NotNull List<Material> allowedMaterials) {
+        if (!allowedMaterials.contains(block.getType())) {
+            return null;
         }
-
+        if (!hasSolidDropSupport(block)) {
+            return null;
+        }
         Block above = block.getRelative(BlockFace.UP);
         Block aboveTwo = above.getRelative(BlockFace.UP);
-        Location dropLocation = block.getLocation().add(0.5d, DROP_SPAWN_Y_OFFSET, 0.5d);
-        return above.isPassable()
-            && aboveTwo.isPassable()
-            && arenaRegion.contains(above.getLocation())
-            && arenaRegion.contains(dropLocation);
+        BoundingBox blockBox = block.getBoundingBox();
+        Location dropLocation = new Location(
+            block.getWorld(),
+            block.getX() + 0.5d,
+            blockBox.getMaxY() + DROP_SPAWN_Y_OFFSET,
+            block.getZ() + 0.5d
+        );
+        return above.isPassable() && aboveTwo.isPassable() ? dropLocation : null;
+    }
+
+    private boolean hasSolidDropSupport(@NotNull Block block) {
+        for (BlockFace face : DROP_SUPPORT_FACES) {
+            if (!block.getRelative(face).getType().isSolid()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private void spawnRandomDrop(@NotNull MiniGameArena arena) {
@@ -872,33 +903,18 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
             return;
         }
 
-        List<Location> surfaces = dropSurfaces(arena);
-        if (surfaces.isEmpty()) {
-            rebuildDropSurfaces(arena);
-            surfaces = dropSurfaces(arena);
-            if (surfaces.isEmpty()) {
-                return;
-            }
-        }
-
-        List<Location> candidates = new ArrayList<>(surfaces);
-        Collections.shuffle(candidates, ThreadLocalRandom.current());
-        for (Location surface : candidates) {
-            SCRegion arenaRegion = arena.get("arenaRegion", SCRegion.class);
-            if (arenaRegion == null || !isValidDropSurface(arenaRegion, surface.getBlock())) {
-                continue;
-            }
-
-            ItemStack item = new ItemStack(configuredDrops.get(ThreadLocalRandom.current().nextInt(configuredDrops.size())));
-            Location dropLocation = surface.clone().add(0.5d, DROP_SPAWN_Y_OFFSET, 0.5d);
-            Item droppedItem = surface.getWorld().dropItem(dropLocation, item);
-            droppedItem.setPickupDelay(10);
-            trackedEntities(arena).add(droppedItem.getUniqueId());
-            arena.trackSupplyDrop(droppedItem, surface);
-            announceSupplyDrop(arena, dropLocation);
-            playSoundToOccupants(arena, Sound.ENTITY_ITEM_PICKUP, 0.6f, 1.35f);
+        Location dropLocation = findRandomDropLocation(arena, ThreadLocalRandom.current(), DROP_LOCATION_ATTEMPTS);
+        if (dropLocation == null) {
             return;
         }
+
+        ItemStack item = new ItemStack(configuredDrops.get(ThreadLocalRandom.current().nextInt(configuredDrops.size())));
+        Item droppedItem = dropLocation.getWorld().dropItem(dropLocation, item);
+        droppedItem.setPickupDelay(10);
+        trackedEntities(arena).add(droppedItem.getUniqueId());
+        arena.trackSupplyDrop(droppedItem, dropLocation);
+        announceSupplyDrop(arena, dropLocation);
+        playSoundToOccupants(arena, Sound.ENTITY_ITEM_PICKUP, 0.6f, 1.35f);
     }
 
     private @NotNull String renderTeamName(MiniGameTeam team) {
