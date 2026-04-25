@@ -61,11 +61,14 @@ public class BoatRaceMiniGame extends BaseMiniGame {
             .registerArenaPlaceholder("winner", (arena, team, player) -> arena == null ? "-" : winnerName(arena))
             .registerArenaPlaceholder("record-time", (arena, team, player) -> arena == null ? "-" : formatMillis(arenaBestMillis(arena)))
             .registerArenaPlaceholder("record-holder", (arena, team, player) -> arena == null ? "-" : arenaBestHolder(arena))
-            .registerArenaPlaceholder("stage-count", (arena, team, player) -> arena == null ? "0" : Integer.toString(stageCount(arena)))
+            .registerArenaPlaceholder("laps", (arena, team, player) -> arena == null ? "1" : Integer.toString(laps(arena)))
+            .registerArenaPlaceholder("checkpoint-count", (arena, team, player) -> arena == null ? "0" : Integer.toString(stageCount(arena)))
             .registerPlayerPlaceholder("best-time", (arena, team, player) -> player == null ? "-" : formatMillis(bestTimeMillis(player)))
+            .registerPlayerPlaceholder("lap", (arena, team, player) -> player == null ? "0" : Integer.toString(currentLap(player)))
             .registerPlayerPlaceholder("place", (arena, team, player) -> player == null ? "-" : placeText(player))
             .registerPlayerPlaceholder("progress", (arena, team, player) -> player == null ? "0/0" : progressText(player))
             .registerPlayerPlaceholder("next-target", (arena, team, player) -> player == null ? "-" : nextTargetLabel(player))
+            .registerPlayerPlaceholder("next-target-short", (arena, team, player) -> player == null ? "-" : nextTargetShortLabel(player))
             .registerPlayerPlaceholder("next-distance", (arena, team, player) -> player == null ? "-" : nextTargetDistance(player));
 
         configFile = api.config().load("boatrace.yml");
@@ -96,7 +99,7 @@ public class BoatRaceMiniGame extends BaseMiniGame {
                 ":clock: <gray>Your Best</gray> <gold>{player:best-time}</gold>",
                 ":location: <gray>Record Holder</gray> <aqua>{arena:record-holder}</aqua>",
                 ":click_action_right: <gray>Record</gray> <gold>{arena:record-time}</gold>",
-                ":warning_yellow: <gray>Checkpoints</gray> <yellow>{arena:stage-count}</yellow>"
+                ":warning_yellow: <gray>Checkpoints</gray> <yellow>{arena:checkpoint-count}</yellow>"
             ),
             HUD_LINE_HOLD_UPDATES
         ));
@@ -111,7 +114,7 @@ public class BoatRaceMiniGame extends BaseMiniGame {
                 "",
                 ":click_action_right: <gold>Starts In</gold> <yellow>{arena:time-remaining}</yellow>",
                 ":location: <gray>Grid Position</gray> <aqua>{player:place}</aqua>",
-                ":warning_yellow: <gray>Checkpoints</gray> <yellow>{arena:stage-count}</yellow>",
+                ":warning_yellow: <gray>Checkpoints</gray> <yellow>{arena:checkpoint-count}</yellow>",
                 ":info_green: <gray>Players</gray> <green>{arena:joined-players}</green>/<green>{arena:max-players}</green>"
             ),
             HUD_LINE_HOLD_UPDATES
@@ -164,6 +167,7 @@ public class BoatRaceMiniGame extends BaseMiniGame {
             .setSpectatorSpawn(world.getSpawnLocation())
             .setMinPlayers(1)
             .setMaxPlayers(8)
+            .set("laps", 1)
             .set("startCountdownSeconds", BoatRaceConfig.DEFAULT_START_COUNTDOWN_SECONDS)
             .set("endingSeconds", BoatRaceConfig.DEFAULT_ENDING_SECONDS)
             .set("arenaRegion", null)
@@ -173,6 +177,8 @@ public class BoatRaceMiniGame extends BaseMiniGame {
             .set("joinOrder", new ArrayList<UUID>())
             .set("assignedGridSlots", new LinkedHashMap<UUID, Integer>())
             .set("boatAssignments", new LinkedHashMap<UUID, UUID>())
+            .set("lapProgress", new LinkedHashMap<UUID, Integer>())
+            .set("finishOrder", new ArrayList<UUID>())
             .set("checkpointLocations", new LinkedHashMap<UUID, Location>())
             .set("stageProgress", new LinkedHashMap<UUID, Integer>())
             .set("bestTimes", new LinkedHashMap<UUID, BoatRaceArenaRecord.BestTime>());
@@ -234,6 +240,7 @@ public class BoatRaceMiniGame extends BaseMiniGame {
                     .setRegion(arenaDef.arenaRegion())
                     .setMinPlayers(arenaDef.minPlayers())
                     .setMaxPlayers(arenaDef.maxPlayers())
+                    .set("laps", arenaDef.laps())
                     .set("startCountdownSeconds", arenaDef.startCountdownSeconds())
                     .set("endingSeconds", arenaDef.endingSeconds())
                     .set("arenaRegion", arenaDef.arenaRegion())
@@ -243,6 +250,8 @@ public class BoatRaceMiniGame extends BaseMiniGame {
                     .set("joinOrder", new ArrayList<UUID>())
                     .set("assignedGridSlots", new LinkedHashMap<UUID, Integer>())
                     .set("boatAssignments", new LinkedHashMap<UUID, UUID>())
+                    .set("lapProgress", new LinkedHashMap<UUID, Integer>())
+                    .set("finishOrder", new ArrayList<UUID>())
                     .set("checkpointLocations", new LinkedHashMap<UUID, Location>())
                     .set("stageProgress", new LinkedHashMap<UUID, Integer>())
                     .set("bestTimes", new LinkedHashMap<>(arenaDef.bestTimes()));
@@ -310,6 +319,10 @@ public class BoatRaceMiniGame extends BaseMiniGame {
         return stageRegions(arena).size();
     }
 
+    public int laps(@NotNull MiniGameArena arena) {
+        return Math.max(1, arena.get("laps", Integer.class, 1));
+    }
+
     public int startCountdownSeconds(@NotNull MiniGameArena arena) {
         return Math.max(1, arena.get("startCountdownSeconds", Integer.class, BoatRaceConfig.DEFAULT_START_COUNTDOWN_SECONDS));
     }
@@ -326,12 +339,41 @@ public class BoatRaceMiniGame extends BaseMiniGame {
         return stageProgress(arena).getOrDefault(player.getPlayer().getUniqueId(), 0);
     }
 
+    @SuppressWarnings("unchecked")
+    public @NotNull Map<UUID, Integer> lapProgress(@NotNull MiniGameArena arena) {
+        return arena.getOrCreate("lapProgress", Map.class, LinkedHashMap::new);
+    }
+
+    @SuppressWarnings("unchecked")
+    public @NotNull List<UUID> finishOrder(@NotNull MiniGameArena arena) {
+        return arena.getOrCreate("finishOrder", List.class, ArrayList::new);
+    }
+
+    public int currentLap(@NotNull MiniGamePlayer player) {
+        MiniGameArena arena = player.arena();
+        if (arena == null) {
+            return 0;
+        }
+        return currentLap(arena, player.getPlayer().getUniqueId());
+    }
+
+    public int currentLap(@NotNull MiniGameArena arena, @NotNull UUID playerId) {
+        return lapProgress(arena).getOrDefault(playerId, 1);
+    }
+
+    public boolean hasFinished(@NotNull MiniGameArena arena, @NotNull UUID playerId) {
+        return finishOrder(arena).contains(playerId);
+    }
+
     public String progressText(@NotNull MiniGamePlayer player) {
         MiniGameArena arena = player.arena();
         if (arena == null) {
             return "0/0";
         }
-        return stageProgress(player) + "/" + stageCount(arena);
+        if (hasFinished(arena, player.getPlayer().getUniqueId())) {
+            return "Finished";
+        }
+        return "Lap " + currentLap(player) + "/" + laps(arena) + " • " + stageProgress(player) + "/" + stageCount(arena);
     }
 
     public String nextTargetLabel(@NotNull MiniGamePlayer player) {
@@ -340,12 +382,40 @@ public class BoatRaceMiniGame extends BaseMiniGame {
             return "-";
         }
 
+        if (hasFinished(arena, player.getPlayer().getUniqueId())) {
+            return "Finished";
+        }
+
         int progress = stageProgress(player);
         int stageCount = stageCount(arena);
         if (progress < stageCount) {
+            if (progress == 0 && currentLap(player) > 1) {
+                return "Lap " + currentLap(player);
+            }
             return "Checkpoint " + (progress + 1);
         }
-        return "Finish";
+        return currentLap(player) < laps(arena) ? "Lap Finish" : "Race Finish";
+    }
+
+    public String nextTargetShortLabel(@NotNull MiniGamePlayer player) {
+        MiniGameArena arena = player.arena();
+        if (arena == null) {
+            return "-";
+        }
+
+        if (hasFinished(arena, player.getPlayer().getUniqueId())) {
+            return "Finished";
+        }
+
+        int progress = stageProgress(player);
+        int stageCount = stageCount(arena);
+        if (progress < stageCount) {
+            if (progress == 0 && currentLap(player) > 1) {
+                return "Lap " + currentLap(player);
+            }
+            return "Checkpoint " + (progress + 1);
+        }
+        return currentLap(player) < laps(arena) ? "Lap Finish" : "Race Finish";
     }
 
     public String nextTargetDistance(@NotNull MiniGamePlayer player) {
@@ -416,6 +486,9 @@ public class BoatRaceMiniGame extends BaseMiniGame {
     }
 
     public @Nullable Location nextTargetLocation(@NotNull MiniGameArena arena, @NotNull UUID playerId) {
+        if (hasFinished(arena, playerId)) {
+            return null;
+        }
         int progress = stageProgress(arena).getOrDefault(playerId, 0);
         List<SCRegion> stages = stageRegions(arena);
         if (progress < stages.size()) {
@@ -428,7 +501,7 @@ public class BoatRaceMiniGame extends BaseMiniGame {
 
     public @NotNull List<RaceStanding> standings(@NotNull MiniGameArena arena) {
         List<RaceStanding> standings = new ArrayList<>();
-        UUID winner = arena.get("winnerUuid", UUID.class);
+        List<UUID> finishOrder = finishOrder(arena);
 
         for (Player player : arena.getPlayers()) {
             if (player == null || !player.isOnline()) {
@@ -437,15 +510,19 @@ public class BoatRaceMiniGame extends BaseMiniGame {
 
             UUID uuid = player.getUniqueId();
             int progress = stageProgress(arena).getOrDefault(uuid, 0);
+            int lap = currentLap(arena, uuid);
             Location nextTarget = nextTargetLocation(arena, uuid);
             double distance = nextTarget == null ? Double.MAX_VALUE : player.getLocation().distanceSquared(nextTarget);
-            boolean finished = winner != null && winner.equals(uuid);
-            standings.add(new RaceStanding(uuid, progress, distance, finished));
+            int finishPlace = finishOrder.indexOf(uuid);
+            boolean finished = finishPlace >= 0;
+            standings.add(new RaceStanding(uuid, lap, progress, distance, finished, finishPlace));
         }
 
         standings.sort(Comparator
-            .comparing(RaceStanding::finished).reversed()
-            .thenComparingInt(RaceStanding::progress).reversed()
+            .comparing(RaceStanding::finished, Comparator.reverseOrder())
+            .thenComparingInt(RaceStanding::finishPlace)
+            .thenComparing(Comparator.comparingInt(RaceStanding::lap).reversed())
+            .thenComparing(Comparator.comparingInt(RaceStanding::progress).reversed())
             .thenComparingDouble(RaceStanding::distanceSquared)
             .thenComparing(standing -> standing.player().getName(), String.CASE_INSENSITIVE_ORDER));
         return standings;
@@ -562,9 +639,11 @@ public class BoatRaceMiniGame extends BaseMiniGame {
 
     public record RaceStanding(
         @NotNull UUID uuid,
+        int lap,
         int progress,
         double distanceSquared,
-        boolean finished
+        boolean finished,
+        int finishPlace
     ) {
         public Player player() {
             return Bukkit.getPlayer(uuid);

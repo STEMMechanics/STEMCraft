@@ -31,6 +31,7 @@ import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.world.WorldLoadEvent;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
 import java.util.regex.Pattern;
@@ -90,16 +91,19 @@ public class HubFeature extends BaseFeature {
      */
     public void runExitCommands(Player player) {
         String currentWorldName = player.getWorld().getName();
+        String currentWorldKey = currentWorldName.toLowerCase(Locale.ROOT);
+        World resolvedHubWorld = hubWorld != null ? hubWorld : api.worlds().getDefaultWorld();
+        String hubWorldName = resolvedHubWorld == null ? currentWorldName : resolvedHubWorld.getName();
 
         for(Map.Entry<Pattern, List<String>> entry : worldExitCommands.entrySet()) {
             Pattern pattern = entry.getKey();
-            if(!pattern.matcher(currentWorldName).matches()) {
+            if(!pattern.matcher(currentWorldKey).matches()) {
                 continue;
             }
 
             List<String> commandList = entry.getValue();
             for(String command : commandList) {
-                command = command.replace("{hub-world}", hubWorld.getName());
+                command = command.replace("{hub-world}", hubWorldName);
                 command = command.replace("{world}", currentWorldName);
                 command = command.replace("{player}", player.getName());
 
@@ -125,8 +129,51 @@ public class HubFeature extends BaseFeature {
 
         for (String worldKey : sec.getKeys(false)) {
             Pattern worldPattern = PatternUtil.globToRegex(worldKey.toLowerCase(Locale.ROOT));
-            worldExitCommands.put(worldPattern, sec.getStringList(worldKey));
+            List<String> commands = loadExitCommands(sec, worldKey);
+            if (!commands.isEmpty()) {
+                worldExitCommands.put(worldPattern, commands);
+            }
         }
+    }
+
+    private @NotNull List<String> loadExitCommands(@NotNull ConfigSection root, @NotNull String worldKey) {
+        if (root.isSection(worldKey)) {
+            ConfigSection entry = root.getSection(worldKey, false);
+            if (entry == null) {
+                return List.of();
+            }
+
+            boolean asPlayer = entry.getBoolean("as-player", false);
+            List<String> commands = new ArrayList<>();
+
+            String command = entry.getString("command");
+            if (!command.isBlank()) {
+                commands.add(asPlayer ? "p:" + command : command);
+            }
+
+            for (String item : entry.getStringList("commands")) {
+                if (item == null || item.isBlank()) {
+                    continue;
+                }
+                commands.add(asPlayer ? "p:" + item : item);
+            }
+
+            return commands;
+        }
+
+        Object raw = root.get(worldKey);
+        if (raw instanceof String command && !command.isBlank()) {
+            return List.of(command);
+        }
+
+        List<String> commands = new ArrayList<>();
+        for (String item : root.getStringList(worldKey)) {
+            if (item == null || item.isBlank()) {
+                continue;
+            }
+            commands.add(item);
+        }
+        return commands;
     }
 
     private World resolveHubWorld() {

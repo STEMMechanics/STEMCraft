@@ -12,28 +12,42 @@ import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.entity.Boat;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.ProjectileHitEvent;
+import org.bukkit.event.entity.ProjectileLaunchEvent;
 import org.bukkit.event.vehicle.VehicleDestroyEvent;
 import org.bukkit.event.vehicle.VehicleExitEvent;
 import org.bukkit.event.vehicle.VehicleMoveEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.projectiles.ProjectileSource;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jspecify.annotations.NonNull;
+import org.bukkit.util.Vector;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
 public class BoatRaceArenaHandler implements MiniGameArenaHandler {
     private static final int RUNNING_COUNTDOWN_SECONDS = 600;
+    private static final int SNOWBALL_SLOT = 0;
+    private static final int SNOWBALL_STACK_SIZE = 16;
+    private static final double SNOWBALL_PUSH_STRENGTH = 0.85d;
+    private static final double SNOWBALL_PUSH_LIFT = 0.08d;
+    private static final long TNT_BOUNCE_COOLDOWN_MILLIS = 750L;
+    private static final double TNT_BOUNCE_VERTICAL_VELOCITY = 1.0d;
+    private static final double TNT_BOUNCE_HORIZONTAL_MULTIPLIER = 1.35d;
+    private static final double TNT_BOUNCE_FALLBACK_SPEED = 0.75d;
 
     private final STEMCraftAPI api;
     private final BoatRaceMiniGame boatRace;
@@ -42,6 +56,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         this.api = api;
         this.boatRace = boatRace;
         registerVehicleListeners();
+        registerSnowballListeners();
     }
 
     @Override
@@ -72,6 +87,9 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         if (arena.getMaxPlayers() < 1) {
             result.addError("Boat Race arenas require at least 1 maximum player.", "maxPlayers");
         }
+        if (boatRace.laps(arena) < 1) {
+            result.addError("Boat Race arenas require at least 1 lap.", "laps");
+        }
         if (!startingGrid.isEmpty() && arena.getMaxPlayers() > startingGrid.size()) {
             result.addError("Max players exceeds configured starting grid slots.", "maxPlayers");
         }
@@ -83,7 +101,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         for (int i = 0; i < stageRegions.size(); i++) {
             SCRegion stage = stageRegions.get(i);
             if (arenaRegion != null && !arenaRegion.contains(stage)) {
-                result.addError("Checkpoint " + (i + 1) + " must be inside the arena region.", "stages." + i);
+                result.addError("Checkpoint " + (i + 1) + " must be inside the arena region.", "checkpoints." + i);
             }
         }
 
@@ -112,7 +130,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
                 public void onExit(@NotNull Player player, @NotNull SCRegion region, @Nullable Location from, @Nullable Location to) {
                     if (arena.hasPlayer(player)
                         && (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING || arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING)) {
-                        resetToCheckpoint(arena, player, "You left the course. Returned to your checkpoint.");
+                        resetToCheckpoint(arena, player, "You left the course. Returned to your last checkpoint.");
                     } else if (arena.hasOccupant(player)
                         && (arena.getStatus() == MiniGameArena.ArenaStatus.ENDING || arena.getStatus() == MiniGameArena.ArenaStatus.RESETTING)) {
                         arena.removeOccupant(player);
@@ -127,6 +145,9 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
                 @Override
                 public void onEnter(@NotNull Player player, @NotNull SCRegion region, @Nullable Location from, @Nullable Location to) {
                     if (!arena.hasPlayer(player) || arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
+                        return;
+                    }
+                    if (boatRace.hasFinished(arena, player.getUniqueId())) {
                         return;
                     }
                     if (boatRace.stageProgress(arena.getPlayer(player)) < boatRace.stageCount(arena)) {
@@ -182,7 +203,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         if (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING || arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING) {
             if (event.getCause() == EntityDamageEvent.DamageCause.VOID
                 || player.getHealth() - event.getFinalDamage() <= 0.0d) {
-                resetToCheckpoint(arena, player, "You crashed out. Returned to your checkpoint.");
+                resetToCheckpoint(arena, player, "You crashed out. Returned to your last checkpoint.");
             }
             return HandlerEventResult.DENY;
         }
@@ -200,12 +221,14 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         if (newStatus == MiniGameArena.ArenaStatus.WAITING) {
             arena.resetTitle();
             arena.stopWinnerCelebration();
+            clearSnowballSupply(arena);
             clearRaceState(arena);
             teleportPlayersToLobby(arena);
             return;
         }
 
         if (newStatus == MiniGameArena.ArenaStatus.STARTING) {
+            clearSnowballSupply(arena);
             prepareStartingGrid(arena);
             broadcastToOccupants(arena, "<gold>Race countdown started.</gold>");
             return;
@@ -220,10 +243,14 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         }
 
         if (newStatus == MiniGameArena.ArenaStatus.ENDING) {
+            String winnerName = boatRace.winnerName(arena);
+            clearSnowballSupply(arena);
             Player winner = resolveWinnerPlayer(arena);
             if (winner != null) {
                 startWinnerCelebration(arena, winner);
                 broadcastToOccupants(arena, "<gold>Race Over!</gold> <yellow>" + winner.getName() + "</yellow> <gray>wins the race.</gray>");
+            } else if (!"-".equals(winnerName)) {
+                broadcastToOccupants(arena, "<gold>Race Over!</gold> <yellow>" + winnerName + "</yellow> <gray>wins the race.</gray>");
             } else {
                 broadcastToOccupants(arena, "<gold>Race Over!</gold> <gray>No winner was determined.</gray>");
             }
@@ -258,9 +285,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         if (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING) {
             arena.setStatus(MiniGameArena.ArenaStatus.RUNNING, RUNNING_COUNTDOWN_SECONDS);
         } else if (arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING) {
-            Player leader = currentLeader(arena);
-            boatRace.setWinner(arena, leader);
-            arena.setStatus(MiniGameArena.ArenaStatus.ENDING, boatRace.endingSeconds(arena));
+            concludeRace(arena);
         } else if (arena.getStatus() == MiniGameArena.ArenaStatus.ENDING) {
             arena.setStatus(MiniGameArena.ArenaStatus.RESETTING);
         }
@@ -270,6 +295,8 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
     public Location onPlayerJoinArena(MiniGameArena arena, Player player) {
         player.setGameMode(GameMode.ADVENTURE);
         registerJoinOrder(arena, player);
+        boatRace.lapProgress(arena).put(player.getUniqueId(), 1);
+        boatRace.finishOrder(arena).remove(player.getUniqueId());
         boatRace.stageProgress(arena).put(player.getUniqueId(), 0);
         boatRace.checkpointLocations(arena).put(player.getUniqueId(), fallbackGridLocation(arena, player));
 
@@ -293,12 +320,10 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
             arena.setStatus(MiniGameArena.ArenaStatus.WAITING);
             arena.setCountdown(0);
         } else if (arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING) {
-            if (arena.numPlayers() == 1) {
-                Player remaining = arena.getPlayers().getFirst();
-                boatRace.setWinner(arena, remaining);
-                arena.setStatus(MiniGameArena.ArenaStatus.ENDING, boatRace.endingSeconds(arena));
-            } else if (arena.numPlayers() < arena.getMinPlayers()) {
+            if (arena.numPlayers() < arena.getMinPlayers()) {
                 arena.setStatus(MiniGameArena.ArenaStatus.RESETTING);
+            } else if (allActiveRacersFinished(arena)) {
+                concludeRace(arena);
             }
         }
     }
@@ -357,6 +382,10 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
             if (!ownsBoat(arena, rider, boat.getUniqueId())) {
                 return;
             }
+            if (arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING) {
+                maybeBounceOnTnt(arena, rider, boat, event.getTo());
+                return;
+            }
             if (arena.getStatus() != MiniGameArena.ArenaStatus.STARTING) {
                 return;
             }
@@ -375,6 +404,69 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         });
     }
 
+    private void registerSnowballListeners() {
+        api.events().register(ProjectileLaunchEvent.class, event -> {
+            if (!(event.getEntity() instanceof org.bukkit.entity.Snowball snowball)) {
+                return;
+            }
+
+            ProjectileSource shooter = snowball.getShooter();
+            if (!(shooter instanceof Player player)) {
+                return;
+            }
+
+            MiniGameArena arena = boatRace.minigame().findPlayer(player);
+            if (arena == null || !BoatRaceMiniGame.namespace().equals(arena.namespace())) {
+                return;
+            }
+            if (!arena.hasPlayer(player) || arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
+                return;
+            }
+
+            api.tasks().nextTick(() -> {
+                if (arena.hasPlayer(player) && arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING) {
+                    ensureSnowballSupply(player);
+                }
+            });
+        });
+
+        api.events().register(ProjectileHitEvent.class, event -> {
+            if (!(event.getEntity() instanceof org.bukkit.entity.Snowball snowball)) {
+                return;
+            }
+            if (!(event.getHitEntity() instanceof Player target)) {
+                return;
+            }
+
+            ProjectileSource shooter = snowball.getShooter();
+            if (!(shooter instanceof Player attacker) || attacker.equals(target)) {
+                return;
+            }
+
+            MiniGameArena arena = boatRace.minigame().findPlayer(attacker);
+            if (arena == null || !BoatRaceMiniGame.namespace().equals(arena.namespace())) {
+                return;
+            }
+            if (arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING || !arena.hasPlayer(attacker) || !arena.hasPlayer(target)) {
+                return;
+            }
+
+            Vector push = snowball.getVelocity().clone();
+            if (push.lengthSquared() < 1.0e-6d) {
+                push = attacker.getLocation().getDirection();
+            }
+            push.setY(0.0d);
+            if (push.lengthSquared() < 1.0e-6d) {
+                return;
+            }
+
+            push.normalize().multiply(SNOWBALL_PUSH_STRENGTH).setY(SNOWBALL_PUSH_LIFT);
+            Entity targetEntity = target.getVehicle() != null ? target.getVehicle() : target;
+            targetEntity.setVelocity(push);
+            target.playSound(target.getLocation(), Sound.ENTITY_PLAYER_HURT_FREEZE, 0.7f, 1.4f);
+        });
+    }
+
     private void prepareStartingGrid(@NotNull MiniGameArena arena) {
         arena.stopWinnerCelebration();
         clearRaceState(arena);
@@ -389,6 +481,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
             boatRace.assignedGridSlots(arena).put(player.getUniqueId(), slot);
             Location slotLocation = orientTowardFinish(grid.get(slot).clone(), finishLookTarget);
             boatRace.checkpointLocations(arena).put(player.getUniqueId(), slotLocation.clone());
+            boatRace.lapProgress(arena).put(player.getUniqueId(), 1);
             boatRace.stageProgress(arena).put(player.getUniqueId(), 0);
             positionPlayerOnStartingGrid(arena, player, slotLocation);
         }
@@ -410,6 +503,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
             player.setSaturation(20.0f);
             player.setFireTicks(0);
             player.setFallDistance(0.0f);
+            ensureSnowballSupply(player);
             remountPlayerIfNeeded(arena, player);
         }
     }
@@ -422,6 +516,9 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
 
     private void clearRaceState(@NotNull MiniGameArena arena) {
         despawnAllBoats(arena);
+        boatRace.finishOrder(arena).clear();
+        boatRace.lapProgress(arena).clear();
+        tntBounceCooldowns(arena).clear();
         boatRace.stageProgress(arena).clear();
         boatRace.assignedGridSlots(arena).clear();
         boatRace.checkpointLocations(arena).clear();
@@ -432,6 +529,8 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
     private void removePlayerState(@NotNull MiniGameArena arena, @NotNull Player player) {
         despawnBoat(arena, player.getUniqueId());
         boatRace.joinOrder(arena).remove(player.getUniqueId());
+        boatRace.lapProgress(arena).remove(player.getUniqueId());
+        tntBounceCooldowns(arena).remove(player.getUniqueId());
         boatRace.assignedGridSlots(arena).remove(player.getUniqueId());
         boatRace.stageProgress(arena).remove(player.getUniqueId());
         boatRace.checkpointLocations(arena).remove(player.getUniqueId());
@@ -439,6 +538,9 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
 
     private void handleStageEnter(@NotNull MiniGameArena arena, @NotNull Player player, int stageIndex, @NotNull Location checkpoint) {
         UUID uuid = player.getUniqueId();
+        if (boatRace.hasFinished(arena, uuid)) {
+            return;
+        }
         Map<UUID, Integer> progress = boatRace.stageProgress(arena);
         int expectedStage = progress.getOrDefault(uuid, 0);
         if (expectedStage != stageIndex) {
@@ -455,29 +557,59 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 0.6f, 1.4f);
     }
 
-    private void finishRace(@NotNull MiniGameArena arena, @NotNull Player winner) {
+    private void finishRace(@NotNull MiniGameArena arena, @NotNull Player player) {
         if (arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
+            return;
+        }
+        if (boatRace.hasFinished(arena, player.getUniqueId())) {
+            return;
+        }
+
+        int currentLap = boatRace.currentLap(arena, player.getUniqueId());
+        int totalLaps = boatRace.laps(arena);
+        if (currentLap < totalLaps) {
+            int nextLap = currentLap + 1;
+            boatRace.lapProgress(arena).put(player.getUniqueId(), nextLap);
+            boatRace.stageProgress(arena).put(player.getUniqueId(), 0);
+            boatRace.checkpointLocations(arena).put(player.getUniqueId(), player.getLocation().clone());
+            String lapLabel = nextLap == totalLaps ? "Final lap" : "Lap";
+            arena.info(player, "<gold>Lap " + currentLap + " complete.</gold> <aqua>" + lapLabel + ":</aqua> <yellow>" + nextLap + "/" + totalLaps + "</yellow>");
+            player.playSound(player.getLocation(), Sound.UI_TOAST_IN, 0.8f, 1.1f);
+            syncCheckpointProgressAtLocation(arena, player, player.getLocation());
             return;
         }
 
         long startedAt = boatRace.raceStartMillis(arena);
         long durationMillis = startedAt <= 0L ? 0L : Math.max(0L, System.currentTimeMillis() - startedAt);
-        BoatRaceMiniGame.FinishRecord finishRecord = boatRace.recordFinish(arena, winner, durationMillis);
+        boatRace.finishOrder(arena).add(player.getUniqueId());
+        boatRace.checkpointLocations(arena).put(player.getUniqueId(), player.getLocation().clone());
+
+        BoatRaceMiniGame.FinishRecord finishRecord = boatRace.recordFinish(arena, player, durationMillis);
+        int place = boatRace.finishOrder(arena).size();
         if (finishRecord.durationMillis() > 0L) {
             if (finishRecord.arenaBest()) {
-                arena.success(winner, "Finished in " + boatRace.formatMillis(finishRecord.durationMillis()) + ". New arena record!");
+                arena.success(player, "Finished " + ordinal(place) + " in " + boatRace.formatMillis(finishRecord.durationMillis()) + ". New arena record!");
             } else if (finishRecord.personalBest()) {
-                arena.success(winner, "Finished in " + boatRace.formatMillis(finishRecord.durationMillis()) + ". New personal best!");
+                arena.success(player, "Finished " + ordinal(place) + " in " + boatRace.formatMillis(finishRecord.durationMillis()) + ". New personal best!");
             } else {
                 String personalBest = finishRecord.previousBestMillis() > 0L
                     ? boatRace.formatMillis(finishRecord.previousBestMillis())
                     : "-";
-                arena.success(winner, "Finished in " + boatRace.formatMillis(finishRecord.durationMillis()) + ". Personal best: " + personalBest);
+                arena.success(player, "Finished " + ordinal(place) + " in " + boatRace.formatMillis(finishRecord.durationMillis()) + ". Personal best: " + personalBest);
             }
         }
 
-        boatRace.setWinner(arena, winner);
-        arena.setStatus(MiniGameArena.ArenaStatus.ENDING, boatRace.endingSeconds(arena));
+        if (place == 1) {
+            boatRace.setWinner(arena, player);
+            broadcastToOccupants(arena, "<gold>" + player.getName() + "</gold> <gray>crossed the line first.</gray>");
+        } else {
+            broadcastToOccupants(arena, "<aqua>" + player.getName() + "</aqua> <gray>finished in " + ordinal(place) + " place.</gray>");
+        }
+        player.playSound(player.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 0.8f, 1.0f);
+
+        if (allActiveRacersFinished(arena)) {
+            concludeRace(arena);
+        }
     }
 
     private void resetToCheckpoint(@NotNull MiniGameArena arena, @NotNull Player player, @Nullable String message) {
@@ -497,9 +629,130 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         player.setSaturation(20.0f);
         player.setFireTicks(0);
         player.setFallDistance(0.0f);
+        if (arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING) {
+            ensureSnowballSupply(player);
+        }
         spawnBoat(arena, player, checkpoint);
+        playCheckpointDeniedSequence(arena, player);
         if (message != null && !message.isBlank()) {
             arena.warn(player, message);
+        }
+    }
+
+    private void playCheckpointDeniedSequence(@NotNull MiniGameArena arena, @NotNull Player player) {
+        long[] delays = {1L, 4L, 7L, 10L, 14L, 18L, 22L};
+        float[] pitches = {1.0f, 0.9f, 0.8f, 0.7f, 0.58f, 0.58f, 0.58f};
+        float[] volumes = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.8f, 0.6f};
+
+        for (int i = 0; i < delays.length; i++) {
+            final float pitch = pitches[i];
+            final float volume = volumes[i];
+            api.tasks().runLater(delays[i], () -> {
+                if (!player.isOnline() || !arena.hasPlayer(player)) {
+                    return;
+                }
+                player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, volume, pitch);
+            });
+        }
+    }
+
+    private void ensureSnowballSupply(@NotNull Player player) {
+        clearSnowballSupply(player);
+        ItemStack snowballs = new ItemStack(Material.SNOWBALL, SNOWBALL_STACK_SIZE);
+        player.getInventory().setItem(SNOWBALL_SLOT, snowballs);
+        player.updateInventory();
+    }
+
+    private void clearSnowballSupply(@NotNull MiniGameArena arena) {
+        for (Player player : arena.getPlayers()) {
+            clearSnowballSupply(player);
+        }
+        for (Player spectator : arena.getSpectators()) {
+            clearSnowballSupply(spectator);
+        }
+    }
+
+    private void clearSnowballSupply(@NotNull Player player) {
+        boolean updated = false;
+        for (int slot = 0; slot < player.getInventory().getSize(); slot++) {
+            ItemStack item = player.getInventory().getItem(slot);
+            if (item != null && item.getType() == Material.SNOWBALL) {
+                player.getInventory().setItem(slot, null);
+                updated = true;
+            }
+        }
+        ItemStack offHand = player.getInventory().getItemInOffHand();
+        if (offHand.getType() == Material.SNOWBALL) {
+            player.getInventory().setItemInOffHand(null);
+            updated = true;
+        }
+        if (updated) {
+            player.updateInventory();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private @NotNull Map<UUID, Long> tntBounceCooldowns(@NotNull MiniGameArena arena) {
+        return arena.getOrCreate("tntBounceCooldowns", Map.class, LinkedHashMap::new);
+    }
+
+    private void maybeBounceOnTnt(@NotNull MiniGameArena arena, @NotNull Player rider, @NotNull Boat boat, @Nullable Location location) {
+        if (location == null || !isTntBounceBlock(location)) {
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        Long cooldownUntil = tntBounceCooldowns(arena).get(rider.getUniqueId());
+        if (cooldownUntil != null && cooldownUntil > now) {
+            return;
+        }
+
+        Vector currentVelocity = boat.getVelocity().clone();
+        Vector horizontal = currentVelocity.clone().setY(0.0d);
+        if (horizontal.lengthSquared() < 1.0e-6d) {
+            horizontal = boat.getLocation().getDirection().setY(0.0d);
+            if (horizontal.lengthSquared() > 1.0e-6d) {
+                horizontal.normalize().multiply(TNT_BOUNCE_FALLBACK_SPEED);
+            }
+        } else {
+            horizontal.multiply(TNT_BOUNCE_HORIZONTAL_MULTIPLIER);
+        }
+
+        Vector velocity = new Vector(
+            horizontal.getX(),
+            Math.max(currentVelocity.getY(), TNT_BOUNCE_VERTICAL_VELOCITY),
+            horizontal.getZ()
+        );
+        boat.setVelocity(velocity);
+        rider.playSound(rider.getLocation(), Sound.ENTITY_FIREWORK_ROCKET_LAUNCH, 0.7f, 1.35f);
+        tntBounceCooldowns(arena).put(rider.getUniqueId(), now + TNT_BOUNCE_COOLDOWN_MILLIS);
+    }
+
+    private boolean isTntBounceBlock(@NotNull Location location) {
+        Material current = location.getBlock().getType();
+        if (current == Material.TNT) {
+            return true;
+        }
+
+        Location below = location.clone().subtract(0.0d, 0.75d, 0.0d);
+        return below.getBlock().getType() == Material.TNT;
+    }
+
+    private void syncCheckpointProgressAtLocation(@NotNull MiniGameArena arena, @NotNull Player player, @NotNull Location location) {
+        UUID playerId = player.getUniqueId();
+        List<SCRegion> stages = boatRace.stageRegions(arena);
+        while (true) {
+            int expectedStage = boatRace.stageProgress(arena).getOrDefault(playerId, 0);
+            if (expectedStage >= stages.size()) {
+                return;
+            }
+
+            SCRegion stage = stages.get(expectedStage);
+            if (stage == null || !stage.contains(location)) {
+                return;
+            }
+
+            handleStageEnter(arena, player, expectedStage, location);
         }
     }
 
@@ -648,6 +901,26 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         return leader == null ? null : leader.player();
     }
 
+    private boolean allActiveRacersFinished(@NotNull MiniGameArena arena) {
+        List<Player> players = arena.getPlayers();
+        if (players.isEmpty()) {
+            return false;
+        }
+        for (Player player : players) {
+            if (!boatRace.hasFinished(arena, player.getUniqueId())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void concludeRace(@NotNull MiniGameArena arena) {
+        if ("-".equals(boatRace.winnerName(arena))) {
+            boatRace.setWinner(arena, currentLeader(arena));
+        }
+        arena.setStatus(MiniGameArena.ArenaStatus.ENDING, boatRace.endingSeconds(arena));
+    }
+
     private @Nullable Player resolveWinnerPlayer(@NotNull MiniGameArena arena) {
         UUID winnerUuid = arena.get("winnerUuid", UUID.class);
         if (winnerUuid == null) {
@@ -721,6 +994,19 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
             1000,
             400
         );
+    }
+
+    private @NotNull String ordinal(int value) {
+        int mod100 = value % 100;
+        if (mod100 >= 11 && mod100 <= 13) {
+            return value + "th";
+        }
+        return switch (value % 10) {
+            case 1 -> value + "st";
+            case 2 -> value + "nd";
+            case 3 -> value + "rd";
+            default -> value + "th";
+        };
     }
 
     private boolean hasDriftedFromGrid(@NotNull Location currentLocation, @NotNull Location gridLocation) {

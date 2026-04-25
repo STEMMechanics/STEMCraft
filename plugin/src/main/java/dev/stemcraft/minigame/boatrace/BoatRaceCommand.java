@@ -40,7 +40,7 @@ public class BoatRaceCommand {
 
         api.commands().create("boatrace")
             .permission("stemcraft.command.boatrace")
-            .usage("/boatrace <list|info|create|delete|join|joinall|spectate|leave|start|stop|restart|save|reload|validate|enable|disable|set|addgrid|setgrid|removegrid|addcheckpoint|setcheckpoint|removecheckpoint|addstage|setstage|removestage|select|sel|show>")
+            .usage("/boatrace <list|info|create|delete|join|joinall|spectate|leave|start|stop|restart|save|reload|validate|enable|disable|set|addgrid|setgrid|removegrid|addcheckpoint|setcheckpoint|removecheckpoint|select|sel|show>")
             .tabCompletion("list")
             .tabCompletion("list", "{int}")
             .tabCompletion("info", "{boatrace-arenas}")
@@ -66,26 +66,22 @@ public class BoatRaceCommand {
             .tabCompletion("set", "{boatrace-arenas}", "finish")
             .tabCompletion("set", "{boatrace-arenas}", "minplayers")
             .tabCompletion("set", "{boatrace-arenas}", "maxplayers")
+            .tabCompletion("set", "{boatrace-arenas}", "laps")
             .tabCompletion("set", "{boatrace-arenas}", "name")
             .tabCompletion("addgrid", "{boatrace-arenas}")
             .tabCompletion("setgrid", "{boatrace-arenas}", "{int}")
             .tabCompletion("removegrid", "{boatrace-arenas}", "{int}")
-            .tabCompletion("addstage", "{boatrace-arenas}")
             .tabCompletion("addcheckpoint", "{boatrace-arenas}")
-            .tabCompletion("setstage", "{boatrace-arenas}", "{int}")
             .tabCompletion("setcheckpoint", "{boatrace-arenas}", "{int}")
-            .tabCompletion("removestage", "{boatrace-arenas}", "{int}")
             .tabCompletion("removecheckpoint", "{boatrace-arenas}", "{int}")
             .tabCompletion("select", "{boatrace-arenas}", "arena")
             .tabCompletion("select", "{boatrace-arenas}", "finish")
-            .tabCompletion("select", "{boatrace-arenas}", "stage", "{int}")
             .tabCompletion("select", "{boatrace-arenas}", "checkpoint", "{int}")
             .tabCompletion("select", "{boatrace-arenas}", "grid", "{int}")
             .tabCompletion("select", "{boatrace-arenas}", "lobby")
             .tabCompletion("select", "{boatrace-arenas}", "spectator")
             .tabCompletion("sel", "{boatrace-arenas}", "arena")
             .tabCompletion("sel", "{boatrace-arenas}", "finish")
-            .tabCompletion("sel", "{boatrace-arenas}", "stage", "{int}")
             .tabCompletion("sel", "{boatrace-arenas}", "checkpoint", "{int}")
             .tabCompletion("sel", "{boatrace-arenas}", "grid", "{int}")
             .tabCompletion("sel", "{boatrace-arenas}", "lobby")
@@ -117,9 +113,9 @@ public class BoatRaceCommand {
                     case "addgrid" -> commandAddGrid(ctx);
                     case "setgrid" -> commandSetGrid(ctx);
                     case "removegrid" -> commandRemoveGrid(ctx);
-                    case "addstage", "addcheckpoint" -> commandAddStage(ctx);
-                    case "setstage", "setcheckpoint" -> commandSetStage(ctx);
-                    case "removestage", "removecheckpoint" -> commandRemoveStage(ctx);
+                    case "addcheckpoint" -> commandAddStage(ctx);
+                    case "setcheckpoint" -> commandSetStage(ctx);
+                    case "removecheckpoint" -> commandRemoveStage(ctx);
                     case "select", "sel" -> commandSelect(ctx);
                     case "show" -> commandShow(ctx);
                     default -> ctx.returnUsage();
@@ -199,6 +195,7 @@ public class BoatRaceCommand {
         ctx.info(" - Players: " + arena.numPlayers() + "/" + arena.getMaxPlayers());
         ctx.info(" - Spectators: " + arena.numSpectators());
         ctx.info(" - Min players: " + arena.getMinPlayers());
+        ctx.info(" - Laps: " + boatRace.laps(arena));
         ctx.info(" - Start countdown: " + boatRace.startCountdownSeconds(arena) + " sec");
         ctx.info(" - Reset countdown: " + boatRace.endingSeconds(arena) + " sec");
         ctx.info(" - Lobby: " + formatLocation(arena.getLobbySpawn()));
@@ -503,6 +500,12 @@ public class BoatRaceCommand {
                 arena.setMaxPlayers(maxPlayers);
                 ctx.success("Maximum players set to " + arena.getMaxPlayers() + " for arena '" + arena.id() + "'.");
             }
+            case "laps" -> {
+                ctx.checkArgsSizeAtLeast(4);
+                int laps = ctx.getArgAsInt(3, 1, 1, null);
+                arena.set("laps", laps);
+                ctx.success("Laps set to " + boatRace.laps(arena) + " for arena '" + arena.id() + "'.");
+            }
             case "name" -> {
                 ctx.checkArgsSizeAtLeast(4);
                 arena.setName(ctx.getArgsAsString(4));
@@ -611,13 +614,13 @@ public class BoatRaceCommand {
                 showRegionPreview(player, "select-finish", region);
                 ctx.success("WorldEdit selection updated from arena '" + arena.id() + "' (finish).");
             }
-            case "stage", "checkpoint" -> {
+            case "checkpoint" -> {
                 ctx.checkArgsSizeAtLeast(4);
                 int index = requireOneBasedIndex(ctx, 3, boatRace.stageRegions(arena).size(), "checkpoint");
                 region = boatRace.stageRegions(arena).get(index);
                 requireSameWorld(ctx, player, region.getWorld().getName());
                 api.selections().setWorldEditSelection(player, region);
-                showRegionPreview(player, "select-stage-" + index, region);
+                showRegionPreview(player, "select-checkpoint-" + index, region);
                 ctx.success("WorldEdit selection updated from arena '" + arena.id() + "' (checkpoint " + (index + 1) + ").");
             }
             case "grid" -> {

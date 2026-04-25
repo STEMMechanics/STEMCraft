@@ -75,12 +75,24 @@ public class HubCommand {
                         return;
                     }
 
-                    // get hub world from config, else first world
-                    api.worlds().getDefaultWorld();
+                    org.bukkit.World hubWorld = feature.getHubWorld();
+                    if (hubWorld == null) {
+                        hubWorld = api.worlds().getDefaultWorld();
+                    }
+                    if (hubWorld == null) {
+                        cmd.error(ctx.getSender(), "HUB_WORLD_NOT_FOUND", "world", "unknown");
+                        return;
+                    }
+
+                    Location hubLocation = hubWorld.getSpawnLocation().clone();
 
                     feature.runExitCommands(target);
-                    Location hubLocation = api.worlds().getDefaultWorld().getSpawnLocation();
-                    PlayerUtil.teleport(target, hubLocation);
+                    api.tasks().runLater(2L, () -> {
+                        if (!target.isOnline()) {
+                            return;
+                        }
+                        PlayerUtil.teleport(target, hubLocation);
+                    });
 
                     if (target.equals(ctx.getSender())) {
                         cmd.success(ctx.getSender(), "HUB_TELEPORT_SUCCESS");
