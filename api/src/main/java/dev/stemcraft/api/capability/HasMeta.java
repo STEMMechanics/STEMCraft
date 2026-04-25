@@ -48,6 +48,33 @@ public interface HasMeta<T extends HasMeta<T>> {
     default <V> V get(String key, Class<V> type) { return get(key, type, null); }
 
     /**
+     * Get a typed map metadata value, validating all keys and values at runtime.
+     *
+     * @param key the metadata key.
+     * @param keyType the expected key type.
+     * @param valueType the expected value type.
+     * @param defaultValue the default value to return if the key is not present.
+     * @return the typed map value, or defaultValue if the key is not present.
+     */
+    <K, V> java.util.Map<K, V> getMap(String key, Class<K> keyType, Class<V> valueType, java.util.Map<K, V> defaultValue);
+    default <K, V> java.util.Map<K, V> getMap(String key, Class<K> keyType, Class<V> valueType) {
+        return getMap(key, keyType, valueType, null);
+    }
+
+    /**
+     * Get a typed list metadata value, validating all elements at runtime.
+     *
+     * @param key the metadata key.
+     * @param elementType the expected element type.
+     * @param defaultValue the default value to return if the key is not present.
+     * @return the typed list value, or defaultValue if the key is not present.
+     */
+    <V> java.util.List<V> getList(String key, Class<V> elementType, java.util.List<V> defaultValue);
+    default <V> java.util.List<V> getList(String key, Class<V> elementType) {
+        return getList(key, elementType, null);
+    }
+
+    /**
      * Get the metadata value for the given key, or create and store a new value using the supplier if not present.
      * <p>
      * This overload allows type-safe retrieval of an existing value.
@@ -58,6 +85,32 @@ public interface HasMeta<T extends HasMeta<T>> {
      * @return the metadata value for the given key, or a new value created by the supplier if not present.
      */
     <V> V getOrCreate(String key, Class<V> type, Supplier<? extends V> supplier);
+
+    /**
+     * Get or create a typed map metadata value, validating all keys and values at runtime.
+     *
+     * @param key the metadata key.
+     * @param keyType the expected key type.
+     * @param valueType the expected value type.
+     * @param supplier the supplier to create a new map if the key is not present.
+     * @return the typed map value.
+     */
+    <K, V> java.util.Map<K, V> getOrCreateMap(String key,
+                                              Class<K> keyType,
+                                              Class<V> valueType,
+                                              Supplier<? extends java.util.Map<K, V>> supplier);
+
+    /**
+     * Get or create a typed list metadata value, validating all elements at runtime.
+     *
+     * @param key the metadata key.
+     * @param elementType the expected element type.
+     * @param supplier the supplier to create a new list if the key is not present.
+     * @return the typed list value.
+     */
+    <V> java.util.List<V> getOrCreateList(String key,
+                                          Class<V> elementType,
+                                          Supplier<? extends java.util.List<V>> supplier);
 
     /**
      * Set the metadata value for the given key.
@@ -93,4 +146,5 @@ public interface HasMeta<T extends HasMeta<T>> {
      * @param consumer the action to perform for each metadata key-value pair.
      */
     void forEach(BiConsumer<String, Object> consumer);
+
 }
