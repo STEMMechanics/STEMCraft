@@ -413,6 +413,17 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
         return new ArrayList<>(minigames.values());
     }
 
+    @Override
+    public boolean removePlayerFromArena(@NotNull Player player, boolean restoreLocation) {
+        MiniGameArenaImpl arena = findPlayerArena(player);
+        if (arena == null) {
+            return false;
+        }
+
+        arena.removeOccupant(player, restoreLocation);
+        return true;
+    }
+
     /**
      * Retrieves the arena handler for a given mini-game namespace.
      *

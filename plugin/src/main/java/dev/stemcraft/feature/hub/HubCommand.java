@@ -79,16 +79,18 @@ public class HubCommand {
                     if (hubWorld == null) {
                         hubWorld = api.worlds().getDefaultWorld();
                     }
+                    if (hubWorld == null) {
+                        cmd.error(ctx.getSender(), "HUB_WORLD_NOT_FOUND", "world", "unknown");
+                        return;
+                    }
 
                     Location hubLocation = hubWorld.getSpawnLocation().clone();
 
-                    feature.runExitCommands(target);
-                    api.tasks().runLater(2L, () -> {
-                        if (!target.isOnline()) {
-                            return;
-                        }
-                        PlayerUtil.teleport(target, hubLocation);
-                    });
+                    boolean removedFromArena = api.minigames().removePlayerFromArena(target, false);
+                    if (!removedFromArena) {
+                        feature.runExitCommands(target);
+                    }
+                    PlayerUtil.teleport(target, hubLocation);
 
                     if (target.equals(ctx.getSender())) {
                         cmd.success(ctx.getSender(), "HUB_TELEPORT_SUCCESS");

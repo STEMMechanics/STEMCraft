@@ -21,6 +21,7 @@
 package dev.stemcraft.api.service.minigame;
 
 import dev.stemcraft.api.minigame.*;
+import org.bukkit.entity.Player;
 
 import java.util.List;
 
@@ -52,4 +53,13 @@ public interface MiniGameService {
      * @return A list of all MiniGame instances.
      */
     List<MiniGame> list();
+
+    /**
+     * Removes the player from their current arena, if any.
+     *
+     * @param player The player to remove.
+     * @param restoreLocation Whether to restore the saved pre-minigame location.
+     * @return True if the player was removed from an arena, false otherwise.
+     */
+    boolean removePlayerFromArena(Player player, boolean restoreLocation);
 }
