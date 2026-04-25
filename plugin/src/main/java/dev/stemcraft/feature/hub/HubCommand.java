@@ -79,10 +79,6 @@ public class HubCommand {
                     if (hubWorld == null) {
                         hubWorld = api.worlds().getDefaultWorld();
                     }
-                    if (hubWorld == null) {
-                        cmd.error(ctx.getSender(), "HUB_WORLD_NOT_FOUND", "world", "unknown");
-                        return;
-                    }
 
                     Location hubLocation = hubWorld.getSpawnLocation().clone();
 

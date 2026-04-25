@@ -93,7 +93,7 @@ public class HubFeature extends BaseFeature {
         String currentWorldName = player.getWorld().getName();
         String currentWorldKey = currentWorldName.toLowerCase(Locale.ROOT);
         World resolvedHubWorld = hubWorld != null ? hubWorld : api.worlds().getDefaultWorld();
-        String hubWorldName = resolvedHubWorld == null ? currentWorldName : resolvedHubWorld.getName();
+        String hubWorldName = resolvedHubWorld.getName();
 
         for(Map.Entry<Pattern, List<String>> entry : worldExitCommands.entrySet()) {
             Pattern pattern = entry.getKey();
