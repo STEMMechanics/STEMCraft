@@ -2,11 +2,9 @@ package dev.stemcraft.minigame.mobarena;
 
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
-import dev.stemcraft.api.command.Command;
 import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.minigame.ArenaValidationResult;
 import dev.stemcraft.api.minigame.MiniGameArena;
-import dev.stemcraft.api.minigame.MiniGameTeam;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
 import dev.stemcraft.exception.MiniGameInvalidArenaConfigException;
@@ -16,11 +14,9 @@ import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
-import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
-import org.bukkit.inventory.ItemStack;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -195,18 +191,7 @@ public class MobArenaCommand {
         }
     }
 
-    private static void printZoneInfo(CommandContext ctx, MiniGameArena arena) {
-        Map<String, SCRegion> zones = arena.getMap("zones", String.class, SCRegion.class);
-        if (zones == null) {
-            return;
-        }
-
-        for (Map.Entry<String, SCRegion> entry : zones.entrySet()) {
-            ctx.info("   - " + entry.getKey() + ": " + entry.getValue());
-        }
-    }
-
-    private static void printSpawnerConfigInfo(CommandContext ctx, MiniGameArena arena) {
+    private void printSpawnerConfigInfo(CommandContext ctx, MiniGameArena arena) {
         int maxSpawnerConfig = arena.get("spawner-configs.max", int.class);
 
         for (int i = 0; i < maxSpawnerConfig; i++) {
@@ -214,6 +199,17 @@ public class MobArenaCommand {
             final String spawnerConfigPrefix = "spawner-configs." + i + ".";
 
             ctx.info("     - Entity Type:", arena.get(spawnerConfigPrefix + "entityType", EntityType.class));
+        }
+    }
+
+    private void printZoneInfo(CommandContext ctx, MiniGameArena arena) {
+        Map<String, SCRegion> zones = arena.getMap("zones", String.class, SCRegion.class);
+        if (zones == null) {
+            return;
+        }
+
+        for (Map.Entry<String, SCRegion> entry : zones.entrySet()) {
+            ctx.info("   - " + entry.getKey() + ": " + formatRegion(entry.getValue()));
         }
     }
 
