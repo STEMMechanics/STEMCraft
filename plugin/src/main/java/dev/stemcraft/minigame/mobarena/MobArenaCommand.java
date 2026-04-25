@@ -182,6 +182,7 @@ public class MobArenaCommand {
         ctx.info(" - Lobby: " + formatLocation(arena.getLobbySpawn()));
         ctx.info(" - Spectator: " + formatLocation(arena.getSpectatorSpawn()));
         ctx.info(" - Spawn Records:");
+        printSpawnerConfigInfo(ctx, arena);
         ctx.info(" - Zones:");
         printZoneInfo(ctx, arena);
         if (validation.hasErrors()) {
