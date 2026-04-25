@@ -5,6 +5,7 @@ import dev.stemcraft.api.config.ConfigFile;
 import dev.stemcraft.api.minigame.ArenaValidationResult;
 import dev.stemcraft.api.minigame.MiniGame;
 import dev.stemcraft.api.minigame.MiniGameArena;
+import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.util.StringUtil;
 import dev.stemcraft.minigame.BaseMiniGame;
 import dev.stemcraft.minigame.MiniGameHudConfigSupport;
@@ -15,10 +16,7 @@ import org.bukkit.World;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
+import java.util.*;
 
 // TODO: [Overall] Add in player stats
 
@@ -68,6 +66,10 @@ public class MobArenaMiniGame extends BaseMiniGame {
                 .setMaxPlayers(16);
 
         // TODO: Initialise everything else.
+
+        arena.set("spawner-configs.max", 0);
+        arena.<Map<String,SCRegion>>set("zones", new HashMap<>());
+
         return arena;
     }
 
