@@ -1,5 +1,6 @@
 package dev.stemcraft.minigame.mobarena;
 
+import dev.stemcraft.api.minigame.ArenaValidationResult;
 import dev.stemcraft.api.model.SCRegion;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -18,13 +19,14 @@ public record MobArenaArenaRecord(
         String spawnZone,
         int minPlayers,
         int maxPlayers,
-        List<SpawnTicket> spawnTicketList,
+        List<SpawnerRecord> spawnTicketList,
         Map<String, SCRegion> zones
 ) {
-    public record SpawnTicket(
+    public record SpawnerRecord(
             EntityType entityType,
             int initialAmount,
             float incrementAmount,
+            IncrementType incrementType,
             int initialWave,
             String spawnZone,
             boolean countTowardsMobCount
@@ -35,3 +37,4 @@ public record MobArenaArenaRecord(
         }
     }
 }
+
