@@ -48,9 +48,12 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
     private static final double SNOWBALL_PUSH_STRENGTH = 0.85d;
     private static final double SNOWBALL_PUSH_LIFT = 0.08d;
     private static final long TNT_BOUNCE_COOLDOWN_MILLIS = 750L;
-    private static final double TNT_BOUNCE_VERTICAL_VELOCITY = 1.0d;
+    private static final double TNT_BOUNCE_VERTICAL_VELOCITY = 1.35d;
     private static final double TNT_BOUNCE_HORIZONTAL_MULTIPLIER = 1.35d;
     private static final double TNT_BOUNCE_FALLBACK_SPEED = 0.75d;
+    private static final double TNT_BOUNCE_MIN_HORIZONTAL_SPEED = 0.95d;
+    private static final double TNT_BOUNCE_SUSTAIN_VERTICAL_VELOCITY = 0.45d;
+    private static final long[] TNT_BOUNCE_SUSTAIN_DELAYS = {1L, 2L};
 
     private final STEMCraftAPI api;
     private final BoatRaceMiniGame boatRace;
@@ -125,63 +128,19 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
     @Override
     public void onArenaLoad(MiniGameArena arena) {
         clearRaceState(arena);
-
-        SCRegion arenaRegion = arena.get("arenaRegion", SCRegion.class);
-        if (arenaRegion != null) {
-            api.regions().addListener(listenerPrefix(arena.id()) + "boundary", arenaRegion, new RegionListener() {
-                @Override
-                public void onExit(@NotNull Player player, @NotNull SCRegion region, @Nullable Location from, @Nullable Location to) {
-                    if (arena.hasPlayer(player)
-                        && (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING || arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING)) {
-                        resetToCheckpoint(arena, player, "You left the course. Returned to your last checkpoint.");
-                    } else if (arena.hasOccupant(player)
-                        && (arena.getStatus() == MiniGameArena.ArenaStatus.ENDING || arena.getStatus() == MiniGameArena.ArenaStatus.RESETTING)) {
-                        arena.removeOccupant(player);
-                    }
-                }
-            });
-        }
-
-        SCRegion finishRegion = arena.get("finishRegion", SCRegion.class);
-        if (finishRegion != null) {
-            api.regions().addListener(listenerPrefix(arena.id()) + "finish", finishRegion, new RegionListener() {
-                @Override
-                public void onEnter(@NotNull Player player, @NotNull SCRegion region, @Nullable Location from, @Nullable Location to) {
-                    if (!arena.hasPlayer(player) || arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
-                        return;
-                    }
-                    if (boatRace.hasFinished(arena, player.getUniqueId())) {
-                        return;
-                    }
-                    if (boatRace.stageProgress(arena.getPlayer(player)) < boatRace.stageCount(arena)) {
-                        return;
-                    }
-                    finishRace(arena, player);
-                }
-            });
-        }
-
-        List<SCRegion> stages = boatRace.stageRegions(arena);
-        for (int i = 0; i < stages.size(); i++) {
-            final int stageIndex = i;
-            SCRegion stage = stages.get(i);
-            api.regions().addListener(listenerPrefix(arena.id()) + "stage_" + stageIndex, stage, new RegionListener() {
-                @Override
-                public void onEnter(@NotNull Player player, @NotNull SCRegion region, @Nullable Location from, @Nullable Location to) {
-                    if (!arena.hasPlayer(player) || arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
-                        return;
-                    }
-                    handleStageEnter(arena, player, stageIndex, to == null ? player.getLocation() : to);
-                }
-            });
-        }
+        refreshRegionListeners(arena);
     }
 
     @Override
     public void onArenaUnload(MiniGameArena arena) {
         arena.stopWinnerCelebration();
         despawnAllBoats(arena);
-        api.regions().removeListener(listenerPrefix(arena.id()) + "*");
+        removeRegionListeners(arena.id());
+    }
+
+    public void refreshRegionListeners(@NotNull MiniGameArena arena) {
+        removeRegionListeners(arena.id());
+        registerRegionListeners(arena);
     }
 
     @Override
@@ -386,7 +345,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
                 return;
             }
             if (arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING) {
-                maybeBounceOnTnt(arena, rider, boat, event.getTo());
+                maybeBounceOnTnt(arena, rider, boat, event.getFrom(), event.getTo());
                 return;
             }
             if (arena.getStatus() != MiniGameArena.ArenaStatus.STARTING) {
@@ -522,6 +481,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         boatRace.finishOrder(arena).clear();
         boatRace.lapProgress(arena).clear();
         tntBounceCooldowns(arena).clear();
+        tntBounceKeys(arena).clear();
         boatRace.stageProgress(arena).clear();
         boatRace.assignedGridSlots(arena).clear();
         boatRace.checkpointLocations(arena).clear();
@@ -534,6 +494,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         boatRace.joinOrder(arena).remove(player.getUniqueId());
         boatRace.lapProgress(arena).remove(player.getUniqueId());
         tntBounceCooldowns(arena).remove(player.getUniqueId());
+        tntBounceKeys(arena).remove(player.getUniqueId());
         boatRace.assignedGridSlots(arena).remove(player.getUniqueId());
         boatRace.stageProgress(arena).remove(player.getUniqueId());
         boatRace.checkpointLocations(arena).remove(player.getUniqueId());
@@ -645,8 +606,8 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
 
     private void playCheckpointDeniedSequence(@NotNull MiniGameArena arena, @NotNull Player player) {
         long[] delays = {1L, 4L, 7L, 10L, 14L, 18L, 22L};
-        float[] pitches = {1.45f, 1.28f, 1.14f, 1.0f, 0.86f, 0.86f, 0.86f};
-        float[] volumes = {0.7f, 0.7f, 0.68f, 0.66f, 0.64f, 0.64f, 0.64f};
+        float[] pitches = {1.45f, 1.28f, 1.14f, 1.0f, 0.86f, 0.74f, 0.62f};
+        float[] volumes = {0.7f, 0.7f, 0.68f, 0.66f, 0.64f, 0.6f, 0.56f};
 
         for (int i = 0; i < delays.length; i++) {
             final float pitch = pitches[i];
@@ -700,46 +661,142 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         return arena.getOrCreate("tntBounceCooldowns", Map.class, LinkedHashMap::new);
     }
 
-    private void maybeBounceOnTnt(@NotNull MiniGameArena arena, @NotNull Player rider, @NotNull Boat boat, @Nullable Location location) {
-        if (location == null || !isTntBounceBlock(location)) {
+    @SuppressWarnings("unchecked")
+    private @NotNull Map<UUID, String> tntBounceKeys(@NotNull MiniGameArena arena) {
+        return arena.getOrCreate("tntBounceKeys", Map.class, LinkedHashMap::new);
+    }
+
+    private void maybeBounceOnTnt(@NotNull MiniGameArena arena,
+                                  @NotNull Player rider,
+                                  @NotNull Boat boat,
+                                  @Nullable Location from,
+                                  @Nullable Location to) {
+        Location contact = findTntBounceContact(from, to);
+        if (contact == null) {
             return;
         }
 
+        String bounceKey = tntBounceKey(contact);
         long now = System.currentTimeMillis();
         Long cooldownUntil = tntBounceCooldowns(arena).get(rider.getUniqueId());
-        if (cooldownUntil != null && cooldownUntil > now) {
+        String cooldownKey = tntBounceKeys(arena).get(rider.getUniqueId());
+        if (cooldownUntil != null && cooldownUntil > now && bounceKey.equals(cooldownKey)) {
             return;
         }
 
-        Vector currentVelocity = boat.getVelocity().clone();
-        Vector horizontal = currentVelocity.clone().setY(0.0d);
-        if (horizontal.lengthSquared() < 1.0e-6d) {
-            horizontal = boat.getLocation().getDirection().setY(0.0d);
-            if (horizontal.lengthSquared() > 1.0e-6d) {
-                horizontal.normalize().multiply(TNT_BOUNCE_FALLBACK_SPEED);
-            }
-        } else {
-            horizontal.multiply(TNT_BOUNCE_HORIZONTAL_MULTIPLIER);
-        }
-
-        Vector velocity = new Vector(
-            horizontal.getX(),
-            Math.max(currentVelocity.getY(), TNT_BOUNCE_VERTICAL_VELOCITY),
-            horizontal.getZ()
-        );
+        Vector velocity = tntBounceVelocity(boat, from, to);
         boat.setVelocity(velocity);
+        sustainTntBounceMomentum(arena, rider, boat, velocity);
         rider.playSound(rider.getLocation(), Sound.ENTITY_FIREWORK_ROCKET_LAUNCH, 0.7f, 1.35f);
         tntBounceCooldowns(arena).put(rider.getUniqueId(), now + TNT_BOUNCE_COOLDOWN_MILLIS);
+        tntBounceKeys(arena).put(rider.getUniqueId(), bounceKey);
     }
 
     private boolean isTntBounceBlock(@NotNull Location location) {
-        Material current = location.getBlock().getType();
-        if (current == Material.TNT) {
-            return true;
+        return tntBounceSource(location) != null;
+    }
+
+    private @Nullable Location tntBounceSource(@Nullable Location location) {
+        if (location == null || location.getWorld() == null) {
+            return null;
+        }
+
+        if (location.getBlock().getType() == Material.TNT) {
+            return location.getBlock().getLocation();
         }
 
         Location below = location.clone().subtract(0.0d, 0.75d, 0.0d);
-        return below.getBlock().getType() == Material.TNT;
+        if (below.getBlock().getType() == Material.TNT) {
+            return below.getBlock().getLocation();
+        }
+
+        return null;
+    }
+
+    private @Nullable Location findTntBounceContact(@Nullable Location from, @Nullable Location to) {
+        if (to == null || to.getWorld() == null) {
+            return null;
+        }
+
+        Location direct = tntBounceSource(to);
+        if (direct != null) {
+            return direct;
+        }
+
+        if (from == null || from.getWorld() == null || !from.getWorld().equals(to.getWorld())) {
+            return null;
+        }
+
+        double dx = to.getX() - from.getX();
+        double dy = to.getY() - from.getY();
+        double dz = to.getZ() - from.getZ();
+        double maxDelta = Math.max(Math.abs(dx), Math.max(Math.abs(dy), Math.abs(dz)));
+        int steps = Math.max(1, (int) Math.ceil(maxDelta * 4.0d));
+
+        for (int i = 1; i <= steps; i++) {
+            double t = i / (double) steps;
+            Location sample = new Location(
+                to.getWorld(),
+                from.getX() + (dx * t),
+                from.getY() + (dy * t),
+                from.getZ() + (dz * t)
+            );
+            Location source = tntBounceSource(sample);
+            if (source != null) {
+                return source;
+            }
+        }
+
+        return null;
+    }
+
+    private @NotNull String tntBounceKey(@NotNull Location source) {
+        return source.getWorld().getName() + ":" + source.getBlockX() + ":" + source.getBlockY() + ":" + source.getBlockZ();
+    }
+
+    private @NotNull Vector tntBounceVelocity(@NotNull Boat boat, @Nullable Location from, @Nullable Location to) {
+        Vector horizontal = boat.getVelocity().clone().setY(0.0d);
+        if (horizontal.lengthSquared() < 1.0e-6d) {
+            horizontal = movementDirection(from, to);
+        }
+        if (horizontal.lengthSquared() < 1.0e-6d) {
+            horizontal = boat.getLocation().getDirection().setY(0.0d);
+        }
+        if (horizontal.lengthSquared() < 1.0e-6d) {
+            horizontal = new Vector(1.0d, 0.0d, 0.0d);
+        }
+
+        double baseSpeed = Math.max(horizontal.length(), TNT_BOUNCE_FALLBACK_SPEED);
+        horizontal.normalize().multiply(Math.max(baseSpeed * TNT_BOUNCE_HORIZONTAL_MULTIPLIER, TNT_BOUNCE_MIN_HORIZONTAL_SPEED));
+        return new Vector(horizontal.getX(), TNT_BOUNCE_VERTICAL_VELOCITY, horizontal.getZ());
+    }
+
+    private @NotNull Vector movementDirection(@Nullable Location from, @Nullable Location to) {
+        if (from == null || to == null || from.getWorld() == null || to.getWorld() == null || !from.getWorld().equals(to.getWorld())) {
+            return new Vector();
+        }
+
+        return new Vector(to.getX() - from.getX(), 0.0d, to.getZ() - from.getZ());
+    }
+
+    private void sustainTntBounceMomentum(@NotNull MiniGameArena arena,
+                                          @NotNull Player rider,
+                                          @NotNull Boat boat,
+                                          @NotNull Vector launchVelocity) {
+        for (long delay : TNT_BOUNCE_SUSTAIN_DELAYS) {
+            api.tasks().runLater(delay, () -> {
+                if (!rider.isOnline() || !arena.hasPlayer(rider) || !ownsBoat(arena, rider, boat.getUniqueId()) || !boat.isValid()) {
+                    return;
+                }
+
+                Vector currentVelocity = boat.getVelocity().clone();
+                boat.setVelocity(new Vector(
+                    launchVelocity.getX(),
+                    Math.max(currentVelocity.getY(), TNT_BOUNCE_SUSTAIN_VERTICAL_VELOCITY),
+                    launchVelocity.getZ()
+                ));
+            });
+        }
     }
 
     private void syncCheckpointProgressAtLocation(@NotNull MiniGameArena arena, @NotNull Player player, @NotNull Location location) {
@@ -1068,6 +1125,64 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         source.setYaw(yaw);
         source.setPitch(0.0f);
         return source;
+    }
+
+    private void registerRegionListeners(@NotNull MiniGameArena arena) {
+        SCRegion arenaRegion = arena.get("arenaRegion", SCRegion.class);
+        if (arenaRegion != null) {
+            api.regions().addListener(listenerPrefix(arena.id()) + "boundary", arenaRegion, new RegionListener() {
+                @Override
+                public void onExit(@NotNull Player player, @NotNull SCRegion region, @Nullable Location from, @Nullable Location to) {
+                    if (arena.hasPlayer(player)
+                        && (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING
+                            || arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING
+                            || arena.getStatus() == MiniGameArena.ArenaStatus.ENDING)) {
+                        resetToCheckpoint(arena, player, "You left the course. Returned to your last checkpoint.");
+                    } else if (arena.hasOccupant(player)
+                        && arena.getStatus() == MiniGameArena.ArenaStatus.RESETTING) {
+                        arena.removeOccupant(player);
+                    }
+                }
+            });
+        }
+
+        SCRegion finishRegion = arena.get("finishRegion", SCRegion.class);
+        if (finishRegion != null) {
+            api.regions().addListener(listenerPrefix(arena.id()) + "finish", finishRegion, new RegionListener() {
+                @Override
+                public void onEnter(@NotNull Player player, @NotNull SCRegion region, @Nullable Location from, @Nullable Location to) {
+                    if (!arena.hasPlayer(player) || arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
+                        return;
+                    }
+                    if (boatRace.hasFinished(arena, player.getUniqueId())) {
+                        return;
+                    }
+                    if (boatRace.stageProgress(arena.getPlayer(player)) < boatRace.stageCount(arena)) {
+                        return;
+                    }
+                    finishRace(arena, player);
+                }
+            });
+        }
+
+        List<SCRegion> stages = boatRace.stageRegions(arena);
+        for (int i = 0; i < stages.size(); i++) {
+            final int stageIndex = i;
+            SCRegion stage = stages.get(i);
+            api.regions().addListener(listenerPrefix(arena.id()) + "stage_" + stageIndex, stage, new RegionListener() {
+                @Override
+                public void onEnter(@NotNull Player player, @NotNull SCRegion region, @Nullable Location from, @Nullable Location to) {
+                    if (!arena.hasPlayer(player) || arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
+                        return;
+                    }
+                    handleStageEnter(arena, player, stageIndex, to == null ? player.getLocation() : to);
+                }
+            });
+        }
+    }
+
+    private void removeRegionListeners(@NotNull String arenaId) {
+        api.regions().removeListener(listenerPrefix(arenaId) + "*");
     }
 
     private String listenerPrefix(String arenaId) {

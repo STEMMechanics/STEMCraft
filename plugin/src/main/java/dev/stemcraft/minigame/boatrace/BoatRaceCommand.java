@@ -474,6 +474,7 @@ public class BoatRaceCommand {
                 SCRegion copy = selection.copy();
                 arena.setRegion(copy);
                 arena.set("arenaRegion", copy.copy());
+                refreshLiveRegionListeners(arena);
                 showRegionPreview(player, "arena", selection);
                 ctx.success("Arena region updated for arena '" + arena.id() + "'.");
             }
@@ -483,6 +484,7 @@ public class BoatRaceCommand {
                 ensureArenaWorld(ctx, arena, selection, "Finish region");
                 ensureRegionContained(ctx, selection, arena.get("arenaRegion", SCRegion.class), "Finish region");
                 arena.set("finishRegion", selection.copy());
+                refreshLiveRegionListeners(arena);
                 showRegionPreview(player, "finish", selection);
                 ctx.success("Finish region updated for arena '" + arena.id() + "'.");
             }
@@ -559,6 +561,7 @@ public class BoatRaceCommand {
         ensureArenaWorld(ctx, arena, selection, "Checkpoint region");
         ensureRegionContained(ctx, selection, arena.get("arenaRegion", SCRegion.class), "Checkpoint region");
         boatRace.stageRegions(arena).add(selection.copy());
+        refreshLiveRegionListeners(arena);
         showRegionPreview(player, "stage-add", selection);
         warnIfCheckpointRegionIsNarrow(ctx, selection, boatRace.stageRegions(arena).size());
         ctx.success("Added checkpoint " + boatRace.stageRegions(arena).size() + " to arena '" + arena.id() + "'.");
@@ -573,6 +576,7 @@ public class BoatRaceCommand {
         ensureArenaWorld(ctx, arena, selection, "Checkpoint region");
         ensureRegionContained(ctx, selection, arena.get("arenaRegion", SCRegion.class), "Checkpoint region");
         boatRace.stageRegions(arena).set(index, selection.copy());
+        refreshLiveRegionListeners(arena);
         showRegionPreview(player, "stage-set-" + index, selection);
         warnIfCheckpointRegionIsNarrow(ctx, selection, index + 1);
         ctx.success("Updated checkpoint " + (index + 1) + " for arena '" + arena.id() + "'.");
@@ -583,6 +587,7 @@ public class BoatRaceCommand {
         MiniGameArena arena = requireArena(ctx);
         int index = requireOneBasedIndex(ctx, 2, boatRace.stageRegions(arena).size(), "checkpoint");
         boatRace.stageRegions(arena).remove(index);
+        refreshLiveRegionListeners(arena);
         ctx.success("Removed checkpoint " + (index + 1) + " from arena '" + arena.id() + "'.");
     }
 
@@ -808,6 +813,20 @@ public class BoatRaceCommand {
                 + RECOMMENDED_MIN_CHECKPOINT_HORIZONTAL_SPAN
                 + " blocks wide are not recommended for boats and may miss detection."
         );
+    }
+
+    void refreshLiveRegionListeners(MiniGameArena arena) {
+        MiniGameArena.ArenaStatus status = arena.getStatus();
+        if (status == null
+            || status == MiniGameArena.ArenaStatus.DISABLED
+            || status == MiniGameArena.ArenaStatus.SETUP
+            || status == MiniGameArena.ArenaStatus.SHUTDOWN) {
+            return;
+        }
+
+        if (boatRace.minigame().handler() instanceof BoatRaceArenaHandler handler) {
+            handler.refreshRegionListeners(arena);
+        }
     }
 
     static int narrowestCheckpointHorizontalSpan(SCRegion region) {
