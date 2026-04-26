@@ -274,13 +274,17 @@ public class NightfallMiniGame extends BaseMiniGame {
             .set("nightTimeSpeedMultiplier", 2.0d)
             .set("dropMinSeconds", 1)
             .set("dropMaxSeconds", 5)
+            .set("dropMaxActiveItems", 10)
             .set("zombieBaseNightlySpawns", 4)
             .set("zombieNightlySpawnIncrease", 3)
+            .set("zombieNightlyHealthMultiplier", 1.05d)
             .set("zombieWaveSize", 2)
             .set("zombieWaveIntervalSeconds", 8)
             .set("zombieSpawnRadiusMin", 20)
             .set("zombieSpawnRadiusMax", 30)
             .set("bloodMoonChancePercent", 0)
+            .set("bloodMoonZombieSpawnMultiplier", 2.0d)
+            .set("bloodMoonBabyZombieChancePercent", 20)
             .set("generatorLocations", new ArrayList<Location>())
             .set("dropItems", copyDropItems(defaultDropItems()));
     }
@@ -350,13 +354,17 @@ public class NightfallMiniGame extends BaseMiniGame {
                     .set("nightTimeSpeedMultiplier", arenaDef.nightTimeSpeedMultiplier())
                     .set("dropMinSeconds", arenaDef.dropMinSeconds())
                     .set("dropMaxSeconds", arenaDef.dropMaxSeconds())
+                    .set("dropMaxActiveItems", arenaDef.dropMaxActiveItems())
                     .set("zombieBaseNightlySpawns", arenaDef.zombieBaseNightlySpawns())
                     .set("zombieNightlySpawnIncrease", arenaDef.zombieNightlySpawnIncrease())
+                    .set("zombieNightlyHealthMultiplier", arenaDef.zombieNightlyHealthMultiplier())
                     .set("zombieWaveSize", arenaDef.zombieWaveSize())
                     .set("zombieWaveIntervalSeconds", arenaDef.zombieWaveIntervalSeconds())
                     .set("zombieSpawnRadiusMin", arenaDef.zombieSpawnRadiusMin())
                     .set("zombieSpawnRadiusMax", arenaDef.zombieSpawnRadiusMax())
                     .set("bloodMoonChancePercent", arenaDef.bloodMoonChancePercent())
+                    .set("bloodMoonZombieSpawnMultiplier", arenaDef.bloodMoonZombieSpawnMultiplier())
+                    .set("bloodMoonBabyZombieChancePercent", arenaDef.bloodMoonBabyZombieChancePercent())
                     .set("generatorLocations", copyLocations(arenaDef.generatorLocations()))
                     .set("dropItems", copyDropItems(arenaDef.dropItems()))
                     .set("pendingWorldRollback", arenaDef.pendingWorldRollback())
@@ -486,11 +494,29 @@ public class NightfallMiniGame extends BaseMiniGame {
     }
 
     public int dropMinSeconds(@NotNull MiniGameArena arena) {
-        return Math.max(1, arena.get("dropMinSeconds", Integer.class, 1));
+        int min = arena.get("dropMinSeconds", Integer.class, 1);
+        int max = arena.get("dropMaxSeconds", Integer.class, 5);
+        if (min <= 0 || max <= 0) {
+            return 0;
+        }
+        return min;
     }
 
     public int dropMaxSeconds(@NotNull MiniGameArena arena) {
-        return Math.max(dropMinSeconds(arena), arena.get("dropMaxSeconds", Integer.class, 5));
+        int min = arena.get("dropMinSeconds", Integer.class, 1);
+        int max = arena.get("dropMaxSeconds", Integer.class, 5);
+        if (min <= 0 || max <= 0) {
+            return 0;
+        }
+        return Math.max(min, max);
+    }
+
+    public boolean dropsEnabled(@NotNull MiniGameArena arena) {
+        return dropMinSeconds(arena) > 0 && dropMaxSeconds(arena) > 0;
+    }
+
+    public int dropMaxActiveItems(@NotNull MiniGameArena arena) {
+        return Math.max(0, arena.get("dropMaxActiveItems", Integer.class, 10));
     }
 
     public int zombieBaseNightlySpawns(@NotNull MiniGameArena arena) {
@@ -499,6 +525,10 @@ public class NightfallMiniGame extends BaseMiniGame {
 
     public int zombieNightlySpawnIncrease(@NotNull MiniGameArena arena) {
         return Math.max(0, arena.get("zombieNightlySpawnIncrease", Integer.class, 3));
+    }
+
+    public double zombieNightlyHealthMultiplier(@NotNull MiniGameArena arena) {
+        return Math.max(1.0d, arena.get("zombieNightlyHealthMultiplier", Double.class, 1.05d));
     }
 
     public int zombieWaveSize(@NotNull MiniGameArena arena) {
@@ -519,6 +549,14 @@ public class NightfallMiniGame extends BaseMiniGame {
 
     public int bloodMoonChancePercent(@NotNull MiniGameArena arena) {
         return Math.clamp(arena.get("bloodMoonChancePercent", Integer.class, 0), 0, 100);
+    }
+
+    public double bloodMoonZombieSpawnMultiplier(@NotNull MiniGameArena arena) {
+        return Math.max(1.0d, arena.get("bloodMoonZombieSpawnMultiplier", Double.class, 2.0d));
+    }
+
+    public int bloodMoonBabyZombieChancePercent(@NotNull MiniGameArena arena) {
+        return Math.clamp(arena.get("bloodMoonBabyZombieChancePercent", Integer.class, 20), 0, 100);
     }
 
     public int currentNight(@NotNull MiniGameArena arena) {

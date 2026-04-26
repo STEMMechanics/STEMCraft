@@ -76,13 +76,17 @@ public class NightfallConfig {
         double nightTimeSpeedMultiplier = section.getDouble("night-time-speed-multiplier", legacyTimeSpeedMultiplier);
         int dropMinSeconds = section.getInt("drop-min-seconds", 1);
         int dropMaxSeconds = section.getInt("drop-max-seconds", 5);
+        int dropMaxActiveItems = section.getInt("drop-max-active-items", 10);
         int zombieBaseNightlySpawns = section.getInt("zombie-base-nightly-spawns", 4);
         int zombieNightlySpawnIncrease = section.getInt("zombie-nightly-spawn-increase", 3);
+        double zombieNightlyHealthMultiplier = section.getDouble("zombie-nightly-health-multiplier", 1.05d);
         int zombieWaveSize = section.getInt("zombie-wave-size", 2);
         int zombieWaveIntervalSeconds = section.getInt("zombie-wave-interval-seconds", 8);
         int zombieSpawnRadiusMin = section.getInt("zombie-spawn-radius-min", 20);
         int zombieSpawnRadiusMax = section.getInt("zombie-spawn-radius-max", 30);
         int bloodMoonChancePercent = section.getInt("blood-moon-chance", 0);
+        double bloodMoonZombieSpawnMultiplier = section.getDouble("blood-moon-zombie-spawn-multiplier", 2.0d);
+        int bloodMoonBabyZombieChancePercent = section.getInt("blood-moon-baby-zombie-chance", 20);
         String name = section.getString("name", StringUtil.beautify(arenaId));
         List<Location> generatorLocations = loadLocations(section, world, arenaId);
         Map<Integer, List<Material>> dropItems = loadDropItems(section, arenaId);
@@ -109,13 +113,17 @@ public class NightfallConfig {
             nightTimeSpeedMultiplier,
             dropMinSeconds,
             dropMaxSeconds,
+            dropMaxActiveItems,
             zombieBaseNightlySpawns,
             zombieNightlySpawnIncrease,
+            zombieNightlyHealthMultiplier,
             zombieWaveSize,
             zombieWaveIntervalSeconds,
             zombieSpawnRadiusMin,
             zombieSpawnRadiusMax,
             bloodMoonChancePercent,
+            bloodMoonZombieSpawnMultiplier,
+            bloodMoonBabyZombieChancePercent,
             generatorLocations,
             dropItems,
             pendingWorldRollback,
@@ -152,13 +160,18 @@ public class NightfallConfig {
         arenaConfig.set("night-time-speed-multiplier", nightTimeSpeed);
         arenaConfig.set("drop-min-seconds", arena.get("dropMinSeconds", Integer.class, 1));
         arenaConfig.set("drop-max-seconds", arena.get("dropMaxSeconds", Integer.class, 5));
+        arenaConfig.set("drop-max-active-items", arena.get("dropMaxActiveItems", Integer.class, 10));
         arenaConfig.set("zombie-base-nightly-spawns", arena.get("zombieBaseNightlySpawns", Integer.class, 4));
         arenaConfig.set("zombie-nightly-spawn-increase", arena.get("zombieNightlySpawnIncrease", Integer.class, 3));
+        arenaConfig.set("zombie-nightly-health-multiplier", arena.get("zombieNightlyHealthMultiplier", Double.class, 1.05d));
         arenaConfig.set("zombie-wave-size", arena.get("zombieWaveSize", Integer.class, 2));
         arenaConfig.set("zombie-wave-interval-seconds", arena.get("zombieWaveIntervalSeconds", Integer.class, 8));
         arenaConfig.set("zombie-spawn-radius-min", arena.get("zombieSpawnRadiusMin", Integer.class, 20));
         arenaConfig.set("zombie-spawn-radius-max", arena.get("zombieSpawnRadiusMax", Integer.class, 30));
         arenaConfig.set("blood-moon-chance", arena.get("bloodMoonChancePercent", Integer.class, 0));
+        arenaConfig.set("blood-moon-zombie-spawn-multiplier", arena.get("bloodMoonZombieSpawnMultiplier", Double.class, 2.0d));
+        arenaConfig.remove("blood-moon-baby-zombies");
+        arenaConfig.set("blood-moon-baby-zombie-chance", arena.get("bloodMoonBabyZombieChancePercent", Integer.class, 20));
         if (generatorLocations(arena).isEmpty()) {
             arenaConfig.set("generator-locations", new ArrayList<>());
         } else {
