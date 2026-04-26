@@ -164,7 +164,7 @@ public class MobArenaConfig {
         }).toList();
     }
 
-    private Map<String, SCRegion> loadZonesFromArena(@NonNull String arenaId, @NonNull ConfigSection section, World world) {
+    private @NonNull Map<String, SCRegion> loadZonesFromArena(@NonNull String arenaId, @NonNull ConfigSection section, World world) {
         Map<String, SCRegion> zones = new HashMap<>();
 
         section.getSection("zones").getKeys(false).forEach(key -> {
@@ -174,21 +174,54 @@ public class MobArenaConfig {
         return zones;
     }
 
-    public void saveArenas(@NotNull Map<@NotNull String, @NotNull MiniGameArena> arena) {
+    public void saveArenas(@NotNull List<@NotNull MobArenaArenaRecord> arena) {
         ensureLoaded();
-        arena.forEach((key, arenaRecord) -> {
-            saveArena(key, arenaRecord);
+        arena.forEach(arenaRecord -> {
+            saveArena(arenaRecord.arenaId(), arenaRecord);
         });
     }
 
-    public void saveArena(@NotNull String key, @NotNull MiniGameArena arenaRecord) {
+    public void saveArena(@NotNull String key, @NotNull MobArenaArenaRecord arenaRecord) {
         ensureLoaded();
 
         ConfigSection toSave = config.createSection("arenas." + key, true);
 
-        // TODO: Saving logic, would be great... - ProjectHSI
+        toSave.set("enabled", arenaRecord.enabled());
+        toSave.set("name", arenaRecord.name());
+        toSave.set("world", arenaRecord.world().getName());
+        toSave.set("lobby", arenaRecord.lobby());
+        toSave.set("spectator", arenaRecord.spectator());
+        toSave.set("spawn-zone", arenaRecord.spawnZone());
+        toSave.set("min-players", arenaRecord.minPlayers());
+        toSave.set("max-players", arenaRecord.maxPlayers());
+        saveSpawnerRecordsToArena(toSave, arenaRecord);
+        saveZonesToArena(toSave, arenaRecord);
 
-        //ConfigSection arenaSection = config.createSection("arenas." + )
+        config.save();
+    }
+
+    private void saveSpawnerRecordsToArena(@NotNull ConfigSection toSave, @NotNull MobArenaArenaRecord arenaRecord) {
+        ConfigSection spawnerConfigsSection = toSave.getSection("spawner-configs");
+
+        for (int i = 0; i < arenaRecord.spawnTicketList().size(); i++) {
+            MobArenaArenaRecord.SpawnerRecord spawnerRecord = arenaRecord.spawnTicketList().get(i);
+            ConfigSection currentSpawnerConfigSection = spawnerConfigsSection.getSection(String.valueOf(i), true);
+
+            currentSpawnerConfigSection.set("entity-type", spawnerRecord.entityType().toString());
+            currentSpawnerConfigSection.set("initial-amount", spawnerRecord.initialAmount());
+            currentSpawnerConfigSection.set("increment-amount", spawnerRecord.incrementAmount());
+            currentSpawnerConfigSection.set("increment-type", spawnerRecord.incrementType().toString());
+            currentSpawnerConfigSection.set("initial-wave", spawnerRecord.initialWave());
+            currentSpawnerConfigSection.set("spawn-zone", spawnerRecord.spawnZone());
+            currentSpawnerConfigSection.set("count-towards-mob-count", spawnerRecord.countTowardsMobCount());
+        }
+    }
+
+    private void saveZonesToArena(@NotNull ConfigSection toSave, @NotNull MobArenaArenaRecord arenaRecord) {
+        ConfigSection zonesSection = toSave.getSection("zones");
+        arenaRecord.zones().forEach((zoneId, zone) -> {
+            zonesSection.set(zoneId, serializeRegion(zone, arenaRecord.arenaId(), "Zone " + zoneId));
+        });
     }
 
     public void deleteArena(@NotNull String arenaId) {

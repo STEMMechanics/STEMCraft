@@ -126,6 +126,8 @@ public class MobArenaMiniGame extends BaseMiniGame {
                 .setSpectatorSpawn(arenaRecord.spectator())
                 .setRegion(arenaRecord.zones().getOrDefault("arena", null));
 
+        arena.set("spawn-zone", arenaRecord.spawnZone());
+
         arena.set("spawner-configs.max", arenaRecord.spawnTicketList().size());
 
         for (int i = 0; i < arenaRecord.spawnTicketList().size(); i++) {
@@ -145,7 +147,7 @@ public class MobArenaMiniGame extends BaseMiniGame {
 
         ArenaValidationResult result = arena.validate();
         if (result.hasErrors()) {
-            api.messages().error("Bridge arena '" + arenaRecord.arenaId() + "' has validation errors and will be disabled:");
+            api.messages().error("Mob Arena arena '" + arenaRecord.arenaId() + "' has validation errors and will be disabled:");
             for (String error : result.getErrors()) {
                 api.messages().error(" - " + error);
             }
