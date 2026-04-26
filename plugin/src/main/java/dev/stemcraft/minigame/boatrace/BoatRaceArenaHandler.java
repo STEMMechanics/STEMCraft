@@ -8,6 +8,8 @@ import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.service.region.RegionListener;
 import dev.stemcraft.api.util.NamespaceId;
 import dev.stemcraft.api.util.PlayerUtil;
+import dev.stemcraft.api.util.TextUtil;
+import net.kyori.adventure.title.Title;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.GameMode;
@@ -31,6 +33,7 @@ import org.jetbrains.annotations.Nullable;
 import org.jspecify.annotations.NonNull;
 import org.bukkit.util.Vector;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -572,6 +575,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
             boatRace.lapProgress(arena).put(player.getUniqueId(), nextLap);
             boatRace.stageProgress(arena).put(player.getUniqueId(), 0);
             boatRace.checkpointLocations(arena).put(player.getUniqueId(), player.getLocation().clone());
+            showLapAdvanceTitle(player, nextLap, totalLaps);
             String lapLabel = nextLap == totalLaps ? "Final lap" : "Lap";
             arena.info(player, "<gold>Lap " + currentLap + " complete.</gold> <aqua>" + lapLabel + ":</aqua> <yellow>" + nextLap + "/" + totalLaps + "</yellow>");
             player.playSound(player.getLocation(), Sound.UI_TOAST_IN, 0.8f, 1.1f);
@@ -994,6 +998,17 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
             1000,
             400
         );
+    }
+
+    private void showLapAdvanceTitle(@NotNull Player player, int lap, int totalLaps) {
+        String subtitle = lap == totalLaps
+            ? "<gold>Final lap</gold> <yellow>" + lap + "/" + totalLaps + "</yellow>"
+            : "<yellow>" + lap + "/" + totalLaps + "</yellow>";
+        player.showTitle(Title.title(
+            TextUtil.colourise("<aqua><bold>Lap " + lap + "</bold></aqua>"),
+            TextUtil.colourise(subtitle),
+            Title.Times.times(Duration.ZERO, Duration.ofMillis(1400), Duration.ofMillis(500))
+        ));
     }
 
     private @NotNull String ordinal(int value) {
