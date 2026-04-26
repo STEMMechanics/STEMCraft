@@ -578,7 +578,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
             showLapAdvanceTitle(player, nextLap, totalLaps);
             String lapLabel = nextLap == totalLaps ? "Final lap" : "Lap";
             arena.info(player, "<gold>Lap " + currentLap + " complete.</gold> <aqua>" + lapLabel + ":</aqua> <yellow>" + nextLap + "/" + totalLaps + "</yellow>");
-            player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 0.7f, 1.45f);
+            player.playSound(player.getLocation(), Sound.UI_TOAST_IN, 0.8f, 1.1f);
             syncCheckpointProgressAtLocation(arena, player, player.getLocation());
             return;
         }
@@ -645,8 +645,8 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
 
     private void playCheckpointDeniedSequence(@NotNull MiniGameArena arena, @NotNull Player player) {
         long[] delays = {1L, 4L, 7L, 10L, 14L, 18L, 22L};
-        float[] pitches = {1.0f, 0.9f, 0.8f, 0.7f, 0.58f, 0.58f, 0.58f};
-        float[] volumes = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.8f, 0.6f};
+        float[] pitches = {1.45f, 1.28f, 1.14f, 1.0f, 0.86f, 0.86f, 0.86f};
+        float[] volumes = {0.7f, 0.7f, 0.68f, 0.66f, 0.64f, 0.64f, 0.64f};
 
         for (int i = 0; i < delays.length; i++) {
             final float pitch = pitches[i];
@@ -655,7 +655,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
                 if (!player.isOnline() || !arena.hasPlayer(player)) {
                     return;
                 }
-                player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, volume, pitch);
+                player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, volume, pitch);
             });
         }
     }

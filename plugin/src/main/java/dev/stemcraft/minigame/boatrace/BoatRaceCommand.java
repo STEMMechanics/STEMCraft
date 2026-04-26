@@ -23,6 +23,7 @@ import java.util.Locale;
 
 public class BoatRaceCommand {
     private static final long PREVIEW_TICKS = 100L;
+    static final int RECOMMENDED_MIN_CHECKPOINT_HORIZONTAL_SPAN = 4;
 
     private final STEMCraftAPI api;
     private final BoatRaceMiniGame boatRace;
@@ -559,6 +560,7 @@ public class BoatRaceCommand {
         ensureRegionContained(ctx, selection, arena.get("arenaRegion", SCRegion.class), "Checkpoint region");
         boatRace.stageRegions(arena).add(selection.copy());
         showRegionPreview(player, "stage-add", selection);
+        warnIfCheckpointRegionIsNarrow(ctx, selection, boatRace.stageRegions(arena).size());
         ctx.success("Added checkpoint " + boatRace.stageRegions(arena).size() + " to arena '" + arena.id() + "'.");
     }
 
@@ -572,6 +574,7 @@ public class BoatRaceCommand {
         ensureRegionContained(ctx, selection, arena.get("arenaRegion", SCRegion.class), "Checkpoint region");
         boatRace.stageRegions(arena).set(index, selection.copy());
         showRegionPreview(player, "stage-set-" + index, selection);
+        warnIfCheckpointRegionIsNarrow(ctx, selection, index + 1);
         ctx.success("Updated checkpoint " + (index + 1) + " for arena '" + arena.id() + "'.");
     }
 
@@ -791,6 +794,36 @@ public class BoatRaceCommand {
             }
             ctx.returnError("Expand the selection or re-set the listed items first.");
         }
+    }
+
+    private void warnIfCheckpointRegionIsNarrow(CommandContext ctx, SCRegion region, int checkpointNumber) {
+        int horizontalSpan = narrowestCheckpointHorizontalSpan(region);
+        if (horizontalSpan >= RECOMMENDED_MIN_CHECKPOINT_HORIZONTAL_SPAN) {
+            return;
+        }
+
+        ctx.warn(
+            "Checkpoint " + checkpointNumber + " is only " + horizontalSpan
+                + " block(s) wide on its narrowest horizontal axis. Regions under "
+                + RECOMMENDED_MIN_CHECKPOINT_HORIZONTAL_SPAN
+                + " blocks wide are not recommended for boats and may miss detection."
+        );
+    }
+
+    static int narrowestCheckpointHorizontalSpan(SCRegion region) {
+        if (region == null) {
+            return 0;
+        }
+
+        Location min = region.getMinimumLocation();
+        Location max = region.getMaximumLocation();
+        if (min == null || max == null) {
+            return 0;
+        }
+
+        int xSpan = Math.abs(max.getBlockX() - min.getBlockX()) + 1;
+        int zSpan = Math.abs(max.getBlockZ() - min.getBlockZ()) + 1;
+        return Math.min(xSpan, zSpan);
     }
 
     private void requireSameWorld(CommandContext ctx, Player player, String worldName) {

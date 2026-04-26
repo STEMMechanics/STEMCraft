@@ -28,8 +28,10 @@ import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.util.NamespaceId;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.vehicle.VehicleMoveEvent;
 import org.jetbrains.annotations.NotNull;
 import org.jspecify.annotations.NonNull;
 
@@ -71,73 +73,102 @@ public class RegionServiceImpl extends BaseService implements RegionService {
      */
     @Override
     public void onEnable() {
-        api.events().register(PlayerMoveEvent.class, event -> {
-            Player player = event.getPlayer();
-            Location from = event.getFrom();
-            Location to = event.getTo();
-            World toWorld = to.getWorld();
-
-            // Previously active regions/worlds for this player
-            List<String> previousIds = playerRegions.getOrDefault(player, List.of());
-            List<String> currentIds = new ArrayList<>();
-
-            // detect regions/worlds player left
-            for (String id : previousIds) {
-                RegionListenerEntry entry = listeners.get(id);
-                if (entry == null) {
-                    continue; // listener was removed
-                }
-
-                SCRegion region = entry.region();
-                World world = entry.world();
-                RegionListener listener = entry.listener();
-
-                if (region != null) {
-                    // Region-based listener: exit when player is no longer inside
-                    if (!region.contains(to)) {
-                        listener.onExit(player, region, from, to);
-                    } else {
-                        currentIds.add(id);
-                    }
-                } else if (world != null) {
-                    // World-based listener: exit when player moved to a different world
-                    if (!world.equals(toWorld)) {
-                        listener.onExitWorld(player, world, from, to);
-                    } else {
-                        currentIds.add(id);
-                    }
-                }
+        api.events().register(PlayerMoveEvent.class, event -> handleMovement(event.getPlayer(), event.getFrom(), event.getTo(), true));
+        api.events().register(VehicleMoveEvent.class, event -> {
+            Player rider = firstPassenger(event.getVehicle());
+            if (rider == null) {
+                return;
             }
 
-            Location effectiveTo = resolveEffectiveEnterLocation(player, from, to);
-            World effectiveWorld = effectiveTo.getWorld();
-
-            // detect regions/worlds player entered
-            listeners.forEach((id, entry) -> {
-                if (currentIds.contains(id)) {
-                    return; // already still inside this region/world
-                }
-
-                SCRegion region = entry.region();
-                World world = entry.world();
-                RegionListener listener = entry.listener();
-
-                if (region != null) {
-                    if (region.contains(effectiveTo)) {
-                        listener.onEnter(player, region, from, effectiveTo);
-                        currentIds.add(id);
-                    }
-                } else if (world != null) {
-                    if (world.equals(effectiveWorld)) {
-                        listener.onEnterWorld(player, world, from, effectiveTo);
-                        currentIds.add(id);
-                    }
-                }
-            });
-
-            // update player's current active regions/worlds
-            playerRegions.put(player, currentIds);
+            handleMovement(rider, event.getFrom(), event.getTo(), false);
         });
+    }
+
+    private void handleMovement(@NotNull Player player,
+                                @Nullable Location from,
+                                @Nullable Location requestedTo,
+                                boolean preferActualPlayerLocation) {
+        if (requestedTo == null || requestedTo.getWorld() == null) {
+            return;
+        }
+
+        Location effectiveTo = preferActualPlayerLocation
+            ? resolveEffectiveEnterLocation(player, from, requestedTo)
+            : requestedTo;
+        if (effectiveTo.getWorld() == null) {
+            return;
+        }
+
+        World effectiveWorld = effectiveTo.getWorld();
+        Set<String> previousIds = new HashSet<>(playerRegions.getOrDefault(player, List.of()));
+        List<String> currentIds = new ArrayList<>();
+
+        listeners.forEach((id, entry) -> {
+            SCRegion region = entry.region();
+            World world = entry.world();
+            RegionListener listener = entry.listener();
+            boolean wasInside = previousIds.contains(id);
+
+            if (region != null) {
+                boolean containsTo = region.contains(effectiveTo);
+                boolean crossedRegion = from != null && region.intersectsPath(from, effectiveTo);
+
+                if (wasInside) {
+                    if (containsTo) {
+                        currentIds.add(id);
+                    } else {
+                        listener.onExit(player, region, from, effectiveTo);
+                    }
+                    return;
+                }
+
+                if (!containsTo && !crossedRegion) {
+                    return;
+                }
+
+                listener.onEnter(player, region, from, effectiveTo);
+                if (containsTo) {
+                    currentIds.add(id);
+                } else {
+                    listener.onExit(player, region, from, effectiveTo);
+                }
+                return;
+            }
+
+            if (world == null) {
+                return;
+            }
+
+            if (wasInside) {
+                if (world.equals(effectiveWorld)) {
+                    currentIds.add(id);
+                } else {
+                    listener.onExitWorld(player, world, from, effectiveTo);
+                }
+                return;
+            }
+
+            if (world.equals(effectiveWorld)) {
+                listener.onEnterWorld(player, world, from, effectiveTo);
+                currentIds.add(id);
+            }
+        });
+
+        playerRegions.put(player, currentIds);
+    }
+
+    private @Nullable Player firstPassenger(@Nullable Entity vehicle) {
+        if (vehicle == null) {
+            return null;
+        }
+
+        for (Entity passenger : vehicle.getPassengers()) {
+            if (passenger instanceof Player player) {
+                return player;
+            }
+        }
+
+        return null;
     }
 
     private Location resolveEffectiveEnterLocation(Player player, Location from, Location requestedTo) {
