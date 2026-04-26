@@ -60,6 +60,7 @@ public class BoatRaceConfig {
         List<Location> grid = loadLocations(section, world, arenaId);
         int minPlayers = section.getInt("min-players", 1);
         int maxPlayers = section.getInt("max-players", Math.max(1, grid.size()));
+        int laps = section.getInt("laps", 1);
         int startCountdownSeconds = section.getInt("start-countdown-seconds", DEFAULT_START_COUNTDOWN_SECONDS);
         int endingSeconds = section.getInt("ending-seconds", DEFAULT_ENDING_SECONDS);
         String name = section.getString("name", StringUtil.beautify(arenaId));
@@ -105,6 +106,7 @@ public class BoatRaceConfig {
             grid,
             minPlayers,
             maxPlayers,
+            laps,
             startCountdownSeconds,
             endingSeconds,
             bestTimes
@@ -123,10 +125,12 @@ public class BoatRaceConfig {
         arenaConfig.set("spectator", serializeLocation(arena.getSpectatorSpawn(), arena.id(), "spectator"));
         arenaConfig.set("arena", serializeRegion(arena.get("arenaRegion", SCRegion.class), arena.id(), "arena"));
         arenaConfig.set("finish", serializeRegion(arena.get("finishRegion", SCRegion.class), arena.id(), "finish"));
-        arenaConfig.set("stages", serializeRegions(stageRegions(arena), arena.id()));
+        arenaConfig.remove("stages");
+        arenaConfig.set("checkpoints", serializeRegions(stageRegions(arena), arena.id()));
         arenaConfig.set("starting-grid", serializeGridLocations(startingGrid(arena), arena.id()));
         arenaConfig.set("min-players", arena.getMinPlayers());
         arenaConfig.set("max-players", arena.getMaxPlayers());
+        arenaConfig.set("laps", arena.get("laps", Integer.class, 1));
         arenaConfig.set("start-countdown-seconds", arena.get("startCountdownSeconds", Integer.class, DEFAULT_START_COUNTDOWN_SECONDS));
         arenaConfig.set("ending-seconds", arena.get("endingSeconds", Integer.class, DEFAULT_ENDING_SECONDS));
         ConfigSection records = arenaConfig.createSection("records", true);
@@ -223,7 +227,10 @@ public class BoatRaceConfig {
 
     private @NotNull List<SCRegion> loadRegions(@NotNull ConfigSection section, @NotNull World world, @NotNull String arenaId) {
         List<SCRegion> regions = new ArrayList<>();
-        List<String> values = section.getStringList("stages");
+        List<String> values = section.getStringList("checkpoints");
+        if (values.isEmpty()) {
+            values = section.getStringList("stages");
+        }
         int index = 1;
         for (String value : values) {
             if (value == null || value.isBlank()) {
@@ -232,7 +239,7 @@ public class BoatRaceConfig {
             }
             SCRegion region = SCRegion.fromString(value, world);
             if (region == null) {
-                throw new MiniGameInvalidArenaConfigException("Stage" + " region #" + index + " for arena '" + arenaId + "' is invalid.");
+                throw new MiniGameInvalidArenaConfigException("Checkpoint region #" + index + " for arena '" + arenaId + "' is invalid.");
             }
             regions.add(region);
             index++;
@@ -321,7 +328,7 @@ public class BoatRaceConfig {
     private @NotNull List<String> serializeRegions(@NotNull List<SCRegion> regions, @NotNull String arenaId) {
         List<String> values = new ArrayList<>();
         for (SCRegion region : regions) {
-            values.add(serializeRegion(region, arenaId, "stages"));
+            values.add(serializeRegion(region, arenaId, "checkpoints"));
         }
         return values;
     }

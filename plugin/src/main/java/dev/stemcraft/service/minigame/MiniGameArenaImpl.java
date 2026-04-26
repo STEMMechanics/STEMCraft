@@ -435,6 +435,10 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         removeActivePlayer(player, true, false);
     }
 
+    void removePlayer(Player player, boolean restoreLocation) {
+        removeActivePlayer(player, restoreLocation, false);
+    }
+
     @Override
     public int numSpectators() {
         return spectators.size();
@@ -486,6 +490,18 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
     @Override
     public void removeSpectator(Player player) {
         removeSpectatorInternal(player, true, false);
+    }
+
+    void removeSpectator(Player player, boolean restoreLocation) {
+        removeSpectatorInternal(player, restoreLocation, false);
+    }
+
+    void removeOccupant(Player player, boolean restoreLocation) {
+        if (players.containsKey(player)) {
+            removeActivePlayer(player, restoreLocation, false);
+        } else if (spectators.contains(player)) {
+            removeSpectatorInternal(player, restoreLocation, false);
+        }
     }
 
     /**
