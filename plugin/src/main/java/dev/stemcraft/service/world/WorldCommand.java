@@ -84,6 +84,8 @@ public class WorldCommand {
                 .tabCompletion("list")
                 .tabCompletion("duplicate")
                 .tabCompletion("listgenerators")
+                .tabCompletion("setgenerator", "{world-any}", "{world-generators}")
+                .tabCompletion("setgenerator", "{world-any}", "{world-generators}", "{world-generator-options:$2}")
                 .tabCompletion("setspawn")
                 .tabCompletion("id", "{world}")
                 .executor(this::onCommand)
@@ -123,6 +125,7 @@ public class WorldCommand {
             case "list" -> handleSubCommandList(ctx);
             case "duplicate" -> handleSubCommandDuplicate(ctx);
             case "listgenerators" -> handleSubCommandListGenerators(ctx);
+            case "setgenerator" -> handleSubCommandSetGenerator(ctx);
             case "setspawn" -> handleSubCommandSetSpawn(ctx);
             case "id" -> handleSubCommandId(ctx);
             case "flags" -> {
@@ -334,6 +337,31 @@ public class WorldCommand {
                 "reason", worldService.getLastWorldOperationErrorOrDefault(name));
         } else {
             ctx.returnSuccess("WORLD_LOADED_DURATION", "world", name, "duration", formatElapsed(System.nanoTime() - startedAt));
+        }
+    }
+
+    public void handleSubCommandSetGenerator(CommandContext ctx) {
+        ctx.checkArgsSizeAtLeast(3, "WORLD_COMMAND_USAGE_SETGENERATOR");
+        String name = ctx.getArg(1);
+        if (!api.worlds().worldExists(name)) {
+            ctx.returnError("WORLD_NOT_FOUND", "world", name);
+        }
+
+        String generatorKey = ctx.getArg(2, "normal");
+        String generatorOptions = ctx.getArg(3, "");
+
+        try {
+            worldService.setStoredGenerator(name, generatorKey, generatorOptions);
+        } catch (IllegalArgumentException exception) {
+            ctx.returnError("Invalid generator for world '" + name + "': " + exception.getMessage());
+            return;
+        }
+
+        ctx.success("Stored generator for world '" + name + "' set to " + formatGeneratorDetail(generatorKey, generatorOptions) + ".");
+        if (api.worlds().isWorldLoaded(name)) {
+            ctx.warn("World '" + name + "' is currently loaded. Unload and load it again for the new generator to apply to future chunks.");
+        } else {
+            ctx.info("The new generator will be used next time world '" + name + "' is loaded.");
         }
     }
 
