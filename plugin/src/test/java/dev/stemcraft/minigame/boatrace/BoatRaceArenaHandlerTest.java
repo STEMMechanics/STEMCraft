@@ -58,7 +58,7 @@ class BoatRaceArenaHandlerTest {
         finishRace.invoke(handler, arena, player);
 
         verify(player).showTitle(any(net.kyori.adventure.title.Title.class));
-        verify(player).playSound(playerLocation, Sound.UI_TOAST_IN, 0.8f, 1.1f);
+        verify(player).playSound(playerLocation, Sound.ENTITY_VILLAGER_NO, 0.7f, 1.45f);
         verify(arena).info(player, "<gold>Lap 1 complete.</gold> <aqua>Lap:</aqua> <yellow>2/3</yellow>");
         assertEquals(2, lapProgress.get(playerId));
         assertEquals(0, stageProgress.get(playerId));

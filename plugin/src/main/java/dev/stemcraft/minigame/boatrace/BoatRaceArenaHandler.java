@@ -578,7 +578,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
             showLapAdvanceTitle(player, nextLap, totalLaps);
             String lapLabel = nextLap == totalLaps ? "Final lap" : "Lap";
             arena.info(player, "<gold>Lap " + currentLap + " complete.</gold> <aqua>" + lapLabel + ":</aqua> <yellow>" + nextLap + "/" + totalLaps + "</yellow>");
-            player.playSound(player.getLocation(), Sound.UI_TOAST_IN, 0.8f, 1.1f);
+            player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 0.7f, 1.45f);
             syncCheckpointProgressAtLocation(arena, player, player.getLocation());
             return;
         }
