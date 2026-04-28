@@ -1,32 +1,54 @@
 package dev.stemcraft.minigame.mobarena;
 
+import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.minigame.ArenaValidationResult;
 import dev.stemcraft.api.minigame.MiniGameArena;
 import dev.stemcraft.api.minigame.MiniGameArenaHandler;
 import dev.stemcraft.api.minigame.MiniGamePlayer;
 import dev.stemcraft.api.model.SCRegion;
+import dev.stemcraft.api.service.event.EventHandler;
 import dev.stemcraft.api.service.region.RegionListener;
 import dev.stemcraft.api.util.NamespaceId;
 import dev.stemcraft.api.util.PlayerUtil;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.Sound;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Mob;
 import org.bukkit.entity.Player;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityDropItemEvent;
+import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.Damageable;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 public class MobArenaArenaHandler implements MiniGameArenaHandler {
     private final STEMCraftAPI api;
     private final MobArenaMiniGame mobArena;
+    private final Map<Entity, MiniGameArena> trackedEntityMiniGameArenaMap;
+    private final Map<Entity, MiniGameArena> entityMiniGameArenaMap;
 
     public MobArenaArenaHandler(STEMCraftAPI api, MobArenaMiniGame mobArena) {
+        trackedEntityMiniGameArenaMap = new HashMap<>();
+        entityMiniGameArenaMap = new HashMap<>();
+
+        api.events().register(EntityDamageEvent.class, this::onEntityDamageDirect);
+        api.events().register(EntityDropItemEvent.class, this::onEntityDropItemDirect);
+
         this.api = api;
         this.mobArena = mobArena;
+    }
+
+    private void onEntityDropItemDirect(EntityDropItemEvent entityDropItemEvent) {
+        if (entityMiniGameArenaMap.containsKey(entityDropItemEvent.getEntity()))
+            entityDropItemEvent.setCancelled(true);
     }
 
     boolean zonesExist(@NotNull MiniGameArena arena) {
@@ -45,22 +67,223 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
         return arena.getMap("zones", String.class, SCRegion.class).containsKey(zone);
     }
 
+    private void onEntityDamageDirect(EntityDamageEvent eventDirect) {
+        if (!(eventDirect.getEntity() instanceof Mob entity)) {
+            return;
+        }
+
+        MiniGameArena entityArena = entityMiniGameArenaMap.get(entity);
+        if (entityArena == null || entityArena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
+            return;
+        }
+
+        double finalDamage = eventDirect.getFinalDamage();
+        if (entity.getHealth() - finalDamage > 0.0d) {
+            return;
+        }
+
+        Entity causingEntity = eventDirect.getDamageSource().getCausingEntity();
+        // TODO: Placeholders - ProjectHSI
+        if (causingEntity != null) {
+            broadcastInfoToOccupants(entityArena, "haha " + entity.getName() + " was just killed by " + causingEntity.getName());
+        } else {
+            broadcastInfoToOccupants(entityArena, "haha " + entity.getName() + " committed loggus");
+        }
+
+        entityMiniGameArenaMap.remove(entity);
+        if (trackedEntityMiniGameArenaMap.containsKey(entity)) {
+            MiniGameArena arenaToProgress = trackedEntityMiniGameArenaMap.get(entity);
+            trackedEntityMiniGameArenaMap.remove(entity);
+            if (!trackedEntityMiniGameArenaMap.containsValue(arenaToProgress)) {
+                incrementRound(arenaToProgress);
+            }
+        }
+    }
+
+    @Override
+    public HandlerEventResult onEntityDamage(MiniGameArena arena, EntityDamageEvent event) {
+        if (!(event.getEntity() instanceof Player player)) {
+            return HandlerEventResult.ALLOW;
+        }
+        if (arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
+            return HandlerEventResult.DENY;
+        }
+
+        double finalDamage = event.getFinalDamage();
+        if (player.getHealth() - finalDamage > 0.0d) {
+            return HandlerEventResult.ALLOW;
+        }
+
+        handleDeath(arena, player, event.getDamageSource().getCausingEntity());
+
+        return HandlerEventResult.DENY;
+    }
+
+    @Override
+    public void onArenaStatusChanged(MiniGameArena arena, MiniGameArena.ArenaStatus oldStatus, MiniGameArena.ArenaStatus newStatus) {
+        switch (newStatus) {
+            case MiniGameArena.ArenaStatus.RUNNING -> {
+                prepareRound(arena, 1);
+                arena.getPlayers().forEach(player -> {
+                    arena.teleport(player, arena.getRegion().getRandomGroundLocation());
+                });
+                playSoundToOccupants(arena, Sound.ENTITY_PLAYER_LEVELUP, 0.85f, 1.0f);
+            }
+            case MiniGameArena.ArenaStatus.RESETTING -> {
+                killAllTrackedMobs(arena);
+                resetAllTrackedMobsForArena(arena);
+                arena.removeAllOccupants();
+                arena.setStatus(MiniGameArena.ArenaStatus.WAITING);
+            }
+        }
+    }
+
+    private void killAllTrackedMobs(MiniGameArena arena) {
+        entityMiniGameArenaMap.forEach((key, arenaMiniGameArena) -> {
+            if (arenaMiniGameArena == arena) {
+                ((Mob) key).setHealth(0);
+            }
+        });
+    }
+
+    private void resetAllTrackedMobsForArena(MiniGameArena arena) {
+        entityMiniGameArenaMap.values().removeAll(Collections.singleton(arena));
+        trackedEntityMiniGameArenaMap.values().removeAll(Collections.singleton(arena));
+    }
+
+    @Override
+    public void onArenaCountdownTick(MiniGameArena arena, int secondsRemaining) {
+        if (secondsRemaining <= 0) {
+            return;
+        }
+
+        MiniGameArena.ArenaStatus status = arena.getStatus();
+        if ((status == MiniGameArena.ArenaStatus.STARTING || status == MiniGameArena.ArenaStatus.ENDING) && secondsRemaining <= 5) {
+            float pitch = 1.0f + ((5 - secondsRemaining) * 0.1f);
+            playSoundToOccupants(arena, Sound.BLOCK_NOTE_BLOCK_HAT, 0.7f, pitch);
+            if (status == MiniGameArena.ArenaStatus.STARTING) {
+                arena.showStartingCountdownTitle(secondsRemaining);
+            }
+        }
+    }
+
+    @Override
+    public void onArenaCountdownEnd(MiniGameArena arena) {
+        if (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING) {
+            arena.setStatus(MiniGameArena.ArenaStatus.RUNNING);
+        } else if (arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING) {
+            arena.setStatus(MiniGameArena.ArenaStatus.ENDING, 30);
+        } else if (arena.getStatus() == MiniGameArena.ArenaStatus.ENDING) {
+            arena.setStatus(MiniGameArena.ArenaStatus.RESETTING);
+        }
+    }
+
+    @Override
+    public Location onPlayerJoinArena(MiniGameArena arena, Player player) {
+        if (arena.getStatus() == MiniGameArena.ArenaStatus.WAITING && arena.numPlayers() >= arena.getMinPlayers()) {
+            arena.setStatus(MiniGameArena.ArenaStatus.STARTING, mobArena.startCountdownSeconds(arena));
+        }
+        clearPlayerInventory(player);
+        player.setGameMode(GameMode.ADVENTURE);
+        return arena.getLobbySpawn();
+    }
+
+    private int determineMobSpawnCount(int round, int initialWave,
+                                        int initialAmount, double incrementAmount,
+                                       @NotNull MobArenaArenaRecord.SpawnerRecord.IncrementType incrementType) {
+        if (round < initialWave) {
+            return 0;
+        } else if (round == initialWave) {
+            return initialAmount;
+        } else {
+            switch (incrementType) {
+                case Linear -> {
+                    return (int) Math.floor(initialAmount + (incrementAmount * (round - initialWave)));
+                }
+                case Exponential -> {
+                    return (int) Math.floor(initialAmount + (Math.pow(incrementAmount, (round - initialWave))));
+                }
+            }
+        }
+
+        return 0; // ?
+    }
+
+    private void spawnMobs(MiniGameArena arena, int round) {
+        int spawnerConfigs = arena.get("spawner-configs.max", Integer.class);
+
+        for (int i = 0; i < spawnerConfigs; i++) {
+            final String spawnerConfigPrefix = "spawner-configs." + i + ".";
+            final SCRegion spawnZoneRegion = arena.getMap("zones", String.class, SCRegion.class).get(arena.get(spawnerConfigPrefix + "spawnZone", String.class));
+            final Class<? extends Entity> entityClass = arena.get(spawnerConfigPrefix + "entityType", EntityType.class).getEntityClass();
+
+            if (entityClass == null)
+                continue;
+
+            for (int j = 0; j < determineMobSpawnCount(
+                    round,
+                    arena.get(spawnerConfigPrefix + "initialWave", Integer.class),
+                    arena.get(spawnerConfigPrefix + "initialAmount", Integer.class),
+                    arena.get(spawnerConfigPrefix + "incrementAmount", Double.class),
+                    arena.get(spawnerConfigPrefix + "incrementType", MobArenaArenaRecord.SpawnerRecord.IncrementType.class)
+            ); j++) {
+                Entity newEntity = arena.world().spawn(spawnZoneRegion.getRandomGroundLocation(), entityClass);
+                entityMiniGameArenaMap.put(newEntity, arena);
+                if (arena.get(spawnerConfigPrefix + "countTowardsMobCount", Boolean.class)) {
+                    trackedEntityMiniGameArenaMap.put(newEntity, arena);
+                }
+            }
+        }
+    }
+
+    private void prepareRound(MiniGameArena arena, int round) {
+        arena.set("round", round);
+        announceWave(arena, round);
+        equipAllPlayers(arena);
+        spawnMobs(arena, round);
+    }
+
+    private void announceWave(MiniGameArena arena, int round) {
+        arena.showTitle("<gold>Wave " + round + "</gold>", "Get fighting!");
+    }
+
+    private void equipPlayer(Player player) {
+        // TODO: Make customisable? - ProjectHSI
+        player.getInventory().clear();
+        player.getInventory().setItem(0, new ItemStack(Material.IRON_SWORD));
+        player.getInventory().setItem(1, new ItemStack(Material.BOW));
+        player.getInventory().setItem(2, new ItemStack(Material.ARROW, 64));
+        player.getScheduler().runDelayed(STEMCraft.getPlugin(), task -> {player.getInventory().setItemInOffHand(new ItemStack(Material.SHIELD));}, null, 2); // shield disappears otherwise
+        player.getInventory().setItem(EquipmentSlot.HEAD, new ItemStack(Material.IRON_HELMET));
+        player.getInventory().setItem(EquipmentSlot.CHEST, new ItemStack(Material.IRON_CHESTPLATE));
+        player.getInventory().setItem(EquipmentSlot.LEGS, new ItemStack(Material.IRON_LEGGINGS));
+        player.getInventory().setItem(EquipmentSlot.FEET, new ItemStack(Material.IRON_BOOTS));
+    }
+
+    private void equipAllPlayers(MiniGameArena arena) {
+        arena.getPlayers().forEach(this::equipPlayer);
+    }
+
+    private void incrementRound(MiniGameArena arena) {
+        prepareRound(arena, arena.get("round", Integer.class) + 1);
+    }
+
     @Override
     public void validate(@NotNull MiniGameArena arena, @NotNull ArenaValidationResult result) {
+        boolean enableArenaChecking;
+        SCRegion arenaRegion = arena.getRegion();
+        if (arenaRegion == null) {
+            result.addError("Arena region is not defined.", "arena");
+            enableArenaChecking = false;
+        } else {
+            enableArenaChecking = true;
+        }
         if (arena.getLobbySpawn() == null) {
             result.addError("Lobby spawn is not defined.", "lobbySpawn");
         }
 
         if (!zonesExist(arena)) {
             result.addError("Zones are not defined.", "zones");
-        } else {
-            if (!containsZone(arena, "arena")) {
-                result.addError("Arena zone is not defined (this may be the root cause of the arena region error).", "arenaZone");
-            }
-        }
-
-        if (arena.get("spawner-configs.max", int.class) == 0) {
-            result.addError("No spawner configs.", "spawner-configs");
         }
 
         if (arena.getMinPlayers() < 2) {
@@ -68,6 +291,38 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
         }
         if (arena.getMaxPlayers() < 2) {
             result.addError("Mob arena arenas require at least 2 maximum players.", "maxPlayers");
+        }
+
+        // Complex validation
+        Map<String, SCRegion> zones = arena.getMap("zones", String.class, SCRegion.class);
+        Set<String> validZones = new HashSet<>(zones.keySet());
+
+        zones.forEach((key, region) -> {
+            if (enableArenaChecking) {
+                if (!arenaRegion.contains(region)) {
+                    result.addError("Zone '" + key + "' is not contained within the arena region.", "zones." + key);
+                }
+            }
+        });
+
+        Integer spawnerConfigsSize = arena.get("spawner-configs.max", Integer.class);
+        if (spawnerConfigsSize == null) {
+            result.addError("Corrupted spawner configs (resolve manually in config file).", "spawner-configs");
+        } else if (spawnerConfigsSize <= 0) {
+            result.addError("No spawner configs.", "spawner-configs");
+        } else {
+            for (int i = 0; i < spawnerConfigsSize; i++) {
+                final String spawnerConfigPrefix = "spawner-configs." + i + ".";
+
+                String spawnZone = arena.get(spawnerConfigPrefix + "spawnZone", String.class);
+                if (spawnZone == null) {
+                    result.addError("Spawner config '" + (i + 1) + "' was badly defined (spawnZone).", spawnerConfigPrefix + "spawn-zone");
+                } else if (spawnZone.isBlank()) {
+                    result.addError("Spawner config '" + (i + 1) + "' spawns in an empty spawn zone (never set?)", spawnerConfigPrefix + "spawn-zone");
+                } else if (!validZones.contains(spawnZone)) {
+                    result.addError("Spawner config '" + (i + 1) + "' spawns in a non-existent spawn zone '" + spawnZone + "'.", spawnerConfigPrefix + "spawn-zone");
+                }
+            }
         }
     }
 
@@ -77,7 +332,7 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
         arena.getOrCreate("trackedAndCountedEntities", Set.class, HashSet::new);
         String listenerPrefix = regionListenerPrefix(arena.id());
 
-        SCRegion arenaRegion = getZone(arena, "arena");
+        SCRegion arenaRegion = arena.getRegion();
         assert arenaRegion != null;
         api.regions().addListener(listenerPrefix + "boundary", arenaRegion, new RegionListener() {
             @Override
@@ -93,25 +348,46 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
         });
     }
 
-    private void handleDeath(@NotNull MiniGameArena arena, @NotNull Player player, @Nullable Mob damagerMob) {
+    public void onArenaUnload(MiniGameArena arena) {
+        arena.stopWinnerCelebration();
+        resetAllTrackedMobsForArena(arena);
+        String listenerPrefix = regionListenerPrefix(arena.id());
+        api.regions().removeListener(listenerPrefix + "boundary");
+    }
+
+    private void handleDeath(@NotNull MiniGameArena arena, @NotNull Player player, @Nullable Entity Entity) {
         MiniGamePlayer mgPlayer = arena.getPlayer(player);
         if (mgPlayer != null) {
             mgPlayer.addDeath();
         }
 
-        if (damagerMob != null) {
+        if (Entity != null) {
             broadcastInfoToOccupants(arena,
-                    "<red>" + player.getName() + "</red> <gray>was eliminated by a</gray> <gold>" + damagerMob.getName() + "</gold><gray>.</gray>");
+                    "<red>" + player.getName() + "</red> <gray>was eliminated by a</gray> <gold>" + Entity.getName() + "</gold><gray>.</gray>");
         } else {
             broadcastInfoToOccupants(arena,
                     "<red>" + player.getName() + "</red> <gray>fell into the void.</gray>");
         }
 
         arena.teleportToLobby(player);
+        arena.addSpectator(player);
         player.setGameMode(GameMode.SPECTATOR);
         player.setAllowFlight(true);
         player.setFlying(true);
         player.setHealth(PlayerUtil.getMaxHealth(player));
+
+        if (arena.getPlayers().size() == 1) {
+            arena.startWinnerCelebration(arena.getPlayers().getFirst().getLocation(), 10);
+            arena.setStatus(MiniGameArena.ArenaStatus.ENDING);
+            arena.setCountdown(10);
+        }
+    }
+
+    // TODO: Merge this into a static class, code copied from Bridge. - ProjectHSI
+    private void playSoundToOccupants(@NotNull MiniGameArena arena, @NotNull Sound sound, float volume, float pitch) {
+        for (Player occupant : arena.getOccupants()) {
+            occupant.playSound(occupant.getLocation(), sound, volume, pitch);
+        }
     }
 
 

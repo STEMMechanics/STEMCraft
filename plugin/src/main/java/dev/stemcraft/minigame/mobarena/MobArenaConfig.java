@@ -4,7 +4,6 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigFile;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.minigame.MiniGame;
-import dev.stemcraft.api.minigame.MiniGameArena;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.util.LocationUtil;
 import dev.stemcraft.api.util.StringUtil;
@@ -25,7 +24,10 @@ import java.util.*;
 
 public class MobArenaConfig {
     private final STEMCraftAPI api;
-    private MiniGame miniGame;
+
+    @Getter
+    @Accessors(fluent = true)
+    private MiniGame minigame;
 
     @Getter
     @Accessors(fluent = true)
@@ -47,7 +49,7 @@ public class MobArenaConfig {
     }
 
     public void onEnable(MiniGame miniGame) {
-        this.miniGame = miniGame;
+        this.minigame = miniGame;
 
         configEnabled = false;
 
@@ -96,13 +98,12 @@ public class MobArenaConfig {
 
         World world = MiniGameConfigSupport.requireWorld(api, arenaId, worldName);
 
+        @NotNull SCRegion arenaRegion = loadRegion(arenaSection, world, arenaId, "arena", "Arena Region");
         @Nullable Location lobbyLocation = loadLocation(arenaSection, world, arenaId, "lobby", true);
         @Nullable Location spectatorLocation = loadLocation(arenaSection, world, arenaId, "spectator", false);
         if (spectatorLocation == null) {
             spectatorLocation = lobbyLocation;
         }
-
-        @NotNull String spawnZone = arenaSection.getString("spawn-zone", "arena");
 
         int minPlayers = arenaSection.getInt("min-players", 2);
         int maxPlayers = arenaSection.getInt("max-players", 16);
@@ -117,9 +118,9 @@ public class MobArenaConfig {
                 enabled,
                 name,
                 world,
+                arenaRegion,
                 lobbyLocation,
                 spectatorLocation,
-                spawnZone,
                 minPlayers,
                 maxPlayers,
                 spawnerRecords,
@@ -141,16 +142,16 @@ public class MobArenaConfig {
 
             EntityType entityType = EntityType.valueOf(currentSection.getString("entity-type"));
 
-            int initialAmount = section.getInt("initial-amount", 1);
+            int initialAmount = currentSection.getInt("initial-amount", 1);
 
-            int incrementAmount = section.getInt("increment-amount", 1);
-            MobArenaArenaRecord.SpawnerRecord.IncrementType incrementType = MobArenaArenaRecord.SpawnerRecord.IncrementType.valueOf(section.getString("increment-type"));
+            int incrementAmount = currentSection.getInt("increment-amount", 1);
+            MobArenaArenaRecord.SpawnerRecord.IncrementType incrementType = MobArenaArenaRecord.SpawnerRecord.IncrementType.valueOf(currentSection.getString("increment-type"));
 
-            int initialWave = section.getInt("initial-wave", 1);
+            int initialWave = currentSection.getInt("initial-wave", 1);
 
-            String mobSpawnZone = section.getString("spawn-zone", "arena");
+            String mobSpawnZone = currentSection.getString("spawn-zone", "");
 
-            boolean countTowardsMobCount = section.getBoolean("count-towards-mob-count", true);
+            boolean countTowardsMobCount = currentSection.getBoolean("count-towards-mob-count", true);
 
             return new MobArenaArenaRecord.SpawnerRecord(
                     entityType,
@@ -168,7 +169,7 @@ public class MobArenaConfig {
         Map<String, SCRegion> zones = new HashMap<>();
 
         section.getSection("zones").getKeys(false).forEach(key -> {
-            loadRegion(section.getSection("zones"), world, arenaId, key, key + " zone");
+            zones.put(key, loadRegion(section.getSection("zones"), world, arenaId, key, key + " zone"));
         });
 
         return zones;
@@ -189,9 +190,9 @@ public class MobArenaConfig {
         toSave.set("enabled", arenaRecord.enabled());
         toSave.set("name", arenaRecord.name());
         toSave.set("world", arenaRecord.world().getName());
-        toSave.set("lobby", arenaRecord.lobby());
-        toSave.set("spectator", arenaRecord.spectator());
-        toSave.set("spawn-zone", arenaRecord.spawnZone());
+        toSave.set("arena", serializeRegion(arenaRecord.arenaRegion(), key, "Arena Region"));
+        toSave.set("lobby", serializeLocation(arenaRecord.lobby(), key,  "Lobby Location"));
+        toSave.set("spectator", serializeLocation(arenaRecord.spectator(), key,  "Spectator Location"));
         toSave.set("min-players", arenaRecord.minPlayers());
         toSave.set("max-players", arenaRecord.maxPlayers());
         saveSpawnerRecordsToArena(toSave, arenaRecord);

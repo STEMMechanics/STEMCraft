@@ -15,13 +15,11 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
+import java.util.*;
 
 // TODO: [Overall] Make sure to get rid of the global "arena" region, using the "arena" zone instead.
 
@@ -40,6 +38,14 @@ public class MobArenaCommand {
                 .arenas()
                 .stream()
                 .map(MiniGameArena::id)
+                .sorted()
+                .toList());
+        api.tabComplete().register("mobarena-mobs", (sender, args)-> Arrays.stream(EntityType.values())
+                .map(Enum::toString)
+                .sorted()
+                .toList());
+        api.tabComplete().register("mobarena-increment-type", (sender, args)-> Arrays.stream(MobArenaArenaRecord.SpawnerRecord.IncrementType.values())
+                .map(Enum::toString)
                 .sorted()
                 .toList());
 
@@ -67,17 +73,32 @@ public class MobArenaCommand {
                 .tabCompletion("validate", "{mobarena-arenas}")
                 .tabCompletion("enable", "{mobarena-arenas}")
                 .tabCompletion("disable", "{mobarena-arenas}")
+                .tabCompletion("set", "{mobarena-arenas}", "arena")
                 .tabCompletion("set", "{mobarena-arenas}", "lobby")
                 .tabCompletion("set", "{mobarena-arenas}", "spectator")
                 .tabCompletion("set", "{mobarena-arenas}", "minplayers")
                 .tabCompletion("set", "{mobarena-arenas}", "maxplayers")
                 .tabCompletion("set", "{mobarena-arenas}", "name")
+                .tabCompletion("select", "{mobarena-arenas}", "arena")
                 .tabCompletion("select", "{mobarena-arenas}", "lobby")
                 .tabCompletion("select", "{mobarena-arenas}", "spectator")
+                .tabCompletion("sel", "{mobarena-arenas}", "arena")
                 .tabCompletion("sel", "{mobarena-arenas}", "lobby")
                 .tabCompletion("sel", "{mobarena-arenas}", "spectator")
                 .tabCompletion("show", "{mobarena-arenas}", "lobby")
                 .tabCompletion("show", "{mobarena-arenas}", "spectator")
+                .tabCompletion("spawnerconfig", "{mobarena-arenas}", "add")
+                .tabCompletion("spawnerconfig", "{mobarena-arenas}", "remove", "")
+                .tabCompletion("spawnerconfig", "{mobarena-arenas}", "set", "", "entityType", "{mobarena-mobs}")
+                .tabCompletion("spawnerconfig", "{mobarena-arenas}", "set", "", "initialAmount", "")
+                .tabCompletion("spawnerconfig", "{mobarena-arenas}", "set", "", "incrementAmount", "")
+                .tabCompletion("spawnerconfig", "{mobarena-arenas}", "set", "", "incrementType", "{mobarena-increment-type}")
+                .tabCompletion("spawnerconfig", "{mobarena-arenas}", "set", "", "initialWave", "")
+                .tabCompletion("spawnerconfig", "{mobarena-arenas}", "set", "", "spawnZone", "")
+                .tabCompletion("spawnerconfig", "{mobarena-arenas}", "set", "", "countTowardsMobCount", "true")
+                .tabCompletion("spawnerconfig", "{mobarena-arenas}", "set", "", "countTowardsMobCount", "false")
+                .tabCompletion("zone", "{mobarena-arenas}", "")
+                .tabCompletion("zone", "{mobarena-arenas}", "delete", "")
                 .executor((ignored, cmd, ctx) -> {
                     switch (ctx.getArgLower(0)) {
                         case "list" -> commandList(ctx);
@@ -99,10 +120,148 @@ public class MobArenaCommand {
                         case "set" -> commandSet(ctx);
                         case "select", "sel" -> commandSelect(ctx);
                         case "show" -> commandShow(ctx);
+                        case "spawnerconfig" -> commandSpawnerConfig(ctx);
+                        case "zone" -> commandZone(ctx);
                         default -> ctx.returnUsage();
                     }
                 })
                 .register(STEMCraft.getPlugin());
+    }
+
+    private void commandSpawnerConfig(CommandContext ctx) {
+        ctx.checkArgsSizeAtLeast(3);
+        switch (ctx.getArg(2)) {
+            case "add" -> commandSpawnerConfigAdd(ctx);
+            case "remove" -> commandSpawnerConfigRemove(ctx);
+            case "set" -> commandSpawnerConfigSet(ctx);
+            default -> ctx.returnUsage();
+        }
+    }
+
+    private void commandSpawnerConfigAdd(CommandContext ctx) {
+        MiniGameArena arena = requireArena(ctx);
+
+        int newSpawnerConfigIndex = arena.get("spawner-configs.max", Integer.class);
+
+        final String newSpawnerConfigPrefix = "spawner-configs." + newSpawnerConfigIndex + ".";
+
+        arena.set(newSpawnerConfigPrefix + "entityType", EntityType.ZOMBIE);
+        arena.set(newSpawnerConfigPrefix + "initialAmount", 1);
+        arena.<Double>set(newSpawnerConfigPrefix + "incrementAmount", 1.0);
+        arena.set(newSpawnerConfigPrefix + "incrementType", MobArenaArenaRecord.SpawnerRecord.IncrementType.Linear);
+        arena.set(newSpawnerConfigPrefix + "initialWave", 1);
+        arena.set(newSpawnerConfigPrefix + "spawnZone", "");
+        arena.set(newSpawnerConfigPrefix + "countTowardsMobCount", true);
+
+        arena.set("spawner-configs.max", newSpawnerConfigIndex + 1);
+
+        ctx.returnSuccess("Created a new spawner config!");
+    }
+
+    private void commandSpawnerConfigRemove(CommandContext ctx) {
+        MiniGameArena arena = requireArena(ctx);
+    }
+
+    private void commandSpawnerConfigSet(CommandContext ctx) {
+        MiniGameArena arena = requireArena(ctx);
+
+        ctx.checkArgsSizeAtLeast(6);
+
+        int spawnerIndex = ctx.getArgAsInt(3) - 1;
+        String spawnerPropertyKey = ctx.getArg(4);
+        String spawnerPropertyValue = ctx.getArg(5);
+
+        if (spawnerIndex < 0 | spawnerIndex >= arena.get("spawner-configs.max", Integer.class)) {
+            ctx.returnUsage();
+        }
+
+        switch (spawnerPropertyKey) {
+            case "entityType":
+                try {
+                    EntityType newEntityType = EntityType.valueOf(spawnerPropertyValue);
+                    arena.set("spawner-configs." + spawnerIndex + ".entityType", newEntityType);
+                    ctx.returnSuccess("Set spawner " + (spawnerIndex + 1) + "'s entity type to '" + spawnerPropertyValue + "'.");
+                } catch (IllegalArgumentException e) {
+                    ctx.returnError("'" + spawnerPropertyValue + "' is not a valid entity type.");
+                }
+                break;
+            case "initialAmount":
+                try {
+                    int newInitialAmount = Integer.parseInt(spawnerPropertyValue);
+                    arena.set("spawner-configs." + spawnerIndex + ".initialAmount", newInitialAmount);
+                    ctx.returnSuccess("Set spawner " + (spawnerIndex + 1) + "'s increment amount to '" + spawnerPropertyValue + "'.");
+                } catch (NumberFormatException e) {
+                    ctx.returnUsage();
+                }
+                break;
+            case "incrementAmount":
+                try {
+                    double newIncrementAmount = Double.parseDouble(spawnerPropertyValue);
+                    arena.set("spawner-configs." + spawnerIndex + ".incrementAmount", newIncrementAmount);
+                    ctx.returnSuccess("Set spawner " + (spawnerIndex + 1) + "'s increment amount to '" + spawnerPropertyValue + "'.");
+                } catch (NumberFormatException e) {
+                    ctx.returnUsage();
+                }
+                break;
+            case "incrementType":
+                try {
+                    MobArenaArenaRecord.SpawnerRecord.IncrementType newIncrementType = MobArenaArenaRecord.SpawnerRecord.IncrementType.valueOf(spawnerPropertyValue);
+                    arena.set("spawner-configs." + spawnerIndex + ".incrementType", newIncrementType);
+                    ctx.returnSuccess("Set spawner " + (spawnerIndex + 1) + "'s increment type to '" + spawnerPropertyValue + "'.");
+                } catch (IllegalArgumentException e) {
+                    ctx.returnError("'" + spawnerPropertyValue + "' is not a valid increment type.");
+                }
+                break;
+            case "initialWave":
+                try {
+                    int newWaveAmount = Integer.parseInt(spawnerPropertyValue);
+                    arena.set("spawner-configs." + spawnerIndex + ".initialWave", newWaveAmount);
+                    ctx.returnSuccess("Set spawner " + (spawnerIndex + 1) + "'s increment wave to '" + spawnerPropertyValue + "'.");
+                } catch (NumberFormatException e) {
+                    ctx.returnUsage();
+                }
+                break;
+            case "spawnZone":
+                arena.set("spawner-configs." + spawnerIndex + ".spawnZone", spawnerPropertyValue);
+                ctx.returnSuccess("Set spawner " + (spawnerIndex + 1) + "'s spawn zone to '" + spawnerPropertyValue + "'.");
+                break;
+            case "countTowardsMobCount":
+                arena.set("spawner-configs." + spawnerIndex + ".countTowardsMobCount", Boolean.valueOf(spawnerPropertyValue));
+                ctx.returnSuccess("Set spawner " + (spawnerIndex + 1) + "'s counting towards the mob count to '" + spawnerPropertyValue + "'.");
+        }
+    }
+
+    private void commandZone(CommandContext ctx) {
+        MiniGameArena arena = requireArena(ctx);
+
+        ctx.checkArgsSizeAtLeast(3);
+
+        String possibleOperation = ctx.getArg(2);
+        if (possibleOperation == "delete") {
+            commandZoneDelete(ctx);
+        } else {
+            commandZonePut(ctx);
+        }
+    }
+
+    private void commandZoneDelete(CommandContext ctx) {
+
+    }
+
+    private void commandZonePut(CommandContext ctx) {
+        MiniGameArena arena = requireArena(ctx);
+        String zoneName = ctx.getArg(2); // callee guarantees args size of 3.
+
+        Player player = requirePlayer(ctx);
+        SCRegion selection = requireSelection(ctx, player);
+        Map<String, SCRegion> zones = arena.getMap("zones", String.class, SCRegion.class);
+
+        SCRegion formerRegion = zones.put(zoneName, selection);
+        if (formerRegion == null) {
+            ctx.returnSuccess("'" + zoneName + "' has been added to the list of zones.");
+        } else {
+            ctx.returnSuccess("'" + zoneName + "' has been replaced with " + formatRegion(selection) + " (formerly " + formatRegion(formerRegion) + ").");
+        }
     }
 
     private void commandList(CommandContext ctx) {
@@ -192,13 +351,17 @@ public class MobArenaCommand {
     }
 
     private void printSpawnerConfigInfo(CommandContext ctx, MiniGameArena arena) {
-        int maxSpawnerConfig = arena.get("spawner-configs.max", int.class);
+        int maxSpawnerConfig = arena.get("spawner-configs.max", Integer.class);
 
         for (int i = 0; i < maxSpawnerConfig; i++) {
-            ctx.info("   - " + (i + 1) + ":");
             final String spawnerConfigPrefix = "spawner-configs." + i + ".";
-
-            ctx.info("     - Entity Type:", arena.get(spawnerConfigPrefix + "entityType", EntityType.class));
+            ctx.info("   - " + (i + 1) + ":");
+            ctx.info("     - Entity Type: " + arena.get(spawnerConfigPrefix + "entityType", EntityType.class).toString());
+            ctx.info("     - Initial Amount: " + arena.get(spawnerConfigPrefix + "initialAmount", Integer.class).toString());
+            ctx.info("     - Increment Amount: " + arena.get(spawnerConfigPrefix + "incrementAmount", Double.class).toString());
+            ctx.info("     - Increment Type: " + arena.get(spawnerConfigPrefix + "incrementType", MobArenaArenaRecord.SpawnerRecord.IncrementType.class).toString());
+            ctx.info("     - Spawn Zone: " + arena.get(spawnerConfigPrefix + "spawnZone", String.class));
+            ctx.info("     - Count Towards Mob Count: " + arena.get(spawnerConfigPrefix + "countTowardsMobCount", Boolean.class).toString());
         }
     }
 
@@ -504,7 +667,7 @@ public class MobArenaCommand {
         Location location = null;
 
         switch (target) {
-            case "arena" -> region = arena.get("arenaRegion", SCRegion.class);
+            case "arena" -> region = arena.getRegion();
             case "lobby" -> location = arena.getLobbySpawn();
             case "spectator" -> location = arena.getSpectatorSpawn();
             default -> {

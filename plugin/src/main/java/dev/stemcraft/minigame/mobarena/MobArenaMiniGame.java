@@ -27,12 +27,11 @@ public class MobArenaMiniGame extends BaseMiniGame {
 
     private MobArenaConfig config;
     private MobArenaCommand command;
+    private MobArenaArenaHandler handler;
 
     @Getter
     @Accessors(fluent = true)
     private MiniGame minigame;
-
-    private ConfigFile configFile;
 
     public MobArenaMiniGame(STEMCraftAPI api) {
         super(api);
@@ -41,9 +40,16 @@ public class MobArenaMiniGame extends BaseMiniGame {
     @Override
     public void onLoad() {
         config = new MobArenaConfig(api);
+        handler = new MobArenaArenaHandler(api, this);
+
+        minigame = createMiniGame(namespace, handler);
+
+        config.onEnable(minigame);
+
         MiniGameHudConfigSupport.apply(minigame, config.config(), defaultHudDefinitions());
 
         command = new MobArenaCommand(api, this);
+        command.onEnable();
 
         loadArenas();
     }
@@ -67,7 +73,7 @@ public class MobArenaMiniGame extends BaseMiniGame {
 
         // TODO: Initialise everything else.
 
-        arena.set("spawner-configs.max", 0);
+        arena.<Integer>set("spawner-configs.max", 0);
         arena.<Map<String,SCRegion>>set("zones", new HashMap<>());
 
         return arena;
@@ -84,7 +90,7 @@ public class MobArenaMiniGame extends BaseMiniGame {
 
     public void saveArena(@NotNull MiniGameArena arena) {
         //registerArenaStats(arena);
-        config.saveArena(arena.id(), arena);
+        config.saveArena(arena.id(), new MobArenaArenaRecord(arena));
     }
 
     public void persistArenaEnabled(@NotNull MiniGameArena arena, boolean enabled) {
@@ -97,12 +103,12 @@ public class MobArenaMiniGame extends BaseMiniGame {
 
     // TODO: Merge this into a static class, code taken from Bridge impl. - ProjectHSI
     public boolean reloadFromConfig() {
-        if (!reloadConfigFile(configFile)) {
+        if (!reloadConfigFile(config.config())) {
             return false;
         }
 
         config.onEnable(minigame);
-        MiniGameHudConfigSupport.apply(minigame, configFile, defaultHudDefinitions());
+        MiniGameHudConfigSupport.apply(minigame, config.config(), defaultHudDefinitions());
         //unloadArenas(minigame, arena -> unregisterArenaStats(arena.id()));
         unloadArenas(minigame);
         loadArenas();
@@ -122,16 +128,16 @@ public class MobArenaMiniGame extends BaseMiniGame {
     private void loadArena(MobArenaArenaRecord arenaRecord) {
         MiniGameArena arena = minigame.createArena(arenaRecord.arenaId(), arenaRecord.world())
                 .setName(arenaRecord.name())
+                .setRegion(arenaRecord.arenaRegion())
                 .setLobbySpawn(arenaRecord.lobby())
                 .setSpectatorSpawn(arenaRecord.spectator())
-                .setRegion(arenaRecord.zones().getOrDefault("arena", null));
-
-        arena.set("spawn-zone", arenaRecord.spawnZone());
+                .setMinPlayers(arenaRecord.minPlayers())
+                .setMaxPlayers(arenaRecord.maxPlayers());
 
         arena.set("spawner-configs.max", arenaRecord.spawnTicketList().size());
 
         for (int i = 0; i < arenaRecord.spawnTicketList().size(); i++) {
-            final String spawnerConfigPrefix = "spawner-configs." + arenaRecord.spawnTicketList().get(i) + ".";
+            final String spawnerConfigPrefix = "spawner-configs." + i + ".";
             final MobArenaArenaRecord.SpawnerRecord spawnerRecord = arenaRecord.spawnTicketList().get(i);
 
             arena.set(spawnerConfigPrefix + "entityType", spawnerRecord.entityType());

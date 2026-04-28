@@ -17,9 +17,9 @@ public record MobArenaArenaRecord(
         boolean enabled,
         String name,
         World world,
+        SCRegion arenaRegion,
         Location lobby,
         Location spectator,
-        String spawnZone,
         int minPlayers,
         int maxPlayers,
         List<SpawnerRecord> spawnTicketList,
@@ -31,26 +31,26 @@ public record MobArenaArenaRecord(
                 arena.getStatus() != MiniGameArena.ArenaStatus.DISABLED,
                 arena.getName(),
                 arena.world(),
+                arena.getRegion(),
                 arena.getLobbySpawn(),
                 arena.getSpectatorSpawn(),
-                arena.get("spawn-zone", String.class, "arena"),
                 arena.getMinPlayers(),
                 arena.getMaxPlayers(),
                 new ArrayList<>(),
                 arena.getMap("zones", String.class, SCRegion.class, new HashMap<>())
         );
 
-        for (int i = 0; i < arena.get("spawner-configs.max", int.class, 0); i++) {
+        for (int i = 0; i < arena.get("spawner-configs.max", Integer.class, 0); i++) {
             final String spawnerConfigPrefix = "spawner-configs." + i + ".";
 
             spawnTicketList.add(new SpawnerRecord(
                     arena.get(spawnerConfigPrefix + "entityType", EntityType.class),
-                    arena.get(spawnerConfigPrefix + "initialAmount", int.class),
-                    arena.get(spawnerConfigPrefix + "incrementAmount", float.class),
+                    arena.get(spawnerConfigPrefix + "initialAmount", Integer.class),
+                    arena.get(spawnerConfigPrefix + "incrementAmount", Double.class),
                     arena.get(spawnerConfigPrefix + "incrementType", SpawnerRecord.IncrementType.class),
-                    arena.get(spawnerConfigPrefix + "initialWave", int.class),
+                    arena.get(spawnerConfigPrefix + "initialWave", Integer.class),
                     arena.get(spawnerConfigPrefix + "spawnZone", String.class),
-                    arena.get(spawnerConfigPrefix + "countTowardsMobCount", boolean.class)
+                    arena.get(spawnerConfigPrefix + "countTowardsMobCount", Boolean.class)
             ));
         }
     }
@@ -58,7 +58,7 @@ public record MobArenaArenaRecord(
     public record SpawnerRecord(
             EntityType entityType,
             int initialAmount,
-            float incrementAmount,
+            double incrementAmount,
             IncrementType incrementType,
             int initialWave,
             String spawnZone,
