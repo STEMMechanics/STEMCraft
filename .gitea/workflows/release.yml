@@ -99,6 +99,61 @@ jobs:
           BUILD_NUMBER: ${{ needs.prepare.outputs.build_number }}
         run: ./gradlew --no-daemon check :api:jar :plugin:jar
 
+      - name: Summarize SpotBugs report
+        if: always()
+        run: |
+          set +e
+
+          REPORT="plugin/build/reports/spotbugs/main.xml"
+          if [ ! -f "$REPORT" ]; then
+            echo "No SpotBugs XML report was generated." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          report = Path("plugin/build/reports/spotbugs/main.xml")
+          root = ET.parse(report).getroot()
+          bugs = root.findall("BugInstance")
+
+          print("## SpotBugs Report")
+          print()
+          print(f"Found {len(bugs)} bug instance(s) in `plugin/build/reports/spotbugs/main.xml`.")
+
+          if not bugs:
+            raise SystemExit(0)
+
+          print()
+          print("```text")
+          for bug in bugs[:20]:
+            bug_type = bug.get("type", "UNKNOWN")
+            long_message = bug.findtext("LongMessage", default=bug_type).strip()
+            source = bug.find("SourceLine")
+            location = "unknown location"
+            if source is not None:
+              source_file = source.get("sourcefile") or source.get("classname") or "unknown"
+              start = source.get("start")
+              location = f"{source_file}:{start}" if start else source_file
+            print(f"- [{bug_type}] {location} - {long_message}")
+          if len(bugs) > 20:
+            print(f"... and {len(bugs) - 20} more")
+          print("```")
+          PY
+
+      - name: Upload build reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-build-reports-${{ gitea.run_number }}
+          if-no-files-found: ignore
+          path: |
+            build/reports/problems/problems-report.html
+            api/build/reports/**
+            plugin/build/reports/**
+            plugin/build/test-results/**
+
   api-publish:
     name: Publish API Snapshot
     runs-on: ubuntu-latest
