@@ -10,6 +10,7 @@ repositories {
     maven { url = uri("https://jitpack.io") }
     maven { url = uri("https://repo.opencollab.dev/main/") }
     maven { url = uri("https://repo.extendedclip.com/content/repositories/placeholderapi/") }
+    maven { url = uri("https://maven.enginehub.org/repo/") }
 }
 
 dependencies {
@@ -43,6 +44,7 @@ dependencies {
     testImplementation "org.mockito:mockito-core:5.12.0"
     //noinspection VulnerableLibrariesLocal
     testImplementation "io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT"
+    testImplementation("com.sk89q.worldedit:worldedit-bukkit:7.3.17")
     //noinspection VulnerableLibrariesLocal
     testImplementation("org.mockbukkit.mockbukkit:mockbukkit-v1.21:4.108.0") {
         exclude group: "org.junit"

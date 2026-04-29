@@ -22,11 +22,13 @@ package dev.stemcraft.api.service.region;
 
 import dev.stemcraft.api.model.SCRegion;
 import org.bukkit.World;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * Service for managing region listeners and querying player locations within regions.
@@ -59,21 +61,47 @@ public interface RegionService {
     void removeListener(@NotNull String namespaceId);
 
     /**
+     * Tracks a living entity for region and world listeners.
+     *
+     * @param livingEntity The entity to track.
+     */
+    void trackLivingEntity(@NotNull LivingEntity livingEntity);
+
+    /**
+     * Untracks a living entity from region and world listeners.
+     *
+     * @param livingEntity The entity to untrack.
+     */
+    void untrackLivingEntity(@NotNull LivingEntity livingEntity);
+
+    /**
+     * Checks if a player is currently within a region or world listener.
+     *
+     * @param livingEntity The entity to check.
+     * @return True if the entity is within a region or world listener, false otherwise.
+     */
+    boolean isTracked(@NotNull LivingEntity livingEntity);
+
+    /**
      * Checks if a player is currently within a region or world listener by its ID.
      *
-     * @param player The player to check.
+     * @param uuid The entity UUID to check.
      * @param namespaceId The unique ID of the region or world listener.
      * @return True if the player is within the specified region or world listener, false otherwise.
      */
-    boolean contains(@NotNull Player player, @NotNull String namespaceId);
+    boolean contains(@NotNull UUID uuid, @NotNull String namespaceId);
+    default boolean contains(@NotNull Player player, @NotNull String namespaceId) { return contains(player.getUniqueId(), namespaceId); }
+    default boolean contains(@NotNull LivingEntity livingEntity, @NotNull String namespaceId) { return contains(livingEntity.getUniqueId(), namespaceId); }
 
     /**
      * Gets the set of region and world listener IDs that a player is currently within.
      *
-     * @param player The player to check.
+     * @param uuid The entity UUID to check.
      * @return A set of region and world listener IDs the player is within.
      */
-    @NotNull Set<String> getRegions(@NotNull Player player);
+    @NotNull Set<String> getRegions(@NotNull UUID uuid);
+    default @NotNull Set<String> getRegions(@NotNull Player player) { return getRegions(player.getUniqueId()); }
+    default @NotNull Set<String> getRegions(@NotNull LivingEntity livingEntity) { return getRegions(livingEntity.getUniqueId()); }
 
     /**
      * Gets a region by its ID.

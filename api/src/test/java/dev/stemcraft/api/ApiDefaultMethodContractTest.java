@@ -30,6 +30,7 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
 import org.bukkit.event.EventPriority;
@@ -472,10 +473,10 @@ class ApiDefaultMethodContractTest {
         Location to = new Location(world, 4, 5, 6);
 
         listener.onEnter(player, region, from, to);
-        verify(listener).onEnter(player, region);
+        verify(listener).onEnter((LivingEntity) player, region);
 
         listener.onExit(player, region, from, to);
-        verify(listener).onExit(player, region);
+        verify(listener).onExit((LivingEntity) player, region);
 
         listener.onEnterWorld(player, world, from, to);
         verify(listener).onEnterWorld(player, world);

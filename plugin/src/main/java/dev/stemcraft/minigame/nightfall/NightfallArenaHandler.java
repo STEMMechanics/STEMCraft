@@ -17,12 +17,14 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.World;
+import org.bukkit.attribute.Attribute;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.data.Bisected;
 import org.bukkit.block.data.type.Door;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Item;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
 import org.bukkit.entity.Zombie;
@@ -32,6 +34,7 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityPickupItemEvent;
+import org.bukkit.event.entity.EntityTransformEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerBedEnterEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
@@ -122,20 +125,33 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         if (nightfall.prepSeconds(arena) < 0) {
             result.addError("Prep seconds cannot be negative.", "prepSeconds");
         }
-        if (nightfall.dropMinSeconds(arena) < 1 || nightfall.dropMinSeconds(arena) > 5) {
-            result.addError("Minimum block delay must be between 1 and 5 seconds.", "dropMinSeconds");
+        int rawDropMinSeconds = arena.get("dropMinSeconds", Integer.class, 1);
+        int rawDropMaxSeconds = arena.get("dropMaxSeconds", Integer.class, 5);
+        if (rawDropMinSeconds < 0) {
+            result.addError("Minimum drop delay cannot be negative.", "dropMinSeconds");
         }
-        if (nightfall.dropMaxSeconds(arena) < 1 || nightfall.dropMaxSeconds(arena) > 5) {
-            result.addError("Maximum block delay must be between 1 and 5 seconds.", "dropMaxSeconds");
+        if (rawDropMaxSeconds < 0) {
+            result.addError("Maximum drop delay cannot be negative.", "dropMaxSeconds");
         }
-        if (nightfall.dropMaxSeconds(arena) < nightfall.dropMinSeconds(arena)) {
+        if ((rawDropMinSeconds == 0) != (rawDropMaxSeconds == 0)) {
+            result.addError("Set both drop delays to 0 to disable drops completely.", "dropMaxSeconds");
+        }
+        if (rawDropMaxSeconds > 0 && rawDropMaxSeconds < rawDropMinSeconds) {
             result.addError("Maximum block delay cannot be lower than minimum block delay.", "dropMaxSeconds");
+        }
+        int dropMaxActiveItems = arena.get("dropMaxActiveItems", Integer.class, 10);
+        if (dropMaxActiveItems < 0) {
+            result.addError("Maximum active drops cannot be negative.", "dropMaxActiveItems");
         }
         if (nightfall.zombieWaveIntervalSeconds(arena) < 1) {
             result.addError("Zombie wave interval must be at least 1 second.", "zombieWaveIntervalSeconds");
         }
         if (nightfall.zombieWaveSize(arena) < 1) {
             result.addError("Zombie wave size must be at least 1.", "zombieWaveSize");
+        }
+        double zombieNightlyHealthMultiplier = arena.get("zombieNightlyHealthMultiplier", Double.class, 1.05d);
+        if (zombieNightlyHealthMultiplier < 1.0d) {
+            result.addError("Zombie nightly health multiplier must be at least 1.0.", "zombieNightlyHealthMultiplier");
         }
         if (nightfall.dayTimeSpeedMultiplier(arena) < 1.0d) {
             result.addError("Day time speed multiplier must be at least 1.0.", "dayTimeSpeedMultiplier");
@@ -149,6 +165,14 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         int bloodMoonChancePercent = arena.get("bloodMoonChancePercent", Integer.class, 0);
         if (bloodMoonChancePercent < 0 || bloodMoonChancePercent > 100) {
             result.addError("Blood moon chance must be between 0 and 100 percent.", "bloodMoonChancePercent");
+        }
+        double bloodMoonZombieSpawnMultiplier = arena.get("bloodMoonZombieSpawnMultiplier", Double.class, 2.0d);
+        if (bloodMoonZombieSpawnMultiplier < 1.0d) {
+            result.addError("Blood moon zombie spawn multiplier must be at least 1.0.", "bloodMoonZombieSpawnMultiplier");
+        }
+        int bloodMoonBabyChancePercent = arena.get("bloodMoonBabyZombieChancePercent", Integer.class, 20);
+        if (bloodMoonBabyChancePercent < 0 || bloodMoonBabyChancePercent > 100) {
+            result.addError("Blood moon baby zombie chance must be between 0 and 100 percent.", "bloodMoonBabyZombieChancePercent");
         }
 
         if (playSpawn != null && !arena.world().equals(playSpawn.getWorld())) {
@@ -211,6 +235,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         arena.getOrCreate("nightEliminatedPlayers", Set.class, LinkedHashSet::new);
         arena.getOrCreate("playerDropDueAt", Map.class, LinkedHashMap::new);
         arena.getOrCreate("playerDropTargets", Map.class, LinkedHashMap::new);
+        arena.getOrCreate("activeDropItems", Set.class, LinkedHashSet::new);
         arena.getOrCreate("pendingDeathRespawns", Map.class, LinkedHashMap::new);
         arena.getOrCreate("prepSpawnAssignments", Map.class, LinkedHashMap::new);
         arena.set("daylightLocked", false);
@@ -448,13 +473,15 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
     private void tickDrops(@NotNull MiniGameArena arena) {
         Map<Integer, List<Material>> dropItems = nightfall.dropItems(arena);
         List<Player> activePlayers = activeSurvivors(arena);
-        if (dropItems.isEmpty() || activePlayers.isEmpty()) {
+        int maxActiveDrops = nightfall.dropMaxActiveItems(arena);
+        if (dropItems.isEmpty() || activePlayers.isEmpty() || maxActiveDrops <= 0 || !nightfall.dropsEnabled(arena)) {
             return;
         }
 
         long now = System.currentTimeMillis();
         Map<UUID, Long> dueAt = playerDropDueAt(arena);
         Map<UUID, Location> dropTargets = playerDropTargets(arena);
+        int activeDropCount = countActiveDropItems(arena);
         Set<UUID> activePlayerIds = new LinkedHashSet<>();
         for (Player player : activePlayers) {
             activePlayerIds.add(player.getUniqueId());
@@ -472,6 +499,11 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
                 continue;
             }
 
+            if (activeDropCount >= maxActiveDrops) {
+                dueAt.put(playerId, now + 1000L);
+                continue;
+            }
+
             Block block = resolveDropTargetBlock(arena, player);
             if (block == null) {
                 dueAt.put(playerId, now + 1000L);
@@ -484,7 +516,9 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
                 continue;
             }
 
-            spawnItemDrop(arena, block.getLocation(), material);
+            if (spawnItemDrop(arena, block.getLocation(), material)) {
+                activeDropCount++;
+            }
             dueAt.put(playerId, now + randomDropDelayMillis(arena));
         }
     }
@@ -539,7 +573,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         boolean bloodMoonActive = shouldTriggerBloodMoon(arena);
         arena.set("bloodMoonActive", bloodMoonActive);
         if (bloodMoonActive) {
-            broadcastToOccupants(arena, nightfall.bloodMoonStartMessage());
+            broadcastPlainToOccupants(arena, nightfall.bloodMoonStartMessage());
             playSoundToOccupants(arena, Sound.ENTITY_ZOMBIE_VILLAGER_CONVERTED, 0.75f, 0.7f);
         }
     }
@@ -557,6 +591,9 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         int night = arena.get("currentNight", Integer.class, 0) + 1;
         int spawns = nightfall.zombieBaseNightlySpawns(arena)
             + (Math.max(0, night - 1) * nightfall.zombieNightlySpawnIncrease(arena));
+        if (nightfall.isBloodMoonActive(arena)) {
+            spawns = (int) Math.ceil(spawns * nightfall.bloodMoonZombieSpawnMultiplier(arena));
+        }
 
         arena.set("currentNight", night);
         arena.set("remainingNightSpawns", Math.max(0, spawns));
@@ -610,11 +647,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
                 continue;
             }
 
-            Zombie zombie = spawnLocation.getWorld().spawn(spawnLocation, Zombie.class, entity -> {
-                entity.setCanPickupItems(false);
-                entity.setAdult();
-                entity.setTarget(target);
-            });
+            Zombie zombie = spawnLocation.getWorld().spawn(spawnLocation, Zombie.class, entity -> configureManagedZombie(arena, entity, target));
             managedZombies(arena).add(zombie.getUniqueId());
             spawned++;
         }
@@ -985,6 +1018,8 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         arena.set("timeSpeedCarry", 0.0d);
         arena.set("wasSunsetOrNight", false);
         arena.set("bloodMoonActive", false);
+        activeDropItems(arena).clear();
+        arena.clearAllSupplyDrops();
         playerDropDueAt(arena).clear();
         playerDropTargets(arena).clear();
         nightEliminatedPlayers(arena).clear();
@@ -995,6 +1030,9 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
     private void seedDropTimers(@NotNull MiniGameArena arena) {
         Map<UUID, Long> dueAt = playerDropDueAt(arena);
         dueAt.clear();
+        if (!nightfall.dropsEnabled(arena)) {
+            return;
+        }
         long now = System.currentTimeMillis();
         for (Player player : activeSurvivors(arena)) {
             dueAt.put(player.getUniqueId(), now + randomDropDelayMillis(arena));
@@ -1063,10 +1101,10 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         return ThreadLocalRandom.current().nextLong(min, max + 1L) * 1000L;
     }
 
-    private void spawnItemDrop(@NotNull MiniGameArena arena, @NotNull Location target, @NotNull Material material) {
+    private boolean spawnItemDrop(@NotNull MiniGameArena arena, @NotNull Location target, @NotNull Material material) {
         World world = target.getWorld();
         if (world == null) {
-            return;
+            return false;
         }
 
         double height = ThreadLocalRandom.current().nextDouble(DROP_SPAWN_HEIGHT_MIN, DROP_SPAWN_HEIGHT_MAX);
@@ -1074,7 +1112,51 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         Item item = world.dropItem(spawnLocation, new ItemStack(material));
         item.setVelocity(new Vector());
         item.setPickupDelay(20);
+        activeDropItems(arena).add(item.getUniqueId());
+        arena.trackSupplyDrop(item, target.clone().add(0.5d, 1.0d, 0.5d));
         api.worlds().changes(arena.world()).captureEntity(item);
+        return true;
+    }
+
+    private int countActiveDropItems(@NotNull MiniGameArena arena) {
+        Set<UUID> tracked = activeDropItems(arena);
+        tracked.removeIf(entityId -> {
+            Entity entity = arena.world().getEntity(entityId);
+            return !(entity instanceof Item item) || item.isDead() || !item.isValid();
+        });
+        return tracked.size();
+    }
+
+    private void configureManagedZombie(@NotNull MiniGameArena arena, @NotNull Zombie zombie, @NotNull Player target) {
+        zombie.setCanPickupItems(false);
+        if (shouldSpawnBabyZombie(arena)) {
+            zombie.setBaby();
+        } else {
+            zombie.setAdult();
+        }
+        zombie.setTarget(target);
+        applyNightlyZombieHealth(arena, zombie);
+    }
+
+    private void applyNightlyZombieHealth(@NotNull MiniGameArena arena, @NotNull Zombie zombie) {
+        var maxHealth = zombie.getAttribute(Attribute.MAX_HEALTH);
+        if (maxHealth == null) {
+            return;
+        }
+
+        int night = Math.max(1, arena.get("currentNight", Integer.class, 1));
+        double multiplier = Math.pow(nightfall.zombieNightlyHealthMultiplier(arena), Math.max(0, night - 1));
+        double scaledMaxHealth = maxHealth.getBaseValue() * multiplier;
+        maxHealth.setBaseValue(scaledMaxHealth);
+        zombie.setHealth(scaledMaxHealth);
+    }
+
+    private boolean shouldSpawnBabyZombie(@NotNull MiniGameArena arena) {
+        if (!nightfall.isBloodMoonActive(arena)) {
+            return false;
+        }
+
+        return ThreadLocalRandom.current().nextInt(100) < nightfall.bloodMoonBabyZombieChancePercent(arena);
     }
 
     private long applyConfiguredTimeSpeed(@NotNull MiniGameArena arena, @NotNull World world) {
@@ -1429,7 +1511,11 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         nightEliminatedPlayers(arena).remove(playerId);
         pendingDeathRespawns(arena).remove(playerId);
         playerDropTargets(arena).remove(playerId);
-        playerDropDueAt(arena).put(playerId, System.currentTimeMillis() + randomDropDelayMillis(arena));
+        if (nightfall.dropsEnabled(arena)) {
+            playerDropDueAt(arena).put(playerId, System.currentTimeMillis() + randomDropDelayMillis(arena));
+        } else {
+            playerDropDueAt(arena).remove(playerId);
+        }
         miniGamePlayer.set("livesRemaining", 1);
         prepareParticipantForRound(player);
         Location respawn = activeSpawn(arena);
@@ -1621,6 +1707,11 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
     }
 
     @SuppressWarnings("unchecked")
+    private Set<UUID> activeDropItems(@NotNull MiniGameArena arena) {
+        return arena.getOrCreate("activeDropItems", Set.class, LinkedHashSet::new);
+    }
+
+    @SuppressWarnings("unchecked")
     private Map<UUID, Location> pendingDeathRespawns(@NotNull MiniGameArena arena) {
         return arena.getOrCreate("pendingDeathRespawns", Map.class, LinkedHashMap::new);
     }
@@ -1650,8 +1741,11 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
                 if (arena.getStatus() == MiniGameArena.ArenaStatus.DISABLED || arena.getStatus() == MiniGameArena.ArenaStatus.SETUP) {
                     continue;
                 }
-                if (event.getEntity() instanceof Zombie && event.getSpawnReason() == CreatureSpawnEvent.SpawnReason.CUSTOM) {
-                    return;
+                if (event.getEntity() instanceof Zombie) {
+                    String reason = event.getSpawnReason().name();
+                    if ("CUSTOM".equals(reason) || "DROWNED".equals(reason)) {
+                        return;
+                    }
                 }
                 event.setCancelled(true);
                 return;
@@ -1831,6 +1925,32 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
                 break;
             }
         });
+
+        api.events().register(EntityTransformEvent.class, event -> {
+            if (!(event.getEntity() instanceof Zombie zombie) || nightfall.minigame() == null) {
+                return;
+            }
+
+            UUID originalId = zombie.getUniqueId();
+            for (MiniGameArena arena : nightfall.minigame().arenas()) {
+                Set<UUID> tracked = managedZombies(arena);
+                if (!tracked.remove(originalId)) {
+                    continue;
+                }
+
+                if (event.getTransformedEntity() instanceof Zombie transformedZombie) {
+                    LivingEntity target = zombie.getTarget();
+                    tracked.add(transformedZombie.getUniqueId());
+                    transformedZombie.setCanPickupItems(false);
+                    if (target != null) {
+                        transformedZombie.setTarget(target);
+                    }
+                }
+
+                updateArenaStateCounters(arena);
+                break;
+            }
+        }, EventPriority.HIGHEST, true);
     }
 
     private @Nullable Player resolvePlayerDamager(@NotNull EntityDamageByEntityEvent event) {

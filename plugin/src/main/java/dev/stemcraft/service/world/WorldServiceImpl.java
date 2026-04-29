@@ -422,6 +422,24 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         }
     }
 
+    void setStoredGenerator(@NotNull String worldName,
+                            @NotNull String generatorName,
+                            @NotNull String generatorOptions) {
+        String resolvedGeneratorName = generatorName.trim().isEmpty() ? "normal" : generatorName.trim();
+        String resolvedGeneratorOptions = generatorOptions.trim();
+
+        resolveConfiguredGenerator(worldName, new ConfiguredGeneratorSpec(resolvedGeneratorName, resolvedGeneratorOptions));
+
+        ConfigSection config = getConfigSection(worldName);
+        config.set("generator.key", resolvedGeneratorName);
+        if (resolvedGeneratorOptions.isBlank()) {
+            config.set("generator.options", null);
+        } else {
+            config.set("generator.options", resolvedGeneratorOptions);
+        }
+        config.save();
+    }
+
     /**
      * Check if a setting with the given key is registered.
      *

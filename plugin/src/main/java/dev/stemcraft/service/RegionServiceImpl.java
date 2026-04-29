@@ -26,10 +26,18 @@ import dev.stemcraft.api.service.region.RegionListener;
 import dev.stemcraft.api.service.region.RegionService;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.util.NamespaceId;
+import io.papermc.paper.event.entity.EntityMoveEvent;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
+import org.bukkit.event.entity.EntityRemoveEvent;
+import org.bukkit.event.player.PlayerKickEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.vehicle.VehicleMoveEvent;
 import org.jetbrains.annotations.NotNull;
 import org.jspecify.annotations.NonNull;
 
@@ -54,7 +62,12 @@ public class RegionServiceImpl extends BaseService implements RegionService {
     /**
      * Map of players to their currently active regions/worlds.
      */
-    private final Map<Player, List<String>> playerRegions = new HashMap<>();
+    private final Map<UUID, List<String>> entityRegions = new HashMap<>();
+
+    /**
+     * List of tracked entities.
+     */
+    private final List<UUID> trackedEntities = new ArrayList<>();
 
     /**
      * Constructor for RegionServiceImpl.
@@ -71,77 +84,146 @@ public class RegionServiceImpl extends BaseService implements RegionService {
      */
     @Override
     public void onEnable() {
-        api.events().register(PlayerMoveEvent.class, event -> {
-            Player player = event.getPlayer();
-            Location from = event.getFrom();
-            Location to = event.getTo();
-            World toWorld = to.getWorld();
+        api.events().register(PlayerMoveEvent.class, event -> handleMovement(event.getPlayer(), event.getFrom(), event.getTo(), true));
 
-            // Previously active regions/worlds for this player
-            List<String> previousIds = playerRegions.getOrDefault(player, List.of());
-            List<String> currentIds = new ArrayList<>();
+        api.events().register(EntityMoveEvent.class, event -> {
+            LivingEntity entity = event.getEntity();
 
-            // detect regions/worlds player left
-            for (String id : previousIds) {
-                RegionListenerEntry entry = listeners.get(id);
-                if (entry == null) {
-                    continue; // listener was removed
-                }
+            if (entity instanceof Player player) return;
+            if (!trackedEntities.contains(entity.getUniqueId())) return;
 
-                SCRegion region = entry.region();
-                World world = entry.world();
-                RegionListener listener = entry.listener();
+            handleMovement(event.getEntity(), event.getFrom(), event.getTo(), false);
+        });
 
-                if (region != null) {
-                    // Region-based listener: exit when player is no longer inside
-                    if (!region.contains(to)) {
-                        listener.onExit(player, region, from, to);
-                    } else {
-                        currentIds.add(id);
-                    }
-                } else if (world != null) {
-                    // World-based listener: exit when player moved to a different world
-                    if (!world.equals(toWorld)) {
-                        listener.onExitWorld(player, world, from, to);
-                    } else {
-                        currentIds.add(id);
-                    }
-                }
+        api.events().register(VehicleMoveEvent.class, event -> {
+            Player rider = firstPassenger(event.getVehicle());
+            if (rider == null) {
+                return;
             }
 
-            Location effectiveTo = resolveEffectiveEnterLocation(player, from, to);
-            World effectiveWorld = effectiveTo.getWorld();
+            handleMovement(rider, event.getFrom(), event.getTo(), false);
+        });
 
-            // detect regions/worlds player entered
-            listeners.forEach((id, entry) -> {
-                if (currentIds.contains(id)) {
-                    return; // already still inside this region/world
-                }
+        api.events().register(EntityRemoveEvent.class, event -> {
+            if (event.getCause() != EntityRemoveEvent.Cause.UNLOAD) {
+                entityRegions.remove(event.getEntity().getUniqueId());
+                trackedEntities.remove(event.getEntity().getUniqueId());
+            }
+        });
 
-                SCRegion region = entry.region();
-                World world = entry.world();
-                RegionListener listener = entry.listener();
+        api.events().register(PlayerQuitEvent.class, event -> entityRegions.remove(event.getPlayer().getUniqueId()));
+        api.events().register(PlayerKickEvent.class, event -> entityRegions.remove(event.getPlayer().getUniqueId()));
 
-                if (region != null) {
-                    if (region.contains(effectiveTo)) {
-                        listener.onEnter(player, region, from, effectiveTo);
-                        currentIds.add(id);
-                    }
-                } else if (world != null) {
-                    if (world.equals(effectiveWorld)) {
-                        listener.onEnterWorld(player, world, from, effectiveTo);
-                        currentIds.add(id);
-                    }
-                }
-            });
+        // 5 minutes in ticks
+        long CLEANUP_ENTITY_INTERVAL = 6000;
+        api.tasks().repeating(CLEANUP_ENTITY_INTERVAL, this::cleanupEntities);
+    }
 
-            // update player's current active regions/worlds
-            playerRegions.put(player, currentIds);
+    private void cleanupEntities() {
+        entityRegions.entrySet().removeIf(entry -> {
+            Entity entity = Bukkit.getEntity(entry.getKey());
+            return entity == null || !entity.isValid();
         });
     }
 
-    private Location resolveEffectiveEnterLocation(Player player, Location from, Location requestedTo) {
-        Location actual = player.getLocation();
+    private void handleMovement(@NotNull LivingEntity livingEntity,
+                                @Nullable Location from,
+                                @Nullable Location requestedTo,
+                                boolean preferActualLocation) {
+        if (requestedTo == null || requestedTo.getWorld() == null) {
+            return;
+        }
+
+        Location effectiveTo = preferActualLocation
+            ? resolveEffectiveEnterLocation(livingEntity, from, requestedTo)
+            : requestedTo;
+        if (effectiveTo.getWorld() == null) {
+            return;
+        }
+
+        UUID entityId = livingEntity.getUniqueId();
+        World effectiveWorld = effectiveTo.getWorld();
+        Set<String> previousIds = new HashSet<>(entityRegions.getOrDefault(entityId, List.of()));
+        List<String> currentIds = new ArrayList<>();
+
+        listeners.forEach((id, entry) -> {
+            SCRegion region = entry.region();
+            World world = entry.world();
+            RegionListener listener = entry.listener();
+            boolean wasInside = previousIds.contains(id);
+
+            if (region != null) {
+                boolean containsTo = region.contains(effectiveTo);
+                boolean crossedRegion = from != null && region.intersectsPath(from, effectiveTo);
+
+                if (wasInside) {
+                    if (containsTo) {
+                        currentIds.add(id);
+                    } else if (livingEntity instanceof Player player) {
+                        listener.onExit(player, region, from, effectiveTo);
+                    } else {
+                        listener.onExit(livingEntity, region, from, effectiveTo);
+                    }
+                    return;
+                }
+
+                if (!containsTo && !crossedRegion) {
+                    return;
+                }
+
+                if (livingEntity instanceof Player player) {
+                    listener.onEnter(player, region, from, effectiveTo);
+                } else {
+                    listener.onEnter(livingEntity, region, from, effectiveTo);
+                }
+                if (containsTo) {
+                    currentIds.add(id);
+                } else if (livingEntity instanceof Player player) {
+                    listener.onExit(player, region, from, effectiveTo);
+                } else {
+                    listener.onExit(livingEntity, region, from, effectiveTo);
+                }
+                return;
+            }
+
+            if (world == null) {
+                return;
+            }
+
+            if (wasInside) {
+                if (world.equals(effectiveWorld)) {
+                    currentIds.add(id);
+                } else if(livingEntity instanceof Player player){
+                    listener.onExitWorld(player, world, from, effectiveTo);
+                }
+                return;
+            }
+
+            if (world.equals(effectiveWorld) && (livingEntity instanceof Player player)) {
+                listener.onEnterWorld(player, world, from, effectiveTo);
+                currentIds.add(id);
+            }
+        });
+
+        entityRegions.put(entityId, currentIds);
+    }
+
+    private @Nullable Player firstPassenger(@Nullable Entity vehicle) {
+        if (vehicle == null) {
+            return null;
+        }
+
+        for (Entity passenger : vehicle.getPassengers()) {
+            if (passenger instanceof Player player) {
+                return player;
+            }
+        }
+
+        return null;
+    }
+
+    private Location resolveEffectiveEnterLocation(LivingEntity livingEntity, Location from, Location requestedTo) {
+        Location actual = livingEntity.getLocation();
         if (differentBlockLocation(actual, from) && differentBlockLocation(actual, requestedTo)) {
             return actual;
         }
@@ -215,27 +297,55 @@ public class RegionServiceImpl extends BaseService implements RegionService {
     }
 
     /**
+     * Tracks a living entity for region and world listeners.
+     *
+     * @param livingEntity The entity to track.
+     */
+    public void trackLivingEntity(@NotNull LivingEntity livingEntity) {
+        trackedEntities.add(livingEntity.getUniqueId());
+    }
+
+    /**
+     * Untracks a living entity from region and world listeners.
+     *
+     * @param livingEntity The entity to untrack.
+     */
+    public void untrackLivingEntity(@NotNull LivingEntity livingEntity) {
+        trackedEntities.remove(livingEntity.getUniqueId());
+    }
+
+    /**
+     * Checks if a player is currently within a region or world listener.
+     *
+     * @param livingEntity The entity to check.
+     * @return True if the entity is within a region or world listener, false otherwise.
+     */
+    public boolean isTracked(@NotNull LivingEntity livingEntity) {
+        return trackedEntities.contains(livingEntity.getUniqueId());
+    }
+
+    /**
      * Checks if a player is currently within a region or world listener by its ID.
      *
-     * @param player The player to check.
+     * @param uuid The entity UUID to check.
      * @param namespaceId The namespace ID of the region or world listener.
      * @return True if the player is within the region or world, false otherwise.
      */
     @Override
-    public boolean contains(@NotNull Player player, @NotNull String namespaceId) {
-        List<String> regions = playerRegions.get(player);
+    public boolean contains(@NotNull UUID uuid, @NotNull String namespaceId) {
+        List<String> regions = entityRegions.get(uuid);
         return regions != null && regions.contains(namespaceId);
     }
 
     /**
      * Gets the set of region and world listener IDs that a player is currently within.
      *
-     * @param player The player to check.
+     * @param uuid The entity UUID to check.
      * @return A set of region and world listener IDs.
      */
     @Override
-    public @NotNull Set<String> getRegions(@NotNull Player player) {
-        List<String> regions = playerRegions.get(player);
+    public @NotNull Set<String> getRegions(@NotNull UUID uuid) {
+        List<String> regions = entityRegions.get(uuid);
         if (regions == null) {
             return Set.of();
         }

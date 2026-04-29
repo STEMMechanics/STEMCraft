@@ -73,13 +73,17 @@ public class NightfallCommand {
             .tabCompletion("set", "{nightfall-arenas}", "prepseconds")
             .tabCompletion("set", "{nightfall-arenas}", "dropmindelay")
             .tabCompletion("set", "{nightfall-arenas}", "dropmaxdelay")
+            .tabCompletion("set", "{nightfall-arenas}", "dropmaxactive")
             .tabCompletion("set", "{nightfall-arenas}", "zombiebasenightly")
             .tabCompletion("set", "{nightfall-arenas}", "zombienightlyincrease")
+            .tabCompletion("set", "{nightfall-arenas}", "zombiehealthmultiplier")
             .tabCompletion("set", "{nightfall-arenas}", "zombiewavesize")
             .tabCompletion("set", "{nightfall-arenas}", "zombiewaveinterval")
             .tabCompletion("set", "{nightfall-arenas}", "zombiespawnradiusmin")
             .tabCompletion("set", "{nightfall-arenas}", "zombiespawnradiusmax")
             .tabCompletion("set", "{nightfall-arenas}", "bloodmoonchance")
+            .tabCompletion("set", "{nightfall-arenas}", "bloodmoonmultiplier")
+            .tabCompletion("set", "{nightfall-arenas}", "bloodmoonbabychance")
             .tabCompletion("set", "{nightfall-arenas}", "timespeed")
             .tabCompletion("set", "{nightfall-arenas}", "daytimespeed")
             .tabCompletion("set", "{nightfall-arenas}", "nighttimespeed")
@@ -182,14 +186,20 @@ public class NightfallCommand {
         ctx.info(" - Prep seconds: " + nightfall.prepSeconds(arena));
         ctx.info(" - Day time speed: " + String.format(Locale.ROOT, "%.2fx", nightfall.dayTimeSpeedMultiplier(arena)));
         ctx.info(" - Night time speed: " + String.format(Locale.ROOT, "%.2fx", nightfall.nightTimeSpeedMultiplier(arena)));
-        ctx.info(" - Drop delay: " + nightfall.dropMinSeconds(arena) + "-" + nightfall.dropMaxSeconds(arena) + " sec");
+        ctx.info(" - Drop delay: " + (nightfall.dropsEnabled(arena)
+            ? nightfall.dropMinSeconds(arena) + "-" + nightfall.dropMaxSeconds(arena) + " sec"
+            : "disabled"));
+        ctx.info(" - Drop max active items: " + nightfall.dropMaxActiveItems(arena));
         ctx.info(" - Drop radius: 5-20 blocks around each player with open sky");
         ctx.info(" - Zombie nightly base: " + nightfall.zombieBaseNightlySpawns(arena));
         ctx.info(" - Zombie nightly increase: " + nightfall.zombieNightlySpawnIncrease(arena));
+        ctx.info(" - Zombie nightly health multiplier: " + String.format(Locale.ROOT, "%.2fx", nightfall.zombieNightlyHealthMultiplier(arena)));
         ctx.info(" - Zombie wave size: " + nightfall.zombieWaveSize(arena));
         ctx.info(" - Zombie wave interval: " + nightfall.zombieWaveIntervalSeconds(arena) + " sec");
         ctx.info(" - Zombie spawn radius: " + nightfall.zombieSpawnRadiusMin(arena) + "-" + nightfall.zombieSpawnRadiusMax(arena));
         ctx.info(" - Blood moon chance: " + nightfall.bloodMoonChancePercent(arena) + "%");
+        ctx.info(" - Blood moon spawn multiplier: " + String.format(Locale.ROOT, "%.2fx", nightfall.bloodMoonZombieSpawnMultiplier(arena)));
+        ctx.info(" - Blood moon baby zombie chance: " + nightfall.bloodMoonBabyZombieChancePercent(arena) + "%");
         ctx.info(" - Drop tiers: " + nightfall.dropItems(arena).size() + " (" + nightfall.dropItemCount(arena) + " items)");
         if (validation.hasErrors()) {
             ctx.warn(" - Validation: failed");
@@ -565,21 +575,39 @@ public class NightfallCommand {
             }
             case "dropmindelay" -> {
                 ctx.checkArgsSizeAtLeast(4);
-                int minDelay = ctx.getArgAsInt(3, 1, 1, 5);
+                int minDelay = ctx.getArgAsInt(3, 1, 0, null);
+                if (minDelay == 0) {
+                    arena.set("dropMinSeconds", 0);
+                    arena.set("dropMaxSeconds", 0);
+                    ctx.success("Drops disabled for arena '" + arena.id() + "'.");
+                    return;
+                }
                 arena.set("dropMinSeconds", minDelay);
-                if (nightfall.dropMaxSeconds(arena) < minDelay) {
+                if (!nightfall.dropsEnabled(arena) || nightfall.dropMaxSeconds(arena) < minDelay) {
                     arena.set("dropMaxSeconds", minDelay);
                 }
                 ctx.success("Minimum generator delay set to " + minDelay + " seconds for arena '" + arena.id() + "'.");
             }
             case "dropmaxdelay" -> {
                 ctx.checkArgsSizeAtLeast(4);
-                int maxDelay = ctx.getArgAsInt(3, 5, 1, 5);
+                int maxDelay = ctx.getArgAsInt(3, 5, 0, null);
+                if (maxDelay == 0) {
+                    arena.set("dropMinSeconds", 0);
+                    arena.set("dropMaxSeconds", 0);
+                    ctx.success("Drops disabled for arena '" + arena.id() + "'.");
+                    return;
+                }
                 arena.set("dropMaxSeconds", maxDelay);
-                if (nightfall.dropMinSeconds(arena) > maxDelay) {
+                if (!nightfall.dropsEnabled(arena) || nightfall.dropMinSeconds(arena) > maxDelay) {
                     arena.set("dropMinSeconds", maxDelay);
                 }
                 ctx.success("Maximum generator delay set to " + maxDelay + " seconds for arena '" + arena.id() + "'.");
+            }
+            case "dropmaxactive" -> {
+                ctx.checkArgsSizeAtLeast(4);
+                int value = ctx.getArgAsInt(3, 10, 0, null);
+                arena.set("dropMaxActiveItems", value);
+                ctx.success("Maximum active drops set to " + value + " for arena '" + arena.id() + "'.");
             }
             case "zombiebasenightly" -> {
                 ctx.checkArgsSizeAtLeast(4);
@@ -592,6 +620,13 @@ public class NightfallCommand {
                 int value = ctx.getArgAsInt(3, 3, 0, null);
                 arena.set("zombieNightlySpawnIncrease", value);
                 ctx.success("Nightly zombie spawn increase set to " + value + " for arena '" + arena.id() + "'.");
+            }
+            case "zombiehealthmultiplier" -> {
+                ctx.checkArgsSizeAtLeast(4);
+                double value = ctx.getArgAsDouble(3, 1.05d, 1.0d, null);
+                arena.set("zombieNightlyHealthMultiplier", value);
+                ctx.success("Zombie nightly health multiplier set to " + String.format(Locale.ROOT, "%.2fx", value)
+                    + " for arena '" + arena.id() + "'.");
             }
             case "zombiewavesize" -> {
                 ctx.checkArgsSizeAtLeast(4);
@@ -628,6 +663,19 @@ public class NightfallCommand {
                 int value = ctx.getArgAsInt(3, 0, 0, 100);
                 arena.set("bloodMoonChancePercent", value);
                 ctx.success("Blood moon chance set to " + value + "% for arena '" + arena.id() + "'.");
+            }
+            case "bloodmoonmultiplier" -> {
+                ctx.checkArgsSizeAtLeast(4);
+                double value = ctx.getArgAsDouble(3, 2.0d, 1.0d, null);
+                arena.set("bloodMoonZombieSpawnMultiplier", value);
+                ctx.success("Blood moon zombie spawn multiplier set to " + String.format(Locale.ROOT, "%.2fx", value)
+                    + " for arena '" + arena.id() + "'.");
+            }
+            case "bloodmoonbabychance" -> {
+                ctx.checkArgsSizeAtLeast(4);
+                int value = ctx.getArgAsInt(3, 20, 0, 100);
+                arena.set("bloodMoonBabyZombieChancePercent", value);
+                ctx.success("Blood moon baby zombie chance set to " + value + "% for arena '" + arena.id() + "'.");
             }
             case "name" -> {
                 ctx.checkArgsSizeAtLeast(4);
