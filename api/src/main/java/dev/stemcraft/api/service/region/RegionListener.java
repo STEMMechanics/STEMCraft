@@ -23,6 +23,7 @@ package dev.stemcraft.api.service.region;
 import dev.stemcraft.api.model.SCRegion;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -31,7 +32,7 @@ import org.jetbrains.annotations.Nullable;
  * Listener for region-related events.
  */
 @SuppressWarnings("EmptyMethod")
-public interface RegionListener {
+public interface  RegionListener {
 
     /**
      * Called when a player enters a region.
@@ -39,7 +40,17 @@ public interface RegionListener {
      * @param player The player entering the region.
      * @param region The region being entered.
      */
-    default void onEnter(@NotNull Player player, @NotNull SCRegion region) { }
+    default void onEnter(@NotNull Player player, @NotNull SCRegion region) {
+        onEnter((LivingEntity) player, region);
+    }
+
+    /**
+     * Called when a living entity enters a region.
+     *
+     * @param livingEntity The a living entity enters the region.
+     * @param region The region being entered.
+     */
+    default void onEnter(@NotNull LivingEntity livingEntity, @NotNull SCRegion region) { }
 
     /**
      * Called when a player enters a region.
@@ -50,7 +61,19 @@ public interface RegionListener {
      * @param to     The move destination that triggered the enter.
      */
     default void onEnter(@NotNull Player player, @NotNull SCRegion region, @Nullable Location from, @Nullable Location to) {
-        onEnter(player, region);
+        onEnter((LivingEntity) player, region, from, to);
+    }
+
+    /**
+     * Called when a living entity enters a region.
+     *
+     * @param livingEntity The a living entity enters the region.
+     * @param region The region being entered.
+     * @param from   The move origin.
+     * @param to     The move destination that triggered the enter.
+     */
+    default void onEnter(@NotNull LivingEntity livingEntity, @NotNull SCRegion region, @Nullable Location from, @Nullable Location to) {
+        onEnter(livingEntity, region);
     }
 
     /**
@@ -79,7 +102,9 @@ public interface RegionListener {
      * @param player The player exiting the region.
      * @param region The region being exited.
      */
-    default void onExit(@NotNull Player player, @NotNull SCRegion region) { }
+    default void onExit(@NotNull Player player, @NotNull SCRegion region) {
+        onExit((LivingEntity) player, region);
+    }
 
     /**
      * Called when a player exits a region.
@@ -90,7 +115,27 @@ public interface RegionListener {
      * @param to     The move destination that triggered the exit.
      */
     default void onExit(@NotNull Player player, @NotNull SCRegion region, @Nullable Location from, @Nullable Location to) {
-        onExit(player, region);
+        onExit((LivingEntity) player, region, from, to);
+    }
+
+    /**
+     * Called when a living entity exits a region.
+     *
+     * @param livingEntity The living entity exits the region.
+     * @param region The region being exited.
+     */
+    default void onExit(@NotNull LivingEntity livingEntity, @NotNull SCRegion region) { }
+
+    /**
+     * Called when a living entity exits a region.
+     *
+     * @param livingEntity The living entity exits the region.
+     * @param region The region being exited.
+     * @param from   The move origin.
+     * @param to     The move destination that triggered the exit.
+     */
+    default void onExit(@NotNull LivingEntity livingEntity, @NotNull SCRegion region, @Nullable Location from, @Nullable Location to) {
+        onExit(livingEntity, region);
     }
 
     /**

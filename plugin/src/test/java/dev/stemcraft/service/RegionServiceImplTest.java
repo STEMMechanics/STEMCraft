@@ -8,12 +8,17 @@ import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.service.event.EventHandler;
 import dev.stemcraft.api.service.event.EventService;
 import dev.stemcraft.api.service.region.RegionListener;
+import dev.stemcraft.api.service.task.TaskService;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Vehicle;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityRemoveEvent;
+import org.bukkit.event.player.PlayerKickEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.vehicle.VehicleMoveEvent;
+import io.papermc.paper.event.entity.EntityMoveEvent;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -56,8 +61,10 @@ class RegionServiceImplTest {
         when(plugin.isEnabled()).thenReturn(true);
 
         EventService events = mock(EventService.class);
+        TaskService tasks = mock(TaskService.class);
         STEMCraftAPI api = mock(STEMCraftAPI.class);
         when(api.events()).thenReturn(events);
+        when(api.tasks()).thenReturn(tasks);
 
         handlers = new HashMap<>();
         when(events.register(any(Class.class), any())).thenAnswer(invocation -> {
@@ -77,9 +84,13 @@ class RegionServiceImplTest {
     }
 
     @Test
-    void onEnableRegistersPlayerAndVehicleMovementHandlers() {
+    void onEnableRegistersMovementAndCleanupHandlers() {
         assertTrue(handlers.containsKey(PlayerMoveEvent.class));
+        assertTrue(handlers.containsKey(EntityMoveEvent.class));
         assertTrue(handlers.containsKey(VehicleMoveEvent.class));
+        assertTrue(handlers.containsKey(EntityRemoveEvent.class));
+        assertTrue(handlers.containsKey(PlayerQuitEvent.class));
+        assertTrue(handlers.containsKey(PlayerKickEvent.class));
     }
 
     @Test
