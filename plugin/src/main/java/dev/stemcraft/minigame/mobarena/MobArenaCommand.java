@@ -171,7 +171,7 @@ public class MobArenaCommand {
         String spawnerPropertyKey = ctx.getArg(4);
         String spawnerPropertyValue = ctx.getArg(5);
 
-        if (spawnerIndex < 0 | spawnerIndex >= arena.get("spawner-configs.max", Integer.class)) {
+        if (spawnerIndex < 0 || spawnerIndex >= arena.get("spawner-configs.max", Integer.class)) {
             ctx.returnUsage();
         }
 
