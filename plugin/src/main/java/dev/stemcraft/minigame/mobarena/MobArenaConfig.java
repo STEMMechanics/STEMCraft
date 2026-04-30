@@ -56,12 +56,13 @@ public class MobArenaConfig {
         this.config = api.config().load("mobarena.yml", true);
         if (this.config == null) {
             api.messages().warn("Mob Arena config could not be loaded (saving disabled!)");
+        } else {
+            config.setAutoSave(true);
+
+            config.getSection("arenas", true);
+
+            configEnabled = true;
         }
-        config.setAutoSave(true);
-
-        config.getSection("arenas", true);
-
-        configEnabled = true;
     }
 
     public @NotNull List<@NotNull MobArenaArenaRecord> loadArenas() {
