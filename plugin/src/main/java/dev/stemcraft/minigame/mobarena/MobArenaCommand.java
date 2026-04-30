@@ -15,7 +15,6 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
-import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 
@@ -147,7 +146,7 @@ public class MobArenaCommand {
 
         arena.set(newSpawnerConfigPrefix + "entityType", EntityType.ZOMBIE);
         arena.set(newSpawnerConfigPrefix + "initialAmount", 1);
-        arena.<Double>set(newSpawnerConfigPrefix + "incrementAmount", 1.0);
+        arena.set(newSpawnerConfigPrefix + "incrementAmount", 1.0);
         arena.set(newSpawnerConfigPrefix + "incrementType", MobArenaArenaRecord.SpawnerRecord.IncrementType.Linear);
         arena.set(newSpawnerConfigPrefix + "initialWave", 1);
         arena.set(newSpawnerConfigPrefix + "spawnZone", "");
@@ -232,12 +231,10 @@ public class MobArenaCommand {
     }
 
     private void commandZone(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx);
-
         ctx.checkArgsSizeAtLeast(3);
 
         String possibleOperation = ctx.getArg(2);
-        if (possibleOperation == "delete") {
+        if (Objects.equals(possibleOperation, "delete")) {
             commandZoneDelete(ctx);
         } else {
             commandZonePut(ctx);
