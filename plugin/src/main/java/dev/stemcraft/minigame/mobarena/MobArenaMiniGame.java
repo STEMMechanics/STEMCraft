@@ -21,6 +21,8 @@ import java.util.*;
 // TODO: [Overall] Add in player stats
 
 public class MobArenaMiniGame extends BaseMiniGame {
+    private static final int HUD_LINE_HOLD_UPDATES = 3;
+
     @Getter
     @Accessors(fluent = true)
     private static final String namespace = "mobarena";
@@ -42,7 +44,9 @@ public class MobArenaMiniGame extends BaseMiniGame {
         config = new MobArenaConfig(api);
         handler = new MobArenaArenaHandler(api, this);
 
-        minigame = createMiniGame(namespace, handler);
+        minigame = createMiniGame(namespace, handler)
+                .registerArenaPlaceholder("mobs-left", (arena, team, player) -> String.valueOf(handler.getTrackedMobsForMinigame(arena)))
+                .registerArenaPlaceholder("round", (arena, team, player) -> String.valueOf(handler.getRoundForArena(arena)));
 
         config.onEnable(minigame);
 
@@ -56,6 +60,68 @@ public class MobArenaMiniGame extends BaseMiniGame {
 
     private @NotNull Map<MiniGameArena.ArenaStatus, MiniGameHudConfigSupport.HudDefinition> defaultHudDefinitions() {
         Map<MiniGameArena.ArenaStatus, MiniGameHudConfigSupport.HudDefinition> definitions = new LinkedHashMap<>();
+        definitions.put(MiniGameArena.ArenaStatus.WAITING, new MiniGameHudConfigSupport.HudDefinition(
+                List.of(
+                        "<gradient:#f59e0b:#ef4444><bold>{arena:name}</bold></gradient>",
+                        ":info_blue: <aqua>Waiting for players</aqua> <dark_gray>•</dark_gray> <green>{arena:joined-players}</green>/<green>{arena:max-players}</green>"
+                ),
+                List.of(
+                        "<gradient:#f59e0b:#ef4444><bold>{arena:name}</bold></gradient>",
+                        "",
+                        ":purple_bed: <gold>Bridge</gold> <dark_gray>•</dark_gray> <aqua>Lobby</aqua>",
+                        ":info_green: <gray>Joined</gray> <green>{arena:joined-players}</green>/<green>{arena:max-players}</green>",
+                        ":question_blue: <gray>Need</gray> <yellow>{arena:min-players}</yellow> <gray>players</gray>",
+                        ":world: <gray>Map ID</gray> <gold>{arena:id}</gold>"
+                ),
+                HUD_LINE_HOLD_UPDATES
+        ));
+        definitions.put(MiniGameArena.ArenaStatus.STARTING, new MiniGameHudConfigSupport.HudDefinition(
+                List.of(
+                        "<gradient:#f59e0b:#ef4444><bold>{arena:name}</bold></gradient>",
+                        ":click_action_right: <gold>Starting in</gold> <yellow>{arena:time-remaining}</yellow>",
+                        ":info_green: <gray>Players</gray> <green>{arena:joined-players}</green>/<green>{arena:max-players}</green>"
+                ),
+                List.of(
+                        "<gradient:#f59e0b:#ef4444><bold>{arena:name}</bold></gradient>",
+                        "",
+                        ":click_action_right: <gold>Starts In</gold> <yellow>{arena:time-remaining}</yellow>",
+                        ":info_green: <gray>Players</gray> <green>{arena:joined-players}</green>/<green>{arena:max-players}</green>",
+                        ":question_blue: <gray>Need</gray> <yellow>{arena:min-players}</yellow>",
+                        ":world: <gray>Map ID</gray> <gold>{arena:id}</gold>"
+                ),
+                HUD_LINE_HOLD_UPDATES
+        ));
+        definitions.put(MiniGameArena.ArenaStatus.RUNNING, new MiniGameHudConfigSupport.HudDefinition(
+                List.of(
+                        "<gradient:#f59e0b:#ef4444><bold>{arena:name}</bold></gradient>",
+                        ":location: <gray>Mobs</gray> {arena:mobs-left}",       // TODO: Replace the icons
+                        ":world: <gray>Round</gray> <aqua>{arena:round}</aqua>" //       for these - ProjectHSI
+                ),
+                List.of(
+                        "<gradient:#f59e0b:#ef4444><bold>{arena:name}</bold></gradient>",
+                        "",
+                        ":location: <gray>Mobs</gray> {arena:mobs-left}",        // TODO: Replace the icons
+                        ":world: <gray>Round</gray> <aqua>{arena:round}</aqua>", //       for these - ProjectHSI
+                        "",
+                        ":click_action_left: <gray>Kills</gray> <red>{player:kills}</red>"
+                ),
+                HUD_LINE_HOLD_UPDATES
+        ));
+        definitions.put(MiniGameArena.ArenaStatus.ENDING, new MiniGameHudConfigSupport.HudDefinition(
+                List.of(
+                        "<gradient:#f59e0b:#ef4444><bold>{arena:name}</bold></gradient>",
+                        ":warning_yellow: <gold>Round ends in</gold> <yellow>{arena:time-remaining}</yellow>"
+                ),
+                List.of(
+                        "<gradient:#f59e0b:#ef4444><bold>{arena:name}</bold></gradient>",
+                        "",
+                        ":world: <gray>Round</gray> <aqua>{arena:round}</aqua>", // TODO: Replace the icon
+                        ":warning_yellow: <gold>Round ends in</gold> <yellow>{arena:time-remaining}</yellow>",
+                        "",
+                        ":click_action_left: <gray>Kills</gray> <red>{player:kills}</red>"
+                ),
+                HUD_LINE_HOLD_UPDATES
+        ));
         return definitions;
     }
 
@@ -73,7 +139,7 @@ public class MobArenaMiniGame extends BaseMiniGame {
 
         // TODO: Initialise everything else.
 
-        arena.<Integer>set("spawner-configs.max", 0);
+        arena.set("spawner-configs.max", 0);
         arena.<Map<String,SCRegion>>set("zones", new HashMap<>());
 
         return arena;

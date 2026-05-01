@@ -7,7 +7,6 @@ import dev.stemcraft.api.minigame.MiniGameArena;
 import dev.stemcraft.api.minigame.MiniGameArenaHandler;
 import dev.stemcraft.api.minigame.MiniGamePlayer;
 import dev.stemcraft.api.model.SCRegion;
-import dev.stemcraft.api.service.event.EventHandler;
 import dev.stemcraft.api.service.region.RegionListener;
 import dev.stemcraft.api.util.NamespaceId;
 import dev.stemcraft.api.util.PlayerUtil;
@@ -23,7 +22,6 @@ import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDropItemEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.Damageable;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -35,10 +33,31 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
     private final Map<Entity, MiniGameArena> trackedEntityMiniGameArenaMap;
     private final Map<Entity, MiniGameArena> entityMiniGameArenaMap;
 
+    public int getTrackedMobsForMinigame(MiniGameArena arena) {
+        return trackedEntityMiniGameArenaMap.values()
+                .stream()
+                .reduce(0, (accumulator, valueArena) ->
+                        valueArena.equals(arena) ? accumulator + 1 : accumulator,
+                        Integer::sum);
+    }
+
+    public Double getTrackedMobHealthForMinigame(MiniGameArena arena) {
+        return trackedEntityMiniGameArenaMap.entrySet()
+                .stream()
+                .reduce(0.0, (accumulator, value) ->
+                                value.getValue().equals(arena)
+                                        ? (value.getKey() instanceof Mob
+                                                ? accumulator + ((Mob) value.getKey()).getHealth()
+                                                : accumulator)
+                                        : accumulator,
+                        Double::sum);
+    }
+
     public MobArenaArenaHandler(STEMCraftAPI api, MobArenaMiniGame mobArena) {
         trackedEntityMiniGameArenaMap = new HashMap<>();
         entityMiniGameArenaMap = new HashMap<>();
 
+        // TODO: Move this into an "onEnable" to fix possible this-escapes - ProjectHSI
         api.events().register(EntityDamageEvent.class, this::onEntityDamageDirect);
         api.events().register(EntityDropItemEvent.class, this::onEntityDropItemDirect);
 
@@ -77,12 +96,23 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
             return;
         }
 
+        if (!entityMiniGameArenaMap.containsKey(entity)) {
+            return;
+        }
+
+        MiniGameArena arenaToProgress = entityMiniGameArenaMap.get(entity);
+
+        Entity causingEntity = eventDirect.getDamageSource().getCausingEntity();
+
+        if (trackedEntityMiniGameArenaMap.containsKey(entity)) {
+            arenaToProgress.set("bossBarProgress", getTrackedMobHealthForMinigame(arenaToProgress) / arenaToProgress.get("totalMobHealthSpawnedThisRound", Double.class, 1.0));
+        }
+
         double finalDamage = eventDirect.getFinalDamage();
         if (entity.getHealth() - finalDamage > 0.0d) {
             return;
         }
 
-        Entity causingEntity = eventDirect.getDamageSource().getCausingEntity();
         // TODO: Placeholders - ProjectHSI
         if (causingEntity != null) {
             broadcastInfoToOccupants(entityArena, "haha " + entity.getName() + " was just killed by " + causingEntity.getName());
@@ -92,12 +122,24 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
 
         entityMiniGameArenaMap.remove(entity);
         if (trackedEntityMiniGameArenaMap.containsKey(entity)) {
-            MiniGameArena arenaToProgress = trackedEntityMiniGameArenaMap.get(entity);
             trackedEntityMiniGameArenaMap.remove(entity);
+
+            if (causingEntity instanceof Player) {
+                MiniGamePlayer miniGamePlayer = arenaToProgress.getPlayer((Player) causingEntity);
+                if (miniGamePlayer != null) {
+                    miniGamePlayer.addKill();
+                }
+            }
+
             if (!trackedEntityMiniGameArenaMap.containsValue(arenaToProgress)) {
-                incrementRound(arenaToProgress);
+                STEMCraft.getPlugin().getServer().getGlobalRegionScheduler().runDelayed(STEMCraft.getPlugin(), task -> incrementRound(arenaToProgress), 20);
             }
         }
+    }
+
+    @Override
+    public HandlerEventResult onPlayerDropItem(MiniGameArena arena, Player player, ItemStack item) {
+        return HandlerEventResult.DENY;
     }
 
     @Override
@@ -107,6 +149,11 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
         }
         if (arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
             return HandlerEventResult.DENY;
+        }
+
+        Entity causingEntity = event.getDamageSource().getCausingEntity();
+        if (causingEntity instanceof Player && arena.hasPlayer(player)) {
+            return HandlerEventResult.DENY; // no friendly fire!
         }
 
         double finalDamage = event.getFinalDamage();
@@ -121,6 +168,7 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
 
     @Override
     public void onArenaStatusChanged(MiniGameArena arena, MiniGameArena.ArenaStatus oldStatus, MiniGameArena.ArenaStatus newStatus) {
+        arena.remove("bossBarProgress");
         switch (newStatus) {
             case MiniGameArena.ArenaStatus.RUNNING -> {
                 prepareRound(arena, 1);
@@ -212,6 +260,9 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
     private void spawnMobs(MiniGameArena arena, int round) {
         int spawnerConfigs = arena.get("spawner-configs.max", Integer.class);
 
+        int mobsSpawned = 0;
+        double totalMobHealth = 0;
+
         for (int i = 0; i < spawnerConfigs; i++) {
             final String spawnerConfigPrefix = "spawner-configs." + i + ".";
             final SCRegion spawnZoneRegion = arena.getMap("zones", String.class, SCRegion.class).get(arena.get(spawnerConfigPrefix + "spawnZone", String.class));
@@ -220,20 +271,31 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
             if (entityClass == null)
                 continue;
 
-            for (int j = 0; j < determineMobSpawnCount(
+            int mobsToSpawn = determineMobSpawnCount(
                     round,
                     arena.get(spawnerConfigPrefix + "initialWave", Integer.class),
                     arena.get(spawnerConfigPrefix + "initialAmount", Integer.class),
                     arena.get(spawnerConfigPrefix + "incrementAmount", Double.class),
                     arena.get(spawnerConfigPrefix + "incrementType", MobArenaArenaRecord.SpawnerRecord.IncrementType.class)
-            ); j++) {
+            );
+
+            mobsSpawned += mobsToSpawn;
+
+            for (int j = 0; j < mobsToSpawn; j++) {
                 Entity newEntity = arena.world().spawn(spawnZoneRegion.getRandomGroundLocation(), entityClass);
                 entityMiniGameArenaMap.put(newEntity, arena);
                 if (arena.get(spawnerConfigPrefix + "countTowardsMobCount", Boolean.class)) {
                     trackedEntityMiniGameArenaMap.put(newEntity, arena);
                 }
+                if (newEntity instanceof Mob) {
+                    totalMobHealth += ((Mob) newEntity).getHealth();
+                }
             }
         }
+
+        arena.set("mobsSpawnedThisRound", mobsSpawned);
+        arena.set("totalMobHealthSpawnedThisRound", totalMobHealth);
+        arena.set("bossBarProgress", 1.0);
     }
 
     private void prepareRound(MiniGameArena arena, int round) {
@@ -249,11 +311,19 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
 
     private void equipPlayer(Player player) {
         // TODO: Make customisable? - ProjectHSI
+        player.setHealth(PlayerUtil.getMaxHealth(player));
+        player.setFoodLevel(20);
+        player.setSaturation(20);
+        player.clearActivePotionEffects();
+
         player.getInventory().clear();
         player.getInventory().setItem(0, new ItemStack(Material.IRON_SWORD));
         player.getInventory().setItem(1, new ItemStack(Material.BOW));
         player.getInventory().setItem(2, new ItemStack(Material.ARROW, 64));
-        player.getScheduler().runDelayed(STEMCraft.getPlugin(), task -> {player.getInventory().setItemInOffHand(new ItemStack(Material.SHIELD));}, null, 2); // shield disappears otherwise
+        // Delay of two ticks here prevents the shield from disappearing on the client.
+        player.getScheduler().runDelayed(STEMCraft.getPlugin(), task ->
+                player.getInventory().setItemInOffHand(new ItemStack(Material.SHIELD)),
+                null, 2);
         player.getInventory().setItem(EquipmentSlot.HEAD, new ItemStack(Material.IRON_HELMET));
         player.getInventory().setItem(EquipmentSlot.CHEST, new ItemStack(Material.IRON_CHESTPLATE));
         player.getInventory().setItem(EquipmentSlot.LEGS, new ItemStack(Material.IRON_LEGGINGS));
@@ -355,15 +425,15 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
         api.regions().removeListener(listenerPrefix + "boundary");
     }
 
-    private void handleDeath(@NotNull MiniGameArena arena, @NotNull Player player, @Nullable Entity Entity) {
+    private void handleDeath(@NotNull MiniGameArena arena, @NotNull Player player, @Nullable Entity entity) {
         MiniGamePlayer mgPlayer = arena.getPlayer(player);
         if (mgPlayer != null) {
             mgPlayer.addDeath();
         }
 
-        if (Entity != null) {
+        if (entity != null) {
             broadcastInfoToOccupants(arena,
-                    "<red>" + player.getName() + "</red> <gray>was eliminated by a</gray> <gold>" + Entity.getName() + "</gold><gray>.</gray>");
+                    "<red>" + player.getName() + "</red> <gray>was eliminated by a</gray> <gold>" + entity.getName() + "</gold><gray>.</gray>");
         } else {
             broadcastInfoToOccupants(arena,
                     "<red>" + player.getName() + "</red> <gray>fell into the void.</gray>");
@@ -420,5 +490,9 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
     // TODO: Merge this into a static class, repeated code impl from bridge - ProjectHSI
     private String regionListenerPrefix(String arenaId) {
         return NamespaceId.of(MobArenaMiniGame.namespace(), NamespaceId.sanitizePath(arenaId) + "_");
+    }
+
+    public int getRoundForArena(MiniGameArena arena) {
+        return arena.get("round", Integer.class);
     }
 }
