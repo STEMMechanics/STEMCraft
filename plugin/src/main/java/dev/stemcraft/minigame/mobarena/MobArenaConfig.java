@@ -83,11 +83,11 @@ public class MobArenaConfig {
         ensureLoaded();
         ConfigSection arenaSection = config.getSection("arenas").getSection(arenaId, false);
 
-        boolean enabled = arenaSection.getBoolean("enabled", true);
-
-        if (arenaSection.getString(arenaId) == null) {
+        if (arenaSection == null) {
             throw new MiniGameInvalidArenaConfigException("Arena not found: '" + arenaId + "'");
         }
+
+        boolean enabled = arenaSection.getBoolean("enabled", true);
 
         String worldName = arenaSection.getString("world");
         if (worldName.isEmpty()) {
