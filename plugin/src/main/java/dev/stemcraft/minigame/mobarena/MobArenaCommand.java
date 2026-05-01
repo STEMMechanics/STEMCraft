@@ -20,8 +20,6 @@ import org.bukkit.entity.Player;
 
 import java.util.*;
 
-// TODO: [Overall] Make sure to get rid of the global "arena" region, using the "arena" zone instead.
-
 public class MobArenaCommand {
     private static final long PREVIEW_TICKS = 100L;
     private final STEMCraftAPI api;
