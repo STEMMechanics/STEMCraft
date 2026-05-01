@@ -841,13 +841,13 @@ public class MobArenaCommand {
 
     // TODO: Merge in this into a static class, code copied from Bridge impl. - ProjectHSI
     private void showRegionPreview(Player player, String key, SCRegion region) {
-        String id = "bridge-preview:" + player.getUniqueId() + ":" + key + ":region";
+        String id = "mobarena-preview:" + player.getUniqueId() + ":" + key + ":region";
         api.selections().highlightRegion(id, player, region, PREVIEW_TICKS);
     }
 
     // TODO: Merge in this into a static class, code copied from Bridge impl. - ProjectHSI
     private void showLocationPreview(Player player, String key, Location location) {
-        String baseId = "bridge-preview:" + player.getUniqueId() + ":" + key;
+        String baseId = "mobarena-preview:" + player.getUniqueId() + ":" + key;
         api.selections().highlightLocation(baseId + ":location", player, location, PREVIEW_TICKS);
         api.selections().flashBlock(baseId + ":block", player, location, PREVIEW_TICKS);
     }
