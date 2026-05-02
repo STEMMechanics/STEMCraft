@@ -420,7 +420,7 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
         api.regions().addListener(listenerPrefix + "boundary", arenaRegion, new RegionListener() {
             @Override
             public void onExit(@NotNull Player player, @NotNull SCRegion region, @Nullable Location from, @Nullable Location to) {
-                if (arena.hasPlayer(player) && arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING) {
+                 if (arena.hasPlayer(player) && arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING) {
                     handleDeath(arena, player, null);
                 } else if (arena.hasOccupant(player) && arena.getStatus() == MiniGameArena.ArenaStatus.ENDING) {
                     keepOccupantInEndingArea(arena, player);
@@ -431,10 +431,9 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
 
             @Override
             public void onExit(@NotNull LivingEntity entity, @NotNull SCRegion region, @Nullable Location from, @Nullable Location to) {
-                if (entityMiniGameArenaMap.containsKey(entity)) {
-                    MiniGameArena entityArena = entityMiniGameArenaMap.get(entity);
-                    updateArenaBossBar(entityArena);
-                    handleMobDeath(entity, null, entityArena);
+                if (entityMiniGameArenaMap.get(entity) == arena) {
+                    updateArenaBossBar(arena);
+                    handleMobDeath(entity, null, arena);
                     entity.setHealth(0);
                 }
             }
