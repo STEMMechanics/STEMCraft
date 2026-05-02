@@ -286,6 +286,7 @@ public class MobArenaCommand {
 
         if (region == null) {
             ctx.returnError("'" + zoneName + "' does not exist.");
+            return;
         }
 
         if (!player.getWorld().equals(region.getWorld())) {
