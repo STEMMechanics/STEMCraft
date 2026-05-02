@@ -1,7 +1,6 @@
 package dev.stemcraft.minigame.mobarena;
 
 import dev.stemcraft.api.STEMCraftAPI;
-import dev.stemcraft.api.config.ConfigFile;
 import dev.stemcraft.api.minigame.ArenaValidationResult;
 import dev.stemcraft.api.minigame.MiniGame;
 import dev.stemcraft.api.minigame.MiniGameArena;
@@ -10,7 +9,6 @@ import dev.stemcraft.api.service.playerstats.PlayerStatDefinition;
 import dev.stemcraft.api.util.StringUtil;
 import dev.stemcraft.minigame.BaseMiniGame;
 import dev.stemcraft.minigame.MiniGameHudConfigSupport;
-import dev.stemcraft.minigame.bridge.BridgeConfig;
 import lombok.Getter;
 import lombok.experimental.Accessors;
 import org.bukkit.World;
