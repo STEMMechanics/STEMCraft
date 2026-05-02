@@ -14,11 +14,9 @@ import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Sound;
-import org.bukkit.entity.Entity;
-import org.bukkit.entity.EntityType;
-import org.bukkit.entity.Mob;
-import org.bukkit.entity.Player;
+import org.bukkit.entity.*;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityDropItemEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
@@ -59,6 +57,7 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
 
         // TODO: Move this into an "onEnable" to fix possible this-escapes - ProjectHSI
         api.events().register(EntityDamageEvent.class, this::onEntityDamageDirect);
+        api.events().register(EntityDeathEvent.class, this::onEntityDeathDirect);
         api.events().register(EntityDropItemEvent.class, this::onEntityDropItemDirect);
 
         this.api = api;
@@ -87,32 +86,41 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
     }
 
     private void onEntityDamageDirect(EntityDamageEvent eventDirect) {
-        if (!(eventDirect.getEntity() instanceof Mob entity)) {
-            return;
-        }
-
-        MiniGameArena entityArena = entityMiniGameArenaMap.get(entity);
-        if (entityArena == null || entityArena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
-            return;
-        }
-
-        if (!entityMiniGameArenaMap.containsKey(entity)) {
-            return;
-        }
-
-        MiniGameArena arenaToProgress = entityMiniGameArenaMap.get(entity);
-
         Entity causingEntity = eventDirect.getDamageSource().getCausingEntity();
 
-        if (trackedEntityMiniGameArenaMap.containsKey(entity)) {
-            arenaToProgress.set("bossBarProgress", getTrackedMobHealthForMinigame(arenaToProgress) / arenaToProgress.get("totalMobHealthSpawnedThisRound", Double.class, 1.0));
-        }
+        handleMobDamage(causingEntity);
+    }
 
-        double finalDamage = eventDirect.getFinalDamage();
-        if (entity.getHealth() - finalDamage > 0.0d) {
+    private void onEntityDeathDirect(EntityDeathEvent eventDirect) {
+        Entity dyingEntity = eventDirect.getEntity();
+        Entity causingEntity = eventDirect.getDamageSource().getCausingEntity();
+
+        if (entityMiniGameArenaMap.containsKey(dyingEntity)) {
+            handleMobDeath(eventDirect.getEntity(), causingEntity, entityMiniGameArenaMap.get(dyingEntity));
+        }
+    }
+
+    private void handleMobDamage(Entity causingEntity) {
+        if (!entityMiniGameArenaMap.containsKey(causingEntity)) {
             return;
         }
 
+        if (trackedEntityMiniGameArenaMap.containsKey(causingEntity)) {
+            MiniGameArena entityArena = entityMiniGameArenaMap.get(causingEntity);
+
+            if (entityArena.getStatus() == MiniGameArena.ArenaStatus.RESETTING) {
+                return;
+            }
+
+            updateArenaBossBar(entityArena);
+        }
+    }
+
+    private void updateArenaBossBar(MiniGameArena arenaToProgress) {
+        arenaToProgress.set("bossBarProgress", getTrackedMobHealthForMinigame(arenaToProgress) / arenaToProgress.get("totalMobHealthSpawnedThisRound", Double.class, 1.0));
+    }
+
+    private void handleMobDeath(Entity entity, Entity causingEntity, MiniGameArena entityArena) {
         // TODO: Placeholders - ProjectHSI
         if (causingEntity != null) {
             broadcastInfoToOccupants(entityArena, "haha " + entity.getName() + " was just killed by " + causingEntity.getName());
@@ -120,19 +128,23 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
             broadcastInfoToOccupants(entityArena, "haha " + entity.getName() + " committed loggus");
         }
 
+        if (entityArena.getStatus() == MiniGameArena.ArenaStatus.RESETTING) {
+            return;
+        }
+
         entityMiniGameArenaMap.remove(entity);
         if (trackedEntityMiniGameArenaMap.containsKey(entity)) {
             trackedEntityMiniGameArenaMap.remove(entity);
 
             if (causingEntity instanceof Player) {
-                MiniGamePlayer miniGamePlayer = arenaToProgress.getPlayer((Player) causingEntity);
+                MiniGamePlayer miniGamePlayer = entityArena.getPlayer((Player) causingEntity);
                 if (miniGamePlayer != null) {
                     miniGamePlayer.addKill();
                 }
             }
 
-            if (!trackedEntityMiniGameArenaMap.containsValue(arenaToProgress)) {
-                STEMCraft.getPlugin().getServer().getGlobalRegionScheduler().runDelayed(STEMCraft.getPlugin(), task -> incrementRound(arenaToProgress), 20);
+            if (!trackedEntityMiniGameArenaMap.containsValue(entityArena) && entityArena.getStatus() == MiniGameArena.ArenaStatus.RUNNING) {
+                STEMCraft.getPlugin().getServer().getGlobalRegionScheduler().runDelayed(STEMCraft.getPlugin(), task -> incrementRound(entityArena), 20);
             }
         }
     }
@@ -288,6 +300,7 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
                     trackedEntityMiniGameArenaMap.put(newEntity, arena);
                 }
                 if (newEntity instanceof Mob) {
+                    api.regions().trackLivingEntity((LivingEntity) newEntity);
                     totalMobHealth += ((Mob) newEntity).getHealth();
                 }
             }
@@ -413,6 +426,16 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
                     keepOccupantInEndingArea(arena, player);
                 } else if (arena.hasOccupant(player) && arena.getStatus() == MiniGameArena.ArenaStatus.RESETTING) {
                     arena.removeOccupant(player);
+                }
+            }
+
+            @Override
+            public void onExit(@NotNull LivingEntity entity, @NotNull SCRegion region, @Nullable Location from, @Nullable Location to) {
+                if (entityMiniGameArenaMap.containsKey(entity)) {
+                    MiniGameArena entityArena = entityMiniGameArenaMap.get(entity);
+                    updateArenaBossBar(entityArena);
+                    handleMobDeath(entity, null, entityArena);
+                    entity.setHealth(0);
                 }
             }
         });
