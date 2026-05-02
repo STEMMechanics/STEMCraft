@@ -87,18 +87,6 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
         return arena.getMap("zones", String.class, SCRegion.class) != null;
     }
 
-    @Nullable SCRegion getZone(@NotNull MiniGameArena arena, @NotNull String zone) {
-        return arena.getMap("zones", String.class, SCRegion.class).get(zone);
-    }
-
-    @NotNull SCRegion getZone(@NotNull MiniGameArena arena, @NotNull String zone, @NotNull SCRegion def) {
-        return arena.getMap("zones", String.class, SCRegion.class).getOrDefault(zone, def);
-    }
-
-    boolean containsZone(@NotNull MiniGameArena arena, @NotNull String zone) {
-        return arena.getMap("zones", String.class, SCRegion.class).containsKey(zone);
-    }
-
     private void onEntityDamageDirect(EntityDamageEvent eventDirect) {
         Entity causingEntity = eventDirect.getDamageSource().getCausingEntity();
 
