@@ -209,9 +209,7 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
         switch (newStatus) {
             case MiniGameArena.ArenaStatus.RUNNING -> {
                 prepareRound(arena, 1);
-                arena.getPlayers().forEach(player -> {
-                    arena.teleport(player, arena.getRegion().getRandomGroundLocation());
-                });
+                arena.getPlayers().forEach(player -> arena.teleport(player, arena.getRegion().getRandomGroundLocation()));
                 playSoundToOccupants(arena, Sound.ENTITY_PLAYER_LEVELUP, 0.85f, 1.0f);
             }
             case MiniGameArena.ArenaStatus.RESETTING -> {

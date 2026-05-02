@@ -169,18 +169,14 @@ public class MobArenaConfig {
     private @NonNull Map<String, SCRegion> loadZonesFromArena(@NonNull String arenaId, @NonNull ConfigSection section, World world) {
         Map<String, SCRegion> zones = new HashMap<>();
 
-        section.getSection("zones").getKeys(false).forEach(key -> {
-            zones.put(key, loadRegion(section.getSection("zones"), world, arenaId, key, key + " zone"));
-        });
+        section.getSection("zones").getKeys(false).forEach(key -> zones.put(key, loadRegion(section.getSection("zones"), world, arenaId, key, key + " zone")));
 
         return zones;
     }
 
     public void saveArenas(@NotNull List<@NotNull MobArenaArenaRecord> arena) {
         ensureLoaded();
-        arena.forEach(arenaRecord -> {
-            saveArena(arenaRecord.arenaId(), arenaRecord);
-        });
+        arena.forEach(arenaRecord -> saveArena(arenaRecord.arenaId(), arenaRecord));
     }
 
     public void saveArena(@NotNull String key, @NotNull MobArenaArenaRecord arenaRecord) {
@@ -221,9 +217,7 @@ public class MobArenaConfig {
 
     private void saveZonesToArena(@NotNull ConfigSection toSave, @NotNull MobArenaArenaRecord arenaRecord) {
         ConfigSection zonesSection = toSave.getSection("zones");
-        arenaRecord.zones().forEach((zoneId, zone) -> {
-            zonesSection.set(zoneId, serializeRegion(zone, arenaRecord.arenaId(), "Zone " + zoneId));
-        });
+        arenaRecord.zones().forEach((zoneId, zone) -> zonesSection.set(zoneId, serializeRegion(zone, arenaRecord.arenaId(), "Zone " + zoneId)));
     }
 
     public void deleteArena(@NotNull String arenaId) {
