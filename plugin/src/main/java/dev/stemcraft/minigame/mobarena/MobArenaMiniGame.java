@@ -6,6 +6,7 @@ import dev.stemcraft.api.minigame.ArenaValidationResult;
 import dev.stemcraft.api.minigame.MiniGame;
 import dev.stemcraft.api.minigame.MiniGameArena;
 import dev.stemcraft.api.model.SCRegion;
+import dev.stemcraft.api.service.playerstats.PlayerStatDefinition;
 import dev.stemcraft.api.util.StringUtil;
 import dev.stemcraft.minigame.BaseMiniGame;
 import dev.stemcraft.minigame.MiniGameHudConfigSupport;
@@ -21,6 +22,13 @@ import java.util.*;
 // TODO: [Overall] Add in player stats
 
 public class MobArenaMiniGame extends BaseMiniGame {
+    @Getter
+    @Accessors(fluent = true)
+    private static final @NotNull String KILLS_TOTAL_STAT_KEY = "mobarena_kills_total";
+    @Getter
+    @Accessors(fluent = true)
+    private static final @NotNull String HIGHEST_ROUND_STAT_KEY = "mobarena_highest_round";
+
     private static final int HUD_LINE_HOLD_UPDATES = 3;
 
     @Getter
@@ -47,6 +55,8 @@ public class MobArenaMiniGame extends BaseMiniGame {
         minigame = createMiniGame(namespace, handler)
                 .registerArenaPlaceholder("mobs-left", (arena, team, player) -> String.valueOf(handler.getTrackedMobsForMinigame(arena)))
                 .registerArenaPlaceholder("round", (arena, team, player) -> String.valueOf(handler.getRoundForArena(arena)));
+
+        registerStats();
 
         command = new MobArenaCommand(api, this);
 
@@ -230,6 +240,25 @@ public class MobArenaMiniGame extends BaseMiniGame {
                     ? MiniGameArena.ArenaStatus.WAITING
                     : MiniGameArena.ArenaStatus.DISABLED);
         }
+    }
+
+    private void registerStats() {
+        api.playerStats().register(new PlayerStatDefinition(
+                KILLS_TOTAL_STAT_KEY,
+                "Mob Arena Kills (All Arenas)",
+                "Total number of mobs slain by the player across all Mob Arena arenas.",
+                namespace,
+                "minigame",
+                namespace
+        ));
+        api.playerStats().register(new PlayerStatDefinition(
+                HIGHEST_ROUND_STAT_KEY,
+                "Highest Mob Arena Round (All Arenas)",
+                "Highest round achieved by the player in any Mob Arena arena.",
+                namespace,
+                "minigame",
+                namespace
+        ));
     }
 
     public int startCountdownSeconds(MiniGameArena arena) {

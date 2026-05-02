@@ -188,6 +188,7 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
             if (causingEntity instanceof Player) {
                 MiniGamePlayer miniGamePlayer = entityArena.getPlayer((Player) causingEntity);
                 if (miniGamePlayer != null) {
+                    api.playerStats().increment(miniGamePlayer.getPlayer().getUniqueId(), miniGamePlayer.getPlayer().getName(), MobArenaMiniGame.KILLS_TOTAL_STAT_KEY(), 1.0d);
                     miniGamePlayer.addKill();
                 }
             }
@@ -382,15 +383,24 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
     private void prepareRound(MiniGameArena arena, int round) {
         arena.set("round", round);
         announceWave(arena, round);
-        equipAllPlayers(arena);
+        setupAllPlayers(arena);
+        setAllPlayersStats(arena, round);
         spawnMobs(arena, round);
+    }
+
+    private void setAllPlayersStats(MiniGameArena arena, int round) {
+        arena.getPlayers().forEach(player -> {
+            if (api.playerStats().total(player.getUniqueId(), MobArenaMiniGame.HIGHEST_ROUND_STAT_KEY()) < round) {
+                api.playerStats().set(player.getUniqueId(), player.getName(), MobArenaMiniGame.HIGHEST_ROUND_STAT_KEY(), round);
+            }
+        });
     }
 
     private void announceWave(MiniGameArena arena, int round) {
         arena.showTitle("<gold>Wave " + round + "</gold>", "Get fighting!");
     }
 
-    private void equipPlayer(Player player) {
+    private void setupPlayer(Player player) {
         // TODO: Make customisable? - ProjectHSI
         player.setHealth(PlayerUtil.getMaxHealth(player));
         player.setFoodLevel(20);
@@ -409,10 +419,11 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
         player.getInventory().setItem(EquipmentSlot.CHEST, new ItemStack(Material.IRON_CHESTPLATE));
         player.getInventory().setItem(EquipmentSlot.LEGS, new ItemStack(Material.IRON_LEGGINGS));
         player.getInventory().setItem(EquipmentSlot.FEET, new ItemStack(Material.IRON_BOOTS));
+
     }
 
-    private void equipAllPlayers(MiniGameArena arena) {
-        arena.getPlayers().forEach(this::equipPlayer);
+    private void setupAllPlayers(MiniGameArena arena) {
+        arena.getPlayers().forEach(this::setupPlayer);
     }
 
     private void incrementRound(MiniGameArena arena) {
