@@ -46,7 +46,6 @@ public class MobArenaCommand {
                 .sorted()
                 .toList());
 
-        // TODO: Add zones and spawner record adjustment here
         api.commands().create("mobarena")
                 .permission("stemcraft.command.mobarena")
                 .usage("/mobarena <list|info [arena]|create <arena> [world]|delete|join|joinall|spectate|leave|start|stop|restart|save|reload")
@@ -85,17 +84,19 @@ public class MobArenaCommand {
                 .tabCompletion("show", "{mobarena-arenas}", "lobby")
                 .tabCompletion("show", "{mobarena-arenas}", "spectator")
                 .tabCompletion("spawnerconfig", "{mobarena-arenas}", "add")
-                .tabCompletion("spawnerconfig", "{mobarena-arenas}", "remove", "")
-                .tabCompletion("spawnerconfig", "{mobarena-arenas}", "set", "", "entityType", "{mobarena-mobs}")
-                .tabCompletion("spawnerconfig", "{mobarena-arenas}", "set", "", "initialAmount", "")
-                .tabCompletion("spawnerconfig", "{mobarena-arenas}", "set", "", "incrementAmount", "")
-                .tabCompletion("spawnerconfig", "{mobarena-arenas}", "set", "", "incrementType", "{mobarena-increment-type}")
-                .tabCompletion("spawnerconfig", "{mobarena-arenas}", "set", "", "initialWave", "")
-                .tabCompletion("spawnerconfig", "{mobarena-arenas}", "set", "", "spawnZone", "")
-                .tabCompletion("spawnerconfig", "{mobarena-arenas}", "set", "", "countTowardsMobCount", "true")
-                .tabCompletion("spawnerconfig", "{mobarena-arenas}", "set", "", "countTowardsMobCount", "false")
+                .tabCompletion("spawnerconfig", "{mobarena-arenas}", "remove", "{int}")
+                .tabCompletion("spawnerconfig", "{mobarena-arenas}", "set", "{int}", "entityType", "{mobarena-mobs}")
+                .tabCompletion("spawnerconfig", "{mobarena-arenas}", "set", "{int}", "initialAmount", "{int}")
+                .tabCompletion("spawnerconfig", "{mobarena-arenas}", "set", "{int}", "incrementAmount", "{int}")
+                .tabCompletion("spawnerconfig", "{mobarena-arenas}", "set", "{int}", "incrementType", "{mobarena-increment-type}")
+                .tabCompletion("spawnerconfig", "{mobarena-arenas}", "set", "{int}", "initialWave", "")
+                .tabCompletion("spawnerconfig", "{mobarena-arenas}", "set", "{int}", "spawnZone", "")
+                .tabCompletion("spawnerconfig", "{mobarena-arenas}", "set", "{int}", "countTowardsMobCount", "true")
+                .tabCompletion("spawnerconfig", "{mobarena-arenas}", "set", "{int}", "countTowardsMobCount", "false")
                 .tabCompletion("zone", "{mobarena-arenas}", "")
                 .tabCompletion("zone", "{mobarena-arenas}", "delete", "")
+
+                .tabCompletion("zone", "{mobarena-arenas}", "select", "")
                 .executor((ignored, cmd, ctx) -> {
                     switch (ctx.getArgLower(0)) {
                         case "list" -> commandList(ctx);
@@ -157,6 +158,37 @@ public class MobArenaCommand {
 
     private void commandSpawnerConfigRemove(CommandContext ctx) {
         MiniGameArena arena = requireArena(ctx);
+
+        int spawnerIndex = ctx.getArgAsInt(3) - 1;
+
+        if (spawnerIndex < 0 || spawnerIndex >= arena.get("spawner-configs.max", Integer.class)) {
+            ctx.returnUsage();
+        }
+
+        for (int i = spawnerIndex + 1; i < arena.get("spawner-configs.max", Integer.class) - 1; i++) {
+            final String oldSpawnerConfigPrefix = "spawner-configs." + i + ".";
+            final String newSpawnerConfigPrefix = "spawner-configs." + (i - 1) + ".";
+
+            arena.set(newSpawnerConfigPrefix + "entityType", arena.get(oldSpawnerConfigPrefix + "entityType", EntityType.class));
+            arena.set(newSpawnerConfigPrefix + "initialAmount", arena.get(oldSpawnerConfigPrefix + "initialAmount", Integer.class));
+            arena.set(newSpawnerConfigPrefix + "incrementAmount", arena.get(oldSpawnerConfigPrefix + "incrementAmount", Double.class));
+            arena.set(newSpawnerConfigPrefix + "incrementType", arena.get(oldSpawnerConfigPrefix + "incrementType", MobArenaArenaRecord.SpawnerRecord.IncrementType.class));
+            arena.set(newSpawnerConfigPrefix + "initialWave", arena.get(oldSpawnerConfigPrefix + "initialWave", Integer.class));
+            arena.set(newSpawnerConfigPrefix + "spawnZone", arena.get(oldSpawnerConfigPrefix + "spawnZone", String.class));
+            arena.set(newSpawnerConfigPrefix + "countTowardsMobCount", arena.get(oldSpawnerConfigPrefix + "countTowardsMobCount", String.class));
+        }
+
+        final String newSpawnerConfigToRemovePrefix = "spawner-configs." + (arena.get("spawner-configs.max", Integer.class) - 1) + ".";
+
+        arena.remove(newSpawnerConfigToRemovePrefix + "entityType");
+        arena.remove(newSpawnerConfigToRemovePrefix + "initialAmount");
+        arena.remove(newSpawnerConfigToRemovePrefix + "incrementAmount");
+        arena.remove(newSpawnerConfigToRemovePrefix + "incrementType");
+        arena.remove(newSpawnerConfigToRemovePrefix + "initialWave");
+        arena.remove(newSpawnerConfigToRemovePrefix + "spawnZone");
+        arena.remove(newSpawnerConfigToRemovePrefix + "countTowardsMobCount");
+
+        arena.set("spawner-configs.max", arena.get("spawner-configs.max", Integer.class) - 1);
     }
 
     private void commandSpawnerConfigSet(CommandContext ctx) {
@@ -186,7 +218,7 @@ public class MobArenaCommand {
                 try {
                     int newInitialAmount = Integer.parseInt(spawnerPropertyValue);
                     arena.set("spawner-configs." + spawnerIndex + ".initialAmount", newInitialAmount);
-                    ctx.returnSuccess("Set spawner " + (spawnerIndex + 1) + "'s increment amount to '" + spawnerPropertyValue + "'.");
+                    ctx.returnSuccess("Set spawner " + (spawnerIndex + 1) + "'s initial amount to '" + spawnerPropertyValue + "'.");
                 } catch (NumberFormatException e) {
                     ctx.returnUsage();
                 }
@@ -213,7 +245,7 @@ public class MobArenaCommand {
                 try {
                     int newWaveAmount = Integer.parseInt(spawnerPropertyValue);
                     arena.set("spawner-configs." + spawnerIndex + ".initialWave", newWaveAmount);
-                    ctx.returnSuccess("Set spawner " + (spawnerIndex + 1) + "'s increment wave to '" + spawnerPropertyValue + "'.");
+                    ctx.returnSuccess("Set spawner " + (spawnerIndex + 1) + "'s initial wave to '" + spawnerPropertyValue + "'.");
                 } catch (NumberFormatException e) {
                     ctx.returnUsage();
                 }
@@ -234,13 +266,50 @@ public class MobArenaCommand {
         String possibleOperation = ctx.getArg(2);
         if (Objects.equals(possibleOperation, "delete")) {
             commandZoneDelete(ctx);
+        } else if (Objects.equals(possibleOperation, "select")) {
+            commandZoneSelect(ctx);
         } else {
             commandZonePut(ctx);
         }
     }
 
-    private void commandZoneDelete(CommandContext ctx) {
+    private void commandZoneSelect(CommandContext ctx) {
+        ctx.checkArgsSizeAtLeast(4);
 
+        Player player = requirePlayer(ctx);
+
+        MiniGameArena arena = requireArena(ctx);
+        String zoneName = ctx.getArg(3);
+
+        Map<String, SCRegion> zones = arena.getMap("zones", String.class, SCRegion.class);
+        SCRegion region = zones.get(zoneName);
+
+        if (region == null) {
+            ctx.returnError("'" + zoneName + "' does not exist.");
+        }
+
+        if (!player.getWorld().equals(region.getWorld())) {
+            ctx.returnError("Move to world '" + region.getWorld().getName() + "' to preview that zone.");
+        }
+
+        api.selections().setWorldEditSelection(player, region);
+        showRegionPreview(player, "select-" + zoneName, region);
+        ctx.success("WorldEdit selection updated from arena '" + arena.id() + "' (" + zoneName + ").");
+    }
+
+    private void commandZoneDelete(CommandContext ctx) {
+        ctx.checkArgsSizeAtLeast(4);
+
+        MiniGameArena arena = requireArena(ctx);
+        String zoneName = ctx.getArg(3); // callee guarantees args size of 3.
+
+        Map<String, SCRegion> zones = arena.getMap("zones", String.class, SCRegion.class);
+
+        if (zones.remove(zoneName) == null) {
+            ctx.returnError("'" + zoneName + "' does not exist.");
+        } else {
+            ctx.returnSuccess("'" + zoneName + "' has been deleted.");
+        }
     }
 
     private void commandZonePut(CommandContext ctx) {

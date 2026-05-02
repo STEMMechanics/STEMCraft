@@ -48,12 +48,13 @@ public class MobArenaMiniGame extends BaseMiniGame {
                 .registerArenaPlaceholder("mobs-left", (arena, team, player) -> String.valueOf(handler.getTrackedMobsForMinigame(arena)))
                 .registerArenaPlaceholder("round", (arena, team, player) -> String.valueOf(handler.getRoundForArena(arena)));
 
+        command = new MobArenaCommand(api, this);
+
         config.onEnable(minigame);
+        handler.onEnable();
+        command.onEnable();
 
         MiniGameHudConfigSupport.apply(minigame, config.config(), defaultHudDefinitions());
-
-        command = new MobArenaCommand(api, this);
-        command.onEnable();
 
         loadArenas();
     }
@@ -68,7 +69,7 @@ public class MobArenaMiniGame extends BaseMiniGame {
                 List.of(
                         "<gradient:#f59e0b:#ef4444><bold>{arena:name}</bold></gradient>",
                         "",
-                        ":purple_bed: <gold>Bridge</gold> <dark_gray>•</dark_gray> <aqua>Lobby</aqua>",
+                        ":skeleton_head_front: <gold>Mob Arena</gold> <dark_gray>•</dark_gray> <aqua>Lobby</aqua>",
                         ":info_green: <gray>Joined</gray> <green>{arena:joined-players}</green>/<green>{arena:max-players}</green>",
                         ":question_blue: <gray>Need</gray> <yellow>{arena:min-players}</yellow> <gray>players</gray>",
                         ":world: <gray>Map ID</gray> <gold>{arena:id}</gold>"
@@ -94,14 +95,14 @@ public class MobArenaMiniGame extends BaseMiniGame {
         definitions.put(MiniGameArena.ArenaStatus.RUNNING, new MiniGameHudConfigSupport.HudDefinition(
                 List.of(
                         "<gradient:#f59e0b:#ef4444><bold>{arena:name}</bold></gradient>",
-                        ":location: <gray>Mobs</gray> {arena:mobs-left}",       // TODO: Replace the icons
-                        ":world: <gray>Round</gray> <aqua>{arena:round}</aqua>" //       for these - ProjectHSI
+                        ":skeleton_head_front: <gray>Mobs</gray> {arena:mobs-left}",
+                        ":ladder: <gray>Round</gray> <aqua>{arena:round}</aqua>"
                 ),
                 List.of(
                         "<gradient:#f59e0b:#ef4444><bold>{arena:name}</bold></gradient>",
                         "",
-                        ":location: <gray>Mobs</gray> {arena:mobs-left}",        // TODO: Replace the icons
-                        ":world: <gray>Round</gray> <aqua>{arena:round}</aqua>", //       for these - ProjectHSI
+                        ":skeleton_head_front: <gray>Mobs</gray> <red>{arena:mobs-left}</red>",
+                        ":ladder: <gray>Round</gray> <aqua>{arena:round}</aqua>",
                         "",
                         ":click_action_left: <gray>Kills</gray> <red>{player:kills}</red>"
                 ),
@@ -115,7 +116,7 @@ public class MobArenaMiniGame extends BaseMiniGame {
                 List.of(
                         "<gradient:#f59e0b:#ef4444><bold>{arena:name}</bold></gradient>",
                         "",
-                        ":world: <gray>Round</gray> <aqua>{arena:round}</aqua>", // TODO: Replace the icon
+                        ":ladder: <gray>Round</gray> <aqua>{arena:round}</aqua>",
                         ":warning_yellow: <gold>Round ends in</gold> <yellow>{arena:time-remaining}</yellow>",
                         "",
                         ":click_action_left: <gray>Kills</gray> <red>{player:kills}</red>"

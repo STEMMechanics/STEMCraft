@@ -1,5 +1,6 @@
 package dev.stemcraft.minigame.mobarena;
 
+import com.destroystokyo.paper.event.entity.EntityRemoveFromWorldEvent;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.minigame.ArenaValidationResult;
@@ -14,10 +15,10 @@ import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Sound;
+import org.bukkit.damage.DamageType;
 import org.bukkit.entity.*;
-import org.bukkit.event.entity.EntityDamageEvent;
-import org.bukkit.event.entity.EntityDeathEvent;
-import org.bukkit.event.entity.EntityDropItemEvent;
+import org.bukkit.event.Listener;
+import org.bukkit.event.entity.*;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
@@ -30,6 +31,11 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
     private final MobArenaMiniGame mobArena;
     private final Map<Entity, MiniGameArena> trackedEntityMiniGameArenaMap;
     private final Map<Entity, MiniGameArena> entityMiniGameArenaMap;
+
+    Listener entityDamageEventListener;
+    Listener entityDeathEventListener;
+    //Listener entityDropItemEventListener;
+    Listener entityRemoveFromWorldEventListener;
 
     public int getTrackedMobsForMinigame(MiniGameArena arena) {
         return trackedEntityMiniGameArenaMap.values()
@@ -55,19 +61,52 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
         trackedEntityMiniGameArenaMap = new HashMap<>();
         entityMiniGameArenaMap = new HashMap<>();
 
-        // TODO: Move this into an "onEnable" to fix possible this-escapes - ProjectHSI
-        api.events().register(EntityDamageEvent.class, this::onEntityDamageDirect);
-        api.events().register(EntityDeathEvent.class, this::onEntityDeathDirect);
-        api.events().register(EntityDropItemEvent.class, this::onEntityDropItemDirect);
-
         this.api = api;
         this.mobArena = mobArena;
     }
 
-    private void onEntityDropItemDirect(EntityDropItemEvent entityDropItemEvent) {
+    public void onEnable() {
+        entityDamageEventListener = api.events().register(EntityDamageEvent.class, this::onEntityDamageDirect);
+        entityDeathEventListener = api.events().register(EntityDeathEvent.class, this::onEntityDeathDirect);
+        entityRemoveFromWorldEventListener = api.events().register(EntityRemoveFromWorldEvent.class, this::onEntityRemoveFromWorldDirect);
+        //entityDropItemEventListener = api.events().register(EntityDropItemEvent.class, this::onEntityDropItemDirect);
+    }
+
+    private void onEntityRemoveFromWorldDirect(EntityRemoveFromWorldEvent entityRemoveFromWorldEvent) {
+        Entity eventEntity = entityRemoveFromWorldEvent.getEntity();
+
+        if (trackedEntityMiniGameArenaMap.containsKey(eventEntity)) {
+            // HACK: Is this really how I'm to do this? - ProjectHSI
+            if (eventEntity instanceof Creeper && ((Creeper) eventEntity).getFuseTicks() >= ((Creeper) eventEntity).getMaxFuseTicks()) {
+                // `eventEntity` is a creeper and has reached this event by exploding.
+                handleMobDamage(eventEntity);
+                handleMobDeath(eventEntity, ((Creeper) eventEntity).getIgniter(), trackedEntityMiniGameArenaMap.get(eventEntity));
+            }
+        }
+    }
+
+    private void onEntityExplodeDirect(EntityExplodeEvent entityExplodeEvent) {
+        STEMCraft.getPlugin().getLogger().info("ent exp event");
+    }
+
+    private void onEntityCombustByEntityDirect(EntityCombustByEntityEvent entityCombustEvent) {
+        STEMCraft.getPlugin().getLogger().info("ent comb by ent event");
+    }
+
+    private void onEntityCombustDirect(EntityCombustEvent entityCombustEvent) {
+        Entity explodingEntity = entityCombustEvent.getEntity();
+        if (trackedEntityMiniGameArenaMap.containsKey(explodingEntity)) {
+            handleMobDamage(null);
+            handleMobDeath(explodingEntity, null, trackedEntityMiniGameArenaMap.get(explodingEntity));
+        } else {
+            entityMiniGameArenaMap.remove(explodingEntity);
+        }
+    }
+
+    /*private void onEntityDropItemDirect(EntityDropItemEvent entityDropItemEvent) {
         if (entityMiniGameArenaMap.containsKey(entityDropItemEvent.getEntity()))
             entityDropItemEvent.setCancelled(true);
-    }
+    }*/
 
     boolean zonesExist(@NotNull MiniGameArena arena) {
         return arena.getMap("zones", String.class, SCRegion.class) != null;
@@ -97,9 +136,18 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
 
         if (entityMiniGameArenaMap.containsKey(dyingEntity)) {
             handleMobDeath(eventDirect.getEntity(), causingEntity, entityMiniGameArenaMap.get(dyingEntity));
+            eventDirect.getDrops().clear();
+            eventDirect.setDroppedExp(0);
+
+            if (eventDirect.getDamageSource().getDamageType() == DamageType.EXPLOSION) {
+                // Many mobs are likely to die in an explosion.
+                // Prevent the death sound from blowing out their eardrums.
+                eventDirect.setDeathSoundVolume(eventDirect.getDeathSoundVolume() / 5);
+            }
         }
     }
 
+    // TODO: Rename the parameter of this or change it, this function seems messy. - ProjectHSI
     private void handleMobDamage(Entity causingEntity) {
         if (!entityMiniGameArenaMap.containsKey(causingEntity)) {
             return;
@@ -121,15 +169,16 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
     }
 
     private void handleMobDeath(Entity entity, Entity causingEntity, MiniGameArena entityArena) {
-        // TODO: Placeholders - ProjectHSI
-        if (causingEntity != null) {
-            broadcastInfoToOccupants(entityArena, "haha " + entity.getName() + " was just killed by " + causingEntity.getName());
-        } else {
-            broadcastInfoToOccupants(entityArena, "haha " + entity.getName() + " committed loggus");
-        }
-
         if (entityArena.getStatus() == MiniGameArena.ArenaStatus.RESETTING) {
             return;
+        }
+
+        // TODO: Make customisable? - ProjectHSI
+        // TODO: Better messages and more of them.
+        if (causingEntity != null) {
+            broadcastInfoToOccupants(entityArena, "A " + entity.getName() + " was just killed by '" + causingEntity.getName() + "'.");
+        } else {
+            broadcastInfoToOccupants(entityArena, entity.getName() + " yeeted themselves into the void");
         }
 
         entityMiniGameArenaMap.remove(entity);
@@ -248,6 +297,21 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
         return arena.getLobbySpawn();
     }
 
+    @Override
+    public void onPlayerLeaveArena(MiniGameArena arena, Player player) {
+        if (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING && arena.numPlayers() < arena.getMinPlayers()) {
+            arena.setStatus(MiniGameArena.ArenaStatus.WAITING);
+            arena.setCountdown(0);
+        } else if (arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING && arena.numPlayers() < arena.getMinPlayers()) {
+            arena.setStatus(MiniGameArena.ArenaStatus.RESETTING);
+        }
+    }
+
+    @Override
+    public void onPlayerQuitArena(MiniGameArena arena, Player player) {
+        onPlayerLeaveArena(arena, player);
+    }
+
     private int determineMobSpawnCount(int round, int initialWave,
                                         int initialAmount, double incrementAmount,
                                        @NotNull MobArenaArenaRecord.SpawnerRecord.IncrementType incrementType) {
@@ -302,6 +366,10 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
                 if (newEntity instanceof Mob) {
                     api.regions().trackLivingEntity((LivingEntity) newEntity);
                     totalMobHealth += ((Mob) newEntity).getHealth();
+                }
+                Entity spawnedVehicle = newEntity.getVehicle();
+                if (spawnedVehicle != null) {
+                    entityMiniGameArenaMap.put(spawnedVehicle, arena);
                 }
             }
         }
