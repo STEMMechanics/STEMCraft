@@ -1,6 +1,5 @@
 package dev.stemcraft.minigame.mobarena;
 
-import dev.stemcraft.api.minigame.ArenaValidationResult;
 import dev.stemcraft.api.minigame.MiniGameArena;
 import dev.stemcraft.api.model.SCRegion;
 import org.bukkit.Location;
