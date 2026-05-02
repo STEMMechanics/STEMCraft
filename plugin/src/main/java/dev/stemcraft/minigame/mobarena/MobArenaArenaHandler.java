@@ -34,7 +34,6 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
 
     Listener entityDamageEventListener;
     Listener entityDeathEventListener;
-    //Listener entityDropItemEventListener;
     Listener entityRemoveFromWorldEventListener;
 
     public int getTrackedMobsForMinigame(MiniGameArena arena) {
@@ -69,7 +68,6 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
         entityDamageEventListener = api.events().register(EntityDamageEvent.class, this::onEntityDamageDirect);
         entityDeathEventListener = api.events().register(EntityDeathEvent.class, this::onEntityDeathDirect);
         entityRemoveFromWorldEventListener = api.events().register(EntityRemoveFromWorldEvent.class, this::onEntityRemoveFromWorldDirect);
-        //entityDropItemEventListener = api.events().register(EntityDropItemEvent.class, this::onEntityDropItemDirect);
     }
 
     private void onEntityRemoveFromWorldDirect(EntityRemoveFromWorldEvent entityRemoveFromWorldEvent) {
@@ -84,29 +82,6 @@ public class MobArenaArenaHandler implements MiniGameArenaHandler {
             }
         }
     }
-
-    private void onEntityExplodeDirect(EntityExplodeEvent entityExplodeEvent) {
-        STEMCraft.getPlugin().getLogger().info("ent exp event");
-    }
-
-    private void onEntityCombustByEntityDirect(EntityCombustByEntityEvent entityCombustEvent) {
-        STEMCraft.getPlugin().getLogger().info("ent comb by ent event");
-    }
-
-    private void onEntityCombustDirect(EntityCombustEvent entityCombustEvent) {
-        Entity explodingEntity = entityCombustEvent.getEntity();
-        if (trackedEntityMiniGameArenaMap.containsKey(explodingEntity)) {
-            handleMobDamage(null);
-            handleMobDeath(explodingEntity, null, trackedEntityMiniGameArenaMap.get(explodingEntity));
-        } else {
-            entityMiniGameArenaMap.remove(explodingEntity);
-        }
-    }
-
-    /*private void onEntityDropItemDirect(EntityDropItemEvent entityDropItemEvent) {
-        if (entityMiniGameArenaMap.containsKey(entityDropItemEvent.getEntity()))
-            entityDropItemEvent.setCancelled(true);
-    }*/
 
     boolean zonesExist(@NotNull MiniGameArena arena) {
         return arena.getMap("zones", String.class, SCRegion.class) != null;
