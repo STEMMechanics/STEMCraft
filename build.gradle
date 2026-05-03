@@ -30,7 +30,7 @@ subprojects {
         apply plugin: "com.github.spotbugs"
 
         java {
-            toolchain.languageVersion = JavaLanguageVersion.of(21)
+            toolchain.languageVersion = JavaLanguageVersion.of(25)
         }
 
         tasks.withType(JavaCompile).configureEach {
