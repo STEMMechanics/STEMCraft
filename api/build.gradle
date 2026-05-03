@@ -29,10 +29,6 @@ dependencies {
     // LuckPerms
     compileOnly 'net.luckperms:api:5.4'
 
-    // Lombok
-    compileOnly "org.projectlombok:lombok:1.18.32"
-    annotationProcessor "org.projectlombok:lombok:1.18.32"
-
     // Jackson for JSON handling
     compileOnly("com.fasterxml.jackson.core:jackson-databind:2.21.1")
     implementation("com.fasterxml.jackson.core:jackson-core:2.21.1")

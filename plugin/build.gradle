@@ -20,13 +20,6 @@ dependencies {
     compileOnly('org.geysermc.floodgate:api:2.2.4-SNAPSHOT')
     compileOnly('me.clip:placeholderapi:2.11.6')
 
-    // Lombok
-    compileOnly("org.projectlombok:lombok:1.18.42")
-    annotationProcessor("org.projectlombok:lombok:1.18.42")
-
-    testCompileOnly("org.projectlombok:lombok:1.18.42")
-    testAnnotationProcessor("org.projectlombok:lombok:1.18.42")
-
     // Vault (provided at runtime by the server). Exclude old Bukkit/Spigot API it pulls in.
     compileOnly("com.github.MilkBowl:VaultAPI:1.7") {
         exclude group: "org.bukkit", module: "bukkit"

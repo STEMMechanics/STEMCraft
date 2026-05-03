@@ -5,11 +5,14 @@ import com.github.spotbugs.snom.SpotBugsTask
 plugins {
     id 'base'   // root is just a container, no jar
     id 'com.github.spotbugs' version '6.2.5' apply false
+    id("io.freefair.lombok") version "9.5.0" apply false
 }
 
 subprojects {
     group = 'dev.stemcraft'
     version = "1.0.0-SNAPSHOT"
+
+    apply plugin: "io.freefair.lombok"
 
     repositories {
         mavenCentral()
@@ -20,7 +23,7 @@ subprojects {
     }
 
     tasks.withType(JavaCompile).configureEach {
-        options.compilerArgs += ["-Xlint:all", "-Xlint:-processing"]
+        options.compilerArgs += ["-Xlint:all", "-Xlint:-processing", "-proc:full"]
     }
 
     plugins.withId("java") {
