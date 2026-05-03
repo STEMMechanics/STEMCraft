@@ -24,7 +24,7 @@ dependencies {
     compileOnly("io.papermc.paper:paper-api:26.1.2.build.+")
 
     // WorldEdit
-    compileOnly("com.sk89q.worldedit:worldedit-bukkit:7.4.3-SNAPSHOT")
+    compileOnly("com.sk89q.worldedit:worldedit-bukkit:7.4.2")
 
     // GeyserMC API
     compileOnly('org.geysermc.geyser:api:2.9.0-SNAPSHOT')

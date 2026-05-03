@@ -40,7 +40,7 @@ dependencies {
     testImplementation "org.mockito:mockito-core:5.12.0"
     //noinspection VulnerableLibrariesLocal
     testImplementation "io.papermc.paper:paper-api:26.1.2.build.+"
-    testImplementation("com.sk89q.worldedit:worldedit-bukkit:7.4.3-SNAPSHOT")
+    testImplementation("com.sk89q.worldedit:worldedit-bukkit:7.4.2")
     //noinspection VulnerableLibrariesLocal
     testImplementation("org.mockbukkit.mockbukkit:mockbukkit-v1.21:4.108.0") {
         exclude group: "org.junit"
