@@ -5,9 +5,11 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.minigame.ArenaValidationResult;
 import dev.stemcraft.api.minigame.MiniGameArena;
+import dev.stemcraft.api.minigame.MiniGameArena.ArenaStatus;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
 import dev.stemcraft.exception.MiniGameInvalidArenaConfigException;
+import dev.stemcraft.minigame.mobarena.MobArenaSpawnerRecord.IncrementType;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
@@ -17,19 +19,38 @@ import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.Contract;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.NonNull;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 
-public class MobArenaCommand {
+final class MobArenaCommand {
     private static final long PREVIEW_TICKS = 100L;
     private final STEMCraftAPI api;
     private final MobArenaMiniGame mobArena;
 
-    public MobArenaCommand(STEMCraftAPI api, MobArenaMiniGame mobArena) {
+    /**
+     * <p>Creates a new {@code MobArenaArenaHandler}.</p>
+     *
+     * @param api      The {@link STEMCraftAPI} to use.
+     * @param mobArena The {@link MobArenaMiniGame} to use.
+     */
+    @Contract(pure = true)
+    public MobArenaCommand(@NotNull final STEMCraftAPI api, @NotNull final MobArenaMiniGame mobArena) {
         this.api = api;
         this.mobArena = mobArena;
     }
 
+    /**
+     * <p>Enables {@code MobArenaCommand}, registering the titular command.</p>
+    */
     public void onEnable() {
         api.tabComplete().register("mobarena-arenas", (sender, args)->mobArena.minigame()
                 .arenas()
@@ -41,7 +62,7 @@ public class MobArenaCommand {
                 .map(Enum::toString)
                 .sorted()
                 .toList());
-        api.tabComplete().register("mobarena-increment-type", (sender, args)-> Arrays.stream(MobArenaArenaRecord.SpawnerRecord.IncrementType.values())
+        api.tabComplete().register("mobarena-increment-type", (sender, args)-> Arrays.stream(IncrementType.values())
                 .map(Enum::toString)
                 .sorted()
                 .toList());
@@ -126,7 +147,7 @@ public class MobArenaCommand {
                 .register(STEMCraft.getPlugin());
     }
 
-    private void commandSpawnerConfig(CommandContext ctx) {
+    private void commandSpawnerConfig(@NotNull final CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
         switch (ctx.getArg(2)) {
             case "add" -> commandSpawnerConfigAdd(ctx);
@@ -136,17 +157,17 @@ public class MobArenaCommand {
         }
     }
 
-    private void commandSpawnerConfigAdd(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx);
+    private void commandSpawnerConfigAdd(@NotNull final CommandContext ctx) {
+        final MiniGameArena arena = requireArena(ctx);
 
-        int newSpawnerConfigIndex = arena.get("spawner-configs.max", Integer.class);
+        final int newSpawnerConfigIndex = arena.get("spawner-configs.max", Integer.class);
 
         final String newSpawnerConfigPrefix = "spawner-configs." + newSpawnerConfigIndex + ".";
 
         arena.set(newSpawnerConfigPrefix + "entityType", EntityType.ZOMBIE);
         arena.set(newSpawnerConfigPrefix + "initialAmount", 1);
         arena.set(newSpawnerConfigPrefix + "incrementAmount", 1.0);
-        arena.set(newSpawnerConfigPrefix + "incrementType", MobArenaArenaRecord.SpawnerRecord.IncrementType.Linear);
+        arena.set(newSpawnerConfigPrefix + "incrementType", IncrementType.Linear);
         arena.set(newSpawnerConfigPrefix + "initialWave", 1);
         arena.set(newSpawnerConfigPrefix + "spawnZone", "");
         arena.set(newSpawnerConfigPrefix + "countTowardsMobCount", true);
@@ -156,10 +177,10 @@ public class MobArenaCommand {
         ctx.returnSuccess("Created a new spawner config!");
     }
 
-    private void commandSpawnerConfigRemove(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx);
+    private void commandSpawnerConfigRemove(@NotNull final CommandContext ctx) {
+        @NotNull final MiniGameArena arena = requireArena(ctx);
 
-        int spawnerIndex = ctx.getArgAsInt(3) - 1;
+        final int spawnerIndex = ctx.getArgAsInt(3) - 1;
 
         if (spawnerIndex < 0 || spawnerIndex >= arena.get("spawner-configs.max", Integer.class)) {
             ctx.returnUsage();
@@ -172,7 +193,7 @@ public class MobArenaCommand {
             arena.set(newSpawnerConfigPrefix + "entityType", arena.get(oldSpawnerConfigPrefix + "entityType", EntityType.class));
             arena.set(newSpawnerConfigPrefix + "initialAmount", arena.get(oldSpawnerConfigPrefix + "initialAmount", Integer.class));
             arena.set(newSpawnerConfigPrefix + "incrementAmount", arena.get(oldSpawnerConfigPrefix + "incrementAmount", Double.class));
-            arena.set(newSpawnerConfigPrefix + "incrementType", arena.get(oldSpawnerConfigPrefix + "incrementType", MobArenaArenaRecord.SpawnerRecord.IncrementType.class));
+            arena.set(newSpawnerConfigPrefix + "incrementType", arena.get(oldSpawnerConfigPrefix + "incrementType", IncrementType.class));
             arena.set(newSpawnerConfigPrefix + "initialWave", arena.get(oldSpawnerConfigPrefix + "initialWave", Integer.class));
             arena.set(newSpawnerConfigPrefix + "spawnZone", arena.get(oldSpawnerConfigPrefix + "spawnZone", String.class));
             arena.set(newSpawnerConfigPrefix + "countTowardsMobCount", arena.get(oldSpawnerConfigPrefix + "countTowardsMobCount", String.class));
@@ -191,14 +212,14 @@ public class MobArenaCommand {
         arena.set("spawner-configs.max", arena.get("spawner-configs.max", Integer.class) - 1);
     }
 
-    private void commandSpawnerConfigSet(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx);
+    private void commandSpawnerConfigSet(@NotNull final CommandContext ctx) {
+        final MiniGameArena arena = requireArena(ctx);
 
         ctx.checkArgsSizeAtLeast(6);
 
-        int spawnerIndex = ctx.getArgAsInt(3) - 1;
-        String spawnerPropertyKey = ctx.getArg(4);
-        String spawnerPropertyValue = ctx.getArg(5);
+        final int spawnerIndex = ctx.getArgAsInt(3) - 1;
+        final String spawnerPropertyKey = ctx.getArg(4);
+        final String spawnerPropertyValue = ctx.getArg(5);
 
         if (spawnerIndex < 0 || spawnerIndex >= arena.get("spawner-configs.max", Integer.class)) {
             ctx.returnUsage();
@@ -207,46 +228,46 @@ public class MobArenaCommand {
         switch (spawnerPropertyKey) {
             case "entityType":
                 try {
-                    EntityType newEntityType = EntityType.valueOf(spawnerPropertyValue);
+                    final EntityType newEntityType = EntityType.valueOf(spawnerPropertyValue);
                     arena.set("spawner-configs." + spawnerIndex + ".entityType", newEntityType);
                     ctx.returnSuccess("Set spawner " + (spawnerIndex + 1) + "'s entity type to '" + spawnerPropertyValue + "'.");
-                } catch (IllegalArgumentException e) {
+                } catch (final IllegalArgumentException e) {
                     ctx.returnError("'" + spawnerPropertyValue + "' is not a valid entity type.");
                 }
                 break;
             case "initialAmount":
                 try {
-                    int newInitialAmount = Integer.parseInt(spawnerPropertyValue);
+                    final int newInitialAmount = Integer.parseInt(spawnerPropertyValue);
                     arena.set("spawner-configs." + spawnerIndex + ".initialAmount", newInitialAmount);
                     ctx.returnSuccess("Set spawner " + (spawnerIndex + 1) + "'s initial amount to '" + spawnerPropertyValue + "'.");
-                } catch (NumberFormatException e) {
+                } catch (final NumberFormatException e) {
                     ctx.returnUsage();
                 }
                 break;
             case "incrementAmount":
                 try {
-                    double newIncrementAmount = Double.parseDouble(spawnerPropertyValue);
+                    final double newIncrementAmount = Double.parseDouble(spawnerPropertyValue);
                     arena.set("spawner-configs." + spawnerIndex + ".incrementAmount", newIncrementAmount);
                     ctx.returnSuccess("Set spawner " + (spawnerIndex + 1) + "'s increment amount to '" + spawnerPropertyValue + "'.");
-                } catch (NumberFormatException e) {
+                } catch (final NumberFormatException e) {
                     ctx.returnUsage();
                 }
                 break;
             case "incrementType":
                 try {
-                    MobArenaArenaRecord.SpawnerRecord.IncrementType newIncrementType = MobArenaArenaRecord.SpawnerRecord.IncrementType.valueOf(spawnerPropertyValue);
+                    final IncrementType newIncrementType = IncrementType.valueOf(spawnerPropertyValue);
                     arena.set("spawner-configs." + spawnerIndex + ".incrementType", newIncrementType);
                     ctx.returnSuccess("Set spawner " + (spawnerIndex + 1) + "'s increment type to '" + spawnerPropertyValue + "'.");
-                } catch (IllegalArgumentException e) {
+                } catch (final IllegalArgumentException e) {
                     ctx.returnError("'" + spawnerPropertyValue + "' is not a valid increment type.");
                 }
                 break;
             case "initialWave":
                 try {
-                    int newWaveAmount = Integer.parseInt(spawnerPropertyValue);
+                    final int newWaveAmount = Integer.parseInt(spawnerPropertyValue);
                     arena.set("spawner-configs." + spawnerIndex + ".initialWave", newWaveAmount);
                     ctx.returnSuccess("Set spawner " + (spawnerIndex + 1) + "'s initial wave to '" + spawnerPropertyValue + "'.");
-                } catch (NumberFormatException e) {
+                } catch (final NumberFormatException e) {
                     ctx.returnUsage();
                 }
                 break;
@@ -260,10 +281,10 @@ public class MobArenaCommand {
         }
     }
 
-    private void commandZone(CommandContext ctx) {
+    private void commandZone(@NotNull final CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
 
-        String possibleOperation = ctx.getArg(2);
+        final String possibleOperation = ctx.getArg(2);
         if (Objects.equals(possibleOperation, "delete")) {
             commandZoneDelete(ctx);
         } else if (Objects.equals(possibleOperation, "select")) {
@@ -273,16 +294,16 @@ public class MobArenaCommand {
         }
     }
 
-    private void commandZoneSelect(CommandContext ctx) {
+    private void commandZoneSelect(@NotNull final CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(4);
 
-        Player player = requirePlayer(ctx);
+        final Player player = requirePlayer(ctx);
 
-        MiniGameArena arena = requireArena(ctx);
-        String zoneName = ctx.getArg(3);
+        final MiniGameArena arena = requireArena(ctx);
+        final String zoneName = ctx.getArg(3);
 
-        Map<String, SCRegion> zones = arena.getMap("zones", String.class, SCRegion.class);
-        SCRegion region = zones.get(zoneName);
+        final Map<String, SCRegion> zones = arena.getMap("zones", String.class, SCRegion.class);
+        final SCRegion region = zones.get(zoneName);
 
         if (region == null) {
             ctx.returnError("'" + zoneName + "' does not exist.");
@@ -298,13 +319,13 @@ public class MobArenaCommand {
         ctx.success("WorldEdit selection updated from arena '" + arena.id() + "' (" + zoneName + ").");
     }
 
-    private void commandZoneDelete(CommandContext ctx) {
+    private void commandZoneDelete(@NotNull final CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(4);
 
-        MiniGameArena arena = requireArena(ctx);
-        String zoneName = ctx.getArg(3); // callee guarantees args size of 3.
+        final MiniGameArena arena = requireArena(ctx);
+        final String zoneName = ctx.getArg(3); // callee guarantees args size of 3.
 
-        Map<String, SCRegion> zones = arena.getMap("zones", String.class, SCRegion.class);
+        final Map<String, SCRegion> zones = arena.getMap("zones", String.class, SCRegion.class);
 
         if (zones.remove(zoneName) == null) {
             ctx.returnError("'" + zoneName + "' does not exist.");
@@ -313,15 +334,15 @@ public class MobArenaCommand {
         }
     }
 
-    private void commandZonePut(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx);
-        String zoneName = ctx.getArg(2); // callee guarantees args size of 3.
+    private void commandZonePut(@NotNull final CommandContext ctx) {
+        final MiniGameArena arena = requireArena(ctx);
+        final String zoneName = ctx.getArg(2); // callee guarantees args size of 3.
 
-        Player player = requirePlayer(ctx);
-        SCRegion selection = requireSelection(ctx, player);
-        Map<String, SCRegion> zones = arena.getMap("zones", String.class, SCRegion.class);
+        final Player player = requirePlayer(ctx);
+        final SCRegion selection = requireSelection(ctx, player);
+        final Map<String, SCRegion> zones = arena.getMap("zones", String.class, SCRegion.class);
 
-        SCRegion formerRegion = zones.put(zoneName, selection);
+        final SCRegion formerRegion = zones.put(zoneName, selection);
         if (formerRegion == null) {
             ctx.returnSuccess("'" + zoneName + "' has been added to the list of zones.");
         } else {
@@ -329,8 +350,8 @@ public class MobArenaCommand {
         }
     }
 
-    private void commandList(CommandContext ctx) {
-        List<MiniGameArena> arenas = mobArena.minigame().arenas().stream()
+    private void commandList(@NotNull final CommandContext ctx) {
+        final List<MiniGameArena> arenas = mobArena.minigame().arenas().stream()
                 .sorted((left, right) -> left.id().compareToIgnoreCase(right.id()))
                 .toList();
 
@@ -341,10 +362,10 @@ public class MobArenaCommand {
                 ctx.getArgAsInt(1, 1),
                 arenas.size(),
                 (start, count, isPlayer) -> {
-                    List<Component> lines = new ArrayList<>();
-                    int end = Math.min(start + count, arenas.size());
+                    final List<Component> lines = new ArrayList<>();
+                    final int end = Math.min(start + count, arenas.size());
                     for (int i = start; i < end; i++) {
-                        MiniGameArena arena = arenas.get(i);
+                        final MiniGameArena arena = arenas.get(i);
                         Component line = Component.text(arena.id(), NamedTextColor.YELLOW)
                                 .hoverEvent(HoverEvent.showText(Component.text("Show info for " + arena.id())))
                                 .clickEvent(ClickEvent.runCommand("/mobarena info " + arena.id()))
@@ -367,7 +388,7 @@ public class MobArenaCommand {
                                         .append(Component.text("[Join]", NamedTextColor.GREEN)
                                                 .clickEvent(ClickEvent.runCommand("/mobarena join " + arena.id()))
                                                 .hoverEvent(HoverEvent.showText(Component.text("Join this arena"))));
-                            } else if (arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING || arena.getStatus() == MiniGameArena.ArenaStatus.ENDING) {
+                            } else if (arena.getStatus() == ArenaStatus.RUNNING || arena.getStatus() == ArenaStatus.ENDING) {
                                 line = line
                                         .append(Component.text(" "))
                                         .append(Component.text("[Spectate]", NamedTextColor.AQUA)
@@ -390,9 +411,9 @@ public class MobArenaCommand {
         );
     }
 
-    private void commandInfo(CommandContext ctx) {
-        MiniGameArena arena = requireArenaForInfo(ctx);
-        ArenaValidationResult validation = arena.validate();
+    private void commandInfo(@NotNull final CommandContext ctx) {
+        final MiniGameArena arena = requireArenaForInfo(ctx);
+        final ArenaValidationResult validation = arena.validate();
         ctx.info("Arena '" + arena.id() + "':");
         ctx.info(" - Name: " + arena.getName());
         ctx.info(" - Status: " + arena.getStatus().name());
@@ -407,7 +428,7 @@ public class MobArenaCommand {
         printZoneInfo(ctx, arena);
         if (validation.hasErrors()) {
             ctx.warn(" - Validation: failed");
-            for (String error : validation.getErrors()) {
+            for (final String error : validation.getErrors()) {
                 ctx.warn("   - " + error);
             }
         } else {
@@ -415,8 +436,14 @@ public class MobArenaCommand {
         }
     }
 
-    private void printSpawnerConfigInfo(CommandContext ctx, MiniGameArena arena) {
-        int maxSpawnerConfig = arena.get("spawner-configs.max", Integer.class);
+    /**
+     * <p>Prints a given arena's spawner configs to a command executor.</p>
+     *
+     * @param ctx The command context.
+     * @param arena THe arena to draw the spawner configs from.
+     */
+    private void printSpawnerConfigInfo(@NotNull final CommandContext ctx, @NonNull final MiniGameArena arena) {
+        final int maxSpawnerConfig = arena.get("spawner-configs.max", Integer.class);
 
         for (int i = 0; i < maxSpawnerConfig; i++) {
             final String spawnerConfigPrefix = "spawner-configs." + i + ".";
@@ -424,26 +451,30 @@ public class MobArenaCommand {
             ctx.info("     - Entity Type: " + arena.get(spawnerConfigPrefix + "entityType", EntityType.class).toString());
             ctx.info("     - Initial Amount: " + arena.get(spawnerConfigPrefix + "initialAmount", Integer.class).toString());
             ctx.info("     - Increment Amount: " + arena.get(spawnerConfigPrefix + "incrementAmount", Double.class).toString());
-            ctx.info("     - Increment Type: " + arena.get(spawnerConfigPrefix + "incrementType", MobArenaArenaRecord.SpawnerRecord.IncrementType.class).toString());
+            ctx.info("     - Increment Type: " + arena.get(spawnerConfigPrefix + "incrementType", IncrementType.class).toString());
             ctx.info("     - Spawn Zone: " + arena.get(spawnerConfigPrefix + "spawnZone", String.class));
             ctx.info("     - Count Towards Mob Count: " + arena.get(spawnerConfigPrefix + "countTowardsMobCount", Boolean.class).toString());
         }
     }
 
-    private void printZoneInfo(CommandContext ctx, MiniGameArena arena) {
-        Map<String, SCRegion> zones = arena.getMap("zones", String.class, SCRegion.class);
+    /**
+     * <p>Prints a given arena's zones to a command executor.</p>
+     *
+     * @param ctx The command context.
+     * @param arena THe arena to draw the zones from.
+     */
+    private void printZoneInfo(@NotNull final CommandContext ctx, final @NonNull MiniGameArena arena) {
+        final Map<String, SCRegion> zones = arena.getMap("zones", String.class, SCRegion.class);
         if (zones == null) {
             return;
         }
 
-        for (Map.Entry<String, SCRegion> entry : zones.entrySet()) {
-            ctx.info("   - " + entry.getKey() + ": " + formatRegion(entry.getValue()));
-        }
+        zones.entrySet().stream().map(entry -> "   - " + entry.getKey() + ": " + formatRegion(entry.getValue())).forEach(ctx::info);
     }
 
-    private void commandCreate(CommandContext ctx) {
+    private void commandCreate(@NotNull final CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2);
-        String arenaId = ctx.getArg(1);
+        final String arenaId = ctx.getArg(1);
         if (mobArena.minigame().arena(arenaId) != null) {
             ctx.returnError("Arena '" + arenaId + "' already exists.");
             return;
@@ -451,7 +482,7 @@ public class MobArenaCommand {
 
         World world = ctx.getArgAsWorld(2);
         if (world == null) {
-            Player player = ctx.asPlayer();
+            final Player player = ctx.asPlayer();
             if (player == null) {
                 ctx.returnError("Specify a world when creating an arena from console.");
                 return;
@@ -459,7 +490,7 @@ public class MobArenaCommand {
             world = player.getWorld();
         }
 
-        MiniGameArena arena = mobArena.createArena(arenaId, world);
+        final MiniGameArena arena = mobArena.createArena(arenaId, world);
         if (arena == null) {
             ctx.returnError("Arena '" + arenaId + "' could not be created.");
             return;
@@ -467,23 +498,23 @@ public class MobArenaCommand {
         ctx.success("Created Mob Arena arena '" + arenaId + "' in world '" + world.getName() + "'.");
     }
 
-    private void commandDelete(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx);
+    private void commandDelete(@NotNull final CommandContext ctx) {
+        final MiniGameArena arena = requireArena(ctx);
         mobArena.deleteArena(arena.id());
         ctx.success("Deleted Mob Arena arena '" + arena.id() + "'.");
     }
 
-    private void commandJoin(CommandContext ctx) {
+    private void commandJoin(@NotNull final CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2);
-        MiniGameArena arena = requireArena(ctx);
-        Player targetPlayer = ctx.getArgAsPlayerOrSender(2);
+        final MiniGameArena arena = requireArena(ctx);
+        final Player targetPlayer = ctx.getArgAsPlayerOrSender(2);
         if (targetPlayer == null) {
             ctx.returnError("Player is required.");
             return;
         }
         ensureNotInArena(ctx, targetPlayer);
 
-        if (arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING || arena.getStatus() == MiniGameArena.ArenaStatus.ENDING) {
+        if (arena.getStatus() == ArenaStatus.RUNNING || arena.getStatus() == ArenaStatus.ENDING) {
             arena.addSpectator(targetPlayer);
             ctx.success("Player '" + targetPlayer.getName() + "' is now spectating arena '" + arena.id() + "'.");
             return;
@@ -498,11 +529,11 @@ public class MobArenaCommand {
         ctx.success("Player '" + targetPlayer.getName() + "' joined arena '" + arena.id() + "'.");
     }
 
-    private void commandJoinAll(CommandContext ctx) {
+    private void commandJoinAll(@NotNull final CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2);
-        MiniGameArena arena = requireArena(ctx);
-        boolean spectateOnly = arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING
-                || arena.getStatus() == MiniGameArena.ArenaStatus.ENDING;
+        final MiniGameArena arena = requireArena(ctx);
+        final boolean spectateOnly = arena.getStatus() == ArenaStatus.RUNNING
+                || arena.getStatus() == ArenaStatus.ENDING;
         if (!spectateOnly && !arena.isJoinable()) {
             ctx.returnError("Arena '" + arena.id() + "' is not joinable right now.");
             return;
@@ -511,8 +542,9 @@ public class MobArenaCommand {
         int joined = 0;
         int spectating = 0;
         int skipped = 0;
-        for (Player targetPlayer : Bukkit.getOnlinePlayers()) {
-            MiniGameArena existingArena = mobArena.minigame().findPlayer(targetPlayer);
+        for (final Player targetPlayer : Bukkit.getOnlinePlayers()) {
+            final MiniGameArena existingArena = mobArena.minigame().findPlayer(targetPlayer);
+            //noinspection VariableNotUsedInsideIf // Used to skip adding the player in
             if (existingArena != null) {
                 skipped++;
                 continue;
@@ -546,10 +578,10 @@ public class MobArenaCommand {
         ctx.success("Arena '" + arena.id() + "': joined " + joined + ", spectating " + spectating + ", skipped " + skipped + ".");
     }
 
-    private void commandSpectate(CommandContext ctx) {
+    private void commandSpectate(@NotNull final CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2);
-        MiniGameArena arena = requireArena(ctx);
-        Player targetPlayer = ctx.getArgAsPlayerOrSender(2);
+        final MiniGameArena arena = requireArena(ctx);
+        final Player targetPlayer = ctx.getArgAsPlayerOrSender(2);
         if (targetPlayer == null) {
             ctx.returnError("Player is required.");
             return;
@@ -560,14 +592,14 @@ public class MobArenaCommand {
         ctx.success("Player '" + targetPlayer.getName() + "' is now spectating arena '" + arena.id() + "'.");
     }
 
-    private void commandLeave(CommandContext ctx) {
-        Player targetPlayer = ctx.getArgAsPlayerOrSender(1);
+    private void commandLeave(@NotNull final CommandContext ctx) {
+        final Player targetPlayer = ctx.getArgAsPlayerOrSender(1);
         if (targetPlayer == null) {
             ctx.returnError("Player is required.");
             return;
         }
 
-        MiniGameArena arena = mobArena.minigame().findPlayer(targetPlayer);
+        final MiniGameArena arena = mobArena.minigame().findPlayer(targetPlayer);
         if (arena == null) {
             ctx.returnError("Player '" + targetPlayer.getName() + "' is not in a Mob Arena arena.");
             return;
@@ -577,126 +609,126 @@ public class MobArenaCommand {
         ctx.success("Player '" + targetPlayer.getName() + "' left arena '" + arena.id() + "'.");
     }
 
-    private void commandStart(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx);
+    private void commandStart(@NotNull final CommandContext ctx) {
+        final MiniGameArena arena = requireArena(ctx);
         if (arena.numPlayers() < arena.getMinPlayers()) {
             ctx.returnError("Arena '" + arena.id() + "' needs at least " + arena.getMinPlayers() + " players to start.");
         }
 
-        arena.setStatus(MiniGameArena.ArenaStatus.STARTING, mobArena.startCountdownSeconds(arena));
+        arena.setStatus(ArenaStatus.STARTING, mobArena.startCountdownSeconds(arena));
         ctx.success("Arena '" + arena.id() + "' is starting.");
     }
 
-    private void commandStop(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx);
-        arena.setStatus(MiniGameArena.ArenaStatus.RESETTING);
+    private void commandStop(@NotNull final CommandContext ctx) {
+        final MiniGameArena arena = requireArena(ctx);
+        arena.setStatus(ArenaStatus.RESETTING);
         ctx.success("Arena '" + arena.id() + "' has been stopped and reset.");
     }
 
-    private void commandRestart(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx);
-        arena.setStatus(MiniGameArena.ArenaStatus.RESETTING);
+    private void commandRestart(@NotNull final CommandContext ctx) {
+        final MiniGameArena arena = requireArena(ctx);
+        arena.setStatus(ArenaStatus.RESETTING);
         if (arena.numPlayers() >= arena.getMinPlayers()) {
-            arena.setStatus(MiniGameArena.ArenaStatus.STARTING, mobArena.startCountdownSeconds(arena));
+            arena.setStatus(ArenaStatus.STARTING, mobArena.startCountdownSeconds(arena));
             ctx.success("Arena '" + arena.id() + "' has been restarted.");
             return;
         }
         ctx.success("Arena '" + arena.id() + "' has been reset.");
     }
 
-    private void commandSave(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx);
+    private void commandSave(@NotNull final CommandContext ctx) {
+        final MiniGameArena arena = requireArena(ctx);
         try {
             mobArena.saveArena(arena);
-        } catch (MiniGameInvalidArenaConfigException exception) {
+        } catch (final MiniGameInvalidArenaConfigException exception) {
             ctx.returnError(exception.getMessage());
         }
         ctx.success("Arena '" + arena.id() + "' has been saved.");
     }
 
-    private void commandReload(CommandContext ctx) {
+    private void commandReload(@NotNull final CommandContext ctx) {
         if (!mobArena.reloadFromConfig()) {
             ctx.returnError("Mob Arena config could not be reloaded.");
         }
         ctx.success("Mob Arena config reloaded. Loaded " + mobArena.minigame().arenas().size() + " arenas.");
     }
 
-    private void commandValidate(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx);
-        ArenaValidationResult result = arena.validate();
+    private void commandValidate(@NotNull final CommandContext ctx) {
+        final MiniGameArena arena = requireArena(ctx);
+        final ArenaValidationResult result = arena.validate();
         if (!result.hasErrors()) {
             ctx.returnSuccess("Arena '" + arena.id() + "' is valid.");
         }
 
         ctx.warn("Arena '" + arena.id() + "' has validation errors:");
-        for (String error : result.getErrors()) {
+        for (final String error : result.getErrors()) {
             ctx.warn(" - " + error);
         }
     }
 
-    private void commandEnable(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx);
-        ArenaValidationResult result = arena.validate();
+    private void commandEnable(@NotNull final CommandContext ctx) {
+        final MiniGameArena arena = requireArena(ctx);
+        final ArenaValidationResult result = arena.validate();
         if (result.hasErrors()) {
             ctx.warn("Arena '" + arena.id() + "' cannot be enabled until it is valid:");
-            for (String error : result.getErrors()) {
+            for (final String error : result.getErrors()) {
                 ctx.warn(" - " + error);
             }
             return;
         }
 
         try {
-            arena.setStatus(MiniGameArena.ArenaStatus.WAITING);
+            arena.setStatus(ArenaStatus.WAITING);
             mobArena.persistArenaEnabled(arena, true);
-        } catch (MiniGameInvalidArenaConfigException exception) {
+        } catch (final MiniGameInvalidArenaConfigException exception) {
             ctx.returnError(exception.getMessage());
         }
         ctx.success("Arena '" + arena.id() + "' is now enabled.");
     }
 
-    private void commandDisable(CommandContext ctx) {
-        MiniGameArena arena = requireArena(ctx);
-        for (Player player : new ArrayList<>(arena.getPlayers())) {
+    private void commandDisable(@NotNull final CommandContext ctx) {
+        final MiniGameArena arena = requireArena(ctx);
+        for (final Player player : new ArrayList<>(arena.getPlayers())) {
             arena.removePlayer(player);
         }
-        for (Player player : new ArrayList<>(arena.getSpectators())) {
+        for (final Player player : new ArrayList<>(arena.getSpectators())) {
             arena.removeSpectator(player);
         }
         try {
-            arena.setStatus(MiniGameArena.ArenaStatus.DISABLED);
+            arena.setStatus(ArenaStatus.DISABLED);
             mobArena.persistArenaEnabled(arena, false);
-        } catch (MiniGameInvalidArenaConfigException exception) {
+        } catch (final MiniGameInvalidArenaConfigException exception) {
             ctx.returnError(exception.getMessage());
         }
         ctx.success("Arena '" + arena.id() + "' is now disabled.");
     }
 
-    private void commandSet(CommandContext ctx) {
+    private void commandSet(@NotNull final CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
-        MiniGameArena arena = requireArena(ctx);
-        String target = ctx.getArgLower(2);
+        final MiniGameArena arena = requireArena(ctx);
+        final String target = ctx.getArgLower(2);
 
         switch (target) {
             case "lobby" -> {
-                Player player = requirePlayer(ctx);
+                final Player player = requirePlayer(ctx);
                 ensureArenaWorld(ctx, arena, player.getLocation(), "Lobby spawn");
                 arena.setLobbySpawn(player.getLocation());
                 showLocationPreview(player, "lobby", player.getLocation());
                 ctx.success("Lobby spawn updated for arena '" + arena.id() + "'.");
             }
             case "spectator" -> {
-                Player player = requirePlayer(ctx);
+                final Player player = requirePlayer(ctx);
                 ensureArenaWorld(ctx, arena, player.getLocation(), "Spectator spawn");
                 arena.setSpectatorSpawn(player.getLocation());
                 showLocationPreview(player, "spectator", player.getLocation());
                 ctx.success("Spectator spawn updated for arena '" + arena.id() + "'.");
             }
             case "arena" -> {
-                Player player = requirePlayer(ctx);
-                SCRegion selection = requireSelection(ctx, player);
+                final Player player = requirePlayer(ctx);
+                final SCRegion selection = requireSelection(ctx, player);
                 ensureArenaWorld(ctx, arena, selection, "Arena region");
                 ensureArenaRegionAcceptsExistingGeometry(ctx, arena, selection);
-                SCRegion regionCopy = selection.copy();
+                final SCRegion regionCopy = selection.copy();
                 arena.setRegion(regionCopy);
                 arena.set("arenaRegion", regionCopy.copy());
                 showRegionPreview(player, "set-arena", selection);
@@ -704,13 +736,13 @@ public class MobArenaCommand {
             }
             case "minplayers" -> {
                 ctx.checkArgsSizeAtLeast(4);
-                int minPlayers = ctx.getArgAsInt(3, 2, 2, null);
+                final int minPlayers = ctx.getArgAsInt(3, 2, 1, null);
                 arena.setMinPlayers(minPlayers);
                 ctx.success("Minimum players set to " + arena.getMinPlayers() + " for arena '" + arena.id() + "'.");
             }
             case "maxplayers" -> {
                 ctx.checkArgsSizeAtLeast(4);
-                int maxPlayers = ctx.getArgAsInt(3, 16, 2, null);
+                final int maxPlayers = ctx.getArgAsInt(3, 16, 1, null);
                 arena.setMaxPlayers(maxPlayers);
                 ctx.success("Maximum players set to " + arena.getMaxPlayers() + " for arena '" + arena.id() + "'.");
             }
@@ -723,11 +755,11 @@ public class MobArenaCommand {
         }
     }
 
-    private void commandSelect(CommandContext ctx) {
+    private void commandSelect(@NotNull final CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
-        Player player = requirePlayer(ctx);
-        MiniGameArena arena = requireArena(ctx);
-        String target = ctx.getArgLower(2);
+        final Player player = requirePlayer(ctx);
+        final MiniGameArena arena = requireArena(ctx);
+        final String target = ctx.getArgLower(2);
         SCRegion region = null;
         Location location = null;
 
@@ -766,12 +798,12 @@ public class MobArenaCommand {
         ctx.success("WorldEdit selection updated from arena '" + arena.id() + "' (" + target + ").");
     }
 
-    private void commandShow(CommandContext ctx) {
+    private void commandShow(@NotNull final CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3);
-        Player player = requirePlayer(ctx);
-        MiniGameArena arena = requireArena(ctx);
-        String target = ctx.getArgLower(2);
-        Location location;
+        final Player player = requirePlayer(ctx);
+        final MiniGameArena arena = requireArena(ctx);
+        final String target = ctx.getArgLower(2);
+        final Location location;
 
         switch (target) {
             case "lobby" -> location = arena.getLobbySpawn();
@@ -796,8 +828,8 @@ public class MobArenaCommand {
     }
 
     // TODO: Merge this into a static class, code taken from Bridge. - ProjectHSI
-    private SCRegion requireSelection(CommandContext ctx, Player player) {
-        SCRegion selection = api.selections().getWorldEditSelection(player);
+    private @NonNull SCRegion requireSelection(@NotNull final CommandContext ctx, final Player player) {
+        final SCRegion selection = api.selections().getWorldEditSelection(player);
         if (selection == null) {
             ctx.returnError("No WorldEdit selection found. Make a selection first.");
             throw new IllegalStateException("WorldEdit selection is required");
@@ -806,8 +838,8 @@ public class MobArenaCommand {
     }
 
     // TODO: Merge this into a static class, code taken from Bridge. - ProjectHSI
-    private Player requirePlayer(CommandContext ctx) {
-        Player player = ctx.asPlayer();
+    private Player requirePlayer(@NotNull final CommandContext ctx) {
+        final Player player = ctx.asPlayer();
         if (player == null) {
             ctx.returnError("This subcommand must be run in-game.");
             throw new IllegalStateException("Player is required");
@@ -816,10 +848,10 @@ public class MobArenaCommand {
     }
 
     // TODO: Merge this into a static class, code taken from Bridge. - ProjectHSI
-    private MiniGameArena requireArena(CommandContext ctx) {
+    private @NonNull MiniGameArena requireArena(@NotNull final CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(1 + 1);
-        String arenaId = ctx.getArg(1);
-        MiniGameArena arena = mobArena.minigame().arena(arenaId);
+        final String arenaId = ctx.getArg(1);
+        final MiniGameArena arena = mobArena.minigame().arena(arenaId);
         if (arena == null) {
             ctx.returnError("Arena '" + arenaId + "' does not exist.");
             throw new IllegalStateException("Arena '" + arenaId + "' does not exist.");
@@ -828,12 +860,12 @@ public class MobArenaCommand {
     }
 
     // TODO: Merge this into a static class, code taken from Bridge. - ProjectHSI
-    private MiniGameArena requireArenaForInfo(CommandContext ctx) {
+    private MiniGameArena requireArenaForInfo(@NotNull final CommandContext ctx) {
         if (ctx.numArgs() >= 2) {
             return requireArena(ctx);
         }
 
-        List<MiniGameArena> arenas = mobArena.minigame().arenas();
+        final List<MiniGameArena> arenas = mobArena.minigame().arenas();
         if (arenas.isEmpty()) {
             ctx.returnError("No Mob Arena arenas are loaded.");
             throw new IllegalStateException("No Mob Arena arenas are loaded.");
@@ -847,7 +879,7 @@ public class MobArenaCommand {
     }
 
     // TODO: Merge this into a static class, code copied from Bridge impl. - ProjectHSI
-    private NamedTextColor statusColour(MiniGameArena arena) {
+    private NamedTextColor statusColour(@NotNull final MiniGameArena arena) {
         return switch (arena.getStatus()) {
             case IDLE, WAITING -> NamedTextColor.GREEN;
             case STARTING, PREPARATION, RUNNING, COOLDOWN, ENDING, RESETTING -> NamedTextColor.GOLD;
@@ -857,7 +889,7 @@ public class MobArenaCommand {
     }
 
     // TODO: Merge this into a static class, code copied from Bridge impl. - ProjectHSI
-    private void ensureArenaWorld(CommandContext ctx, MiniGameArena arena, Location location, String label) {
+    private void ensureArenaWorld(@NotNull final CommandContext ctx, @NotNull final MiniGameArena arena, @Nullable final Location location, @NotNull final String label) {
         if (location == null || location.getWorld() == null) {
             ctx.returnError(label + " is not set in a valid world.");
             return;
@@ -868,7 +900,7 @@ public class MobArenaCommand {
     }
 
     // TODO: Merge this into a static class, code copied from Bridge impl. - ProjectHSI
-    private void ensureArenaWorld(CommandContext ctx, MiniGameArena arena, SCRegion region, String label) {
+    private void ensureArenaWorld(@NotNull final CommandContext ctx, @NotNull final MiniGameArena arena, @Nullable final SCRegion region, @NotNull final String label) {
         if (region == null || region.getWorld() == null) {
             ctx.returnError(label + " is not set in a valid world.");
             return;
@@ -879,22 +911,28 @@ public class MobArenaCommand {
     }
 
     // TODO: Merge this into a static class, code copied from Bridge impl. - ProjectHSI
-    private void ensureRegionContained(CommandContext ctx, SCRegion child, SCRegion parent, String childLabel) {
+    private void ensureRegionContained(@NotNull final CommandContext ctx, @NotNull final SCRegion child, @Nullable final SCRegion parent, @NotNull final String childLabel) {
         if (parent != null && !parent.contains(child)) {
             ctx.returnError(childLabel + " must be fully inside the " + "arena region" + ".");
         }
     }
 
 
-    // TODO: Merge this into a static class, code copied from Bridge impl. - ProjectHSI
-    private void ensureArenaRegionAcceptsExistingGeometry(CommandContext ctx, MiniGameArena arena, SCRegion arenaRegion) {
-        List<String> errors = new ArrayList<>();
+    // TODO: Merge this into a static class (or abstract it). - ProjectHSI
+    private void ensureArenaRegionAcceptsExistingGeometry(@NotNull final CommandContext ctx, @NotNull final MiniGameArena arena, @NotNull final SCRegion arenaRegion) {
+        final List<String> errors = new ArrayList<>();
 
-        // TODO: Add in arena reigon validation.
+        final Map<String, SCRegion> zones = arena.getMap("zones", String.class, SCRegion.class);
+
+        zones.forEach((key, value) -> {
+            if (arenaRegion.contains(value)) {
+                errors.add("Arena region does not contain zone '" + key + "'.");
+            }
+        });
 
         if (!errors.isEmpty()) {
             ctx.warn("Cannot set arena region because it would exclude existing arena geometry:");
-            for (String error : errors) {
+            for (final String error : errors) {
                 ctx.warn(" - " + error);
             }
             ctx.returnError("Expand the selection or re-set the listed items first.");
@@ -902,28 +940,28 @@ public class MobArenaCommand {
     }
 
     // TODO: Merge this into a static class, code copied from Bridge impl. - ProjectHSI
-    private void ensureNotInArena(CommandContext ctx, Player player) {
-        MiniGameArena existingArena = mobArena.minigame().findPlayer(player);
+    private void ensureNotInArena(@NotNull final CommandContext ctx, @NotNull final Player player) {
+        final MiniGameArena existingArena = mobArena.minigame().findPlayer(player);
         if (existingArena != null) {
             ctx.returnError("Player '" + player.getName() + "' is already in arena '" + existingArena.id() + "'.");
         }
     }
 
     // TODO: Merge in this into a static class, code copied from Bridge impl. - ProjectHSI
-    private void showRegionPreview(Player player, String key, SCRegion region) {
-        String id = "mobarena-preview:" + player.getUniqueId() + ":" + key + ":region";
+    private void showRegionPreview(@NonNull final Player player, @NotNull final String key, @NotNull final SCRegion region) {
+        @NotNull final String id = "mobarena-preview:" + player.getUniqueId() + ":" + key + ":region";
         api.selections().highlightRegion(id, player, region, PREVIEW_TICKS);
     }
 
     // TODO: Merge in this into a static class, code copied from Bridge impl. - ProjectHSI
-    private void showLocationPreview(Player player, String key, Location location) {
-        String baseId = "mobarena-preview:" + player.getUniqueId() + ":" + key;
+    private void showLocationPreview(@NonNull final Player player, @NotNull final String key, @NotNull final Location location) {
+        @NotNull final String baseId = "mobarena-preview:" + player.getUniqueId() + ":" + key;
         api.selections().highlightLocation(baseId + ":location", player, location, PREVIEW_TICKS);
         api.selections().flashBlock(baseId + ":block", player, location, PREVIEW_TICKS);
     }
 
     // TODO: Merge in this into a static class, code copied from Bridge impl. - ProjectHSI
-    private String formatLocation(Location location) {
+    private @NonNull String formatLocation(final Location location) {
         if (location == null) {
             return "<unset>";
         }
@@ -931,12 +969,12 @@ public class MobArenaCommand {
     }
 
     // TODO: Merge in this into a static class, code copied from Bridge impl. - ProjectHSI
-    private String formatRegion(SCRegion region) {
+    private @NonNull String formatRegion(@Nullable final SCRegion region) {
         if (region == null) {
             return "<unset>";
         }
-        Location min = region.getMinimumLocation();
-        Location max = region.getMaximumLocation();
+        final Location min = region.getMinimumLocation();
+        final Location max = region.getMaximumLocation();
         return region.getWorld().getName() + " "
                 + min.getBlockX() + "," + min.getBlockY() + "," + min.getBlockZ()
                 + " -> "

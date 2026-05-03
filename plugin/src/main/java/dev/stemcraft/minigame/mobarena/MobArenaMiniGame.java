@@ -4,21 +4,28 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.minigame.ArenaValidationResult;
 import dev.stemcraft.api.minigame.MiniGame;
 import dev.stemcraft.api.minigame.MiniGameArena;
+import dev.stemcraft.api.minigame.MiniGameArena.ArenaStatus;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.service.playerstats.PlayerStatDefinition;
 import dev.stemcraft.api.util.StringUtil;
 import dev.stemcraft.minigame.BaseMiniGame;
 import dev.stemcraft.minigame.MiniGameHudConfigSupport;
+import dev.stemcraft.minigame.MiniGameHudConfigSupport.HudDefinition;
 import lombok.Getter;
 import lombok.experimental.Accessors;
 import org.bukkit.World;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.Unmodifiable;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
-// TODO: [Overall] Add in player stats
-
+/**
+ * <p>The Mob Arena mini-game.</p>
+ */
 public class MobArenaMiniGame extends BaseMiniGame {
     @Getter
     @Accessors(fluent = true)
@@ -33,18 +40,26 @@ public class MobArenaMiniGame extends BaseMiniGame {
     @Accessors(fluent = true)
     private static final String namespace = "mobarena";
 
-    private MobArenaConfig config;
-    private MobArenaCommand command;
-    private MobArenaArenaHandler handler;
+    private MobArenaConfig config = null;
+    private MobArenaCommand command = null;
+    private MobArenaArenaHandler handler = null;
 
     @Getter
     @Accessors(fluent = true)
-    private MiniGame minigame;
+    private MiniGame minigame = null;
 
-    public MobArenaMiniGame(STEMCraftAPI api) {
+    /**
+     * <p>Creates a new {@code MobArenaMiniGame}.</p>
+     *
+     * @param api The {@link STEMCraftAPI} to use.
+     */
+    public MobArenaMiniGame(@NotNull final STEMCraftAPI api) {
         super(api);
     }
 
+    /**
+     * <p>Handles whenever the minigame is told to load in.</p>
+     */
     @Override
     public void onLoad() {
         config = new MobArenaConfig(api);
@@ -52,7 +67,7 @@ public class MobArenaMiniGame extends BaseMiniGame {
 
         minigame = createMiniGame(namespace, handler)
                 .registerArenaPlaceholder("mobs-left", (arena, team, player) -> String.valueOf(handler.getTrackedMobsForMinigame(arena)))
-                .registerArenaPlaceholder("round", (arena, team, player) -> String.valueOf(handler.getRoundForArena(arena)));
+                .registerArenaPlaceholder("round", (arena, team, player) -> String.valueOf(handler.getWaveForArena(arena)));
 
         registerStats();
 
@@ -67,9 +82,14 @@ public class MobArenaMiniGame extends BaseMiniGame {
         loadArenas();
     }
 
-    private @NotNull Map<MiniGameArena.ArenaStatus, MiniGameHudConfigSupport.HudDefinition> defaultHudDefinitions() {
-        Map<MiniGameArena.ArenaStatus, MiniGameHudConfigSupport.HudDefinition> definitions = new LinkedHashMap<>();
-        definitions.put(MiniGameArena.ArenaStatus.WAITING, new MiniGameHudConfigSupport.HudDefinition(
+    /**
+     * <p>Gets all default HUD definitions.</p>
+     *
+     * @return The default Mob Arena HUD definitions.
+     */
+    private @NotNull Map<@NotNull ArenaStatus, @NotNull HudDefinition> defaultHudDefinitions() {
+        @NotNull final Map<ArenaStatus, HudDefinition> definitions = new LinkedHashMap<>();
+        definitions.put(ArenaStatus.WAITING, new HudDefinition(
                 List.of(
                         "<gradient:#f59e0b:#ef4444><bold>{arena:name}</bold></gradient>",
                         ":info_blue: <aqua>Waiting for players</aqua> <dark_gray>•</dark_gray> <green>{arena:joined-players}</green>/<green>{arena:max-players}</green>"
@@ -84,7 +104,7 @@ public class MobArenaMiniGame extends BaseMiniGame {
                 ),
                 HUD_LINE_HOLD_UPDATES
         ));
-        definitions.put(MiniGameArena.ArenaStatus.STARTING, new MiniGameHudConfigSupport.HudDefinition(
+        definitions.put(ArenaStatus.STARTING, new HudDefinition(
                 List.of(
                         "<gradient:#f59e0b:#ef4444><bold>{arena:name}</bold></gradient>",
                         ":click_action_right: <gold>Starting in</gold> <yellow>{arena:time-remaining}</yellow>",
@@ -100,7 +120,7 @@ public class MobArenaMiniGame extends BaseMiniGame {
                 ),
                 HUD_LINE_HOLD_UPDATES
         ));
-        definitions.put(MiniGameArena.ArenaStatus.RUNNING, new MiniGameHudConfigSupport.HudDefinition(
+        definitions.put(ArenaStatus.RUNNING, new HudDefinition(
                 List.of(
                         "<gradient:#f59e0b:#ef4444><bold>{arena:name}</bold></gradient>",
                         ":skeleton_head_front: <gray>Mobs</gray> {arena:mobs-left}",
@@ -116,7 +136,7 @@ public class MobArenaMiniGame extends BaseMiniGame {
                 ),
                 HUD_LINE_HOLD_UPDATES
         ));
-        definitions.put(MiniGameArena.ArenaStatus.ENDING, new MiniGameHudConfigSupport.HudDefinition(
+        definitions.put(ArenaStatus.ENDING, new HudDefinition(
                 List.of(
                         "<gradient:#f59e0b:#ef4444><bold>{arena:name}</bold></gradient>",
                         ":warning_yellow: <gold>Round ends in</gold> <yellow>{arena:time-remaining}</yellow>"
@@ -134,19 +154,24 @@ public class MobArenaMiniGame extends BaseMiniGame {
         return definitions;
     }
 
-    public @Nullable MiniGameArena createArena(@NotNull String arenaId, @NotNull World world) {
+    /**
+     * <p>Creates a new Mob Arena arena.</p>
+     *
+     * @param arenaId The Arena ID of the new arena to create.
+     * @param world   The world that contains the new arena.
+     * @return        The instance of the new arena.
+     */
+    public @Nullable MiniGameArena createArena(@NotNull final String arenaId, @NotNull final World world) {
         if (minigame.arena(arenaId) != null) {
             return null;
         }
 
-        MiniGameArena arena = minigame.createArena(arenaId, world)
+        @NotNull final MiniGameArena arena = minigame.createArena(arenaId, world)
                 .setName(StringUtil.beautify(arenaId))
                 .setLobbySpawn(world.getSpawnLocation())
                 .setSpectatorSpawn(world.getSpawnLocation())
-                .setMinPlayers(2)
+                .setMinPlayers(1)
                 .setMaxPlayers(16);
-
-        // TODO: Initialise everything else.
 
         arena.set("spawner-configs.max", 0);
         arena.<Map<String,SCRegion>>set("zones", new HashMap<>());
@@ -154,8 +179,14 @@ public class MobArenaMiniGame extends BaseMiniGame {
         return arena;
     }
 
-    public void deleteArena(@NotNull String arenaId) {
-        MiniGameArena arena = minigame.arena(arenaId);
+    /**
+     * <p>Deletes an arena via it's ID.</p>
+     *
+     * @param arenaId The ID of the arena to delete.
+     */
+    public void deleteArena(@NotNull final String arenaId) {
+        @NotNull final MiniGameArena arena = minigame.arena(arenaId);
+        //noinspection VariableNotUsedInsideIf // Used as a check to see if the arena exists.
         if (arena != null) {
             minigame.removeArena(arenaId);
         }
@@ -163,12 +194,23 @@ public class MobArenaMiniGame extends BaseMiniGame {
         config.deleteArena(arenaId);
     }
 
-    public void saveArena(@NotNull MiniGameArena arena) {
+    /**
+     * <p>Saves an arena.</p>
+     *
+     * @param arena The arena to save.
+     */
+    public void saveArena(@NotNull final MiniGameArena arena) {
         //registerArenaStats(arena);
         config.saveArena(arena.id(), new MobArenaArenaRecord(arena));
     }
 
-    public void persistArenaEnabled(@NotNull MiniGameArena arena, boolean enabled) {
+    /**
+     * <p>Save the given arena's status.</p>
+     *
+     * @param arena   The arena whose status to persist.
+     * @param enabled Whether the arena is enabled or not.
+     */
+    public void persistArenaEnabled(@NotNull final MiniGameArena arena, final boolean enabled) {
         if (enabled && !config.hasArena(arena.id())) {
             saveArena(arena);
             return;
@@ -176,6 +218,11 @@ public class MobArenaMiniGame extends BaseMiniGame {
         config.setArenaEnabled(arena.id(), enabled);
     }
 
+    /**
+     * <p>Reloads the Mob Arena config from the config file.</p>
+     *
+     * @return Whether the arena config was loaded or not.
+     */
     // TODO: Merge this into a static class, code taken from Bridge impl. - ProjectHSI
     public boolean reloadFromConfig() {
         if (!reloadConfigFile(config.config())) {
@@ -190,18 +237,31 @@ public class MobArenaMiniGame extends BaseMiniGame {
         return true;
     }
 
+    /**
+     * <p>Loads all arenas from the config.</p>
+     */
     private void loadArenas() {
-        List<MobArenaArenaRecord> arenaRecordList = config.loadArenas();
+        @NotNull @Unmodifiable final List<MobArenaArenaRecord> arenaRecordList = config.loadArenas();
 
         arenaRecordList.forEach(this::loadArena);
     }
 
-    private void loadArena(String arenaId) {
+    /**
+     * <p>Loads an arena via it's ID.</p>
+     *
+     * @param arenaId The Arena ID to load in.
+     */
+    private void loadArena(@NotNull final String arenaId) {
         loadArena(config.loadArena(arenaId));
     }
 
-    private void loadArena(MobArenaArenaRecord arenaRecord) {
-        MiniGameArena arena = minigame.createArena(arenaRecord.arenaId(), arenaRecord.world())
+    /**
+     * <p>Loads an arena record into it's Arena form.</p>
+     *
+     * @param arenaRecord The {@link MobArenaArenaRecord} to load in from.
+     */
+    private void loadArena(@NotNull final MobArenaArenaRecord arenaRecord) {
+        @NotNull final MiniGameArena arena = minigame.createArena(arenaRecord.arenaId(), arenaRecord.world())
                 .setName(arenaRecord.name())
                 .setRegion(arenaRecord.arenaRegion())
                 .setLobbySpawn(arenaRecord.lobby())
@@ -209,11 +269,11 @@ public class MobArenaMiniGame extends BaseMiniGame {
                 .setMinPlayers(arenaRecord.minPlayers())
                 .setMaxPlayers(arenaRecord.maxPlayers());
 
-        arena.set("spawner-configs.max", arenaRecord.spawnTicketList().size());
+        arena.set("spawner-configs.max", arenaRecord.spawnerConfigs().size());
 
-        for (int i = 0; i < arenaRecord.spawnTicketList().size(); i++) {
-            final String spawnerConfigPrefix = "spawner-configs." + i + ".";
-            final MobArenaArenaRecord.SpawnerRecord spawnerRecord = arenaRecord.spawnTicketList().get(i);
+        for (int i = 0; i < arenaRecord.spawnerConfigs().size(); i++) {
+            @NotNull final String spawnerConfigPrefix = "spawner-configs." + i + ".";
+            final MobArenaSpawnerRecord spawnerRecord = arenaRecord.spawnerConfigs().get(i);
 
             arena.set(spawnerConfigPrefix + "entityType", spawnerRecord.entityType());
             arena.set(spawnerConfigPrefix + "initialAmount", spawnerRecord.initialAmount());
@@ -226,20 +286,23 @@ public class MobArenaMiniGame extends BaseMiniGame {
 
         arena.set("zones", arenaRecord.zones());
 
-        ArenaValidationResult result = arena.validate();
+        @NotNull final ArenaValidationResult result = arena.validate();
         if (result.hasErrors()) {
             api.messages().error("Mob Arena arena '" + arenaRecord.arenaId() + "' has validation errors and will be disabled:");
-            for (String error : result.getErrors()) {
+            for (final String error : result.getErrors()) {
                 api.messages().error(" - " + error);
             }
-            arena.setStatus(MiniGameArena.ArenaStatus.DISABLED);
+            arena.setStatus(ArenaStatus.DISABLED);
         } else {
             arena.setStatus(arenaRecord.enabled()
-                    ? MiniGameArena.ArenaStatus.WAITING
-                    : MiniGameArena.ArenaStatus.DISABLED);
+                    ? ArenaStatus.WAITING
+                    : ArenaStatus.DISABLED);
         }
     }
 
+    /**
+     * <p>Registers global stats for Mob Arena.</p>
+     */
     private void registerStats() {
         api.playerStats().register(new PlayerStatDefinition(
                 KILLS_TOTAL_STAT_KEY,
@@ -259,7 +322,13 @@ public class MobArenaMiniGame extends BaseMiniGame {
         ));
     }
 
-    public int startCountdownSeconds(MiniGameArena arena) {
+    /**
+     * <p>Gets the amount of time it should take for an arena to start for a given arena.</p>
+     *
+     * @param arena The arena to get the time it takes for an arena to start.
+     * @return The time it should take for the arena to start.
+     */
+    public int startCountdownSeconds(@NotNull final MiniGameArena arena) {
         return 30; // TODO: Make this customisable.
     }
 }

@@ -9,52 +9,76 @@ import dev.stemcraft.api.util.LocationUtil;
 import dev.stemcraft.api.util.StringUtil;
 import dev.stemcraft.exception.MiniGameInvalidArenaConfigException;
 import dev.stemcraft.minigame.MiniGameConfigSupport;
+import dev.stemcraft.minigame.mobarena.MobArenaSpawnerRecord.IncrementType;
 import lombok.Getter;
 import lombok.experimental.Accessors;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.EntityType;
-import org.checkerframework.dataflow.qual.Pure;
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.Unmodifiable;
 import org.jspecify.annotations.NonNull;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
-public class MobArenaConfig {
+/**
+ * <p>Manages Mob Arena's config file.</p>
+ */
+final class MobArenaConfig {
     private final STEMCraftAPI api;
 
     @Getter
     @Accessors(fluent = true)
-    private MiniGame minigame;
+    private MiniGame minigame = null;
 
     @Getter
     @Accessors(fluent = true)
-    private ConfigFile config;
+    private ConfigFile config = null;
 
     @Getter
     @Accessors(fluent = true)
     private boolean configEnabled = false;
 
-    @Pure
+    /**
+     * <p>Ensures that the config file is loaded, otherwise throws an {@code IllegalStateException}.</p>
+     *
+     * @throws IllegalStateException Thrown whenever the config is not loaded.
+     */
+    @Contract(pure = true)
     private void ensureLoaded() {
         if (!configEnabled) {
             throw new IllegalStateException("Mob Arena config not loaded or broken.");
         }
     }
 
-    public MobArenaConfig(STEMCraftAPI api) {
+    /**
+     * <p>Creates a new {@code MobArenaConfig}.</p>
+     *
+     * @param api      The {@link STEMCraftAPI} to use.
+     */
+    @Contract(pure = true)
+    MobArenaConfig(@NotNull final STEMCraftAPI api) {
         this.api = api;
     }
 
-    public void onEnable(MiniGame miniGame) {
-        this.minigame = miniGame;
+    /**
+     * <p>Enables the Mob Arena config.</p>
+     * <p>This registers listeners for {@code EntityDamageEvent}, {@code EntityDeathEvent}, {@code EntityRemoveFromWorldEvent}, and {@code EntityTransformEvent}</p>
+     */
+    void onEnable(@NotNull final MiniGame miniGame) {
+        minigame = miniGame;
 
         configEnabled = false;
 
-        this.config = api.config().load("mobarena.yml", true);
-        if (this.config == null) {
+        config = api.config().load("mobarena.yml", true);
+        if (config == null) {
             api.messages().warn("Mob Arena config could not be loaded (saving disabled!)");
         } else {
             config.setAutoSave(true);
@@ -65,31 +89,42 @@ public class MobArenaConfig {
         }
     }
 
-    public @NotNull List<@NotNull MobArenaArenaRecord> loadArenas() {
+    /**
+     * <p>Loads all arenas from the config file.</p>
+     *
+     * @return A list of all arena records loaded.
+     */
+    @NotNull List<@NotNull MobArenaArenaRecord> loadArenas() {
         ensureLoaded();
 
-        @NotNull List<@NotNull MobArenaArenaRecord> MiniGameArenas = new ArrayList<>();
+        @NotNull final List<@NotNull MobArenaArenaRecord> MiniGameArenas = new ArrayList<>();
 
         config.getSectionKeys("arenas", false).parallelStream().forEach(key -> {
             try {
                 MiniGameArenas.add(loadArena(key));
-            } catch (MiniGameInvalidArenaConfigException ignored) {}
+            } catch (final MiniGameInvalidArenaConfigException ignored) {}
         });
 
         return MiniGameArenas;
     }
 
-    public @NotNull MobArenaArenaRecord loadArena(@NotNull String arenaId) throws MiniGameInvalidArenaConfigException {
+    /**
+     * @param arenaId The arena ID to load in.
+     * @return An arena record for the given Arena ID.
+     * @throws MiniGameInvalidArenaConfigException Thrown if the arena config in the config file is not valid.
+     */
+    @Contract("_ -> new")
+    @NotNull MobArenaArenaRecord loadArena(@NotNull final String arenaId) throws MiniGameInvalidArenaConfigException {
         ensureLoaded();
-        ConfigSection arenaSection = config.getSection("arenas").getSection(arenaId, false);
+        @NotNull final ConfigSection arenaSection = config.getSection("arenas").getSection(arenaId, false);
 
         if (arenaSection == null) {
             throw new MiniGameInvalidArenaConfigException("Arena not found: '" + arenaId + "'");
         }
 
-        boolean enabled = arenaSection.getBoolean("enabled", true);
+        final boolean enabled = arenaSection.getBoolean("enabled", true);
 
-        String worldName = arenaSection.getString("world");
+        @NotNull final String worldName = arenaSection.getString("world");
         if (worldName.isEmpty()) {
             throw new MiniGameInvalidArenaConfigException("World not defined for arena '" + arenaId + "'.");
         }
@@ -97,22 +132,22 @@ public class MobArenaConfig {
             throw new MiniGameInvalidArenaConfigException("World '" + worldName + "' for arena '" + arenaId + "' does not exist.");
         }
 
-        World world = MiniGameConfigSupport.requireWorld(api, arenaId, worldName);
+        @NotNull final World world = MiniGameConfigSupport.requireWorld(api, arenaId, worldName);
 
-        @NotNull SCRegion arenaRegion = loadRegion(arenaSection, world, arenaId, "arena", "Arena Region");
-        @Nullable Location lobbyLocation = loadLocation(arenaSection, world, arenaId, "lobby", true);
+        @NotNull final SCRegion arenaRegion = loadRegion(arenaSection, world, arenaId, "arena", "Arena Region");
+        @Nullable final Location lobbyLocation = loadLocation(arenaSection, world, arenaId, "lobby", true);
         @Nullable Location spectatorLocation = loadLocation(arenaSection, world, arenaId, "spectator", false);
         if (spectatorLocation == null) {
             spectatorLocation = lobbyLocation;
         }
 
-        int minPlayers = arenaSection.getInt("min-players", 2);
-        int maxPlayers = arenaSection.getInt("max-players", 16);
-        @NotNull String name = arenaSection.getString("name", StringUtil.beautify(arenaId));
+        final int minPlayers = arenaSection.getInt("min-players", 2);
+        final int maxPlayers = arenaSection.getInt("max-players", 16);
+        @NotNull final String name = arenaSection.getString("name", StringUtil.beautify(arenaId));
 
-        @NotNull List<MobArenaArenaRecord.SpawnerRecord> spawnerRecords = loadSpawnerRecordsFromArena(arenaSection);
+        @NotNull final List<MobArenaSpawnerRecord> spawnerRecords = loadSpawnerRecordsFromArena(arenaSection);
 
-        @NotNull Map<String, SCRegion> zones = loadZonesFromArena(arenaId, arenaSection, world);
+        @NotNull final Map<String, SCRegion> zones = loadZonesFromArena(arenaId, arenaSection, world);
 
         return new MobArenaArenaRecord(
                 arenaId,
@@ -129,32 +164,36 @@ public class MobArenaConfig {
         );
     }
 
-    private static @NotNull List<MobArenaArenaRecord.SpawnerRecord> loadSpawnerRecordsFromArena(@NonNull ConfigSection section) {
-        @NotNull Set<String> configSpawnTickets = section.getSectionKeys("spawner-configs", false);
+    /**
+     * @param section The config section to convert into spawner configs.
+     * @return The list of {@link MobArenaSpawnerRecord} found.
+     */
+    private static @NotNull @Unmodifiable List<MobArenaSpawnerRecord> loadSpawnerRecordsFromArena(@NonNull final ConfigSection section) {
+        @NotNull final Set<String> configSpawnTickets = section.getSectionKeys("spawner-configs", false);
 
         return configSpawnTickets.stream().map(spawnerConfigIdString -> {
             try {
                 return Integer.parseInt(spawnerConfigIdString);
-            } catch (NumberFormatException e) {
-                throw new MiniGameInvalidArenaConfigException("Spawner Config ID '" + spawnerConfigIdString + "' could not be parsed.");
+            } catch (final NumberFormatException e) {
+                throw new MiniGameInvalidArenaConfigException("Spawner Config ID '" + spawnerConfigIdString + "' could not be parsed.", e);
             }
         }).sorted().map(spawnTicketId -> {
-            @NotNull ConfigSection currentSection = section.getSection("spawner-configs").getSection(spawnTicketId.toString());
+            @NotNull final ConfigSection currentSection = section.getSection("spawner-configs").getSection(spawnTicketId.toString());
 
-            EntityType entityType = EntityType.valueOf(currentSection.getString("entity-type"));
+            @NotNull final EntityType entityType = EntityType.valueOf(currentSection.getString("entity-type", "ZOMBIE").toUpperCase());
 
-            int initialAmount = currentSection.getInt("initial-amount", 1);
+            final int initialAmount = currentSection.getInt("initial-amount", 1);
 
-            int incrementAmount = currentSection.getInt("increment-amount", 1);
-            MobArenaArenaRecord.SpawnerRecord.IncrementType incrementType = MobArenaArenaRecord.SpawnerRecord.IncrementType.valueOf(currentSection.getString("increment-type"));
+            final int incrementAmount = currentSection.getInt("increment-amount", 1);
+            @NotNull final IncrementType incrementType = IncrementType.valueOf(currentSection.getString("increment-type"));
 
-            int initialWave = currentSection.getInt("initial-wave", 1);
+            final int initialWave = currentSection.getInt("initial-wave", 1);
 
-            String mobSpawnZone = currentSection.getString("spawn-zone", "");
+            @NotNull final String mobSpawnZone = currentSection.getString("spawn-zone", "");
 
-            boolean countTowardsMobCount = currentSection.getBoolean("count-towards-mob-count", true);
+            final boolean countTowardsMobCount = currentSection.getBoolean("count-towards-mob-count", true);
 
-            return new MobArenaArenaRecord.SpawnerRecord(
+            return new MobArenaSpawnerRecord(
                     entityType,
                     initialAmount,
                     incrementAmount,
@@ -166,23 +205,32 @@ public class MobArenaConfig {
         }).toList();
     }
 
-    private @NonNull Map<String, SCRegion> loadZonesFromArena(@NonNull String arenaId, @NonNull ConfigSection section, World world) {
-        Map<String, SCRegion> zones = new HashMap<>();
+    private @NonNull Map<String, SCRegion> loadZonesFromArena(@NonNull final String arenaId, @NonNull final ConfigSection section, final World world) {
+        @NotNull final Map<String, SCRegion> zones = new HashMap<>();
 
         section.getSection("zones").getKeys(false).forEach(key -> zones.put(key, loadRegion(section.getSection("zones"), world, arenaId, key, key + " zone")));
 
         return zones;
     }
 
-    public void saveArenas(@NotNull List<@NotNull MobArenaArenaRecord> arena) {
+    /**
+     * <p>Saves a list of arenas.</p>
+     *
+     * @param arenas The list of arenas to save.
+     */
+    void saveArenas(@NotNull final List<@NotNull MobArenaArenaRecord> arenas) {
         ensureLoaded();
-        arena.forEach(arenaRecord -> saveArena(arenaRecord.arenaId(), arenaRecord));
+        arenas.forEach(arenaRecord -> saveArena(arenaRecord.arenaId(), arenaRecord));
     }
 
-    public void saveArena(@NotNull String key, @NotNull MobArenaArenaRecord arenaRecord) {
+    /**
+     * @param key         The ID of the arena.
+     * @param arenaRecord The arena record to save.
+     */
+    void saveArena(@NotNull final String key, @NotNull final MobArenaArenaRecord arenaRecord) {
         ensureLoaded();
 
-        ConfigSection toSave = config.createSection("arenas." + key, true);
+        @NotNull final ConfigSection toSave = config.createSection("arenas." + key, true);
 
         toSave.set("enabled", arenaRecord.enabled());
         toSave.set("name", arenaRecord.name());
@@ -198,12 +246,18 @@ public class MobArenaConfig {
         config.save();
     }
 
-    private void saveSpawnerRecordsToArena(@NotNull ConfigSection toSave, @NotNull MobArenaArenaRecord arenaRecord) {
-        ConfigSection spawnerConfigsSection = toSave.getSection("spawner-configs");
+    /**
+     * <p>Saves an arena record to an arena section.</p>
+     *
+     * @param toSave The arena config section to save to.
+     * @param arenaRecord The arena record with the spawner configs.
+     */
+    private void saveSpawnerRecordsToArena(@NotNull final ConfigSection toSave, @NotNull final MobArenaArenaRecord arenaRecord) {
+        final ConfigSection spawnerConfigsSection = toSave.getSection("spawner-configs");
 
-        for (int i = 0; i < arenaRecord.spawnTicketList().size(); i++) {
-            MobArenaArenaRecord.SpawnerRecord spawnerRecord = arenaRecord.spawnTicketList().get(i);
-            ConfigSection currentSpawnerConfigSection = spawnerConfigsSection.getSection(String.valueOf(i), true);
+        for (int i = 0; i < arenaRecord.spawnerConfigs().size(); i++) {
+            final MobArenaSpawnerRecord spawnerRecord = arenaRecord.spawnerConfigs().get(i);
+            final ConfigSection currentSpawnerConfigSection = spawnerConfigsSection.getSection(String.valueOf(i), true);
 
             currentSpawnerConfigSection.set("entity-type", spawnerRecord.entityType().toString());
             currentSpawnerConfigSection.set("initial-amount", spawnerRecord.initialAmount());
@@ -215,34 +269,57 @@ public class MobArenaConfig {
         }
     }
 
-    private void saveZonesToArena(@NotNull ConfigSection toSave, @NotNull MobArenaArenaRecord arenaRecord) {
-        ConfigSection zonesSection = toSave.getSection("zones");
+    /**
+     * <p>Saves a map of zones to an arena section.</p>
+     *
+     * @param toSave The arena config section to save to.
+     * @param arenaRecord The arena record with the zones.
+     */
+    private void saveZonesToArena(@NotNull final ConfigSection toSave, @NotNull final MobArenaArenaRecord arenaRecord) {
+        final ConfigSection zonesSection = toSave.getSection("zones");
         arenaRecord.zones().forEach((zoneId, zone) -> zonesSection.set(zoneId, serializeRegion(zone, arenaRecord.arenaId(), "Zone " + zoneId)));
     }
 
-    public void deleteArena(@NotNull String arenaId) {
+    /**
+     * <p>Deletes an arena from the config file by ID.</p>
+     *
+     * @param arenaId The Arena ID to delete.
+     */
+    void deleteArena(@NotNull final String arenaId) {
         ensureLoaded();
 
-        ConfigSection arenas = config.getSection("arenas");
+        final ConfigSection arenas = config.getSection("arenas");
         arenas.remove(arenaId);
         config.save();
     }
 
-    public boolean hasArena(@NotNull String arenaId) {
+    /**
+     * <p>Checks whether an arena is in the config file or not.</p>
+     *
+     * @param arenaId The Arena ID to check for.
+     * @return Whether the arena is config file or not.
+     */
+    boolean hasArena(@NotNull final String arenaId) {
         ensureLoaded();
 
-        ConfigSection arenas = config.getSection("arenas", false);
+        final ConfigSection arenas = config.getSection("arenas", false);
         return arenas != null && arenas.isSection(arenaId);
     }
 
-    public void setArenaEnabled(@NotNull String arenaId, boolean enabled) {
+    /**
+     * <p>Sets the status of an arena in the config.</p>
+     *
+     * @param arenaId The Arena ID to set the status of.
+     * @param enabled Whether the Arena ID is enabled or not.
+     */
+    void setArenaEnabled(@NotNull final String arenaId, final boolean enabled) {
         ensureLoaded();
-        ConfigSection arenas = config.getSection("arenas", false);
+        final ConfigSection arenas = config.getSection("arenas", false);
         if (arenas == null || !arenas.isSection(arenaId)) {
             return;
         }
 
-        ConfigSection arenaConfig = arenas.getSection(arenaId, false);
+        final ConfigSection arenaConfig = arenas.getSection(arenaId, false);
         if (arenaConfig == null) {
             return;
         }
@@ -251,10 +328,10 @@ public class MobArenaConfig {
         config.save();
     }
 
-    // FIXME: I want these "load*" and "serialize*" merged into a single static class, but #20 needs to be reviewed. - ProjectHSI
+    // FIXME: I want these "load*" and "serialize*" merged into a single static class, but #20 needs to be redone. - ProjectHSI
     //  These are copied from the Bridge impl.
-    private @Nullable Location loadLocation(@NotNull ConfigSection section, @NotNull World world, @NotNull String arenaId, @NotNull String key, boolean required) {
-        String locationString = section.getString(key);
+    private @Nullable Location loadLocation(@NotNull final ConfigSection section, @NotNull final World world, @NotNull final String arenaId, @NotNull final String key, final boolean required) {
+        final String locationString = section.getString(key);
         if (locationString.isEmpty()) {
             if (required) {
                 throw new MiniGameInvalidArenaConfigException("Location '" + key + "' for arena '" + arenaId + "' is not defined.");
@@ -262,34 +339,36 @@ public class MobArenaConfig {
             return null;
         }
 
-        Location location = LocationUtil.deserialize(locationString, world);
+        final Location location = LocationUtil.deserialize(locationString, world);
         if (location == null && required) {
             throw new MiniGameInvalidArenaConfigException("Location '" + key + "' for arena '" + arenaId + "' is invalid.");
         }
         return location;
     }
 
-    private @NotNull SCRegion loadRegion(@NotNull ConfigSection section, @NotNull World world, @NotNull String arenaId, @NotNull String key, @NotNull String title) {
-        String regionString = section.getString(key);
+    private @NotNull SCRegion loadRegion(@NotNull final ConfigSection section, @NotNull final World world, @NotNull final String arenaId, @NotNull final String key, @NotNull final String title) {
+        final String regionString = section.getString(key);
         if (regionString.isEmpty()) {
             throw new MiniGameInvalidArenaConfigException(title + " region for arena '" + arenaId + "' is not defined.");
         }
 
-        SCRegion region = SCRegion.fromString(regionString, world);
+        final SCRegion region = SCRegion.fromString(regionString, world);
         if (region == null) {
             throw new MiniGameInvalidArenaConfigException(title + " region for arena '" + arenaId + "' is invalid.");
         }
         return region;
     }
 
-    private @NotNull String serializeLocation(@Nullable Location location, @NotNull String arenaId, @NotNull String name) {
+    @Contract("null, _, _ -> fail")
+    private @NotNull String serializeLocation(@Nullable final Location location, @NotNull final String arenaId, @NotNull final String name) {
         if (location == null) {
             throw new MiniGameInvalidArenaConfigException("Arena '" + arenaId + "' is missing " + name + ".");
         }
         return LocationUtil.serialize(location, false, false);
     }
 
-    private @NotNull String serializeRegion(@Nullable SCRegion region, @NotNull String arenaId, @NotNull String name) {
+    @Contract("null, _, _ -> fail")
+    private @NotNull String serializeRegion(@Nullable final SCRegion region, @NotNull final String arenaId, @NotNull final String name) {
         if (region == null) {
             throw new MiniGameInvalidArenaConfigException("Arena '" + arenaId + "' is missing " + name + ".");
         }
