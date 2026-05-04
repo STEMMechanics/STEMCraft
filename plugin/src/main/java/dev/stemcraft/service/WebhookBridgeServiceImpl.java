@@ -443,18 +443,18 @@ public final class WebhookBridgeServiceImpl extends BaseService {
 
         PenaltyStateRecord activeBan = findActivePenalty(player.getId(), player.getName(), "ban");
         if (activeBan != null) {
-            disallowPlayerLogin(event, Component.text(messageForPenalty(activeBan, "You are banned from this server.")));
+            disallowPlayerLogin(event, PlayerLoginEvent.Result.KICK_BANNED, messageForPenalty(activeBan, "You are banned from this server."));
             return;
         }
 
         BlacklistRecord blacklist = findBlacklist(player.getId(), player.getName());
         if (blacklist != null && blacklist.isActive()) {
-            disallowPlayerLogin(event, Component.text(messageForBlacklist(player.getUniqueId(), player.getName())));
+            disallowPlayerLogin(event, PlayerLoginEvent.Result.KICK_BANNED, messageForBlacklist(player.getUniqueId(), player.getName()));
             return;
         }
 
         if (isDeniedByAccountStateStrict(player.getId(), player.getName(), loginPlatform)) {
-            disallowPlayerLogin(event, Component.text(getWhitelistKickMessage()));
+            disallowPlayerLogin(event, PlayerLoginEvent.Result.KICK_WHITELIST, getWhitelistKickMessage());
             return;
         }
 
@@ -3311,12 +3311,13 @@ public final class WebhookBridgeServiceImpl extends BaseService {
         event.disallow(result, message);
     }
 
-    @SuppressWarnings("UnstableApiUsage")
+    @SuppressWarnings("deprecation")
     private static void disallowPlayerLogin(
-        @NotNull PlayerConnectionValidateLoginEvent event,
-        @NotNull Component message
+        @NotNull PlayerLoginEvent event,
+        @NotNull PlayerLoginEvent.Result result,
+        @NotNull String message
     ) {
-        event.kickMessage(message);
+        event.disallow(result, message);
     }
 
     private String formatHistoryEntry(WebhookHistoryEntry entry) {
