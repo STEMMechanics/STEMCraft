@@ -1,6 +1,7 @@
 package dev.stemcraft.service.resourcepack;
 
 import dev.stemcraft.api.config.ConfigSectionView;
+import dev.stemcraft.api.service.resourcepack.PackFormatRange;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -74,5 +75,22 @@ class ResourcePackServiceImplTest {
         assertEquals(75, supportedRange[0]);
         assertEquals(75, supportedRange[1]);
         assertEquals(1, warnings.size());
+    }
+
+    @Test
+    void planFutureSegmentsSplitsRangesWhereGeneratorCompatibilityChanges() {
+        List<PackFormatRange> plannedRanges = ResourcePackServiceImpl.planFutureSegments(
+            75,
+            List.of(
+                List.of(new PackFormatRange(64, 75)),
+                List.of(new PackFormatRange(64, 75), new PackFormatRange(80, 85)),
+                List.of(new PackFormatRange(64, 82))
+            )
+        );
+
+        assertEquals(3, plannedRanges.size());
+        assertEquals(new PackFormatRange(76, 79), plannedRanges.get(0));
+        assertEquals(new PackFormatRange(80, 82), plannedRanges.get(1));
+        assertEquals(new PackFormatRange(83, 85), plannedRanges.get(2));
     }
 }

@@ -27,10 +27,13 @@ import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.config.ConfigSectionView;
+import dev.stemcraft.api.service.resourcepack.PackFormatRange;
 import dev.stemcraft.api.service.resourcepack.ResourcePackHost;
+import dev.stemcraft.api.service.resourcepack.ResourcePackBuildContext;
 import dev.stemcraft.api.service.resourcepack.ResourcePackService;
 import dev.stemcraft.api.service.resourcepack.generator.ResourcePackGenerator;
 import dev.stemcraft.api.util.FileUtil;
+import dev.stemcraft.exception.ResourcePackGeneratorException;
 import dev.stemcraft.service.BaseService;
 import dev.stemcraft.service.resourcepack.generators.GlyphGenerator;
 import dev.stemcraft.service.resourcepack.generators.MinecraftPackGenerator;
@@ -71,8 +74,11 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
     private int minSupportedVersion;
     private int maxSupportedVersion;
     private final int currentMinecraftFormatVersion;
+    private PackFormatRange baseSupportedRange;
+    private List<PlannedBuildSegment> plannedBuildSegments = List.of();
     private record BedrockGlyphAsset(Path image, int javaHeight, int bedrockHeight, boolean autoScale, double scale, int yOffset) {}
     private record ResourcePackFormatVersion(int[] minecraftVersion, int formatVersion) {}
+    private record PlannedBuildSegment(ResourcePackBuildContext context, List<ResourcePackGenerator> generators) {}
 
     private static final List<ResourcePackFormatVersion> RESOURCE_PACK_FORMAT_VERSIONS = List.of(
         new ResourcePackFormatVersion(new int[] {1, 20, 5}, 32),
@@ -109,6 +115,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
         int[] supportedRange = resolveSupportedVersionRange(STEMCraft.getMinecraftVersion());
         minSupportedVersion = supportedRange[0];
         maxSupportedVersion = supportedRange[1];
+        baseSupportedRange = new PackFormatRange(minSupportedVersion, maxSupportedVersion);
 
         if (isMinecraftVersionBeyondKnownRange(STEMCraft.getMinecraftVersion())) {
             plugin.getLogger().warning(
@@ -190,13 +197,16 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
         }
 
         if(generator.onLoad(getConfig())) {
-            int[] nextSupportedRange = applyGeneratorSupportedVersion(generator);
-            if (nextSupportedRange == null) {
+            if (!supportsCurrentMinecraftFormat(generator)) {
+                plugin.getLogger().warning(
+                    "[resource-pack] Skipping generator "
+                        + generator.getClass().getSimpleName()
+                        + " because it does not support the current server pack format "
+                        + currentMinecraftFormatVersion
+                        + "."
+                );
                 return;
             }
-
-            minSupportedVersion = nextSupportedRange[0];
-            maxSupportedVersion = nextSupportedRange[1];
             generators.add(generator);
             generatorsByType.put(generator.getClass(), generator);
             attemptPendingGeneratorRegistrations();
@@ -291,6 +301,8 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
      * @param statusCallback Optional callback to receive status updates.
      */
     public void generatePack(@Nullable Consumer<String> statusCallback) {
+        recalculateSupportedVersionRange();
+
         // clear previous resource pack
         File existingZip = plugin.getDataFolder().toPath().resolve("resource-pack.zip").toFile();
         if(existingZip.exists() && !existingZip.delete()) {
@@ -328,89 +340,16 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
             return;
         }
 
-        // buildStart
-        for(ResourcePackGenerator generator : generators) {
-            generator.buildStart(manifest, tempPackDir);
+        if (plannedBuildSegments.isEmpty()) {
+            api.messages().error("Failed to plan resource pack build segments");
+            if (statusCallback != null) { statusCallback.accept("error"); }
+            return;
         }
 
-        // iterate each data pack directory
         if(statusCallback != null) { statusCallback.accept("generating"); }
-        for (File dataPackDir : dataPackDirs) {
-            int tokensBefore = countTokens(manifest);
-            int filesBefore = countFiles(tempPackDir);
-            File contentsDir = new File(dataPackDir, "contents");
-            if (contentsDir.exists() && contentsDir.isDirectory()) {
-                // buildFromDataPack should run even if there is no configs/ directory.
-                for(ResourcePackGenerator generator : generators) {
-                    generator.buildFromDataPack(contentsDir, manifest, tempPackDir);
-                }
-            } else {
-                plugin.getLogger().info(
-                    "[resource-pack] Pack '" + dataPackDir.getName() + "': no contents/ directory " +
-                    "(" + new File(dataPackDir, "contents").getAbsolutePath() + ")"
-                );
-            }
-
-            // iterate YAML configs from the data-pack location
-            List<File> configFiles = collectPackConfigFiles(dataPackDir);
-
-            if (configFiles.isEmpty()) {
-                int tokensAfter = countTokens(manifest);
-                int filesAfter = countFiles(tempPackDir);
-                plugin.getLogger().info(
-                    "[resource-pack] Pack '" + dataPackDir.getName() + "': +" +
-                    (filesAfter - filesBefore) + " files, +" + (tokensAfter - tokensBefore) +
-                    " glyph tokens (no config files)"
-                );
-                continue;
-            }
-
-            File[] namespaceDirs = contentsDir.exists() ? contentsDir.listFiles(file ->
-                file.isDirectory() && !file.getName().startsWith(".")
-            ) : null;
-
-            for(File file : configFiles) {
-                ConfigSection config = api.config().load(file);
-                if(config == null) {
-                    continue;
-                }
-
-                String namespace = config.getString("namespace");
-
-                if(!namespace.isEmpty()) {
-                    File namespaceDir = new File(contentsDir, namespace);
-                    if(!namespaceDir.exists() || !namespaceDir.isDirectory()) {
-                        continue;
-                    }
-
-                    for(ResourcePackGenerator generator : generators) {
-                        generator.buildFromDataPackConfig(namespace, config, namespaceDir, manifest, tempPackDir);
-                    }
-                    continue;
-                }
-
-                if (namespaceDirs == null) {
-                    continue;
-                }
-
-                for (File namespaceDir : namespaceDirs) {
-                    for(ResourcePackGenerator generator : generators) {
-                        generator.buildFromDataPackConfig(namespaceDir.getName(), config, namespaceDir, manifest, tempPackDir);
-                    }
-                }
-            }
-
-            int tokensAfter = countTokens(manifest);
-            int filesAfter = countFiles(tempPackDir);
-            plugin.getLogger().info(
-                "[resource-pack] Pack '" + dataPackDir.getName() + "': +" +
-                (filesAfter - filesBefore) + " files, +" + (tokensAfter - tokensBefore) + " glyph tokens"
-            );
-        }
-
-        // buildEnd
-        for(ResourcePackGenerator generator : generators) {
-            generator.buildEnd(manifest, tempPackDir);
+        for (PlannedBuildSegment segment : plannedBuildSegments) {
+            File segmentRoot = resolveSegmentRoot(tempPackDir, segment.context());
+            buildSegment(segment, dataPackDirs, manifest, segmentRoot);
         }
 
         copyJavaPackIcon(tempPackDir);
@@ -443,6 +382,119 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
         if(statusCallback != null) { statusCallback.accept("complete"); }
     }
 
+    private void buildSegment(@NotNull PlannedBuildSegment segment,
+                              @NotNull File[] dataPackDirs,
+                              @NotNull ConfigSection manifest,
+                              @NotNull File segmentRoot) {
+        ResourcePackBuildContext context = segment.context();
+        List<ResourcePackGenerator> segmentGenerators = segment.generators();
+
+        for(ResourcePackGenerator generator : segmentGenerators) {
+            generator.buildStart(context, manifest, segmentRoot);
+        }
+
+        for (File dataPackDir : dataPackDirs) {
+            int tokensBefore = countTokens(manifest);
+            int filesBefore = countFiles(segmentRoot);
+            File contentsDir = new File(dataPackDir, "contents");
+            if (contentsDir.exists() && contentsDir.isDirectory()) {
+                for(ResourcePackGenerator generator : segmentGenerators) {
+                    generator.buildFromDataPack(context, contentsDir, manifest, segmentRoot);
+                }
+            } else {
+                plugin.getLogger().info(
+                    "[resource-pack] Segment '" + segmentLabel(context) + "', pack '" + dataPackDir.getName() + "': no contents/ directory " +
+                    "(" + new File(dataPackDir, "contents").getAbsolutePath() + ")"
+                );
+            }
+
+            List<File> configFiles = collectPackConfigFiles(dataPackDir);
+
+            if (configFiles.isEmpty()) {
+                int tokensAfter = countTokens(manifest);
+                int filesAfter = countFiles(segmentRoot);
+                plugin.getLogger().info(
+                    "[resource-pack] Segment '" + segmentLabel(context) + "', pack '" + dataPackDir.getName() + "': +" +
+                    (filesAfter - filesBefore) + " files, +" + (tokensAfter - tokensBefore) +
+                    " glyph tokens (no config files)"
+                );
+                continue;
+            }
+
+            File[] namespaceDirs = contentsDir.exists() ? contentsDir.listFiles(file ->
+                file.isDirectory() && !file.getName().startsWith(".")
+            ) : null;
+
+            for(File file : configFiles) {
+                ConfigSection config = api.config().load(file);
+                if(config == null) {
+                    continue;
+                }
+
+                String namespace = config.getString("namespace");
+
+                if(!namespace.isEmpty()) {
+                    File namespaceDir = new File(contentsDir, namespace);
+                    if(!namespaceDir.exists() || !namespaceDir.isDirectory()) {
+                        continue;
+                    }
+
+                    for(ResourcePackGenerator generator : segmentGenerators) {
+                        generator.buildFromDataPackConfig(context, namespace, config, namespaceDir, manifest, segmentRoot);
+                    }
+                    continue;
+                }
+
+                if (namespaceDirs == null) {
+                    continue;
+                }
+
+                for (File namespaceDir : namespaceDirs) {
+                    for(ResourcePackGenerator generator : segmentGenerators) {
+                        generator.buildFromDataPackConfig(context, namespaceDir.getName(), config, namespaceDir, manifest, segmentRoot);
+                    }
+                }
+            }
+
+            int tokensAfter = countTokens(manifest);
+            int filesAfter = countFiles(segmentRoot);
+            plugin.getLogger().info(
+                "[resource-pack] Segment '" + segmentLabel(context) + "', pack '" + dataPackDir.getName() + "': +" +
+                (filesAfter - filesBefore) + " files, +" + (tokensAfter - tokensBefore) + " glyph tokens"
+            );
+        }
+
+        for(ResourcePackGenerator generator : segmentGenerators) {
+            generator.buildEnd(context, manifest, segmentRoot);
+        }
+    }
+
+    private @NotNull File resolveSegmentRoot(@NotNull File tempPackDir, @NotNull ResourcePackBuildContext context) {
+        if (!context.overlay()) {
+            return tempPackDir;
+        }
+
+        File overlayRoot = tempPackDir.toPath()
+            .resolve("overlays")
+            .resolve(Objects.requireNonNull(context.overlayDirectory()))
+            .toFile();
+
+        if (!overlayRoot.exists() && !overlayRoot.mkdirs() && !overlayRoot.exists()) {
+            throw new ResourcePackGeneratorException("Failed to create overlay directory " + overlayRoot);
+        }
+
+        return overlayRoot;
+    }
+
+    private @NotNull String segmentLabel(@NotNull ResourcePackBuildContext context) {
+        if (!context.overlay()) {
+            return "base:" + context.supportedRange().minFormat() + "-" + context.supportedRange().maxFormat();
+        }
+
+        return Objects.requireNonNull(context.overlayDirectory()) + ":"
+            + context.supportedRange().minFormat() + "-" + context.supportedRange().maxFormat();
+    }
+
     /**
      * Gets the format version of the resource pack.
      *
@@ -451,6 +503,18 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
     @Override
     public int[] supportedVersion() {
         return new int[] { minSupportedVersion, maxSupportedVersion };
+    }
+
+    @Override
+    public @NotNull PackFormatRange supportedRange() {
+        return baseSupportedRange;
+    }
+
+    @Override
+    public @NotNull List<ResourcePackBuildContext> buildPlan() {
+        return plannedBuildSegments.stream()
+            .map(PlannedBuildSegment::context)
+            .toList();
     }
 
     static int resolveResourcePackFormat(@Nullable int[] minecraftVersion) {
@@ -543,69 +607,29 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
         ) > 0;
     }
 
-    private @Nullable int[] applyGeneratorSupportedVersion(@NotNull ResourcePackGenerator generator) {
-        return applyGeneratorSupportedVersion(generator, minSupportedVersion, maxSupportedVersion);
+    private boolean supportsCurrentMinecraftFormat(@NotNull ResourcePackGenerator generator) {
+        for (PackFormatRange supportedRange : generator.supportedRanges()) {
+            if (supportedRange.contains(currentMinecraftFormatVersion)) {
+                return true;
+            }
+        }
+        return false;
     }
 
-    private @Nullable int[] applyGeneratorSupportedVersion(@NotNull ResourcePackGenerator generator,
-                                                           int currentMinSupportedVersion,
-                                                           int currentMaxSupportedVersion) {
-        int[] supportedVersions = generator.supportedVersion();
-        if (supportedVersions.length == 0) {
-            return new int[] { currentMinSupportedVersion, currentMaxSupportedVersion };
+    private @Nullable PackFormatRange selectBaseRange(@NotNull ResourcePackGenerator generator,
+                                                      @NotNull PackFormatRange currentBaseRange) {
+        PackFormatRange selectedRange = null;
+        for (PackFormatRange supportedRange : generator.supportedRanges()) {
+            if (!supportedRange.contains(currentMinecraftFormatVersion)) {
+                continue;
+            }
+
+            PackFormatRange clippedRange = supportedRange.intersection(currentBaseRange);
+            if (selectedRange == null || clippedRange.minFormat() > selectedRange.minFormat()) {
+                selectedRange = clippedRange;
+            }
         }
-
-        int generatorMinSupportedVersion = supportedVersions[0];
-        int generatorMaxSupportedVersion = supportedVersions.length > 1 ? supportedVersions[1] : generatorMinSupportedVersion;
-
-        if (generatorMaxSupportedVersion > 0
-                && generatorMinSupportedVersion > generatorMaxSupportedVersion) {
-            plugin.getLogger().warning(
-                "[resource-pack] Skipping generator "
-                    + generator.getClass().getSimpleName()
-                    + " because it declared an invalid supported pack format range ["
-                    + generatorMinSupportedVersion
-                    + ", "
-                    + generatorMaxSupportedVersion
-                    + "]."
-            );
-            return null;
-        }
-
-        if (generatorMaxSupportedVersion > 0 && generatorMaxSupportedVersion < currentMinecraftFormatVersion) {
-            plugin.getLogger().warning(
-                "[resource-pack] Skipping generator "
-                    + generator.getClass().getSimpleName()
-                    + " because it only supports pack format "
-                    + generatorMaxSupportedVersion
-                    + " while the current server requires pack format "
-                    + currentMinecraftFormatVersion
-                    + ". Update the generator for Minecraft "
-                    + Bukkit.getMinecraftVersion()
-                    + "."
-            );
-            return null;
-        }
-
-        if (generatorMinSupportedVersion > 0 && generatorMinSupportedVersion > currentMaxSupportedVersion) {
-            plugin.getLogger().warning(
-                "[resource-pack] Skipping generator "
-                    + generator.getClass().getSimpleName()
-                    + " because it requires pack format "
-                    + generatorMinSupportedVersion
-                    + " but the current maximum supported format is "
-                    + currentMaxSupportedVersion
-                    + "."
-            );
-            return null;
-        }
-
-        return new int[] {
-            generatorMinSupportedVersion > 0
-                ? Math.max(currentMinSupportedVersion, generatorMinSupportedVersion)
-                : currentMinSupportedVersion,
-            currentMaxSupportedVersion
-        };
+        return selectedRange;
     }
 
     private @NotNull List<String> missingRequiredGenerators(@NotNull ResourcePackGenerator generator) {
@@ -635,18 +659,23 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
                     continue;
                 }
 
-                int[] nextSupportedRange = applyGeneratorSupportedVersion(generator);
-                if (nextSupportedRange == null) {
+                if (!supportsCurrentMinecraftFormat(generator)) {
+                    plugin.getLogger().warning(
+                        "[resource-pack] Skipping generator "
+                            + generator.getClass().getSimpleName()
+                            + " because it does not support the current server pack format "
+                            + currentMinecraftFormatVersion
+                            + "."
+                    );
                     continue;
                 }
-
-                minSupportedVersion = nextSupportedRange[0];
-                maxSupportedVersion = nextSupportedRange[1];
                 generators.add(generator);
                 generatorsByType.put(generator.getClass(), generator);
                 progress = true;
             }
         } while (progress);
+
+        recalculateSupportedVersionRange();
     }
 
     private void logPendingGenerators() {
@@ -672,25 +701,164 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
             warning -> plugin.getLogger().warning(warning)
         );
 
-        int nextMinSupportedVersion = supportedRange[0];
-        int nextMaxSupportedVersion = supportedRange[1];
+        PackFormatRange nextBaseRange = new PackFormatRange(supportedRange[0], supportedRange[1]);
 
         for (ResourcePackGenerator generator : generators) {
-            int[] nextSupportedRange = applyGeneratorSupportedVersion(
-                generator,
-                nextMinSupportedVersion,
-                nextMaxSupportedVersion
-            );
-            if (nextSupportedRange == null) {
+            PackFormatRange generatorBaseRange = selectBaseRange(generator, nextBaseRange);
+            if (generatorBaseRange == null) {
+                plugin.getLogger().warning(
+                    "[resource-pack] Generator "
+                        + generator.getClass().getSimpleName()
+                        + " no longer supports the current server pack format "
+                        + currentMinecraftFormatVersion
+                        + "."
+                );
                 continue;
             }
 
-            nextMinSupportedVersion = nextSupportedRange[0];
-            nextMaxSupportedVersion = nextSupportedRange[1];
+            nextBaseRange = nextBaseRange.intersection(generatorBaseRange);
         }
 
-        minSupportedVersion = nextMinSupportedVersion;
-        maxSupportedVersion = nextMaxSupportedVersion;
+        baseSupportedRange = nextBaseRange;
+        minSupportedVersion = nextBaseRange.minFormat();
+        maxSupportedVersion = nextBaseRange.maxFormat();
+        plannedBuildSegments = planBuildSegments(nextBaseRange);
+    }
+
+    private @NotNull List<PlannedBuildSegment> planBuildSegments(@NotNull PackFormatRange baseRange) {
+        List<PlannedBuildSegment> segments = new ArrayList<>();
+        ResourcePackBuildContext baseContext = new ResourcePackBuildContext(
+            baseRange,
+            currentMinecraftFormatVersion,
+            false,
+            null
+        );
+        segments.add(new PlannedBuildSegment(baseContext, resolveSegmentGenerators(baseRange)));
+
+        List<PackFormatRange> futureRanges = planFutureSegments(
+            currentMinecraftFormatVersion,
+            generators.stream().map(ResourcePackGenerator::supportedRanges).toList()
+        );
+
+        for (PackFormatRange futureRange : futureRanges) {
+            List<ResourcePackGenerator> segmentGenerators = resolveSegmentGenerators(futureRange);
+            if (segmentGenerators.isEmpty()) {
+                continue;
+            }
+
+            segments.add(new PlannedBuildSegment(
+                new ResourcePackBuildContext(
+                    futureRange,
+                    futureRange.maxFormat(),
+                    true,
+                    overlayDirectoryName(futureRange)
+                ),
+                segmentGenerators
+            ));
+        }
+
+        return List.copyOf(segments);
+    }
+
+    static @NotNull List<PackFormatRange> planFutureSegments(int currentFormat,
+                                                             @NotNull List<List<PackFormatRange>> generatorRanges) {
+        SortedSet<Integer> boundaries = new TreeSet<>();
+
+        for (List<PackFormatRange> ranges : generatorRanges) {
+            for (PackFormatRange range : ranges) {
+                int futureMin = Math.max(range.minFormat(), currentFormat + 1);
+                if (futureMin > range.maxFormat()) {
+                    continue;
+                }
+
+                boundaries.add(futureMin);
+                boundaries.add(range.maxFormat() + 1);
+            }
+        }
+
+        if (boundaries.size() < 2) {
+            return List.of();
+        }
+
+        List<Integer> sortedBoundaries = new ArrayList<>(boundaries);
+        List<PackFormatRange> ranges = new ArrayList<>();
+
+        for (int i = 0; i < sortedBoundaries.size() - 1; i++) {
+            int minFormat = sortedBoundaries.get(i);
+            int maxFormat = sortedBoundaries.get(i + 1) - 1;
+            if (minFormat > maxFormat) {
+                continue;
+            }
+
+            PackFormatRange candidate = new PackFormatRange(minFormat, maxFormat);
+            boolean covered = false;
+            for (List<PackFormatRange> generatorSupportedRanges : generatorRanges) {
+                if (supportsRange(generatorSupportedRanges, candidate)) {
+                    covered = true;
+                    break;
+                }
+            }
+
+            if (covered) {
+                ranges.add(candidate);
+            }
+        }
+
+        return List.copyOf(ranges);
+    }
+
+    private @NotNull List<ResourcePackGenerator> resolveSegmentGenerators(@NotNull PackFormatRange segmentRange) {
+        List<ResourcePackGenerator> compatibleGenerators = new ArrayList<>();
+        for (ResourcePackGenerator generator : generators) {
+            if (supportsRange(generator.supportedRanges(), segmentRange)) {
+                compatibleGenerators.add(generator);
+            }
+        }
+
+        boolean changed;
+        do {
+            changed = false;
+            Iterator<ResourcePackGenerator> iterator = compatibleGenerators.iterator();
+            while (iterator.hasNext()) {
+                ResourcePackGenerator generator = iterator.next();
+                boolean dependenciesSatisfied = true;
+                for (Class<? extends ResourcePackGenerator> requiredGenerator : generator.requiredGenerators()) {
+                    boolean present = false;
+                    for (ResourcePackGenerator candidate : compatibleGenerators) {
+                        if (requiredGenerator.isInstance(candidate)) {
+                            present = true;
+                            break;
+                        }
+                    }
+                    if (!present) {
+                        dependenciesSatisfied = false;
+                        break;
+                    }
+                }
+
+                if (!dependenciesSatisfied) {
+                    iterator.remove();
+                    changed = true;
+                }
+            }
+        } while (changed);
+
+        return List.copyOf(compatibleGenerators);
+    }
+
+    private static boolean supportsRange(@NotNull List<PackFormatRange> supportedRanges,
+                                         @NotNull PackFormatRange targetRange) {
+        for (PackFormatRange supportedRange : supportedRanges) {
+            if (supportedRange.minFormat() <= targetRange.minFormat()
+                && supportedRange.maxFormat() >= targetRange.maxFormat()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static @NotNull String overlayDirectoryName(@NotNull PackFormatRange range) {
+        return "overlay_" + range.minFormat() + "_" + range.maxFormat();
     }
 
     private static int compareMinecraftVersions(int @NotNull [] left, int @NotNull [] right) {

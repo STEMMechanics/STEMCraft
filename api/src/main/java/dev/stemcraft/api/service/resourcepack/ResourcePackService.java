@@ -7,6 +7,7 @@ import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
 import java.io.File;
+import java.util.List;
 import java.util.function.Consumer;
 
 /**
@@ -82,4 +83,19 @@ public interface ResourcePackService {
      * @return The supported format version of the resource pack.
      */
     int[] supportedVersion();
+
+    /**
+     * Gets the supported format range for the main pack target.
+     *
+     * @return The supported format range for the base pack.
+     */
+    @NotNull PackFormatRange supportedRange();
+
+    /**
+     * Gets the planned build contexts for the current pack build. The first
+     * entry is always the base pack, followed by overlay segments.
+     *
+     * @return The planned build contexts.
+     */
+    @NotNull List<ResourcePackBuildContext> buildPlan();
 }

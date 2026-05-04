@@ -246,8 +246,13 @@ public class GlyphGenerator extends ResourcePackGenerator {
                 continue;
             }
             String tokenName = deriveGeneratedTokenName(texturesDir, pngFile, namePrefix);
+            int glyphCodePoint = parseCodePoint(manifest.getString("tokens." + tokenName, ""), -1);
 
-            while (reservedCodePoints.contains(nextCodePoint)) {
+            if (glyphCodePoint < 0) {
+                while (reservedCodePoints.contains(nextCodePoint)) {
+                    nextCodePoint++;
+                }
+                glyphCodePoint = nextCodePoint;
                 nextCodePoint++;
             }
 
@@ -257,14 +262,13 @@ public class GlyphGenerator extends ResourcePackGenerator {
             provider.addProperty("ascent", ascent);
             provider.addProperty("height", height);
             JsonArray chars = new JsonArray();
-            chars.add(new String(Character.toChars(nextCodePoint)));
+            chars.add(new String(Character.toChars(glyphCodePoint)));
             provider.add("chars", chars);
             providers.add(provider);
 
             writeTokenMeta(manifest, tokenName, namespace, relative, ascent, height, section);
-            manifest.set("tokens." + tokenName, new String(Character.toChars(nextCodePoint)));
-            reservedCodePoints.add(nextCodePoint);
-            nextCodePoint++;
+            manifest.set("tokens." + tokenName, new String(Character.toChars(glyphCodePoint)));
+            reservedCodePoints.add(glyphCodePoint);
         }
 
         try {
