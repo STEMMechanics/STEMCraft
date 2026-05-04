@@ -453,7 +453,7 @@ public final class WebhookBridgeServiceImpl extends BaseService {
             return;
         }
 
-        if (isDeniedByAccountStateStrict(player.getId(), player.getName(), loginPlatform)) {
+        if (!isWhitelistedByAccountState(player.getId(), player.getName(), loginPlatform)) {
             disallowPlayerLogin(event, Component.text(getWhitelistKickMessage()));
             return;
         }
