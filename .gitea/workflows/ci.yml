@@ -2,14 +2,35 @@ name: CI
 
 on:
   pull_request:
+    paths:
+      - 'api/**'
+      - 'plugin/**'
+      - 'gradle/**'
+      - 'build.gradle'
+      - 'buildSource.gradle'
+      - 'gradle.properties'
+      - 'settings.gradle'
+      - 'gradlew'
+      - 'gradlew.bat'
   push:
-    branches: [ main, dev ]
+    branches: [ '**' ]
+    paths:
+      - 'api/**'
+      - 'plugin/**'
+      - 'gradle/**'
+      - 'build.gradle'
+      - 'buildSource.gradle'
+      - 'gradle.properties'
+      - 'settings.gradle'
+      - 'gradlew'
+      - 'gradlew.bat'
 
 permissions: read-all
 
 jobs:
   build-and-test:
     name: Test and Build Plugin and API JARs
+    if: ${{ gitea.event_name != 'push' || gitea.ref_name == 'dev' || gitea.ref_name == gitea.event.repository.default_branch || gitea.ref_name == github.event.repository.default_branch }}
     runs-on: ubuntu-latest
     
     steps:
