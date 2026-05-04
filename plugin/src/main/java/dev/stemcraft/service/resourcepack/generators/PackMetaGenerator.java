@@ -19,9 +19,6 @@ import java.nio.file.Path;
  * Generates the pack.mcmeta file for a Minecraft resource pack.
  */
 public class PackMetaGenerator extends ResourcePackGenerator {
-    private static final int DEFAULT_MIN_PACK_VERSION = 64;
-    private static final int DEFAULT_MAX_PACK_VERSION = 84;
-
     /**
      * Constructs a PackMetaGenerator with the given STEMCraftAPI instance.
      *
@@ -68,12 +65,17 @@ public class PackMetaGenerator extends ResourcePackGenerator {
      * @author ProjectHSI
      */
     private void addPackVersionToMetadata(@NotNull final ConfigSectionView config, @NotNull final JsonObject packJson) {
-        final int minPackFormat = config.getInt("min_pack_format", DEFAULT_MIN_PACK_VERSION);
-        final int maxPackFormat = config.getInt("max_pack_format", DEFAULT_MAX_PACK_VERSION);
-        packJson.addProperty("min_format", minPackFormat);
-        packJson.addProperty("max_format", maxPackFormat);
+        final int[] supportedVersions = service.supportedVersion();
+        final int minPackFormat = supportedVersions.length > 0 ? supportedVersions[0] : 0;
+        final int maxPackFormat = supportedVersions.length > 1 ? supportedVersions[1] : minPackFormat;
+        if (maxPackFormat >= 65) {
+            packJson.addProperty("min_format", minPackFormat);
+            packJson.addProperty("max_format", maxPackFormat);
 
-        if (minPackFormat < 65) {
+            if (minPackFormat < 65) {
+                addLegacyPackVersionToMetadata(packJson, minPackFormat, 64);
+            }
+        } else {
             addLegacyPackVersionToMetadata(packJson, minPackFormat, maxPackFormat);
         }
     }
@@ -89,7 +91,7 @@ public class PackMetaGenerator extends ResourcePackGenerator {
      */
     private void addLegacyPackVersionToMetadata(@NotNull final JsonObject packJson,
                                                 final int minPackFormat, final int maxPackFormat) {
-        packJson.addProperty("pack_format", minPackFormat);
+        packJson.addProperty("pack_format", maxPackFormat);
 
         final JsonArray supportedFormats = new JsonArray();
         supportedFormats.add(minPackFormat);

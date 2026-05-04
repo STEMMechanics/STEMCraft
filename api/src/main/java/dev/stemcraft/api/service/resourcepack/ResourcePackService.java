@@ -50,6 +50,14 @@ public interface ResourcePackService {
     void registerGenerator(@NotNull ResourcePackGenerator generator);
 
     /**
+     * Checks whether a compatible resource pack generator has been loaded.
+     *
+     * @param generatorType The generator type to check.
+     * @return true if the generator is loaded, false otherwise.
+     */
+    boolean hasGenerator(@NotNull Class<? extends ResourcePackGenerator> generatorType);
+
+    /**
      * Sends the resource pack to the specified player.
      *
      * @param audience The player to send the resource pack to.
@@ -67,4 +75,11 @@ public interface ResourcePackService {
      * @param statusCallback A consumer to receive status updates during generation.
      */
     void generatePack(@Nullable Consumer<@NotNull String> statusCallback);
+
+    /**
+     * Gets the format version of the resource pack.
+     *
+     * @return The supported format version of the resource pack.
+     */
+    int[] supportedVersion();
 }

@@ -68,13 +68,31 @@ import java.util.zip.ZipOutputStream;
  * sending to players.
  */
 public class ResourcePackServiceImpl extends BaseService implements ResourcePackService {
+    private int minSupportedVersion;
+    private int maxSupportedVersion;
+    private final int currentMinecraftFormatVersion;
     private record BedrockGlyphAsset(Path image, int javaHeight, int bedrockHeight, boolean autoScale, double scale, int yOffset) {}
+    private record ResourcePackFormatVersion(int[] minecraftVersion, int formatVersion) {}
+
+    private static final List<ResourcePackFormatVersion> RESOURCE_PACK_FORMAT_VERSIONS = List.of(
+        new ResourcePackFormatVersion(new int[] {1, 20, 5}, 32),
+        new ResourcePackFormatVersion(new int[] {1, 21, 0}, 34),
+        new ResourcePackFormatVersion(new int[] {1, 21, 2}, 42),
+        new ResourcePackFormatVersion(new int[] {1, 21, 4}, 46),
+        new ResourcePackFormatVersion(new int[] {1, 21, 5}, 55),
+        new ResourcePackFormatVersion(new int[] {1, 21, 6}, 63),
+        new ResourcePackFormatVersion(new int[] {1, 21, 7}, 64),
+        new ResourcePackFormatVersion(new int[] {1, 21, 9}, 69),
+        new ResourcePackFormatVersion(new int[] {1, 21, 11}, 75)
+    );
 
     private File dataPacksDir;
 
     private ResourcePackHostImpl host;
 
     private final List<ResourcePackGenerator> generators = new ArrayList<>();
+    private final Map<Class<? extends ResourcePackGenerator>, ResourcePackGenerator> generatorsByType = new LinkedHashMap<>();
+    private final List<ResourcePackGenerator> pendingGenerators = new ArrayList<>();
     private final Set<String> appliedManifestTokens = new HashSet<>();
     private String resourcePackHash = "";
 
@@ -86,6 +104,22 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
      */
     public ResourcePackServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
+
+        currentMinecraftFormatVersion = resolveResourcePackFormat(STEMCraft.getMinecraftVersion());
+        int[] supportedRange = resolveSupportedVersionRange(STEMCraft.getMinecraftVersion());
+        minSupportedVersion = supportedRange[0];
+        maxSupportedVersion = supportedRange[1];
+
+        if (isMinecraftVersionBeyondKnownRange(STEMCraft.getMinecraftVersion())) {
+            plugin.getLogger().warning(
+                "[resource-pack] Minecraft "
+                    + Bukkit.getMinecraftVersion()
+                    + " is newer than the latest known resource-pack format mapping. "
+                    + "Using pack format "
+                    + maxSupportedVersion
+                    + " until the mapping table is updated."
+            );
+        }
     }
 
     /**
@@ -99,6 +133,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
 
         host = new ResourcePackHostImpl(api, this);
         host.onEnable(getConfigSection());
+        recalculateSupportedVersionRange();
 
         ResourcePackCommand command = new ResourcePackCommand(api, this);
         command.onEnable();
@@ -109,6 +144,8 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
         registerGenerator(new PackMetaGenerator(api, this));
         registerGenerator(new GlyphGenerator(api, this));
         registerGenerator(new MinecraftPackGenerator(api, this));
+        attemptPendingGeneratorRegistrations();
+        logPendingGenerators();
 
         applyManifestTokensFromDisk();
     }
@@ -116,6 +153,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
     @Override
     public void onReload() {
         super.onReload();
+        recalculateSupportedVersionRange();
         applyManifestTokensFromDisk();
     }
 
@@ -134,9 +172,45 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
      * @param generator The resource pack generator to register.
      */
     public void registerGenerator(@NotNull ResourcePackGenerator generator) {
-        if(generator.onLoad(getConfig())) {
-            generators.add(generator);
+        if (hasGenerator(generator.getClass()) || pendingGenerators.contains(generator)) {
+            return;
         }
+
+        List<String> missingGenerators = missingRequiredGenerators(generator);
+        if (!missingGenerators.isEmpty()) {
+            plugin.getLogger().warning(
+                "[resource-pack] Delaying generator "
+                    + generator.getClass().getSimpleName()
+                    + " until required generators are loaded: "
+                    + String.join(", ", missingGenerators)
+                    + "."
+            );
+            pendingGenerators.add(generator);
+            return;
+        }
+
+        if(generator.onLoad(getConfig())) {
+            int[] nextSupportedRange = applyGeneratorSupportedVersion(generator);
+            if (nextSupportedRange == null) {
+                return;
+            }
+
+            minSupportedVersion = nextSupportedRange[0];
+            maxSupportedVersion = nextSupportedRange[1];
+            generators.add(generator);
+            generatorsByType.put(generator.getClass(), generator);
+            attemptPendingGeneratorRegistrations();
+        }
+    }
+
+    @Override
+    public boolean hasGenerator(@NotNull Class<? extends ResourcePackGenerator> generatorType) {
+        for (ResourcePackGenerator generator : generatorsByType.values()) {
+            if (generatorType.isInstance(generator)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -367,6 +441,268 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
         }
 
         if(statusCallback != null) { statusCallback.accept("complete"); }
+    }
+
+    /**
+     * Gets the format version of the resource pack.
+     *
+     * @return The supported format version of the resource pack.
+     */
+    @Override
+    public int[] supportedVersion() {
+        return new int[] { minSupportedVersion, maxSupportedVersion };
+    }
+
+    static int resolveResourcePackFormat(@Nullable int[] minecraftVersion) {
+        int resolvedFormat = RESOURCE_PACK_FORMAT_VERSIONS.getFirst().formatVersion();
+        if (minecraftVersion == null || minecraftVersion.length == 0) {
+            return resolvedFormat;
+        }
+
+        for (ResourcePackFormatVersion version : RESOURCE_PACK_FORMAT_VERSIONS) {
+            if (compareMinecraftVersions(minecraftVersion, version.minecraftVersion()) >= 0) {
+                resolvedFormat = version.formatVersion();
+            } else {
+                break;
+            }
+        }
+
+        return resolvedFormat;
+    }
+
+    static int[] resolveSupportedVersionRange(@Nullable int[] minecraftVersion) {
+        return new int[] {
+            RESOURCE_PACK_FORMAT_VERSIONS.getFirst().formatVersion(),
+            resolveResourcePackFormat(minecraftVersion)
+        };
+    }
+
+    static int[] resolveSupportedVersionRange(@Nullable int[] minecraftVersion,
+                                              @Nullable ConfigSectionView config,
+                                              @Nullable Consumer<String> warningCallback) {
+        int[] defaultRange = resolveSupportedVersionRange(minecraftVersion);
+        int minSupportedVersion = defaultRange[0];
+        int maxSupportedVersion = defaultRange[1];
+
+        if (config == null) {
+            return defaultRange;
+        }
+
+        int configuredMinSupportedVersion = config.getInt("min_pack_format", minSupportedVersion);
+        int configuredMaxSupportedVersion = config.getInt("max_pack_format", maxSupportedVersion);
+
+        if (configuredMinSupportedVersion < RESOURCE_PACK_FORMAT_VERSIONS.getFirst().formatVersion()) {
+            if (warningCallback != null) {
+                warningCallback.accept(
+                    "[resource-pack] Configured min_pack_format "
+                        + configuredMinSupportedVersion
+                        + " is below the earliest supported pack format "
+                        + RESOURCE_PACK_FORMAT_VERSIONS.getFirst().formatVersion()
+                        + ". Clamping to the earliest supported format."
+                );
+            }
+            configuredMinSupportedVersion = RESOURCE_PACK_FORMAT_VERSIONS.getFirst().formatVersion();
+        }
+
+        if (configuredMinSupportedVersion > maxSupportedVersion) {
+            if (warningCallback != null) {
+                warningCallback.accept(
+                    "[resource-pack] Configured min_pack_format "
+                        + configuredMinSupportedVersion
+                        + " is above the current Minecraft pack format "
+                        + maxSupportedVersion
+                        + ". Clamping to the current Minecraft pack format."
+                );
+            }
+            configuredMinSupportedVersion = maxSupportedVersion;
+        }
+
+        if (configuredMaxSupportedVersion != maxSupportedVersion && warningCallback != null) {
+            warningCallback.accept(
+                "[resource-pack] Configured max_pack_format "
+                    + configuredMaxSupportedVersion
+                    + " does not match the current Minecraft pack format "
+                    + maxSupportedVersion
+                    + ". The service must support the running server version, so max_pack_format is clamped to "
+                    + maxSupportedVersion
+                    + "."
+            );
+        }
+
+        return new int[] { configuredMinSupportedVersion, maxSupportedVersion };
+    }
+
+    private static boolean isMinecraftVersionBeyondKnownRange(@Nullable int[] minecraftVersion) {
+        if (minecraftVersion == null || minecraftVersion.length == 0) {
+            return false;
+        }
+
+        return compareMinecraftVersions(
+            minecraftVersion,
+            RESOURCE_PACK_FORMAT_VERSIONS.getLast().minecraftVersion()
+        ) > 0;
+    }
+
+    private @Nullable int[] applyGeneratorSupportedVersion(@NotNull ResourcePackGenerator generator) {
+        return applyGeneratorSupportedVersion(generator, minSupportedVersion, maxSupportedVersion);
+    }
+
+    private @Nullable int[] applyGeneratorSupportedVersion(@NotNull ResourcePackGenerator generator,
+                                                           int currentMinSupportedVersion,
+                                                           int currentMaxSupportedVersion) {
+        int[] supportedVersions = generator.supportedVersion();
+        if (supportedVersions.length == 0) {
+            return new int[] { currentMinSupportedVersion, currentMaxSupportedVersion };
+        }
+
+        int generatorMinSupportedVersion = supportedVersions[0];
+        int generatorMaxSupportedVersion = supportedVersions.length > 1 ? supportedVersions[1] : generatorMinSupportedVersion;
+
+        if (generatorMaxSupportedVersion > 0
+                && generatorMinSupportedVersion > generatorMaxSupportedVersion) {
+            plugin.getLogger().warning(
+                "[resource-pack] Skipping generator "
+                    + generator.getClass().getSimpleName()
+                    + " because it declared an invalid supported pack format range ["
+                    + generatorMinSupportedVersion
+                    + ", "
+                    + generatorMaxSupportedVersion
+                    + "]."
+            );
+            return null;
+        }
+
+        if (generatorMaxSupportedVersion > 0 && generatorMaxSupportedVersion < currentMinecraftFormatVersion) {
+            plugin.getLogger().warning(
+                "[resource-pack] Skipping generator "
+                    + generator.getClass().getSimpleName()
+                    + " because it only supports pack format "
+                    + generatorMaxSupportedVersion
+                    + " while the current server requires pack format "
+                    + currentMinecraftFormatVersion
+                    + ". Update the generator for Minecraft "
+                    + Bukkit.getMinecraftVersion()
+                    + "."
+            );
+            return null;
+        }
+
+        if (generatorMinSupportedVersion > 0 && generatorMinSupportedVersion > currentMaxSupportedVersion) {
+            plugin.getLogger().warning(
+                "[resource-pack] Skipping generator "
+                    + generator.getClass().getSimpleName()
+                    + " because it requires pack format "
+                    + generatorMinSupportedVersion
+                    + " but the current maximum supported format is "
+                    + currentMaxSupportedVersion
+                    + "."
+            );
+            return null;
+        }
+
+        return new int[] {
+            generatorMinSupportedVersion > 0
+                ? Math.max(currentMinSupportedVersion, generatorMinSupportedVersion)
+                : currentMinSupportedVersion,
+            currentMaxSupportedVersion
+        };
+    }
+
+    private @NotNull List<String> missingRequiredGenerators(@NotNull ResourcePackGenerator generator) {
+        List<Class<? extends ResourcePackGenerator>> requiredGenerators = generator.requiredGenerators();
+        List<String> missingGenerators = new ArrayList<>();
+        for (Class<? extends ResourcePackGenerator> requiredGenerator : requiredGenerators) {
+            if (!hasGenerator(requiredGenerator)) {
+                missingGenerators.add(requiredGenerator.getSimpleName());
+            }
+        }
+        return missingGenerators;
+    }
+
+    private void attemptPendingGeneratorRegistrations() {
+        boolean progress;
+        do {
+            progress = false;
+            Iterator<ResourcePackGenerator> iterator = pendingGenerators.iterator();
+            while (iterator.hasNext()) {
+                ResourcePackGenerator generator = iterator.next();
+                if (!missingRequiredGenerators(generator).isEmpty()) {
+                    continue;
+                }
+
+                iterator.remove();
+                if (!generator.onLoad(getConfig())) {
+                    continue;
+                }
+
+                int[] nextSupportedRange = applyGeneratorSupportedVersion(generator);
+                if (nextSupportedRange == null) {
+                    continue;
+                }
+
+                minSupportedVersion = nextSupportedRange[0];
+                maxSupportedVersion = nextSupportedRange[1];
+                generators.add(generator);
+                generatorsByType.put(generator.getClass(), generator);
+                progress = true;
+            }
+        } while (progress);
+    }
+
+    private void logPendingGenerators() {
+        for (ResourcePackGenerator generator : pendingGenerators) {
+            List<String> missingGenerators = missingRequiredGenerators(generator);
+
+            if (!missingGenerators.isEmpty()) {
+                plugin.getLogger().warning(
+                    "[resource-pack] Generator "
+                        + generator.getClass().getSimpleName()
+                        + " is still waiting on required generators: "
+                        + String.join(", ", missingGenerators)
+                        + "."
+                );
+            }
+        }
+    }
+
+    private void recalculateSupportedVersionRange() {
+        int[] supportedRange = resolveSupportedVersionRange(
+            STEMCraft.getMinecraftVersion(),
+            getConfig(),
+            warning -> plugin.getLogger().warning(warning)
+        );
+
+        int nextMinSupportedVersion = supportedRange[0];
+        int nextMaxSupportedVersion = supportedRange[1];
+
+        for (ResourcePackGenerator generator : generators) {
+            int[] nextSupportedRange = applyGeneratorSupportedVersion(
+                generator,
+                nextMinSupportedVersion,
+                nextMaxSupportedVersion
+            );
+            if (nextSupportedRange == null) {
+                continue;
+            }
+
+            nextMinSupportedVersion = nextSupportedRange[0];
+            nextMaxSupportedVersion = nextSupportedRange[1];
+        }
+
+        minSupportedVersion = nextMinSupportedVersion;
+        maxSupportedVersion = nextMaxSupportedVersion;
+    }
+
+    private static int compareMinecraftVersions(int @NotNull [] left, int @NotNull [] right) {
+        int maxLength = Math.max(left.length, right.length);
+        for (int i = 0; i < maxLength; i++) {
+            int leftValue = i < left.length ? left[i] : 0;
+            int rightValue = i < right.length ? right[i] : 0;
+            if (leftValue != rightValue) {
+                return Integer.compare(leftValue, rightValue);
+            }
+        }
+        return 0;
     }
 
     private void reloadGeyserAfterPackBuild() {

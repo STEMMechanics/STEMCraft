@@ -6,6 +6,7 @@ import dev.stemcraft.api.config.ConfigSectionView;
 import dev.stemcraft.api.service.resourcepack.ResourcePackService;
 
 import java.io.File;
+import java.util.List;
 
 public abstract class ResourcePackGenerator {
     protected final STEMCraftAPI api;
@@ -72,4 +73,40 @@ public abstract class ResourcePackGenerator {
      * @param manifest The manifest configuration section.
      */
     public void apply(String namespace, ConfigSectionView manifest) { }
+
+    /**
+     * Returns the supported Minecraft version range for this generator.
+     *
+     * @return The supported Minecraft version range.
+     */
+    public int[] supportedVersion() { return new int[] { 0, 0 }; }
+
+    /**
+     * Returns the generator classes that must already be loaded before this
+     * generator can be enabled.
+     *
+     * @return The required generator classes.
+     */
+    public List<Class<? extends ResourcePackGenerator>> requiredGenerators() {
+        return List.of();
+    }
+
+    /**
+     * Returns the currently supported resource-pack format range for the service.
+     *
+     * @return The supported resource-pack format range.
+     */
+    protected final int[] currentSupportedVersion() {
+        return service.supportedVersion();
+    }
+
+    /**
+     * Checks whether another resource-pack generator is loaded.
+     *
+     * @param generatorType The generator type to check.
+     * @return true if the generator is loaded, false otherwise.
+     */
+    protected final boolean hasGenerator(Class<? extends ResourcePackGenerator> generatorType) {
+        return service.hasGenerator(generatorType);
+    }
 }
