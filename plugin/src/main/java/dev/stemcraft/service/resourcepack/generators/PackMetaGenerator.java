@@ -68,8 +68,6 @@ public class PackMetaGenerator extends ResourcePackGenerator {
      *
      * @param supportedRange The Pack Format Range supported by the resource pack being generated.
      * @param packJson The Pack JSON Object to add the version information to.
-     *
-     * @author ProjectHSI
      */
     private void addPackVersionToMetadata(@NotNull final PackFormatRange supportedRange, @NotNull final JsonObject packJson) {
         final int minPackFormat = supportedRange.minFormat();
@@ -92,8 +90,6 @@ public class PackMetaGenerator extends ResourcePackGenerator {
      * @param packJson The Pack JSON Object to add the version information to.
      * @param minPackFormat The minimum pack format of the resource pack being generated.
      * @param maxPackFormat The maximum pack format of the resource pack being generated.
-     *
-     * @author ProjectHSI
      */
     private void addLegacyPackVersionToMetadata(@NotNull final JsonObject packJson,
                                                 final int minPackFormat, final int maxPackFormat) {
