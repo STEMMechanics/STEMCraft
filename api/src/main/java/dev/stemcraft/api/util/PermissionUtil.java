@@ -22,7 +22,9 @@ package dev.stemcraft.api.util;
 
 import net.luckperms.api.LuckPerms;
 import net.luckperms.api.LuckPermsProvider;
+import net.luckperms.api.model.group.Group;
 import net.luckperms.api.model.user.User;
+import net.luckperms.api.query.QueryOptions;
 import org.bukkit.Bukkit;
 
 import java.util.UUID;
@@ -62,5 +64,41 @@ public class PermissionUtil {
                 .getPermissionData()
                 .checkPermission(permission)
                 .asBoolean();
+    }
+
+    /**
+     * Checks if a player belongs to a LuckPerms group.
+     *
+     * @param uuid The UUID of the player.
+     * @param group The group name.
+     * @return True if the player belongs to the group, false otherwise.
+     */
+    public static boolean isInGroup(UUID uuid, String group) {
+        if(isLuckPermsInstalled == null) {
+            if (Bukkit.getPluginManager().getPlugin("LuckPerms") != null) {
+                isLuckPermsInstalled = true;
+                luckPermsApi = LuckPermsProvider.get();
+            } else {
+                isLuckPermsInstalled = false;
+            }
+        }
+
+        if(!isLuckPermsInstalled) {
+            return false;
+        }
+
+        User user = luckPermsApi.getUserManager().getUser(uuid);
+        if (user == null) return false;
+
+        QueryOptions queryOptions = luckPermsApi.getContextManager()
+            .getQueryOptions(user)
+            .orElseGet(() -> luckPermsApi.getContextManager().getStaticQueryOptions());
+        for (Group inheritedGroup : user.getInheritedGroups(queryOptions)) {
+            if (inheritedGroup.getName().equalsIgnoreCase(group)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

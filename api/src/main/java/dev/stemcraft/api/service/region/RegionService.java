@@ -21,12 +21,15 @@
 package dev.stemcraft.api.service.region;
 
 import dev.stemcraft.api.model.SCRegion;
+import dev.stemcraft.api.model.SCManagedRegion;
+import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
+import java.util.Collection;
 import java.util.Set;
 import java.util.UUID;
 
@@ -43,6 +46,15 @@ public interface RegionService {
      * @param listener The listener to handle region events.
      */
     void addListener(@NotNull String namespaceId, @NotNull SCRegion region, @NotNull RegionListener listener);
+
+    /**
+     * Adds a region listener for a managed region by its identifier.
+     *
+     * @param namespaceId The unique ID for the region listener.
+     * @param managedRegionId The managed region identifier to resolve.
+     * @param listener The listener to handle region events.
+     */
+    void addListener(@NotNull String namespaceId, @NotNull String managedRegionId, @NotNull RegionListener listener);
 
     /**
      * Adds a region listener for an entire world.
@@ -104,11 +116,102 @@ public interface RegionService {
     default @NotNull Set<String> getRegions(@NotNull LivingEntity livingEntity) { return getRegions(livingEntity.getUniqueId()); }
 
     /**
-     * Gets a region by its ID.
+     * Gets a managed region shape by world name and local region ID.
      *
-     * @param id The unique ID of the region.
+     * @param worldName The world name that owns the region.
+     * @param id The local managed region ID.
      * @return The SCRegion instance, or null if not found.
      */
     @Nullable
-    SCRegion getRegion(@NotNull String id);
+    SCRegion getRegion(@NotNull String worldName, @NotNull String id);
+    default @Nullable SCRegion getRegion(@NotNull World world, @NotNull String id) { return getRegion(world.getName(), id); }
+
+    /**
+     * Stores or updates a managed region definition.
+     *
+     * @param region The managed region definition to store.
+     */
+    void saveManagedRegion(@NotNull SCManagedRegion region);
+
+    /**
+     * Retrieves a managed region definition by its world name and local region ID.
+     *
+     * @param worldName The world name that owns the region.
+     * @param id The local managed region ID.
+     * @return The managed region definition, or null if not found.
+     */
+    @Nullable
+    SCManagedRegion getManagedRegion(@NotNull String worldName, @NotNull String id);
+    default @Nullable SCManagedRegion getManagedRegion(@NotNull World world, @NotNull String id) { return getManagedRegion(world.getName(), id); }
+
+    /**
+     * Checks whether a managed region exists in the given world.
+     *
+     * @param worldName The world name that owns the region.
+     * @param id The local managed region ID.
+     * @return True if the managed region exists, false otherwise.
+     */
+    boolean hasManagedRegion(@NotNull String worldName, @NotNull String id);
+    default boolean hasManagedRegion(@NotNull World world, @NotNull String id) { return hasManagedRegion(world.getName(), id); }
+
+    /**
+     * Removes a managed region definition from the given world.
+     *
+     * @param worldName The world name that owns the region.
+     * @param id The local managed region ID.
+     * @return True if a region was removed, false otherwise.
+     */
+    boolean removeManagedRegion(@NotNull String worldName, @NotNull String id);
+    default boolean removeManagedRegion(@NotNull World world, @NotNull String id) { return removeManagedRegion(world.getName(), id); }
+
+    /**
+     * Returns all managed region definitions known to the region service for one world.
+     *
+     * @param worldName The world name that owns the regions.
+     * @return The managed region definitions for the world.
+     */
+    @NotNull Collection<SCManagedRegion> getManagedRegions(@NotNull String worldName);
+    default @NotNull Collection<SCManagedRegion> getManagedRegions(@NotNull World world) { return getManagedRegions(world.getName()); }
+
+    /**
+     * Returns all managed regions that match the given location.
+     * <p>
+     * The returned collection is ordered from highest priority to lowest priority.
+     *
+     * @param location The location to resolve.
+     * @return The matching managed regions ordered by priority.
+     */
+    @NotNull Collection<SCManagedRegion> getManagedRegionsAt(@NotNull Location location);
+
+    /**
+     * Returns the highest-priority managed region that matches the given location.
+     *
+     * @param location The location to resolve.
+     * @return The highest-priority matching managed region, or null if none match.
+     */
+    @Nullable
+    SCManagedRegion getManagedRegionAt(@NotNull Location location);
+
+    /**
+     * Registers a pluggable extension for managed region data.
+     *
+     * @param extension The extension to register.
+     */
+    void registerExtension(@NotNull RegionExtension<?> extension);
+
+    /**
+     * Retrieves a registered managed-region extension by its key.
+     *
+     * @param key The extension key.
+     * @return The registered extension, or null if not found.
+     */
+    @Nullable
+    RegionExtension<?> getExtension(@NotNull String key);
+
+    /**
+     * Returns all registered managed-region extensions.
+     *
+     * @return The registered managed-region extensions.
+     */
+    @NotNull Collection<RegionExtension<?>> getExtensions();
 }
