@@ -362,6 +362,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
         return arena.getLobbySpawn();
     }
 
+    @Override
     public void onPlayerLeaveArena(MiniGameArena arena, Player player) {
         if (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING && arena.numPlayers() < arena.getMinPlayers()) {
             arena.setStatus(MiniGameArena.ArenaStatus.WAITING);

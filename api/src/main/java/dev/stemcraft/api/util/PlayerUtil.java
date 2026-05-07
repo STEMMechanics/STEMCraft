@@ -32,6 +32,7 @@ import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.SkullMeta;
+import org.bukkit.plugin.Plugin;
 import org.geysermc.geyser.api.GeyserApi;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -353,7 +354,8 @@ public class PlayerUtil {
 
         synchronized (PlayerUtil.class) {
             if (isGeyserInstalled == null) {
-                if (Bukkit.getPluginManager().getPlugin("Geyser-Spigot") != null) {
+                final @Nullable Plugin geyserPlugin = Bukkit.getPluginManager().getPlugin("Geyser-Spigot");
+                if (geyserPlugin != null && geyserPlugin.isEnabled()) {
                     geyserApi = GeyserApi.api();
                     isGeyserInstalled = true;
                 } else {
