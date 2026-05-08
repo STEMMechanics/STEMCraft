@@ -14,24 +14,24 @@ repositories {
     maven { url = uri("https://repo.papermc.io/repository/maven-public/") }
     maven { url = uri("https://repo.opencollab.dev/main/") }
     maven { url = uri("https://maven.enginehub.org/repo/") }
-    maven {
-        name = "papermc"
-        url = uri("https://repo.papermc.io/repository/maven-public/")
-    }
 }
 
 dependencies {
     //noinspection VulnerableLibrariesLocal
-    compileOnly("io.papermc.paper:paper-api:26.1.2.build.+")
+    compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
 
     // WorldEdit
-    compileOnly("com.sk89q.worldedit:worldedit-bukkit:7.4.2")
+    compileOnly("com.sk89q.worldedit:worldedit-bukkit:7.3.17")
 
     // GeyserMC API
     compileOnly('org.geysermc.geyser:api:2.9.0-SNAPSHOT')
 
     // LuckPerms
     compileOnly 'net.luckperms:api:5.4'
+
+    // Lombok
+    compileOnly "org.projectlombok:lombok:1.18.32"
+    annotationProcessor "org.projectlombok:lombok:1.18.32"
 
     // Jackson for JSON handling
     compileOnly("com.fasterxml.jackson.core:jackson-databind:2.21.1")
@@ -41,7 +41,7 @@ dependencies {
     testImplementation "org.junit.jupiter:junit-jupiter:5.11.0"
     testImplementation "org.mockito:mockito-core:5.12.0"
     //noinspection VulnerableLibrariesLocal
-    testImplementation "io.papermc.paper:paper-api:26.1.2.build.+"
+    testImplementation "io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT"
     //noinspection VulnerableLibrariesLocal
     testImplementation("org.mockbukkit.mockbukkit:mockbukkit-v1.21:4.108.0") {
         exclude group: "org.junit"
@@ -52,7 +52,7 @@ dependencies {
     testImplementation("com.google.code.gson:gson:2.11.0")
     testImplementation("org.geysermc.geyser:api:2.9.0-SNAPSHOT")
     testImplementation("net.luckperms:api:5.4")
-    testImplementation("com.sk89q.worldedit:worldedit-bukkit:7.4.3-SNAPSHOT")
+    testImplementation("com.sk89q.worldedit:worldedit-bukkit:7.3.17")
     testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.11.0"
 }
 
