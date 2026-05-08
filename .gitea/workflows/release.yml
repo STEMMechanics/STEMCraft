@@ -58,24 +58,18 @@ jobs:
         env:
           EVENT_NAME: ${{ gitea.event_name }}
           REF_NAME: ${{ gitea.ref_name }}
-          DEFAULT_BRANCH: ${{ gitea.event.repository.default_branch || github.event.repository.default_branch || '' }}
+          DEFAULT_BRANCH: ${{ gitea.event.repository.default_branch }}
           RUN_NUMBER: ${{ gitea.run_number }}
           INPUT_RELEASE: ${{ inputs.release || 'false' }}
           INPUT_BUILD_NAME: ${{ inputs.build_name || '' }}
         run: |
           set -eu
 
-          if [ -z "$DEFAULT_BRANCH" ]; then
-            DEFAULT_BRANCH="$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's#^refs/remotes/origin/##' || true)"
-          fi
-
-          if [ -z "$DEFAULT_BRANCH" ]; then
-            echo "Could not determine the repository default branch."
-            exit 1
-          fi
-
           SHOULD_RELEASE=false
-          if [ "$REF_NAME" = "$DEFAULT_BRANCH" ] && { [ "$EVENT_NAME" = "push" ] || [ "$INPUT_RELEASE" = "true" ]; }; then
+
+          if [ "$REF_NAME" = "$DEFAULT_BRANCH" ] && {
+            [ "$EVENT_NAME" = "push" ] || [ "$INPUT_RELEASE" = "true" ];
+          }; then
             SHOULD_RELEASE=true
           fi
 
@@ -109,7 +103,7 @@ jobs:
 
   build-and-test:
     name: Test and Build Plugin and API JARs
-    if: ${{ gitea.event_name != 'push' || gitea.ref_name == 'dev' || gitea.ref_name == gitea.event.repository.default_branch || gitea.ref_name == github.event.repository.default_branch }}
+    if: ${{ gitea.event_name != 'push' || gitea.ref_name == 'dev' || gitea.ref_name == gitea.event.repository.default_branch }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs:

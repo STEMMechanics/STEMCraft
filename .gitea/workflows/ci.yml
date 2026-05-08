@@ -30,9 +30,9 @@ permissions: read-all
 jobs:
   build-and-test:
     name: Test and Build Plugin and API JARs
-    if: ${{ gitea.event_name != 'push' || gitea.ref_name == 'dev' || gitea.ref_name == gitea.event.repository.default_branch || gitea.ref_name == github.event.repository.default_branch }}
+    if: ${{ gitea.event_name != 'push' || gitea.ref_name == 'dev' || gitea.ref_name == gitea.event.repository.default_branch }}
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -70,22 +70,22 @@ jobs:
           print(f"Found {len(bugs)} bug instance(s) in `plugin/build/reports/spotbugs/main.xml`.")
 
           if not bugs:
-            raise SystemExit(0)
+              raise SystemExit(0)
 
           print()
           print("```text")
           for bug in bugs[:20]:
-            bug_type = bug.get("type", "UNKNOWN")
-            long_message = bug.findtext("LongMessage", default=bug_type).strip()
-            source = bug.find("SourceLine")
-            location = "unknown location"
-            if source is not None:
-              source_file = source.get("sourcefile") or source.get("classname") or "unknown"
-              start = source.get("start")
-              location = f"{source_file}:{start}" if start else source_file
-            print(f"- [{bug_type}] {location} - {long_message}")
+              bug_type = bug.get("type", "UNKNOWN")
+              long_message = bug.findtext("LongMessage", default=bug_type).strip()
+              source = bug.find("SourceLine")
+              location = "unknown location"
+              if source is not None:
+                  source_file = source.get("sourcefile") or source.get("classname") or "unknown"
+                  start = source.get("start")
+                  location = f"{source_file}:{start}" if start else source_file
+              print(f"- [{bug_type}] {location} - {long_message}")
           if len(bugs) > 20:
-            print(f"... and {len(bugs) - 20} more")
+              print(f"... and {len(bugs) - 20} more")
           print("```")
           PY
 
