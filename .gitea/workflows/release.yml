@@ -317,7 +317,8 @@ jobs:
               TAG_ALREADY_EXISTS=true
               ;;
             *)
-              echo "Failed to create tag:"
+              echo "Failed to create tag. HTTP status: $TAG_STATUS"
+              echo "Endpoint: $TAGS_ENDPOINT"
               cat "$TAG_RESPONSE"
               exit 1
               ;;
