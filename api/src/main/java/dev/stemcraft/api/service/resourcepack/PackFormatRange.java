@@ -6,6 +6,7 @@ import org.jetbrains.annotations.NotNull;
  * Inclusive range of resource-pack format versions.
  */
 public record PackFormatRange(int minFormat, int maxFormat) {
+    private static final PackFormatRange ALL = new PackFormatRange(1, Integer.MAX_VALUE);
 
     public PackFormatRange {
         if (minFormat <= 0) {
@@ -40,5 +41,9 @@ public record PackFormatRange(int minFormat, int maxFormat) {
 
     public boolean isAfter(int format) {
         return minFormat > format;
+    }
+
+    public static @NotNull PackFormatRange all() {
+        return ALL;
     }
 }

@@ -4,15 +4,16 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.config.ConfigSectionView;
-import dev.stemcraft.api.service.resourcepack.ResourcePackService;
-import dev.stemcraft.api.service.resourcepack.generator.ResourcePackGenerator;
-import dev.stemcraft.api.util.FileUtil;
+import dev.stemcraft.api.service.resourcepack.ResourcePackBuildContext;
+import dev.stemcraft.api.service.resourcepack.generator.AbstractResourcePackGenerator;
 import dev.stemcraft.exception.ResourcePackGeneratorException;
+import dev.stemcraft.service.resourcepack.ResourcePackServiceImpl;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -22,49 +23,77 @@ import java.util.Locale;
 import java.util.Set;
 
 /**
- * Generates glyphs for custom fonts in the resource pack based on data pack configuration.
+ * Generates glyphs for custom fonts in the resource pack based on data-pack configuration.
  */
-public class GlyphGenerator extends ResourcePackGenerator {
+public class GlyphGenerator extends AbstractResourcePackGenerator {
+    private final ResourcePackServiceImpl service;
 
-    /**
-     * Constructs a GlyphGenerator with the given STEMCraftAPI and ResourcePackService.
-     *
-     * @param api The STEMCraftAPI instance.
-     * @param service The ResourcePackService instance.
-     */
-    public GlyphGenerator(STEMCraftAPI api, ResourcePackService service) {
-        super(api, service);
+    public GlyphGenerator(@NotNull ResourcePackServiceImpl service) {
+        super("glyphs");
+        this.service = service;
     }
 
-    /**
-     * Generates glyphs defined in the data pack configuration into the resource pack.
-     *
-     * @param namespace The namespace to use for generated assets.
-     * @param config The configuration section for generator settings.
-     * @param dataPackDir The output directory for data pack files.
-     * @param manifest The manifest configuration section.
-     * @param resourcePackDir The output directory for resource pack files.
-     */
     @Override
-    public void buildFromDataPackConfig(String namespace, ConfigSection config, File dataPackDir, ConfigSection manifest, File resourcePackDir) {
-        if (dataPackDir == null || resourcePackDir == null || namespace == null || config == null) {
-            return;
-        }
-
+    public void generate(@NotNull ResourcePackBuildContext context) throws IOException {
+        ConfigSection manifest = context.writer().manifest();
         Set<Integer> reservedCodePoints = collectReservedCodePoints(manifest);
         Set<String> reservedFilePaths = new HashSet<>();
+
+        for (File dataPackDir : service.dataPackDirectories()) {
+            File contentsDir = new File(dataPackDir, "contents");
+            if (!contentsDir.exists() || !contentsDir.isDirectory()) {
+                continue;
+            }
+
+            File[] namespaceDirs = contentsDir.listFiles(file ->
+                file.isDirectory() && !file.getName().startsWith(".")
+            );
+
+            for (File configFile : service.collectPackConfigFiles(dataPackDir)) {
+                ConfigSection config = service.loadPackConfig(configFile);
+                if (config == null) {
+                    continue;
+                }
+
+                String namespace = config.getString("namespace");
+                if (!namespace.isEmpty()) {
+                    File namespaceDir = new File(contentsDir, namespace);
+                    if (namespaceDir.exists() && namespaceDir.isDirectory()) {
+                        processNamespace(context, namespace, config, namespaceDir, reservedCodePoints, reservedFilePaths);
+                    }
+                    continue;
+                }
+
+                if (namespaceDirs == null) {
+                    continue;
+                }
+
+                for (File namespaceDir : namespaceDirs) {
+                    processNamespace(
+                        context,
+                        namespaceDir.getName(),
+                        config,
+                        namespaceDir,
+                        reservedCodePoints,
+                        reservedFilePaths
+                    );
+                }
+            }
+        }
+    }
+
+    private void processNamespace(@NotNull ResourcePackBuildContext context,
+                                  @NotNull String namespace,
+                                  @NotNull ConfigSection config,
+                                  @NotNull File dataPackDir,
+                                  @NotNull Set<Integer> reservedCodePoints,
+                                  @NotNull Set<String> reservedFilePaths) throws IOException {
+        ConfigSection manifest = context.writer().manifest();
         ConfigSection glyphsSection = getGlyphSection(config);
         if (glyphsSection != null && !glyphsSection.getKeys().isEmpty()) {
-            // Destination JSON (append providers rather than overwrite)
-            Path fontJsonPath = new File(resourcePackDir, "assets/minecraft/font/default.json").toPath();
+            Path fontJsonPath = context.writer().resolve("assets/minecraft/font/default.json");
             JsonObject json = loadOrCreateDefaultFont(fontJsonPath);
             JsonArray providers = ensureProvidersArray(json);
-
-            // Ensure namespace textures base exists
-            File texturesBase = new File(resourcePackDir, "assets/" + namespace + "/textures");
-            if (!texturesBase.exists() && !texturesBase.mkdirs() && !texturesBase.exists()) {
-                throw new ResourcePackGeneratorException("Failed to create textures directory " + texturesBase);
-            }
 
             for (String glyphName : glyphsSection.getKeys()) {
                 ConfigSection glyphConfig = glyphsSection.getSection(glyphName);
@@ -87,28 +116,22 @@ public class GlyphGenerator extends ResourcePackGenerator {
                 if (filePath.isBlank()) {
                     continue;
                 }
-                reservedFilePaths.add(filePath.replace("\\", "/").toLowerCase(Locale.ROOT));
+                String normalizedFilePath = filePath.replace("\\", "/");
+                reservedFilePaths.add(normalizedFilePath.toLowerCase(Locale.ROOT));
+
+                File src = new File(new File(dataPackDir, "textures"), normalizedFilePath);
+                if (!src.exists()) {
+                    continue;
+                }
+
+                context.writer().copyFile(src.toPath(), "assets/" + namespace + "/textures/" + normalizedFilePath);
 
                 int ascent = glyphConfig.getInt("ascent", 8);
                 int height = glyphConfig.getInt("height", 8);
 
-                // Expected source layout for namespace dirs is <namespaceDir>/textures/<filePath>.
-                File src = new File(new File(dataPackDir, "textures"), filePath);
-                File dest = new File(texturesBase, filePath.replace("\\", "/"));
-
-                try {
-                    if (!src.exists()) {
-                        continue;
-                    }
-
-                    FileUtil.copyFile(src.toPath(), dest.toPath());
-                } catch (Exception e) {
-                    throw new ResourcePackGeneratorException("Failed to copy glyph image for " + glyphName, e);
-                }
-
                 JsonObject provider = new JsonObject();
                 provider.addProperty("type", "bitmap");
-                provider.addProperty("file", namespace + ":" + filePath.replace("\\", "/"));
+                provider.addProperty("file", namespace + ":" + normalizedFilePath);
                 provider.addProperty("ascent", ascent);
                 provider.addProperty("height", height);
                 JsonArray chars = new JsonArray();
@@ -118,38 +141,21 @@ public class GlyphGenerator extends ResourcePackGenerator {
 
                 String tokenPrefix = config.getString("name_prefix");
                 String token = tokenPrefix + glyphName;
-                writeTokenMeta(manifest, token, namespace, filePath.replace("\\", "/"), ascent, height, glyphConfig);
+                writeTokenMeta(manifest, token, namespace, normalizedFilePath, ascent, height, glyphConfig);
                 manifest.set("tokens." + token, glyphChars);
             }
 
-            try {
-                Path parent = fontJsonPath.getParent();
-                if (parent != null) {
-                    Files.createDirectories(parent);
-                }
-                Files.writeString(fontJsonPath, new GsonBuilder().setPrettyPrinting().create().toJson(json));
-            } catch (Exception e) {
-                throw new ResourcePackGeneratorException("Failed to write font JSON " + fontJsonPath, e);
-            }
+            writeFontJson(fontJsonPath, json);
         }
 
-        processGeneratedFontImages(namespace, config, dataPackDir, manifest, resourcePackDir, reservedCodePoints, reservedFilePaths);
-    }
-
-    /**
-     * Applies token mappings from the manifest to the resource pack service.
-     *
-     * @param namespace The namespace for the resource pack.
-     * @param manifest The manifest configuration section.
-     */
-    @Override
-    public void apply(String namespace, ConfigSectionView manifest) {
-        for(String key : manifest.getSection("tokens").getKeys()) {
-            String value = manifest.getSection("tokens").getString(key);
-            if(!value.isEmpty()) {
-                api.messages().tokens().add(key, value);
-            }
-        }
+        processGeneratedFontImages(
+            context,
+            namespace,
+            config,
+            dataPackDir,
+            reservedCodePoints,
+            reservedFilePaths
+        );
     }
 
     private JsonObject loadOrCreateDefaultFont(Path fontJsonPath) {
@@ -195,14 +201,13 @@ public class GlyphGenerator extends ResourcePackGenerator {
     }
 
     private void processGeneratedFontImages(
-        String namespace,
-        ConfigSection config,
-        File namespaceDir,
-        ConfigSection manifest,
-        File resourcePackDir,
-        Set<Integer> reservedCodePoints,
-        Set<String> reservedFilePaths
-    ) {
+        @NotNull ResourcePackBuildContext context,
+        @NotNull String namespace,
+        @NotNull ConfigSection config,
+        @NotNull File namespaceDir,
+        @NotNull Set<Integer> reservedCodePoints,
+        @NotNull Set<String> reservedFilePaths
+    ) throws IOException {
         if (!config.contains("generate_font_images")) {
             return;
         }
@@ -220,7 +225,6 @@ public class GlyphGenerator extends ResourcePackGenerator {
         int nextCodePoint = parseCodePoint(startCharValue, 0xE200);
 
         File texturesRoot = new File(namespaceDir, "textures");
-        // Allow packs that place assets directly under the namespace root.
         if (!texturesRoot.exists() || !texturesRoot.isDirectory()) {
             texturesRoot = namespaceDir;
         }
@@ -236,9 +240,10 @@ public class GlyphGenerator extends ResourcePackGenerator {
         }
         pngFiles.sort((left, right) -> left.getAbsolutePath().compareToIgnoreCase(right.getAbsolutePath()));
 
-        Path fontJsonPath = new File(resourcePackDir, "assets/minecraft/font/default.json").toPath();
+        Path fontJsonPath = context.writer().resolve("assets/minecraft/font/default.json");
         JsonObject json = loadOrCreateDefaultFont(fontJsonPath);
         JsonArray providers = ensureProvidersArray(json);
+        ConfigSection manifest = context.writer().manifest();
 
         for (File pngFile : pngFiles) {
             String relative = texturesRoot.toPath().relativize(pngFile.toPath()).toString().replace("\\", "/");
@@ -271,15 +276,18 @@ public class GlyphGenerator extends ResourcePackGenerator {
             reservedCodePoints.add(glyphCodePoint);
         }
 
-        try {
-            Path parent = fontJsonPath.getParent();
-            if (parent != null) {
-                Files.createDirectories(parent);
-            }
-            Files.writeString(fontJsonPath, new GsonBuilder().setPrettyPrinting().create().toJson(json));
-        } catch (Exception e) {
-            throw new ResourcePackGeneratorException("Failed to write generated font JSON " + fontJsonPath, e);
+        writeFontJson(fontJsonPath, json);
+    }
+
+    private void writeFontJson(@NotNull Path fontJsonPath, @NotNull JsonObject json) throws IOException {
+        Path parent = fontJsonPath.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
         }
+        Files.writeString(
+            fontJsonPath,
+            new GsonBuilder().setPrettyPrinting().create().toJson(json)
+        );
     }
 
     private String deriveGeneratedTokenName(File tokenRoot, File pngFile, String namePrefix) {
@@ -367,10 +375,6 @@ public class GlyphGenerator extends ResourcePackGenerator {
 
     private Set<Integer> collectReservedCodePoints(ConfigSection manifest) {
         Set<Integer> reserved = new HashSet<>();
-        if (manifest == null) {
-            return reserved;
-        }
-
         ConfigSection tokens = manifest.getSection("tokens");
         if (tokens == null) {
             return reserved;
@@ -387,18 +391,3 @@ public class GlyphGenerator extends ResourcePackGenerator {
         return reserved;
     }
 }
-
-/*
- namespace: stemcraft
- glyphs:
-    accept:
-        char: 
-       file: font/accept.png
-       ascent: 8
-       height: 8
-     cancel:
-       char: 
-       file: font/cancel.png
-       ascent: 8
-       height: 8
- */

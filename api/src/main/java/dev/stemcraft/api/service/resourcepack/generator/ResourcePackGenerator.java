@@ -1,189 +1,78 @@
 package dev.stemcraft.api.service.resourcepack.generator;
 
-import dev.stemcraft.api.STEMCraftAPI;
-import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.config.ConfigSectionView;
 import dev.stemcraft.api.service.resourcepack.PackFormatRange;
 import dev.stemcraft.api.service.resourcepack.ResourcePackBuildContext;
-import dev.stemcraft.api.service.resourcepack.ResourcePackService;
+import dev.stemcraft.api.service.resourcepack.ResourcePackBuildTarget;
+import org.jetbrains.annotations.NotNull;
 
-import java.io.File;
+import java.io.IOException;
 import java.util.List;
 
-public abstract class ResourcePackGenerator {
-    protected final STEMCraftAPI api;
-    protected final ResourcePackService service;
+/**
+ * Public extension point for resource-pack generation.
+ *
+ * <p>External plugins should usually implement this interface directly.
+ * {@link AbstractResourcePackGenerator} is available as a convenience helper
+ * for generators that want a stored id and config reference.</p>
+ */
+public interface ResourcePackGenerator {
 
     /**
-     * Constructor for ResourcePackGenerator.
+     * Returns the unique generator id.
+     *
+     * @return The unique generator id.
      */
-    public ResourcePackGenerator(STEMCraftAPI api, ResourcePackService service) {
-        this.api = api;
-        this.service = service;
+    @NotNull String id();
+
+    /**
+     * Called after dependency checks and before the generator is activated.
+     *
+     * @param config The generator configuration section from disk.
+     */
+    default void onLoad(@NotNull ConfigSectionView config) {
     }
 
     /**
-     * Called when the generator is loaded.
-     *
-     * @param config The configuration section for the generator.
-     * @return true if the generator loaded successfully, false otherwise.
+     * Called when the generator is unloaded or unregistered.
      */
-    @SuppressWarnings("SameReturnValue")
-    public boolean onLoad(ConfigSectionView config) { return true; }
-
-    /**
-     * Called at the start of the build process.
-     *
-     * @param manifest The manifest configuration section.
-     * @param resourcePackDir The output directory for resource pack files.
-     */
-    public void buildStart(ConfigSection manifest, File resourcePackDir) { }
-
-    /**
-     * Called at the start of one build segment.
-     *
-     * @param context The build-segment context.
-     * @param manifest The manifest configuration section.
-     * @param resourcePackDir The output directory for segment files.
-     */
-    public void buildStart(ResourcePackBuildContext context, ConfigSection manifest, File resourcePackDir) {
-        buildStart(manifest, resourcePackDir);
+    default void onUnload() {
     }
 
     /**
-     * Called at the end of the build process.
+     * Generates resource-pack output for one supported build target.
      *
-     * @param manifest The manifest configuration section.
-     * @param resourcePackDir The output directory for resource pack files.
+     * @param context The build context for the target.
+     * @throws IOException If a file operation fails.
      */
-    @SuppressWarnings("EmptyMethod")
-    public void buildEnd(ConfigSection manifest, File resourcePackDir) { }
+    void generate(@NotNull ResourcePackBuildContext context) throws IOException;
 
     /**
-     * Called at the end of one build segment.
+     * Returns generator ids that must already be active before this generator
+     * can be enabled.
      *
-     * @param context The build-segment context.
-     * @param manifest The manifest configuration section.
-     * @param resourcePackDir The output directory for segment files.
+     * @return Required generator ids.
      */
-    public void buildEnd(ResourcePackBuildContext context, ConfigSection manifest, File resourcePackDir) {
-        buildEnd(manifest, resourcePackDir);
-    }
-
-    /**
-     * Called to build the resource pack from existing data pack files.
-     *
-     * @param dataPackDir The output directory for data pack files.
-     * @param resourcePackDir The output directory for resource pack files.
-     * @param manifest The manifest configuration section.
-     */
-    public void buildFromDataPack(File dataPackDir, ConfigSection manifest, File resourcePackDir) { }
-
-    /**
-     * Called to build one resource-pack segment from existing data pack files.
-     *
-     * @param context The build-segment context.
-     * @param dataPackDir The output directory for data pack files.
-     * @param manifest The manifest configuration section.
-     * @param resourcePackDir The output directory for segment files.
-     */
-    public void buildFromDataPack(ResourcePackBuildContext context,
-                                  File dataPackDir,
-                                  ConfigSection manifest,
-                                  File resourcePackDir) {
-        buildFromDataPack(dataPackDir, manifest, resourcePackDir);
-    }
-
-    /**
-     * Called to build the resource pack based on data pack configuration.
-     *
-     * @param dataPackDir The output directory for data pack files.
-     * @param resourcePackDir The output directory for resource pack files.
-     * @param namespace The namespace to use for generated assets.
-     * @param config The configuration section for generator settings.
-     * @param manifest The manifest configuration section.
-     */
-    public void buildFromDataPackConfig(String namespace, ConfigSection config, File dataPackDir, ConfigSection manifest, File resourcePackDir) { }
-
-    /**
-     * Called to build one resource-pack segment based on data pack configuration.
-     *
-     * @param context The build-segment context.
-     * @param namespace The namespace to use for generated assets.
-     * @param config The configuration section for generator settings.
-     * @param dataPackDir The output directory for data pack files.
-     * @param manifest The manifest configuration section.
-     * @param resourcePackDir The output directory for segment files.
-     */
-    public void buildFromDataPackConfig(ResourcePackBuildContext context,
-                                        String namespace,
-                                        ConfigSection config,
-                                        File dataPackDir,
-                                        ConfigSection manifest,
-                                        File resourcePackDir) {
-        buildFromDataPackConfig(namespace, config, dataPackDir, manifest, resourcePackDir);
-    }
-
-    /**
-     * Applies additional modifications to the resource pack based on the manifest.
-     *
-     * @param namespace The namespace to use for generated assets.
-     * @param manifest The manifest configuration section.
-     */
-    public void apply(String namespace, ConfigSectionView manifest) { }
-
-    /**
-     * Returns the supported Minecraft version range for this generator.
-     *
-     * @return The supported Minecraft version range.
-     */
-    public int[] supportedVersion() { return new int[] { 0, 0 }; }
-
-    /**
-     * Returns the supported resource-pack format ranges for this generator.
-     *
-     * @return The supported format ranges.
-     */
-    public List<PackFormatRange> supportedRanges() {
-        int[] supportedVersion = supportedVersion();
-        int[] currentSupportedVersion = currentSupportedVersion();
-
-        int minFormat = supportedVersion.length > 0 && supportedVersion[0] > 0
-            ? supportedVersion[0]
-            : currentSupportedVersion[0];
-        int maxFormat = supportedVersion.length > 1 && supportedVersion[1] > 0
-            ? supportedVersion[1]
-            : currentSupportedVersion[1];
-
-        return List.of(new PackFormatRange(minFormat, maxFormat));
-    }
-
-    /**
-     * Returns the generator classes that must already be loaded before this
-     * generator can be enabled.
-     *
-     * @return The required generator classes.
-     */
-    public List<Class<? extends ResourcePackGenerator>> requiredGenerators() {
+    default @NotNull List<String> requiredGenerators() {
         return List.of();
     }
 
     /**
-     * Returns the currently supported resource-pack format range for the service.
+     * Returns the supported pack-format range for this generator.
      *
-     * @return The supported resource-pack format range.
+     * @return The supported pack-format range.
      */
-    protected final int[] currentSupportedVersion() {
-        return service.supportedVersion();
+    default @NotNull PackFormatRange supportedFormats() {
+        return PackFormatRange.all();
     }
 
     /**
-     * Checks whether another resource-pack generator is loaded.
+     * Returns whether the generator supports the given build target.
      *
-     * @param generatorType The generator type to check.
-     * @return true if the generator is loaded, false otherwise.
+     * @param target The build target to test.
+     * @return {@code true} if the target is supported.
      */
-    protected final boolean hasGenerator(Class<? extends ResourcePackGenerator> generatorType) {
-        return service.hasGenerator(generatorType);
+    default boolean supports(@NotNull ResourcePackBuildTarget target) {
+        return supportedFormats().contains(target.packFormat());
     }
 }

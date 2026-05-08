@@ -53,10 +53,26 @@ public interface ResourcePackService {
     /**
      * Checks whether a compatible resource pack generator has been loaded.
      *
+     * @param generatorId The generator id to check.
+     * @return true if the generator is loaded, false otherwise.
+     */
+    boolean hasGenerator(@NotNull String generatorId);
+
+    /**
+     * Checks whether a compatible resource pack generator has been loaded.
+     *
      * @param generatorType The generator type to check.
      * @return true if the generator is loaded, false otherwise.
      */
     boolean hasGenerator(@NotNull Class<? extends ResourcePackGenerator> generatorType);
+
+    /**
+     * Unregisters a resource pack generator by id.
+     *
+     * @param generatorId The generator id to remove.
+     */
+    default void unregisterGenerator(@NotNull String generatorId) {
+    }
 
     /**
      * Sends the resource pack to the specified player.
@@ -78,24 +94,33 @@ public interface ResourcePackService {
     void generatePack(@Nullable Consumer<@NotNull String> statusCallback);
 
     /**
-     * Gets the format version of the resource pack.
+     * Returns the legacy service-level pack-format compatibility window as a
+     * two-element array containing {@code [minSupportedFormat, maxSupportedFormat]}.
      *
-     * @return The supported format version of the resource pack.
+     * <p>This does not describe the full multi-target build plan. It reflects
+     * the currently resolved compatibility range for the running server version,
+     * retained for callers that still consume the older array-based API.</p>
+     *
+     * @return The min and max supported pack formats for the current service state.
      */
     int[] supportedVersion();
 
     /**
-     * Gets the supported format range for the main pack target.
+     * Gets the supported format range for the base build target generated for
+     * the running server version.
      *
-     * @return The supported format range for the base pack.
+     * <p>Additional future overlay targets may be present in {@link #buildPlan()}.</p>
+     *
+     * @return The supported format range for the base pack target.
      */
     @NotNull PackFormatRange supportedRange();
 
     /**
-     * Gets the planned build contexts for the current pack build. The first
-     * entry is always the base pack, followed by overlay segments.
+     * Gets the planned build targets for the current pack build. The first
+     * entry is always the base pack target, followed by any future overlay
+     * targets.
      *
-     * @return The planned build contexts.
+     * @return The planned build targets.
      */
-    @NotNull List<ResourcePackBuildContext> buildPlan();
+    @NotNull List<ResourcePackBuildTarget> buildPlan();
 }

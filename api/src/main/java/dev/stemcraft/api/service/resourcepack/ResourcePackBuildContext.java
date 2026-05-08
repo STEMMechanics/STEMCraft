@@ -1,30 +1,21 @@
 package dev.stemcraft.api.service.resourcepack;
 
+import dev.stemcraft.api.config.ConfigSectionView;
 import org.jetbrains.annotations.NotNull;
 
-import javax.annotation.Nullable;
+import java.util.Objects;
 
 /**
- * Build context for one resource-pack output segment.
+ * Build context passed to one generator for one build target.
  */
 public record ResourcePackBuildContext(
-    @NotNull PackFormatRange supportedRange,
-    int targetFormat,
-    boolean overlay,
-    @Nullable String overlayDirectory
+    @NotNull ResourcePackBuildTarget target,
+    @NotNull ResourcePackWriter writer,
+    @NotNull ConfigSectionView config
 ) {
     public ResourcePackBuildContext {
-        if (targetFormat <= 0) {
-            throw new IllegalArgumentException("targetFormat must be positive");
-        }
-        if (!supportedRange.contains(targetFormat)) {
-            throw new IllegalArgumentException("supportedRange must include targetFormat");
-        }
-        if (overlay && (overlayDirectory == null || overlayDirectory.isBlank())) {
-            throw new IllegalArgumentException("overlayDirectory is required for overlay contexts");
-        }
-        if (!overlay) {
-            overlayDirectory = null;
-        }
+        Objects.requireNonNull(target, "target");
+        Objects.requireNonNull(writer, "writer");
+        Objects.requireNonNull(config, "config");
     }
 }

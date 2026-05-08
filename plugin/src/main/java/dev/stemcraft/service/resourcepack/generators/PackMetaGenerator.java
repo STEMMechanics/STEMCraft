@@ -3,99 +3,80 @@ package dev.stemcraft.service.resourcepack.generators;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.service.resourcepack.PackFormatRange;
 import dev.stemcraft.api.service.resourcepack.ResourcePackBuildContext;
-import dev.stemcraft.api.config.ConfigSection;
-import dev.stemcraft.api.config.ConfigSectionView;
-import dev.stemcraft.api.service.resourcepack.ResourcePackService;
-import dev.stemcraft.api.service.resourcepack.generator.ResourcePackGenerator;
-import dev.stemcraft.exception.ResourcePackGeneratorException;
+import dev.stemcraft.api.service.resourcepack.generator.AbstractResourcePackGenerator;
+import dev.stemcraft.service.resourcepack.ResourcePackServiceImpl;
 import org.jetbrains.annotations.NotNull;
 
-import java.io.File;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.io.IOException;
 
 /**
  * Generates the pack.mcmeta file for a Minecraft resource pack.
  */
-public class PackMetaGenerator extends ResourcePackGenerator {
+public class PackMetaGenerator extends AbstractResourcePackGenerator {
     /**
-     * Constructs a PackMetaGenerator with the given STEMCraftAPI instance.
-     *
-     * @param api The STEMCraftAPI instance.
+     * Resource-pack metadata format introduced top-level {@code min_format}
+     * and {@code max_format} fields in pack metadata and overlay metadata
+     * starting at pack format 65.
      */
-    public PackMetaGenerator(STEMCraftAPI api, ResourcePackService service) {
-        super(api, service);
-    }
+    private static final int MIN_MAX_PACK_METADATA_FORMAT = 65;
 
     /**
-     * Generates the pack.mcmeta file for the resource pack.
-     *
-     * @param manifest The manifest configuration section (not used in this generator).
-     * @param resourcePackDir The resource pack directory where pack.mcmeta will be created.
+     * Legacy metadata uses {@code pack_format}/{@code supported_formats} up to
+     * the format immediately before {@link #MIN_MAX_PACK_METADATA_FORMAT}.
      */
+    private static final int LEGACY_PACK_METADATA_MAX_FORMAT = MIN_MAX_PACK_METADATA_FORMAT - 1;
+
+    private final ResourcePackServiceImpl service;
+
+    public PackMetaGenerator(@NotNull ResourcePackServiceImpl service) {
+        super("pack-meta");
+        this.service = service;
+    }
+
     @Override
-    public void buildStart(ResourcePackBuildContext context, ConfigSection manifest, File resourcePackDir) {
-        if (context.overlay()) {
+    public void generate(@NotNull ResourcePackBuildContext context) throws IOException {
+        if (context.writer().overlay()) {
             return;
         }
 
-        ConfigSectionView config = service.getConfig();
-
-        try {
-            JsonObject root = new JsonObject();
-            JsonObject pack = new JsonObject();
-            addPackVersionToMetadata(service.supportedRange(), pack);
-            pack.addProperty("description", config.getString("description", "A STEMCraft Resource Pack"));
-            root.add("pack", pack);
-            addOverlays(root);
-
-            Path out = new File(resourcePackDir, "pack.mcmeta").toPath();
-            Path parent = out.getParent();
-            if (parent != null) {
-                Files.createDirectories(parent);
-            }
-            Files.writeString(out, new GsonBuilder().setPrettyPrinting().create().toJson(root));
-        } catch (Exception e) {
-            throw new ResourcePackGeneratorException("Failed to write pack.mcmeta", e);
-        }
+        JsonObject root = new JsonObject();
+        JsonObject pack = new JsonObject();
+        addPackVersionToMetadata(context.writer().supportedRange(), pack);
+        pack.addProperty(
+            "description",
+            service.getConfig().getString("description", "A STEMCraft Resource Pack")
+        );
+        root.add("pack", pack);
+        addOverlays(root);
+        context.writer().writeString(
+            "pack.mcmeta",
+            new GsonBuilder().setPrettyPrinting().create().toJson(root)
+        );
     }
 
-    /**
-     * <p>Adds Minecraft Pack Version information to a JSON Object.</p>
-     *
-     * @param supportedRange The Pack Format Range supported by the resource pack being generated.
-     * @param packJson The Pack JSON Object to add the version information to.
-     */
-    private void addPackVersionToMetadata(@NotNull final PackFormatRange supportedRange, @NotNull final JsonObject packJson) {
-        final int minPackFormat = supportedRange.minFormat();
-        final int maxPackFormat = supportedRange.maxFormat();
-        if (maxPackFormat >= 65) {
+    private void addPackVersionToMetadata(@NotNull PackFormatRange supportedRange, @NotNull JsonObject packJson) {
+        int minPackFormat = supportedRange.minFormat();
+        int maxPackFormat = supportedRange.maxFormat();
+        if (maxPackFormat >= MIN_MAX_PACK_METADATA_FORMAT) {
             packJson.addProperty("min_format", minPackFormat);
             packJson.addProperty("max_format", maxPackFormat);
 
-            if (minPackFormat < 65) {
-                addLegacyPackVersionToMetadata(packJson, minPackFormat, 64);
+            if (minPackFormat < MIN_MAX_PACK_METADATA_FORMAT) {
+                addLegacyPackVersionToMetadata(packJson, minPackFormat, LEGACY_PACK_METADATA_MAX_FORMAT);
             }
         } else {
             addLegacyPackVersionToMetadata(packJson, minPackFormat, maxPackFormat);
         }
     }
 
-    /**
-     * <p>Adds Minecraft Pack Version information to a JSON Object.</p>
-     *
-     * @param packJson The Pack JSON Object to add the version information to.
-     * @param minPackFormat The minimum pack format of the resource pack being generated.
-     * @param maxPackFormat The maximum pack format of the resource pack being generated.
-     */
-    private void addLegacyPackVersionToMetadata(@NotNull final JsonObject packJson,
-                                                final int minPackFormat, final int maxPackFormat) {
+    private void addLegacyPackVersionToMetadata(@NotNull JsonObject packJson,
+                                                int minPackFormat,
+                                                int maxPackFormat) {
         packJson.addProperty("pack_format", maxPackFormat);
 
-        final JsonArray supportedFormats = new JsonArray();
+        JsonArray supportedFormats = new JsonArray();
         supportedFormats.add(minPackFormat);
         supportedFormats.add(maxPackFormat);
         packJson.add("supported_formats", supportedFormats);
@@ -104,14 +85,10 @@ public class PackMetaGenerator extends ResourcePackGenerator {
     private void addOverlays(@NotNull JsonObject root) {
         JsonArray overlayEntries = new JsonArray();
 
-        for (ResourcePackBuildContext context : service.buildPlan()) {
-            if (!context.overlay()) {
-                continue;
-            }
-
+        for (ResourcePackServiceImpl.OverlayBuildPlanEntry overlay : service.overlayBuildPlan()) {
             JsonObject entry = new JsonObject();
-            entry.addProperty("directory", context.overlayDirectory());
-            addOverlayVersionMetadata(context.supportedRange(), entry);
+            entry.addProperty("directory", overlay.directory());
+            addOverlayVersionMetadata(overlay.supportedRange(), entry);
             overlayEntries.add(entry);
         }
 
@@ -128,12 +105,12 @@ public class PackMetaGenerator extends ResourcePackGenerator {
         int minPackFormat = supportedRange.minFormat();
         int maxPackFormat = supportedRange.maxFormat();
 
-        if (maxPackFormat >= 65) {
+        if (maxPackFormat >= MIN_MAX_PACK_METADATA_FORMAT) {
             overlayJson.addProperty("min_format", minPackFormat);
             overlayJson.addProperty("max_format", maxPackFormat);
 
-            if (minPackFormat < 65) {
-                addLegacyOverlayFormats(overlayJson, minPackFormat, 64);
+            if (minPackFormat < MIN_MAX_PACK_METADATA_FORMAT) {
+                addLegacyOverlayFormats(overlayJson, minPackFormat, LEGACY_PACK_METADATA_MAX_FORMAT);
             }
             return;
         }
