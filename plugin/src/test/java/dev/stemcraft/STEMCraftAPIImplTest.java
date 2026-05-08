@@ -16,6 +16,7 @@ import dev.stemcraft.service.PunishmentServiceImpl;
 import dev.stemcraft.service.RecipeServiceImpl;
 import dev.stemcraft.service.RegionServiceImpl;
 import dev.stemcraft.service.SelectionServiceImpl;
+import dev.stemcraft.service.SpellBookServiceImpl;
 import dev.stemcraft.service.TaskServiceImpl;
 import dev.stemcraft.service.WebServiceImpl;
 import dev.stemcraft.service.command.CommandServiceImpl;
@@ -66,6 +67,7 @@ class STEMCraftAPIImplTest {
         "playerStats",
         "recipes",
         "selections",
+        "spellBooks",
         "regions",
         "tabComplete",
         "tasks",
@@ -103,6 +105,7 @@ class STEMCraftAPIImplTest {
         PlayerStatsServiceImpl playerStats = mock(PlayerStatsServiceImpl.class);
         RecipeServiceImpl recipes = mock(RecipeServiceImpl.class);
         SelectionServiceImpl selections = mock(SelectionServiceImpl.class);
+        SpellBookServiceImpl spellBooks = mock(SpellBookServiceImpl.class);
         RegionServiceImpl regions = mock(RegionServiceImpl.class);
         TabCompleteServiceImpl tabComplete = mock(TabCompleteServiceImpl.class);
         TaskServiceImpl tasks = mock(TaskServiceImpl.class);
@@ -125,6 +128,7 @@ class STEMCraftAPIImplTest {
         when(plugin.playerStats()).thenReturn(playerStats);
         when(plugin.recipes()).thenReturn(recipes);
         when(plugin.selections()).thenReturn(selections);
+        when(plugin.spellBooks()).thenReturn(spellBooks);
         when(plugin.regions()).thenReturn(regions);
         when(plugin.tabComplete()).thenReturn(tabComplete);
         when(plugin.tasks()).thenReturn(tasks);
@@ -148,6 +152,7 @@ class STEMCraftAPIImplTest {
         expectedDelegates.put("playerStats", playerStats);
         expectedDelegates.put("recipes", recipes);
         expectedDelegates.put("selections", selections);
+        expectedDelegates.put("spellBooks", spellBooks);
         expectedDelegates.put("regions", regions);
         expectedDelegates.put("tabComplete", tabComplete);
         expectedDelegates.put("tasks", tasks);

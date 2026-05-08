@@ -37,6 +37,7 @@ import dev.stemcraft.api.service.placeholder.PlaceholderService;
 import dev.stemcraft.api.service.recipe.RecipeService;
 import dev.stemcraft.api.service.region.RegionService;
 import dev.stemcraft.api.service.selection.SelectionService;
+import dev.stemcraft.api.service.spellbook.SpellBookService;
 import dev.stemcraft.api.service.task.TaskService;
 import dev.stemcraft.api.service.punishment.PunishmentService;
 import dev.stemcraft.api.service.tabcomplete.TabCompleteService;
@@ -151,6 +152,11 @@ public interface STEMCraftAPI {
      * Get the tab complete service.
      */
     TabCompleteService tabComplete();
+
+    /**
+     * Get the spell-book service.
+     */
+    SpellBookService spellBooks();
 
     /**
      * Get the task service.

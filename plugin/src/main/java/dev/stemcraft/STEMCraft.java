@@ -104,6 +104,7 @@ public final class STEMCraft extends JavaPlugin {
     private RegionServiceImpl regions;
     private ResourcePackServiceImpl resourcePack;
     private SelectionServiceImpl selections;
+    private SpellBookServiceImpl spellBooks;
     private TabCompleteServiceImpl tabComplete;
     private TaskServiceImpl tasks;
     private WebhookBridgeServiceImpl webhookBridge;
@@ -195,6 +196,7 @@ public final class STEMCraft extends JavaPlugin {
         regions = new RegionServiceImpl(this, api);
         resourcePack = new ResourcePackServiceImpl(this, api);
         selections = new SelectionServiceImpl(this, api);
+        spellBooks = new SpellBookServiceImpl(this, api);
         tabComplete = new TabCompleteServiceImpl(this, api);
         webhookBridge = new WebhookBridgeServiceImpl(this, api);
         web = new WebServiceImpl(this, api);
@@ -216,6 +218,7 @@ public final class STEMCraft extends JavaPlugin {
         regions.onEnable();
         resourcePack.onEnable();
         selections.onEnable();
+        spellBooks.onEnable();
         tabComplete.onEnable();
         webhookBridge.onEnable();
         web.onEnable();
@@ -317,6 +320,7 @@ public final class STEMCraft extends JavaPlugin {
         disableService(tabComplete);
         disableService(resourcePack);
         disableService(selections);
+        disableService(spellBooks);
         disableService(regions);
         disableService(recipes);
         disableService(punishments);
@@ -603,6 +607,9 @@ public final class STEMCraft extends JavaPlugin {
         if (!localesOnly) {
             if (selections != null) {
                 selections.onReload();
+            }
+            if (spellBooks != null) {
+                spellBooks.onReload();
             }
             if (placeholders != null) {
                 placeholders.onReload();

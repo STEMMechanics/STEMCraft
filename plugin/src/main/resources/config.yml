@@ -37,6 +37,56 @@ custom-commands:
     run:
       - tpworld survival
 
+spell-books:
+  enabled: true
+  extensions:
+    locked-chest:
+      enabled: true
+      spell: "me chest be locked"
+    world-teleports:
+      enabled: true
+      targets:
+        duan:
+          enabled: true
+          spell: "yo go to bo zo du"
+          world: "duan"
+    home-teleport:
+      enabled: true
+      spell: "zo me home"
+      fallback-to-world-spawn: true
+    pig-drops:
+      enabled: true
+      spell: "do zo ham"
+      source: "inventory"
+      drop-multiplier: 2.0
+    tree-fall:
+      enabled: true
+      spell: "tree fall now"
+      source: "inventory"
+      require-axe: true
+      max-blocks: 64
+    quick-fishing:
+      enabled: true
+      spell: "fish come quick"
+      source: "inventory"
+      min-wait-ticks: 20
+      max-wait-ticks: 80
+      min-lure-ticks: 20
+      max-lure-ticks: 40
+    no-bite:
+      enabled: true
+      spell: "zo no bite"
+      source: "inventory"
+      forgive-after-seconds: 10
+      mob-types:
+        - SPIDER
+        - CAVE_SPIDER
+        - WOLF
+    rain-go-way:
+      enabled: true
+      spell: "rain go way"
+      reset-weather-duration: true
+
 web_server:
     enabled: true
     port: 8950
