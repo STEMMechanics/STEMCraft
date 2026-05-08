@@ -72,6 +72,15 @@ dragon-respawn:
   # Leave empty to allow all THE_END worlds.
   worlds: []
 
+travel-lodestones:
+  enabled: true
+  explosion-chance: 0.05
+  explosion-power: 2.5
+  explosion-damage: 8.0
+  teleport-search-radius: 5
+  activation-sound: BLOCK_BEACON_ACTIVATE
+  travel-sound: BLOCK_PORTAL_TRAVEL
+
 distance_difficulty:
   range: 500
   multiplier: 0.25
