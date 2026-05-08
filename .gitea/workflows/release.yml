@@ -35,8 +35,10 @@ on:
         required: false
         default: ""
 
-permissions: read-all
-
+permissions:
+  contents: write
+  releases: write
+  
 jobs:
   prepare:
     name: Prepare Build Metadata
