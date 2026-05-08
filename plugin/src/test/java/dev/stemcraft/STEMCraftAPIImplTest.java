@@ -41,6 +41,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -167,6 +168,20 @@ class STEMCraftAPIImplTest {
 
             assertEquals("1.2.3-test", api.getVersion());
         }
+    }
+
+    @Test
+    void parseMinecraftVersionReturnsMajorMinorPatchComponents() {
+        assertArrayEquals(new int[] {1, 21, 11}, STEMCraft.parseMinecraftVersion("1.21.11"));
+        assertArrayEquals(new int[] {1, 21, 0}, STEMCraft.parseMinecraftVersion("1.21"));
+        assertArrayEquals(new int[] {26, 1, 2}, STEMCraft.parseMinecraftVersion("26.1.2.build.59-stable"));
+    }
+
+    @Test
+    void parseMinecraftVersionDefaultsMissingOrInvalidComponentsToZero() {
+        assertArrayEquals(new int[] {0, 0, 0}, STEMCraft.parseMinecraftVersion(null));
+        assertArrayEquals(new int[] {0, 0, 0}, STEMCraft.parseMinecraftVersion(""));
+        assertArrayEquals(new int[] {0, 0, 0}, STEMCraft.parseMinecraftVersion("release"));
     }
 
     @Test
