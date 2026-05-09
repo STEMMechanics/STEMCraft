@@ -24,6 +24,7 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.service.spellbook.SpellBookExtension;
 import dev.stemcraft.api.service.spellbook.SpellBookExtensionContext;
+import dev.stemcraft.api.service.spellbook.SpellBookMatch;
 import dev.stemcraft.api.service.spellbook.SpellBookService;
 import dev.stemcraft.api.service.spellbook.SpellBookSource;
 import org.bukkit.Material;
@@ -77,7 +78,8 @@ public final class TreeFallSpellBookExtension implements SpellBookExtension {
                 Player player = event.getPlayer();
                 String spell = config.getString("spell", DEFAULT_SPELL);
                 SpellBookSource source = parseSource(config.getString("source", "inventory"));
-                if (spellBooks.findSpell(player, source, spell) == null) {
+                SpellBookMatch match = spellBooks.findSpell(player, source, spell);
+                if (match == null) {
                     return;
                 }
 
@@ -88,6 +90,7 @@ public final class TreeFallSpellBookExtension implements SpellBookExtension {
 
                 int maxBlocks = Math.max(1, config.getInt("max-blocks", 64));
                 fellTree(origin, tool, maxBlocks);
+                SpellBookNegativeEffect.applyConfigured(player, match, config);
             } finally {
                 processing.remove(key);
             }

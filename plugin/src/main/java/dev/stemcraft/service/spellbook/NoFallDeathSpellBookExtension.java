@@ -27,26 +27,22 @@ import dev.stemcraft.api.service.spellbook.SpellBookExtensionContext;
 import dev.stemcraft.api.service.spellbook.SpellBookMatch;
 import dev.stemcraft.api.service.spellbook.SpellBookService;
 import dev.stemcraft.api.service.spellbook.SpellBookSource;
-import org.bukkit.Material;
-import org.bukkit.entity.Pig;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventPriority;
-import org.bukkit.event.entity.EntityDeathEvent;
-import org.bukkit.inventory.ItemStack;
+import org.bukkit.event.entity.EntityDamageEvent;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Locale;
 
 /**
- * Built-in spell that doubles pig drops when the killer carries the spell book.
+ * Prevents lethal fall damage for players carrying the spell book.
  */
-public final class DoublePigDropsSpellBookExtension implements SpellBookExtension {
-    private static final String DEFAULT_SPELL = "do zo ham";
+public final class NoFallDeathSpellBookExtension implements SpellBookExtension {
+    private static final String DEFAULT_SPELL = "fall no die";
 
     @Override
     public @NotNull String id() {
-        return "pig-drops";
+        return "no-fall-death";
     }
 
     @Override
@@ -54,45 +50,34 @@ public final class DoublePigDropsSpellBookExtension implements SpellBookExtensio
         STEMCraftAPI api = context.api();
         SpellBookService spellBooks = context.spellBooks();
 
-        api.events().register(EntityDeathEvent.class, event -> {
+        api.events().register(EntityDamageEvent.class, event -> {
             ConfigSection config = context.config();
-            if (!spellBooks.isEnabled() || !config.getBoolean("enabled", true) || !(event.getEntity() instanceof Pig pig)) {
+            if (!spellBooks.isEnabled() || !config.getBoolean("enabled", true)) {
+                return;
+            }
+            if (event.getCause() != EntityDamageEvent.DamageCause.FALL || !(event.getEntity() instanceof Player player)) {
                 return;
             }
 
-            Player killer = pig.getKiller();
             String spell = config.getString("spell", DEFAULT_SPELL);
             SpellBookSource source = parseSource(config.getString("source", "inventory"));
-            if (killer == null) {
-                return;
-            }
-
-            SpellBookMatch match = spellBooks.findSpell(killer, source, spell);
+            SpellBookMatch match = spellBooks.findSpell(player, source, spell);
             if (match == null) {
                 return;
             }
 
-            double multiplier = Math.max(1.0d, config.getDouble("drop-multiplier", 2.0d));
-            List<ItemStack> bonusDrops = new ArrayList<>(event.getDrops().size());
-            for (ItemStack drop : event.getDrops()) {
-                if (drop == null || drop.getType() == Material.AIR) {
-                    continue;
-                }
-                int extraAmount = Math.max(0, (int) Math.round(drop.getAmount() * (multiplier - 1.0d)));
-                if (extraAmount <= 0) {
-                    continue;
-                }
-                ItemStack extra = drop.clone();
-                extra.setAmount(extraAmount);
-                bonusDrops.add(extra);
+            double health = player.getHealth();
+            if (event.getFinalDamage() < health) {
+                return;
             }
-            event.getDrops().addAll(bonusDrops);
-            SpellBookNegativeEffect.applyConfigured(killer, match, config);
-        }, EventPriority.NORMAL, true);
+
+            event.setDamage(Math.max(0.0d, health - 1.0d));
+            SpellBookNegativeEffect.applyConfigured(player, match, config);
+        }, EventPriority.HIGHEST, true);
     }
 
     private @NotNull SpellBookSource parseSource(@NotNull String value) {
-        return switch (value.trim().toLowerCase()) {
+        return switch (value.trim().toLowerCase(Locale.ROOT)) {
             case "main-hand" -> SpellBookSource.MAIN_HAND;
             case "off-hand" -> SpellBookSource.OFF_HAND;
             case "hands" -> SpellBookSource.HANDS;

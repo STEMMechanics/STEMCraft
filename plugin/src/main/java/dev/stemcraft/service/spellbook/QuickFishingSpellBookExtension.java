@@ -24,6 +24,7 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.service.spellbook.SpellBookExtension;
 import dev.stemcraft.api.service.spellbook.SpellBookExtensionContext;
+import dev.stemcraft.api.service.spellbook.SpellBookMatch;
 import dev.stemcraft.api.service.spellbook.SpellBookService;
 import dev.stemcraft.api.service.spellbook.SpellBookSource;
 import org.bukkit.entity.Player;
@@ -59,7 +60,8 @@ public final class QuickFishingSpellBookExtension implements SpellBookExtension 
             Player player = event.getPlayer();
             String spell = config.getString("spell", DEFAULT_SPELL);
             SpellBookSource source = parseSource(config.getString("source", "inventory"));
-            if (spellBooks.findSpell(player, source, spell) == null) {
+            SpellBookMatch match = spellBooks.findSpell(player, source, spell);
+            if (match == null) {
                 return;
             }
 
@@ -70,6 +72,7 @@ public final class QuickFishingSpellBookExtension implements SpellBookExtension 
 
             event.getHook().setWaitTime(minWait, maxWait);
             event.getHook().setLureTime(minLure, maxLure);
+            SpellBookNegativeEffect.applyConfigured(player, match, config);
         }, EventPriority.HIGHEST, true);
     }
 

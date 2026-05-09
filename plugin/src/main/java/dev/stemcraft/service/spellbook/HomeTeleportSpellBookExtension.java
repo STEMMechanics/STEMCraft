@@ -24,6 +24,7 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.service.spellbook.SpellBookExtension;
 import dev.stemcraft.api.service.spellbook.SpellBookExtensionContext;
+import dev.stemcraft.api.service.spellbook.SpellBookMatch;
 import dev.stemcraft.api.service.spellbook.SpellBookService;
 import dev.stemcraft.api.service.spellbook.SpellBookSource;
 import net.kyori.adventure.text.Component;
@@ -64,7 +65,8 @@ public final class HomeTeleportSpellBookExtension implements SpellBookExtension 
 
             String spell = config.getString("spell", DEFAULT_SPELL);
             Player player = event.getPlayer();
-            if (spellBooks.findSpell(player, SpellBookSource.MAIN_HAND, spell) == null) {
+            SpellBookMatch match = spellBooks.findSpell(player, SpellBookSource.MAIN_HAND, spell);
+            if (match == null) {
                 return;
             }
 
@@ -79,6 +81,7 @@ public final class HomeTeleportSpellBookExtension implements SpellBookExtension 
 
             player.teleport(destination);
             event.setCancelled(true);
+            SpellBookNegativeEffect.applyConfigured(player, match, config);
         }, EventPriority.HIGHEST, true);
     }
 }

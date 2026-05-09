@@ -60,7 +60,9 @@ import dev.stemcraft.service.spellbook.DoublePigDropsSpellBookExtension;
 import dev.stemcraft.service.spellbook.LockedChestSpellBookExtension;
 import dev.stemcraft.service.spellbook.SpellBookExtensionContextImpl;
 import dev.stemcraft.service.spellbook.HomeTeleportSpellBookExtension;
+import dev.stemcraft.service.spellbook.KeepInventorySpellBookExtension;
 import dev.stemcraft.service.spellbook.NoBiteSpellBookExtension;
+import dev.stemcraft.service.spellbook.NoFallDeathSpellBookExtension;
 import dev.stemcraft.service.spellbook.RainGoWaySpellBookExtension;
 import dev.stemcraft.service.spellbook.TreeFallSpellBookExtension;
 import dev.stemcraft.service.spellbook.QuickFishingSpellBookExtension;
@@ -355,6 +357,8 @@ public class SpellBookServiceImpl extends BaseService implements SpellBookServic
         registerExtension(new QuickFishingSpellBookExtension());
         registerExtension(new NoBiteSpellBookExtension());
         registerExtension(new RainGoWaySpellBookExtension());
+        registerExtension(new NoFallDeathSpellBookExtension());
+        registerExtension(new KeepInventorySpellBookExtension());
     }
 
     private @NotNull ConfigSection extensionConfig(@NotNull String id) {

@@ -24,7 +24,9 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.service.spellbook.SpellBookExtension;
 import dev.stemcraft.api.service.spellbook.SpellBookExtensionContext;
+import dev.stemcraft.api.service.spellbook.SpellBookMatch;
 import dev.stemcraft.api.service.spellbook.SpellBookService;
+import org.bukkit.Location;
 import org.bukkit.block.Block;
 import org.bukkit.block.Chest;
 import org.bukkit.entity.Player;
@@ -74,6 +76,10 @@ public final class LockedChestSpellBookExtension implements SpellBookExtension {
                 return;
             }
 
+            SpellBookMatch match = spellBooks.findSpell(top, spell);
+            if (match != null) {
+                SpellBookNegativeEffect.applyConfigured(top, match, config, inventoryLocation(top));
+            }
             event.setCancelled(true);
         }, EventPriority.HIGHEST, true);
 
@@ -216,5 +222,20 @@ public final class LockedChestSpellBookExtension implements SpellBookExtension {
         }
         InventoryHolder holder = inventory.getHolder();
         return holder instanceof Chest || holder instanceof org.bukkit.block.DoubleChest;
+    }
+
+    private @Nullable Location inventoryLocation(@Nullable Inventory inventory) {
+        if (inventory == null) {
+            return null;
+        }
+
+        InventoryHolder holder = inventory.getHolder();
+        if (holder instanceof Chest chest) {
+            return chest.getLocation();
+        }
+        if (holder instanceof org.bukkit.block.DoubleChest doubleChest) {
+            return doubleChest.getLocation();
+        }
+        return null;
     }
 }

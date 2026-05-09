@@ -43,8 +43,10 @@ spell-books:
     locked-chest:
       enabled: true
       spell: "me chest be locked"
+      negative: "none"
     world-teleports:
       enabled: true
+      negative: "none"
       targets:
         duan:
           enabled: true
@@ -54,17 +56,20 @@ spell-books:
       enabled: true
       spell: "zo me home"
       fallback-to-world-spawn: true
+      negative: "none"
     pig-drops:
       enabled: true
       spell: "do zo ham"
       source: "inventory"
       drop-multiplier: 2.0
+      negative: "none"
     tree-fall:
       enabled: true
       spell: "tree fall now"
       source: "inventory"
       require-axe: true
       max-blocks: 64
+      negative: "none"
     quick-fishing:
       enabled: true
       spell: "fish come quick"
@@ -73,11 +78,13 @@ spell-books:
       max-wait-ticks: 80
       min-lure-ticks: 20
       max-lure-ticks: 40
+      negative: "none"
     no-bite:
       enabled: true
       spell: "zo no bite"
       source: "inventory"
       forgive-after-seconds: 10
+      negative: "none"
       mob-types:
         - SPIDER
         - CAVE_SPIDER
@@ -86,6 +93,17 @@ spell-books:
       enabled: true
       spell: "rain go way"
       reset-weather-duration: true
+      negative: "none"
+    no-fall-death:
+      enabled: true
+      spell: "fall no die"
+      source: "inventory"
+      negative: "drop"
+    keep-inventory:
+      enabled: true
+      spell: "die keep inventory"
+      source: "inventory"
+      negative: "consume"
 
 web_server:
     enabled: true
