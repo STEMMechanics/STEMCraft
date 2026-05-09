@@ -7,7 +7,9 @@ This plugin exposes a Java API through `STEMCraftAPI`.
 ```java
 import dev.stemcraft.api.STEMCraftAPI;
 
-STEMCraftAPI api = STEMCraftAPI.api();
+final class ExamplePluginBootstrap {
+    private final STEMCraftAPI api = STEMCraftAPI.api();
+}
 ```
 
 ## Service Surface
@@ -37,44 +39,96 @@ From `STEMCraftAPI`, you can access:
 ## Command Registration Example
 
 ```java
-api.commands().create("example")
-    .permission("stemcraft.command.example")
-    .usage("/example")
-    .executor((plugin, cmd, ctx) -> {
-        ctx.returnInfo("Hello from example.");
-    })
-    .register(yourPlugin);
+final class ExampleCommands {
+    void register(STEMCraftAPI api, org.bukkit.plugin.Plugin yourPlugin) {
+        api.commands().create("example")
+            .permission("stemcraft.command.example")
+            .usage("/example")
+            .executor((plugin, cmd, ctx) -> {
+                ctx.returnInfo("Hello from example.");
+            })
+            .register(yourPlugin);
+    }
+}
 ```
 
 ## Event Registration Example
 
 ```java
-api.events().register(org.bukkit.event.player.PlayerJoinEvent.class, event -> {
-    api.messages().info(event.getPlayer(), "Welcome!");
-});
+final class ExampleEvents {
+    void register(STEMCraftAPI api) {
+        api.events().register(org.bukkit.event.player.PlayerJoinEvent.class, event -> {
+            api.messages().info(event.getPlayer(), "Welcome!");
+        });
+    }
+}
 ```
 
 ## Database Example
 
 ```java
-api.database().execute(
-    "CREATE TABLE IF NOT EXISTS example_data (id TEXT PRIMARY KEY, value TEXT);"
-);
+final class ExampleDatabase {
+    void init(STEMCraftAPI api) {
+        api.database().execute(
+            "CREATE TABLE IF NOT EXISTS example_data (id TEXT PRIMARY KEY, value TEXT);"
+        );
 
-api.database().update(
-    "INSERT INTO example_data (id, value) VALUES (?, ?) " +
-    "ON CONFLICT(id) DO UPDATE SET value = excluded.value",
-    ps -> {
-        ps.setString(1, "row-1");
-        ps.setString(2, "hello");
+        api.database().update(
+            "INSERT INTO example_data (id, value) VALUES (?, ?) " +
+            "ON CONFLICT(id) DO UPDATE SET value = excluded.value",
+            ps -> {
+                ps.setString(1, "row-1");
+                ps.setString(2, "hello");
+            }
+        );
     }
-);
+}
 ```
 
 ## Resource Pack Generator Extension Point
 
-Resource pack generation supports generator registration via `ResourcePackGenerator`.
-See implementations in:
+`ResourcePackGenerator` is now an interface-based extension point.
+
+This is a breaking API change from the previous abstract-class model.
+Generators written against the older `extends ResourcePackGenerator` API must
+be migrated to the new interface contract.
+
+Plugin authors should usually implement `ResourcePackGenerator` directly.
+`AbstractResourcePackGenerator` is available as an optional convenience helper
+when you want STEMCraft to store the generator id and generator config for you.
+
+Core generator contract:
+
+- `id()`
+  Returns the unique generator id used for registration, dependency
+  resolution, config lookup, and logging.
+- `onLoad(ConfigSectionView)`
+  Called after dependency checks and before the generator is activated.
+  Use this to read and cache generator-specific config from disk.
+- `onUnload()`
+  Called when the generator is unregistered or the service unloads.
+- `generate(ResourcePackBuildContext)`
+  Performs one build pass for one target. `generate(context)` is invoked once
+  per supported `ResourcePackBuildTarget`.
+- `requiredGenerators()`
+  Returns generator ids that must already be active before this generator can
+  be activated.
+- `supportedFormats()`
+  Declares the pack-format range the generator can build.
+- `supports(ResourcePackBuildTarget)`
+  Optional finer-grained target check. By default this delegates to
+  `supportedFormats().contains(target.packFormat())`.
+
+`ResourcePackBuildContext` provides:
+
+- `target()`
+  The explicit `ResourcePackBuildTarget` currently being built.
+- `writer()`
+  The `ResourcePackWriter` output abstraction for the current target.
+- `config()`
+  The generator-specific `ConfigSectionView`.
+
+See bundled implementations in:
 
 - `dev.stemcraft.service.resourcepack.generators.PackMetaGenerator`
 - `dev.stemcraft.service.resourcepack.generators.GlyphGenerator`

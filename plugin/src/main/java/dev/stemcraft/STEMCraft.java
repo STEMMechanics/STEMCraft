@@ -77,11 +77,14 @@ import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @SuppressWarnings("SameParameterValue")
 @Getter
 @Accessors(fluent = true)
 public final class STEMCraft extends JavaPlugin {
+    private static final Pattern VERSION_COMPONENT_PATTERN = Pattern.compile("\\d+");
     private static STEMCraftAPI api;
     private File cacheDir;
 
@@ -512,6 +515,29 @@ public final class STEMCraft extends JavaPlugin {
      */
     public static String getVersion() {
         return getPlugin().getPluginMeta().getVersion();
+    }
+
+    /**
+     * Get the current Minecraft version as major, minor, and patch components.
+     *
+     * @return a three-element array containing the parsed Minecraft version.
+     */
+    public static int[] getMinecraftVersion() {
+        return parseMinecraftVersion(Bukkit.getMinecraftVersion());
+    }
+
+    static int[] parseMinecraftVersion(@Nullable String version) {
+        int[] components = new int[] {0, 0, 0};
+        if (version == null || version.isBlank()) {
+            return components;
+        }
+
+        Matcher matcher = VERSION_COMPONENT_PATTERN.matcher(version);
+        int index = 0;
+        while (matcher.find() && index < components.length) {
+            components[index++] = Integer.parseInt(matcher.group());
+        }
+        return components;
     }
 
     /**
