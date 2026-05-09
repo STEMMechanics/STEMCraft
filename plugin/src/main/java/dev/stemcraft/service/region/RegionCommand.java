@@ -219,19 +219,21 @@ public class RegionCommand {
         if (selection == null) {
             ctx.returnError("No WorldEdit selection found. Make a selection first.");
         }
+        SCRegion selectedRegion = Objects.requireNonNull(selection, "selection");
 
-        World world = selection.getWorld();
+        World world = selectedRegion.getWorld();
         if (world == null) {
             ctx.returnError("The current WorldEdit selection is not bound to a loaded world.");
         }
+        World selectedWorld = Objects.requireNonNull(world, "world");
 
-        ManagedRegionRef regionRef = parseRegionRef(ctx, ctx.getArg(1), world.getName());
-        if (!regionRef.worldName().equals(world.getName())) {
-            ctx.returnError("Region world '" + regionRef.worldName() + "' does not match the WorldEdit selection world '" + world.getName() + "'.");
+        ManagedRegionRef regionRef = parseRegionRef(ctx, ctx.getArg(1), selectedWorld.getName());
+        if (!regionRef.worldName().equals(selectedWorld.getName())) {
+            ctx.returnError("Region world '" + regionRef.worldName() + "' does not match the WorldEdit selection world '" + selectedWorld.getName() + "'.");
         }
 
         int priority = ctx.numArgs() >= 3 ? parsePriority(ctx.getArg(2), ctx) : 0;
-        SCManagedRegion region = new SCManagedRegion(regionRef.id(), world.getName(), selection.copy(), priority);
+        SCManagedRegion region = new SCManagedRegion(regionRef.id(), selectedWorld.getName(), selectedRegion.copy(), priority);
         regionService.saveManagedRegion(region);
         ctx.returnSuccess("Managed region '" + regionRef.reference() + "' saved from your current WorldEdit selection.");
     }
@@ -328,7 +330,7 @@ public class RegionCommand {
         if (player == null) {
             ctx.returnError("A player is required when using this command.");
         }
-        return player;
+        return Objects.requireNonNull(player, "player");
     }
 
     /**
@@ -396,7 +398,7 @@ public class RegionCommand {
             if (world == null) {
                 ctx.returnError("World '" + ctx.getArg(1) + "' does not exist.");
             }
-            return world.getName();
+            return Objects.requireNonNull(world, "world").getName();
         }
         return resolveDefaultWorldName(ctx);
     }
@@ -427,7 +429,7 @@ public class RegionCommand {
         if (player == null) {
             ctx.returnError("A world is required here. Use <world:id> from console.");
         }
-        return player.getWorld().getName();
+        return Objects.requireNonNull(player, "player").getWorld().getName();
     }
 
     private @NotNull ManagedRegionRef parseRegionRef(@NotNull CommandContext ctx,
@@ -445,7 +447,7 @@ public class RegionCommand {
             ctx.returnError("A world is required here. Use <world:id>.");
         }
 
-        return new ManagedRegionRef(defaultWorldName, normalizeRegionId(ctx, trimmed));
+        return new ManagedRegionRef(Objects.requireNonNull(defaultWorldName, "defaultWorldName"), normalizeRegionId(ctx, trimmed));
     }
 
     private record ManagedRegionRef(String worldName, String id) {

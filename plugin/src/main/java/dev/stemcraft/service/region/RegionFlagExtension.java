@@ -54,6 +54,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Self-contained managed-region extension for boolean region flags.
@@ -158,18 +159,19 @@ public class RegionFlagExtension implements RegionDataExtension<RegionFlagData> 
             if (settings == null || settings.isEmpty()) {
                 ctx.returnInfo("Region '" + region.getId() + "' has no region flags for scope '" + scope + "'.");
             }
+            RegionFlagData scopedSettings = Objects.requireNonNull(settings, "settings");
 
             if (ctx.numArgs() == 0) {
                 ctx.info("Region flags for '" + region.getId() + "' [" + scope + "]:");
-                settings.flags().forEach((flagKey, value) -> ctx.info(" - " + flagKey + ": " + value));
+                scopedSettings.flags().forEach((flagKey, value) -> ctx.info(" - " + flagKey + ": " + value));
                 return;
             }
 
             String flagKey = normalizeFlagKey(ctx.getArg(0));
-            if (!settings.hasFlag(flagKey)) {
+            if (!scopedSettings.hasFlag(flagKey)) {
                 ctx.returnInfo("Region flag '" + flagKey + "' for '" + region.getId() + "' [" + scope + "]: (unset)");
             }
-            ctx.returnInfo("Region flag '" + flagKey + "' for '" + region.getId() + "' [" + scope + "]: " + settings.getFlag(flagKey));
+            ctx.returnInfo("Region flag '" + flagKey + "' for '" + region.getId() + "' [" + scope + "]: " + scopedSettings.getFlag(flagKey));
         }
 
         Map<String, RegionFlagData> scopedData = getAll(region);
@@ -203,6 +205,7 @@ public class RegionFlagExtension implements RegionDataExtension<RegionFlagData> 
             if (settings == null || settings.isEmpty()) {
                 ctx.returnInfo("Region '" + region.getId() + "' has no region flags for scope '" + scope + "'.");
             }
+            RegionFlagData scopedSettings = Objects.requireNonNull(settings, "settings");
 
             if (ctx.numArgs() == 0) {
                 remove(region, scope);
@@ -210,8 +213,8 @@ public class RegionFlagExtension implements RegionDataExtension<RegionFlagData> 
             }
 
             String flagKey = normalizeFlagKey(ctx.getArg(0));
-            settings.removeFlag(flagKey);
-            persist(region, scope, settings);
+            scopedSettings.removeFlag(flagKey);
+            persist(region, scope, scopedSettings);
             ctx.returnSuccess("Region flag '" + flagKey + "' cleared for '" + region.getId() + "'" + scopeSuffix(scope) + ".");
         }
 

@@ -141,10 +141,11 @@ public class RegionMemberExtension implements RegionDataExtension<RegionMemberDa
         if (settings == null || settings.isEmpty()) {
             ctx.returnInfo("Region '" + region.getId() + "' has no explicit members.");
         }
+        RegionMemberData memberSettings = Objects.requireNonNull(settings, "settings");
 
         ctx.info("Region members for '" + region.getId() + "':");
-        ctx.info(" - players: " + formatPlayers(settings));
-        ctx.info(" - groups: " + formatGroups(settings));
+        ctx.info(" - players: " + formatPlayers(memberSettings));
+        ctx.info(" - groups: " + formatGroups(memberSettings));
     }
 
     @Override
@@ -161,6 +162,7 @@ public class RegionMemberExtension implements RegionDataExtension<RegionMemberDa
         if (settings == null || settings.isEmpty()) {
             ctx.returnInfo("Region '" + region.getId() + "' has no explicit members.");
         }
+        RegionMemberData memberSettings = Objects.requireNonNull(settings, "settings");
 
         if (ctx.numArgs() == 0) {
             region.removeData(key());
@@ -169,8 +171,8 @@ public class RegionMemberExtension implements RegionDataExtension<RegionMemberDa
         }
 
         MemberTarget target = parseTarget(ctx, 0);
-        removeTarget(settings, target);
-        persist(region, settings);
+        removeTarget(memberSettings, target);
+        persist(region, memberSettings);
         ctx.returnSuccess("Region members updated for '" + region.getId() + "'.");
     }
 
@@ -297,7 +299,7 @@ public class RegionMemberExtension implements RegionDataExtension<RegionMemberDa
             ctx.returnError("Unknown player '" + raw + "'.");
         }
 
-        return new MemberTarget(offlinePlayer.getUniqueId(), null);
+        return new MemberTarget(Objects.requireNonNull(offlinePlayer, "offlinePlayer").getUniqueId(), null);
     }
 
     private record MemberTarget(@Nullable UUID playerId, @Nullable String group) { }
