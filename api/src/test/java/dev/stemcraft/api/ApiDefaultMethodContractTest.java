@@ -20,7 +20,10 @@ import dev.stemcraft.api.service.locale.LocaleService;
 import dev.stemcraft.api.service.message.MessageService;
 import dev.stemcraft.api.service.player.PlayerService;
 import dev.stemcraft.api.service.region.RegionListener;
-import dev.stemcraft.api.service.resourcepack.ResourcePackService;
+import dev.stemcraft.api.service.resourcepack.PackFormatRange;
+import dev.stemcraft.api.service.resourcepack.ResourcePackWriter;
+import dev.stemcraft.api.service.resourcepack.ResourcePackBuildContext;
+import dev.stemcraft.api.service.resourcepack.ResourcePackBuildTarget;
 import dev.stemcraft.api.service.resourcepack.generator.ResourcePackGenerator;
 import dev.stemcraft.api.service.selection.SelectionService;
 import dev.stemcraft.api.service.world.WorldBaseSetting;
@@ -46,7 +49,6 @@ import org.mockbukkit.mockbukkit.world.WorldMock;
 import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
-import java.io.File;
 import java.lang.reflect.Field;
 import java.time.Duration;
 import java.util.List;
@@ -501,22 +503,19 @@ class ApiDefaultMethodContractTest {
     }
 
     @Test
-    void resourcePackGeneratorDefaultsReturnTrueAndNoOp() {
-        STEMCraftAPI api = mock(STEMCraftAPI.class);
-        ResourcePackService service = mock(ResourcePackService.class);
-        TestResourcePackGenerator generator = new TestResourcePackGenerator(api, service);
+    void resourcePackGeneratorDefaultsReturnNoOpLifecycleAndUniversalSupport() {
+        TestResourcePackGenerator generator = new TestResourcePackGenerator();
         ConfigSection config = mock(ConfigSection.class);
-        File dataPackDir = new File("build/tmp/api-tests/datapack");
-        File resourcePackDir = new File("build/tmp/api-tests/resourcepack");
+        ResourcePackWriter writer = mock(ResourcePackWriter.class);
+        ResourcePackBuildTarget target = new ResourcePackBuildTarget("1.21.11", 75);
 
-        assertSame(api, generator.exposedApi());
-        assertSame(service, generator.exposedService());
-        assertTrue(generator.onLoad(config));
-        assertDoesNotThrow(() -> generator.buildStart(config, resourcePackDir));
-        assertDoesNotThrow(() -> generator.buildEnd(config, resourcePackDir));
-        assertDoesNotThrow(() -> generator.buildFromDataPack(dataPackDir, config, resourcePackDir));
-        assertDoesNotThrow(() -> generator.buildFromDataPackConfig("ns", config, dataPackDir, config, resourcePackDir));
-        assertDoesNotThrow(() -> generator.apply("ns", config));
+        assertEquals("test-generator", generator.id());
+        assertDoesNotThrow(() -> generator.onLoad(config));
+        assertDoesNotThrow(generator::onUnload);
+        assertDoesNotThrow(() -> generator.generate(new ResourcePackBuildContext(target, writer, config)));
+        assertTrue(generator.requiredGenerators().isEmpty());
+        assertEquals(PackFormatRange.all(), generator.supportedFormats());
+        assertTrue(generator.supports(target));
     }
 
     @Test
@@ -680,17 +679,14 @@ class ApiDefaultMethodContractTest {
         }
     }
 
-    private static final class TestResourcePackGenerator extends ResourcePackGenerator {
-        private TestResourcePackGenerator(STEMCraftAPI api, ResourcePackService service) {
-            super(api, service);
+    private static final class TestResourcePackGenerator implements ResourcePackGenerator {
+        @Override
+        public @NotNull String id() {
+            return "test-generator";
         }
 
-        private STEMCraftAPI exposedApi() {
-            return api;
-        }
-
-        private ResourcePackService exposedService() {
-            return service;
+        @Override
+        public void generate(@NotNull ResourcePackBuildContext context) {
         }
     }
 }
