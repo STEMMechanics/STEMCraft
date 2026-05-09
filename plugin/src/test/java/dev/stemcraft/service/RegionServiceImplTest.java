@@ -58,6 +58,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -106,18 +107,7 @@ class RegionServiceImplTest {
         doNothing().when(configSection).save();
 
         handlers = new HashMap<>();
-        when(events.register(any(Class.class), any())).thenAnswer(invocation -> {
-            Class<?> eventClass = invocation.getArgument(0);
-            EventHandler<?> handler = invocation.getArgument(1);
-            handlers.computeIfAbsent(eventClass, ignored -> new java.util.ArrayList<>()).add(handler);
-            return mock(Listener.class);
-        });
-        when(events.register(any(Class.class), any(), any(EventPriority.class), anyBoolean())).thenAnswer(invocation -> {
-            Class<?> eventClass = invocation.getArgument(0);
-            EventHandler<?> handler = invocation.getArgument(1);
-            handlers.computeIfAbsent(eventClass, ignored -> new java.util.ArrayList<>()).add(handler);
-            return mock(Listener.class);
-        });
+        stubEventRegistration(events);
 
         service = new RegionServiceImpl(plugin, api) {
             @Override
@@ -393,19 +383,47 @@ class RegionServiceImplTest {
     }
 
     private void firePlayerMove(Location from, Location to) {
-        List<EventHandler<?>> moveHandlers = handlers.get(PlayerMoveEvent.class);
+        List<EventHandler<PlayerMoveEvent>> moveHandlers = handlersFor(PlayerMoveEvent.class);
         assertNotNull(moveHandlers);
         @SuppressWarnings("UnstableApiUsage")
         PlayerMoveEvent event = new PlayerMoveEvent(player, from, to);
-        for (EventHandler<?> rawHandler : moveHandlers) {
-            EventHandler<PlayerMoveEvent> handler = (EventHandler<PlayerMoveEvent>) rawHandler;
+        for (EventHandler<PlayerMoveEvent> handler : moveHandlers) {
             handler.handle(event);
         }
     }
 
-    private <T extends Event> EventHandler<T> firstHandler(Class<?> eventClass) {
-        List<EventHandler<?>> eventHandlers = handlers.get(eventClass);
+    @SuppressWarnings("unchecked")
+    private <T extends Event> List<EventHandler<T>> handlersFor(Class<T> eventClass) {
+        return (List<EventHandler<T>>) (List<?>) handlers.get(eventClass);
+    }
+
+    private <T extends Event> EventHandler<T> firstHandler(Class<T> eventClass) {
+        List<EventHandler<T>> eventHandlers = handlersFor(eventClass);
         assertNotNull(eventHandlers);
-        return (EventHandler<T>) eventHandlers.getFirst();
+        return eventHandlers.getFirst();
+    }
+
+    private void stubEventRegistration(EventService events) {
+        doAnswer(invocation -> {
+            Class<?> eventClass = invocation.getArgument(0);
+            EventHandler<?> handler = invocation.getArgument(1);
+            handlers.computeIfAbsent(eventClass, ignored -> new java.util.ArrayList<>()).add(handler);
+            return mock(Listener.class);
+        }).when(events).register(anyEventClass(), anyEventHandler());
+
+        doAnswer(invocation -> {
+            Class<?> eventClass = invocation.getArgument(0);
+            EventHandler<?> handler = invocation.getArgument(1);
+            handlers.computeIfAbsent(eventClass, ignored -> new java.util.ArrayList<>()).add(handler);
+            return mock(Listener.class);
+        }).when(events).register(anyEventClass(), anyEventHandler(), any(EventPriority.class), anyBoolean());
+    }
+
+    private Class<Event> anyEventClass() {
+        return any();
+    }
+
+    private EventHandler<Event> anyEventHandler() {
+        return any();
     }
 }
