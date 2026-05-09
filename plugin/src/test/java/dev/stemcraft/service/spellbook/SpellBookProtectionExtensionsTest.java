@@ -4,6 +4,7 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.service.event.EventHandler;
 import dev.stemcraft.api.service.event.EventService;
+import dev.stemcraft.api.service.spellbook.SpellBook;
 import dev.stemcraft.api.service.spellbook.SpellBookExtensionContext;
 import dev.stemcraft.api.service.spellbook.SpellBookMatch;
 import dev.stemcraft.api.service.spellbook.SpellBookService;
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -50,7 +52,7 @@ class SpellBookProtectionExtensionsTest {
 
         Player player = mock(Player.class);
         when(player.getHealth()).thenReturn(10.0d);
-        when(spellBooks.findSpell(player, SpellBookSource.INVENTORY, "fall no die")).thenReturn(mock(SpellBookMatch.class));
+        when(spellBooks.findSpell(player, SpellBookSource.INVENTORY, "fall no die")).thenReturn(match());
 
         EntityDamageEvent event = mock(EntityDamageEvent.class);
         when(event.getCause()).thenReturn(EntityDamageEvent.DamageCause.FALL);
@@ -108,7 +110,7 @@ class SpellBookProtectionExtensionsTest {
         new KeepInventorySpellBookExtension().register(context(events, spellBooks, config));
 
         Player player = mock(Player.class);
-        when(spellBooks.findSpell(player, SpellBookSource.INVENTORY, "die keep inventory")).thenReturn(mock(SpellBookMatch.class));
+        when(spellBooks.findSpell(player, SpellBookSource.INVENTORY, "die keep inventory")).thenReturn(match());
 
         List<ItemStack> drops = new ArrayList<>();
         drops.add(mock(ItemStack.class));
@@ -169,5 +171,9 @@ class SpellBookProtectionExtensionsTest {
         when(config.getString("source", "inventory")).thenReturn(source);
         when(config.getString("negative", "none")).thenReturn("none");
         return config;
+    }
+
+    private SpellBookMatch match() {
+        return new SpellBookMatch(mock(ItemStack.class), 0, new SpellBook("spell", "spell", UUID.randomUUID()));
     }
 }
