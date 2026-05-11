@@ -26,7 +26,6 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
-import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
 import org.bukkit.event.entity.EntityDeathEvent;
@@ -52,11 +51,6 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
     private final MobArenaMiniGame mobArena;
     private final Map<Entity, MiniGameArena> trackedEntityMiniGameArenaMap;
     private final Map<Entity, MiniGameArena> entityMiniGameArenaMap;
-
-    private Listener entityDamageEventListener = null;
-    private Listener entityDeathEventListener = null;
-    private Listener entityRemoveFromWorldEventListener = null;
-    private Listener entityTransformEventListener = null;
 
     /**
      * <p>Gets the number of tracked mobs from the given arena.</p>
@@ -109,10 +103,10 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
      * <p>This registers listeners for {@code EntityDamageEvent}, {@code EntityDeathEvent}, {@code EntityRemoveFromWorldEvent}, and {@code EntityTransformEvent}</p>
      */
     public void onEnable() {
-        entityDamageEventListener = api.events().register(EntityDamageEvent.class, this::onEntityDamageDirect);
-        entityDeathEventListener = api.events().register(EntityDeathEvent.class, this::onEntityDeathDirect);
-        entityRemoveFromWorldEventListener = api.events().register(EntityRemoveFromWorldEvent.class, this::onEntityRemoveFromWorldDirect);
-        entityTransformEventListener = api.events().register(EntityTransformEvent.class, this::onEntityTransformDirect);
+        api.events().register(EntityDamageEvent.class, this::onEntityDamageDirect);
+        api.events().register(EntityDeathEvent.class, this::onEntityDeathDirect);
+        api.events().register(EntityRemoveFromWorldEvent.class, this::onEntityRemoveFromWorldDirect);
+        api.events().register(EntityTransformEvent.class, this::onEntityTransformDirect);
     }
 
     /**
@@ -499,8 +493,6 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
     public void onArenaCountdownEnd(final MiniGameArena arena) {
         if (arena.getStatus() == ArenaStatus.STARTING) {
             arena.setStatus(ArenaStatus.RUNNING);
-        } else if (arena.getStatus() == ArenaStatus.RUNNING) {
-            arena.setStatus(ArenaStatus.ENDING, 30);
         } else if (arena.getStatus() == ArenaStatus.ENDING) {
             arena.setStatus(ArenaStatus.RESETTING);
         }
@@ -561,7 +553,7 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
      * @param incrementType How to increase the amount of mobs to spawn in by.
      * @return The amount of mobs to spawn in.
      */
-    private int determineMobSpawnCount(final int round, final int initialWave,
+    public static int determineMobSpawnCount(final int round, final int initialWave,
                                        final int initialAmount, final double incrementAmount,
                                        @NotNull final IncrementType incrementType) {
         if (round < initialWave) {
@@ -865,15 +857,15 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
         player.setHealth(PlayerUtil.getMaxHealth(player));
 
         if (arena.getPlayers().size() == 1) {
-            arena.startWinnerCelebration(arena.getPlayers().getFirst().getLocation(), 10);
+            arena.startWinnerCelebration(arena.getPlayers().getFirst().getLocation(), mobArena.endingSeconds(arena));
             broadcastInfoToOccupants(arena,
                     "<rainbow>Congratulations!</rainbow> " + player.getName() + " got up to wave <gold>" + arena.get("wave", Integer.class) + "</gold>!");
             arena.setStatus(ArenaStatus.ENDING);
-            arena.setCountdown(10);
+            arena.setCountdown(mobArena.endingSeconds(arena));
         } else if (arena.getPlayers().isEmpty()) {
-            arena.startWinnerCelebration(playerFormerLocation, 10);
+            arena.startWinnerCelebration(playerFormerLocation, mobArena.endingSeconds(arena));
             arena.setStatus(ArenaStatus.ENDING);
-            arena.setCountdown(10);
+            arena.setCountdown(mobArena.endingSeconds(arena));
             broadcastInfoToOccupants(arena,
                     "<rainbow>Congratulations!</rainbow> You got up to wave <gold>" + arena.get("wave", Integer.class) + "</gold>!");
         }

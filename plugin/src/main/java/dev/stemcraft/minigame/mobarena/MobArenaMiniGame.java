@@ -34,6 +34,9 @@ public class MobArenaMiniGame extends BaseMiniGame {
     @Accessors(fluent = true)
     private static final @NotNull String HIGHEST_ROUND_STAT_KEY = "mobarena_highest_round";
 
+    static final int DEFAULT_START_COUNTDOWN_SECONDS = 30;
+    static final int DEFAULT_ENDING_SECONDS = 20;
+
     private static final int HUD_LINE_HOLD_UPDATES = 3;
 
     @Getter
@@ -328,7 +331,17 @@ public class MobArenaMiniGame extends BaseMiniGame {
      * @param arena The arena to get the time it takes for an arena to start.
      * @return The time it should take for the arena to start.
      */
-    public int startCountdownSeconds(@NotNull final MiniGameArena arena) {
-        return 30; // TODO: Make this customisable.
+    public int startCountdownSeconds(final @NotNull MiniGameArena arena) {
+        return Math.max(1, arena.get("startCountdownSeconds", Integer.class, DEFAULT_START_COUNTDOWN_SECONDS));
+    }
+
+    /**
+     * <p>Gets the amount of time it should take for an arena to reset from an ending for a given arena.</p>
+     *
+     * @param arena The arena to get the time it takes for an arena to reset from an ending.
+     * @return The time it should take for the arena to start.
+     */
+    public int endingSeconds(final @NotNull MiniGameArena arena) {
+        return Math.max(1, arena.get("endingSeconds", Integer.class, DEFAULT_ENDING_SECONDS));
     }
 }

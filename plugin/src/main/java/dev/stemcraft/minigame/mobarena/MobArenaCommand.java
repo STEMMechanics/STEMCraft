@@ -95,6 +95,8 @@ final class MobArenaCommand {
                 .tabCompletion("set", "{mobarena-arenas}", "spectator")
                 .tabCompletion("set", "{mobarena-arenas}", "minplayers")
                 .tabCompletion("set", "{mobarena-arenas}", "maxplayers")
+                .tabCompletion("set", "{mobarena-arenas}", "startcountdown")
+                .tabCompletion("set", "{mobarena-arenas}", "endingseconds")
                 .tabCompletion("set", "{mobarena-arenas}", "name")
                 .tabCompletion("select", "{mobarena-arenas}", "arena")
                 .tabCompletion("select", "{mobarena-arenas}", "lobby")
@@ -422,6 +424,8 @@ final class MobArenaCommand {
         ctx.info(" - Min players: " + arena.getMinPlayers());
         ctx.info(" - Lobby: " + formatLocation(arena.getLobbySpawn()));
         ctx.info(" - Spectator: " + formatLocation(arena.getSpectatorSpawn()));
+        ctx.info(" - Start countdown: " + mobArena.startCountdownSeconds(arena) + " sec");
+        ctx.info(" - Reset countdown: " + mobArena.endingSeconds(arena) + " sec");
         ctx.info(" - Spawn Records:");
         printSpawnerConfigInfo(ctx, arena);
         ctx.info(" - Zones:");
@@ -745,6 +749,18 @@ final class MobArenaCommand {
                 final int maxPlayers = ctx.getArgAsInt(3, 16, 1, null);
                 arena.setMaxPlayers(maxPlayers);
                 ctx.success("Maximum players set to " + arena.getMaxPlayers() + " for arena '" + arena.id() + "'.");
+            }
+            case "startcountdown" -> {
+                ctx.checkArgsSizeAtLeast(4);
+                final int seconds = ctx.getArgAsInt(3, MobArenaMiniGame.DEFAULT_START_COUNTDOWN_SECONDS, 1, null);
+                arena.set("startCountdownSeconds", seconds);
+                ctx.success("Start countdown set to " + seconds + " seconds for arena '" + arena.id() + "'.");
+            }
+            case "endingseconds" -> {
+                ctx.checkArgsSizeAtLeast(4);
+                final int seconds = ctx.getArgAsInt(3, MobArenaMiniGame.DEFAULT_ENDING_SECONDS, 1, null);
+                arena.set("endingSeconds", seconds);
+                ctx.success("Ending countdown set to " + seconds + " seconds for arena '" + arena.id() + "'.");
             }
             case "name" -> {
                 ctx.checkArgsSizeAtLeast(4);
