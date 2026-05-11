@@ -287,6 +287,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
         return arena.getLobbySpawn();
     }
 
+    @Override
     public void onPlayerLeaveArena(MiniGameArena arena, Player player) {
         if (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING
             && (arena.numPlayers() < arena.getMinPlayers() || activeTeamCount(arena) < 2)) {
