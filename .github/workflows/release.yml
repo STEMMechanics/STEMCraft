@@ -5,7 +5,6 @@ on:
     branches: [ '**' ]
     paths:
       - 'api/**'
-      - 'changes.md'
       - 'plugin/**'
       - 'gradle/**'
       - 'build.gradle'
@@ -29,7 +28,7 @@ on:
       changes_file:
         description: Optional path to the release notes source file
         required: false
-        default: 'changes.md'
+        default: ''
         type: string
 
 permissions:
@@ -61,7 +60,7 @@ jobs:
           RUN_NUMBER: ${{ github.run_number }}
           INPUT_RELEASE: ${{ inputs.release && 'true' || 'false' }}
           INPUT_BUILD_NAME: ${{ inputs.build_name || '' }}
-          INPUT_CHANGES_FILE: ${{ inputs.changes_file || 'changes.md' }}
+          INPUT_CHANGES_FILE: ${{ inputs.changes_file || '' }}
         run: |
           set -eu
 
@@ -233,29 +232,76 @@ jobs:
           if [ -n "${CHANGES_FILE:-}" ] && [ -f "$CHANGES_FILE" ] && grep -q '[^[:space:]]' "$CHANGES_FILE"; then
             {
               echo
-              echo "## Release Notes"
+              echo "## Manual Release Notes"
               echo
               cat "$CHANGES_FILE"
               echo
             } >> release-notes.txt
           else
-            PR_TITLE="$(gh api \
-              -H 'Accept: application/vnd.github+json' \
-              "/repos/$REPOSITORY/commits/$SHA/pulls" \
-              --jq '.[0].title' 2>/dev/null || true)"
-            COMMIT_SUBJECT="$(git log -1 --pretty=%s "$SHA")"
-            SUMMARY_TITLE="${PR_TITLE:-$COMMIT_SUBJECT}"
+            PREVIOUS_TAG="$(
+              git tag --list 'build-*' \
+                | grep -Fxv "${TAG:-}" \
+                | sort -V \
+                | tail -1
+            )"
 
-            cat >> release-notes.txt <<EOF
+            if [ -n "$PREVIOUS_TAG" ]; then
+              RANGE="${PREVIOUS_TAG}..${SHA}"
+            else
+              RANGE="${SHA}"
+            fi
 
-          ## Release Notes
+            CHANGE_LINES="$(
+              python3 - "$RANGE" <<'PY'
+              import re
+              import subprocess
+              import sys
 
-          - ${SUMMARY_TITLE}
+              range_spec = sys.argv[1]
+              commits = subprocess.check_output(
+                  ["git", "log", "--first-parent", "--format=%H\t%s", range_spec],
+                  text=True,
+              ).splitlines()
 
-          ## Assets
-          - STEMCraft plugin JAR
-          - STEMCraft API JAR
-          EOF
+              merge_pattern = re.compile(r"^Merge pull request #(\d+) ")
+              lines = []
+
+              for entry in commits:
+                  sha, subject = entry.split("\t", 1)
+                  body = subprocess.check_output(
+                      ["git", "show", "-s", "--format=%b", sha],
+                      text=True,
+                  ).splitlines()
+                  detail = next((line.strip() for line in body if line.strip()), "")
+                  match = merge_pattern.match(subject)
+                  if match:
+                      pr_number = match.group(1)
+                      summary = detail or subject
+                      lines.append(f"- {summary} (#{pr_number})")
+                  else:
+                      lines.append(f"- {subject}")
+
+              if not lines:
+                  lines.append("- No code changes since the previous build tag.")
+
+              print("\n".join(lines))
+              PY
+            )"
+
+            {
+              echo
+              echo "## What's Changed"
+              echo
+              printf '%s\n' "$CHANGE_LINES"
+              echo
+              if [ -n "$PREVIOUS_TAG" ]; then
+                echo "Full changelog: https://github.com/${REPOSITORY}/compare/${PREVIOUS_TAG}...${SHA}"
+                echo
+              fi
+              echo "## Assets"
+              echo "- STEMCraft plugin JAR"
+              echo "- STEMCraft API JAR"
+            } >> release-notes.txt
           fi
 
           if gh release view "$TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
