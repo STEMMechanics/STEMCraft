@@ -251,42 +251,26 @@ jobs:
               RANGE="${SHA}"
             fi
 
-            CHANGE_LINES="$(
-              python3 - "$RANGE" <<'PY'
-              import re
-              import subprocess
-              import sys
+            change_lines_file="$(mktemp)"
+            git log --first-parent --format='%H%x09%s' "$RANGE" | while IFS=$'\t' read -r commit_sha subject; do
+              [ -n "${commit_sha:-}" ] || continue
 
-              range_spec = sys.argv[1]
-              commits = subprocess.check_output(
-                  ["git", "log", "--first-parent", "--format=%H\t%s", range_spec],
-                  text=True,
-              ).splitlines()
+              detail="$(git show -s --format=%b "$commit_sha" | awk 'NF { print; exit }')"
+              if printf '%s\n' "$subject" | grep -Eq '^Merge pull request #[0-9]+ '; then
+                pr_number="$(printf '%s\n' "$subject" | sed -E 's/^Merge pull request #([0-9]+).*/\1/')"
+                summary="${detail:-$subject}"
+                printf -- '- %s (#%s)\n' "$summary" "$pr_number" >> "$change_lines_file"
+              else
+                printf -- '- %s\n' "$subject" >> "$change_lines_file"
+              fi
+            done
 
-              merge_pattern = re.compile(r"^Merge pull request #(\d+) ")
-              lines = []
-
-              for entry in commits:
-                  sha, subject = entry.split("\t", 1)
-                  body = subprocess.check_output(
-                      ["git", "show", "-s", "--format=%b", sha],
-                      text=True,
-                  ).splitlines()
-                  detail = next((line.strip() for line in body if line.strip()), "")
-                  match = merge_pattern.match(subject)
-                  if match:
-                      pr_number = match.group(1)
-                      summary = detail or subject
-                      lines.append(f"- {summary} (#{pr_number})")
-                  else:
-                      lines.append(f"- {subject}")
-
-              if not lines:
-                  lines.append("- No code changes since the previous build tag.")
-
-              print("\n".join(lines))
-              PY
-            )"
+            if [ -s "$change_lines_file" ]; then
+              CHANGE_LINES="$(cat "$change_lines_file")"
+            else
+              CHANGE_LINES="- No code changes since the previous build tag."
+            fi
+            rm -f "$change_lines_file"
 
             {
               echo
