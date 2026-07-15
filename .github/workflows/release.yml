@@ -25,6 +25,11 @@ on:
         required: false
         default: ''
         type: string
+      changes_file:
+        description: Optional path to the release notes source file
+        required: false
+        default: 'changes.md'
+        type: string
 
 permissions:
   contents: write
@@ -38,6 +43,7 @@ jobs:
       build_number: ${{ steps.meta.outputs.build_number }}
       tag: ${{ steps.meta.outputs.tag }}
       release_name: ${{ steps.meta.outputs.release_name }}
+      changes_file: ${{ steps.meta.outputs.changes_file }}
 
     steps:
       - name: Check out repository
@@ -54,6 +60,7 @@ jobs:
           RUN_NUMBER: ${{ github.run_number }}
           INPUT_RELEASE: ${{ inputs.release && 'true' || 'false' }}
           INPUT_BUILD_NAME: ${{ inputs.build_name || '' }}
+          INPUT_CHANGES_FILE: ${{ inputs.changes_file || 'changes.md' }}
         run: |
           set -eu
 
@@ -90,6 +97,7 @@ jobs:
             echo "build_number=$BUILD_NUMBER"
             echo "tag=$TAG"
             echo "release_name=$RELEASE_NAME"
+            echo "changes_file=$INPUT_CHANGES_FILE"
           } >> "$GITHUB_OUTPUT"
 
   build-and-test:
@@ -207,6 +215,7 @@ jobs:
       - name: Create or update GitHub release and upload JARs
         env:
           BUILD_NUMBER: ${{ needs.prepare.outputs.build_number }}
+          CHANGES_FILE: ${{ needs.prepare.outputs.changes_file }}
           GH_TOKEN: ${{ github.token }}
           RELEASE_NAME: ${{ needs.prepare.outputs.release_name }}
           REPOSITORY: ${{ github.repository }}
@@ -218,11 +227,24 @@ jobs:
           short_sha="${SHA::10}"
           cat > release-notes.txt <<EOF
           Automated build \`${BUILD_NUMBER}\` for commit \`${short_sha}\`.
+          EOF
+
+          if [ -n "${CHANGES_FILE:-}" ] && [ -f "$CHANGES_FILE" ] && grep -q '[^[:space:]]' "$CHANGES_FILE"; then
+            {
+              echo
+              echo "## Release Notes"
+              echo
+              cat "$CHANGES_FILE"
+              echo
+            } >> release-notes.txt
+          else
+            cat >> release-notes.txt <<EOF
 
           Assets:
           - STEMCraft plugin JAR
           - STEMCraft API JAR
           EOF
+          fi
 
           if gh release view "$TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
             gh release edit "$TAG" \
