@@ -27,6 +27,9 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -39,6 +42,7 @@ import java.util.regex.Pattern;
  */
 public class LocaleServiceImpl extends BaseService implements LocaleService {
     private final Map<String, YamlConfiguration> locales = new HashMap<>();
+    private final Map<String, YamlConfiguration> bundledLocales = new HashMap<>();
     private String defaultLocale;
 
     private static final Pattern LOCALE_KEY_PATTERN = Pattern.compile("[A-Z]+_[A-Z_]+");
@@ -69,6 +73,7 @@ public class LocaleServiceImpl extends BaseService implements LocaleService {
     @Override
     public void onDisable() {
         locales.clear();
+        bundledLocales.clear();
         missingKeysLogged.clear();
     }
 
@@ -114,13 +119,20 @@ public class LocaleServiceImpl extends BaseService implements LocaleService {
         if (cfg == null) {
             cfg = locales.get(defaultLocale);
         }
+        YamlConfiguration bundledCfg = bundledLocales.get(lang);
+        if (bundledCfg == null) {
+            bundledCfg = bundledLocales.get(defaultLocale);
+        }
 
         // If we still have no config, just return the key.
-        if (cfg == null) {
+        if (cfg == null && bundledCfg == null) {
             return key;
         }
 
-        String raw = cfg.getString(key);
+        String raw = cfg == null ? null : cfg.getString(key);
+        if (raw == null && bundledCfg != null) {
+            raw = bundledCfg.getString(key);
+        }
         if (raw == null) {
             // Log missing keys once to avoid spam.
             String logKey = lang + ":" + key;
@@ -139,6 +151,8 @@ public class LocaleServiceImpl extends BaseService implements LocaleService {
     private void loadLocales() {
         plugin.exportBundledDirectory("locales");
         locales.clear();
+        bundledLocales.clear();
+        loadBundledLocales();
 
         File folder = new File(plugin.getDataFolder(), "locales");
         if (!folder.exists()) {
@@ -167,6 +181,30 @@ public class LocaleServiceImpl extends BaseService implements LocaleService {
                     "lang", defaultLocale,
                     "available", String.join(", ", locales.keySet())
             );
+        }
+    }
+
+    private void loadBundledLocales() {
+        File folder = new File(plugin.getDataFolder(), "locales");
+        File[] files = folder.listFiles((dir, name) -> name.endsWith(".yml"));
+        if (files == null) {
+            return;
+        }
+
+        for (File file : files) {
+            String lang = file.getName()
+                .substring(0, file.getName().length() - 4)
+                .toLowerCase(Locale.ROOT);
+
+            String resourcePath = "locales/" + file.getName();
+            try (InputStream in = plugin.getResource(resourcePath)) {
+                if (in == null) {
+                    continue;
+                }
+                bundledLocales.put(lang, YamlConfiguration.loadConfiguration(new InputStreamReader(in, StandardCharsets.UTF_8)));
+            } catch (Exception ex) {
+                plugin.getLogger().warning("Failed to load bundled locale " + resourcePath + ": " + ex.getMessage());
+            }
         }
     }
 }

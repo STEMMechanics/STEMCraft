@@ -66,8 +66,8 @@ To avoid website account mismatches:
 
 ## Whitelist Authority
 
-Webhook bridge can enforce account whitelist state for login decisions.
-Blacklist authority is handled by webhook bridge state; whitelist authority should be centralized in one place (webhook bridge in this setup).
+Website whitelist enforcement has been removed.
+Access control now follows the server's native whitelist configuration.
 
 ## Operational Notes
 

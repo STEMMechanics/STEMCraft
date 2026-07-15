@@ -45,7 +45,7 @@ High-level summary. Canonical webhook contract is in:
 
 `server.sync.players`:
 - Laravel updates identity (`uuid`, `username`, `platform`) from inbound payload.
-- Laravel keeps authority on `is_whitelisted`.
+- whitelist state is no longer synchronized with the website; access control uses the server's native whitelist.
 - Laravel responds with full authoritative players list (including players absent from inbound payload).
 - inbound `players.*.uuid` may be null for unresolved players.
 - response `sync.players` may include `uuid: null` rows.

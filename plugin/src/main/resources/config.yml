@@ -7,12 +7,6 @@ logging:
     success: "<dark_green><bold>[ \u2714 ]</bold></dark_green> "
     broadcast: "<dark_purple><bold>[ ! ]</bold></dark_purple> "
 
-whitelist_message: |-
-  This server is for our workshop players only.
-  
-  If you believe you should have access, please contact STEMMechanics.
-
-
 motd:
   title: "<blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple> <yellow><bold>STEMCRAFT</bold></yellow> <blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple>"
   text: "                   <yellow>★</yellow> <aqua>Enjoy your stay!</aqua> <yellow>★</yellow>"
@@ -42,25 +36,15 @@ web_server:
     port: 8950
     path: www
 
-webhook_bridge:
-  enabled: false
-  site_webhook_url: "http://127.0.0.1:8080/webhooks/minecraft/server"
-  shared_secret: ""
-  server_name: "STEMCraft"
-  # Incoming website webhooks are served by the shared web_server on this path.
-  listen_path: "/stemcraft/webhook"
-  connect_timeout_millis: 5000
-  request_timeout_millis: 10000
-  replay_window_seconds: 300
-  debug_logging: false
-  enforce_account_whitelist: true
-  whitelist_kick_message: "You are not whitelisted on this server."
-  drop_stale_sync_managed_events: true
-  drop_sync_managed_events_missing_occurred_at: true
-  allow_status_requests: true
-  allow_player_stats_requests: true
-  allow_remote_commands: false
-  remote_command_max_output_chars: 12000
+first-join:
+  enabled: true
+  timeout-seconds: 60
+  maximum-attempts: 3
+  minimum-number: 1
+  maximum-number: 20
+  movement-tolerance: 0.5
+  verified-key: human_verified
+  bypass-permission: stemcraft.firstjoin.bypass
 
 player_stats:
   autosave_ticks: 1200
@@ -83,10 +67,11 @@ chat:
   spam_message: "Please do not spam the chat"
   content_filter:
     enabled: true
-    timeout_millis: 10000
+    minimum_severity: mild
     allow_filtered_message: false
     blocked_message: "Your message was blocked by the content filter."
-    unavailable_message: "Chat is temporarily unavailable while the content filter service is offline."
+    staff_alerts: true
+    staff_alert_permission: "stemcraft.moderation.alerts"
     actions:
       "1":
         count: 1
@@ -105,12 +90,25 @@ chat:
         within: 30m
         action: ban
         duration: 7d
+  reports:
+    enabled: true
+    include_online_player_locations: true
+    staff_alert_permission: "stemcraft.moderation.alerts"
+
+punishments:
+  profanity_filter:
+    enabled: true
+    action: sanitize
+    minimum_severity: moderate
+    blocked_message: "Punishment reasons must not include profane language."
 
 player_logs:
     enabled: true
     max_days: 30
     tps_threshold: 15
     memory_threshold: 5MB
+    query_default_limit: 20
+    query_max_limit: 100
     blocks:
       place:
         - ".*SHULKER_BOX"

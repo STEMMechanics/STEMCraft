@@ -81,10 +81,6 @@ public class PlayerServiceImpl extends BaseService implements PlayerService {
 
     @Override
     public boolean isWhitelisted(@Nullable UUID uuid, @Nullable String username, @Nullable String platform) {
-        if (plugin.webhookBridge() != null && plugin.webhookBridge().isWhitelistEnforcementActive()) {
-            return plugin.webhookBridge().isWhitelisted(uuid, username, platform);
-        }
-
         return PlayerUtil.isWhitelistedVanilla(uuid, username);
     }
 }

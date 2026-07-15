@@ -21,6 +21,7 @@
 package dev.stemcraft.api;
 
 import dev.stemcraft.api.service.command.CommandService;
+import dev.stemcraft.api.service.audit.AuditService;
 import dev.stemcraft.api.internal.InstanceHolder;
 import dev.stemcraft.api.service.database.DatabaseService;
 import dev.stemcraft.api.service.event.EventService;
@@ -34,6 +35,7 @@ import dev.stemcraft.api.service.motd.MotdService;
 import dev.stemcraft.api.service.player.PlayerService;
 import dev.stemcraft.api.service.playerstats.PlayerStatsService;
 import dev.stemcraft.api.service.placeholder.PlaceholderService;
+import dev.stemcraft.api.service.profanity.ProfanityFilterService;
 import dev.stemcraft.api.service.recipe.RecipeService;
 import dev.stemcraft.api.service.region.RegionService;
 import dev.stemcraft.api.service.selection.SelectionService;
@@ -71,6 +73,11 @@ public interface STEMCraftAPI {
      * Get the STEMCraft configuration file.
      */
     ConfigService config();
+
+    /**
+     * Get the audit service.
+     */
+    AuditService audit();
 
     /**
      * Get the database service.
@@ -121,6 +128,11 @@ public interface STEMCraftAPI {
      * Get the placeholder service.
      */
     PlaceholderService placeholders();
+
+    /**
+     * Get the profanity filter service.
+     */
+    ProfanityFilterService profanityFilter();
 
     /**
      * Get the punishment service.
