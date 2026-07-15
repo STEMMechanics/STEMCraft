@@ -7,6 +7,12 @@ plugins {
     id 'com.github.spotbugs' version '6.2.5' apply false
 }
 
+ext {
+    paperApiVersion = "26.1.2.build.74-stable"
+    paperRuntimeVersion = "26.2"
+    javaToolchainVersion = 25
+}
+
 subprojects {
     group = 'dev.stemcraft'
     version = "1.0.0-SNAPSHOT"
@@ -27,7 +33,7 @@ subprojects {
         apply plugin: "com.github.spotbugs"
 
         java {
-            toolchain.languageVersion = JavaLanguageVersion.of(21)
+            toolchain.languageVersion = JavaLanguageVersion.of(rootProject.ext.javaToolchainVersion)
         }
 
         tasks.withType(JavaCompile).configureEach {

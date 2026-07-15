@@ -183,8 +183,8 @@ class STEMCraftAPIImplTest {
     @Test
     void parseMinecraftVersionReturnsMajorMinorPatchComponents() {
         assertArrayEquals(new int[] {1, 21, 11}, STEMCraft.parseMinecraftVersion("1.21.11"));
-        assertArrayEquals(new int[] {1, 21, 0}, STEMCraft.parseMinecraftVersion("1.21"));
-        assertArrayEquals(new int[] {26, 1, 2}, STEMCraft.parseMinecraftVersion("26.1.2.build.59-stable"));
+        assertArrayEquals(new int[] {26, 2, 0}, STEMCraft.parseMinecraftVersion("26.2"));
+        assertArrayEquals(new int[] {26, 2, 0}, STEMCraft.parseMinecraftVersion("26.2.build.60-beta"));
     }
 
     @Test

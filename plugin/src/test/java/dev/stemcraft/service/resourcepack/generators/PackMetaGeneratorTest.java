@@ -44,7 +44,7 @@ class PackMetaGeneratorTest {
             null
         );
         new PackMetaGenerator(service).generate(new ResourcePackBuildContext(
-            new ResourcePackBuildTarget("1.21.11", 75),
+            new ResourcePackBuildTarget("26.2", 75),
             writer,
             config
         ));
@@ -123,7 +123,7 @@ class PackMetaGeneratorTest {
         Path output = tempDir.resolve("with-overlay");
         Files.createDirectories(output);
         new PackMetaGenerator(service).generate(new ResourcePackBuildContext(
-            new ResourcePackBuildTarget("1.21.11", 75),
+            new ResourcePackBuildTarget("26.2", 75),
             new TestResourcePackWriter(output, new PackFormatRange(64, 75), null),
             config
         ));

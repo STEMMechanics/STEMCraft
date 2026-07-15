@@ -507,7 +507,7 @@ class ApiDefaultMethodContractTest {
         TestResourcePackGenerator generator = new TestResourcePackGenerator();
         ConfigSection config = mock(ConfigSection.class);
         ResourcePackWriter writer = mock(ResourcePackWriter.class);
-        ResourcePackBuildTarget target = new ResourcePackBuildTarget("1.21.11", 75);
+        ResourcePackBuildTarget target = new ResourcePackBuildTarget("26.2", 75);
 
         assertEquals("test-generator", generator.id());
         assertDoesNotThrow(() -> generator.onLoad(config));

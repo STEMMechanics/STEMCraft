@@ -272,7 +272,7 @@ public final class STEMCraft extends JavaPlugin {
                 UUID uuid = getUuid(event);
 
                 if (uuid == null) {
-                    // may be null (https://jd.papermc.io/paper/1.21.11/org/bukkit/profile/PlayerProfile.html)
+                    // may be null in the Paper API
                     // can’t reliably identify them here (offline mode / early stage / etc.)
                     return;
                 }
@@ -537,7 +537,13 @@ public final class STEMCraft extends JavaPlugin {
             return components;
         }
 
-        Matcher matcher = VERSION_COMPONENT_PATTERN.matcher(version);
+        String normalizedVersion = version;
+        int buildSeparator = normalizedVersion.indexOf(".build.");
+        if (buildSeparator >= 0) {
+            normalizedVersion = normalizedVersion.substring(0, buildSeparator);
+        }
+
+        Matcher matcher = VERSION_COMPONENT_PATTERN.matcher(normalizedVersion);
         int index = 0;
         while (matcher.find() && index < components.length) {
             components[index++] = Integer.parseInt(matcher.group());

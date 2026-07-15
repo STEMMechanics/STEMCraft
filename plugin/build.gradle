@@ -16,7 +16,7 @@ repositories {
 dependencies {
     implementation project(":api")
     //noinspection VulnerableLibrariesLocal
-    compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
+    compileOnly("io.papermc.paper:paper-api:${rootProject.ext.paperApiVersion}")
     compileOnly('org.geysermc.floodgate:api:2.2.4-SNAPSHOT')
     compileOnly('me.clip:placeholderapi:2.11.6')
 
@@ -39,25 +39,27 @@ dependencies {
     implementation("org.xerial:sqlite-jdbc:3.46.1.3")
 
     compileOnly("com.fasterxml.jackson.core:jackson-databind:2.21.1")
+    compileOnly("com.google.code.findbugs:jsr305:3.0.2")
 
     testImplementation "org.junit.jupiter:junit-jupiter:5.11.0"
     testImplementation "org.mockito:mockito-core:5.12.0"
     //noinspection VulnerableLibrariesLocal
-    testImplementation "io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT"
-    testImplementation("com.sk89q.worldedit:worldedit-bukkit:7.3.17")
+    testImplementation "io.papermc.paper:paper-api:${rootProject.ext.paperApiVersion}"
+    testImplementation("com.sk89q.worldedit:worldedit-bukkit:7.4.4")
     //noinspection VulnerableLibrariesLocal
-    testImplementation("org.mockbukkit.mockbukkit:mockbukkit-v1.21:4.108.0") {
+    testImplementation("org.mockbukkit.mockbukkit:mockbukkit-v26.1.2:4.114.0") {
         exclude group: "org.junit"
         exclude group: "org.junit.jupiter"
         exclude group: "org.junit.platform"
     }
     testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.11.0"
+    testImplementation("com.google.code.findbugs:jsr305:3.0.2")
     testImplementation "org.yaml:snakeyaml:2.3"
 }
 
 tasks {
     runServer {
-        minecraftVersion("1.21.11")
+        minecraftVersion(rootProject.ext.paperRuntimeVersion)
     }
 }
 

@@ -236,3 +236,29 @@ jobs:
               --notes-file release-notes.txt \
               --target "$SHA"
           fi
+  publish-maven:
+    name: Publish API to Maven Repository
+    runs-on:
+      - self-hosted
+      - maven-publisher
+    needs:
+      - prepare
+      - build-and-test
+    if: needs.prepare.outputs.should_release == 'true'
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Publish API to local Maven repository
+        env:
+          BUILD_NUMBER: ${{ needs.prepare.outputs.build_number }}
+        run: ./gradlew --no-daemon :api:publish
+      - name: Copy Maven repository to web dataset
+        run: |
+          rsync -a \
+            api/build/repository/ \
+            /mnt/maven-public/

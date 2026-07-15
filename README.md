@@ -7,8 +7,8 @@ This is the core STEMCraft plugin that provides the core functionality and helpe
 
 ## Requirements
 
-- Java 21
-- Paper 1.21.11 or higher
+- Java 25
+- Paper 26.2 or higher
 
 
 ## Usage
@@ -24,7 +24,7 @@ To include the API in your project, add the repository to your project:
 ```
 repositories {
     maven {
-        url = uri("https://repo.stemmechanics.com.au/maven-public/")
+        url = uri("https://maven.stemmechanics.com.au/")
     }
 } 
 ```
