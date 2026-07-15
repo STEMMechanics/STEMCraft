@@ -49,6 +49,14 @@ first-join:
 player_stats:
   autosave_ticks: 1200
 
+holograms:
+  visibility:
+    enabled: true
+    update_ticks: 10
+    max_distance: 32
+    require_line_of_sight: true
+    apply_to_citizens: true
+
 dragon-respawn:
   enabled: false
   days: 3
