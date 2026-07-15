@@ -63,12 +63,15 @@ public class MotdServiceImpl extends BaseService implements MotdService {
 
         api.events().register(ServerListPingEvent.class, event -> {
             if (api.isMaintenanceMode()) {
-                event.motd(TextUtil.colourise("<red><bold>Server is under maintenance!</bold>\n<gray>Please check back later.</gray>"));
+                applyLegacyMotd(event,
+                    "<red><bold>Server is under maintenance!</bold>",
+                    "<gray>Please check back later.</gray>"
+                );
                 return;
             }
 
             ResolvedMotd motd = current();
-            event.motd(TextUtil.colourise(motd.motdTitle() + "\n" + motd.motdText()));
+            applyLegacyMotd(event, motd.motdTitle(), motd.motdText());
         });
     }
 
@@ -145,5 +148,14 @@ public class MotdServiceImpl extends BaseService implements MotdService {
         }
 
         this.currentMotdId = highestPriorityId;
+    }
+
+    static @NotNull String formatLegacyMotd(@NotNull String title, @NotNull String text) {
+        return TextUtil.colouriseToSection(title) + "\n" + TextUtil.colouriseToSection(text);
+    }
+
+    @SuppressWarnings("deprecation")
+    private static void applyLegacyMotd(@NotNull ServerListPingEvent event, @NotNull String title, @NotNull String text) {
+        event.setMotd(formatLegacyMotd(title, text));
     }
 }
