@@ -1,6 +1,8 @@
-# STEMCraft Webhook Spec (Current Behavior)
+# STEMCraft Webhook Spec (Historical)
 
-This document reflects the currently implemented webhook behavior in Laravel.
+This document is retained as historical reference for the removed webhook bridge.
+
+It does not describe the current active STEMCraft runtime on the `26.2.x` release line.
 
 ## 1. Endpoints
 

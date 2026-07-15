@@ -1,7 +1,8 @@
 # STEMCraft API
 
-High-level summary. Canonical webhook contract is in:
-- `docs/STEMCRAFT_WEBHOOK_SPEC.md`
+High-level summary.
+
+Note: the old webhook bridge is no longer part of the active runtime. `docs/STEMCRAFT_WEBHOOK_SPEC.md` is retained as a historical reference only.
 
 ## Current Inbound Events (Plugin -> Laravel)
 

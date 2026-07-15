@@ -1,6 +1,8 @@
 # Webhook Bridge Integration
 
-This document describes STEMCraft's website bridge behavior for account state, penalties, status, and player stats.
+This document is retained as historical reference only.
+
+The webhook bridge described here is no longer active runtime behavior in STEMCraft. Current builds keep the embedded web server and `/status` endpoint, but the old website event bridge, website-managed whitelist flow, and webhook sync behavior have been removed.
 
 ## Outbound Security
 

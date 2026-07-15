@@ -1,7 +1,7 @@
 <!--suppress HtmlDeprecatedAttribute -->
-<p align="center"><img src="https://git.stemmechanics.com.au/STEMMechanics/STEMCraft/raw/branch/main/docs/images/stemcraft.jpg" width="666" height="198" alt="STEMMechanics"></p>
+<p align="center"><img src="docs/images/stemcraft.jpg" width="666" height="198" alt="STEMMechanics"></p>
 
-# STEMCraftLib
+# STEMCraft
 
 This is the core STEMCraft plugin that provides the core functionality and helper methods for the STEMCraft server and other STEMCraft Plugins.
 
@@ -13,11 +13,11 @@ This is the core STEMCraft plugin that provides the core functionality and helpe
 
 ## Usage
 
-You can visit the [Wiki](https://git.stemmechanics.com.au/STEMMechanics/STEMCraft/wiki) for details on the plugin commands, classes, and using as a dependency.
+Start with the local docs in [docs/README.md](docs/README.md) for commands, features, and integration notes.
 
 ## Builds & API
 
-We provide an up-to-date plugin build over on our [Jenkins server](https://jenkins.stemmechanics.com.au/job/STEMCraft/).
+Releases for the current default branch are published through GitHub Actions and GitHub Releases.
 
 To include the API in your project, add the repository to your project:
 
@@ -44,8 +44,6 @@ STEMCraftAPI.api();
 ```
 
 `STEMCraftAPI.api();` may be null until after the STEMCraft plugin enables.
-
-
 
 ## Get in touch!
 

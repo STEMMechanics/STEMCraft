@@ -44,12 +44,15 @@
   - Writes Bedrock manifest/texture metadata/glyph maps
   - Optional automatic Geyser reload after `/resourcepack zip`
 
-## Webhook Bridge
+## First Join Check
 
-- Signed outbound webhooks (player lifecycle, stats sync, status data, etc.).
-- Inbound sync-managed state for accounts/penalties/blacklist.
-- Whitelist authority can be driven by webhook account state.
-- Bedrock username transformer support for webhook payloads.
+- Unverified players are held in a restricted first-join session.
+- Players answer a generated addition or subtraction prompt in private chat.
+- Correct answers persist a first-join flag against the authenticated UUID.
+- Ops and `stemcraft.firstjoin.bypass` bypass the check.
+- Admin commands:
+  - `/stemcraft firstjoin status <player>`
+  - `/stemcraft firstjoin reset <player>`
 
 ## Player Stats
 
@@ -59,6 +62,30 @@
   - `player_stats.time_in.<bucket>.worlds`
   - Recorded keys: `time_in_<bucket>`
 - Startup sync sends `server.player-stats.sync` snapshots (configurable periods).
+
+## Web Status Endpoint
+
+- Built-in `/status` endpoint from the embedded web server.
+- Returns online state, player counts, Minecraft version, maintenance state, and timestamp JSON.
+
+## Moderation, Audit, and Reports
+
+- Local profanity filtering replaces the old website-backed moderation path.
+- Chat, sign, and book moderation can create incidents and punishments locally.
+- Structured audit logging records chat, sign, book, command, and related player events.
+- Staff review commands:
+  - `/profanity ...`
+  - `/moderation ...`
+  - `/audit ...`
+- Player reporting flow:
+  - `/report <message>`
+  - `/reports ...`
+
+## Website Bridge Status
+
+- The old webhook bridge is no longer active runtime behavior.
+- Website polling support remains through the embedded web server.
+- Legacy webhook docs are retained only as historical reference.
 
 ## Additional Gameplay Features
 

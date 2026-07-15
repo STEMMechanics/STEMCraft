@@ -1,5 +1,7 @@
 # STEMCraft Plugin Startup Sync - Codex Prompt
 
+This document is historical reference for the removed webhook bridge and is not current runtime guidance for the active release line.
+
 Use this prompt when implementing plugin-side startup reconciliation against Laravel.
 
 ## Copy/Paste Prompt
