@@ -5,6 +5,7 @@ on:
     branches: [ '**' ]
     paths:
       - 'api/**'
+      - 'changes.md'
       - 'plugin/**'
       - 'gradle/**'
       - 'build.gradle'
@@ -238,9 +239,20 @@ jobs:
               echo
             } >> release-notes.txt
           else
+            PR_TITLE="$(gh api \
+              -H 'Accept: application/vnd.github+json' \
+              "/repos/$REPOSITORY/commits/$SHA/pulls" \
+              --jq '.[0].title' 2>/dev/null || true)"
+            COMMIT_SUBJECT="$(git log -1 --pretty=%s "$SHA")"
+            SUMMARY_TITLE="${PR_TITLE:-$COMMIT_SUBJECT}"
+
             cat >> release-notes.txt <<EOF
 
-          Assets:
+          ## Release Notes
+
+          - ${SUMMARY_TITLE}
+
+          ## Assets
           - STEMCraft plugin JAR
           - STEMCraft API JAR
           EOF
