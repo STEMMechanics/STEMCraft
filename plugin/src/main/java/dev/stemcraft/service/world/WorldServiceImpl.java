@@ -58,6 +58,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class WorldServiceImpl extends BaseService implements WorldService {
     private static final String DEFAULT_WORLD_OPERATION_ERROR = "unknown error";
     private static final Path PAPER_DIMENSIONS_DIRECTORY = Path.of("dimensions", "minecraft");
+    private static final Set<String> RESERVED_PAPER_DIMENSION_NAMES = Set.of("overworld", "the_nether", "the_end");
     private final Map<String, WorldSettingData> settings = new ConcurrentHashMap<>();
     private final Map<String, String> lastWorldOperationErrors = new ConcurrentHashMap<>();
     private WorldCommand worldCommand;
@@ -1157,17 +1158,9 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         }
 
         World.Environment environment = WorldUtil.resolveEnvironment(worldName);
-        if (environment != World.Environment.NORMAL) {
-            String baseWorldName = WorldUtil.baseName(worldName);
-            if (baseWorldName != null && !baseWorldName.equals(worldName)) {
-                Path baseRoot = worldRoot(baseWorldName);
-                if (isRecognizedWorldRoot(baseRoot)) {
-                    Path dimensionPath = paperDimensionPath(baseRoot, environment);
-                    if (Files.isDirectory(dimensionPath)) {
-                        return new ResolvedWorldPath(dimensionPath, WorldStorageKind.INTEGRATED_DIMENSION, baseWorldName);
-                    }
-                }
-            }
+        Path integratedPath = findIntegratedWorldPath(plugin.getServer().getWorldContainer().toPath(), worldName, environment);
+        if (integratedPath != null) {
+            return new ResolvedWorldPath(integratedPath, WorldStorageKind.INTEGRATED_DIMENSION, baseWorldNameFor(worldName, environment));
         }
 
         return new ResolvedWorldPath(directRoot, WorldStorageKind.ROOT, null);
@@ -1259,30 +1252,80 @@ public class WorldServiceImpl extends BaseService implements WorldService {
     static @NotNull Set<String> discoverWorldNames(@NotNull Path container) throws IOException {
         Set<String> names = new LinkedHashSet<>();
 
-        try (var ds = Files.newDirectoryStream(container)) {
-            for (Path path : ds) {
-                if (!isRecognizedWorldRoot(path)) {
-                    continue;
-                }
+        for (Path path : recognizedWorldRoots(container)) {
+            Path fileName = path.getFileName();
+            if (fileName == null) {
+                continue;
+            }
 
-                Path fileName = path.getFileName();
-                if (fileName == null) {
-                    continue;
-                }
+            String rootWorldName = fileName.toString();
+            names.add(rootWorldName);
 
-                String rootWorldName = fileName.toString();
-                names.add(rootWorldName);
+            if (Files.isDirectory(paperDimensionPath(path, World.Environment.NETHER))) {
+                names.add(rootWorldName + "_nether");
+            }
+            if (Files.isDirectory(paperDimensionPath(path, World.Environment.THE_END))) {
+                names.add(rootWorldName + "_the_end");
+            }
 
-                if (Files.isDirectory(paperDimensionPath(path, World.Environment.NETHER))) {
-                    names.add(rootWorldName + "_nether");
-                }
-                if (Files.isDirectory(paperDimensionPath(path, World.Environment.THE_END))) {
-                    names.add(rootWorldName + "_the_end");
+            Path dimensionsRoot = path.resolve(PAPER_DIMENSIONS_DIRECTORY);
+            if (Files.isDirectory(dimensionsRoot)) {
+                try (var dimensions = Files.list(dimensionsRoot)) {
+                    dimensions
+                        .filter(Files::isDirectory)
+                        .map(Path::getFileName)
+                        .filter(Objects::nonNull)
+                        .map(Path::toString)
+                        .filter(name -> !RESERVED_PAPER_DIMENSION_NAMES.contains(name))
+                        .sorted()
+                        .forEach(names::add);
                 }
             }
         }
 
         return names;
+    }
+
+    static @Nullable Path findIntegratedWorldPath(@NotNull Path container, @NotNull String worldName, @NotNull World.Environment environment) {
+        try {
+            for (Path root : recognizedWorldRoots(container)) {
+                if (environment == World.Environment.NORMAL) {
+                    Path customDimensionPath = root.resolve(PAPER_DIMENSIONS_DIRECTORY).resolve(worldName);
+                    if (Files.isDirectory(customDimensionPath)) {
+                        return customDimensionPath;
+                    }
+                    continue;
+                }
+
+                String baseWorldName = WorldUtil.baseName(worldName);
+                Path fileName = root.getFileName();
+                if (baseWorldName == null || fileName == null || !fileName.toString().equals(baseWorldName)) {
+                    continue;
+                }
+
+                Path dimensionPath = paperDimensionPath(root, environment);
+                if (Files.isDirectory(dimensionPath)) {
+                    return dimensionPath;
+                }
+            }
+        } catch (IOException ignored) {
+            return null;
+        }
+
+        return null;
+    }
+
+    private static @NotNull List<Path> recognizedWorldRoots(@NotNull Path container) throws IOException {
+        List<Path> roots = new ArrayList<>();
+        try (var ds = Files.newDirectoryStream(container)) {
+            for (Path path : ds) {
+                if (isRecognizedWorldRoot(path)) {
+                    roots.add(path);
+                }
+            }
+        }
+        roots.sort(Comparator.comparing(path -> path.getFileName() == null ? "" : path.getFileName().toString()));
+        return roots;
     }
 
     static boolean isRecognizedWorldRoot(@NotNull Path path) {
@@ -1309,10 +1352,12 @@ public class WorldServiceImpl extends BaseService implements WorldService {
 
     static boolean isIntegratedDimensionPath(@NotNull Path path) {
         String normalized = path.normalize().toString().replace('\\', '/');
-        return normalized.contains("/dimensions/minecraft/the_nether")
-            || normalized.contains("/dimensions/minecraft/the_end")
-            || normalized.endsWith("/dimensions/minecraft/the_nether")
-            || normalized.endsWith("/dimensions/minecraft/the_end");
+        return normalized.contains("/dimensions/minecraft/")
+            || normalized.endsWith("/dimensions/minecraft");
+    }
+
+    private static @Nullable String baseWorldNameFor(@NotNull String worldName, @NotNull World.Environment environment) {
+        return environment == World.Environment.NORMAL ? null : WorldUtil.baseName(worldName);
     }
 
     private void rememberWorldOperationError(@NotNull String worldName, @NotNull String message) {

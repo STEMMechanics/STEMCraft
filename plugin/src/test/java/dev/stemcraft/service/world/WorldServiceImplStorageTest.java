@@ -24,10 +24,11 @@ class WorldServiceImplStorageTest {
         Files.createFile(worldRoot.resolve("level.dat"));
         Files.createDirectories(WorldServiceImpl.paperDimensionPath(worldRoot, World.Environment.NETHER).resolve("region"));
         Files.createDirectories(WorldServiceImpl.paperDimensionPath(worldRoot, World.Environment.THE_END).resolve("region"));
+        Files.createDirectories(worldRoot.resolve("dimensions").resolve("minecraft").resolve("survival").resolve("region"));
 
         Set<String> names = WorldServiceImpl.discoverWorldNames(tempDir);
 
-        assertEquals(Set.of("world", "world_nether", "world_the_end"), names);
+        assertEquals(Set.of("world", "world_nether", "world_the_end", "survival"), names);
     }
 
     @Test
@@ -53,9 +54,24 @@ class WorldServiceImplStorageTest {
         Path worldRoot = tempDir.resolve("survival");
         Path netherPath = WorldServiceImpl.paperDimensionPath(worldRoot, World.Environment.NETHER);
         Path endPath = WorldServiceImpl.paperDimensionPath(worldRoot, World.Environment.THE_END);
+        Path customDimensionPath = worldRoot.resolve("dimensions").resolve("minecraft").resolve("survival");
 
         assertTrue(WorldServiceImpl.isIntegratedDimensionPath(netherPath));
         assertTrue(WorldServiceImpl.isIntegratedDimensionPath(endPath));
+        assertTrue(WorldServiceImpl.isIntegratedDimensionPath(customDimensionPath));
         assertFalse(WorldServiceImpl.isIntegratedDimensionPath(worldRoot));
+    }
+
+    @Test
+    void findIntegratedWorldPathResolvesCustomNormalDimension() throws IOException {
+        Path worldRoot = tempDir.resolve("world");
+        Files.createDirectories(worldRoot);
+        Files.createFile(worldRoot.resolve("level.dat"));
+        Path customDimensionPath = worldRoot.resolve("dimensions").resolve("minecraft").resolve("survival");
+        Files.createDirectories(customDimensionPath.resolve("region"));
+
+        Path resolved = WorldServiceImpl.findIntegratedWorldPath(tempDir, "survival", World.Environment.NORMAL);
+
+        assertEquals(customDimensionPath, resolved);
     }
 }
