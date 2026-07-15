@@ -47,23 +47,21 @@ public interface PlayerService {
     void show(@NotNull Player player);
 
     /**
-     * Check whether a player is effectively whitelisted according to the
-     * currently active whitelist authority.
+     * Check whether a player is allowed by the server's whitelist rules.
      *
      * @param uuid The player UUID.
      * @param username The player username.
      * @param platform The player platform, such as java or bedrock.
-     * @return True if the player is allowed by the active whitelist policy.
+     * @return True if the player is allowed by the server whitelist.
      */
     boolean isWhitelisted(@Nullable UUID uuid, @Nullable String username, @Nullable String platform);
 
     /**
-     * Check whether a player is effectively whitelisted according to the
-     * currently active whitelist authority.
+     * Check whether a player is allowed by the server's whitelist rules.
      *
      * @param uuid The player UUID.
      * @param username The player username.
-     * @return True if the player is allowed by the active whitelist policy.
+     * @return True if the player is allowed by the server whitelist.
      */
     default boolean isWhitelisted(@Nullable UUID uuid, @Nullable String username) {
         String platform = PlayerUtil.isBedrock(uuid) ? "bedrock" : "java";
@@ -71,11 +69,10 @@ public interface PlayerService {
     }
 
     /**
-     * Check whether a player is effectively whitelisted according to the
-     * currently active whitelist authority.
+     * Check whether a player is allowed by the server's whitelist rules.
      *
      * @param player The player to test.
-     * @return True if the player is allowed by the active whitelist policy.
+     * @return True if the player is allowed by the server whitelist.
      */
     default boolean isWhitelisted(@NotNull Player player) {
         String platform = PlayerUtil.isBedrock(player) ? "bedrock" : "java";

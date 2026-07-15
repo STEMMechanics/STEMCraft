@@ -48,6 +48,4 @@ public interface PlayerStatsService {
     @NotNull List<PlayerStatsRecord> list(@Nullable String uuidText, @Nullable String username, @Nullable String statKey, @Nullable String period);
 
     @NotNull List<PlayerStatsRecord> top(@NotNull String statKey, int limit, @Nullable String period);
-
-    @NotNull Map<String, Object> buildWebhookStatsResponse(@Nullable String uuidText, @Nullable String username, @Nullable String statKey, @Nullable String period);
 }

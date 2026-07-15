@@ -21,6 +21,7 @@
 package dev.stemcraft;
 
 import dev.stemcraft.api.service.command.CommandService;
+import dev.stemcraft.api.service.audit.AuditService;
 import dev.stemcraft.api.service.config.ConfigService;
 import dev.stemcraft.api.service.database.DatabaseService;
 import dev.stemcraft.api.service.event.EventService;
@@ -28,6 +29,7 @@ import dev.stemcraft.api.service.motd.MotdService;
 import dev.stemcraft.api.service.player.PlayerService;
 import dev.stemcraft.api.service.playerstats.PlayerStatsService;
 import dev.stemcraft.api.service.placeholder.PlaceholderService;
+import dev.stemcraft.api.service.profanity.ProfanityFilterService;
 import dev.stemcraft.api.service.recipe.RecipeService;
 import dev.stemcraft.capability.HasMessagesImpl;
 import dev.stemcraft.api.STEMCraftAPI;
@@ -93,6 +95,12 @@ public class STEMCraftAPIImpl extends HasMessagesImpl implements STEMCraftAPI {
     }
 
     /**
+     * Get the audit service.
+     */
+    @Override
+    public AuditService audit() { return plugin.audit(); }
+
+    /**
      * Get the database service.
      */
     @Override
@@ -155,6 +163,12 @@ public class STEMCraftAPIImpl extends HasMessagesImpl implements STEMCraftAPI {
      */
     @Override
     public PlaceholderService placeholders() { return plugin.placeholders(); }
+
+    /**
+     * Get the profanity filter service.
+     */
+    @Override
+    public ProfanityFilterService profanityFilter() { return plugin.profanityFilter(); }
 
     /**
      * Get the punishment service.

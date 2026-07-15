@@ -192,8 +192,8 @@ public class PlayerUtil {
     }
 
     /**
-     * Check whether the given player is effectively whitelisted according to
-     * the active server whitelist authority.
+     * Check whether the given player is allowed by the server's whitelist
+     * rules.
      *
      * @param player The player to test.
      * @return True if the player is whitelisted.
@@ -207,8 +207,8 @@ public class PlayerUtil {
     }
 
     /**
-     * Check whether the given identity is effectively whitelisted according to
-     * the active server whitelist authority.
+     * Check whether the given identity is allowed by the server's whitelist
+     * rules.
      *
      * @param uuid The player UUID.
      * @param username The player username.

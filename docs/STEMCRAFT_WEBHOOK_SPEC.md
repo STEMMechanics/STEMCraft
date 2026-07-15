@@ -107,14 +107,14 @@ Behavior:
 Purpose:
 - plugin sends current player identity snapshot
 - Laravel updates identity fields (`uuid`, `username`, `platform`) from this payload
-- `is_whitelisted` remains Laravel source-of-truth and is not overridden by inbound values
+- whitelist state is no longer synchronized through webhooks; access control uses the server's native whitelist
 
 Request:
 - optional: `server_name`, `reason`, `plugin_version`
 - required: `players` array
 - player fields:
   - required: `username`, `platform`
-  - optional: `uuid` (nullable for unresolved/site-only players), `updated_at`, `is_whitelisted` (ignored for authority)
+  - optional: `uuid` (nullable for unresolved/site-only players), `updated_at`
 
 Response:
 - `{"ok":true,"sync":{...}}`
@@ -212,7 +212,7 @@ Payload:
   - `username` required
   - `platform` required
   - `user_id` nullable
-  - `is_whitelisted` required
+  - website whitelist state is no longer used by the plugin
   - `updated_at` present
   - nested `occurred_at` included
 
@@ -308,5 +308,5 @@ To avoid state rollback during outages, plugin should implement:
    - replay of observational/audit-only events is optional
 
 5. Authority rule (players):
-   - Laravel remains authority for `is_whitelisted`
-   - plugin-side disconnected whitelist toggles are temporary and may be overwritten on sync
+   - whitelist state is managed by the Minecraft server, not the website
+   - plugin-side access control follows the native server whitelist only

@@ -80,7 +80,7 @@ Compatibility note:
 ## Quick Checks
 
 1. Restart plugin and confirm ping + all three sync calls succeed.
-2. Verify whitelist state follows Laravel response values.
+2. Verify whitelist behavior matches the server's native whitelist settings.
 3. Verify penalties reconcile by `updated_at` and include deleted (`deleted_at`) records.
 4. Verify stats payload uses root `stats` definitions and root `periods` snapshots.
 5. Verify deprecated events return `unknown_event` and are not used.
