@@ -104,11 +104,11 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
-      - name: Set up Java 21
-        uses: actions/setup-java@v4
+      - name: Set up Java 25
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '25'
 
       - name: Run analysis, tests, and build jars
         env:
@@ -187,11 +187,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Java 21
-        uses: actions/setup-java@v4
+      - name: Set up Java 25
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '25'
 
       - name: Build release JARs
         env:
@@ -254,11 +254,11 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
         
-      - name: Set up Java 21
-        uses: actions/setup-java@v4
+      - name: Set up Java 25
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '25'
 
       - name: Verify Maven mount
         run: |
