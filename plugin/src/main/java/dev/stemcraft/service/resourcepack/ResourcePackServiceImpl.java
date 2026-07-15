@@ -102,7 +102,9 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
         new ResourcePackFormatVersion(new int[] {1, 21, 6}, 63),
         new ResourcePackFormatVersion(new int[] {1, 21, 7}, 64),
         new ResourcePackFormatVersion(new int[] {1, 21, 9}, 69),
-        new ResourcePackFormatVersion(new int[] {1, 21, 11}, 75)
+        new ResourcePackFormatVersion(new int[] {1, 21, 11}, 75),
+        new ResourcePackFormatVersion(new int[] {26, 1, 0}, 84),
+        new ResourcePackFormatVersion(new int[] {26, 2, 0}, 88)
     );
 
     private File dataPacksDir;
