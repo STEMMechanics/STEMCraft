@@ -40,6 +40,7 @@ import dev.stemcraft.service.message.MessageServiceImpl;
 import dev.stemcraft.service.minigame.MiniGameServiceImpl;
 import dev.stemcraft.service.resourcepack.ResourcePackServiceImpl;
 import dev.stemcraft.service.tabcompletion.TabCompleteServiceImpl;
+import dev.stemcraft.service.firstjoin.FirstJoinService;
 import dev.stemcraft.service.world.WorldServiceImpl;
 import io.papermc.paper.connection.PlayerLoginConnection;
 import io.papermc.paper.event.connection.PlayerConnectionValidateLoginEvent;
@@ -91,6 +92,7 @@ public final class STEMCraft extends JavaPlugin {
     private ChatServiceImpl chat;
     private CommandServiceImpl commands;
     private ConfigServiceImpl config;
+    private AuditServiceImpl audit;
     private DatabaseServiceImpl database;
     private EventServiceImpl events;
     private HologramServiceImpl holograms;
@@ -102,6 +104,7 @@ public final class STEMCraft extends JavaPlugin {
     private PlaceholderServiceImpl placeholders;
     private PlayerServiceImpl players;
     private PlayerStatsServiceImpl playerStats;
+    private ProfanityFilterServiceImpl profanityFilter;
     private PunishmentServiceImpl punishments;
     private RecipeServiceImpl recipes;
     private RegionServiceImpl regions;
@@ -109,7 +112,7 @@ public final class STEMCraft extends JavaPlugin {
     private SelectionServiceImpl selections;
     private TabCompleteServiceImpl tabComplete;
     private TaskServiceImpl tasks;
-    private WebhookBridgeServiceImpl webhookBridge;
+    private FirstJoinService firstJoin;
     private WebServiceImpl web;
     private WorldServiceImpl worlds;
 
@@ -182,6 +185,7 @@ public final class STEMCraft extends JavaPlugin {
         debugging = configFile.getBoolean("debug", false);
 
         // Load managers
+        audit = new AuditServiceImpl(this, api);
         chat = new ChatServiceImpl(this, api);
         commands = new CommandServiceImpl(this, api);
         database = new DatabaseServiceImpl(this, api);
@@ -193,19 +197,22 @@ public final class STEMCraft extends JavaPlugin {
         placeholders = new PlaceholderServiceImpl(this, api);
         players = new PlayerServiceImpl(this, api);
         playerStats = new PlayerStatsServiceImpl(this, api);
+        profanityFilter = new ProfanityFilterServiceImpl(this, api);
         punishments = new PunishmentServiceImpl(this, api);
         recipes = new RecipeServiceImpl(this, api);
         regions = new RegionServiceImpl(this, api);
         resourcePack = new ResourcePackServiceImpl(this, api);
         selections = new SelectionServiceImpl(this, api);
         tabComplete = new TabCompleteServiceImpl(this, api);
-        webhookBridge = new WebhookBridgeServiceImpl(this, api);
         web = new WebServiceImpl(this, api);
+        firstJoin = new FirstJoinService(this, api);
         worlds = new WorldServiceImpl(this, api);
 
+        database.onEnable();
+        firstJoin.onEnable();
+        audit.onEnable();
         chat.onEnable();
         commands.onEnable();
-        database.onEnable();
         events.onEnable();
         holograms.onEnable();
         items.onEnable();
@@ -214,13 +221,13 @@ public final class STEMCraft extends JavaPlugin {
         placeholders.onEnable();
         players.onEnable();
         playerStats.onEnable();
+        profanityFilter.onEnable();
         punishments.onEnable();
         recipes.onEnable();
         regions.onEnable();
         resourcePack.onEnable();
         selections.onEnable();
         tabComplete.onEnable();
-        webhookBridge.onEnable();
         web.onEnable();
         worlds.onEnable();
 
@@ -316,13 +323,13 @@ public final class STEMCraft extends JavaPlugin {
         disableService(minigames);
         disableService(worlds);
         disableService(web);
-        disableService(webhookBridge);
         disableService(tabComplete);
         disableService(resourcePack);
         disableService(selections);
         disableService(regions);
         disableService(recipes);
         disableService(punishments);
+        disableService(profanityFilter);
         disableService(playerStats);
         disableService(placeholders);
         disableService(players);
@@ -330,6 +337,8 @@ public final class STEMCraft extends JavaPlugin {
         disableService(items);
         disableService(holograms);
         disableService(events);
+        disableService(firstJoin);
+        disableService(audit);
         disableService(database);
         disableService(commands);
         disableService(chat);
@@ -627,6 +636,9 @@ public final class STEMCraft extends JavaPlugin {
 
         int reloadedFeatures = 0;
         if (!localesOnly) {
+            if (firstJoin != null) {
+                firstJoin.onReload();
+            }
             if (selections != null) {
                 selections.onReload();
             }

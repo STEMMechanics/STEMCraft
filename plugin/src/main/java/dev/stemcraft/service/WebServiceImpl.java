@@ -20,6 +20,8 @@
 
 package dev.stemcraft.service;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
@@ -41,6 +43,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -51,6 +56,8 @@ import java.util.Map;
  * Implementation of the WebService for serving HTTP requests.
  */
 public class WebServiceImpl extends BaseService implements WebService {
+    private static final Gson GSON = new GsonBuilder().serializeNulls().create();
+    private static final String MAINTENANCE_MESSAGE = "Server is under maintenance. Please try again later.";
     private File wwwRoot;
     private HttpServer httpServer;
     private final Map<String, WebServiceEndpointHandler> endpointHandlers = new LinkedHashMap<>();
@@ -182,6 +189,8 @@ public class WebServiceImpl extends BaseService implements WebService {
             httpServer.setExecutor(null);
             httpServer.start();
             api.messages().info("WEB_SERVER_STARTED_ON", "ip", ip, "port", String.valueOf(port));
+
+            registerEndpointHandler("/status", this::handleStatusEndpoint);
         } catch (IOException e) {
             api.messages().error("WEB_SERVER_START_FAILED", "error", e.getMessage());
             httpServer = null;
@@ -205,6 +214,28 @@ public class WebServiceImpl extends BaseService implements WebService {
     public void registerEndpointHandler(@NotNull String path, @NotNull WebServiceEndpointHandler handler) {
         this.endpointHandlers.put(path, handler);
         api.messages().debug("WEB_SERVER_REGISTERED_ENDPOINT", "path", path);
+    }
+
+    Object handleStatusEndpoint(@NotNull WebServiceRequest request) {
+        if (!"/status".equals(request.path())) {
+            return null;
+        }
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        boolean maintenance = plugin.isMaintenanceMode();
+        payload.put("online", true);
+        payload.put("players_online", plugin.getServer().getOnlinePlayers().size());
+        payload.put("max_players", plugin.getServer().getMaxPlayers());
+        payload.put("version", plugin.getServer().getMinecraftVersion());
+        payload.put("maintenance", maintenance);
+        payload.put("message", maintenance ? MAINTENANCE_MESSAGE : null);
+        payload.put("checked_at", OffsetDateTime.now(ZoneId.systemDefault()).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("responseCode", 200);
+        response.put("contentType", "application/json; charset=utf-8");
+        response.put("body", GSON.toJson(payload));
+        return response;
     }
 
     /**
@@ -288,62 +319,7 @@ public class WebServiceImpl extends BaseService implements WebService {
             for (var e : endpointHandlers.entrySet()) {
                 if (request.path().startsWith(e.getKey())) {
                     Object result = e.getValue().handle(request);
-
-                    int responseCode = 200;
-                    byte[] bodyBytes = new byte[0];
-                    File responseFile = null;
-                    String contentType = "text/plain; charset=utf-8";
-                    Map<String, String> responseHeaders = new LinkedHashMap<>();
-
-                    if (result instanceof Map<?, ?> map) {
-                        Object codeObj = map.get("responseCode");
-                        if (codeObj == null) {
-                            codeObj = map.get("code");
-                        }
-                        if (codeObj instanceof Number) responseCode = ((Number) codeObj).intValue();
-
-                        Object ctObj = map.get("contentType");
-                        if (ctObj instanceof String) contentType = (String) ctObj;
-
-                        Object headersObj = map.get("headers");
-                        if (headersObj instanceof Map<?, ?> mapHeaders) {
-                            for (Map.Entry<?, ?> headerEntry : mapHeaders.entrySet()) {
-                                if (headerEntry.getKey() == null || headerEntry.getValue() == null) {
-                                    continue;
-                                }
-                                responseHeaders.put(headerEntry.getKey().toString(), headerEntry.getValue().toString());
-                            }
-                        }
-
-                        Object fileObj = map.get("file");
-                        if (fileObj instanceof File f) {
-                            responseFile = f;
-                        } else {
-                            Object bodyObj = map.get("body");
-                            String body = (bodyObj != null) ? bodyObj.toString() : "";
-                            bodyBytes = body.getBytes(StandardCharsets.UTF_8);
-                        }
-                    } else if (result != null) {
-                        bodyBytes = result.toString().getBytes(StandardCharsets.UTF_8);
-                    }
-
-                    responseHeaders.forEach((header, value) -> exchange.getResponseHeaders().set(header, value));
-
-                    if (responseFile != null) {
-                        exchange.getResponseHeaders().add("Content-Type", contentType);
-                        exchange.sendResponseHeaders(responseCode, responseFile.length());
-                        try (OutputStream os = exchange.getResponseBody();
-                             FileInputStream fis = new FileInputStream(responseFile)) {
-                            fis.transferTo(os);
-                        }
-                    } else {
-                        exchange.getResponseHeaders().add("Content-Type", contentType);
-                        exchange.sendResponseHeaders(responseCode, bodyBytes.length);
-                        try (OutputStream os = exchange.getResponseBody()) {
-                            os.write(bodyBytes);
-                        }
-                    }
-
+                    writeEndpointResponse(exchange, result);
                     return;
                 }
             }
@@ -368,6 +344,64 @@ public class WebServiceImpl extends BaseService implements WebService {
 
             try (OutputStream os = exchange.getResponseBody()) {
                 Files.copy(requested, os);
+            }
+        }
+
+        private void writeEndpointResponse(HttpExchange exchange, Object result) throws IOException {
+            int responseCode = 200;
+            byte[] bodyBytes = new byte[0];
+            File responseFile = null;
+            String contentType = "text/plain; charset=utf-8";
+            Map<String, String> responseHeaders = new LinkedHashMap<>();
+
+            if (result instanceof Map<?, ?> map) {
+                Object codeObj = map.get("responseCode");
+                if (codeObj == null) {
+                    codeObj = map.get("code");
+                }
+                if (codeObj instanceof Number) responseCode = ((Number) codeObj).intValue();
+
+                Object ctObj = map.get("contentType");
+                if (ctObj instanceof String) contentType = (String) ctObj;
+
+                Object headersObj = map.get("headers");
+                if (headersObj instanceof Map<?, ?> mapHeaders) {
+                    for (Map.Entry<?, ?> headerEntry : mapHeaders.entrySet()) {
+                        if (headerEntry.getKey() == null || headerEntry.getValue() == null) {
+                            continue;
+                        }
+                        responseHeaders.put(headerEntry.getKey().toString(), headerEntry.getValue().toString());
+                    }
+                }
+
+                Object fileObj = map.get("file");
+                if (fileObj instanceof File f) {
+                    responseFile = f;
+                } else {
+                    Object bodyObj = map.get("body");
+                    String body = (bodyObj != null) ? bodyObj.toString() : "";
+                    bodyBytes = body.getBytes(StandardCharsets.UTF_8);
+                }
+            } else if (result != null) {
+                bodyBytes = result.toString().getBytes(StandardCharsets.UTF_8);
+            }
+
+            responseHeaders.forEach((header, value) -> exchange.getResponseHeaders().set(header, value));
+
+            if (responseFile != null) {
+                exchange.getResponseHeaders().add("Content-Type", contentType);
+                exchange.sendResponseHeaders(responseCode, responseFile.length());
+                try (OutputStream os = exchange.getResponseBody();
+                     FileInputStream fis = new FileInputStream(responseFile)) {
+                    fis.transferTo(os);
+                }
+                return;
+            }
+
+            exchange.getResponseHeaders().add("Content-Type", contentType);
+            exchange.sendResponseHeaders(responseCode, bodyBytes.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(bodyBytes);
             }
         }
 

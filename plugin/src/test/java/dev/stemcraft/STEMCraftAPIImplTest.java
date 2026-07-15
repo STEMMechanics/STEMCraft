@@ -2,6 +2,7 @@ package dev.stemcraft;
 
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.internal.InstanceHolder;
+import dev.stemcraft.service.AuditServiceImpl;
 import dev.stemcraft.service.ConfigServiceImpl;
 import dev.stemcraft.service.DatabaseServiceImpl;
 import dev.stemcraft.service.EventServiceImpl;
@@ -10,6 +11,7 @@ import dev.stemcraft.service.ItemServiceImpl;
 import dev.stemcraft.service.LocaleServiceImpl;
 import dev.stemcraft.service.MotdServiceImpl;
 import dev.stemcraft.service.PlaceholderServiceImpl;
+import dev.stemcraft.service.ProfanityFilterServiceImpl;
 import dev.stemcraft.service.PlayerServiceImpl;
 import dev.stemcraft.service.PlayerStatsServiceImpl;
 import dev.stemcraft.service.PunishmentServiceImpl;
@@ -51,6 +53,7 @@ import static org.mockito.Mockito.when;
 
 class STEMCraftAPIImplTest {
     private static final List<String> SERVICE_ACCESSOR_NAMES = List.of(
+        "audit",
         "commands",
         "config",
         "database",
@@ -63,6 +66,7 @@ class STEMCraftAPIImplTest {
         "motd",
         "players",
         "placeholders",
+        "profanityFilter",
         "punishments",
         "playerStats",
         "recipes",
@@ -88,6 +92,7 @@ class STEMCraftAPIImplTest {
         when(plugin.getDataFolder()).thenReturn(dataFolder);
         when(plugin.isMaintenanceMode()).thenReturn(true);
 
+        AuditServiceImpl audit = mock(AuditServiceImpl.class);
         CommandServiceImpl commands = mock(CommandServiceImpl.class);
         ConfigServiceImpl config = mock(ConfigServiceImpl.class);
         DatabaseServiceImpl database = mock(DatabaseServiceImpl.class);
@@ -100,6 +105,7 @@ class STEMCraftAPIImplTest {
         MotdServiceImpl motd = mock(MotdServiceImpl.class);
         PlayerServiceImpl players = mock(PlayerServiceImpl.class);
         PlaceholderServiceImpl placeholders = mock(PlaceholderServiceImpl.class);
+        ProfanityFilterServiceImpl profanityFilter = mock(ProfanityFilterServiceImpl.class);
         PunishmentServiceImpl punishments = mock(PunishmentServiceImpl.class);
         PlayerStatsServiceImpl playerStats = mock(PlayerStatsServiceImpl.class);
         RecipeServiceImpl recipes = mock(RecipeServiceImpl.class);
@@ -110,6 +116,7 @@ class STEMCraftAPIImplTest {
         WebServiceImpl web = mock(WebServiceImpl.class);
         WorldServiceImpl worlds = mock(WorldServiceImpl.class);
 
+        when(plugin.audit()).thenReturn(audit);
         when(plugin.commands()).thenReturn(commands);
         when(plugin.config()).thenReturn(config);
         when(plugin.database()).thenReturn(database);
@@ -122,6 +129,7 @@ class STEMCraftAPIImplTest {
         when(plugin.motd()).thenReturn(motd);
         when(plugin.players()).thenReturn(players);
         when(plugin.placeholders()).thenReturn(placeholders);
+        when(plugin.profanityFilter()).thenReturn(profanityFilter);
         when(plugin.punishments()).thenReturn(punishments);
         when(plugin.playerStats()).thenReturn(playerStats);
         when(plugin.recipes()).thenReturn(recipes);
@@ -133,6 +141,7 @@ class STEMCraftAPIImplTest {
         when(plugin.worlds()).thenReturn(worlds);
 
         expectedDelegates = new LinkedHashMap<>();
+        expectedDelegates.put("audit", audit);
         expectedDelegates.put("commands", commands);
         expectedDelegates.put("config", config);
         expectedDelegates.put("database", database);
@@ -145,6 +154,7 @@ class STEMCraftAPIImplTest {
         expectedDelegates.put("motd", motd);
         expectedDelegates.put("players", players);
         expectedDelegates.put("placeholders", placeholders);
+        expectedDelegates.put("profanityFilter", profanityFilter);
         expectedDelegates.put("punishments", punishments);
         expectedDelegates.put("playerStats", playerStats);
         expectedDelegates.put("recipes", recipes);

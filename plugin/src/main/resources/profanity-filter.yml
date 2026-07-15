@@ -1,0 +1,50 @@
+enabled: true
+mask_character: "*"
+
+matching:
+  allow_separated_letters: true
+  allowed_suffixes:
+    - s
+    - es
+    - ed
+    - er
+    - ers
+    - ing
+    - ings
+
+substitutions:
+  "@": "a"
+  "$": "s"
+  "3": "e"
+  "0": "o"
+  "1": "i"
+  "!": "i"
+
+allow:
+  - assignment
+  - classroom
+  - aerospace
+  - workspace
+
+false_positives:
+  - assessment
+  - assistant
+  - passionate
+
+block:
+  mild:
+    - damn
+    - crap
+    - bloody
+  moderate:
+    - asshole
+    - bastard
+    - bitch
+    - shit
+    - twat
+    - wanker
+  high:
+    - fuck
+    - motherfucker
+  extreme:
+    - cunt
