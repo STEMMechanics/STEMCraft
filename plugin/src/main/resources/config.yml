@@ -31,6 +31,9 @@ custom-commands:
     run:
       - tpworld survival
 
+interactive-menus:
+  enabled: true
+
 web_server:
     enabled: true
     port: 8950
