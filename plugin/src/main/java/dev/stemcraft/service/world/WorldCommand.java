@@ -475,7 +475,7 @@ public class WorldCommand {
             ctx.returnInfo("WORLD_NO_GENERATORS");
         }
 
-        StringBuilder sb = new StringBuilder("Registered generators:");
+        StringBuilder sb = new StringBuilder("Available generators:");
         for (String key : worldService.generator().list()) {
             sb.append("\n - ").append(key);
         }

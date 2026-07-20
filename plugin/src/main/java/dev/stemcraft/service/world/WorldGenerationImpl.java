@@ -23,7 +23,9 @@ package dev.stemcraft.service.world;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.factory.ChunkGeneratorFactory;
 import dev.stemcraft.api.service.world.WorldGeneration;
+import org.bukkit.Bukkit;
 import org.bukkit.generator.ChunkGenerator;
+import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
@@ -69,14 +71,29 @@ public class WorldGenerationImpl implements WorldGeneration {
     }
 
     /**
-     * Returns a sorted list of all registered chunk generator keys.
+     * Returns a sorted list of STEMCraft generator keys and enabled Bukkit plugin
+     * names that may provide external generators.
      *
-     * @return A list of registered chunk generator keys.
+     * @return A list of available chunk generator keys.
      */
     public @NotNull List<String> list() {
-        List<String> out = new ArrayList<>(registry.keySet());
-        Collections.sort(out);
-        return out;
+        Set<String> out = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        out.addAll(registry.keySet());
+
+        for (Plugin plugin : Bukkit.getPluginManager().getPlugins()) {
+            if (!plugin.isEnabled()) {
+                continue;
+            }
+
+            String pluginName = plugin.getName();
+            if (pluginName == null || pluginName.isBlank()) {
+                continue;
+            }
+
+            out.add(pluginName);
+        }
+
+        return new ArrayList<>(out);
     }
 
     /**

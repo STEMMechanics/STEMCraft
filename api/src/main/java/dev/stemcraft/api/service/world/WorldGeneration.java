@@ -29,9 +29,9 @@ import java.util.*;
 public interface WorldGeneration {
 
     /**
-     * Returns a sorted list of all registered chunk generator keys.
+     * Returns a sorted list of available chunk generator keys.
      *
-     * @return A list of registered chunk generator keys.
+     * @return A list of available chunk generator keys.
      */
     @NotNull List<String> list();
 
