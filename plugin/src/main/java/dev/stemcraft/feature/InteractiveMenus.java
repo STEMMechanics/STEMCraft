@@ -107,7 +107,9 @@ public class InteractiveMenus extends BaseFeature {
 
         command = api.commands().create("imenu")
             .description("Interactive menus")
-            .usage("/imenu <open|select|list|info|create|delete|set|item>")
+            .usage("/imenu <help|open|select|list|info|create|delete|set|item>")
+            .tabCompletion("help")
+            .tabCompletion("help", "{int}")
             .tabCompletion("open", "{interactive-menus}", "{player}")
             .tabCompletion("open", "{interactive-menus}", "{player}", "-test")
             .tabCompletion("select", "{interactive-menus}", "{interactive-menu-items:$1}")
@@ -136,10 +138,12 @@ public class InteractiveMenus extends BaseFeature {
 
     private void onCommand(STEMCraftAPI unused, Command cmd, CommandContext ctx) {
         if (ctx.numArgs() == 0) {
-            ctx.returnInfo("Usage: /imenu <open|select|list|info|create|delete|set|item>");
+            commandHelp(ctx);
+            return;
         }
 
         switch (ctx.getArgLower(0)) {
+            case "help" -> commandHelp(ctx);
             case "open" -> commandOpen(ctx);
             case "select" -> commandSelect(ctx);
             case "list" -> commandList(ctx);
@@ -148,8 +152,41 @@ public class InteractiveMenus extends BaseFeature {
             case "delete" -> commandDelete(ctx);
             case "set" -> commandSet(ctx);
             case "item" -> commandItem(ctx);
-            default -> ctx.returnError("Unknown imenu subcommand: " + ctx.getArg(0));
+            default -> ctx.returnError("Unknown imenu subcommand: " + ctx.getArg(0) + ". Use /imenu help.");
         }
+    }
+
+    private void commandHelp(CommandContext ctx) {
+        List<HelpEntry> entries = new ArrayList<>();
+        entries.add(new HelpEntry("/imenu open <menu> [player] [-test]", "Open a menu. Java gets a book; Bedrock gets a Geyser form."));
+        entries.add(new HelpEntry("/imenu select <menu> <item> [-test]", "Select a menu item directly. -test shows what would run."));
+        entries.add(new HelpEntry("/imenu list", "List menus with clickable open/test/edit actions."));
+        entries.add(new HelpEntry("/imenu info <menu>", "Show menu items, descriptions, commands, and clickable edit actions."));
+        entries.add(new HelpEntry("/imenu create <menu> [title]", "Create a new menu."));
+        entries.add(new HelpEntry("/imenu set <menu> <title|body|book-title|book-author> <value>", "Edit menu text."));
+        entries.add(new HelpEntry("/imenu item add <menu> <item> <title>", "Add a menu item."));
+        entries.add(new HelpEntry("/imenu item set <menu> <item> <title|description> <value>", "Edit an item title or description."));
+        entries.add(new HelpEntry("/imenu item command add <menu> <item> <command>", "Add a command. Prefix with player: to run as the player."));
+        entries.add(new HelpEntry("/imenu item command set <menu> <item> <index> <command>", "Edit a numbered command on an item."));
+        entries.add(new HelpEntry("/imenu item command remove <menu> <item> <index>", "Remove a numbered command from an item."));
+        entries.add(new HelpEntry("/imenu item command clear <menu> <item>", "Clear all commands from an item."));
+        entries.add(new HelpEntry("Placeholders: {player}, {uuid}, {menu}, {item}, {item_title}", "Internal config placeholders use braces. Console commands are default; player:<command> runs as the player."));
+
+        int page = ChatMenuUtil.getPageFromArgs(ctx.args());
+        ChatMenuUtil.render(ctx.getSender(), "Interactive Menu Help", "imenu help", page, entries.size(), (start, count, isPlayer) -> {
+            List<Component> lines = new ArrayList<>();
+            for (int i = 0; i < count; i++) {
+                HelpEntry entry = entries.get(start + i);
+                Component line = Component.text(entry.command(), NamedTextColor.YELLOW)
+                    .append(Component.text(" - " + entry.description(), NamedTextColor.GRAY));
+                if (isPlayer && entry.command().startsWith("/")) {
+                    line = line.clickEvent(ClickEvent.suggestCommand(entry.command()))
+                        .hoverEvent(HoverEvent.showText(Component.text("Suggest command")));
+                }
+                lines.add(line);
+            }
+            return lines;
+        }, "No help entries found.");
     }
 
     private void commandOpen(CommandContext ctx) {
@@ -828,5 +865,10 @@ public class InteractiveMenus extends BaseFeature {
         String title,
         String description,
         List<String> commands
+    ) {}
+
+    private record HelpEntry(
+        String command,
+        String description
     ) {}
 }
