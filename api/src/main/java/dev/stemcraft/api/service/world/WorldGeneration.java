@@ -52,6 +52,21 @@ public interface WorldGeneration {
     boolean isRegistered(@NotNull String key);
 
     /**
+     * Checks if a chunk generator key is available for a world.
+     * <p>
+     * Registered STEMCraft generators are always available. Bukkit plugin
+     * generators are available only when the named plugin can provide a
+     * generator for the supplied world name.
+     *
+     * @param key The generator key or Bukkit plugin[:id] generator spec.
+     * @param worldName The world name the generator would be used for.
+     * @return True if the generator can be resolved, false otherwise.
+     */
+    default boolean isAvailable(@NotNull String key, @NotNull String worldName) {
+        return isRegistered(key);
+    }
+
+    /**
      * Returns tab-completion suggestions for a generator's options.
      *
      * @param key The chunk generator key.
