@@ -58,6 +58,9 @@ import java.util.regex.Pattern;
 public class InteractiveMenus extends BaseFeature {
     private static final Pattern ID_PATTERN = Pattern.compile("^[a-z0-9][a-z0-9_.-]*$");
     private static final int BOOK_LINES_PER_PAGE = 12;
+    private static final int CHAT_MENU_LINES_PER_PAGE = 8;
+    private static final int CHAT_MENU_ITEMS_PER_PAGE = 8;
+    private static final String LEFT_CLICK_MARKER = ":click_action_left:";
     private static final String EDIT_PERMISSION = "stemcraft.imenu.edit";
     private static final String MENU_CONFIG_FILE = "interactive-menus.yml";
 
@@ -270,70 +273,19 @@ public class InteractiveMenus extends BaseFeature {
 
         ctx.info("Menu '" + menu.id() + "': " + TextUtil.stripColour(menu.title()));
 
+        boolean canEdit = ctx.getSender() instanceof Player && ctx.hasPermission(EDIT_PERMISSION);
+        List<List<Component>> pages = buildItemPages(menu, items, canEdit);
         int page = ChatMenuUtil.getPageFromArgs(ctx.args());
-        ChatMenuUtil.render(ctx.getSender(), "Items: " + menu.id(), "imenu items " + menu.id(), page, items.size(), (start, count, isPlayer) -> {
-            List<Component> lines = new ArrayList<>();
-            for (int i = 0; i < count; i++) {
-                MenuItem item = items.get(start + i);
-                Component line = Component.text(item.id(), NamedTextColor.YELLOW);
-                if (isPlayer && ctx.hasPermission(EDIT_PERMISSION)) {
-                    line = line.append(Component.text(" "))
-                        .append(deleteAction("[Del]", "/imenu item remove " + menu.id() + " " + item.id(), "Delete item"));
-                }
-                lines.add(line);
-
-                Component title = Component.text("  Title: ", NamedTextColor.GRAY)
-                    .append(TextUtil.colourise(item.title()));
-                if (isPlayer && ctx.hasPermission(EDIT_PERMISSION)) {
-                    title = title.append(Component.text(" "))
-                        .append(suggest("[Edit]", "/imenu item set " + menu.id() + " " + item.id() + " title " + item.title(), "Edit item title"));
-                }
-                lines.add(title);
-
-                Component description = Component.text("  Description: ", NamedTextColor.GRAY)
-                    .append(item.description().isBlank()
-                        ? Component.text("(empty)", NamedTextColor.DARK_GRAY)
-                        : Component.text(TextUtil.stripColour(item.description()), NamedTextColor.GRAY));
-                if (isPlayer && ctx.hasPermission(EDIT_PERMISSION)) {
-                    description = description.append(Component.text(" "))
-                        .append(suggest("[Edit]", "/imenu item set " + menu.id() + " " + item.id() + " description " + item.description(), "Edit item description"));
-                }
-                lines.add(description);
-
-                Component commandsHeader = Component.text("  Commands:", NamedTextColor.GRAY);
-                if (isPlayer && ctx.hasPermission(EDIT_PERMISSION)) {
-                    commandsHeader = commandsHeader.append(Component.text(" "))
-                        .append(suggest("[Add]", "/imenu item command add " + menu.id() + " " + item.id() + " ", "Add item command"));
-                }
-                lines.add(commandsHeader);
-
-                if (item.commands().isEmpty()) {
-                    lines.add(Component.text("    (none)", NamedTextColor.DARK_GRAY));
-                    continue;
-                }
-
-                for (int commandIndex = 0; commandIndex < item.commands().size(); commandIndex++) {
-                    int oneBasedIndex = commandIndex + 1;
-                    String command = item.commands().get(commandIndex);
-                    Component commandLine = Component.text("    #" + oneBasedIndex + " " + command, NamedTextColor.DARK_GRAY);
-                    if (isPlayer && ctx.hasPermission(EDIT_PERMISSION)) {
-                        commandLine = commandLine.append(Component.text(" "))
-                            .append(suggest(
-                                "[E]",
-                                "/imenu item command set " + menu.id() + " " + item.id() + " " + oneBasedIndex + " " + command,
-                                "Edit command #" + oneBasedIndex
-                            ))
-                            .append(Component.text(" "))
-                            .append(deleteAction(
-                                "[D]",
-                                "/imenu item command remove " + menu.id() + " " + item.id() + " " + oneBasedIndex,
-                                "Delete command #" + oneBasedIndex
-                            ));
-                    }
-                    lines.add(commandLine);
-                }
+        if (!pages.isEmpty()) {
+            page = Math.min(page, pages.size());
+        }
+        int virtualCount = pages.isEmpty() ? 0 : pages.size() * CHAT_MENU_ITEMS_PER_PAGE;
+        ChatMenuUtil.render(ctx.getSender(), "Items: " + menu.id(), "imenu items " + menu.id(), page, virtualCount, (start, count, isPlayer) -> {
+            int pageIndex = start / CHAT_MENU_ITEMS_PER_PAGE;
+            if (pageIndex < 0 || pageIndex >= pages.size()) {
+                return List.of();
             }
-            return lines;
+            return pages.get(pageIndex);
         }, "Menu '" + menu.id() + "' has no items.");
     }
 
@@ -713,20 +665,31 @@ public class InteractiveMenus extends BaseFeature {
         page = page.append(Component.newline()).append(Component.newline());
         lines += 2;
 
+        boolean firstItemOnPage = true;
         for (MenuItem item : menu.items().values()) {
-            if (lines >= BOOK_LINES_PER_PAGE) {
+            int itemLines = 1 + (item.description().isBlank() ? 0 : 1);
+            int requiredLines = itemLines + (firstItemOnPage ? 0 : 1);
+            if (!firstItemOnPage && lines + requiredLines > BOOK_LINES_PER_PAGE) {
+                pages.add(page);
+                page = Component.empty();
+                lines = 0;
+                firstItemOnPage = true;
+            } else if (firstItemOnPage && lines + requiredLines > BOOK_LINES_PER_PAGE) {
                 pages.add(page);
                 page = Component.empty();
                 lines = 0;
             }
 
             String selectCommand = "/imenu select " + menu.id() + " " + item.id() + (testMode ? " -test" : "");
-            page = page.append(Component.text("> ", NamedTextColor.DARK_GRAY))
-                .append(TextUtil.colourise(item.title())
-                    .clickEvent(ClickEvent.runCommand(selectCommand))
-                    .hoverEvent(HoverEvent.showText(Component.text(selectCommand))))
+            if (!firstItemOnPage) {
+                page = page.append(Component.newline());
+                lines++;
+            }
+
+            page = page.append(bookClickableLabel(TextUtil.colourise(item.title()), selectCommand, selectCommand))
                 .append(Component.newline());
             lines++;
+            firstItemOnPage = false;
 
             if (!item.description().isBlank()) {
                 page = page.append(TextUtil.colourise("<gray>" + item.description() + "</gray>"))
@@ -801,6 +764,94 @@ public class InteractiveMenus extends BaseFeature {
         );
     }
 
+    private List<List<Component>> buildItemPages(MenuDefinition menu, List<MenuItem> items, boolean canEdit) {
+        List<List<Component>> pages = new ArrayList<>();
+        List<Component> currentPage = new ArrayList<>();
+
+        for (MenuItem item : items) {
+            List<Component> block = buildItemLines(menu, item, canEdit);
+            int requiredLines = block.size() + (currentPage.isEmpty() ? 0 : 1);
+            if (!currentPage.isEmpty() && currentPage.size() + requiredLines > CHAT_MENU_LINES_PER_PAGE) {
+                pages.add(currentPage);
+                currentPage = new ArrayList<>();
+            }
+
+            if (!currentPage.isEmpty()) {
+                currentPage.add(Component.empty());
+            }
+            currentPage.addAll(block);
+        }
+
+        if (!currentPage.isEmpty()) {
+            pages.add(currentPage);
+        }
+        return pages;
+    }
+
+    private List<Component> buildItemLines(MenuDefinition menu, MenuItem item, boolean canEdit) {
+        List<Component> lines = new ArrayList<>();
+
+        Component line = Component.text(item.id(), NamedTextColor.YELLOW);
+        if (canEdit) {
+            line = line.append(Component.text(" "))
+                .append(deleteAction("[Del]", "/imenu item remove " + menu.id() + " " + item.id(), "Delete item"));
+        }
+        lines.add(line);
+
+        Component title = Component.text("  Title: ", NamedTextColor.GRAY)
+            .append(TextUtil.colourise(item.title()));
+        if (canEdit) {
+            title = title.append(Component.text(" "))
+                .append(suggest("[Edit]", "/imenu item set " + menu.id() + " " + item.id() + " title " + item.title(), "Edit item title"));
+        }
+        lines.add(title);
+
+        Component description = Component.text("  Description: ", NamedTextColor.GRAY)
+            .append(item.description().isBlank()
+                ? Component.text("(empty)", NamedTextColor.DARK_GRAY)
+                : Component.text(TextUtil.stripColour(item.description()), NamedTextColor.GRAY));
+        if (canEdit) {
+            description = description.append(Component.text(" "))
+                .append(suggest("[Edit]", "/imenu item set " + menu.id() + " " + item.id() + " description " + item.description(), "Edit item description"));
+        }
+        lines.add(description);
+
+        Component commandsHeader = Component.text("  Commands:", NamedTextColor.GRAY);
+        if (canEdit) {
+            commandsHeader = commandsHeader.append(Component.text(" "))
+                .append(suggest("[Add]", "/imenu item command add " + menu.id() + " " + item.id() + " ", "Add item command"));
+        }
+        lines.add(commandsHeader);
+
+        if (item.commands().isEmpty()) {
+            lines.add(Component.text("    (none)", NamedTextColor.DARK_GRAY));
+            return lines;
+        }
+
+        for (int commandIndex = 0; commandIndex < item.commands().size(); commandIndex++) {
+            int oneBasedIndex = commandIndex + 1;
+            String command = item.commands().get(commandIndex);
+            Component commandLine = Component.text("    #" + oneBasedIndex + " " + command, NamedTextColor.DARK_GRAY);
+            if (canEdit) {
+                commandLine = commandLine.append(Component.text(" "))
+                    .append(suggest(
+                        "[E]",
+                        "/imenu item command set " + menu.id() + " " + item.id() + " " + oneBasedIndex + " " + command,
+                        "Edit command #" + oneBasedIndex
+                    ))
+                    .append(Component.text(" "))
+                    .append(deleteAction(
+                        "[D]",
+                        "/imenu item command remove " + menu.id() + " " + item.id() + " " + oneBasedIndex,
+                        "Delete command #" + oneBasedIndex
+                    ));
+            }
+            lines.add(commandLine);
+        }
+
+        return lines;
+    }
+
     private ConfigFile getMenuConfig() {
         if (menuConfig == null) {
             java.io.File file = new java.io.File(STEMCraft.getPlugin().getDataFolder(), MENU_CONFIG_FILE);
@@ -832,6 +883,13 @@ public class InteractiveMenus extends BaseFeature {
     private Component suggest(String label, String command, String hover) {
         return Component.text(label, NamedTextColor.GOLD)
             .clickEvent(ClickEvent.suggestCommand(command))
+            .hoverEvent(HoverEvent.showText(Component.text(hover)));
+    }
+
+    private Component bookClickableLabel(Component label, String command, String hover) {
+        return Component.text(api.messages().tokens().apply(LEFT_CLICK_MARKER) + " ", NamedTextColor.WHITE)
+            .append(label)
+            .clickEvent(ClickEvent.runCommand(command))
             .hoverEvent(HoverEvent.showText(Component.text(hover)));
     }
 
