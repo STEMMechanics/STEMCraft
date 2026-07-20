@@ -107,7 +107,7 @@ public class InteractiveMenus extends BaseFeature {
 
         command = api.commands().create("imenu")
             .description("Interactive menus")
-            .usage("/imenu <help|open|select|list|info|create|delete|set|item>")
+            .usage("/imenu <help|open|select|list|items|create|delete|set|item>")
             .tabCompletion("help")
             .tabCompletion("help", "{int}")
             .tabCompletion("open", "{interactive-menus}", "{player}")
@@ -116,8 +116,8 @@ public class InteractiveMenus extends BaseFeature {
             .tabCompletion("select", "{interactive-menus}", "{interactive-menu-items:$1}", "-test")
             .tabCompletion("list")
             .tabCompletion("list", "{int}")
-            .tabCompletion("info", "{interactive-menus}")
-            .tabCompletion("info", "{interactive-menus}", "{int}")
+            .tabCompletion("items", "{interactive-menus}")
+            .tabCompletion("items", "{interactive-menus}", "{int}")
             .tabCompletion("create")
             .tabCompletion("delete", "{interactive-menus}")
             .tabCompletion("set", "{interactive-menus}", "title")
@@ -147,7 +147,7 @@ public class InteractiveMenus extends BaseFeature {
             case "open" -> commandOpen(ctx);
             case "select" -> commandSelect(ctx);
             case "list" -> commandList(ctx);
-            case "info" -> commandInfo(ctx);
+            case "items", "info" -> commandItems(ctx);
             case "create" -> commandCreate(ctx);
             case "delete" -> commandDelete(ctx);
             case "set" -> commandSet(ctx);
@@ -161,7 +161,7 @@ public class InteractiveMenus extends BaseFeature {
         entries.add(new HelpEntry("/imenu open <menu> [player] [-test]", "Open a menu. Java gets a book; Bedrock gets a Geyser form."));
         entries.add(new HelpEntry("/imenu select <menu> <item> [-test]", "Select a menu item directly. -test shows what would run."));
         entries.add(new HelpEntry("/imenu list", "List menus with clickable open/test/edit actions."));
-        entries.add(new HelpEntry("/imenu info <menu>", "Show menu items, descriptions, commands, and clickable edit actions."));
+        entries.add(new HelpEntry("/imenu items <menu>", "Manage menu items, descriptions, and commands."));
         entries.add(new HelpEntry("/imenu create <menu> [title]", "Create a new menu."));
         entries.add(new HelpEntry("/imenu set <menu> <title|body|book-title|book-author> <value>", "Edit menu text."));
         entries.add(new HelpEntry("/imenu item add <menu> <item> <title>", "Add a menu item."));
@@ -228,84 +228,106 @@ public class InteractiveMenus extends BaseFeature {
             for (int i = 0; i < count; i++) {
                 MenuDefinition menu = menuList.get(start + i);
                 Component line = Component.text(menu.id(), NamedTextColor.YELLOW)
-                    .append(Component.text(" (" + menu.items().size() + " item(s))", NamedTextColor.GRAY));
+                    .append(Component.text(" (" + menu.items().size() + " items)", NamedTextColor.GRAY));
                 if (isPlayer) {
                     line = line.append(Component.text(" "))
-                        .append(action("[info]", "/imenu info " + menu.id(), "Show menu details"))
+                        .append(action("[Items]", "/imenu items " + menu.id(), "Manage menu items"))
                         .append(Component.text(" "))
-                        .append(action("[open]", "/imenu open " + menu.id(), "Open menu"))
+                        .append(action("[Open]", "/imenu open " + menu.id(), "Open menu"))
                         .append(Component.text(" "))
-                        .append(action("[test]", "/imenu open " + menu.id() + " -test", "Open in test mode"));
+                        .append(action("[Test]", "/imenu open " + menu.id() + " -test", "Open in test mode"));
                     if (ctx.hasPermission(EDIT_PERMISSION)) {
                         line = line.append(Component.text(" "))
-                            .append(suggest("[title]", "/imenu set " + menu.id() + " title ", "Set title"))
-                            .append(Component.text(" "))
-                            .append(suggest("[body]", "/imenu set " + menu.id() + " body ", "Set body"));
+                            .append(deleteAction("[Del]", "/imenu delete " + menu.id(), "Delete menu"));
                     }
                 }
                 lines.add(line);
+
+                Component title = Component.text("  Title: ", NamedTextColor.GRAY)
+                    .append(TextUtil.colourise(menu.title()));
+                if (isPlayer && ctx.hasPermission(EDIT_PERMISSION)) {
+                    title = title.append(Component.text(" "))
+                        .append(suggest("[Edit]", "/imenu set " + menu.id() + " title " + menu.title(), "Edit title"));
+                }
+                lines.add(title);
+
+                Component body = Component.text("  Body: ", NamedTextColor.GRAY)
+                    .append(menu.body().isBlank() ? Component.text("(empty)", NamedTextColor.DARK_GRAY) : TextUtil.colourise(menu.body()));
+                if (isPlayer && ctx.hasPermission(EDIT_PERMISSION)) {
+                    body = body.append(Component.text(" "))
+                        .append(suggest("[Edit]", "/imenu set " + menu.id() + " body " + menu.body(), "Edit body"));
+                }
+                lines.add(body);
             }
             return lines;
         }, "No interactive menus are configured.");
     }
 
-    private void commandInfo(CommandContext ctx) {
-        ctx.checkArgsSizeAtLeast(2, "Usage: /imenu info <menu>");
+    private void commandItems(CommandContext ctx) {
+        ctx.checkArgsSizeAtLeast(2, "Usage: /imenu items <menu>");
         MenuDefinition menu = requireMenu(ctx, normalizeId(ctx.getArg(1)));
         List<MenuItem> items = new ArrayList<>(menu.items().values());
 
         ctx.info("Menu '" + menu.id() + "': " + TextUtil.stripColour(menu.title()));
-        if (!menu.body().isBlank()) {
-            ctx.info("Body: " + TextUtil.stripColour(menu.body()));
-        }
 
         int page = ChatMenuUtil.getPageFromArgs(ctx.args());
-        ChatMenuUtil.render(ctx.getSender(), "Items: " + menu.id(), "imenu info " + menu.id(), page, items.size(), (start, count, isPlayer) -> {
+        ChatMenuUtil.render(ctx.getSender(), "Items: " + menu.id(), "imenu items " + menu.id(), page, items.size(), (start, count, isPlayer) -> {
             List<Component> lines = new ArrayList<>();
             for (int i = 0; i < count; i++) {
                 MenuItem item = items.get(start + i);
-                Component line = Component.text(item.id(), NamedTextColor.YELLOW)
-                    .append(Component.text(": ", NamedTextColor.GRAY))
-                    .append(TextUtil.colourise(item.title()));
-                if (isPlayer) {
+                Component line = Component.text(item.id(), NamedTextColor.YELLOW);
+                if (isPlayer && ctx.hasPermission(EDIT_PERMISSION)) {
                     line = line.append(Component.text(" "))
-                        .append(action("[select]", "/imenu select " + menu.id() + " " + item.id(), "Run item"))
-                        .append(Component.text(" "))
-                        .append(action("[test]", "/imenu select " + menu.id() + " " + item.id() + " -test", "Test item"));
-                    if (ctx.hasPermission(EDIT_PERMISSION)) {
-                        line = line.append(Component.text(" "))
-                            .append(suggest("[title]", "/imenu item set " + menu.id() + " " + item.id() + " title ", "Set item title"))
-                            .append(Component.text(" "))
-                            .append(suggest("[desc]", "/imenu item set " + menu.id() + " " + item.id() + " description ", "Set item description"))
-                            .append(Component.text(" "))
-                            .append(suggest("[cmd+]", "/imenu item command add " + menu.id() + " " + item.id() + " ", "Add item command"))
-                            .append(Component.text(" "))
-                            .append(action("[cmdx]", "/imenu item command clear " + menu.id() + " " + item.id(), "Clear item commands"))
-                            .append(Component.text(" "))
-                            .append(action("[del]", "/imenu item remove " + menu.id() + " " + item.id(), "Delete item"));
-                    }
+                        .append(deleteAction("[Del]", "/imenu item remove " + menu.id() + " " + item.id(), "Delete item"));
                 }
                 lines.add(line);
 
-                if (!item.description().isBlank()) {
-                    lines.add(Component.text("  " + TextUtil.stripColour(item.description()), NamedTextColor.GRAY));
+                Component title = Component.text("  Title: ", NamedTextColor.GRAY)
+                    .append(TextUtil.colourise(item.title()));
+                if (isPlayer && ctx.hasPermission(EDIT_PERMISSION)) {
+                    title = title.append(Component.text(" "))
+                        .append(suggest("[Edit]", "/imenu item set " + menu.id() + " " + item.id() + " title " + item.title(), "Edit item title"));
                 }
+                lines.add(title);
+
+                Component description = Component.text("  Description: ", NamedTextColor.GRAY)
+                    .append(item.description().isBlank()
+                        ? Component.text("(empty)", NamedTextColor.DARK_GRAY)
+                        : Component.text(TextUtil.stripColour(item.description()), NamedTextColor.GRAY));
+                if (isPlayer && ctx.hasPermission(EDIT_PERMISSION)) {
+                    description = description.append(Component.text(" "))
+                        .append(suggest("[Edit]", "/imenu item set " + menu.id() + " " + item.id() + " description " + item.description(), "Edit item description"));
+                }
+                lines.add(description);
+
+                Component commandsHeader = Component.text("  Commands:", NamedTextColor.GRAY);
+                if (isPlayer && ctx.hasPermission(EDIT_PERMISSION)) {
+                    commandsHeader = commandsHeader.append(Component.text(" "))
+                        .append(suggest("[Add]", "/imenu item command add " + menu.id() + " " + item.id() + " ", "Add item command"));
+                }
+                lines.add(commandsHeader);
+
+                if (item.commands().isEmpty()) {
+                    lines.add(Component.text("    (none)", NamedTextColor.DARK_GRAY));
+                    continue;
+                }
+
                 for (int commandIndex = 0; commandIndex < item.commands().size(); commandIndex++) {
                     int oneBasedIndex = commandIndex + 1;
                     String command = item.commands().get(commandIndex);
-                    Component commandLine = Component.text("  #" + oneBasedIndex + " " + command, NamedTextColor.DARK_GRAY);
+                    Component commandLine = Component.text("    #" + oneBasedIndex + " " + command, NamedTextColor.DARK_GRAY);
                     if (isPlayer && ctx.hasPermission(EDIT_PERMISSION)) {
                         commandLine = commandLine.append(Component.text(" "))
                             .append(suggest(
-                                "[edit]",
+                                "[E]",
                                 "/imenu item command set " + menu.id() + " " + item.id() + " " + oneBasedIndex + " " + command,
                                 "Edit command #" + oneBasedIndex
                             ))
                             .append(Component.text(" "))
-                            .append(action(
-                                "[remove]",
+                            .append(deleteAction(
+                                "[D]",
                                 "/imenu item command remove " + menu.id() + " " + item.id() + " " + oneBasedIndex,
-                                "Remove command #" + oneBasedIndex
+                                "Delete command #" + oneBasedIndex
                             ));
                     }
                     lines.add(commandLine);
@@ -796,13 +818,19 @@ public class InteractiveMenus extends BaseFeature {
     }
 
     private Component action(String label, String command, String hover) {
-        return Component.text(label, NamedTextColor.GREEN)
+        return Component.text(label, NamedTextColor.GOLD)
+            .clickEvent(ClickEvent.runCommand(command))
+            .hoverEvent(HoverEvent.showText(Component.text(hover)));
+    }
+
+    private Component deleteAction(String label, String command, String hover) {
+        return Component.text(label, NamedTextColor.RED)
             .clickEvent(ClickEvent.runCommand(command))
             .hoverEvent(HoverEvent.showText(Component.text(hover)));
     }
 
     private Component suggest(String label, String command, String hover) {
-        return Component.text(label, NamedTextColor.AQUA)
+        return Component.text(label, NamedTextColor.GOLD)
             .clickEvent(ClickEvent.suggestCommand(command))
             .hoverEvent(HoverEvent.showText(Component.text(hover)));
     }
