@@ -33,23 +33,6 @@ custom-commands:
 
 interactive-menus:
   enabled: true
-  menus:
-    challenges:
-      title: "<gold>Challenges</gold>"
-      body: "<gray>Choose a challenge.</gray>"
-      book-title: "Challenges"
-      book-author: "STEMCraft"
-      items:
-        parkour:
-          title: "<aqua>Parkour</aqua>"
-          description: "Start the parkour challenge."
-          commands:
-            - "player:parkour join"
-        survival:
-          title: "<green>Survival</green>"
-          description: "Teleport to survival."
-          commands:
-            - "player:tpworld survival"
 
 web_server:
     enabled: true

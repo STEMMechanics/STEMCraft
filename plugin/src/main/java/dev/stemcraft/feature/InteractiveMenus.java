@@ -24,10 +24,12 @@ import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.Command;
 import dev.stemcraft.api.command.CommandContext;
+import dev.stemcraft.api.config.ConfigFile;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.util.PlaceholderUtil;
 import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.api.util.TextUtil;
+import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
@@ -57,8 +59,10 @@ public class InteractiveMenus extends BaseFeature {
     private static final Pattern ID_PATTERN = Pattern.compile("^[a-z0-9][a-z0-9_.-]*$");
     private static final int BOOK_LINES_PER_PAGE = 12;
     private static final String EDIT_PERMISSION = "stemcraft.imenu.edit";
+    private static final String MENU_CONFIG_FILE = "interactive-menus.yml";
 
     private final Map<String, MenuDefinition> menus = new LinkedHashMap<>();
+    private ConfigFile menuConfig;
     private Command command;
 
     public InteractiveMenus(STEMCraftAPI api) {
@@ -74,6 +78,9 @@ public class InteractiveMenus extends BaseFeature {
     @Override
     public void onReload() {
         super.onReload();
+        if (menuConfig != null) {
+            menuConfig.reload();
+        }
         reloadMenus();
     }
 
@@ -106,7 +113,9 @@ public class InteractiveMenus extends BaseFeature {
             .tabCompletion("select", "{interactive-menus}", "{interactive-menu-items:$1}")
             .tabCompletion("select", "{interactive-menus}", "{interactive-menu-items:$1}", "-test")
             .tabCompletion("list")
+            .tabCompletion("list", "{int}")
             .tabCompletion("info", "{interactive-menus}")
+            .tabCompletion("info", "{interactive-menus}", "{int}")
             .tabCompletion("create")
             .tabCompletion("delete", "{interactive-menus}")
             .tabCompletion("set", "{interactive-menus}", "title")
@@ -173,24 +182,81 @@ public class InteractiveMenus extends BaseFeature {
             ctx.returnInfo("No interactive menus are configured.");
         }
 
-        ctx.info("Interactive menus:");
-        menus.values().forEach(menu -> ctx.info(" - " + menu.id() + " (" + menu.items().size() + " item(s))"));
+        List<MenuDefinition> menuList = new ArrayList<>(menus.values());
+        int page = ChatMenuUtil.getPageFromArgs(ctx.args());
+        ChatMenuUtil.render(ctx.getSender(), "Interactive Menus", "imenu list", page, menuList.size(), (start, count, isPlayer) -> {
+            List<Component> lines = new ArrayList<>();
+            for (int i = 0; i < count; i++) {
+                MenuDefinition menu = menuList.get(start + i);
+                Component line = Component.text(menu.id(), NamedTextColor.YELLOW)
+                    .append(Component.text(" (" + menu.items().size() + " item(s))", NamedTextColor.GRAY));
+                if (isPlayer) {
+                    line = line.append(Component.text(" "))
+                        .append(action("[info]", "/imenu info " + menu.id(), "Show menu details"))
+                        .append(Component.text(" "))
+                        .append(action("[open]", "/imenu open " + menu.id(), "Open menu"))
+                        .append(Component.text(" "))
+                        .append(action("[test]", "/imenu open " + menu.id() + " -test", "Open in test mode"));
+                    if (ctx.hasPermission(EDIT_PERMISSION)) {
+                        line = line.append(Component.text(" "))
+                            .append(suggest("[title]", "/imenu set " + menu.id() + " title ", "Set title"))
+                            .append(Component.text(" "))
+                            .append(suggest("[body]", "/imenu set " + menu.id() + " body ", "Set body"));
+                    }
+                }
+                lines.add(line);
+            }
+            return lines;
+        }, "No interactive menus are configured.");
     }
 
     private void commandInfo(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2, "Usage: /imenu info <menu>");
         MenuDefinition menu = requireMenu(ctx, normalizeId(ctx.getArg(1)));
+        List<MenuItem> items = new ArrayList<>(menu.items().values());
 
-        ctx.info("Menu '" + menu.id() + "':");
-        ctx.info(" - Title: " + TextUtil.stripColour(menu.title()));
-        ctx.info(" - Body: " + TextUtil.stripColour(menu.body()));
-        ctx.info(" - Items: " + menu.items().size());
-        for (MenuItem item : menu.items().values()) {
-            ctx.info("   - " + item.id() + ": " + TextUtil.stripColour(item.title()));
-            for (String command : item.commands()) {
-                ctx.info("     * " + command);
-            }
+        ctx.info("Menu '" + menu.id() + "': " + TextUtil.stripColour(menu.title()));
+        if (!menu.body().isBlank()) {
+            ctx.info("Body: " + TextUtil.stripColour(menu.body()));
         }
+
+        int page = ChatMenuUtil.getPageFromArgs(ctx.args());
+        ChatMenuUtil.render(ctx.getSender(), "Items: " + menu.id(), "imenu info " + menu.id(), page, items.size(), (start, count, isPlayer) -> {
+            List<Component> lines = new ArrayList<>();
+            for (int i = 0; i < count; i++) {
+                MenuItem item = items.get(start + i);
+                Component line = Component.text(item.id(), NamedTextColor.YELLOW)
+                    .append(Component.text(": ", NamedTextColor.GRAY))
+                    .append(TextUtil.colourise(item.title()));
+                if (isPlayer) {
+                    line = line.append(Component.text(" "))
+                        .append(action("[select]", "/imenu select " + menu.id() + " " + item.id(), "Run item"))
+                        .append(Component.text(" "))
+                        .append(action("[test]", "/imenu select " + menu.id() + " " + item.id() + " -test", "Test item"));
+                    if (ctx.hasPermission(EDIT_PERMISSION)) {
+                        line = line.append(Component.text(" "))
+                            .append(suggest("[title]", "/imenu item set " + menu.id() + " " + item.id() + " title ", "Set item title"))
+                            .append(Component.text(" "))
+                            .append(suggest("[desc]", "/imenu item set " + menu.id() + " " + item.id() + " description ", "Set item description"))
+                            .append(Component.text(" "))
+                            .append(suggest("[cmd+]", "/imenu item command add " + menu.id() + " " + item.id() + " ", "Add item command"))
+                            .append(Component.text(" "))
+                            .append(action("[cmdx]", "/imenu item command clear " + menu.id() + " " + item.id(), "Clear item commands"))
+                            .append(Component.text(" "))
+                            .append(action("[del]", "/imenu item remove " + menu.id() + " " + item.id(), "Delete item"));
+                    }
+                }
+                lines.add(line);
+
+                if (!item.description().isBlank()) {
+                    lines.add(Component.text("  " + TextUtil.stripColour(item.description()), NamedTextColor.GRAY));
+                }
+                if (!item.commands().isEmpty()) {
+                    lines.add(Component.text("  commands: " + String.join("; ", item.commands()), NamedTextColor.DARK_GRAY));
+                }
+            }
+            return lines;
+        }, "Menu '" + menu.id() + "' has no items.");
     }
 
     private void commandCreate(CommandContext ctx) {
@@ -204,7 +270,7 @@ public class InteractiveMenus extends BaseFeature {
         }
 
         String title = ctx.numArgs() > 2 ? ctx.getArgsAsString(3) : menuId;
-        ConfigSection menu = getConfigSection().getSection("menus").createSection(menuId);
+        ConfigSection menu = getMenuConfig().getSection("menus").createSection(menuId);
         menu.set("title", title);
         menu.set("body", "");
         menu.set("book-title", TextUtil.stripColour(title));
@@ -221,8 +287,8 @@ public class InteractiveMenus extends BaseFeature {
 
         String menuId = normalizeId(ctx.getArg(1));
         requireMenu(ctx, menuId);
-        getConfigSection().set("menus." + menuId, null);
-        getConfigSection().save();
+        getMenuConfig().set("menus." + menuId, null);
+        getMenuConfig().save();
         reloadMenus();
         ctx.returnSuccess("Deleted interactive menu '" + menuId + "'.");
     }
@@ -238,8 +304,8 @@ public class InteractiveMenus extends BaseFeature {
             ctx.returnError("Unknown menu field: " + ctx.getArg(2));
         }
 
-        getConfigSection().set("menus." + menuId + "." + field, ctx.getArgsAsString(4));
-        getConfigSection().save();
+        getMenuConfig().set("menus." + menuId + "." + field, ctx.getArgsAsString(4));
+        getMenuConfig().save();
         reloadMenus();
         ctx.returnSuccess("Updated " + field + " for menu '" + menuId + "'.");
     }
@@ -268,7 +334,7 @@ public class InteractiveMenus extends BaseFeature {
             ctx.returnError("Menu item already exists: " + itemId);
         }
 
-        ConfigSection item = getConfigSection().getSection("menus." + menuId + ".items").createSection(itemId);
+        ConfigSection item = getMenuConfig().getSection("menus." + menuId + ".items").createSection(itemId);
         item.set("title", ctx.getArgsAsString(5));
         item.set("description", "");
         item.set("commands", List.of());
@@ -285,8 +351,8 @@ public class InteractiveMenus extends BaseFeature {
         String itemId = normalizeId(ctx.getArg(3));
         requireItem(ctx, menu, itemId);
 
-        getConfigSection().set("menus." + menuId + ".items." + itemId, null);
-        getConfigSection().save();
+        getMenuConfig().set("menus." + menuId + ".items." + itemId, null);
+        getMenuConfig().save();
         reloadMenus();
         ctx.returnSuccess("Removed item '" + itemId + "' from menu '" + menuId + "'.");
     }
@@ -303,8 +369,8 @@ public class InteractiveMenus extends BaseFeature {
             ctx.returnError("Unknown item field: " + ctx.getArg(4));
         }
 
-        getConfigSection().set("menus." + menuId + ".items." + itemId + "." + field, ctx.getArgsAsString(6));
-        getConfigSection().save();
+        getMenuConfig().set("menus." + menuId + ".items." + itemId + "." + field, ctx.getArgsAsString(6));
+        getMenuConfig().save();
         reloadMenus();
         ctx.returnSuccess("Updated " + field + " for item '" + itemId + "'.");
     }
@@ -335,8 +401,8 @@ public class InteractiveMenus extends BaseFeature {
 
         List<String> commands = new ArrayList<>(item.commands());
         commands.add(commandLine);
-        getConfigSection().set("menus." + menuId + ".items." + itemId + ".commands", commands);
-        getConfigSection().save();
+        getMenuConfig().set("menus." + menuId + ".items." + itemId + ".commands", commands);
+        getMenuConfig().save();
         reloadMenus();
         ctx.returnSuccess("Added command to item '" + itemId + "'.");
     }
@@ -347,8 +413,8 @@ public class InteractiveMenus extends BaseFeature {
         String itemId = normalizeId(ctx.getArg(4));
         requireItem(ctx, menu, itemId);
 
-        getConfigSection().set("menus." + menuId + ".items." + itemId + ".commands", List.of());
-        getConfigSection().save();
+        getMenuConfig().set("menus." + menuId + ".items." + itemId + ".commands", List.of());
+        getMenuConfig().save();
         reloadMenus();
         ctx.returnSuccess("Cleared commands for item '" + itemId + "'.");
     }
@@ -356,7 +422,7 @@ public class InteractiveMenus extends BaseFeature {
     private void reloadMenus() {
         menus.clear();
 
-        ConfigSection menusSection = getConfigSection().getSection("menus", false);
+        ConfigSection menusSection = getMenuConfig().getSection("menus", false);
         if (menusSection == null) {
             return;
         }
@@ -603,6 +669,34 @@ public class InteractiveMenus extends BaseFeature {
             "item_title", TextUtil.stripColour(item.title()),
             "item-title", TextUtil.stripColour(item.title())
         );
+    }
+
+    private ConfigFile getMenuConfig() {
+        if (menuConfig == null) {
+            java.io.File file = new java.io.File(STEMCraft.getPlugin().getDataFolder(), MENU_CONFIG_FILE);
+            if (!file.exists()) {
+                STEMCraft.getPlugin().saveResource(MENU_CONFIG_FILE, false);
+            }
+
+            ConfigFile loaded = api.config().load(MENU_CONFIG_FILE);
+            if (loaded == null) {
+                throw new IllegalStateException("Could not load " + MENU_CONFIG_FILE);
+            }
+            menuConfig = loaded;
+        }
+        return menuConfig;
+    }
+
+    private Component action(String label, String command, String hover) {
+        return Component.text(label, NamedTextColor.GREEN)
+            .clickEvent(ClickEvent.runCommand(command))
+            .hoverEvent(HoverEvent.showText(Component.text(hover)));
+    }
+
+    private Component suggest(String label, String command, String hover) {
+        return Component.text(label, NamedTextColor.AQUA)
+            .clickEvent(ClickEvent.suggestCommand(command))
+            .hoverEvent(HoverEvent.showText(Component.text(hover)));
     }
 
     private void requireEditPermission(CommandContext ctx) {
