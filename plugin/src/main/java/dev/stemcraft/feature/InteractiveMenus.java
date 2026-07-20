@@ -127,6 +127,8 @@ public class InteractiveMenus extends BaseFeature {
             .tabCompletion("item", "set", "{interactive-menus}", "{interactive-menu-items:$2}", "title")
             .tabCompletion("item", "set", "{interactive-menus}", "{interactive-menu-items:$2}", "description")
             .tabCompletion("item", "command", "add", "{interactive-menus}", "{interactive-menu-items:$3}")
+            .tabCompletion("item", "command", "set", "{interactive-menus}", "{interactive-menu-items:$3}", "{int}")
+            .tabCompletion("item", "command", "remove", "{interactive-menus}", "{interactive-menu-items:$3}", "{int}")
             .tabCompletion("item", "command", "clear", "{interactive-menus}", "{interactive-menu-items:$3}")
             .executor(this::onCommand)
             .register(STEMCraft.getPlugin());
@@ -251,8 +253,25 @@ public class InteractiveMenus extends BaseFeature {
                 if (!item.description().isBlank()) {
                     lines.add(Component.text("  " + TextUtil.stripColour(item.description()), NamedTextColor.GRAY));
                 }
-                if (!item.commands().isEmpty()) {
-                    lines.add(Component.text("  commands: " + String.join("; ", item.commands()), NamedTextColor.DARK_GRAY));
+                for (int commandIndex = 0; commandIndex < item.commands().size(); commandIndex++) {
+                    int oneBasedIndex = commandIndex + 1;
+                    String command = item.commands().get(commandIndex);
+                    Component commandLine = Component.text("  #" + oneBasedIndex + " " + command, NamedTextColor.DARK_GRAY);
+                    if (isPlayer && ctx.hasPermission(EDIT_PERMISSION)) {
+                        commandLine = commandLine.append(Component.text(" "))
+                            .append(suggest(
+                                "[edit]",
+                                "/imenu item command set " + menu.id() + " " + item.id() + " " + oneBasedIndex + " " + command,
+                                "Edit command #" + oneBasedIndex
+                            ))
+                            .append(Component.text(" "))
+                            .append(action(
+                                "[remove]",
+                                "/imenu item command remove " + menu.id() + " " + item.id() + " " + oneBasedIndex,
+                                "Remove command #" + oneBasedIndex
+                            ));
+                    }
+                    lines.add(commandLine);
                 }
             }
             return lines;
@@ -376,12 +395,20 @@ public class InteractiveMenus extends BaseFeature {
     }
 
     private void commandItemCommand(CommandContext ctx) {
-        ctx.checkArgsSizeAtLeast(5, "Usage: /imenu item command <add|clear> <menu> <item> [command]");
+        ctx.checkArgsSizeAtLeast(5, "Usage: /imenu item command <add|set|remove|clear> <menu> <item> [args]");
 
         switch (ctx.getArgLower(2)) {
             case "add" -> {
                 ctx.checkArgsSizeAtLeast(6, "Usage: /imenu item command add <menu> <item> <command>");
                 addItemCommand(ctx);
+            }
+            case "set" -> {
+                ctx.checkArgsSizeAtLeast(7, "Usage: /imenu item command set <menu> <item> <index> <command>");
+                setItemCommand(ctx);
+            }
+            case "remove" -> {
+                ctx.checkArgsSizeAtLeast(6, "Usage: /imenu item command remove <menu> <item> <index>");
+                removeItemCommand(ctx);
             }
             case "clear" -> clearItemCommands(ctx);
             default -> ctx.returnError("Unknown item command action: " + ctx.getArg(2));
@@ -407,6 +434,41 @@ public class InteractiveMenus extends BaseFeature {
         ctx.returnSuccess("Added command to item '" + itemId + "'.");
     }
 
+    private void setItemCommand(CommandContext ctx) {
+        String menuId = normalizeId(ctx.getArg(3));
+        MenuDefinition menu = requireMenu(ctx, menuId);
+        String itemId = normalizeId(ctx.getArg(4));
+        MenuItem item = requireItem(ctx, menu, itemId);
+        int index = requireCommandIndex(ctx, item, 5);
+
+        String commandLine = normalizeCommand(String.join(" ", ctx.rawArgs().subList(6, ctx.rawArgs().size())));
+        if (commandLine.isBlank()) {
+            ctx.returnError("Command cannot be empty.");
+        }
+
+        List<String> commands = new ArrayList<>(item.commands());
+        commands.set(index, commandLine);
+        getMenuConfig().set("menus." + menuId + ".items." + itemId + ".commands", commands);
+        getMenuConfig().save();
+        reloadMenus();
+        ctx.returnSuccess("Updated command " + (index + 1) + " for item '" + itemId + "'.");
+    }
+
+    private void removeItemCommand(CommandContext ctx) {
+        String menuId = normalizeId(ctx.getArg(3));
+        MenuDefinition menu = requireMenu(ctx, menuId);
+        String itemId = normalizeId(ctx.getArg(4));
+        MenuItem item = requireItem(ctx, menu, itemId);
+        int index = requireCommandIndex(ctx, item, 5);
+
+        List<String> commands = new ArrayList<>(item.commands());
+        commands.remove(index);
+        getMenuConfig().set("menus." + menuId + ".items." + itemId + ".commands", commands);
+        getMenuConfig().save();
+        reloadMenus();
+        ctx.returnSuccess("Removed command " + (index + 1) + " from item '" + itemId + "'.");
+    }
+
     private void clearItemCommands(CommandContext ctx) {
         String menuId = normalizeId(ctx.getArg(3));
         MenuDefinition menu = requireMenu(ctx, menuId);
@@ -417,6 +479,15 @@ public class InteractiveMenus extends BaseFeature {
         getMenuConfig().save();
         reloadMenus();
         ctx.returnSuccess("Cleared commands for item '" + itemId + "'.");
+    }
+
+    private int requireCommandIndex(CommandContext ctx, MenuItem item, int argIndex) {
+        int oneBasedIndex = ctx.getArgAsInt(argIndex, -1);
+        int index = oneBasedIndex - 1;
+        if (index < 0 || index >= item.commands().size()) {
+            ctx.returnError("Command index must be between 1 and " + item.commands().size() + ".");
+        }
+        return index;
     }
 
     private void reloadMenus() {
