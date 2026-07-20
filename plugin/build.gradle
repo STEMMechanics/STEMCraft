@@ -18,6 +18,7 @@ dependencies {
     //noinspection VulnerableLibrariesLocal
     compileOnly("io.papermc.paper:paper-api:${rootProject.ext.paperApiVersion}")
     compileOnly('org.geysermc.floodgate:api:2.2.4-SNAPSHOT')
+    compileOnly('org.geysermc.geyser:api:2.9.0-SNAPSHOT')
     compileOnly('me.clip:placeholderapi:2.11.6')
 
     // Lombok
