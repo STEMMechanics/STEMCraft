@@ -251,24 +251,50 @@ jobs:
               RANGE="${SHA}"
             fi
 
+            ci_skip_marker() {
+              commit_sha="$1"
+              changed_paths="$(
+                git diff-tree --no-commit-id --name-only -r "${commit_sha}^1" "$commit_sha" 2>/dev/null \
+                  || git diff-tree --no-commit-id --name-only -r "$commit_sha" 2>/dev/null \
+                  || true
+              )"
+
+              [ -n "$changed_paths" ] || return 1
+
+              while IFS= read -r changed_path; do
+                [ -n "$changed_path" ] || continue
+                case "$changed_path" in
+                  .github/*|docs/*|*.md|*.adoc|*.txt|LICENSE|NOTICE|CODEOWNERS|.editorconfig|.gitattributes|.gitignore)
+                    ;;
+                  *)
+                    return 1
+                    ;;
+                esac
+              done <<< "$changed_paths"
+
+              printf ' [ci skip]'
+            }
+
             change_lines_file="$(mktemp)"
             git log --first-parent --format='%H%x09%s' "$RANGE" | while IFS=$'\t' read -r commit_sha subject; do
               [ -n "${commit_sha:-}" ] || continue
 
+              short_commit="$(git rev-parse --short=7 "$commit_sha")"
+              skip_marker="$(ci_skip_marker "$commit_sha" || true)"
               detail="$(git show -s --format=%b "$commit_sha" | awk 'NF { print; exit }')"
               if printf '%s\n' "$subject" | grep -Eq '^Merge pull request #[0-9]+ '; then
                 pr_number="$(printf '%s\n' "$subject" | sed -E 's/^Merge pull request #([0-9]+).*/\1/')"
                 summary="${detail:-$subject}"
-                printf -- '- %s (#%s)\n' "$summary" "$pr_number" >> "$change_lines_file"
+                printf '%s%s %s (#%s)\n' "$short_commit" "$skip_marker" "$summary" "$pr_number" >> "$change_lines_file"
               else
-                printf -- '- %s\n' "$subject" >> "$change_lines_file"
+                printf '%s%s %s\n' "$short_commit" "$skip_marker" "$subject" >> "$change_lines_file"
               fi
             done
 
             if [ -s "$change_lines_file" ]; then
               CHANGE_LINES="$(cat "$change_lines_file")"
             else
-              CHANGE_LINES="- No code changes since the previous build tag."
+              CHANGE_LINES="No code changes since the previous build tag."
             fi
             rm -f "$change_lines_file"
 
