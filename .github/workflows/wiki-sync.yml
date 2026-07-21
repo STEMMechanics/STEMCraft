@@ -1,0 +1,73 @@
+name: Sync Wiki
+
+on:
+  push:
+    branches: [ '**' ]
+    paths:
+      - 'docs/wiki/**'
+      - '.github/workflows/wiki-sync.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wiki-sync-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    name: Publish docs/wiki to GitHub Wiki
+    if: ${{ github.event_name != 'push' || github.ref_name == github.event.repository.default_branch }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Sync wiki repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          SOURCE_DIR="docs/wiki"
+          if [ ! -d "$SOURCE_DIR" ]; then
+            echo "No docs/wiki directory found." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          WORKDIR="$(mktemp -d)"
+          WIKI_URL="https://x-access-token:${GH_TOKEN}@github.com/${REPOSITORY}.wiki.git"
+
+          if ! git clone "$WIKI_URL" "$WORKDIR/wiki" 2>"$WORKDIR/clone.err"; then
+            echo "Failed to clone the wiki repository. Ensure the GitHub wiki is enabled for ${REPOSITORY}." >&2
+            cat "$WORKDIR/clone.err" >&2
+            exit 1
+          fi
+
+          rsync -a --delete --exclude '.git/' "${SOURCE_DIR}/" "$WORKDIR/wiki/"
+
+          cd "$WORKDIR/wiki"
+          WIKI_BRANCH="$(git symbolic-ref --short HEAD 2>/dev/null || echo master)"
+
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "Wiki already up to date." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -A
+          SHORT_SHA="${SHA::10}"
+          git commit -m "Sync wiki from ${REPOSITORY}@${SHORT_SHA}"
+          git push origin HEAD:"${WIKI_BRANCH}"
+
+          {
+            echo "## Wiki Sync"
+            echo
+            echo "Published \`docs/wiki\` to \`${REPOSITORY}.wiki.git\` on branch \`${WIKI_BRANCH}\`."
+          } >> "$GITHUB_STEP_SUMMARY"
