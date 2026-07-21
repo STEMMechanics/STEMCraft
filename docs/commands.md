@@ -6,6 +6,7 @@ This is the active command surface registered by STEMCraft.
 
 - `/maintenance <on|off>`
 - `/stemcraft <status|version|reload|firstjoin>`
+- `/customcommands <list|info|create|delete|setlabel|setpermission|addrun|setrun|removerun>`
 - `/webserver <start|stop|enable|disable>`
 - `/world <record|create|delete|info|load|list|duplicate|listgenerators|setspawn|id|flags|time|weather|tickspeed|gamemode|nether|end|randomspawn>`
 - `/world create <name> [generator|plugin[:id]] [generatorOptions]` accepts STEMCraft generators and Bukkit plugin generators such as `PlotSquared` or `Plugin:id`
@@ -61,6 +62,7 @@ This is the active command surface registered by STEMCraft.
 Most commands follow `stemcraft.command.<command>`, for example:
 
 - `stemcraft.command.world`
+- `stemcraft.command.customcommands`
 - `stemcraft.command.tpworld`
 - `stemcraft.command.resourcepack`
 - `stemcraft.command.profanity`

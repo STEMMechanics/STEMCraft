@@ -71,8 +71,8 @@ public class WorldGenerationImpl implements WorldGeneration {
     }
 
     /**
-     * Returns a sorted list of STEMCraft generator keys and enabled Bukkit plugin
-     * names that may provide external generators.
+     * Returns a sorted list of registered STEMCraft generator keys and enabled
+     * Bukkit plugins that can provide a default world generator.
      *
      * @return A list of available chunk generator keys.
      */
@@ -81,16 +81,7 @@ public class WorldGenerationImpl implements WorldGeneration {
         out.addAll(registry.keySet());
 
         for (Plugin plugin : Bukkit.getPluginManager().getPlugins()) {
-            if (!plugin.isEnabled()) {
-                continue;
-            }
-
-            String pluginName = plugin.getName();
-            if (pluginName == null || pluginName.isBlank()) {
-                continue;
-            }
-
-            out.add(pluginName);
+            listExternalGenerator(plugin).ifPresent(out::add);
         }
 
         return new ArrayList<>(out);
@@ -116,6 +107,18 @@ public class WorldGenerationImpl implements WorldGeneration {
     public boolean isRegistered(@NotNull String key) {
         String k = normalizeKey(key);
         return registry.containsKey(k);
+    }
+
+    @Override
+    public boolean isAvailable(@NotNull String key, @NotNull String worldName) {
+        String generatorKey = key.trim();
+        if (generatorKey.isEmpty()) {
+            return false;
+        }
+        if (isRegistered(generatorKey)) {
+            return true;
+        }
+        return resolveExternal(worldName, generatorKey, "").isPresent();
     }
 
     @Override
@@ -145,6 +148,81 @@ public class WorldGenerationImpl implements WorldGeneration {
     }
 
     /**
+     * Resolves a Bukkit plugin generator.
+     *
+     * @param worldName The world name the generator is for.
+     * @param generatorKey Plugin name or plugin:id generator key.
+     * @param generatorOptions Generator id when {@code generatorKey} is a plugin name.
+     * @return The resolved generator, if one is available.
+     */
+    public @NotNull Optional<ChunkGenerator> resolveExternal(
+        @NotNull String worldName,
+        @NotNull String generatorKey,
+        @NotNull String generatorOptions
+    ) {
+        ExternalGeneratorSpec spec = parseExternalGeneratorSpec(generatorKey, generatorOptions);
+        Plugin plugin = Bukkit.getPluginManager().getPlugin(spec.pluginName());
+        if (plugin == null || !plugin.isEnabled()) {
+            return Optional.empty();
+        }
+
+        try {
+            return Optional.ofNullable(plugin.getDefaultWorldGenerator(worldName, spec.id()));
+        } catch (RuntimeException exception) {
+            return Optional.empty();
+        }
+    }
+
+    private @NotNull Optional<String> listExternalGenerator(@NotNull Plugin plugin) {
+        if (!plugin.isEnabled()) {
+            return Optional.empty();
+        }
+
+        String pluginName = plugin.getName();
+        if (pluginName.isBlank()) {
+            return Optional.empty();
+        }
+
+        try {
+            if (plugin.getDefaultWorldGenerator("__stemcraft_generator_probe__", null) == null) {
+                return Optional.empty();
+            }
+        } catch (RuntimeException exception) {
+            return Optional.empty();
+        }
+
+        return Optional.of(pluginName);
+    }
+
+    private static @NotNull ExternalGeneratorSpec parseExternalGeneratorSpec(
+        @NotNull String generatorKey,
+        @NotNull String generatorOptions
+    ) {
+        String key = generatorKey.trim();
+        String options = generatorOptions.trim();
+        if (key.isEmpty()) {
+            throw new IllegalArgumentException("Generator name cannot be empty.");
+        }
+        if (key.contains(":") && !options.isEmpty()) {
+            throw new IllegalArgumentException(
+                "Generator '" + key + "' already includes an id; remove generator options or use plugin:id only."
+            );
+        }
+
+        int separator = key.indexOf(':');
+        if (separator < 0) {
+            return new ExternalGeneratorSpec(key, options.isEmpty() ? null : options);
+        }
+
+        String pluginName = key.substring(0, separator).trim();
+        String id = key.substring(separator + 1).trim();
+        if (pluginName.isEmpty()) {
+            throw new IllegalArgumentException("Generator plugin name cannot be empty.");
+        }
+        return new ExternalGeneratorSpec(pluginName, id.isEmpty() ? null : id);
+    }
+
+    /**
      * Normalizes a chunk generator key.
      *
      * @param key The chunk generator key.
@@ -156,4 +234,6 @@ public class WorldGenerationImpl implements WorldGeneration {
         if (k.isEmpty()) throw new IllegalArgumentException("key cannot be empty");
         return k.toLowerCase(Locale.ROOT);
     }
+
+    private record ExternalGeneratorSpec(@NotNull String pluginName, String id) {}
 }

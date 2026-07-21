@@ -51,6 +51,21 @@ public final class ChatMenuUtil {
      * @param noneText The text to display if there are no items.
      */
     public static void render(CommandSender sender, String title, String command, int page, int count, ChatMenuRenderer rendererFunc, String noneText) {
+        render(sender, Component.text(title, NamedTextColor.AQUA), command, page, count, rendererFunc, noneText);
+    }
+
+    /**
+     * Render a chat menu for the player.
+     *
+     * @param sender The command sender (player or console).
+     * @param title The title component of the menu.
+     * @param command The base command for pagination links.
+     * @param page The current page number.
+     * @param count The total number of items.
+     * @param rendererFunc The function to render the menu items.
+     * @param noneText The text to display if there are no items.
+     */
+    public static void render(CommandSender sender, Component title, String command, int page, int count, ChatMenuRenderer rendererFunc, String noneText) {
         if (count <= 0) {
             STEMCraftAPI.api().messages().error(sender, noneText);
             return;
@@ -67,7 +82,7 @@ public final class ChatMenuUtil {
             return;
         }
 
-        sender.sendMessage(createSeparatorString(Component.text(title, NamedTextColor.AQUA)));
+        sender.sendMessage(createSeparatorString(title));
 
         // Display the content for the current page.
         for (Component line : lines) {

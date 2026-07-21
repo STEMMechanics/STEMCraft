@@ -655,29 +655,16 @@ public class WorldServiceImpl extends BaseService implements WorldService {
             return worldGeneration.get(generator.key(), generator.options());
         }
 
-        String bukkitGeneratorName = toBukkitGeneratorSpec(generator.key(), generator.options());
-        ChunkGenerator resolved = WorldCreator.getGeneratorForName(worldName, bukkitGeneratorName, null);
-        if (resolved == null) {
-            throw new IllegalArgumentException("Unknown or unavailable Bukkit generator: " + bukkitGeneratorName);
-        }
-        return resolved;
+        return worldGeneration.resolveExternal(worldName, generator.key(), generator.options())
+            .orElseThrow(() -> new IllegalArgumentException(
+                "Unknown or unavailable Bukkit generator: " + formatExternalGeneratorSpec(generator.key(), generator.options())
+            ));
     }
 
-    private @NotNull String toBukkitGeneratorSpec(@NotNull String generatorKey, @NotNull String generatorOptions) {
+    private @NotNull String formatExternalGeneratorSpec(@NotNull String generatorKey, @NotNull String generatorOptions) {
         String key = generatorKey.trim();
         String options = generatorOptions.trim();
-        if (key.isEmpty()) {
-            throw new IllegalArgumentException("Generator name cannot be empty.");
-        }
-        if (options.isEmpty()) {
-            return key;
-        }
-        if (key.contains(":")) {
-            throw new IllegalArgumentException(
-                "Generator '" + key + "' already includes an id; remove generator options or use plugin:id only."
-            );
-        }
-        return key + ":" + options;
+        return options.isEmpty() || key.contains(":") ? key : key + ":" + options;
     }
   
     /**
@@ -1299,7 +1286,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
 
                 String baseWorldName = WorldUtil.baseName(worldName);
                 Path fileName = root.getFileName();
-                if (baseWorldName == null || fileName == null || !fileName.toString().equals(baseWorldName)) {
+                if (fileName == null || !fileName.toString().equals(baseWorldName)) {
                     continue;
                 }
 

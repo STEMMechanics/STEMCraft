@@ -218,6 +218,12 @@ public class WorldCommand {
         String genOpt = ctx.getArg(3, "");
         Long seed = parseSeedOption(ctx);
 
+        if (!worldService.generator().isRegistered(genKey)) {
+            if (!worldService.generator().isAvailable(formatExternalGeneratorKey(genKey, genOpt), name)) {
+                ctx.returnError("WORLD_INVALID_GENERATOR", "generator", formatGeneratorDetail(genKey, genOpt));
+            }
+        }
+
         ctx.info("WORLD_CREATING", "world", name, "generator", formatGeneratorDetail(genKey, genOpt));
 
         long startedAt = System.nanoTime();
@@ -574,6 +580,12 @@ public class WorldCommand {
             return key + ":" + options;
         }
         return key + " [" + options + "]";
+    }
+
+    private String formatExternalGeneratorKey(String generatorKey, String generatorOptions) {
+        String key = (generatorKey == null || generatorKey.isBlank()) ? "normal" : generatorKey.trim();
+        String options = generatorOptions == null ? "" : generatorOptions.trim();
+        return options.isBlank() || key.contains(":") ? key : key + ":" + options;
     }
 
     private void renderLoadedWorldInfo(@NotNull CommandContext ctx, @NotNull World world) {
