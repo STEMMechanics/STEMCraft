@@ -8,8 +8,11 @@ This is the active command surface registered by STEMCraft.
 - `/stemcraft <status|version|reload|firstjoin>`
 - `/customcommands <list|info|create|delete|setlabel|setpermission|addrun|setrun|removerun>`
 - `/webserver <start|stop|enable|disable>`
-- `/world <record|create|delete|info|load|list|duplicate|listgenerators|setspawn|id|flags|time|weather|tickspeed|gamemode|nether|end|randomspawn>`
+- `/world <record|create|delete|info|load|list|duplicate|listgenerators|setspawn|id|joincommands|leavecommands|addjoincommand|addleavecommand|setjoincommand|setleavecommand|removejoincommand|removeleavecommand|flags|time|weather|tickspeed|gamemode|nether|end|randomspawn>`
 - `/world create <name> [generator|plugin[:id]] [generatorOptions]` accepts STEMCraft generators and Bukkit plugin generators such as `PlotSquared` or `Plugin:id`
+- `/world joincommands [world] [page]` and `/world leavecommands [world] [page]` open the in-chat world transition command editors
+- `/world addjoincommand <world> <command>` and `/world addleavecommand <world> <command>` append commands run on world join/leave
+- World join/leave commands run as the player by default; prefix an entry with `server:` or `player:` to force the sender per command
 
 ## Teleport / Movement
 

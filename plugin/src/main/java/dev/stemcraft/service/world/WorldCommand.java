@@ -67,6 +67,21 @@ public class WorldCommand {
      * Enable the world command.
      */
     public void onEnable() {
+        api.tabComplete().register("world-transition-command-index", (player, args) -> {
+            if (args.length < 2) {
+                return List.of();
+            }
+
+            WorldService.TransitionCommandPhase phase = parseTransitionPhase(args[0]);
+            if (phase == null) {
+                return List.of();
+            }
+
+            return indexedTransitionCommands(args[1], phase).stream()
+                .map(indexedCommand -> Integer.toString(indexedCommand.index()))
+                .toList();
+        });
+
         command = api.commands().create("world")
                 .description("WORLD_DESCRIPTION")
                 .permission("stemcraft.command.world")
@@ -88,6 +103,18 @@ public class WorldCommand {
                 .tabCompletion("setgenerator", "{world-any}", "{world-generators}", "{world-generator-options:$2}")
                 .tabCompletion("setspawn")
                 .tabCompletion("id", "{world}")
+                .tabCompletion("joincommands")
+                .tabCompletion("joincommands", "{world-any}")
+                .tabCompletion("joincommands", "{world-any}", "{int}")
+                .tabCompletion("leavecommands")
+                .tabCompletion("leavecommands", "{world-any}")
+                .tabCompletion("leavecommands", "{world-any}", "{int}")
+                .tabCompletion("addjoincommand", "{world-any}")
+                .tabCompletion("addleavecommand", "{world-any}")
+                .tabCompletion("setjoincommand", "{world-any}", "{world-transition-command-index:join:$1}")
+                .tabCompletion("setleavecommand", "{world-any}", "{world-transition-command-index:leave:$1}")
+                .tabCompletion("removejoincommand", "{world-any}", "{world-transition-command-index:join:$1}")
+                .tabCompletion("removeleavecommand", "{world-any}", "{world-transition-command-index:leave:$1}")
                 .executor(this::onCommand)
                 .register(STEMCraft.getPlugin());
     }
@@ -128,6 +155,14 @@ public class WorldCommand {
             case "setgenerator" -> handleSubCommandSetGenerator(ctx);
             case "setspawn" -> handleSubCommandSetSpawn(ctx);
             case "id" -> handleSubCommandId(ctx);
+            case "joincommands" -> handleTransitionCommandList(ctx, WorldService.TransitionCommandPhase.JOIN);
+            case "leavecommands" -> handleTransitionCommandList(ctx, WorldService.TransitionCommandPhase.LEAVE);
+            case "addjoincommand" -> handleAddTransitionCommand(ctx, WorldService.TransitionCommandPhase.JOIN);
+            case "addleavecommand" -> handleAddTransitionCommand(ctx, WorldService.TransitionCommandPhase.LEAVE);
+            case "setjoincommand" -> handleSetTransitionCommand(ctx, WorldService.TransitionCommandPhase.JOIN);
+            case "setleavecommand" -> handleSetTransitionCommand(ctx, WorldService.TransitionCommandPhase.LEAVE);
+            case "removejoincommand" -> handleRemoveTransitionCommand(ctx, WorldService.TransitionCommandPhase.JOIN);
+            case "removeleavecommand" -> handleRemoveTransitionCommand(ctx, WorldService.TransitionCommandPhase.LEAVE);
             case "flags" -> {
                 String worldArg = ctx.getArg(1, null);
                 World explicitWorld = ctx.getArgAsWorld(1);
@@ -431,12 +466,24 @@ public class WorldCommand {
                                 .clickEvent(ClickEvent.runCommand("/world delete " + worldName))
                                 .hoverEvent(HoverEvent.showText(Component.text("Delete this world")));
 
+                        Component joinCommands = Component.text("[Join]", NamedTextColor.GOLD)
+                                .clickEvent(ClickEvent.runCommand("/world joincommands " + worldName))
+                                .hoverEvent(HoverEvent.showText(Component.text("Edit join commands")));
+
+                        Component leaveCommands = Component.text("[Leave]", NamedTextColor.GOLD)
+                                .clickEvent(ClickEvent.runCommand("/world leavecommands " + worldName))
+                                .hoverEvent(HoverEvent.showText(Component.text("Edit leave commands")));
+
                         Component line = Component.text(worldName, NamedTextColor.YELLOW)
                                 .append(Component.text(" - ", NamedTextColor.GRAY))
                                 .append(status);
 
                         if (isPlayer) {
                             line = line.append(Component.text(" "))
+                                    .append(joinCommands)
+                                    .append(Component.text(" "))
+                                    .append(leaveCommands)
+                                    .append(Component.text(" "))
                                     .append(loadToggle)
                                     .append(Component.text(" "))
                                     .append(delete);
@@ -527,6 +574,89 @@ public class WorldCommand {
         ctx.getSender().sendMessage(copy);
     }
 
+    public void handleTransitionCommandList(CommandContext ctx, WorldService.TransitionCommandPhase phase) {
+        String worldName = resolveWorldName(ctx, 1);
+        int page = ctx.getArgAsInt(2, 1);
+        List<Component> lines = buildTransitionCommandLines(worldName, phase, ctx.isPlayer());
+
+        ChatMenuUtil.render(
+            ctx.getSender(),
+            transitionTitle(worldName, phase),
+            "world " + transitionRootLabel(phase) + "commands " + worldName,
+            page,
+            lines.size(),
+            (start, count, isPlayer) -> {
+                int end = Math.min(start + count, lines.size());
+                if (start >= end) {
+                    return List.of();
+                }
+                return lines.subList(start, end);
+            },
+            "WORLD_NONE"
+        );
+    }
+
+    public void handleAddTransitionCommand(CommandContext ctx, WorldService.TransitionCommandPhase phase) {
+        ctx.checkArgsSizeAtLeast(3, usageKeyForTransition(phase, "add"));
+        String worldName = resolveWorldName(ctx, 1);
+        String configuredCommand = ctx.getArgsAsString(2, "").trim();
+        if (configuredCommand.isBlank()) {
+            ctx.returnUsage();
+        }
+
+        List<String> commands = new ArrayList<>(worldService.getWorldTransitionCommands(worldName, phase));
+        commands.add(configuredCommand);
+        worldService.setWorldTransitionCommands(worldName, phase, commands);
+        ctx.returnSuccess("WORLD_TRANSITION_COMMAND_ADDED",
+            "type", transitionLabel(phase),
+            "world", worldName,
+            "command", configuredCommand
+        );
+    }
+
+    public void handleSetTransitionCommand(CommandContext ctx, WorldService.TransitionCommandPhase phase) {
+        ctx.checkArgsSizeAtLeast(4, usageKeyForTransition(phase, "set"));
+        String worldName = resolveWorldName(ctx, 1);
+        List<String> commands = new ArrayList<>(worldService.getWorldTransitionCommands(worldName, phase));
+        if (commands.isEmpty()) {
+            ctx.returnError("WORLD_TRANSITION_COMMAND_NONE_SET", "type", transitionLabel(phase), "world", worldName);
+        }
+
+        int index = ctx.getArgAsInt(2, 1, 1, commands.size()) - 1;
+        String configuredCommand = ctx.getArgsAsString(3, "").trim();
+        if (configuredCommand.isBlank()) {
+            ctx.returnUsage();
+        }
+
+        commands.set(index, configuredCommand);
+        worldService.setWorldTransitionCommands(worldName, phase, commands);
+        ctx.returnSuccess("WORLD_TRANSITION_COMMAND_UPDATED",
+            "type", transitionLabel(phase),
+            "world", worldName,
+            "index", index + 1,
+            "command", configuredCommand
+        );
+    }
+
+    public void handleRemoveTransitionCommand(CommandContext ctx, WorldService.TransitionCommandPhase phase) {
+        ctx.checkArgsSizeAtLeast(3, usageKeyForTransition(phase, "remove"));
+        String worldName = resolveWorldName(ctx, 1);
+        List<String> commands = new ArrayList<>(worldService.getWorldTransitionCommands(worldName, phase));
+        if (commands.isEmpty()) {
+            ctx.returnError("WORLD_TRANSITION_COMMAND_NONE_SET", "type", transitionLabel(phase), "world", worldName);
+        }
+
+        int index = ctx.getArgAsInt(2, 1, 1, commands.size()) - 1;
+        String removed = commands.remove(index);
+        worldService.setWorldTransitionCommands(worldName, phase, commands);
+        ctx.returnSuccess("WORLD_TRANSITION_COMMAND_REMOVED",
+            "type", transitionLabel(phase),
+            "world", worldName,
+            "index", index + 1,
+            "command", removed
+        );
+    }
+
     /**
      * Handle the 'flags' sub-command.
      *
@@ -606,6 +736,7 @@ public class WorldCommand {
         ctx.info(" - Height: " + world.getMinHeight() + " to " + world.getMaxHeight());
         ctx.info(" - Border: " + formatBorder(world));
         ctx.info(" - Folder: " + api.worlds().getWorldFolder(world.getName()).toAbsolutePath());
+        appendTransitionCommandSummary(ctx, world.getName(), ctx.isPlayer());
         appendConfiguredSettings(ctx, world.getName(), world, config);
     }
 
@@ -625,13 +756,43 @@ public class WorldCommand {
         }
 
         if (config == null) {
+            appendTransitionCommandSummary(ctx, worldName, ctx.isPlayer());
             ctx.info(" - Stored settings: none");
             ctx.info(" - Runtime values are unavailable until the world is loaded.");
             return;
         }
 
+        appendTransitionCommandSummary(ctx, worldName, ctx.isPlayer());
         appendConfiguredSettings(ctx, worldName, null, config);
         ctx.info(" - Runtime values are unavailable until the world is loaded.");
+    }
+
+    private void appendTransitionCommandSummary(@NotNull CommandContext ctx, @NotNull String worldName, boolean includeActions) {
+        appendTransitionCommandSummary(ctx, worldName, WorldService.TransitionCommandPhase.JOIN, includeActions);
+        appendTransitionCommandSummary(ctx, worldName, WorldService.TransitionCommandPhase.LEAVE, includeActions);
+    }
+
+    private void appendTransitionCommandSummary(
+        @NotNull CommandContext ctx,
+        @NotNull String worldName,
+        @NotNull WorldService.TransitionCommandPhase phase,
+        boolean includeActions
+    ) {
+        List<String> commands = worldService.getWorldTransitionCommands(worldName, phase);
+        String prefix = " - " + StringUtil.capitalize(transitionRootLabel(phase)) + " commands: " + commands.size();
+        if (!includeActions) {
+            ctx.info(prefix);
+            return;
+        }
+
+        Component line = Component.text(prefix, NamedTextColor.GRAY)
+            .append(Component.text(" "))
+            .append(action(
+                "[Edit]",
+                "/world " + transitionRootLabel(phase) + "commands " + worldName,
+                "Edit " + transitionLabel(phase) + " commands"
+            ));
+        ctx.getSender().sendMessage(line);
     }
 
     private void appendConfiguredSettings(
@@ -803,6 +964,154 @@ public class WorldCommand {
         return StringUtil.capitalize(StringUtil.beautify(value));
     }
 
+    private @NotNull String resolveWorldName(@NotNull CommandContext ctx, int argIndex) {
+        String requestedName = ctx.getArg(argIndex, null);
+        if (requestedName == null || requestedName.isBlank()) {
+            if (ctx.isConsole()) {
+                ctx.returnError("WORLD_COMMAND_CONSOLE_WORLD_REQUIRED");
+            }
+            return ctx.asPlayer().getWorld().getName();
+        }
+
+        if (!api.worlds().worldExists(requestedName) && Bukkit.getWorld(requestedName) == null) {
+            ctx.returnError("WORLD_NOT_FOUND", "world", requestedName);
+        }
+        return requestedName;
+    }
+
+    private @NotNull List<Component> buildTransitionCommandLines(
+        @NotNull String worldName,
+        @NotNull WorldService.TransitionCommandPhase phase,
+        boolean interactive
+    ) {
+        List<Component> lines = new ArrayList<>();
+
+        Component worldLine = Component.text("World: ", NamedTextColor.GRAY)
+            .append(Component.text(worldName, NamedTextColor.YELLOW));
+        if (interactive) {
+            worldLine = worldLine.append(Component.text(" "))
+                .append(action("[Info]", "/world info " + worldName, "Show world details"))
+                .append(Component.text(" "))
+                .append(action("[Join]", "/world joincommands " + worldName, "Edit join commands"))
+                .append(Component.text(" "))
+                .append(action("[Leave]", "/world leavecommands " + worldName, "Edit leave commands"));
+        }
+        lines.add(worldLine);
+
+        Component commandsLine = Component.text("Commands: ", NamedTextColor.GRAY)
+            .append(Component.text("default player, use player: or server: prefixes", NamedTextColor.DARK_GRAY));
+        if (interactive) {
+            commandsLine = commandsLine.append(Component.text(" "))
+                .append(suggest(
+                    "[Add]",
+                    "/world add" + transitionRootLabel(phase) + "command " + worldName + " ",
+                    "Add a " + transitionLabel(phase) + " command"
+                ));
+        }
+        lines.add(commandsLine);
+
+        List<IndexedTransitionCommand> commands = indexedTransitionCommands(worldName, phase);
+        if (commands.isEmpty()) {
+            lines.add(Component.text("None configured.", NamedTextColor.DARK_GRAY));
+            return lines;
+        }
+
+        for (IndexedTransitionCommand indexedCommand : commands) {
+            Component line = Component.text("#" + indexedCommand.index() + " ", NamedTextColor.GRAY)
+                .append(Component.text(indexedCommand.command(), NamedTextColor.YELLOW));
+            if (interactive) {
+                line = line.append(Component.text(" "))
+                    .append(suggest(
+                        "[Edit]",
+                        "/world set" + transitionRootLabel(phase) + "command " + worldName + " " + indexedCommand.index() + " " + indexedCommand.command(),
+                        "Edit command #" + indexedCommand.index()
+                    ))
+                    .append(Component.text(" "))
+                    .append(deleteAction(
+                        "[Del]",
+                        "/world remove" + transitionRootLabel(phase) + "command " + worldName + " " + indexedCommand.index(),
+                        "Delete command #" + indexedCommand.index()
+                    ));
+            }
+            lines.add(line);
+        }
+
+        return lines;
+    }
+
+    private @NotNull List<IndexedTransitionCommand> indexedTransitionCommands(
+        @NotNull String worldName,
+        @NotNull WorldService.TransitionCommandPhase phase
+    ) {
+        List<String> commands = worldService.getWorldTransitionCommands(worldName, phase);
+        List<IndexedTransitionCommand> indexed = new ArrayList<>(commands.size());
+        for (int i = 0; i < commands.size(); i++) {
+            indexed.add(new IndexedTransitionCommand(i + 1, commands.get(i)));
+        }
+        return indexed;
+    }
+
+    private @NotNull String transitionTitle(@NotNull String worldName, @NotNull WorldService.TransitionCommandPhase phase) {
+        return StringUtil.capitalize(transitionLabel(phase)) + " Commands: " + worldName;
+    }
+
+    private @NotNull String transitionRootLabel(@NotNull WorldService.TransitionCommandPhase phase) {
+        return switch (phase) {
+            case JOIN -> "join";
+            case LEAVE -> "leave";
+        };
+    }
+
+    private @NotNull String transitionLabel(@NotNull WorldService.TransitionCommandPhase phase) {
+        return transitionRootLabel(phase);
+    }
+
+    private @NotNull String usageKeyForTransition(@NotNull WorldService.TransitionCommandPhase phase, @NotNull String action) {
+        return switch (phase) {
+            case JOIN -> switch (action) {
+                case "add" -> "WORLD_COMMAND_USAGE_ADDJOINCOMMAND";
+                case "set" -> "WORLD_COMMAND_USAGE_SETJOINCOMMAND";
+                case "remove" -> "WORLD_COMMAND_USAGE_REMOVEJOINCOMMAND";
+                default -> "WORLD_COMMAND_USAGE";
+            };
+            case LEAVE -> switch (action) {
+                case "add" -> "WORLD_COMMAND_USAGE_ADDLEAVECOMMAND";
+                case "set" -> "WORLD_COMMAND_USAGE_SETLEAVECOMMAND";
+                case "remove" -> "WORLD_COMMAND_USAGE_REMOVELEAVECOMMAND";
+                default -> "WORLD_COMMAND_USAGE";
+            };
+        };
+    }
+
+    private @Nullable WorldService.TransitionCommandPhase parseTransitionPhase(@Nullable String value) {
+        if (value == null) {
+            return null;
+        }
+        return switch (value.toLowerCase(Locale.ROOT)) {
+            case "join" -> WorldService.TransitionCommandPhase.JOIN;
+            case "leave" -> WorldService.TransitionCommandPhase.LEAVE;
+            default -> null;
+        };
+    }
+
+    private Component action(String label, String command, String hover) {
+        return Component.text(label, NamedTextColor.GOLD)
+            .clickEvent(ClickEvent.runCommand(command))
+            .hoverEvent(HoverEvent.showText(Component.text(hover)));
+    }
+
+    private Component deleteAction(String label, String command, String hover) {
+        return Component.text(label, NamedTextColor.RED)
+            .clickEvent(ClickEvent.runCommand(command))
+            .hoverEvent(HoverEvent.showText(Component.text(hover)));
+    }
+
+    private Component suggest(String label, String command, String hover) {
+        return Component.text(label, NamedTextColor.GOLD)
+            .clickEvent(ClickEvent.suggestCommand(command))
+            .hoverEvent(HoverEvent.showText(Component.text(hover)));
+    }
+
     private @NotNull String yesNo(boolean value) {
         return value ? "yes" : "no";
     }
@@ -815,4 +1124,6 @@ public class WorldCommand {
     private String formatElapsed(long elapsedNanos) {
         return String.format(Locale.ROOT, "%.2fs", elapsedNanos / 1_000_000_000.0d);
     }
+
+    private record IndexedTransitionCommand(int index, @NotNull String command) {}
 }
