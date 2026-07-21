@@ -35,8 +35,12 @@ import dev.stemcraft.service.world.recorder.WorldChangeRecorder;
 import dev.stemcraft.service.world.setting.*;
 import lombok.Setter;
 import org.bukkit.*;
+import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.event.entity.EntityPortalEvent;
 import org.bukkit.event.block.BlockIgniteEvent;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.player.PlayerPortalEvent;
 import org.bukkit.event.world.WorldLoadEvent;
@@ -71,6 +75,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      */
     private record WorldSettingData(WorldBaseSetting setting, SettingCommandMode mode) {}
     private record ConfiguredGeneratorSpec(String key, String options) {}
+    private record TransitionCommands(@NotNull List<String> commands) {}
     private enum WorldStorageKind { ROOT, INTEGRATED_DIMENSION }
     private record ResolvedWorldPath(@NotNull Path path, @NotNull WorldStorageKind kind, @Nullable String baseWorldName) {}
 
@@ -146,6 +151,19 @@ public class WorldServiceImpl extends BaseService implements WorldService {
             deleteWorldSettings(event.getWorldName());
             purgeWorldScopedData(event.getWorldName());
         }, EventPriority.MONITOR, false);
+
+        api.events().register(PlayerJoinEvent.class, event ->
+            executeWorldTransitionCommands(event.getPlayer(), event.getPlayer().getWorld(), TransitionCommandPhase.JOIN)
+        );
+
+        api.events().register(PlayerChangedWorldEvent.class, event -> {
+            executeWorldTransitionCommands(event.getPlayer(), event.getFrom(), TransitionCommandPhase.LEAVE);
+            executeWorldTransitionCommands(event.getPlayer(), event.getPlayer().getWorld(), TransitionCommandPhase.JOIN);
+        });
+
+        api.events().register(PlayerQuitEvent.class, event ->
+            executeWorldTransitionCommands(event.getPlayer(), event.getPlayer().getWorld(), TransitionCommandPhase.LEAVE)
+        );
 
         registerSettingHandler(worldChangeRecorder, SettingCommandMode.SUBCOMMAND);
         registerSettingHandler(new WorldDenySpawnSetting(), SettingCommandMode.FLAG);
@@ -603,11 +621,108 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         return getConfigSection(world.getName());
     }
 
+    @Override
+    public @NotNull List<String> getWorldTransitionCommands(@NotNull String worldName, @NotNull TransitionCommandPhase phase) {
+        return readTransitionCommands(worldName, phase).commands();
+    }
+
+    @Override
+    public void setWorldTransitionCommands(@NotNull String worldName, @NotNull TransitionCommandPhase phase, @NotNull List<String> commands) {
+        List<String> normalizedCommands = normalizeTransitionCommands(commands);
+        writeTransitionCommands(worldName, phase, new TransitionCommands(normalizedCommands));
+    }
+
     @Nullable ConfigSection getExistingConfigSection(@NotNull String worldName) {
         if (!getConfigSection().isSection(worldName)) {
             return null;
         }
         return getConfigSection().getSection(worldName, false);
+    }
+
+    private @NotNull TransitionCommands readTransitionCommands(@NotNull String worldName, @NotNull TransitionCommandPhase phase) {
+        return readTransitionCommands(getExistingConfigSection(worldName), phase);
+    }
+
+    private @NotNull TransitionCommands readTransitionCommands(@Nullable ConfigSection worldConfig, @NotNull TransitionCommandPhase phase) {
+        if (worldConfig == null) {
+            return new TransitionCommands(List.of());
+        }
+
+        String path = phase.configPath();
+        if (worldConfig.isSection(path)) {
+            ConfigSection section = worldConfig.getSection(path, false);
+            if (section == null) {
+                return new TransitionCommands(List.of());
+            }
+
+            List<String> commands = new ArrayList<>();
+            boolean legacyAsPlayer = section.getBoolean("as-player", true);
+
+            String singleCommand = section.getString("command", "").trim();
+            if (!singleCommand.isBlank()) {
+                commands.add(applyLegacySenderPrefix(singleCommand, legacyAsPlayer));
+            }
+
+            for (String configuredCommand : section.getStringList("commands")) {
+                if (configuredCommand == null) {
+                    continue;
+                }
+                String normalized = configuredCommand.trim();
+                if (!normalized.isBlank()) {
+                    commands.add(applyLegacySenderPrefix(normalized, legacyAsPlayer));
+                }
+            }
+
+            return new TransitionCommands(List.copyOf(commands));
+        }
+
+        Object raw = worldConfig.get(path);
+        if (raw instanceof String singleCommand) {
+            String normalized = singleCommand.trim();
+            if (!normalized.isBlank()) {
+                return new TransitionCommands(List.of(normalized));
+            }
+        }
+
+        return new TransitionCommands(normalizeTransitionCommands(worldConfig.getStringList(path)));
+    }
+
+    private void writeTransitionCommands(
+        @NotNull String worldName,
+        @NotNull TransitionCommandPhase phase,
+        @NotNull TransitionCommands transitionCommands
+    ) {
+        ConfigSection worldConfig = getConfigSection(worldName);
+        ConfigSection section = worldConfig.createSection(phase.configPath(), true);
+        section.set("command", null);
+        section.set("commands", new ArrayList<>(transitionCommands.commands()));
+        saveConfig();
+    }
+
+    private @NotNull List<String> normalizeTransitionCommands(@NotNull List<String> commands) {
+        List<String> normalized = new ArrayList<>();
+        for (String configuredCommand : commands) {
+            if (configuredCommand == null) {
+                continue;
+            }
+            String trimmed = configuredCommand.trim();
+            if (!trimmed.isBlank()) {
+                normalized.add(trimmed);
+            }
+        }
+        return List.copyOf(normalized);
+    }
+
+    private @NotNull String applyLegacySenderPrefix(@NotNull String command, boolean asPlayer) {
+        if (hasExplicitSenderPrefix(command)) {
+            return command;
+        }
+        return asPlayer ? command : "server:" + command;
+    }
+
+    private boolean hasExplicitSenderPrefix(@NotNull String command) {
+        String lowered = command.toLowerCase(Locale.ROOT);
+        return lowered.startsWith("player:") || lowered.startsWith("server:");
     }
 
     private @Nullable ChunkGenerator resolveStoredGenerator(@NotNull String worldName) {
@@ -820,6 +935,42 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      */
     private @Nullable Location handlePortalRouting(@NotNull PlayerPortalEvent event) {
         return handlePortalRouting(event.getFrom(), portalTypeFrom(event.getCause()));
+    }
+
+    private void executeWorldTransitionCommands(
+        @NotNull org.bukkit.entity.Player player,
+        @Nullable World world,
+        @NotNull TransitionCommandPhase phase
+    ) {
+        if (world == null) {
+            return;
+        }
+
+        TransitionCommands transitionCommands = readTransitionCommands(world.getName(), phase);
+        if (transitionCommands.commands().isEmpty()) {
+            return;
+        }
+
+        ConsoleCommandSender console = Bukkit.getConsoleSender();
+        for (String command : transitionCommands.commands()) {
+            String trimmed = command.trim();
+            if (trimmed.isBlank()) {
+                continue;
+            }
+
+            String lowered = trimmed.toLowerCase(Locale.ROOT);
+            if (lowered.startsWith("server:")) {
+                Bukkit.dispatchCommand(console, trimmed.substring("server:".length()).trim());
+                continue;
+            }
+
+            String playerCommand = lowered.startsWith("player:")
+                ? trimmed.substring("player:".length()).trim()
+                : trimmed;
+            if (!playerCommand.isBlank()) {
+                Bukkit.dispatchCommand(player, playerCommand);
+            }
+        }
     }
 
     private @Nullable Location handlePortalRouting(@NotNull EntityPortalEvent event) {
