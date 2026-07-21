@@ -1,0 +1,73 @@
+name: Feature request
+description: Propose a new capability or improvement to STEMCraft.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for improvements to plugin behavior, commands, configuration, API, documentation, or tooling.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What are you trying to do, and what limitation is getting in the way?
+      placeholder: Admins need a way to ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the behavior, command surface, config, or API you want added.
+      placeholder: Add a `/world ...` subcommand that ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Describe current workarounds or other designs you considered.
+      placeholder: We can currently do this by ..., but it has these drawbacks ...
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of STEMCraft does this affect most?
+      options:
+        - Commands
+        - Features
+        - Services / API
+        - Worlds
+        - Minigames
+        - Resource pack
+        - Documentation
+        - CI / GitHub workflow
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Expected impact
+      description: Who benefits, and how would this improve operation or development?
+      placeholder: This would reduce admin overhead by ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Add examples, related issues, screenshots, or API/config sketches if useful.
+      placeholder: Extra examples or implementation notes.
+    validations:
+      required: false
