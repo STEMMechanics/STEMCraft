@@ -2,6 +2,7 @@ package dev.stemcraft.api.util;
 
 import dev.stemcraft.api.minigame.util.TeamNames;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -265,9 +266,12 @@ class ApiUtilityResultTest {
     }
 
     @Test
-    void fontUtilCalculatesPixelWidthIgnoringFormattingCodes() {
+    void fontUtilCalculatesPixelWidthWithFormattingAndCustomGlyphs() {
         assertEquals(9, FontUtil.calculatePixelWidth("il "));
         assertEquals(8, FontUtil.calculatePixelWidth("§aHi"));
+        assertEquals(10, FontUtil.calculatePixelWidth("§lHi"));
+        assertEquals(15, FontUtil.calculatePixelWidth("§l■★"));
+        assertEquals(10, FontUtil.calculatePixelWidth(Component.text("Hi").decorate(TextDecoration.BOLD)));
         assertEquals(9, FontUtil.calculatePixelWidth(Component.text("il ")));
     }
 
