@@ -11,18 +11,18 @@ This wiki mirrors the current source tree and is intended to give server operato
 
 ## Start Here
 
-- [Architecture](./Architecture.md)
-- [Services](./Services.md)
-- [Features](./Features.md)
-- [Commands](./Commands.md)
-- [API](./API.md)
-- [Minigames](./Minigames.md)
-- [Configuration](./Configuration.md)
+- [Architecture](./Architecture)
+- [Services](./Services)
+- [Features](./Features)
+- [Commands](./Commands)
+- [API](./API)
+- [Minigames](./Minigames)
+- [Configuration](./Configuration)
 
 ## Audience
 
-- Server owners: start with [Features](./Features.md), [Commands](./Commands.md), and [Configuration](./Configuration.md)
-- Plugin developers: start with [API](./API.md), [Services](./Services.md), and [Architecture](./Architecture.md)
+- Server owners: start with [Features](./Features), [Commands](./Commands), and [Configuration](./Configuration)
+- Plugin developers: start with [API](./API), [Services](./Services), and [Architecture](./Architecture)
 - Contributors: use this wiki as the high-level index, then follow the package paths back into source
 
 ## Source of Truth
