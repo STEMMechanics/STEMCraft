@@ -642,6 +642,9 @@ public final class STEMCraft extends JavaPlugin {
 
         int reloadedFeatures = 0;
         if (!localesOnly) {
+            if (motd != null) {
+                motd.onReload();
+            }
             if (firstJoin != null) {
                 firstJoin.onReload();
             }

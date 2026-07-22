@@ -23,6 +23,7 @@ package dev.stemcraft.service;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.service.motd.MotdService;
+import dev.stemcraft.api.util.FontUtil;
 import dev.stemcraft.api.util.TextUtil;
 import org.bukkit.event.server.ServerListPingEvent;
 import org.jetbrains.annotations.NotNull;
@@ -36,10 +37,16 @@ import java.util.Map;
  * Implementation of the MotdService for managing the server's Message of the Day (MOTD).
  */
 public class MotdServiceImpl extends BaseService implements MotdService {
+    private static final String DEFAULT_TITLE = "<gold><bold>STEMCraft</bold></gold>";
+    private static final String DEFAULT_TEXT = "";
+    private static final int CENTERED_MOTD_LINE_WIDTH = 258;
+    private static final int SPACE_WIDTH = 4;
 
     private final Map<String, ResolvedMotd> motdMap = new LinkedHashMap<>();
     private String defaultMotdTitle;
     private String defaultMotdText;
+    private boolean defaultTitleCentered;
+    private boolean defaultTextCentered;
     private String currentMotdId;
 
     /**
@@ -56,10 +63,7 @@ public class MotdServiceImpl extends BaseService implements MotdService {
      * Called when the service is being enabled.
      */
     public void onEnable() {
-        setDefault(
-            getConfigSection().getString("title", "<gold><bold>STEMCraft</bold></gold>"),
-            getConfigSection().getString("text", "")
-        );
+        loadDefaultFromConfig();
 
         api.events().register(ServerListPingEvent.class, event -> {
             if (api.isMaintenanceMode()) {
@@ -71,8 +75,18 @@ public class MotdServiceImpl extends BaseService implements MotdService {
             }
 
             ResolvedMotd motd = current();
-            applyLegacyMotd(event, motd.motdTitle(), motd.motdText());
+            boolean centered = currentMotdId == null;
+            applyLegacyMotd(event,
+                renderLine(motd.motdTitle(), centered && defaultTitleCentered),
+                renderLine(motd.motdText(), centered && defaultTextCentered));
         });
+    }
+
+    @Override
+    public void onReload() {
+        super.onReload();
+        getRootConfigSection().reload();
+        loadDefaultFromConfig();
     }
 
     /**
@@ -84,6 +98,34 @@ public class MotdServiceImpl extends BaseService implements MotdService {
     public void setDefault(@NotNull String title, @NotNull String text) {
         this.defaultMotdTitle = title;
         this.defaultMotdText = text;
+    }
+
+    public @NotNull ResolvedMotd defaultMotd() {
+        return new ResolvedMotd(defaultMotdTitle, defaultMotdText, Priority.DEFAULT);
+    }
+
+    public boolean isDefaultTitleCentered() {
+        return defaultTitleCentered;
+    }
+
+    public boolean isDefaultTextCentered() {
+        return defaultTextCentered;
+    }
+
+    public void updateDefaultTitle(@NotNull String title, boolean centered) {
+        setDefault(title, defaultMotdText);
+        defaultTitleCentered = centered;
+        getConfigSection().set("title", title);
+        getConfigSection().set("center-title", centered);
+        saveConfig();
+    }
+
+    public void updateDefaultText(@NotNull String text, boolean centered) {
+        setDefault(defaultMotdTitle, text);
+        defaultTextCentered = centered;
+        getConfigSection().set("text", text);
+        getConfigSection().set("center-text", centered);
+        saveConfig();
     }
 
     /**
@@ -150,8 +192,32 @@ public class MotdServiceImpl extends BaseService implements MotdService {
         this.currentMotdId = highestPriorityId;
     }
 
+    private void loadDefaultFromConfig() {
+        setDefault(
+            getConfigSection().getString("title", DEFAULT_TITLE),
+            getConfigSection().getString("text", DEFAULT_TEXT)
+        );
+        defaultTitleCentered = getConfigSection().getBoolean("center-title", false);
+        defaultTextCentered = getConfigSection().getBoolean("center-text", false);
+    }
+
     static @NotNull String formatLegacyMotd(@NotNull String title, @NotNull String text) {
         return TextUtil.colouriseToSection(title) + "\n" + TextUtil.colouriseToSection(text);
+    }
+
+    static @NotNull String renderLine(@NotNull String text, boolean centered) {
+        if (!centered) {
+            return text;
+        }
+
+        int width = FontUtil.calculatePixelWidth(TextUtil.colouriseToSection(text));
+        if (width >= CENTERED_MOTD_LINE_WIDTH) {
+            return text;
+        }
+
+        int paddingWidth = (CENTERED_MOTD_LINE_WIDTH - width) / 2;
+        int spaces = Math.max(0, paddingWidth / SPACE_WIDTH);
+        return " ".repeat(spaces) + text;
     }
 
     @SuppressWarnings("deprecation")
