@@ -8,6 +8,12 @@ import dev.stemcraft.api.service.command.CommandService;
 import dev.stemcraft.api.service.profanity.ProfanityFilterResult;
 import dev.stemcraft.api.service.profanity.ProfanityFilterService;
 import dev.stemcraft.api.service.profanity.ProfanitySeverity;
+import dev.stemcraft.api.util.TimeUtil;
+import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.event.HoverEvent;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -143,12 +149,13 @@ public class ProfanityFilterServiceImpl extends BaseService implements Profanity
     private void registerCommands() {
         api.commands().create("profanity")
             .description("Manage the profanity filter.")
-            .usage("/profanity <status|check|search|list|add|remove|set|reload>")
+            .usage("/profanity <status|check|search|list|actions|add|remove|addaction|setaction|removeaction|set|reload>")
             .permission("stemcraft.command.profanity")
             .tabCompletion("status")
             .tabCompletion("reload")
             .tabCompletion("check", "{text}")
             .tabCompletion("search", "{word}")
+            .tabCompletion("actions")
             .tabCompletion("list", "allow")
             .tabCompletion("list", "false-positives")
             .tabCompletion("list", "mild")
@@ -167,9 +174,21 @@ public class ProfanityFilterServiceImpl extends BaseService implements Profanity
             .tabCompletion("remove", "moderate", "{word}")
             .tabCompletion("remove", "high", "{word}")
             .tabCompletion("remove", "extreme", "{word}")
+            .tabCompletion("addaction", "{int}", "warn")
+            .tabCompletion("addaction", "{int}", "kick")
+            .tabCompletion("addaction", "{int}", "ban")
+            .tabCompletion("setaction", "{int}", "{int}", "warn")
+            .tabCompletion("setaction", "{int}", "{int}", "kick")
+            .tabCompletion("setaction", "{int}", "{int}", "ban")
+            .tabCompletion("removeaction", "{int}")
             .tabCompletion("set", "enabled", "true")
             .tabCompletion("set", "enabled", "false")
             .tabCompletion("set", "mask", "*")
+            .tabCompletion("set", "points", "mild", "{int}")
+            .tabCompletion("set", "points", "moderate", "{int}")
+            .tabCompletion("set", "points", "high", "{int}")
+            .tabCompletion("set", "points", "extreme", "{int}")
+            .tabCompletion("set", "decay", "{int}", "1h")
             .executor((unused, cmd, ctx) -> {
                 String action = Objects.requireNonNullElse(ctx.getArgLower(0), "status");
                 switch (action) {
@@ -177,8 +196,12 @@ public class ProfanityFilterServiceImpl extends BaseService implements Profanity
                     case "check" -> runCheck(ctx);
                     case "search" -> runSearch(ctx);
                     case "list" -> runList(ctx);
+                    case "actions" -> runActions(ctx);
                     case "add" -> runAdd(ctx);
                     case "remove" -> runRemove(ctx);
+                    case "addaction" -> runAddAction(ctx);
+                    case "setaction" -> runSetAction(ctx);
+                    case "removeaction" -> runRemoveAction(ctx);
                     case "set" -> runSet(ctx);
                     case "reload" -> runReload(ctx);
                     default -> ctx.returnUsage();
@@ -211,10 +234,20 @@ public class ProfanityFilterServiceImpl extends BaseService implements Profanity
         ctx.info(" - Moderate block words: " + configFile.getStringList("block.moderate").size());
         ctx.info(" - High block words: " + configFile.getStringList("block.high").size());
         ctx.info(" - Extreme block words: " + configFile.getStringList("block.extreme").size());
+        ctx.info(" - Severity order: mild < moderate < high < extreme");
+        ChatServiceImpl chat = plugin.chat();
+        if (chat != null) {
+            ctx.info(" - Points: mild=" + chat.contentFilterSeverityPoints().getOrDefault(ProfanitySeverity.MILD, 0)
+                + ", moderate=" + chat.contentFilterSeverityPoints().getOrDefault(ProfanitySeverity.MODERATE, 0)
+                + ", high=" + chat.contentFilterSeverityPoints().getOrDefault(ProfanitySeverity.HIGH, 0)
+                + ", extreme=" + chat.contentFilterSeverityPoints().getOrDefault(ProfanitySeverity.EXTREME, 0));
+            ctx.info(" - Score decay: " + chat.contentFilterScoreDecayAmount() + " every " + TimeUtil.formatDuration(chat.contentFilterScoreDecaySeconds()));
+            ctx.info(" - Action rules: " + chat.moderationActionRules().size());
+        }
     }
 
     private void runCheck(dev.stemcraft.api.command.CommandContext ctx) {
-        String text = ctx.getArgsAsString(1, "").trim();
+        String text = ctx.getArgsAsString(2, "").trim();
         if (text.isBlank()) {
             ctx.returnError("Usage: /profanity check <text>");
         }
@@ -229,7 +262,7 @@ public class ProfanityFilterServiceImpl extends BaseService implements Profanity
     }
 
     private void runSearch(dev.stemcraft.api.command.CommandContext ctx) {
-        String query = normalizeWord(ctx.getArgsAsString(1, ""));
+        String query = normalizeWord(ctx.getArgsAsString(2, ""));
         if (query.isBlank()) {
             ctx.returnError("Usage: /profanity search <word>");
         }
@@ -254,26 +287,208 @@ public class ProfanityFilterServiceImpl extends BaseService implements Profanity
     }
 
     private void runList(dev.stemcraft.api.command.CommandContext ctx) {
-        String key = normalizeListKey(ctx.getArgLower(1));
-        if (key == null) {
-            ctx.returnError("Usage: /profanity list <allow|false-positives|mild|moderate|high|extreme>");
+        int page = ChatMenuUtil.getPageFromArgs(ctx.args(), ctx.args().size() >= 3 ? 2 : 1, 1);
+        String rawKey = ctx.args().size() >= 2 && !isPositiveInteger(ctx.args().get(1)) ? ctx.args().get(1) : null;
+        String key = normalizeListKey(rawKey);
+
+        if (rawKey != null && key == null) {
+            ctx.returnError("Usage: /profanity list [allow|false-positives|mild|moderate|high|extreme] [page]");
             return;
         }
 
-        List<String> values = listValues(key);
-        ctx.info(key + " (" + values.size() + "):");
-        if (values.isEmpty()) {
-            ctx.info(" - <empty>");
+        if (key == null) {
+            renderListOverview(ctx, page);
             return;
         }
-        for (String value : values) {
-            ctx.info(" - " + value);
+
+        renderListEntries(ctx, key, page);
+    }
+
+    private void runActions(dev.stemcraft.api.command.CommandContext ctx) {
+        int page = ChatMenuUtil.getPageFromArgs(ctx.args());
+        ChatServiceImpl chat = requireChatService(ctx);
+        List<ChatServiceImpl.ModerationActionRule> rules = chat.moderationActionRules();
+        int lineCount = Math.max(1, rules.size());
+
+        ChatMenuUtil.render(
+            ctx.getSender(),
+            buildActionsTitle(ctx.isPlayer()),
+            "profanity actions",
+            page,
+            lineCount,
+            (start, count, isPlayer) -> {
+                List<Component> lines = new ArrayList<>();
+                int end = Math.min(start + count, lineCount);
+                for (int i = start; i < end; i++) {
+                    if (rules.isEmpty()) {
+                        lines.add(Component.text("<empty>", NamedTextColor.GRAY));
+                        continue;
+                    }
+                    ChatServiceImpl.ModerationActionRule rule = rules.get(i);
+                    int index = i + 1;
+                    Component line = Component.text("#" + index + " ", NamedTextColor.DARK_GRAY)
+                        .append(Component.text("score>=" + rule.threshold(), NamedTextColor.YELLOW))
+                        .append(Component.text(" -> ", NamedTextColor.GRAY))
+                        .append(Component.text(rule.action(), NamedTextColor.AQUA));
+
+                    if (rule.durationSeconds() > 0L) {
+                        line = line.append(Component.text(" (" + TimeUtil.formatDuration(rule.durationSeconds()) + ")", NamedTextColor.GOLD));
+                    }
+
+                    if (isPlayer) {
+                        line = line.append(Component.text(" "))
+                            .append(actionButton("[Edit]", NamedTextColor.BLUE,
+                                ClickEvent.suggestCommand("/profanity setaction " + index + " " + rule.threshold() + " " + rule.action()
+                                    + (rule.durationSeconds() > 0L ? " " + TimeUtil.formatDuration(rule.durationSeconds()) : "")),
+                                "Edit this moderation action"))
+                            .append(Component.text(" "))
+                            .append(actionButton("[Del]", NamedTextColor.RED,
+                                ClickEvent.runCommand("/profanity removeaction " + index),
+                                "Remove this moderation action"));
+                    }
+                    lines.add(line);
+                }
+                return lines;
+            },
+            "No content-filter action rules are configured."
+        );
+    }
+
+    private void runAddAction(dev.stemcraft.api.command.CommandContext ctx) {
+        if (ctx.args().size() < 3) {
+            ctx.returnError("Usage: /profanity addaction <threshold> <warn|kick|ban> [duration]");
+            return;
         }
+
+        Integer threshold = parseNonNegativeInt(ctx.getArg(1));
+        String action = normalizeModerationAction(ctx.getArgLower(2));
+        long durationSeconds = parseDurationSeconds(ctx.getArg(3, ""));
+
+        if (threshold == null || threshold <= 0 || action == null || ("ban".equals(action) && durationSeconds <= 0L && ctx.getArg(3) != null && !ctx.getArg(3).isBlank())) {
+            ctx.returnError("Usage: /profanity addaction <threshold> <warn|kick|ban> [duration]");
+            return;
+        }
+
+        requireChatService(ctx).addModerationActionRule(threshold, action, durationSeconds);
+        ctx.returnSuccess("Added moderation action at score " + threshold + ": " + action + (durationSeconds > 0L ? " (" + TimeUtil.formatDuration(durationSeconds) + ")" : "") + ".");
+    }
+
+    private void runSetAction(dev.stemcraft.api.command.CommandContext ctx) {
+        if (ctx.args().size() < 4) {
+            ctx.returnError("Usage: /profanity setaction <index> <threshold> <warn|kick|ban> [duration]");
+            return;
+        }
+
+        Integer index = parseNonNegativeInt(ctx.getArg(1));
+        Integer threshold = parseNonNegativeInt(ctx.getArg(2));
+        String action = normalizeModerationAction(ctx.getArgLower(3));
+        long durationSeconds = parseDurationSeconds(ctx.getArg(4, ""));
+
+        if (index == null || index <= 0 || threshold == null || threshold <= 0 || action == null) {
+            ctx.returnError("Usage: /profanity setaction <index> <threshold> <warn|kick|ban> [duration]");
+            return;
+        }
+
+        try {
+            requireChatService(ctx).updateModerationActionRule(index, threshold, action, durationSeconds);
+        } catch (IllegalArgumentException ex) {
+            ctx.returnError(ex.getMessage());
+            return;
+        }
+        ctx.returnSuccess("Updated moderation action #" + index + ".");
+    }
+
+    private void runRemoveAction(dev.stemcraft.api.command.CommandContext ctx) {
+        if (ctx.args().size() < 2) {
+            ctx.returnError("Usage: /profanity removeaction <index>");
+            return;
+        }
+
+        Integer index = parseNonNegativeInt(ctx.getArg(1));
+        if (index == null || index <= 0) {
+            ctx.returnError("Usage: /profanity removeaction <index>");
+            return;
+        }
+
+        try {
+            requireChatService(ctx).removeModerationActionRule(index);
+        } catch (IllegalArgumentException ex) {
+            ctx.returnError(ex.getMessage());
+            return;
+        }
+        ctx.returnSuccess("Removed moderation action #" + index + ".");
+    }
+
+    private void renderListOverview(dev.stemcraft.api.command.CommandContext ctx, int page) {
+        ChatMenuUtil.render(
+            ctx.getSender(),
+            buildListOverviewTitle(ctx.isPlayer()),
+            "profanity list",
+            page,
+            LIST_KEYS.size(),
+            (start, count, isPlayer) -> {
+                List<Component> lines = new ArrayList<>();
+                int end = Math.min(start + count, LIST_KEYS.size());
+                for (int i = start; i < end; i++) {
+                    String key = LIST_KEYS.get(i);
+                    List<String> values = listValues(key);
+                    Component line = Component.text(key, NamedTextColor.YELLOW)
+                        .append(Component.text(" (" + values.size() + ")", NamedTextColor.AQUA));
+                    if (isPlayer) {
+                        line = line.append(Component.text(" "))
+                            .append(actionButton("[Open]", NamedTextColor.GOLD,
+                                ClickEvent.runCommand("/profanity list " + key),
+                                "Show entries in " + key))
+                            .append(Component.text(" "))
+                            .append(actionButton("[Add]", NamedTextColor.GREEN,
+                                ClickEvent.suggestCommand("/profanity add " + key + " "),
+                                "Add a new entry to " + key));
+                    }
+                    lines.add(line);
+                }
+                return lines;
+            },
+            "No profanity lists are configured."
+        );
+    }
+
+    private void renderListEntries(dev.stemcraft.api.command.CommandContext ctx, String key, int page) {
+        List<String> values = listValues(key);
+        int lineCount = Math.max(1, values.size());
+
+        ChatMenuUtil.render(
+            ctx.getSender(),
+            buildListTitle(key, ctx.isPlayer()),
+            "profanity list " + key,
+            page,
+            lineCount,
+            (start, count, isPlayer) -> {
+                List<Component> lines = new ArrayList<>();
+                int end = Math.min(start + count, lineCount);
+                for (int i = start; i < end; i++) {
+                    if (values.isEmpty()) {
+                        lines.add(Component.text("<empty>", NamedTextColor.GRAY));
+                        continue;
+                    }
+                    String value = values.get(i);
+                    Component line = Component.text(value, NamedTextColor.GOLD);
+                    if (isPlayer) {
+                        line = line.append(Component.text(" "))
+                            .append(actionButton("[Del]", NamedTextColor.RED,
+                                ClickEvent.runCommand("/profanity remove " + key + " " + value),
+                                "Remove this entry from " + key));
+                    }
+                    lines.add(line);
+                }
+                return lines;
+            },
+            key + " is empty."
+        );
     }
 
     private void runAdd(dev.stemcraft.api.command.CommandContext ctx) {
         String key = normalizeListKey(ctx.getArgLower(1));
-        String word = normalizeWord(ctx.getArgsAsString(2, ""));
+        String word = normalizeWord(ctx.getArgsAsString(3, ""));
         if (key == null || word.isBlank()) {
             ctx.returnError("Usage: /profanity add <allow|false-positives|mild|moderate|high|extreme> <word>");
             return;
@@ -288,7 +503,7 @@ public class ProfanityFilterServiceImpl extends BaseService implements Profanity
 
     private void runRemove(dev.stemcraft.api.command.CommandContext ctx) {
         String key = normalizeListKey(ctx.getArgLower(1));
-        String word = normalizeWord(ctx.getArgsAsString(2, ""));
+        String word = normalizeWord(ctx.getArgsAsString(3, ""));
         if (key == null || word.isBlank()) {
             ctx.returnError("Usage: /profanity remove <allow|false-positives|mild|moderate|high|extreme> <word>");
             return;
@@ -308,6 +523,7 @@ public class ProfanityFilterServiceImpl extends BaseService implements Profanity
             case "enabled" -> {
                 if (!"true".equalsIgnoreCase(value) && !"false".equalsIgnoreCase(value)) {
                     ctx.returnError("Usage: /profanity set enabled <true|false>");
+                    return;
                 }
                 configFile.set("enabled", Boolean.parseBoolean(value));
                 configFile.save();
@@ -317,13 +533,41 @@ public class ProfanityFilterServiceImpl extends BaseService implements Profanity
             case "mask" -> {
                 if (value.isBlank()) {
                     ctx.returnError("Usage: /profanity set mask <character>");
+                    return;
                 }
                 configFile.set("mask_character", String.valueOf(value.charAt(0)));
                 configFile.save();
                 reloadSettings();
                 ctx.returnSuccess("Profanity filter mask set to '" + maskCharacter + "'.");
             }
-            default -> ctx.returnError("Usage: /profanity set <enabled|mask> <value>");
+            case "points" -> {
+                String severityText = Objects.requireNonNullElse(ctx.getArgLower(2), "");
+                ProfanitySeverity severity = switch (severityText) {
+                    case "mild" -> ProfanitySeverity.MILD;
+                    case "moderate" -> ProfanitySeverity.MODERATE;
+                    case "high" -> ProfanitySeverity.HIGH;
+                    case "extreme" -> ProfanitySeverity.EXTREME;
+                    default -> null;
+                };
+                Integer points = parseNonNegativeInt(ctx.getArg(3));
+                if (severity == null || points == null) {
+                    ctx.returnError("Usage: /profanity set points <mild|moderate|high|extreme> <value>");
+                    return;
+                }
+                requireChatService(ctx).updateContentFilterSeverityPoints(severity, points);
+                ctx.returnSuccess("Set profanity score points for " + severity.name().toLowerCase(Locale.ROOT) + " to " + points + ".");
+            }
+            case "decay" -> {
+                Integer amount = parseNonNegativeInt(ctx.getArg(2));
+                long everySeconds = parseDurationSeconds(ctx.getArg(3, ""));
+                if (amount == null || everySeconds <= 0L) {
+                    ctx.returnError("Usage: /profanity set decay <amount> <every>");
+                    return;
+                }
+                requireChatService(ctx).updateContentFilterScoreDecay(amount, everySeconds);
+                ctx.returnSuccess("Set profanity score decay to " + amount + " every " + TimeUtil.formatDuration(everySeconds) + ".");
+            }
+            default -> ctx.returnError("Usage: /profanity set <enabled|mask|points|decay> ...");
         }
     }
 
@@ -412,6 +656,98 @@ public class ProfanityFilterServiceImpl extends BaseService implements Profanity
             case "mild", "moderate", "high", "extreme" -> raw.trim().toLowerCase(Locale.ROOT);
             default -> null;
         };
+    }
+
+    private @Nullable String normalizeModerationAction(@Nullable String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        return switch (raw.trim().toLowerCase(Locale.ROOT)) {
+            case "warn", "kick", "ban" -> raw.trim().toLowerCase(Locale.ROOT);
+            default -> null;
+        };
+    }
+
+    private @Nullable Integer parseNonNegativeInt(@Nullable String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(raw);
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    private boolean isPositiveInteger(@Nullable String raw) {
+        Integer parsed = parseNonNegativeInt(raw);
+        return parsed != null && parsed > 0;
+    }
+
+    private long parseDurationSeconds(@Nullable String raw) {
+        if (raw == null || raw.isBlank()) {
+            return 0L;
+        }
+        try {
+            return TimeUtil.parseDuration(raw);
+        } catch (IllegalArgumentException ignored) {
+            return 0L;
+        }
+    }
+
+    private ChatServiceImpl requireChatService(dev.stemcraft.api.command.CommandContext ctx) {
+        ChatServiceImpl chat = plugin.chat();
+        if (chat == null) {
+            ctx.returnError("Chat service is not available.");
+        }
+        return chat;
+    }
+
+    private Component buildListOverviewTitle(boolean isPlayer) {
+        Component title = Component.text("Profanity Lists", NamedTextColor.AQUA);
+        if (isPlayer) {
+            title = title.append(Component.text(" "))
+                .append(actionButton("[Actions]", NamedTextColor.BLUE,
+                    ClickEvent.runCommand("/profanity actions"),
+                    "Show score action rules"));
+        }
+        return title;
+    }
+
+    private Component buildListTitle(String key, boolean isPlayer) {
+        Component title = Component.text(key, NamedTextColor.AQUA);
+        if (isPlayer) {
+            title = title.append(Component.text(" "))
+                .append(actionButton("[Add]", NamedTextColor.GREEN,
+                    ClickEvent.suggestCommand("/profanity add " + key + " "),
+                    "Add a new " + key + " entry"))
+                .append(Component.text(" "))
+                .append(actionButton("[Lists]", NamedTextColor.GOLD,
+                    ClickEvent.runCommand("/profanity list"),
+                    "Back to profanity lists"));
+        }
+        return title;
+    }
+
+    private Component buildActionsTitle(boolean isPlayer) {
+        Component title = Component.text("Profanity Actions", NamedTextColor.AQUA);
+        if (isPlayer) {
+            title = title.append(Component.text(" "))
+                .append(actionButton("[Add]", NamedTextColor.GREEN,
+                    ClickEvent.suggestCommand("/profanity addaction 5 kick"),
+                    "Add a new moderation action"))
+                .append(Component.text(" "))
+                .append(actionButton("[Lists]", NamedTextColor.GOLD,
+                    ClickEvent.runCommand("/profanity list"),
+                    "Back to profanity lists"));
+        }
+        return title;
+    }
+
+    private Component actionButton(String text, NamedTextColor color, ClickEvent clickEvent, String hoverText) {
+        return Component.text(text, color)
+            .clickEvent(clickEvent)
+            .hoverEvent(HoverEvent.showText(Component.text(hoverText)));
     }
 
     private String pathForListKey(@NotNull String key) {
