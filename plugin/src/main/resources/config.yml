@@ -82,25 +82,33 @@ chat:
     enabled: true
     minimum_severity: mild
     allow_filtered_message: false
-    blocked_message: "Your message was blocked by the content filter."
+    blocked_message: "Your message was blocked. Please keep chat family friendly."
+    warn_message: "Your message was blocked. Please keep chat family friendly."
+    kick_reason: "Repeated use of inappropriate language."
+    ban_reason: "Severe or repeated use of inappropriate language."
     staff_alerts: true
     staff_alert_permission: "stemcraft.moderation.alerts"
+    severity_points:
+      mild: 1
+      moderate: 2
+      high: 5
+      extreme: 10
+    score_decay:
+      amount: 1
+      every: 1h
     actions:
       "1":
-        count: 1
-        within: 5m
+        threshold: 3
         action: warn
       "2":
-        count: 2
-        within: 5m
-        action: warn
-      "3":
-        count: 3
-        within: 10m
+        threshold: 5
         action: kick
+      "3":
+        threshold: 6
+        action: ban
+        duration: 1h
       "4":
-        count: 4
-        within: 30m
+        threshold: 10
         action: ban
         duration: 7d
   reports:

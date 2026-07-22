@@ -53,8 +53,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.Deque;
-import java.util.LinkedList;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -72,10 +71,16 @@ public class ChatServiceImpl extends BaseService {
     private static final int MODERATION_DEFAULT_LIMIT = 20;
     private static final int MODERATION_MAX_LIMIT = 100;
     private static final List<ModerationActionRule> DEFAULT_MODERATION_ACTION_RULES = List.of(
-        new ModerationActionRule(1, TimeUtil.parseDuration("5m"), "warn", 0L),
-        new ModerationActionRule(2, TimeUtil.parseDuration("5m"), "warn", 0L),
-        new ModerationActionRule(3, TimeUtil.parseDuration("10m"), "kick", 0L),
-        new ModerationActionRule(4, TimeUtil.parseDuration("30m"), "ban", TimeUtil.parseDuration("7d"))
+        new ModerationActionRule(3, "warn", 0L),
+        new ModerationActionRule(5, "kick", 0L),
+        new ModerationActionRule(6, "ban", TimeUtil.parseDuration("1h")),
+        new ModerationActionRule(10, "ban", TimeUtil.parseDuration("7d"))
+    );
+    private static final Map<ProfanitySeverity, Integer> DEFAULT_CONTENT_FILTER_SEVERITY_POINTS = Map.of(
+        ProfanitySeverity.MILD, 1,
+        ProfanitySeverity.MODERATE, 2,
+        ProfanitySeverity.HIGH, 5,
+        ProfanitySeverity.EXTREME, 10
     );
 
     String chatFormat;
@@ -90,15 +95,20 @@ public class ChatServiceImpl extends BaseService {
     private boolean contentFilterEnabled;
     private ProfanitySeverity contentFilterMinimumSeverity;
     private String contentFilterBlockedMessage;
+    private String contentFilterWarnMessage;
+    private String contentFilterKickReason;
+    private String contentFilterBanReason;
     private boolean contentFilterAllowFilteredMessage;
     private boolean contentFilterStaffAlerts;
     private String contentFilterStaffAlertPermission;
+    private final EnumMap<ProfanitySeverity, Integer> contentFilterSeverityPoints = new EnumMap<>(ProfanitySeverity.class);
+    private int contentFilterScoreDecayAmount;
+    private long contentFilterScoreDecaySeconds;
     private boolean reportsEnabled;
     private boolean reportsIncludeOnlinePlayerLocations;
     private String reportsStaffAlertPermission;
-    private final Map<UUID, Deque<Instant>> contentFilterViolations = new ConcurrentHashMap<>();
+    private final Map<UUID, ViolationScoreState> contentFilterViolations = new ConcurrentHashMap<>();
     private List<ModerationActionRule> moderationActionRules = List.of();
-    private long moderationMaxWindowSeconds;
 
     private boolean muted;
 
@@ -329,7 +339,19 @@ public class ChatServiceImpl extends BaseService {
         );
         contentFilterBlockedMessage = getConfigSection().getString(
             "content_filter.blocked_message",
-            "Your message was blocked by the content filter."
+            "Your message was blocked. Please keep chat family friendly."
+        );
+        contentFilterWarnMessage = getConfigSection().getString(
+            "content_filter.warn_message",
+            "Your message was blocked. Please keep chat family friendly."
+        );
+        contentFilterKickReason = getConfigSection().getString(
+            "content_filter.kick_reason",
+            "Repeated use of inappropriate language."
+        );
+        contentFilterBanReason = getConfigSection().getString(
+            "content_filter.ban_reason",
+            "Severe or repeated use of inappropriate language."
         );
         contentFilterAllowFilteredMessage = getConfigSection().getBoolean("content_filter.allow_filtered_message", false);
         contentFilterStaffAlerts = getConfigSection().getBoolean("content_filter.staff_alerts", true);
@@ -337,6 +359,7 @@ public class ChatServiceImpl extends BaseService {
             "content_filter.staff_alert_permission",
             "stemcraft.moderation.alerts"
         );
+        loadContentFilterScoreSettings();
         reportsEnabled = getConfigSection().getBoolean("reports.enabled", true);
         reportsIncludeOnlinePlayerLocations = getConfigSection().getBoolean("reports.include_online_player_locations", true);
         reportsStaffAlertPermission = getConfigSection().getString(
@@ -361,7 +384,7 @@ public class ChatServiceImpl extends BaseService {
             return ModerationDecision.filtered(result.cleanedText(), "content_filter_filtered", reasonDetail);
         }
 
-        return ModerationDecision.deny(contentFilterBlockedMessage, "content_filter_rejected", reasonDetail, true);
+        return ModerationDecision.deny(contentFilterBlockedMessage, "content_filter_rejected", reasonDetail, result.severity(), true);
     }
 
     private void ensureModerationStorage() {
@@ -805,13 +828,16 @@ public class ChatServiceImpl extends BaseService {
     private void registerModerationCommands() {
         api.commands().create("moderation")
             .description("Review and manage moderation incidents.")
-            .usage("/moderation <list|show|context|resolve|undo|strikes|clearstrikes> [options]")
+            .usage("/moderation <list|show|context|resolve|undo|score|setscore|clearscore|strikes|clearstrikes> [options]")
             .permission("stemcraft.command.moderation")
             .tabCompletion("list")
             .tabCompletion("show", "{int}")
             .tabCompletion("context", "{int}")
             .tabCompletion("resolve", "{int}")
             .tabCompletion("undo", "{int}")
+            .tabCompletion("score", "{player}")
+            .tabCompletion("setscore", "{player}", "{int}")
+            .tabCompletion("clearscore", "{player}")
             .tabCompletion("strikes", "{player}")
             .tabCompletion("clearstrikes", "{player}")
             .executor((unused, cmd, ctx) -> {
@@ -841,13 +867,17 @@ public class ChatServiceImpl extends BaseService {
                         ctx.dropArg();
                         handleModerationUndo(ctx);
                     }
-                    case "strikes" -> {
+                    case "score", "strikes" -> {
                         ctx.dropArg();
-                        handleModerationStrikes(ctx);
+                        handleModerationScore(ctx);
                     }
-                    case "clearstrikes" -> {
+                    case "setscore" -> {
                         ctx.dropArg();
-                        handleModerationClearStrikes(ctx);
+                        handleModerationSetScore(ctx);
+                    }
+                    case "clearscore", "clearstrikes" -> {
+                        ctx.dropArg();
+                        handleModerationClearScore(ctx);
                     }
                     default -> ctx.returnUsage();
                 }
@@ -908,7 +938,7 @@ public class ChatServiceImpl extends BaseService {
 
         ctx.info("Incident #" + incident.id() + " " + formatModerationInstant(incident.occurredAt()) + " " + incident.messageType() + " " + incident.actionTaken());
         ctx.info("Player: " + incident.playerName() + " [" + incident.playerUuid() + "]");
-        ctx.info("Blocked: " + incident.blocked() + " | Strikes: " + incident.strikeCount());
+        ctx.info("Blocked: " + incident.blocked() + " | Score: " + incident.strikeCount());
         if (incident.reasonCode() != null) {
             ctx.info("Reason: " + incident.reasonCode() + formatSuffix(incident.reasonDetail()));
         }
@@ -1001,14 +1031,14 @@ public class ChatServiceImpl extends BaseService {
             unbanned = plugin.punishments().pardonActiveBan(incident.playerUuid(), ctx.asPlayer(), reason, ctx.getSenderName());
         }
 
-        String note = reason + " | cleared_strikes=" + clearedStrikes + " | ban_reversed=" + unbanned;
+        String note = reason + " | cleared_score=" + clearedStrikes + " | ban_reversed=" + unbanned;
         updateIncidentResolution(id, ctx.asPlayer(), ctx.getSenderName(), "undo", note);
         ctx.returnSuccess("Undid moderation incident #" + id + ".");
     }
 
-    private void handleModerationStrikes(dev.stemcraft.api.command.CommandContext ctx) {
+    private void handleModerationScore(dev.stemcraft.api.command.CommandContext ctx) {
         if (ctx.args().isEmpty()) {
-            ctx.returnError("Usage: /moderation strikes <player>");
+            ctx.returnError("Usage: /moderation score <player>");
             return;
         }
 
@@ -1019,12 +1049,48 @@ public class ChatServiceImpl extends BaseService {
         }
 
         int count = getActiveViolationCount(target.getUniqueId());
-        ctx.returnInfo("Active content-filter strikes for " + Objects.requireNonNullElse(target.getName(), target.getUniqueId().toString()) + ": " + count);
+        String playerName = Objects.requireNonNullElse(target.getName(), target.getUniqueId().toString());
+        ctx.info("Active content-filter score for " + playerName + ": " + count);
+        if (ctx.isPlayer()) {
+            ctx.getSender().sendMessage(
+                Component.text("[Set]", net.kyori.adventure.text.format.NamedTextColor.BLUE)
+                    .clickEvent(net.kyori.adventure.text.event.ClickEvent.suggestCommand("/moderation setscore " + playerName + " " + count))
+                    .hoverEvent(net.kyori.adventure.text.event.HoverEvent.showText(Component.text("Set this player's score")))
+                    .append(Component.text(" ", net.kyori.adventure.text.format.NamedTextColor.GRAY))
+                    .append(
+                        Component.text("[Clear]", net.kyori.adventure.text.format.NamedTextColor.RED)
+                            .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/moderation clearscore " + playerName))
+                            .hoverEvent(net.kyori.adventure.text.event.HoverEvent.showText(Component.text("Clear this player's score")))
+                    )
+            );
+        }
     }
 
-    private void handleModerationClearStrikes(dev.stemcraft.api.command.CommandContext ctx) {
+    private void handleModerationSetScore(dev.stemcraft.api.command.CommandContext ctx) {
+        if (ctx.args().size() < 2) {
+            ctx.returnError("Usage: /moderation setscore <player> <value>");
+            return;
+        }
+
+        OfflinePlayer target = ctx.getArgAsOfflinePlayer(0);
+        if (target == null || target.getUniqueId() == null) {
+            ctx.returnError("Player was not found.");
+            return;
+        }
+
+        int score = ctx.getArgAsInt(1, Integer.MIN_VALUE, 0, null);
+        if (score == Integer.MIN_VALUE) {
+            ctx.returnError("Usage: /moderation setscore <player> <value>");
+            return;
+        }
+
+        setViolationScore(target.getUniqueId(), score);
+        ctx.returnSuccess("Set active content-filter score for " + Objects.requireNonNullElse(target.getName(), target.getUniqueId().toString()) + " to " + score + ".");
+    }
+
+    private void handleModerationClearScore(dev.stemcraft.api.command.CommandContext ctx) {
         if (ctx.args().isEmpty()) {
-            ctx.returnError("Usage: /moderation clearstrikes <player>");
+            ctx.returnError("Usage: /moderation clearscore <player>");
             return;
         }
 
@@ -1035,7 +1101,7 @@ public class ChatServiceImpl extends BaseService {
         }
 
         int cleared = clearViolations(target.getUniqueId());
-        ctx.returnSuccess("Cleared " + cleared + " active content-filter strike(s) for " + Objects.requireNonNullElse(target.getName(), target.getUniqueId().toString()) + ".");
+        ctx.returnSuccess("Cleared " + cleared + " active content-filter score for " + Objects.requireNonNullElse(target.getName(), target.getUniqueId().toString()) + ".");
     }
 
     private void recordModerationIncident(Player player,
@@ -1119,7 +1185,11 @@ public class ChatServiceImpl extends BaseService {
         if (decision.reasonDetail() != null) {
             details.put("matched_words", decision.reasonDetail());
         }
-        details.put("strike_count", outcome.strikeCount());
+        details.put("score_total", outcome.strikeCount());
+        details.put("score_points", outcome.pointsAdded());
+        if (decision.severity() != null) {
+            details.put("severity", decision.severity().name().toLowerCase(Locale.ROOT));
+        }
         return details;
     }
 
@@ -1372,8 +1442,124 @@ public class ChatServiceImpl extends BaseService {
     private String formatModerationSummary(ModerationIncidentRecord incident) {
         return "#" + incident.id() + " " + formatModerationInstant(incident.occurredAt()) + " " + incident.playerName() + " " +
             incident.messageType() + " -> " + incident.actionTaken() +
+            " score=" + incident.strikeCount() +
             (incident.resolved() ? " [resolved]" : " [open]") +
             " [" + clip(incident.originalText().replace('\n', ' '), 64) + "]";
+    }
+
+    private void loadContentFilterScoreSettings() {
+        contentFilterSeverityPoints.clear();
+        for (ProfanitySeverity severity : ProfanitySeverity.values()) {
+            int defaultPoints = DEFAULT_CONTENT_FILTER_SEVERITY_POINTS.getOrDefault(severity, Math.max(1, severity.ordinal() + 1));
+            int configuredPoints = getConfigSection().getInt(
+                "content_filter.severity_points." + severity.name().toLowerCase(Locale.ROOT),
+                defaultPoints
+            );
+            contentFilterSeverityPoints.put(severity, Math.max(0, configuredPoints));
+        }
+
+        contentFilterScoreDecayAmount = Math.max(0, getConfigSection().getInt("content_filter.score_decay.amount", 1));
+        contentFilterScoreDecaySeconds = parseDurationSeconds(getConfigSection().getString("content_filter.score_decay.every", "1h"));
+        if (contentFilterScoreDecayAmount > 0 && contentFilterScoreDecaySeconds <= 0L) {
+            contentFilterScoreDecaySeconds = TimeUtil.parseDuration("1h");
+        }
+    }
+
+    void configureContentFilterScoringForTest(@NotNull Map<ProfanitySeverity, Integer> severityPoints, int decayAmount, long decaySeconds) {
+        contentFilterSeverityPoints.clear();
+        contentFilterSeverityPoints.putAll(severityPoints);
+        contentFilterScoreDecayAmount = decayAmount;
+        contentFilterScoreDecaySeconds = decaySeconds;
+    }
+
+    Map<ProfanitySeverity, Integer> contentFilterSeverityPoints() {
+        return Map.copyOf(contentFilterSeverityPoints);
+    }
+
+    int contentFilterScoreDecayAmount() {
+        return contentFilterScoreDecayAmount;
+    }
+
+    long contentFilterScoreDecaySeconds() {
+        return contentFilterScoreDecaySeconds;
+    }
+
+    List<ModerationActionRule> moderationActionRules() {
+        return List.copyOf(moderationActionRules);
+    }
+
+    void updateContentFilterSeverityPoints(@NotNull ProfanitySeverity severity, int points) {
+        contentFilterSeverityPoints.put(severity, Math.max(0, points));
+        getConfigSection().set("content_filter.severity_points." + severity.name().toLowerCase(Locale.ROOT), Math.max(0, points));
+        getRootConfigSection().save();
+    }
+
+    void updateContentFilterScoreDecay(int amount, long decaySeconds) {
+        contentFilterScoreDecayAmount = Math.max(0, amount);
+        contentFilterScoreDecaySeconds = Math.max(0L, decaySeconds);
+        getConfigSection().set("content_filter.score_decay.amount", contentFilterScoreDecayAmount);
+        if (contentFilterScoreDecaySeconds <= 0L) {
+            getConfigSection().set("content_filter.score_decay.every", "0s");
+        } else {
+            getConfigSection().set("content_filter.score_decay.every", TimeUtil.formatDuration(contentFilterScoreDecaySeconds));
+        }
+        getRootConfigSection().save();
+    }
+
+    void addModerationActionRule(int threshold, @NotNull String action, long durationSeconds) {
+        List<ModerationActionRule> rules = new ArrayList<>(moderationActionRules);
+        rules.add(new ModerationActionRule(Math.max(1, threshold), normalizeModerationText(action), Math.max(0L, durationSeconds)));
+        saveModerationActionRules(rules);
+    }
+
+    void updateModerationActionRule(int index, int threshold, @NotNull String action, long durationSeconds) {
+        List<ModerationActionRule> rules = new ArrayList<>(moderationActionRules);
+        if (index < 1 || index > rules.size()) {
+            throw new IllegalArgumentException("Unknown moderation action index: " + index);
+        }
+        rules.set(index - 1, new ModerationActionRule(Math.max(1, threshold), normalizeModerationText(action), Math.max(0L, durationSeconds)));
+        saveModerationActionRules(rules);
+    }
+
+    void removeModerationActionRule(int index) {
+        List<ModerationActionRule> rules = new ArrayList<>(moderationActionRules);
+        if (index < 1 || index > rules.size()) {
+            throw new IllegalArgumentException("Unknown moderation action index: " + index);
+        }
+        rules.remove(index - 1);
+        saveModerationActionRules(rules);
+    }
+
+    void setViolationScore(@NotNull UUID playerUuid, int score) {
+        int normalized = Math.max(0, score);
+        if (normalized == 0) {
+            contentFilterViolations.remove(playerUuid);
+            return;
+        }
+
+        ViolationScoreState state = contentFilterViolations.computeIfAbsent(playerUuid, ignored -> new ViolationScoreState());
+        synchronized (state) {
+            state.score = normalized;
+            state.updatedAt = Instant.now();
+        }
+    }
+
+    private void saveModerationActionRules(@NotNull List<ModerationActionRule> rules) {
+        rules.sort(Comparator.comparingInt(ModerationActionRule::threshold));
+        var actionsSection = getConfigSection().createSection("content_filter.actions", true);
+        int index = 1;
+        for (ModerationActionRule rule : rules) {
+            String basePath = Integer.toString(index++);
+            actionsSection.set(basePath + ".threshold", rule.threshold());
+            actionsSection.set(basePath + ".action", rule.action());
+            if (rule.durationSeconds() > 0L) {
+                actionsSection.set(basePath + ".duration", TimeUtil.formatDuration(rule.durationSeconds()));
+            } else {
+                actionsSection.remove(basePath + ".duration");
+            }
+        }
+        getRootConfigSection().save();
+        moderationActionRules = List.copyOf(rules);
     }
 
     private String formatModerationInstant(Instant instant) {
@@ -1422,16 +1608,18 @@ public class ChatServiceImpl extends BaseService {
                         continue;
                     }
 
-                    int count = ruleSection.getInt("count", 0);
-                    long windowSeconds = parseDurationSeconds(ruleSection.getString("within", "0s"));
+                    int threshold = ruleSection.getInt("threshold", Integer.MIN_VALUE);
+                    if (threshold == Integer.MIN_VALUE) {
+                        threshold = ruleSection.getInt("count", 0);
+                    }
                     String action = ruleSection.getString("action", "warn").trim().toLowerCase(Locale.ROOT);
                     long durationSeconds = parseDurationSeconds(ruleSection.getString("duration", ""));
 
-                    if (count <= 0 || windowSeconds <= 0L || action.isBlank()) {
+                    if (threshold <= 0 || action.isBlank()) {
                         continue;
                     }
 
-                    loadedRules.add(new ModerationActionRule(count, windowSeconds, action, durationSeconds));
+                    loadedRules.add(new ModerationActionRule(threshold, action, durationSeconds));
                 }
             }
         }
@@ -1440,11 +1628,8 @@ public class ChatServiceImpl extends BaseService {
             loadedRules.addAll(DEFAULT_MODERATION_ACTION_RULES);
         }
 
+        loadedRules.sort(Comparator.comparingInt(ModerationActionRule::threshold));
         moderationActionRules = loadedRules;
-        moderationMaxWindowSeconds = loadedRules.stream()
-            .mapToLong(ModerationActionRule::windowSeconds)
-            .max()
-            .orElse(0L);
     }
 
     private void writeDefaultModerationActionRules() {
@@ -1452,8 +1637,7 @@ public class ChatServiceImpl extends BaseService {
         int index = 1;
         for (ModerationActionRule rule : DEFAULT_MODERATION_ACTION_RULES) {
             String basePath = Integer.toString(index++);
-            actionsSection.set(basePath + ".count", rule.count());
-            actionsSection.set(basePath + ".within", TimeUtil.formatDuration(rule.windowSeconds()));
+            actionsSection.set(basePath + ".threshold", rule.threshold());
             actionsSection.set(basePath + ".action", rule.action());
             if (rule.durationSeconds() > 0L) {
                 actionsSection.set(basePath + ".duration", TimeUtil.formatDuration(rule.durationSeconds()));
@@ -1489,7 +1673,7 @@ public class ChatServiceImpl extends BaseService {
         }
 
         api.tasks().nextTick(() -> api.messages().error(player, decision.userMessage()));
-        return ModerationOutcome.blocked();
+        return ModerationOutcome.blocked(0, 0);
     }
 
     private ModerationOutcome applyModerationViolation(Player player, String messageType, ModerationDecision decision) {
@@ -1499,116 +1683,160 @@ public class ChatServiceImpl extends BaseService {
             Bukkit.getScheduler().runTask(plugin, () -> Bukkit.dispatchCommand(console, cmd));
         }
 
-        ViolationStatus status = recordViolation(player.getUniqueId());
+        ViolationStatus status = recordViolation(player.getUniqueId(), decision.severity(), Instant.now());
         ModerationActionRule actionRule = status.actionRule();
-        String reason = buildModerationReason(messageType, decision);
 
         if (actionRule == null) {
             api.tasks().nextTick(() -> api.messages().error(player, contentFilterBlockedMessage));
-            return ModerationOutcome.blocked(status.activeStrikeCount());
+            return ModerationOutcome.blocked(status.activeScore(), status.pointsAdded());
         }
 
         switch (actionRule.action()) {
             case "ban" -> {
-                applyContentFilterBan(player, actionRule, reason);
-                return ModerationOutcome.of("ban", status.activeStrikeCount());
+                applyContentFilterBan(player, actionRule, buildContentFilterBanReason(messageType, decision));
+                return ModerationOutcome.of("ban", status.activeScore(), status.pointsAdded());
             }
             case "kick" -> {
-                applyContentFilterKick(player, reason);
-                return ModerationOutcome.of("kick", status.activeStrikeCount());
+                applyContentFilterKick(player, buildContentFilterKickReason(messageType, decision));
+                return ModerationOutcome.of("kick", status.activeScore(), status.pointsAdded());
             }
             case "warn" -> {
-                plugin.punishments().record(player.getUniqueId(), null, null, "warn", false, reason);
-                return ModerationOutcome.of("warn", status.activeStrikeCount());
+                plugin.punishments().record(player.getUniqueId(), null, null, "warn", false, buildContentFilterWarnReason(messageType, decision));
+                api.tasks().nextTick(() -> api.messages().error(player, contentFilterWarnMessage));
+                return ModerationOutcome.of("warn", status.activeScore(), status.pointsAdded());
             }
             default -> {
                 api.tasks().nextTick(() -> api.messages().error(player, contentFilterBlockedMessage));
-                return ModerationOutcome.blocked(status.activeStrikeCount());
+                return ModerationOutcome.blocked(status.activeScore(), status.pointsAdded());
             }
         }
     }
 
-    private ViolationStatus recordViolation(UUID playerUuid) {
-        Instant now = Instant.now();
-        Deque<Instant> timestamps = contentFilterViolations.computeIfAbsent(playerUuid, ignored -> new LinkedList<>());
+    ViolationStatus recordViolation(UUID playerUuid, @Nullable ProfanitySeverity severity, @NotNull Instant now) {
+        int pointsAdded = scorePointsForSeverity(severity);
+        ViolationScoreState state = contentFilterViolations.computeIfAbsent(playerUuid, ignored -> new ViolationScoreState());
 
-        synchronized (timestamps) {
-            timestamps.addLast(now);
-            pruneViolations(timestamps, now);
-            return new ViolationStatus(timestamps.size(), findMatchedRule(timestamps, now));
+        synchronized (state) {
+            int activeScore = decayViolationScore(state, now);
+            activeScore = Math.max(0, activeScore + pointsAdded);
+            state.score = activeScore;
+            state.updatedAt = now;
+
+            if (activeScore <= 0) {
+                contentFilterViolations.remove(playerUuid, state);
+            }
+
+            return new ViolationStatus(activeScore, pointsAdded, findMatchedRule(activeScore));
         }
     }
 
     private int clearViolations(UUID playerUuid) {
-        Deque<Instant> timestamps = contentFilterViolations.remove(playerUuid);
-        if (timestamps == null) {
+        ViolationScoreState state = contentFilterViolations.remove(playerUuid);
+        if (state == null) {
             return 0;
         }
-        synchronized (timestamps) {
-            int cleared = timestamps.size();
-            timestamps.clear();
+        synchronized (state) {
+            int cleared = Math.max(0, state.score);
+            state.score = 0;
+            state.updatedAt = Instant.now();
             return cleared;
         }
     }
 
     private int getActiveViolationCount(UUID playerUuid) {
-        Deque<Instant> timestamps = contentFilterViolations.get(playerUuid);
-        if (timestamps == null) {
+        return getActiveViolationCount(playerUuid, Instant.now());
+    }
+
+    int getActiveViolationCount(UUID playerUuid, @NotNull Instant now) {
+        ViolationScoreState state = contentFilterViolations.get(playerUuid);
+        if (state == null) {
             return 0;
         }
-        synchronized (timestamps) {
-            pruneViolations(timestamps, Instant.now());
-            return timestamps.size();
-        }
-    }
-
-    private void pruneViolations(Deque<Instant> timestamps, Instant now) {
-        if (moderationMaxWindowSeconds <= 0L) {
-            return;
-        }
-
-        Instant cutoff = now.minusSeconds(moderationMaxWindowSeconds);
-        while (!timestamps.isEmpty() && timestamps.peekFirst().isBefore(cutoff)) {
-            timestamps.removeFirst();
-        }
-    }
-
-    private ModerationActionRule findMatchedRule(Deque<Instant> timestamps, Instant now) {
-        ModerationActionRule matchedRule = null;
-
-        for (ModerationActionRule rule : moderationActionRules) {
-            if (timestamps.size() < rule.count()) {
-                continue;
+        synchronized (state) {
+            int activeScore = decayViolationScore(state, now);
+            if (activeScore <= 0) {
+                contentFilterViolations.remove(playerUuid, state);
+                return 0;
             }
+            return activeScore;
+        }
+    }
 
-            List<Instant> snapshot = new ArrayList<>(timestamps);
-            Instant thresholdInstant = snapshot.get(snapshot.size() - rule.count());
+    private int decayViolationScore(@NotNull ViolationScoreState state, @NotNull Instant now) {
+        int currentScore = Math.max(0, state.score);
+        if (currentScore == 0) {
+            state.updatedAt = now;
+            return 0;
+        }
+        if (contentFilterScoreDecayAmount <= 0 || contentFilterScoreDecaySeconds <= 0L) {
+            return currentScore;
+        }
 
-            if (!thresholdInstant.isBefore(now.minusSeconds(rule.windowSeconds()))) {
+        long elapsedSeconds = Math.max(0L, Duration.between(state.updatedAt, now).getSeconds());
+        long completedPeriods = elapsedSeconds / contentFilterScoreDecaySeconds;
+        if (completedPeriods <= 0L) {
+            return currentScore;
+        }
+
+        long decayed = completedPeriods * (long) contentFilterScoreDecayAmount;
+        int decayedScore = (int) Math.max(0L, currentScore - decayed);
+        if (decayedScore < currentScore) {
+            state.score = decayedScore;
+            state.updatedAt = state.updatedAt.plusSeconds(completedPeriods * contentFilterScoreDecaySeconds);
+        }
+        return decayedScore;
+    }
+
+    private ModerationActionRule findMatchedRule(int activeScore) {
+        ModerationActionRule matchedRule = null;
+        for (ModerationActionRule rule : moderationActionRules) {
+            if (activeScore >= rule.threshold()) {
                 matchedRule = rule;
             }
         }
-
         return matchedRule;
     }
 
-    private String buildModerationReason(String messageType, ModerationDecision decision) {
-        StringBuilder reason = new StringBuilder("Blocked ");
-        reason.append(messageType).append(" by content filter");
+    private String buildContentFilterWarnReason(String messageType, ModerationDecision decision) {
+        return buildContentFilterReason(contentFilterWarnMessage, messageType, decision);
+    }
 
-        if (decision.reason() != null && !decision.reason().isBlank()) {
-            reason.append(": ").append(decision.reason());
-        }
-        if (decision.reasonDetail() != null && !decision.reasonDetail().isBlank()) {
-            reason.append(" (").append(decision.reasonDetail()).append(')');
-        }
+    private String buildContentFilterKickReason(String messageType, ModerationDecision decision) {
+        return buildContentFilterReason(contentFilterKickReason, messageType, decision);
+    }
 
-        return reason.toString();
+    private String buildContentFilterBanReason(String messageType, ModerationDecision decision) {
+        return buildContentFilterReason(contentFilterBanReason, messageType, decision);
+    }
+
+    private String buildContentFilterReason(String template, String messageType, ModerationDecision decision) {
+        String severity = decision.severity() == null
+            ? ""
+            : decision.severity().name().toLowerCase(Locale.ROOT);
+        return template
+            .replace("{type}", messageType)
+            .replace("{severity}", severity)
+            .trim();
+    }
+
+    void configureContentFilterMessagesForTest(String blockedMessage, String warnMessage, String kickReason, String banReason) {
+        this.contentFilterBlockedMessage = blockedMessage;
+        this.contentFilterWarnMessage = warnMessage;
+        this.contentFilterKickReason = kickReason;
+        this.contentFilterBanReason = banReason;
+    }
+
+    String contentFilterKickReasonForTest(String messageType, @Nullable ProfanitySeverity severity) {
+        return buildContentFilterKickReason(messageType, ModerationDecision.deny("", "content_filter_rejected", "ignored", severity, true));
+    }
+
+    String contentFilterBanReasonForTest(String messageType, @Nullable ProfanitySeverity severity) {
+        return buildContentFilterBanReason(messageType, ModerationDecision.deny("", "content_filter_rejected", "ignored", severity, true));
     }
 
     private void applyContentFilterKick(Player player, String reason) {
         plugin.punishments().record(player.getUniqueId(), null, null, "kick", true, reason);
-        api.tasks().nextTick(() -> player.kick(Component.text("You have been kicked: " + reason)));
+        api.tasks().nextTick(() -> player.kick(Component.text("You have been kicked from this server.\nReason: " + reason)));
     }
 
     private void applyContentFilterBan(Player player, ModerationActionRule rule, String reason) {
@@ -1710,42 +1938,56 @@ public class ChatServiceImpl extends BaseService {
         return lines;
     }
 
-    private record ModerationDecision(boolean blocked, String filteredMessage, String userMessage, String reason, String reasonDetail, boolean enforcePunishment) {
+    private int scorePointsForSeverity(@Nullable ProfanitySeverity severity) {
+        if (severity == null) {
+            return 0;
+        }
+        return Math.max(0, contentFilterSeverityPoints.getOrDefault(severity, DEFAULT_CONTENT_FILTER_SEVERITY_POINTS.getOrDefault(severity, 0)));
+    }
+
+    private record ModerationDecision(boolean blocked,
+                                      String filteredMessage,
+                                      String userMessage,
+                                      String reason,
+                                      String reasonDetail,
+                                      @Nullable ProfanitySeverity severity,
+                                      boolean enforcePunishment) {
         private static ModerationDecision allow() {
-            return new ModerationDecision(false, null, null, "allowed", null, false);
+            return new ModerationDecision(false, null, null, "allowed", null, null, false);
         }
 
         private static ModerationDecision filtered(String filteredMessage, String reason, String reasonDetail) {
-            return new ModerationDecision(false, filteredMessage, null, reason == null ? "filtered" : reason, reasonDetail, false);
+            return new ModerationDecision(false, filteredMessage, null, reason == null ? "filtered" : reason, reasonDetail, null, false);
         }
 
-        private static ModerationDecision deny(String userMessage, String reason, String reasonDetail, boolean enforcePunishment) {
-            return new ModerationDecision(true, null, userMessage, reason, reasonDetail, enforcePunishment);
+        private static ModerationDecision deny(String userMessage, String reason, String reasonDetail, @Nullable ProfanitySeverity severity, boolean enforcePunishment) {
+            return new ModerationDecision(true, null, userMessage, reason, reasonDetail, severity, enforcePunishment);
         }
     }
 
-    private record ModerationOutcome(String actionTaken, int strikeCount) {
+    private record ModerationOutcome(String actionTaken, int strikeCount, int pointsAdded) {
         private static ModerationOutcome filtered() {
-            return new ModerationOutcome("filtered", 0);
+            return new ModerationOutcome("filtered", 0, 0);
         }
 
-        private static ModerationOutcome blocked() {
-            return new ModerationOutcome("blocked", 0);
+        private static ModerationOutcome blocked(int strikeCount, int pointsAdded) {
+            return new ModerationOutcome("blocked", strikeCount, pointsAdded);
         }
 
-        private static ModerationOutcome blocked(int strikeCount) {
-            return new ModerationOutcome("blocked", strikeCount);
-        }
-
-        private static ModerationOutcome of(String actionTaken, int strikeCount) {
-            return new ModerationOutcome(actionTaken, strikeCount);
+        private static ModerationOutcome of(String actionTaken, int strikeCount, int pointsAdded) {
+            return new ModerationOutcome(actionTaken, strikeCount, pointsAdded);
         }
     }
 
-    private record ModerationActionRule(int count, long windowSeconds, String action, long durationSeconds) {
+    record ModerationActionRule(int threshold, String action, long durationSeconds) {
     }
 
-    private record ViolationStatus(int activeStrikeCount, @Nullable ModerationActionRule actionRule) {
+    record ViolationStatus(int activeScore, int pointsAdded, @Nullable ModerationActionRule actionRule) {
+    }
+
+    private static final class ViolationScoreState {
+        private int score;
+        private Instant updatedAt = Instant.now();
     }
 
     private record ModerationPlayerFilter(@Nullable UUID uuid, @Nullable String name) {
