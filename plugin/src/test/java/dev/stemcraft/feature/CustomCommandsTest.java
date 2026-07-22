@@ -3,9 +3,13 @@ package dev.stemcraft.feature;
 import dev.stemcraft.config.ConfigFileImpl;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockbukkit.mockbukkit.MockBukkit;
+import org.mockbukkit.mockbukkit.ServerMock;
+import org.mockbukkit.mockbukkit.entity.PlayerMock;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -103,5 +107,60 @@ class CustomCommandsTest {
         assertEquals("survival", CustomCommands.normalizeConfigId(" /Survival "));
         assertEquals("survival", CustomCommands.normalizeLabel("//Survival"));
         assertEquals("tpworld survival", CustomCommands.normalizeRunCommand(" //tpworld survival "));
+    }
+
+    @Test
+    void parseRunCommandDefaultsToPlayerAndAppliesPlaceholders() {
+        ServerMock server = MockBukkit.mock();
+        try {
+            PlayerMock player = server.addPlayer();
+            UUID uuid = player.getUniqueId();
+
+            CustomCommands.ParsedRunCommand parsed = CustomCommands.parseRunCommand(
+                    player,
+                    "tpworld survival {player} {uuid}"
+            );
+
+            assertEquals(CustomCommands.CommandDispatchMode.PLAYER, parsed.mode());
+            assertEquals("tpworld survival " + player.getName() + " " + uuid, parsed.command());
+        } finally {
+            MockBukkit.unmock();
+        }
+    }
+
+    @Test
+    void parseRunCommandSupportsServerPrefix() {
+        ServerMock server = MockBukkit.mock();
+        try {
+            PlayerMock player = server.addPlayer();
+
+            CustomCommands.ParsedRunCommand parsed = CustomCommands.parseRunCommand(
+                    player,
+                    "server:tpworld survival {player}"
+            );
+
+            assertEquals(CustomCommands.CommandDispatchMode.SERVER, parsed.mode());
+            assertEquals("tpworld survival " + player.getName(), parsed.command());
+        } finally {
+            MockBukkit.unmock();
+        }
+    }
+
+    @Test
+    void parseRunCommandSupportsExplicitPlayerPrefix() {
+        ServerMock server = MockBukkit.mock();
+        try {
+            PlayerMock player = server.addPlayer();
+
+            CustomCommands.ParsedRunCommand parsed = CustomCommands.parseRunCommand(
+                    player,
+                    "player:warp spawn"
+            );
+
+            assertEquals(CustomCommands.CommandDispatchMode.PLAYER, parsed.mode());
+            assertEquals("warp spawn", parsed.command());
+        } finally {
+            MockBukkit.unmock();
+        }
     }
 }

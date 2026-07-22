@@ -19,7 +19,7 @@ Features are discovered from `dev.stemcraft.feature` and loaded through `BaseFea
 | --- | --- |
 | `CustomBooks` | Configurable books plus `/book` command surfaces |
 | `InteractiveMenus` | Book/form-based interactive menu system with admin editing |
-| `CustomCommands` | Config-defined player-run command aliases |
+| `CustomCommands` | Config-defined command aliases with player/server sender control |
 | `PlayerTabList` | Header/footer tab list rendering and update loop |
 | `PlayerGameMessages` | Join, quit, death, and related configurable player messages |
 
