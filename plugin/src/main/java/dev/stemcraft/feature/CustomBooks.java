@@ -461,16 +461,27 @@ public class CustomBooks extends BaseFeature {
      * @return The generated book name.
      */
     private String generateName(String title) {
-        // Remove non-alpha characters
-        title = title.replaceAll("[^a-zA-Z0-9\\s]", "");
+        return generateBookName(title);
+    }
 
-        // Replace spaces with dashes
-        title = title.replace(" ", "-");
+    static String generateBookName(String title) {
+        if (title == null) {
+            return "";
+        }
 
-        // Convert to lowercase
-        title = title.toLowerCase();
+        String normalized = title.trim().toLowerCase(Locale.ROOT);
 
-        return title;
+        // Keep existing hyphens while collapsing whitespace into single dashes.
+        normalized = normalized.replaceAll("\\s+", "-");
+
+        // Drop characters that are not valid in saved book keys.
+        normalized = normalized.replaceAll("[^a-z0-9-]", "");
+
+        // Avoid duplicate or dangling separators after sanitizing.
+        normalized = normalized.replaceAll("-{2,}", "-");
+        normalized = normalized.replaceAll("^-+|-+$", "");
+
+        return normalized;
     }
 
     /**
