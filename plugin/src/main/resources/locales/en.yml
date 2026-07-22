@@ -2,6 +2,7 @@ DEPENDENCY_WORLDEDIT_REQUIRED: "WorldEdit plugin not found or not enabled! STEMC
 
 STEMCRAFT_ENABLED: "STEMCraft enabled"
 # STEMCRAFT_ERROR_SAVING_CONFIG: "Could not save the config file to disk"
+STEMCRAFT_ERROR_LOAD_CONFIG: "Could not load config.yml."
 STEMCRAFT_ERROR_PLUGIN_CLASS: "Error creating PluginCommand class {error}"
 STEMCRAFT_ERROR_LOAD_CLASS: "Failed to load class {class}: {error}"
 STEMCRAFT_ERROR_SCAN_CLASS: "Failed to scan classes in plugin jar: {error}"
