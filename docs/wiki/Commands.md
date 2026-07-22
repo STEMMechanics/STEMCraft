@@ -52,7 +52,7 @@ The list below reflects the active built-in command roots in source.
 | --- | --- | --- |
 | `/book` | `CustomBooks` | Create, list, show, and distribute configured books |
 | `/imenu` | `InteractiveMenus` | Interactive menu runtime and editor |
-| dynamic configured aliases | `CustomCommands` | Commands loaded from config at startup |
+| dynamic configured aliases | `CustomCommands` | Commands loaded from config at startup; default player sender with optional `player:` / `server:` prefixes |
 | `gms`, `gmc`, `gma`, `gmsp` | `GameModeAliases` | Short aliases that dispatch to `/gamemode` |
 
 ## Minigames
@@ -86,6 +86,8 @@ The `/world` command is one of the most important operator surfaces. It covers:
   - `/world removeleavecommand`
 
 Join and leave commands run as the player by default. Use `player:` or `server:` prefixes on individual entries to control sender mode per command.
+
+Custom command aliases also run as the player by default. Use `player:` or `server:` on a configured run entry to force the sender, and `{player}` / `{uuid}` placeholders inside the configured command text.
 
 ## Permission Conventions
 

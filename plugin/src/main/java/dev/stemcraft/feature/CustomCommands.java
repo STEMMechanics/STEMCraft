@@ -24,12 +24,14 @@ import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.Command;
 import dev.stemcraft.api.config.ConfigSection;
+import dev.stemcraft.api.util.PlaceholderUtil;
 import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
 import org.bukkit.Bukkit;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.Nullable;
 
@@ -735,14 +737,45 @@ public class CustomCommands extends BaseFeature {
                         ctx.returnInfo("CUSTOM_COMMAND_NO_COMMANDS_SET");
                     }
 
+                    ConsoleCommandSender console = Bukkit.getConsoleSender();
                     for (String configuredCommand : activeEntry.runCommands()) {
-                        boolean dispatched = Bukkit.dispatchCommand(player, configuredCommand);
+                        ParsedRunCommand parsedCommand = parseRunCommand(player, configuredCommand);
+                        if (parsedCommand.command().isBlank()) {
+                            continue;
+                        }
+
+                        boolean dispatched = parsedCommand.mode() == CommandDispatchMode.SERVER
+                                ? Bukkit.dispatchCommand(console, parsedCommand.command())
+                                : Bukkit.dispatchCommand(player, parsedCommand.command());
                         if (!dispatched) {
                             ctx.returnError("CUSTOM_COMMAND_RUN_FAILED", "command", configuredCommand);
                         }
                     }
                 })
                 .register(STEMCraft.getPlugin()));
+    }
+
+    static ParsedRunCommand parseRunCommand(Player player, String configuredCommand) {
+        String trimmed = configuredCommand == null ? "" : configuredCommand.trim();
+        if (trimmed.isBlank()) {
+            return new ParsedRunCommand(CommandDispatchMode.PLAYER, "");
+        }
+
+        String resolved = PlaceholderUtil.apply(
+                trimmed,
+                "player", player.getName(),
+                "uuid", player.getUniqueId().toString()
+        );
+
+        if (resolved.regionMatches(true, 0, "server:", 0, "server:".length())) {
+            return new ParsedRunCommand(CommandDispatchMode.SERVER, resolved.substring("server:".length()).trim());
+        }
+
+        if (resolved.regionMatches(true, 0, "player:", 0, "player:".length())) {
+            return new ParsedRunCommand(CommandDispatchMode.PLAYER, resolved.substring("player:".length()).trim());
+        }
+
+        return new ParsedRunCommand(CommandDispatchMode.PLAYER, resolved);
     }
 
     private void unregisterRuntimeCommand(String label) {
@@ -775,5 +808,13 @@ public class CustomCommands extends BaseFeature {
         CustomCommandEntry {
             runCommands = List.copyOf(runCommands);
         }
+    }
+
+    enum CommandDispatchMode {
+        PLAYER,
+        SERVER
+    }
+
+    static record ParsedRunCommand(CommandDispatchMode mode, String command) {
     }
 }

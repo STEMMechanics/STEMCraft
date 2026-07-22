@@ -6,7 +6,9 @@ This is the active command surface registered by STEMCraft.
 
 - `/maintenance <on|off>`
 - `/stemcraft <status|version|reload|firstjoin>`
-- `/customcommands <list|info|create|delete|setlabel|setpermission|addrun|setrun|removerun>`
+- `/customcommands <list|info|create|delete|setlabel|setpermission|addcommand|setcommand|removecommand>`
+- Custom command aliases run as the player by default; prefix a run entry with `server:` or `player:` to force the sender
+- Custom command aliases support `{player}` and `{uuid}` placeholders in run entries
 - `/webserver <start|stop|enable|disable>`
 - `/world <record|create|delete|info|load|list|duplicate|listgenerators|setspawn|id|joincommands|leavecommands|addjoincommand|addleavecommand|setjoincommand|setleavecommand|removejoincommand|removeleavecommand|flags|time|weather|tickspeed|gamemode|nether|end|randomspawn>`
 - `/world create <name> [generator|plugin[:id]] [generatorOptions]` accepts STEMCraft generators and Bukkit plugin generators such as `PlotSquared` or `Plugin:id`
