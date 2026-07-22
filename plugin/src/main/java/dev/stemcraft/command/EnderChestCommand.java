@@ -68,7 +68,7 @@ public class EnderChestCommand extends BaseCommand {
             return;
         }
 
-        Player target = ctx.getPlayer(1, null);
+        Player target = ctx.getPlayer(0, null);
         if(target == null) {
             cmd.error("PLAYER_NOT_FOUND", "player", ctx.args().getFirst());
             return;
