@@ -86,6 +86,7 @@ import java.util.regex.Pattern;
 @Accessors(fluent = true)
 public final class STEMCraft extends JavaPlugin {
     private static final Pattern VERSION_COMPONENT_PATTERN = Pattern.compile("\\d+");
+    private static final String BOOTSTRAP_ERROR_LOAD_CONFIG = "Could not load config.yml.";
     private static STEMCraftAPI api;
     private File cacheDir;
 
@@ -153,7 +154,7 @@ public final class STEMCraft extends JavaPlugin {
         // Load configuration
         configFile = api.config().load("config.yml");
         if(configFile == null) {
-            error("STEMCRAFT_ERROR_LOAD_CONFIG");
+            error(BOOTSTRAP_ERROR_LOAD_CONFIG);
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
