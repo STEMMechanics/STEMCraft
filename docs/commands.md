@@ -40,6 +40,7 @@ This is the active command surface registered by STEMCraft.
 - `/coordbar`
 - `/speed <fly|walk|reset> <speed> <player>`
 - `/book <option>`
+- `/book save <author> <title>` stores the book under a title-derived key; existing hyphens in the title are preserved
 - `/resourcepack [send] [player]`
 - `/resourcepack zip`
 
