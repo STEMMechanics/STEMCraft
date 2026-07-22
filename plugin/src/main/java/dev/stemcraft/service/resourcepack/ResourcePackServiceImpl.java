@@ -116,6 +116,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
     private final Map<Class<? extends ResourcePackGenerator>, ResourcePackGenerator> generatorsByType = new LinkedHashMap<>();
     private final Map<String, ResourcePackGenerator> pendingGenerators = new LinkedHashMap<>();
     private final Set<String> appliedManifestTokens = new HashSet<>();
+    private final Set<String> emittedSupportedRangeWarnings = new HashSet<>();
     private String resourcePackHash = "";
     private boolean buildInProgress;
 
@@ -188,6 +189,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
     @Override
     public void onReload() {
         super.onReload();
+        emittedSupportedRangeWarnings.clear();
         reloadActiveGenerators();
         attemptPendingGeneratorRegistrations();
         recalculateSupportedVersionRange();
@@ -760,7 +762,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
         int[] supportedRange = resolveSupportedVersionRange(
             STEMCraft.getMinecraftVersion(),
             getConfig(),
-            warning -> plugin.getLogger().warning(warning)
+            this::logSupportedRangeWarning
         );
 
         PackFormatRange nextBaseRange = new PackFormatRange(supportedRange[0], supportedRange[1]);
@@ -786,6 +788,12 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
         minSupportedVersion = nextBaseRange.minFormat();
         maxSupportedVersion = nextBaseRange.maxFormat();
         plannedBuildSegments = planBuildSegments(nextBaseRange);
+    }
+
+    private void logSupportedRangeWarning(@NotNull String warning) {
+        if (emittedSupportedRangeWarnings.add(warning)) {
+            plugin.getLogger().warning(warning);
+        }
     }
 
     private @NotNull List<PlannedBuildSegment> planBuildSegments(@NotNull PackFormatRange baseRange) {

@@ -27,12 +27,16 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Handler;
+import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.logging.LogRecord;
 import java.util.zip.ZipFile;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -44,7 +48,9 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyInt;
 
 class ResourcePackServiceImplTest {
     @TempDir
@@ -121,6 +127,46 @@ class ResourcePackServiceImplTest {
         assertEquals(88, supportedRange[0]);
         assertEquals(88, supportedRange[1]);
         assertEquals(1, warnings.size());
+    }
+
+    @Test
+    void recalculateSupportedVersionRangeLogsRepeatedMaxFormatMismatchOnlyOncePerLifecycle() throws Exception {
+        MockBukkit.mock();
+        Logger logger = Logger.getLogger("resource-pack-warning-test");
+        logger.setUseParentHandlers(false);
+        logger.setLevel(Level.ALL);
+        RecordingHandler handler = new RecordingHandler();
+        logger.addHandler(handler);
+
+        try {
+            STEMCraft plugin = mock(STEMCraft.class);
+            when(plugin.getLogger()).thenReturn(logger);
+
+            STEMCraftAPI api = mock(STEMCraftAPI.class);
+            ConfigSectionView config = mock(ConfigSectionView.class);
+            int currentFormat = ResourcePackServiceImpl.resolveResourcePackFormat(STEMCraft.getMinecraftVersion());
+            when(config.getInt("min_pack_format", 32)).thenReturn(32);
+            when(config.getInt(eq("max_pack_format"), anyInt())).thenReturn(currentFormat - 1);
+
+            TestService service = new TestService(plugin, api, config);
+            Method method = ResourcePackServiceImpl.class.getDeclaredMethod("recalculateSupportedVersionRange");
+            method.setAccessible(true);
+
+            method.invoke(service);
+            method.invoke(service);
+
+            long mismatchWarnings = handler.records.stream()
+                .filter(record -> record.getLevel().intValue() >= Level.WARNING.intValue())
+                .map(LogRecord::getMessage)
+                .filter(message -> message.contains(
+                    "Configured max_pack_format " + (currentFormat - 1) + " does not match the current Minecraft pack format " + currentFormat
+                ))
+                .count();
+
+            assertEquals(1, mismatchWarnings);
+        } finally {
+            logger.removeHandler(handler);
+        }
     }
 
     @Test
@@ -309,6 +355,23 @@ class ResourcePackServiceImplTest {
             when(config.getInt("max_pack_format", 84)).thenReturn(84);
 
             service = new TestService(plugin, api, config);
+        }
+    }
+
+    private static final class RecordingHandler extends Handler {
+        private final List<LogRecord> records = new ArrayList<>();
+
+        @Override
+        public void publish(LogRecord record) {
+            records.add(record);
+        }
+
+        @Override
+        public void flush() {
+        }
+
+        @Override
+        public void close() {
         }
     }
 
