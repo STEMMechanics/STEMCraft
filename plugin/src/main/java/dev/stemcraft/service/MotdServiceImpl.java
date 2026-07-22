@@ -39,7 +39,7 @@ import java.util.Map;
 public class MotdServiceImpl extends BaseService implements MotdService {
     private static final String DEFAULT_TITLE = "<gold><bold>STEMCraft</bold></gold>";
     private static final String DEFAULT_TEXT = "";
-    private static final int CENTERED_MOTD_LINE_WIDTH = 258;
+    private static final int CENTERED_MOTD_LINE_WIDTH = 266;
     private static final int SPACE_WIDTH = 4;
 
     private final Map<String, ResolvedMotd> motdMap = new LinkedHashMap<>();
