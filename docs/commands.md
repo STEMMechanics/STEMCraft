@@ -21,7 +21,7 @@ This is the active command surface registered by STEMCraft.
 
 - `/portal list`
 - `/portal info <id>`
-- `/portal set <id> <world|here> [x y z [yaw pitch]]`
+- `/portal set <id> <world|here> [spawn|x y z [yaw pitch]]`
 - `/portal delete <id>`
 - `/tpall`
 - `/tphere <player>`
