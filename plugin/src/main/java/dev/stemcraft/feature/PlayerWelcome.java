@@ -23,8 +23,8 @@ package dev.stemcraft.feature;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.util.PlaceholderUtil;
+import dev.stemcraft.api.util.TextUtil;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
@@ -55,8 +55,6 @@ public class PlayerWelcome extends BaseFeature {
     private static final int MIGRATION_VERSION = 1;
     private static final long JOIN_MESSAGE_DELAY_TICKS = 20L;
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ISO_LOCAL_DATE;
-
-    private final MiniMessage mm = MiniMessage.miniMessage();
 
     private boolean enabled;
     private List<String> firstTimeMessage = List.of();
@@ -219,20 +217,20 @@ public class PlayerWelcome extends BaseFeature {
             return;
         }
 
-        for (String line : renderLines(player, messageLines, firstJoinedAt, years)) {
-            player.sendMessage(mm.deserialize(line));
+        for (Component line : renderComponents(player, messageLines, firstJoinedAt, years)) {
+            player.sendMessage(line);
         }
     }
 
     private void broadcastMessage(@NotNull Player player, @NotNull List<String> messageLines, long firstJoinedAt, int years) {
-        List<String> rendered = renderLines(player, messageLines, firstJoinedAt, years);
-        if (!hasUsableMessage(rendered)) {
+        List<Component> rendered = renderComponents(player, messageLines, firstJoinedAt, years);
+        if (rendered.isEmpty()) {
             return;
         }
 
         for (Player online : Bukkit.getOnlinePlayers()) {
-            for (String line : rendered) {
-                online.sendMessage(mm.deserialize(line));
+            for (Component line : rendered) {
+                online.sendMessage(line);
             }
         }
     }
@@ -244,6 +242,18 @@ public class PlayerWelcome extends BaseFeature {
             rendered.add(value == null ? "" : value);
         }
         return rendered;
+    }
+
+    private @NotNull List<Component> renderComponents(@NotNull Player player,
+                                                      @NotNull List<String> messageLines,
+                                                      long firstJoinedAt,
+                                                      int years) {
+        List<String> renderedLines = renderLines(player, messageLines, firstJoinedAt, years);
+        List<Component> rendered = new ArrayList<>(renderedLines.size());
+        for (String line : renderedLines) {
+            rendered.add(renderComponentLine(line));
+        }
+        return List.copyOf(rendered);
     }
 
     private @Nullable String renderLine(@NotNull Player player, @Nullable String line, long firstJoinedAt, int years) {
@@ -343,11 +353,7 @@ public class PlayerWelcome extends BaseFeature {
         }
 
         int years = kind == MessageKind.ANNIVERSARY ? anniversaryYear == null ? 0 : anniversaryYear : 0;
-        List<Component> rendered = new ArrayList<>(lines.size());
-        for (String line : renderLines(player, lines, player.getFirstPlayed(), years)) {
-            rendered.add(mm.deserialize(line));
-        }
-        return List.copyOf(rendered);
+        return renderComponents(player, lines, previewFirstJoinedAt(player), years);
     }
 
     static @NotNull String messagePath(@NotNull MessageKind kind, @Nullable Integer anniversaryYear) {
@@ -377,6 +383,10 @@ public class PlayerWelcome extends BaseFeature {
 
     static @NotNull String displayLine(@Nullable String line) {
         return line == null || line.isEmpty() ? "<blank>" : line;
+    }
+
+    static @NotNull Component renderComponentLine(@Nullable String line) {
+        return TextUtil.colourise(line == null ? "" : line);
     }
 
     private void saveConfiguredLines(@NotNull MessageKind kind, @Nullable Integer anniversaryYear, @NotNull List<String> lines) {
@@ -454,6 +464,11 @@ public class PlayerWelcome extends BaseFeature {
         } catch (NumberFormatException ignored) {
             return -1;
         }
+    }
+
+    private long previewFirstJoinedAt(@NotNull Player player) {
+        long firstPlayed = player.getFirstPlayed();
+        return firstPlayed > 0L ? firstPlayed : System.currentTimeMillis();
     }
 
     private record PlayerWelcomeState(long firstJoinedAt, int lastAnniversaryYear) {
