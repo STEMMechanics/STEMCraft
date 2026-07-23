@@ -16,6 +16,10 @@ This is the active command surface registered by STEMCraft.
 
 ## Teleport / Movement
 
+- `/portal list`
+- `/portal info <id>`
+- `/portal set <id> <world|here> [x y z [yaw pitch]]`
+- `/portal delete <id>`
 - `/tpall`
 - `/tphere <player>`
 - `/tpspawn <world> [player]`
