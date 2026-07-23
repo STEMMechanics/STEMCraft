@@ -140,6 +140,15 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
         }
     }
 
+    /**
+     * Returns the registered Bukkit command instance, if this command has been registered.
+     *
+     * @return the registered Bukkit command instance or null.
+     */
+    public org.bukkit.command.Command getRegisteredBukkitCommand() {
+        return pluginCommand;
+    }
+
     @Override
     public void unregister() {
         if (this.pluginCommand == null) {
