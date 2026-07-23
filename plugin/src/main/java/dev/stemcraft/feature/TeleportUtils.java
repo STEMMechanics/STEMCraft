@@ -102,6 +102,19 @@ public class TeleportUtils extends BaseFeature {
             setWorldLastLocation(player.getUniqueId(), to);
         });
 
+        api.events().register(PlayerTeleportEvent.class, event -> {
+            Location to = event.getTo();
+            if (to == null) {
+                return;
+            }
+
+            STEMCraft.getPlugin().getLogger().info(
+                "[teleport] " + event.getPlayer().getName()
+                    + " " + formatLocation(event.getFrom())
+                    + " -> " + formatLocation(to)
+            );
+        }, EventPriority.MONITOR, true);
+
         api.events().register(PlayerJoinEvent.class, event -> {
             Player player = event.getPlayer();
             grantDamageProtection(player);
@@ -929,6 +942,19 @@ public class TeleportUtils extends BaseFeature {
         return record == null ? null : toLocation(record);
     }
 
+    public Location resolveWorldDestination(UUID uuid, World world) {
+        if (world == null) {
+            return null;
+        }
+
+        Location destination = getWorldLastLocation(uuid, world.getName());
+        if (destination != null) {
+            return destination;
+        }
+
+        return world.getSpawnLocation();
+    }
+
     /**
      * Get a player's most recent location across a world-set (overworld/nether/end).
      *
@@ -1071,5 +1097,25 @@ public class TeleportUtils extends BaseFeature {
         setBackLocation(target.getUniqueId(), target.getLocation());
         target.teleport(world.getSpawnLocation());
         cmd.info(sender, "SPAWN_SUCCESS", "player", target.getName(), "world", world.getName());
+    }
+
+    private static String formatLocation(Location location) {
+        if (location == null || location.getWorld() == null) {
+            return "(unknown)";
+        }
+
+        return location.getWorld().getName()
+            + "("
+            + formatCoordinate(location.getX()) + ","
+            + formatCoordinate(location.getY()) + ","
+            + formatCoordinate(location.getZ()) + ")";
+    }
+
+    private static String formatCoordinate(double value) {
+        if (value == Math.rint(value)) {
+            return Integer.toString((int) value);
+        }
+
+        return String.format(Locale.ROOT, "%.2f", value);
     }
 }

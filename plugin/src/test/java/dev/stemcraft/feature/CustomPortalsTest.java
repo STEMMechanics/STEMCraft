@@ -35,7 +35,15 @@ class CustomPortalsTest {
 
         CustomPortals.PortalDefinition definition = new CustomPortals.PortalDefinition(
             "creative",
-            new CustomPortals.PortalDestination("creative", 10.5, 64.0, -23.25, 90.0f, 0.0f),
+            new CustomPortals.PortalDestination(
+                "creative",
+                CustomPortals.PortalDestinationMode.EXACT,
+                10.5,
+                64.0,
+                -23.25,
+                90.0f,
+                0.0f
+            ),
             Set.of(
                 new CustomPortals.PortalBlockKey("lobby", 100, 64, 200),
                 new CustomPortals.PortalBlockKey("lobby", 100, 65, 200)
@@ -53,6 +61,57 @@ class CustomPortalsTest {
         assertEquals(definition.id(), reloaded.id());
         assertEquals(definition.destination(), reloaded.destination());
         assertEquals(definition.blocks(), reloaded.blocks());
+    }
+
+    @Test
+    void writePortalRoundTripsWorldDefaultDestination() {
+        ConfigFileImpl config = new ConfigFileImpl();
+        assertTrue(config.load(tempDir.toFile(), "custom-portals.yml", true));
+
+        CustomPortals.PortalDefinition definition = new CustomPortals.PortalDefinition(
+            "survival",
+            new CustomPortals.PortalDestination(
+                "survival",
+                CustomPortals.PortalDestinationMode.WORLD_DEFAULT,
+                0.0d,
+                0.0d,
+                0.0d,
+                0.0f,
+                0.0f
+            ),
+            Set.of(new CustomPortals.PortalBlockKey("lobby", 100, 64, 200))
+        );
+
+        CustomPortals.writePortal(config.getSection("portals"), definition);
+
+        CustomPortals.PortalDefinition reloaded = CustomPortals.readPortal(
+            "survival",
+            config.getSection("portals.survival", false)
+        );
+
+        assertNotNull(reloaded);
+        assertEquals(definition.destination(), reloaded.destination());
+    }
+
+    @Test
+    void deserializeLegacyExactDestinationStillWorks() {
+        CustomPortals.PortalDestination destination = CustomPortals.PortalDestination.deserialize(
+            "creative,10.5,64.0,-23.25,90.0,0.0"
+        );
+
+        assertNotNull(destination);
+        assertEquals(
+            new CustomPortals.PortalDestination(
+                "creative",
+                CustomPortals.PortalDestinationMode.EXACT,
+                10.5,
+                64.0,
+                -23.25,
+                90.0f,
+                0.0f
+            ),
+            destination
+        );
     }
 
     @Test

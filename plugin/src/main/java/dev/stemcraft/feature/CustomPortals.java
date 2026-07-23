@@ -47,6 +47,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 /**
@@ -107,11 +108,42 @@ public class CustomPortals extends BaseFeature {
         }
     }
 
-    record PortalDestination(String worldName, double x, double y, double z, float yaw, float pitch) {
+    enum PortalDestinationMode {
+        WORLD_DEFAULT("default"),
+        WORLD_SPAWN("spawn"),
+        EXACT("exact");
+
+        private final String serializedValue;
+
+        PortalDestinationMode(String serializedValue) {
+            this.serializedValue = serializedValue;
+        }
+
+        String serializedValue() {
+            return serializedValue;
+        }
+
+        static @Nullable PortalDestinationMode fromSerializedValue(@Nullable String value) {
+            if (value == null || value.isBlank()) {
+                return null;
+            }
+
+            for (PortalDestinationMode mode : values()) {
+                if (mode.serializedValue.equalsIgnoreCase(value.trim())) {
+                    return mode;
+                }
+            }
+
+            return null;
+        }
+    }
+
+    record PortalDestination(String worldName, PortalDestinationMode mode, double x, double y, double z, float yaw, float pitch) {
         static PortalDestination fromLocation(@NotNull Location location) {
             World world = Objects.requireNonNull(location.getWorld(), "Destination world cannot be null.");
             return new PortalDestination(
                 world.getName(),
+                PortalDestinationMode.EXACT,
                 location.getX(),
                 location.getY(),
                 location.getZ(),
@@ -120,24 +152,63 @@ public class CustomPortals extends BaseFeature {
             );
         }
 
+        static PortalDestination worldDefault(@NotNull World world) {
+            return new PortalDestination(world.getName(), PortalDestinationMode.WORLD_DEFAULT, 0.0d, 0.0d, 0.0d, 0.0f, 0.0f);
+        }
+
+        static PortalDestination worldSpawn(@NotNull World world) {
+            return new PortalDestination(world.getName(), PortalDestinationMode.WORLD_SPAWN, 0.0d, 0.0d, 0.0d, 0.0f, 0.0f);
+        }
+
         static @Nullable PortalDestination deserialize(@Nullable String serialized) {
             if (serialized == null || serialized.isBlank()) {
                 return null;
             }
 
             String[] parts = serialized.split(",");
-            if (parts.length != 6) {
+            if (parts.length == 2) {
+                PortalDestinationMode mode = PortalDestinationMode.fromSerializedValue(parts[1].trim());
+                if (mode == null || mode == PortalDestinationMode.EXACT) {
+                    return null;
+                }
+
+                return new PortalDestination(parts[0].trim(), mode, 0.0d, 0.0d, 0.0d, 0.0f, 0.0f);
+            }
+
+            if (parts.length == 6) {
+                try {
+                    return new PortalDestination(
+                        parts[0].trim(),
+                        PortalDestinationMode.EXACT,
+                        Double.parseDouble(parts[1].trim()),
+                        Double.parseDouble(parts[2].trim()),
+                        Double.parseDouble(parts[3].trim()),
+                        Float.parseFloat(parts[4].trim()),
+                        Float.parseFloat(parts[5].trim())
+                    );
+                } catch (NumberFormatException exception) {
+                    return null;
+                }
+            }
+
+            if (parts.length != 7) {
                 return null;
             }
 
             try {
+                PortalDestinationMode mode = PortalDestinationMode.fromSerializedValue(parts[1].trim());
+                if (mode == null) {
+                    return null;
+                }
+
                 return new PortalDestination(
                     parts[0].trim(),
-                    Double.parseDouble(parts[1].trim()),
+                    mode,
                     Double.parseDouble(parts[2].trim()),
                     Double.parseDouble(parts[3].trim()),
-                    Float.parseFloat(parts[4].trim()),
-                    Float.parseFloat(parts[5].trim())
+                    Double.parseDouble(parts[4].trim()),
+                    Float.parseFloat(parts[5].trim()),
+                    Float.parseFloat(parts[6].trim())
                 );
             } catch (NumberFormatException exception) {
                 return null;
@@ -145,7 +216,11 @@ public class CustomPortals extends BaseFeature {
         }
 
         String serialize() {
-            return worldName + "," + x + "," + y + "," + z + "," + yaw + "," + pitch;
+            if (mode != PortalDestinationMode.EXACT) {
+                return worldName + "," + mode.serializedValue();
+            }
+
+            return worldName + "," + mode.serializedValue() + "," + x + "," + y + "," + z + "," + yaw + "," + pitch;
         }
     }
 
@@ -204,6 +279,7 @@ public class CustomPortals extends BaseFeature {
             .tabCompletion("set", "{custom-portal-id}")
             .tabCompletion("set", "{custom-portal-id}", "here")
             .tabCompletion("set", "{custom-portal-id}", "{world}")
+            .tabCompletion("set", "{custom-portal-id}", "{world}", "spawn")
             .tabCompletion("delete", "{custom-portal-id}")
             .executor((unused, cmd, ctx) -> handleCommand(ctx))
             .register(STEMCraft.getPlugin());
@@ -261,7 +337,7 @@ public class CustomPortals extends BaseFeature {
     }
 
     private void handleSet(@NotNull CommandContext ctx) {
-        ctx.checkArgsSizeAtLeast(3, "Usage: /portal set <id> <world|here> [x y z [yaw pitch]]");
+        ctx.checkArgsSizeAtLeast(3, "Usage: /portal set <id> <world|here> [spawn|x y z [yaw pitch]]");
         ctx.checkNotConsole("This command must be run in-game.");
 
         String portalId = normalizePortalId(ctx.getArg(1));
@@ -324,7 +400,7 @@ public class CustomPortals extends BaseFeature {
             return;
         }
 
-        Location destination = resolveDestination(definition.destination());
+        Location destination = resolveDestination(event.getPlayer(), definition.destination());
         if (destination == null) {
             STEMCraft.getPlugin().getLogger().warning(
                 "Skipping custom portal '" + definition.id() + "' because destination world '"
@@ -333,6 +409,7 @@ public class CustomPortals extends BaseFeature {
             return;
         }
 
+        rememberForcedDestination(event.getPlayer(), definition.destination(), destination);
         event.setCancelled(true);
         PlayerUtil.teleport(event.getPlayer(), destination);
     }
@@ -505,10 +582,13 @@ public class CustomPortals extends BaseFeature {
 
         int remainingArgs = ctx.numArgs() - startIndex;
         if (remainingArgs == 1) {
-            return PortalDestination.fromLocation(world.getSpawnLocation());
+            return PortalDestination.worldDefault(world);
+        }
+        if (remainingArgs == 2 && "spawn".equalsIgnoreCase(ctx.getArg(startIndex + 1))) {
+            return PortalDestination.worldSpawn(world);
         }
         if (remainingArgs != 4 && remainingArgs != 6) {
-            ctx.returnError("Usage: /portal set <id> <world> [x y z [yaw pitch]]");
+            ctx.returnError("Usage: /portal set <id> <world> [spawn|x y z [yaw pitch]]");
         }
 
         ctx.checkArgIsDouble(startIndex + 1, "Invalid X coordinate: " + ctx.getArg(startIndex + 1));
@@ -528,7 +608,7 @@ public class CustomPortals extends BaseFeature {
             pitch = ctx.getArgAsFloat(startIndex + 5);
         }
 
-        return new PortalDestination(world.getName(), x, y, z, yaw, pitch);
+        return new PortalDestination(world.getName(), PortalDestinationMode.EXACT, x, y, z, yaw, pitch);
     }
 
     private @Nullable World resolveWorld(@Nullable String worldName) {
@@ -548,20 +628,49 @@ public class CustomPortals extends BaseFeature {
         return api.worlds().loadWorld(worldName);
     }
 
-    private @Nullable Location resolveDestination(@NotNull PortalDestination destination) {
+    private @NotNull Location resolveWorldDefaultDestination(@Nullable UUID playerId, @NotNull World world) {
+        TeleportUtils teleportUtils = STEMCraft.getPlugin().feature(TeleportUtils.class);
+        if (teleportUtils == null) {
+            return world.getSpawnLocation();
+        }
+
+        Location destination = teleportUtils.resolveWorldDestination(playerId, world);
+        return destination != null ? destination : world.getSpawnLocation();
+    }
+
+    private void rememberForcedDestination(@NotNull Player player,
+                                           @NotNull PortalDestination destination,
+                                           @NotNull Location resolvedDestination) {
+        if (destination.mode() == PortalDestinationMode.WORLD_DEFAULT || resolvedDestination.getWorld() == null) {
+            return;
+        }
+
+        RandomFirstSpawn randomFirstSpawn = STEMCraft.getPlugin().feature(RandomFirstSpawn.class);
+        if (randomFirstSpawn == null) {
+            return;
+        }
+
+        randomFirstSpawn.recordSeenWorldEntry(player.getUniqueId(), resolvedDestination.getWorld(), resolvedDestination);
+    }
+
+    private @Nullable Location resolveDestination(@NotNull Player player, @NotNull PortalDestination destination) {
         World world = resolveWorld(destination.worldName());
         if (world == null) {
             return null;
         }
 
-        return new Location(
-            world,
-            destination.x(),
-            destination.y(),
-            destination.z(),
-            destination.yaw(),
-            destination.pitch()
-        );
+        return switch (destination.mode()) {
+            case WORLD_DEFAULT -> resolveWorldDefaultDestination(player.getUniqueId(), world);
+            case WORLD_SPAWN -> world.getSpawnLocation();
+            case EXACT -> new Location(
+                world,
+                destination.x(),
+                destination.y(),
+                destination.z(),
+                destination.yaw(),
+                destination.pitch()
+            );
+        };
     }
 
     private void savePortal(@NotNull PortalDefinition definition) {
@@ -619,13 +728,17 @@ public class CustomPortals extends BaseFeature {
     }
 
     private static @NotNull String formatDestination(@NotNull PortalDestination destination) {
-        return destination.worldName()
-            + " @ "
-            + formatCoordinate(destination.x())
-            + ", "
-            + formatCoordinate(destination.y())
-            + ", "
-            + formatCoordinate(destination.z());
+        return switch (destination.mode()) {
+            case WORLD_DEFAULT -> destination.worldName() + " (world default)";
+            case WORLD_SPAWN -> destination.worldName() + " (spawn)";
+            case EXACT -> destination.worldName()
+                + " @ "
+                + formatCoordinate(destination.x())
+                + ", "
+                + formatCoordinate(destination.y())
+                + ", "
+                + formatCoordinate(destination.z());
+        };
     }
 
     private static @NotNull String formatCoordinate(double value) {

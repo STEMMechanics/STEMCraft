@@ -28,10 +28,11 @@
 
 - Custom nether portal routing via `/portal set <id> <world|here> ...`.
 - Custom portals bind to the connected lit `NETHER_PORTAL` block cluster, so non-rectangular portal shapes are supported.
-- Destinations can be a world's spawn or a specific location with yaw/pitch.
+- Destinations can use world-default routing, force a world's spawn with `spawn`, or target a specific location with yaw/pitch.
 - Standard utilities: `/back`, `/warp`, `/spawn`, `/tpworld`, `/tpworldspawn`, `/tpworldlast`.
 - `/tpworld` uses player last known location in that world, falls back to world spawn.
 - `/tpworldlast <base>` selects the most recently visited world in `{base, base_nether, base_the_end}`.
+- Successful player teleports are written to the server log with source and destination.
 - Persistence:
   - `player_last_locations` for `/back`
   - `player_world_last_locations` for world-specific recall
