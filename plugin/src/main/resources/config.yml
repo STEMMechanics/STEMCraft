@@ -55,6 +55,30 @@ first-join:
   verified-key: human_verified
   bypass-permission: stemcraft.firstjoin.bypass
 
+player-welcome:
+  enabled: true
+  first-time: []
+  returning: []
+  anniversaries: {}
+  # Example:
+  # first-time:
+  #   - "<gold>🌟 Welcome to STEMCRAFT, {player}! 🌟"
+  #   - ""
+  #   - "<light_purple>Choose your adventure:"
+  #   - "<light_purple>🟣 CREATIVE</light_purple> <gray>← Build anything"
+  #   - "<aqua>🎮 MINIGAMES</aqua> <gray>↑ Play with friends"
+  #   - "<green>🟢 SURVIVAL</green> <gray>→ Explore and survive"
+  #   - ""
+  #   - "<yellow>Need help?</yellow> Click the Server Helper or type <white>/help"
+  #   - "<gray>Be kind, have fun, and keep personal information private."
+  # returning:
+  #   - "<green>Welcome back, {player}."
+  # anniversaries:
+  #   "1":
+  #     - "<gold>🎂 {player} is celebrating their {ordinal_year} cake day on STEMCRAFT."
+  #   "2":
+  #     - "<gold>🎂 {player} is celebrating their {ordinal_year} cake day on STEMCRAFT."
+
 player_stats:
   autosave_ticks: 1200
 
