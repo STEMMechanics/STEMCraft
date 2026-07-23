@@ -26,15 +26,18 @@ import dev.stemcraft.api.command.Command;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.util.PlaceholderUtil;
 import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
+import dev.stemcraft.service.command.CommandImpl;
 import org.bukkit.Bukkit;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.command.CommandMap;
 import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.Nullable;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -56,6 +59,7 @@ public class CustomCommands extends BaseFeature {
     private static final Set<String> RESERVED_LABELS = Set.of(EDITOR_LABEL, "customcommand");
 
     private final Map<String, Command> registeredCommands = new LinkedHashMap<>();
+    private final Map<String, org.bukkit.command.Command> displacedCommands = new LinkedHashMap<>();
     private final Map<String, CustomCommandEntry> activeEntries = new LinkedHashMap<>();
     private Command editorCommand;
 
@@ -511,7 +515,7 @@ public class CustomCommands extends BaseFeature {
             return;
         }
 
-        registeredCommands.values().forEach(Command::unregister);
+        new ArrayList<>(registeredCommands.keySet()).forEach(this::unregisterRuntimeCommand);
         registeredCommands.clear();
         if (syncAfter) {
             syncCommands();
@@ -720,7 +724,7 @@ public class CustomCommands extends BaseFeature {
 
     private void registerRuntimeCommand(CustomCommandEntry entry) {
         String label = entry.label();
-        registeredCommands.put(label, api.commands().create(label)
+        Command command = api.commands().create(label)
                 .description("CUSTOM_COMMAND_DESCRIPTION")
                 .usage("/" + label)
                 .permission(entry.permission())
@@ -737,22 +741,15 @@ public class CustomCommands extends BaseFeature {
                         ctx.returnInfo("CUSTOM_COMMAND_NO_COMMANDS_SET");
                     }
 
-                    ConsoleCommandSender console = Bukkit.getConsoleSender();
                     for (String configuredCommand : activeEntry.runCommands()) {
-                        ParsedRunCommand parsedCommand = parseRunCommand(player, configuredCommand);
-                        if (parsedCommand.command().isBlank()) {
-                            continue;
-                        }
-
-                        boolean dispatched = parsedCommand.mode() == CommandDispatchMode.SERVER
-                                ? Bukkit.dispatchCommand(console, parsedCommand.command())
-                                : Bukkit.dispatchCommand(player, parsedCommand.command());
-                        if (!dispatched) {
+                        if (!dispatchConfiguredCommand(player, configuredCommand)) {
                             ctx.returnError("CUSTOM_COMMAND_RUN_FAILED", "command", configuredCommand);
                         }
                     }
                 })
-                .register(STEMCraft.getPlugin()));
+                .register(STEMCraft.getPlugin());
+        registeredCommands.put(label, command);
+        claimCommandLabel(label, command);
     }
 
     static ParsedRunCommand parseRunCommand(Player player, String configuredCommand) {
@@ -783,6 +780,7 @@ public class CustomCommands extends BaseFeature {
         if (command != null) {
             command.unregister();
         }
+        restoreCommandLabel(label);
     }
 
     private @Nullable CustomCommandEntry activeEntryForLabel(String label) {
@@ -794,12 +792,139 @@ public class CustomCommands extends BaseFeature {
         return null;
     }
 
+    private boolean dispatchConfiguredCommand(Player player, String rawCommand) {
+        if (rawCommand == null) {
+            return false;
+        }
+
+        ParsedRunCommand parsedCommand = parseRunCommand(player, applyCommandPlaceholders(player, rawCommand.trim()));
+        if (parsedCommand.command().isBlank()) {
+            return false;
+        }
+
+        if (parsedCommand.mode() == CommandDispatchMode.SERVER) {
+            ConsoleCommandSender console = Bukkit.getServer().getConsoleSender();
+            return Bukkit.dispatchCommand(console, parsedCommand.command());
+        }
+
+        return Bukkit.dispatchCommand(player, parsedCommand.command());
+    }
+
+    private String applyCommandPlaceholders(Player player, String command) {
+        String rendered = PlaceholderUtil.apply(
+            command,
+            "player", player.getName(),
+            "uuid", player.getUniqueId().toString()
+        );
+        String placeholderRendered = api.placeholders().apply(player, rendered);
+        return placeholderRendered == null ? "" : placeholderRendered.trim();
+    }
+
     private void syncCommands() {
         try {
             Method method = Bukkit.getServer().getClass().getMethod("syncCommands");
             method.invoke(Bukkit.getServer());
         } catch (ReflectiveOperationException ignored) {
             // Not available on all server implementations.
+        }
+    }
+
+    private void claimCommandLabel(String label, Command command) {
+        org.bukkit.command.Command bukkitCommand = resolveBukkitCommand(command);
+        if (bukkitCommand == null) {
+            return;
+        }
+
+        Map<String, org.bukkit.command.Command> knownCommands = getKnownCommands();
+        if (knownCommands == null) {
+            return;
+        }
+
+        applyCommandOverride(knownCommands, displacedCommands, label, bukkitCommand);
+    }
+
+    private void restoreCommandLabel(String label) {
+        Map<String, org.bukkit.command.Command> knownCommands = getKnownCommands();
+        if (knownCommands == null) {
+            return;
+        }
+
+        restoreCommandOverride(knownCommands, displacedCommands, label);
+    }
+
+    private @Nullable org.bukkit.command.Command resolveBukkitCommand(Command command) {
+        if (command instanceof CommandImpl impl) {
+            return impl.getRegisteredBukkitCommand();
+        }
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private @Nullable Map<String, org.bukkit.command.Command> getKnownCommands() {
+        CommandMap commandMap = getCommandMap();
+        Class<?> type = commandMap.getClass();
+
+        while (type != null) {
+            try {
+                Field field = type.getDeclaredField("knownCommands");
+                field.setAccessible(true);
+                Object value = field.get(commandMap);
+                if (value instanceof Map<?, ?> knownCommands) {
+                    return (Map<String, org.bukkit.command.Command>) knownCommands;
+                }
+                return null;
+            } catch (NoSuchFieldException ignored) {
+                type = type.getSuperclass();
+            } catch (IllegalAccessException ignored) {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    private CommandMap getCommandMap() {
+        try {
+            return Bukkit.getCommandMap();
+        } catch (NoSuchMethodError ignored) {
+        }
+
+        try {
+            Field field = Bukkit.getServer().getClass().getDeclaredField("commandMap");
+            field.setAccessible(true);
+            return (CommandMap) field.get(Bukkit.getServer());
+        } catch (ReflectiveOperationException ex) {
+            throw new IllegalStateException("Cannot get CommandMap", ex);
+        }
+    }
+
+    static void applyCommandOverride(
+            Map<String, org.bukkit.command.Command> knownCommands,
+            Map<String, org.bukkit.command.Command> displacedCommands,
+            String label,
+            org.bukkit.command.Command overrideCommand
+    ) {
+        String key = normalizeLabel(label);
+        org.bukkit.command.Command current = knownCommands.get(key);
+        if (current == overrideCommand) {
+            return;
+        }
+
+        if (current != null) {
+            displacedCommands.putIfAbsent(key, current);
+        }
+        knownCommands.put(key, overrideCommand);
+    }
+
+    static void restoreCommandOverride(
+            Map<String, org.bukkit.command.Command> knownCommands,
+            Map<String, org.bukkit.command.Command> displacedCommands,
+            String label
+    ) {
+        String key = normalizeLabel(label);
+        org.bukkit.command.Command displaced = displacedCommands.remove(key);
+        if (displaced != null) {
+            knownCommands.put(key, displaced);
         }
     }
 

@@ -1,6 +1,7 @@
 package dev.stemcraft.feature;
 
 import dev.stemcraft.config.ConfigFileImpl;
+import org.bukkit.command.Command;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockbukkit.mockbukkit.MockBukkit;
@@ -8,12 +9,16 @@ import org.mockbukkit.mockbukkit.ServerMock;
 import org.mockbukkit.mockbukkit.entity.PlayerMock;
 
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.UUID;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 class CustomCommandsTest {
     @TempDir
@@ -162,5 +167,36 @@ class CustomCommandsTest {
         } finally {
             MockBukkit.unmock();
         }
+    }
+
+    @Test
+    void applyCommandOverrideReplacesRootLabelAndStoresPreviousCommand() {
+        Map<String, Command> knownCommands = new LinkedHashMap<>();
+        Map<String, Command> displacedCommands = new LinkedHashMap<>();
+        Command vanilla = mock(Command.class);
+        Command custom = mock(Command.class);
+
+        knownCommands.put("help", vanilla);
+
+        CustomCommands.applyCommandOverride(knownCommands, displacedCommands, "Help", custom);
+
+        assertSame(custom, knownCommands.get("help"));
+        assertSame(vanilla, displacedCommands.get("help"));
+    }
+
+    @Test
+    void restoreCommandOverridePutsBackDisplacedCommand() {
+        Map<String, Command> knownCommands = new LinkedHashMap<>();
+        Map<String, Command> displacedCommands = new LinkedHashMap<>();
+        Command vanilla = mock(Command.class);
+        Command custom = mock(Command.class);
+
+        knownCommands.put("help", custom);
+        displacedCommands.put("help", vanilla);
+
+        CustomCommands.restoreCommandOverride(knownCommands, displacedCommands, "help");
+
+        assertSame(vanilla, knownCommands.get("help"));
+        assertFalse(displacedCommands.containsKey("help"));
     }
 }
