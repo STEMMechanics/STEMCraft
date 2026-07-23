@@ -60,8 +60,16 @@
 - Persistent stat state in DB.
 - Time-in-world bucketed stats via config:
   - `player_stats.time_in.<bucket>.worlds`
-  - Recorded keys: `time_in_<bucket>`
+- Recorded keys: `time_in_<bucket>`
 - Startup sync sends `server.player-stats.sync` snapshots (configurable periods).
+
+## Player Welcome
+
+- Configurable multi-line welcome messages for first-time and returning players.
+- Messages are sent directly to the player without message prefixes.
+- Supports MiniMessage formatting plus placeholder expansion such as `{player}`, `{world}`, `{years}`, `{ordinal_year}`, and `{first_join_date}`.
+- Anniversary "cake day" broadcasts are driven by persisted first-join state in DB (`player_welcome_state`).
+- Blank or missing message lists are ignored.
 
 ## Web Status Endpoint
 
