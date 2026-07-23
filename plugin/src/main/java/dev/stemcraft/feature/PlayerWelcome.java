@@ -63,6 +63,24 @@ public class PlayerWelcome extends BaseFeature {
     private List<String> returningMessage = List.of();
     private Map<Integer, List<String>> anniversaryMessages = Map.of();
 
+    public enum MessageKind {
+        FIRST_TIME("first-time", "first-time"),
+        RETURNING("returning", "returning"),
+        ANNIVERSARY("anniversary", "anniversaries");
+
+        private final String displayName;
+        private final String configRoot;
+
+        MessageKind(String displayName, String configRoot) {
+            this.displayName = displayName;
+            this.configRoot = configRoot;
+        }
+
+        public String displayName() {
+            return displayName;
+        }
+    }
+
     public PlayerWelcome(STEMCraftAPI api) {
         super(api);
     }
@@ -278,6 +296,97 @@ public class PlayerWelcome extends BaseFeature {
             });
 
         return Map.copyOf(configured);
+    }
+
+    public @NotNull List<String> getConfiguredLines(@NotNull MessageKind kind, @Nullable Integer anniversaryYear) {
+        List<String> list = getConfigSection().getStringList(messagePath(kind, anniversaryYear));
+        if (list.isEmpty()) {
+            return List.of();
+        }
+        return List.copyOf(list);
+    }
+
+    public void clearConfiguredLines(@NotNull MessageKind kind, @Nullable Integer anniversaryYear) {
+        getConfigSection().remove(messagePath(kind, anniversaryYear));
+        saveAndReloadConfigState();
+    }
+
+    public void addConfiguredLine(@NotNull MessageKind kind, @Nullable Integer anniversaryYear, @NotNull String line) {
+        List<String> lines = new ArrayList<>(getConfiguredLines(kind, anniversaryYear));
+        lines.add(line);
+        saveConfiguredLines(kind, anniversaryYear, lines);
+    }
+
+    public void insertConfiguredLine(@NotNull MessageKind kind, @Nullable Integer anniversaryYear, int oneBasedLineNumber, @NotNull String line) {
+        List<String> lines = new ArrayList<>(getConfiguredLines(kind, anniversaryYear));
+        lines.add(normalizeInsertIndex(oneBasedLineNumber, lines.size()), line);
+        saveConfiguredLines(kind, anniversaryYear, lines);
+    }
+
+    public void setConfiguredLine(@NotNull MessageKind kind, @Nullable Integer anniversaryYear, int oneBasedLineNumber, @NotNull String line) {
+        List<String> lines = new ArrayList<>(getConfiguredLines(kind, anniversaryYear));
+        lines.set(normalizeExistingLineIndex(oneBasedLineNumber, lines.size()), line);
+        saveConfiguredLines(kind, anniversaryYear, lines);
+    }
+
+    public @NotNull String removeConfiguredLine(@NotNull MessageKind kind, @Nullable Integer anniversaryYear, int oneBasedLineNumber) {
+        List<String> lines = new ArrayList<>(getConfiguredLines(kind, anniversaryYear));
+        String removed = lines.remove(normalizeExistingLineIndex(oneBasedLineNumber, lines.size()));
+        saveConfiguredLines(kind, anniversaryYear, lines);
+        return removed;
+    }
+
+    public @NotNull List<Component> previewComponents(@NotNull Player player, @NotNull MessageKind kind, @Nullable Integer anniversaryYear) {
+        List<String> lines = getConfiguredLines(kind, anniversaryYear);
+        if (!hasUsableMessage(lines)) {
+            return List.of();
+        }
+
+        int years = kind == MessageKind.ANNIVERSARY ? anniversaryYear == null ? 0 : anniversaryYear : 0;
+        List<Component> rendered = new ArrayList<>(lines.size());
+        for (String line : renderLines(player, lines, player.getFirstPlayed(), years)) {
+            rendered.add(mm.deserialize(line));
+        }
+        return List.copyOf(rendered);
+    }
+
+    static @NotNull String messagePath(@NotNull MessageKind kind, @Nullable Integer anniversaryYear) {
+        if (kind == MessageKind.ANNIVERSARY) {
+            if (anniversaryYear == null || anniversaryYear < 1) {
+                throw new IllegalArgumentException("Anniversary welcome messages require a positive year.");
+            }
+            return kind.configRoot + "." + anniversaryYear;
+        }
+
+        return kind.configRoot;
+    }
+
+    static int normalizeInsertIndex(int oneBasedLineNumber, int currentSize) {
+        if (oneBasedLineNumber < 1 || oneBasedLineNumber > currentSize + 1) {
+            throw new IllegalArgumentException("Line number must be between 1 and " + (currentSize + 1) + ".");
+        }
+        return oneBasedLineNumber - 1;
+    }
+
+    static int normalizeExistingLineIndex(int oneBasedLineNumber, int currentSize) {
+        if (oneBasedLineNumber < 1 || oneBasedLineNumber > currentSize) {
+            throw new IllegalArgumentException("Line number must be between 1 and " + currentSize + ".");
+        }
+        return oneBasedLineNumber - 1;
+    }
+
+    static @NotNull String displayLine(@Nullable String line) {
+        return line == null || line.isEmpty() ? "<blank>" : line;
+    }
+
+    private void saveConfiguredLines(@NotNull MessageKind kind, @Nullable Integer anniversaryYear, @NotNull List<String> lines) {
+        getConfigSection().set(messagePath(kind, anniversaryYear), new ArrayList<>(lines));
+        saveAndReloadConfigState();
+    }
+
+    private void saveAndReloadConfigState() {
+        getConfigSection().save();
+        onReload();
     }
 
     static boolean hasUsableMessage(@Nullable List<String> lines) {

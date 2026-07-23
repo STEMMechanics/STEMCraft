@@ -8,6 +8,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -56,5 +57,24 @@ class PlayerWelcomeTest {
         assertEquals("12th", PlayerWelcome.ordinal(12));
         assertEquals("13th", PlayerWelcome.ordinal(13));
         assertEquals("21st", PlayerWelcome.ordinal(21));
+    }
+
+    @Test
+    void messagePathRequiresYearForAnniversaryMessages() {
+        assertEquals("first-time", PlayerWelcome.messagePath(PlayerWelcome.MessageKind.FIRST_TIME, null));
+        assertEquals("returning", PlayerWelcome.messagePath(PlayerWelcome.MessageKind.RETURNING, null));
+        assertEquals("anniversaries.2", PlayerWelcome.messagePath(PlayerWelcome.MessageKind.ANNIVERSARY, 2));
+        assertThrows(IllegalArgumentException.class, () -> PlayerWelcome.messagePath(PlayerWelcome.MessageKind.ANNIVERSARY, null));
+    }
+
+    @Test
+    void lineHelpersSupportBlankDisplayAndBoundsChecks() {
+        assertEquals("<blank>", PlayerWelcome.displayLine(""));
+        assertEquals("hello", PlayerWelcome.displayLine("hello"));
+        assertEquals(0, PlayerWelcome.normalizeInsertIndex(1, 0));
+        assertEquals(2, PlayerWelcome.normalizeInsertIndex(3, 2));
+        assertEquals(1, PlayerWelcome.normalizeExistingLineIndex(2, 3));
+        assertThrows(IllegalArgumentException.class, () -> PlayerWelcome.normalizeInsertIndex(0, 1));
+        assertThrows(IllegalArgumentException.class, () -> PlayerWelcome.normalizeExistingLineIndex(4, 3));
     }
 }

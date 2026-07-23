@@ -5,7 +5,8 @@ This is the active command surface registered by STEMCraft.
 ## Core / Admin
 
 - `/maintenance <on|off>`
-- `/stemcraft <status|version|reload|firstjoin>`
+- `/stemcraft <status|version|reload|firstjoin|welcome>`
+- `/stemcraft welcome <show|preview|clear|addline|insertline|setline|removeline|addblank|insertblank> <first|returning|anniversary [year]> ...`
 - `/customcommands <list|info|create|delete|setlabel|setpermission|addcommand|setcommand|removecommand>`
 - Custom command aliases run as the player by default; prefix a run entry with `server:` or `player:` to force the sender
 - Custom command aliases support `{player}` and `{uuid}` placeholders in run entries
