@@ -33,6 +33,10 @@ custom-commands:
     run:
       - tpworld survival
 
+custom-portals:
+  enabled: true
+  portals: {}
+
 interactive-menus:
   enabled: true
 
