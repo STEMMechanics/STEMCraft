@@ -1,5 +1,7 @@
 package dev.stemcraft.feature;
 
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.junit.jupiter.api.Test;
 
 import java.time.ZoneId;
@@ -76,5 +78,17 @@ class PlayerWelcomeTest {
         assertEquals(1, PlayerWelcome.normalizeExistingLineIndex(2, 3));
         assertThrows(IllegalArgumentException.class, () -> PlayerWelcome.normalizeInsertIndex(0, 1));
         assertThrows(IllegalArgumentException.class, () -> PlayerWelcome.normalizeExistingLineIndex(4, 3));
+    }
+
+    @Test
+    void renderComponentLineSupportsLegacyAndMiniMessageFormatting() {
+        assertEquals(
+            "§eWelcome",
+            LegacyComponentSerializer.legacySection().serialize(PlayerWelcome.renderComponentLine("&eWelcome"))
+        );
+        assertEquals(
+            "Welcome",
+            PlainTextComponentSerializer.plainText().serialize(PlayerWelcome.renderComponentLine("<yellow>Welcome"))
+        );
     }
 }

@@ -198,11 +198,19 @@ public final class PlayerWelcomeCommand {
     }
 
     private String requireRemainingText(CommandContext ctx, int startIndex, String error) {
-        String value = ctx.getArgsAsString(startIndex, "").trim();
+        String value = remainingRawText(ctx.rawArgs(), startIndex).trim();
         if (value.isEmpty()) {
             ctx.returnError(error);
         }
         return value;
+    }
+
+    static String remainingRawText(List<String> rawArgs, int startIndex) {
+        if (rawArgs == null || startIndex < 0 || startIndex >= rawArgs.size()) {
+            return "";
+        }
+
+        return String.join(" ", rawArgs.subList(startIndex, rawArgs.size()));
     }
 
     private TargetSpec parseTarget(CommandContext ctx, int startIndex) {
