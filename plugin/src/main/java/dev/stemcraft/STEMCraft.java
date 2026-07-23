@@ -675,6 +675,15 @@ public final class STEMCraft extends JavaPlugin {
         return loadedFeatures.stream().map(BaseFeature::id).sorted().toList();
     }
 
+    public <T extends BaseFeature> @Nullable T feature(@NotNull Class<T> type) {
+        for (BaseFeature feature : loadedFeatures) {
+            if (type.isInstance(feature)) {
+                return type.cast(feature);
+            }
+        }
+        return null;
+    }
+
     public List<String> loadedCommandIds() {
         return Collections.unmodifiableList(loadedCommandIds);
     }
