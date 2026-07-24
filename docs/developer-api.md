@@ -85,6 +85,95 @@ final class ExampleDatabase {
 }
 ```
 
+## Minigame Framework Example
+
+The minigame framework is available through `api.minigames()`. A minigame can
+register a framework-managed team-selection policy and then leave lobby team
+selection, provisional assignment, countdown gating, and HUD placeholders to
+the shared runtime.
+
+Common API types:
+
+- `MiniGameService`
+- `MiniGame`
+- `MiniGameArena`
+- `MiniGameArenaHandler`
+- `MiniGameTeam`
+- `MiniGameTeamSelectionInput`
+- `MiniGameTeamSelectionPolicy`
+
+Example:
+
+```java
+import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.api.minigame.MiniGame;
+import dev.stemcraft.api.minigame.MiniGameArena;
+import dev.stemcraft.api.minigame.MiniGameArenaHandler;
+import dev.stemcraft.api.minigame.MiniGameTeam;
+import dev.stemcraft.api.minigame.MiniGameTeamSelectionInput;
+import dev.stemcraft.api.minigame.MiniGameTeamSelectionPolicy;
+import org.bukkit.entity.Player;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+final class ExampleMiniGameBootstrap {
+    void register(STEMCraftAPI api, MiniGameArenaHandler handler) {
+        MiniGame game = api.minigames()
+            .create("examplegame", handler)
+            .setTeamSelectionPolicy(new MiniGameTeamSelectionPolicy() {
+                @Override
+                public List<MiniGameTeam> assignableTeams(MiniGameArena arena, Map<Player, String> preferences) {
+                    return new ArrayList<>(arena.getTeams());
+                }
+
+                @Override
+                public int teamCapacity(MiniGameArena arena, MiniGameTeam team) {
+                    return 2;
+                }
+
+                @Override
+                public int requiredActiveTeams(MiniGameArena arena) {
+                    return 2;
+                }
+
+                @Override
+                public Set<MiniGameTeamSelectionInput> supportedInputs(MiniGameArena arena) {
+                    return Set.of(MiniGameTeamSelectionInput.FLOOR, MiniGameTeamSelectionInput.HOTBAR);
+                }
+            });
+
+        game.registerHud(
+            MiniGameArena.ArenaStatus.WAITING,
+            List.of("Example: {arena:name}"),
+            List.of(
+                "<gold>Example: <white>{arena:name}",
+                "Selected: {player:selected-team}",
+                "Auto: {arena:auto-selected-count}",
+                "{arena:lobby-team-line-1}",
+                "{arena:lobby-team-line-2}"
+            )
+        );
+    }
+}
+```
+
+Arena-side setup used by the framework:
+
+- `arena.setLobbySpawn(...)`
+- `arena.setLobbyRegion(...)`
+- `arena.setTeamSelectionInput(MiniGameTeamSelectionInput.FLOOR)` or `HOTBAR`
+
+Framework-owned behavior:
+
+- floor and hotbar team selection
+- strict floor validation against `lobbyRegion`
+- provisional lobby assignment and team balancing
+- countdown stop/reset when the minimum active-team requirement is no longer met
+- shared lobby placeholders such as `{player:selected-team}` and `{arena:lobby-team-line-1}`
+
 ## Resource Pack Generator Extension Point
 
 `ResourcePackGenerator` is now an interface-based extension point.

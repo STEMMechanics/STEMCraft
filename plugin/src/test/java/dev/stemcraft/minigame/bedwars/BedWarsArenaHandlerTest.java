@@ -2,6 +2,7 @@ package dev.stemcraft.minigame.bedwars;
 
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.minigame.MiniGameArena;
+import dev.stemcraft.api.minigame.MiniGamePlayer;
 import dev.stemcraft.api.minigame.MiniGameTeam;
 import dev.stemcraft.api.service.event.EventService;
 import org.bukkit.Location;
@@ -21,8 +22,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.same;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -64,36 +65,27 @@ class BedWarsArenaHandlerTest {
     }
 
     @Test
-    void onPlayerJoinArenaUsesConfiguredStartCountdownWhenArenaReady() {
+    void onPlayerJoinArenaClearsInventoryAndReturnsLobbySpawn() {
         STEMCraftAPI api = mock(STEMCraftAPI.class);
         EventService events = mock(EventService.class);
         BedWarsMiniGame game = mock(BedWarsMiniGame.class);
         MiniGameArena arena = mock(MiniGameArena.class);
-        MiniGameTeam red = mock(MiniGameTeam.class);
-        MiniGameTeam blue = mock(MiniGameTeam.class);
         Player player = mock(Player.class);
         PlayerInventory inventory = mock(PlayerInventory.class);
+        Location lobby = new Location(null, 0.0d, 0.0d, 0.0d);
 
         when(api.events()).thenReturn(events);
         when(events.register(any(), any())).thenReturn(mock(Listener.class));
-        when(red.getName()).thenReturn("red");
-        when(blue.getName()).thenReturn("blue");
-        when(arena.getTeams()).thenReturn(List.of(red, blue));
-        when(arena.get("teamSize", Integer.class, 1)).thenReturn(2);
-        when(arena.getTeamPlayers("red")).thenReturn(List.of(mock(Player.class)));
-        when(arena.getTeamPlayers("blue")).thenReturn(List.of(mock(Player.class)));
-        when(arena.getStatus()).thenReturn(MiniGameArena.ArenaStatus.WAITING);
-        when(arena.numPlayers()).thenReturn(2);
-        when(arena.getMinPlayers()).thenReturn(2);
-        when(arena.getLobbySpawn()).thenReturn(new Location(null, 0.0d, 0.0d, 0.0d));
-        when(game.startCountdownSeconds(arena)).thenReturn(42);
+        when(arena.getLobbySpawn()).thenReturn(lobby);
         when(player.getInventory()).thenReturn(inventory);
 
         BedWarsArenaHandler handler = new BedWarsArenaHandler(api, game);
-        handler.onPlayerJoinArena(arena, player);
+        Location joinSpawn = handler.onPlayerJoinArena(arena, player);
 
-        verify(arena).setStatus(MiniGameArena.ArenaStatus.STARTING, 42);
-        verify(arena, times(1)).setPlayerTeam(eq(player), eq("red"));
+        assertEquals(lobby, joinSpawn);
+        verify(inventory).clear();
+        verify(player).updateInventory();
+        verify(arena, never()).setStatus(any(), any(Integer.class));
     }
 
     @Test
@@ -153,6 +145,13 @@ class BedWarsArenaHandlerTest {
         verify(unusedTeam, never()).set(eq("bedAlive"), eq(false));
         verify(game, never()).incrementStat(eq("beds_broken"), eq(arena), any());
         verify(arena, never()).broadcast(any());
+    }
+
+    @Test
+    private MiniGameTeam team(String name) {
+        MiniGameTeam team = mock(MiniGameTeam.class);
+        when(team.getName()).thenReturn(name);
+        return team;
     }
 
 }

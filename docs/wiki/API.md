@@ -89,10 +89,48 @@ The minigame API includes:
 - `MiniGameArenaHandler`
 - `MiniGamePlayer`
 - `MiniGameTeam`
+- `MiniGameTeamSelectionInput`
+- `MiniGameTeamSelectionPolicy`
 - `MiniGamePlaceholderProvider`
 - `MiniGameHudProvider`
 
 Use these when extending or integrating with the arena framework.
+
+Framework-managed team selection is now part of the public minigame API:
+
+- `MiniGame#setTeamSelectionPolicy(...)` declares the team-selection rules for a minigame.
+- `MiniGameArena#setLobbyRegion(...)` stores the lobby area used by framework-owned lobby features.
+- `MiniGameArena#setTeamSelectionInput(...)` enables `floor` or `hotbar` selection for one arena.
+
+At runtime the framework owns:
+
+- floor and hotbar selection input handling
+- provisional assignment for lobby/start phases
+- countdown reset when the current lobby state no longer satisfies minimum-team rules
+- shared placeholders such as `{player:selected-team}` and `{arena:lobby-team-line-1}`
+
+Example:
+
+```java
+MiniGame game = api.minigames()
+    .create("examplegame", handler)
+    .setTeamSelectionPolicy(new MiniGameTeamSelectionPolicy() {
+        @Override
+        public List<MiniGameTeam> assignableTeams(MiniGameArena arena, Map<Player, String> preferences) {
+            return new ArrayList<>(arena.getTeams());
+        }
+
+        @Override
+        public int teamCapacity(MiniGameArena arena, MiniGameTeam team) {
+            return 2;
+        }
+    });
+
+MiniGameArena arena = game.createArena("example", world)
+    .setLobbySpawn(world.getSpawnLocation())
+    .setLobbyRegion(selectionRegion)
+    .setTeamSelectionInput(MiniGameTeamSelectionInput.FLOOR);
+```
 
 ### Resource Packs
 

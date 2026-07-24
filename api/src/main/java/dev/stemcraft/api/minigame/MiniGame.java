@@ -2,6 +2,7 @@ package dev.stemcraft.api.minigame;
 
 import org.bukkit.World;
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
@@ -99,6 +100,21 @@ public interface MiniGame {
      * @return The MiniGame instance for method chaining.
      */
     MiniGame registerPlayerPlaceholder(String key, MiniGamePlaceholderProvider provider);
+
+    /**
+     * Configure the framework-managed team selection policy for this minigame.
+     *
+     * @param policy The team selection policy, or {@code null} to disable framework-managed team selection.
+     * @return The MiniGame instance for method chaining.
+     */
+    MiniGame setTeamSelectionPolicy(@Nullable MiniGameTeamSelectionPolicy policy);
+
+    /**
+     * Get the framework-managed team selection policy for this minigame.
+     *
+     * @return The configured team selection policy, or {@code null} if none is configured.
+     */
+    @Nullable MiniGameTeamSelectionPolicy getTeamSelectionPolicy();
 
     /**
      * Gets the list of all arenas in this mini-game.
