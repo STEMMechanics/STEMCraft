@@ -6,6 +6,7 @@ import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.minigame.ArenaValidationResult;
 import dev.stemcraft.api.minigame.MiniGameArena;
 import dev.stemcraft.api.minigame.MiniGameTeam;
+import dev.stemcraft.api.minigame.MiniGameTeamSelectionInput;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.util.StringUtil;
 import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
@@ -20,6 +21,7 @@ import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -77,20 +79,31 @@ public class BedWarsCommand {
             .tabCompletion("addteam", "{bedwars-arenas}", "{bedwars-team-ids}")
             .tabCompletion("removeteam", "{bedwars-arenas}", "{bedwars-arena-teams:$1}")
             .tabCompletion("set", "{bedwars-arenas}", "lobby")
+            .tabCompletion("set", "{bedwars-arenas}", "lobbyspawn")
             .tabCompletion("set", "{bedwars-arenas}", "spectator")
             .tabCompletion("set", "{bedwars-arenas}", "arena")
+            .tabCompletion("set", "{bedwars-arenas}", "lobbyregion")
             .tabCompletion("set", "{bedwars-arenas}", "teamspawn", "{bedwars-arena-teams:$1}")
             .tabCompletion("set", "{bedwars-arenas}", "teambed", "{bedwars-arena-teams:$1}")
             .tabCompletion("set", "{bedwars-arenas}", "teamsize")
+            .tabCompletion("set", "{bedwars-arenas}", "teamselection")
+            .tabCompletion("set", "{bedwars-arenas}", "teamselection", "none")
+            .tabCompletion("set", "{bedwars-arenas}", "teamselection", "floor")
+            .tabCompletion("set", "{bedwars-arenas}", "teamselection", "hotbar")
+            .tabCompletion("set", "{bedwars-arenas}", "teamselection", "floor")
+            .tabCompletion("set", "{bedwars-arenas}", "teamselection", "hotbar")
             .tabCompletion("set", "{bedwars-arenas}", "minplayers")
             .tabCompletion("set", "{bedwars-arenas}", "maxplayers")
             .tabCompletion("set", "{bedwars-arenas}", "name")
             .tabCompletion("set", "{bedwars-arenas}", "teamname", "{bedwars-arena-teams:$1}")
             .tabCompletion("select", "{bedwars-arenas}", "arena")
+            .tabCompletion("select", "{bedwars-arenas}", "lobbyregion")
             .tabCompletion("select", "{bedwars-arenas}", "teambed", "{bedwars-arena-teams:$1}")
             .tabCompletion("sel", "{bedwars-arenas}", "arena")
+            .tabCompletion("sel", "{bedwars-arenas}", "lobbyregion")
             .tabCompletion("sel", "{bedwars-arenas}", "teambed", "{bedwars-arena-teams:$1}")
             .tabCompletion("show", "{bedwars-arenas}", "lobby")
+            .tabCompletion("show", "{bedwars-arenas}", "lobbyspawn")
             .tabCompletion("show", "{bedwars-arenas}", "spectator")
             .tabCompletion("show", "{bedwars-arenas}", "teamspawn", "{bedwars-arena-teams:$1}")
             .tabCompletion("dropitems", "{bedwars-arenas}")
@@ -181,6 +194,8 @@ public class BedWarsCommand {
         ctx.info(" - Start countdown: " + bedWars.startCountdownSeconds(arena) + " sec");
         ctx.info(" - Reset countdown: " + bedWars.endingSeconds(arena) + " sec");
         ctx.info(" - Team size: " + arena.get("teamSize", Integer.class, 1));
+        ctx.info(" - Team selection: " + formatTeamSelectionInput(arena));
+        ctx.info(" - Lobby region: " + formatRegion(arena.getLobbyRegion()));
         ctx.info(" - Drop items: " + bedWars.dropItems(arena).size() + " configured");
         ctx.info(" - Drop surfaces: " + bedWars.dropSurfaceMaterials(arena).size() + " configured");
         ctx.info(" - Lobby: " + formatLocation(arena.getLobbySpawn()));
@@ -338,10 +353,6 @@ public class BedWarsCommand {
         if (arena.numPlayers() < arena.getMinPlayers()) {
             ctx.returnError("Arena '" + arena.id() + "' needs at least " + arena.getMinPlayers() + " players to start.");
         }
-        if (occupiedTeams(arena) < 2) {
-            ctx.returnError("Arena '" + arena.id() + "' needs players on at least two teams to start.");
-        }
-
         arena.setStatus(MiniGameArena.ArenaStatus.STARTING, bedWars.startCountdownSeconds(arena));
         ctx.success("Arena '" + arena.id() + "' is starting.");
     }
@@ -355,7 +366,7 @@ public class BedWarsCommand {
     private void commandRestart(CommandContext ctx) {
         MiniGameArena arena = requireArena(ctx);
         arena.setStatus(MiniGameArena.ArenaStatus.RESETTING);
-        if (arena.numPlayers() >= arena.getMinPlayers() && occupiedTeams(arena) >= 2) {
+        if (arena.numPlayers() >= arena.getMinPlayers()) {
             arena.setStatus(MiniGameArena.ArenaStatus.STARTING, bedWars.startCountdownSeconds(arena));
             ctx.success("Arena '" + arena.id() + "' has been restarted.");
             return;
@@ -477,10 +488,10 @@ public class BedWarsCommand {
         String target = ctx.getArgLower(2);
 
         switch (target) {
-            case "lobby" -> {
+            case "lobby", "lobbyspawn", "lobby-spawn" -> {
                 Player player = requirePlayer(ctx);
                 arena.setLobbySpawn(player.getLocation());
-                showLocationPreview(player, "lobby", player.getLocation());
+                showLocationPreview(player, "lobbyspawn", player.getLocation());
                 ctx.success("Lobby spawn updated for arena '" + arena.id() + "'.");
             }
             case "spectator" -> {
@@ -497,6 +508,13 @@ public class BedWarsCommand {
                 arena.set("arenaRegion", regionCopy.copy());
                 showRegionPreview(player, "arena", selection);
                 ctx.success("Arena region updated for arena '" + arena.id() + "'.");
+            }
+            case "lobbyregion", "lobby-region" -> {
+                Player player = requirePlayer(ctx);
+                SCRegion selection = requireSelection(ctx, player);
+                arena.setLobbyRegion(selection.copy());
+                showRegionPreview(player, "lobbyregion", selection);
+                ctx.success("Lobby region updated for arena '" + arena.id() + "'.");
             }
             case "teamspawn" -> {
                 ctx.checkArgsSizeAtLeast(4);
@@ -526,6 +544,10 @@ public class BedWarsCommand {
                     arena.setMaxPlayers(arena.getTeams().size() * teamSize);
                 }
                 ctx.success("Team size set to " + teamSize + " for arena '" + arena.id() + "'.");
+            }
+            case "teamselection", "team-selection" -> {
+                arena.setTeamSelectionInput(parseTeamSelectionInput(ctx, 3));
+                ctx.success("Team selection input set to " + formatTeamSelectionInput(arena) + " for arena '" + arena.id() + "'.");
             }
             case "minplayers" -> {
                 ctx.checkArgsSizeAtLeast(4);
@@ -565,6 +587,7 @@ public class BedWarsCommand {
 
         switch (target) {
             case "arena" -> region = arena.get("arenaRegion", SCRegion.class);
+            case "lobbyregion", "lobby-region" -> region = arena.getLobbyRegion();
             case "teambed" -> {
                 ctx.checkArgsSizeAtLeast(4);
                 MiniGameTeam team = requireTeam(ctx, arena, 3);
@@ -598,7 +621,7 @@ public class BedWarsCommand {
         Location location;
 
         switch (target) {
-            case "lobby" -> location = arena.getLobbySpawn();
+            case "lobby", "lobbyspawn", "lobby-spawn" -> location = arena.getLobbySpawn();
             case "spectator" -> location = arena.getSpectatorSpawn();
             case "teamspawn" -> {
                 ctx.checkArgsSizeAtLeast(4);
@@ -725,8 +748,32 @@ public class BedWarsCommand {
         }
     }
 
-    private int occupiedTeams(MiniGameArena arena) {
-        return (int) arena.getTeams().stream().filter(team -> !arena.getTeamPlayers(team.getName()).isEmpty()).count();
+    private MiniGameTeamSelectionInput parseTeamSelectionInput(@NotNull CommandContext ctx, int index) {
+        if (ctx.numArgs() <= index) {
+            ctx.returnError("Specify a team selection input: none, floor, or hotbar.");
+        }
+        if (ctx.numArgs() > index + 1) {
+            ctx.returnError("Only one team selection input can be configured per arena.");
+        }
+
+        String token = ctx.getArgLower(index);
+        if ("none".equals(token)) {
+            return null;
+        }
+
+        MiniGameTeamSelectionInput input = MiniGameTeamSelectionInput.fromToken(token);
+        if (input == null) {
+            ctx.returnError("Unknown team selection input '" + token + "'. Supported inputs: none, floor, hotbar.");
+        }
+        return input;
+    }
+
+    private @NotNull String formatTeamSelectionInput(@NotNull MiniGameArena arena) {
+        MiniGameTeamSelectionInput input = arena.getTeamSelectionInput();
+        if (input == null) {
+            return "auto";
+        }
+        return input.configToken();
     }
 
     private void showRegionPreview(Player player, String key, SCRegion region) {

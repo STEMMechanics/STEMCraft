@@ -4,12 +4,14 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.minigame.MiniGameArena;
 import dev.stemcraft.api.minigame.MiniGameTeam;
+import dev.stemcraft.api.minigame.MiniGameTeamSelectionInput;
 import dev.stemcraft.api.minigame.util.TeamNames;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.util.LocationUtil;
 import dev.stemcraft.api.util.StringUtil;
 import dev.stemcraft.exception.MiniGameInvalidArenaConfigException;
 import dev.stemcraft.minigame.MiniGameConfigSupport;
+import dev.stemcraft.service.minigame.MiniGameTeamSelectionSupport;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -27,6 +29,7 @@ import java.util.Set;
 public class BedWarsConfig {
     static final int DEFAULT_START_COUNTDOWN_SECONDS = 30;
     static final int DEFAULT_ENDING_SECONDS = 20;
+    static final MiniGameTeamSelectionInput DEFAULT_TEAM_SELECTION_INPUT = null;
     private static final int MIN_TEAMS = 2;
     private static final int MAX_TEAMS = 8;
 
@@ -66,6 +69,20 @@ public class BedWarsConfig {
         int startCountdownSeconds = section.getInt("start-countdown-seconds", DEFAULT_START_COUNTDOWN_SECONDS);
         int endingSeconds = section.getInt("ending-seconds", DEFAULT_ENDING_SECONDS);
         int teamSize = section.getInt("team-size", 1);
+        MiniGameTeamSelectionInput teamSelectionInput = MiniGameTeamSelectionSupport.parseInput(section.getString(MiniGameTeamSelectionSupport.CONFIG_INPUT_PATH));
+        if (teamSelectionInput == null) {
+            List<String> legacyInputs = section.getStringList(MiniGameTeamSelectionSupport.CONFIG_INPUTS_PATH);
+            if (!legacyInputs.isEmpty()) {
+                teamSelectionInput = MiniGameTeamSelectionSupport.parseInput(legacyInputs.getFirst());
+            }
+        }
+        if (teamSelectionInput == null && section.getBoolean(MiniGameTeamSelectionSupport.LEGACY_CONFIG_FLOOR_ENABLED_PATH, false)) {
+            teamSelectionInput = MiniGameTeamSelectionInput.FLOOR;
+        }
+        SCRegion lobbyRegion = loadRegion(section, world, arenaId, MiniGameTeamSelectionSupport.CONFIG_LOBBY_REGION_PATH, "Lobby", false);
+        if (lobbyRegion == null) {
+            lobbyRegion = loadRegion(section, world, arenaId, "team-floor-selection.region", "Team floor selection lobby", false);
+        }
         String name = section.getString("name", StringUtil.beautify(arenaId));
         List<Material> dropItems = loadDropItems(section, arenaId);
         List<Material> dropSurfaceMaterials = loadDropSurfaceMaterials(section, arenaId);
@@ -108,6 +125,8 @@ public class BedWarsConfig {
             startCountdownSeconds,
             endingSeconds,
             teamSize,
+            teamSelectionInput,
+            lobbyRegion,
             dropItems,
             dropSurfaceMaterials,
             teamDefs
@@ -130,6 +149,10 @@ public class BedWarsConfig {
         arenaConfig.set("start-countdown-seconds", arena.get("startCountdownSeconds", Integer.class, DEFAULT_START_COUNTDOWN_SECONDS));
         arenaConfig.set("ending-seconds", arena.get("endingSeconds", Integer.class, DEFAULT_ENDING_SECONDS));
         arenaConfig.set("team-size", arena.get("teamSize", Integer.class, 1));
+        arenaConfig.set(MiniGameTeamSelectionSupport.CONFIG_INPUT_PATH, MiniGameTeamSelectionSupport.serializeInput(arena.getTeamSelectionInput()));
+        arenaConfig.remove(MiniGameTeamSelectionSupport.CONFIG_INPUTS_PATH);
+        arenaConfig.remove(MiniGameTeamSelectionSupport.LEGACY_CONFIG_FLOOR_ENABLED_PATH);
+        arenaConfig.set(MiniGameTeamSelectionSupport.CONFIG_LOBBY_REGION_PATH, serializeRegion(arena.getLobbyRegion(), arena.id(), "lobby region"));
         List<?> rawDropItems = arena.get("dropItems", List.class);
         arenaConfig.set("drop-items", serializeDropItems(rawDropItems, arena.id()));
         List<?> rawDropSurfaceMaterials = arena.get("dropSurfaceMaterials", List.class);
@@ -237,15 +260,26 @@ public class BedWarsConfig {
         }
     }
 
-    private @NotNull SCRegion loadRegion(@NotNull ConfigSection section, @NotNull World world, @NotNull String arenaId, @NotNull String key, @NotNull String title) {
+    private @Nullable SCRegion loadRegion(@NotNull ConfigSection section, @NotNull World world, @NotNull String arenaId, @NotNull String key, @NotNull String title, boolean required) {
         String regionString = section.getString(key);
         if (regionString.isEmpty()) {
-            throw new MiniGameInvalidArenaConfigException(title + " region for arena '" + arenaId + "' is not defined.");
+            if (required) {
+                throw new MiniGameInvalidArenaConfigException(title + " region for arena '" + arenaId + "' is not defined.");
+            }
+            return null;
         }
 
         SCRegion region = SCRegion.fromString(regionString, world);
         if (region == null) {
             throw new MiniGameInvalidArenaConfigException(title + " region for arena '" + arenaId + "' is invalid.");
+        }
+        return region;
+    }
+
+    private @NotNull SCRegion loadRegion(@NotNull ConfigSection section, @NotNull World world, @NotNull String arenaId, @NotNull String key, @NotNull String title) {
+        SCRegion region = loadRegion(section, world, arenaId, key, title, true);
+        if (region == null) {
+            throw new MiniGameInvalidArenaConfigException(title + " region for arena '" + arenaId + "' is not defined.");
         }
         return region;
     }

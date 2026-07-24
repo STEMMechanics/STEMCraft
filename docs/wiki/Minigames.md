@@ -35,6 +35,74 @@ The shared minigame framework handles:
 - HUD refresh loops
 - countdown/start handling
 - common safety and world protection hooks
+- framework-managed team selection for compatible minigames
+
+## Framework Team Selection
+
+Team minigames can now opt into framework-managed team selection through the
+public API instead of reimplementing selection logic per minigame.
+
+API contract:
+
+- `MiniGame#setTeamSelectionPolicy(...)`
+- `MiniGameArena#setLobbyRegion(...)`
+- `MiniGameArena#setTeamSelectionInput(...)`
+- `MiniGameTeamSelectionInput`
+- `MiniGameTeamSelectionPolicy`
+
+Supported arena inputs:
+
+- `FLOOR`
+- `HOTBAR`
+
+`null` means auto-assignment only.
+
+The framework handles:
+
+- floor and hotbar selection input handling
+- selector validation during arena enable/validation
+- provisional team assignment in `WAITING` / `STARTING`
+- countdown reset when the lobby no longer satisfies minimum active-team rules
+- shared placeholders for selection HUDs
+
+### Example
+
+```java
+MiniGame game = api.minigames()
+    .create("examplegame", handler)
+    .setTeamSelectionPolicy(new MiniGameTeamSelectionPolicy() {
+        @Override
+        public List<MiniGameTeam> assignableTeams(MiniGameArena arena, Map<Player, String> preferences) {
+            return new ArrayList<>(arena.getTeams());
+        }
+
+        @Override
+        public int teamCapacity(MiniGameArena arena, MiniGameTeam team) {
+            return 2;
+        }
+
+        @Override
+        public int requiredActiveTeams(MiniGameArena arena) {
+            return 2;
+        }
+    });
+
+MiniGameArena arena = game.createArena("example", world)
+    .setLobbySpawn(world.getSpawnLocation())
+    .setLobbyRegion(region)
+    .setTeamSelectionInput(MiniGameTeamSelectionInput.FLOOR);
+```
+
+Global floor selector materials are configured in `config.yml`:
+
+```yml
+minigames:
+  team-selection:
+    floor:
+      red:
+        - red_concrete
+        - red_wool
+```
 
 ## Command Surfaces
 

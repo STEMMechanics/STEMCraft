@@ -8,6 +8,7 @@ import org.bukkit.entity.Player;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.anyMap;
@@ -64,8 +65,8 @@ class BedWarsMiniGameTest {
         when(arena.getTeamPlayers("red")).thenReturn(List.of());
         when(arena.getStatus()).thenReturn(MiniGameArena.ArenaStatus.RUNNING);
 
-        assertEquals("&9blue: &abed &7(1) &7(You)", game.renderTeamLine(arena, viewer, 0));
-        assertEquals("&cred: eliminated", game.renderTeamLine(arena, viewer, 1));
+        assertEquals("&9Blue: &abed &7(1) &7(You)", game.renderTeamLine(arena, viewer, 0));
+        assertEquals("&cRed: eliminated", game.renderTeamLine(arena, viewer, 1));
     }
 
     @Test
@@ -93,5 +94,50 @@ class BedWarsMiniGameTest {
         when(team.get("displayName", String.class, "")).thenReturn("yellow");
 
         assertEquals("Yellow", game.teamDisplayName(team, "yellow"));
+    }
+
+    @Test
+    void assignmentTeamsKeepsExplicitSelectionsActiveWhenScalingDown() {
+        BedWarsMiniGame game = new BedWarsMiniGame(null);
+        MiniGameArena arena = mock(MiniGameArena.class);
+        MiniGameTeam red = mock(MiniGameTeam.class);
+        MiniGameTeam blue = mock(MiniGameTeam.class);
+        MiniGameTeam green = mock(MiniGameTeam.class);
+        MiniGameTeam yellow = mock(MiniGameTeam.class);
+        Player redPlayer = mock(Player.class);
+        Player bluePlayer = mock(Player.class);
+        Player autoPlayer = mock(Player.class);
+
+        when(red.getName()).thenReturn("red");
+        when(blue.getName()).thenReturn("blue");
+        when(green.getName()).thenReturn("green");
+        when(yellow.getName()).thenReturn("yellow");
+        when(arena.getTeams()).thenReturn(List.of(red, blue, green, yellow));
+        when(arena.numPlayers()).thenReturn(3);
+        when(arena.get("teamSize", Integer.class, 1)).thenReturn(2);
+
+        List<MiniGameTeam> assignmentTeams = game.assignmentTeams(arena, Map.of(
+            redPlayer, "red",
+            bluePlayer, "blue",
+            autoPlayer, "auto"
+        ));
+
+        assertEquals(List.of(red, blue), assignmentTeams);
+    }
+
+    @Test
+    void assignmentTeamsKeepsAtLeastTwoTeamsForSmallGames() {
+        BedWarsMiniGame game = new BedWarsMiniGame(null);
+        MiniGameArena arena = mock(MiniGameArena.class);
+        MiniGameTeam blue = mock(MiniGameTeam.class);
+        MiniGameTeam red = mock(MiniGameTeam.class);
+
+        when(red.getName()).thenReturn("red");
+        when(blue.getName()).thenReturn("blue");
+        when(arena.getTeams()).thenReturn(List.of(red, blue));
+        when(arena.numPlayers()).thenReturn(2);
+        when(arena.get("teamSize", Integer.class, 1)).thenReturn(2);
+
+        assertEquals(List.of(red, blue), game.assignmentTeams(arena, Map.of()));
     }
 }

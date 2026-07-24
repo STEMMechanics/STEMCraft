@@ -35,9 +35,14 @@ These placeholders are registered for every minigame.
 | `{arena:joined-players}`        | The current joined player count.       | Includes players currently in the arena.            |
 | `{arena:min-players}`           | The configured minimum player count.   |                                                     |
 | `{arena:max-players}`           | The configured maximum player count.   |                                                     |
+| `{arena:min-teams}`             | Minimum active teams required to start. | Only meaningful for minigames using framework team selection. |
+| `{arena:active-teams}`          | Current effective active team count.   | Uses provisional lobby assignment during waiting/starting. |
+| `{arena:max-teams}`             | Number of configured teams in the arena. |                                                     |
+| `{arena:auto-selected-count}`   | Players still on auto assignment.      | Framework team-selection placeholder.               |
 | `{player:score}`                | The current player's arena score.      | Meaning depends on the minigame.                    |
 | `{player:kills}`                | The current player's kill count.       |                                                     |
 | `{player:deaths}`               | The current player's death count.      |                                                     |
+| `{player:selected-team}`        | The player's current lobby team selection. | Returns `Auto` when no explicit team is selected. |
 | `{team:<team-id>:name}`         | The target team's internal name.       | Example: `{team:red:name}`.                         |
 | `{team:<team-id>:display-name}` | The target team's display name.        | Example: `{team:red:display-name}`.                 |
 
@@ -52,6 +57,23 @@ Bridge uses the shared placeholders above and adds:
 | `{team:blue:score}`    | Blue team's score display.         | Renders the team's display name plus a 7-heart score bar.                      |
 
 Bridge only supports the `red` and `blue` teams, so those are the expected team IDs for team placeholders.
+
+When Bridge team selection is enabled, the lobby also supports:
+
+- `{arena:lobby-team-line-1}`
+- `{arena:lobby-team-line-2}`
+
+`bridge.yml` placeholder config supports:
+
+```yml
+placeholders:
+  team-red: '<red>Red</red>'
+  team-blue: '<blue>Blue</blue>'
+  lobby-team-state: '<gray>({active}/{max})</gray>'
+  lobby-team-line: '{team} {state} {you}'
+```
+
+`{you}` expands to `(You)` for the viewer's current lobby team and is blank otherwise.
 
 ## Parkour
 
@@ -82,50 +104,71 @@ BedWars uses the shared placeholders above and adds:
 | `{arena:team-line-6}`  | Team summary line for the sixth team.        |                                                                        |
 | `{arena:team-line-7}`  | Team summary line for the seventh team.      |                                                                        |
 | `{arena:team-line-8}`  | Team summary line for the eighth team.       |                                                                        |
+| `{arena:lobby-team-line-1}` | Lobby team line for the first visible team slot. | Framework team-selection placeholder. |
+| `{arena:lobby-team-line-2}` | Lobby team line for the second visible team slot. |                                                                        |
+| `{arena:lobby-team-line-3}` | Lobby team line for the third visible team slot. |                                                                        |
+| `{arena:lobby-team-line-4}` | Lobby team line for the fourth visible team slot. |                                                                        |
+| `{arena:lobby-team-line-5}` | Lobby team line for the fifth visible team slot. |                                                                        |
+| `{arena:lobby-team-line-6}` | Lobby team line for the sixth visible team slot. |                                                                        |
+| `{arena:lobby-team-line-7}` | Lobby team line for the seventh visible team slot. |                                                                        |
+| `{arena:lobby-team-line-8}` | Lobby team line for the eighth visible team slot. |                                                                        |
 | `{player:final-kills}` | The current player's final kill count.       |                                                                        |
 
 `{arena:team-line-N}` renders a compact team status line. During a running game it can show a team as eliminated when the bed is gone and no players remain.
 
-BedWars `team-line` output is configurable from `bedwars.yml`. If the root keys are missing, STEMCraft now seeds these defaults automatically:
+BedWars `team-line` and lobby team-selection output are configurable from `bedwars.yml`. If the root keys are missing, STEMCraft now seeds these defaults automatically:
 
 ```yaml
 placeholders:
-  black: "&0black"
-  blue: "&9blue"
-  brown: "&6brown"
-  cyan: "&3cyan"
-  gray: "&8gray"
-  green: "&2green"
-  light_blue: "&blight blue"
-  light_gray: "&7light gray"
-  lime: "&alime"
-  magenta: "&dmagenta"
-  orange: "&6orange"
-  pink: "&dpink"
-  purple: "&5purple"
-  red: "&cred"
-  white: "&fwhite"
-  yellow: "&eyellow"
+  team-black: "&0Black"
+  team-blue: "&9Blue"
+  team-brown: "&6Brown"
+  team-cyan: "&3Cyan"
+  team-gray: "&8Gray"
+  team-green: "&2Green"
+  team-light_blue: "&bLight blue"
+  team-light_gray: "&7Light gray"
+  team-lime: "&aLime"
+  team-magenta: "&dMagenta"
+  team-orange: "&6Orange"
+  team-pink: "&dPink"
+  team-purple: "&5Purple"
+  team-red: "&cRed"
+  team-white: "&fWhite"
+  team-yellow: "&eYellow"
   bed: "&abed"
   no-bed: "&cno bed"
   remaining-players: "&7({count})"
   no-remaining-players: "eliminated"
   team-line: "{colour}: {state}"
+  lobby-team-state: "&7({active}/{max})"
+  lobby-team-line: "{team}: {state} {you}"
 ```
 
 `team-line` supports `{colour}` and `{state}`. `remaining-players` supports `{count}`. This also means you can replace team names or states with glyph tokens, for example:
 
 ```yaml
 placeholders:
-  blue: ":mc_blue_bed:"
-  red: ":mc_red_bed:"
-  yellow: ":mc_yellow_bed:"
+  team-blue: ":mc_blue_bed:"
+  team-red: ":mc_red_bed:"
+  team-yellow: ":mc_yellow_bed:"
   bed: ":green_tick:"
   no-bed: ":red_cross:"
   remaining-players: ":steve: {count}"
   no-remaining-players: ":skull:"
   team-line: "{colour} {state}"
+  lobby-team-state: "({active}/{max})"
+  lobby-team-line: "{team} {state} {you}"
 ```
+
+For framework team selection, the lobby line placeholders also support:
+
+- `{team}` / `{colour}` / `{color}`
+- `{state}`
+- `{active}`
+- `{count}`
+- `{max}`
+- `{you}`
 
 ## Boat Race
 

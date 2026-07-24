@@ -355,19 +355,13 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
 
     @Override
     public Location onPlayerJoinArena(MiniGameArena arena, Player player) {
-        if (arena.getStatus() == MiniGameArena.ArenaStatus.WAITING && arena.numPlayers() >= arena.getMinPlayers()) {
-            arena.setStatus(MiniGameArena.ArenaStatus.STARTING, bridge.startCountdownSeconds(arena));
-        }
         clearPlayerInventory(player);
         return arena.getLobbySpawn();
     }
 
     @Override
     public void onPlayerLeaveArena(MiniGameArena arena, Player player) {
-        if (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING && arena.numPlayers() < arena.getMinPlayers()) {
-            arena.setStatus(MiniGameArena.ArenaStatus.WAITING);
-            arena.setCountdown(0);
-        } else if (arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING && arena.numPlayers() < arena.getMinPlayers()) {
+        if (arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING && arena.numPlayers() < arena.getMinPlayers()) {
             arena.setStatus(MiniGameArena.ArenaStatus.RESETTING);
         }
     }

@@ -55,7 +55,6 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
 
     private final STEMCraftAPI api;
     private final BedWarsMiniGame bedWars;
-
     public BedWarsArenaHandler(STEMCraftAPI api, BedWarsMiniGame bedWars) {
         this.api = api;
         this.bedWars = bedWars;
@@ -269,31 +268,13 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
 
     @Override
     public Location onPlayerJoinArena(MiniGameArena arena, Player player) {
-        String teamId = selectAvailableTeam(arena);
-        if (teamId == null) {
-            teamId = arena.getRandomTeam();
-        }
-        if (teamId != null && !teamId.isBlank()) {
-            arena.setPlayerTeam(player, teamId);
-        }
-
-        if (arena.getStatus() == MiniGameArena.ArenaStatus.WAITING
-            && arena.numPlayers() >= arena.getMinPlayers()
-            && activeTeamCount(arena) >= 2) {
-            arena.setStatus(MiniGameArena.ArenaStatus.STARTING, bedWars.startCountdownSeconds(arena));
-        }
-
         clearPlayerInventory(player);
         return arena.getLobbySpawn();
     }
 
     @Override
     public void onPlayerLeaveArena(MiniGameArena arena, Player player) {
-        if (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING
-            && (arena.numPlayers() < arena.getMinPlayers() || activeTeamCount(arena) < 2)) {
-            arena.setStatus(MiniGameArena.ArenaStatus.WAITING);
-            arena.setCountdown(0);
-        } else if (arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING) {
+        if (arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING) {
             checkForRoundEnd(arena);
         }
     }
@@ -505,25 +486,11 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
 
     private @Nullable String selectAvailableTeam(MiniGameArena arena) {
         int teamSize = teamSize(arena);
-        return assignmentTeams(arena).stream()
+        return bedWars.assignmentTeams(arena, Map.of()).stream()
             .filter(team -> arena.getTeamPlayers(team.getName()).size() < teamSize)
             .min(Comparator.comparingInt(team -> arena.getTeamPlayers(team.getName()).size()))
             .map(MiniGameTeam::getName)
             .orElse(null);
-    }
-
-    private @NotNull List<MiniGameTeam> assignmentTeams(@NotNull MiniGameArena arena) {
-        List<MiniGameTeam> teams = new ArrayList<>(arena.getTeams());
-        if (teams.size() <= 2) {
-            return teams;
-        }
-
-        int players = Math.max(1, arena.numPlayers());
-        int teamSize = teamSize(arena);
-        int desiredTeams = Math.max(2, players / 3);
-        int requiredTeams = Math.max(2, (players + teamSize - 1) / teamSize);
-        int activeTeams = Math.clamp(desiredTeams, requiredTeams, teams.size());
-        return teams.subList(0, activeTeams);
     }
 
     private int teamSize(MiniGameArena arena) {

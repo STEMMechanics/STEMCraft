@@ -31,7 +31,9 @@ import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -40,6 +42,9 @@ import java.util.Set;
  * Represents a mini-game arena with players, teams, and game states.
  */
 public interface MiniGameArena extends MessageService, HasMeta<MiniGameArena> {
+    String LOBBY_REGION_META_KEY = "lobbyRegion";
+    String TEAM_SELECTION_INPUT_META_KEY = "teamSelectionInput";
+    String TEAM_SELECTION_INPUTS_META_KEY = "teamSelectionInputs";
 
     enum ArenaStatus {
         DISABLED,   // Arena is disabled/unavailable
@@ -130,6 +135,54 @@ public interface MiniGameArena extends MessageService, HasMeta<MiniGameArena> {
      * @param location The new lobby spawn location.
      */
     MiniGameArena setLobbySpawn(Location location);
+
+    /**
+     * Get the optional lobby region used by framework-owned lobby features such as floor team selection.
+     *
+     * @return The lobby region, or {@code null} if none is configured.
+     */
+    default SCRegion getLobbyRegion() {
+        SCRegion region = get(LOBBY_REGION_META_KEY, SCRegion.class);
+        return region == null ? null : region.copy();
+    }
+
+    /**
+     * Set the optional lobby region used by framework-owned lobby features.
+     *
+     * @param region The lobby region, or {@code null} to clear it.
+     * @return The arena instance.
+     */
+    default MiniGameArena setLobbyRegion(SCRegion region) {
+        return set(LOBBY_REGION_META_KEY, region == null ? null : region.copy());
+    }
+
+    /**
+     * Get the explicit team-selection input enabled for this arena.
+     * A {@code null} value means players remain on auto-assignment unless they are assigned by framework defaults.
+     *
+     * @return The enabled team-selection input, or {@code null}.
+     */
+    default MiniGameTeamSelectionInput getTeamSelectionInput() {
+        MiniGameTeamSelectionInput input = get(TEAM_SELECTION_INPUT_META_KEY, MiniGameTeamSelectionInput.class);
+        if (input != null) {
+            return input;
+        }
+
+        List<MiniGameTeamSelectionInput> legacy = getList(TEAM_SELECTION_INPUTS_META_KEY, MiniGameTeamSelectionInput.class, List.of());
+        return legacy.isEmpty() ? null : legacy.getFirst();
+    }
+
+    /**
+     * Set the explicit team-selection input enabled for this arena.
+     *
+     * @param input The enabled input, or {@code null} for auto-only behavior.
+     * @return The arena instance.
+     */
+    default MiniGameArena setTeamSelectionInput(MiniGameTeamSelectionInput input) {
+        set(TEAM_SELECTION_INPUT_META_KEY, input);
+        set(TEAM_SELECTION_INPUTS_META_KEY, input == null ? List.of() : List.of(input));
+        return this;
+    }
 
     /**
      * Get the spectator spawn location.

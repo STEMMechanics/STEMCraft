@@ -14,6 +14,7 @@ public class MiniGameImpl implements MiniGame {
     private final MiniGameServiceImpl service;
     private final String namespace;
     private boolean disableHungerByDefault = true;
+    private MiniGameTeamSelectionPolicy teamSelectionPolicy;
 
     private final Map<MiniGameArena.ArenaStatus, MiniGameHUD> huds = new HashMap<>();
 
@@ -58,6 +59,7 @@ public class MiniGameImpl implements MiniGame {
         registerPlayerPlaceholder("score", (arena, team, player) -> player != null ? String.valueOf(player.getScore()) : "0");
         registerPlayerPlaceholder("kills", (arena, team, player) -> player != null ? String.valueOf(player.getKills()) : "0");
         registerPlayerPlaceholder("deaths", (arena, team, player) -> player != null ? String.valueOf(player.getDeaths()) : "0");
+        service.teamSelectionSupport().registerPlaceholders(this);
     }
 
     /**
@@ -139,6 +141,17 @@ public class MiniGameImpl implements MiniGame {
     public MiniGame registerPlayerPlaceholder(String key, MiniGamePlaceholderProvider provider) {
         playerPlaceholders.put(key, provider);
         return this;
+    }
+
+    @Override
+    public MiniGame setTeamSelectionPolicy(MiniGameTeamSelectionPolicy policy) {
+        this.teamSelectionPolicy = policy;
+        return this;
+    }
+
+    @Override
+    public MiniGameTeamSelectionPolicy getTeamSelectionPolicy() {
+        return teamSelectionPolicy;
     }
 
     /**

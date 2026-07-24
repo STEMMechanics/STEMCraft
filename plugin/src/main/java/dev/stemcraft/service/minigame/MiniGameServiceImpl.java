@@ -66,6 +66,7 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
     private final Map<String, Map<String, MiniGameArenaImpl>> arenasByNamespace = new HashMap<>();
     private final Map<UUID, ArenaOccupancy> players = new HashMap<>();
     private final Map<UUID, StoredPlayerState> prevPlayerStates = new HashMap<>();
+    private final MiniGameTeamSelectionSupport teamSelectionSupport;
 
     /**
      * Constructs a MiniGameServiceImpl instance.
@@ -75,6 +76,13 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
      */
     public MiniGameServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
+        this.teamSelectionSupport = new MiniGameTeamSelectionSupport(api, this);
+    }
+
+    @Override
+    public void onReload() {
+        super.onReload();
+        teamSelectionSupport.reloadConfig();
     }
 
     /**
@@ -91,6 +99,7 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
                     if (arena instanceof MiniGameArenaImpl arenaImpl) {
                         arenaImpl.pruneSupplyDrops();
                     }
+                    teamSelectionSupport.tickArena(arena);
                     if (arena.getCountdown() > 0) {
                         int remaining = arena.decrementCountdown();
                         handler.onArenaCountdownTick(arena, remaining);
@@ -390,6 +399,14 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
 
     STEMCraftAPI api() {
         return api;
+    }
+
+    MiniGameTeamSelectionSupport teamSelectionSupport() {
+        return teamSelectionSupport;
+    }
+
+    MiniGameImpl getMiniGameImpl(@NotNull String namespace) {
+        return minigames.get(namespace);
     }
 
     /**

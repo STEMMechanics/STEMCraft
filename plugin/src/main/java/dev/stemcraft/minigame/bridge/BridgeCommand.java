@@ -26,6 +26,7 @@ import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.minigame.ArenaValidationResult;
 import dev.stemcraft.api.minigame.MiniGameArena;
 import dev.stemcraft.api.minigame.MiniGameTeam;
+import dev.stemcraft.api.minigame.MiniGameTeamSelectionInput;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.util.StringUtil;
 import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
@@ -40,6 +41,7 @@ import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -86,9 +88,17 @@ public class BridgeCommand {
             .tabCompletion("enable", "{bridge-arenas}")
             .tabCompletion("disable", "{bridge-arenas}")
             .tabCompletion("set", "{bridge-arenas}", "lobby")
+            .tabCompletion("set", "{bridge-arenas}", "lobbyspawn")
+            .tabCompletion("set", "{bridge-arenas}", "lobbyregion")
             .tabCompletion("set", "{bridge-arenas}", "spectator")
             .tabCompletion("set", "{bridge-arenas}", "bridge")
             .tabCompletion("set", "{bridge-arenas}", "arena")
+            .tabCompletion("set", "{bridge-arenas}", "teamselection")
+            .tabCompletion("set", "{bridge-arenas}", "teamselection", "none")
+            .tabCompletion("set", "{bridge-arenas}", "teamselection", "floor")
+            .tabCompletion("set", "{bridge-arenas}", "teamselection", "hotbar")
+            .tabCompletion("set", "{bridge-arenas}", "teamselection", "floor")
+            .tabCompletion("set", "{bridge-arenas}", "teamselection", "hotbar")
             .tabCompletion("set", "{bridge-arenas}", "teamspawn", "{bridge-teams}")
             .tabCompletion("set", "{bridge-arenas}", "teamportal", "{bridge-teams}")
             .tabCompletion("set", "{bridge-arenas}", "minplayers")
@@ -97,16 +107,21 @@ public class BridgeCommand {
             .tabCompletion("select", "{bridge-arenas}", "arena")
             .tabCompletion("select", "{bridge-arenas}", "bridge")
             .tabCompletion("select", "{bridge-arenas}", "lobby")
+            .tabCompletion("select", "{bridge-arenas}", "lobbyspawn")
+            .tabCompletion("select", "{bridge-arenas}", "lobbyregion")
             .tabCompletion("select", "{bridge-arenas}", "spectator")
             .tabCompletion("select", "{bridge-arenas}", "teamspawn", "{bridge-teams}")
             .tabCompletion("select", "{bridge-arenas}", "teamportal", "{bridge-teams}")
             .tabCompletion("sel", "{bridge-arenas}", "arena")
             .tabCompletion("sel", "{bridge-arenas}", "bridge")
             .tabCompletion("sel", "{bridge-arenas}", "lobby")
+            .tabCompletion("sel", "{bridge-arenas}", "lobbyspawn")
+            .tabCompletion("sel", "{bridge-arenas}", "lobbyregion")
             .tabCompletion("sel", "{bridge-arenas}", "spectator")
             .tabCompletion("sel", "{bridge-arenas}", "teamspawn", "{bridge-teams}")
             .tabCompletion("sel", "{bridge-arenas}", "teamportal", "{bridge-teams}")
             .tabCompletion("show", "{bridge-arenas}", "lobby")
+            .tabCompletion("show", "{bridge-arenas}", "lobbyspawn")
             .tabCompletion("show", "{bridge-arenas}", "spectator")
             .tabCompletion("show", "{bridge-arenas}", "teamspawn", "{bridge-teams}")
             .tabCompletion("dropitems", "{bridge-arenas}")
@@ -227,7 +242,9 @@ public class BridgeCommand {
         ctx.info(" - Min players: " + arena.getMinPlayers());
         ctx.info(" - Start countdown: " + bridge.startCountdownSeconds(arena) + " sec");
         ctx.info(" - Reset countdown: " + bridge.endingSeconds(arena) + " sec");
+        ctx.info(" - Team selection: " + formatTeamSelectionInput(arena));
         ctx.info(" - Lobby: " + formatLocation(arena.getLobbySpawn()));
+        ctx.info(" - Lobby region: " + formatRegion(arena.getLobbyRegion()));
         ctx.info(" - Spectator: " + formatLocation(arena.getSpectatorSpawn()));
         ctx.info(" - Arena region: " + formatRegion(arena.get("arenaRegion", SCRegion.class)));
         ctx.info(" - Bridge region: " + formatRegion(arena.get("bridgeRegion", SCRegion.class)));
@@ -487,12 +504,21 @@ public class BridgeCommand {
         String target = ctx.getArgLower(2);
 
         switch (target) {
-            case "lobby" -> {
+            case "lobby", "lobbyspawn", "lobby-spawn" -> {
                 Player player = requirePlayer(ctx);
                 ensureArenaWorld(ctx, arena, player.getLocation(), "Lobby spawn");
                 arena.setLobbySpawn(player.getLocation());
-                showLocationPreview(player, "lobby", player.getLocation());
+                showLocationPreview(player, "lobbyspawn", player.getLocation());
                 ctx.success("Lobby spawn updated for arena '" + arena.id() + "'.");
+            }
+            case "lobbyregion", "lobby-region" -> {
+                Player player = requirePlayer(ctx);
+                SCRegion selection = requireSelection(ctx, player);
+                ensureArenaWorld(ctx, arena, selection, "Lobby region");
+                ensureRegionContained(ctx, selection, arena.get("arenaRegion", SCRegion.class), "Lobby region");
+                arena.setLobbyRegion(selection.copy());
+                showRegionPreview(player, "set-lobbyregion", selection);
+                ctx.success("Lobby region updated for arena '" + arena.id() + "'.");
             }
             case "spectator" -> {
                 Player player = requirePlayer(ctx);
@@ -542,6 +568,10 @@ public class BridgeCommand {
                 showRegionPreview(player, "teamportal-" + team.getName(), selection);
                 ctx.success("Portal region updated for team '" + team.getName() + "' in arena '" + arena.id() + "'.");
             }
+            case "teamselection", "team-selection" -> {
+                arena.setTeamSelectionInput(parseTeamSelectionInput(ctx, 3));
+                ctx.success("Team selection input set to " + formatTeamSelectionInput(arena) + " for arena '" + arena.id() + "'.");
+            }
             case "minplayers" -> {
                 ctx.checkArgsSizeAtLeast(4);
                 int minPlayers = ctx.getArgAsInt(3, 2, 2, null);
@@ -574,7 +604,8 @@ public class BridgeCommand {
         switch (target) {
             case "arena" -> region = arena.get("arenaRegion", SCRegion.class);
             case "bridge" -> region = arena.get("bridgeRegion", SCRegion.class);
-            case "lobby" -> location = arena.getLobbySpawn();
+            case "lobbyregion", "lobby-region" -> region = arena.getLobbyRegion();
+            case "lobby", "lobbyspawn", "lobby-spawn" -> location = arena.getLobbySpawn();
             case "spectator" -> location = arena.getSpectatorSpawn();
             case "teamspawn" -> {
                 ctx.checkArgsSizeAtLeast(4);
@@ -625,7 +656,7 @@ public class BridgeCommand {
         Location location;
 
         switch (target) {
-            case "lobby" -> location = arena.getLobbySpawn();
+            case "lobby", "lobbyspawn", "lobby-spawn" -> location = arena.getLobbySpawn();
             case "spectator" -> location = arena.getSpectatorSpawn();
             case "teamspawn" -> {
                 ctx.checkArgsSizeAtLeast(4);
@@ -736,6 +767,34 @@ public class BridgeCommand {
 
         ctx.returnError("Specify an arena id. Use /bridge list to choose one.");
         throw new IllegalStateException("Specify an arena id.");
+    }
+
+    private MiniGameTeamSelectionInput parseTeamSelectionInput(@NotNull CommandContext ctx, int index) {
+        if (ctx.numArgs() <= index) {
+            ctx.returnError("Specify a team selection input: none, floor, or hotbar.");
+        }
+        if (ctx.numArgs() > index + 1) {
+            ctx.returnError("Only one team selection input can be configured per arena.");
+        }
+
+        String token = ctx.getArgLower(index);
+        if ("none".equals(token)) {
+            return null;
+        }
+
+        MiniGameTeamSelectionInput input = MiniGameTeamSelectionInput.fromToken(token);
+        if (input == null) {
+            ctx.returnError("Unknown team selection input '" + token + "'. Supported inputs: none, floor, hotbar.");
+        }
+        return input;
+    }
+
+    private @NotNull String formatTeamSelectionInput(@NotNull MiniGameArena arena) {
+        MiniGameTeamSelectionInput input = arena.getTeamSelectionInput();
+        if (input == null) {
+            return "auto";
+        }
+        return input.configToken();
     }
 
     private MiniGameTeam requireTeam(CommandContext ctx, MiniGameArena arena) {

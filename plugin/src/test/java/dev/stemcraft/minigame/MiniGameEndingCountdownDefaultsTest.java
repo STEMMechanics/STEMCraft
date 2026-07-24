@@ -4,6 +4,7 @@ import dev.stemcraft.api.minigame.MiniGameArena;
 import dev.stemcraft.minigame.bedwars.BedWarsMiniGame;
 import dev.stemcraft.minigame.boatrace.BoatRaceMiniGame;
 import dev.stemcraft.minigame.bridge.BridgeMiniGame;
+import dev.stemcraft.minigame.minefield.MinefieldMiniGame;
 import dev.stemcraft.minigame.nightfall.NightfallMiniGame;
 import dev.stemcraft.minigame.tntrun.TntRunMiniGame;
 import org.junit.jupiter.api.Test;
@@ -21,6 +22,7 @@ class MiniGameEndingCountdownDefaultsTest {
         assertEquals(20, new BedWarsMiniGame(null).endingSeconds(arena));
         assertEquals(20, new BridgeMiniGame(null).endingSeconds(arena));
         assertEquals(20, new BoatRaceMiniGame(null).endingSeconds(arena));
+        assertEquals(20, new MinefieldMiniGame(null).endingSeconds(arena));
         assertEquals(20, new NightfallMiniGame(null).endingSeconds(arena));
         assertEquals(20, new TntRunMiniGame(null).endingSeconds(arena));
     }
@@ -33,6 +35,7 @@ class MiniGameEndingCountdownDefaultsTest {
         assertEquals(45, new BedWarsMiniGame(null).endingSeconds(arena));
         assertEquals(45, new BridgeMiniGame(null).endingSeconds(arena));
         assertEquals(45, new BoatRaceMiniGame(null).endingSeconds(arena));
+        assertEquals(45, new MinefieldMiniGame(null).endingSeconds(arena));
         assertEquals(45, new NightfallMiniGame(null).endingSeconds(arena));
         assertEquals(45, new TntRunMiniGame(null).endingSeconds(arena));
     }
