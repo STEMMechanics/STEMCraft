@@ -1,6 +1,7 @@
 package dev.stemcraft.service.world.setting;
 
 import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.api.service.event.EventHandler;
 import dev.stemcraft.api.service.event.EventService;
 import dev.stemcraft.api.service.world.WorldService;
 import dev.stemcraft.config.ConfigFileImpl;
@@ -51,7 +52,12 @@ class WorldGameModeSettingTest {
         when(service.getConfigSection(world)).thenReturn(config);
 
         EventService eventService = mock(EventService.class);
-        when(eventService.register(any(Class.class), any(), any(EventPriority.class), anyBoolean())).thenReturn(mock(Listener.class));
+        when(eventService.register(
+            org.mockito.ArgumentMatchers.<Class<Event>>any(),
+            org.mockito.ArgumentMatchers.<EventHandler<Event>>any(),
+            any(EventPriority.class),
+            anyBoolean()
+        )).thenReturn(mock(Listener.class));
 
         STEMCraftAPI api = mock(STEMCraftAPI.class);
         when(api.events()).thenReturn(eventService);
