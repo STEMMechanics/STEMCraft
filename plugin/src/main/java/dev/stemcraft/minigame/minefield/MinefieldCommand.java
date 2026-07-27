@@ -66,14 +66,15 @@ public class MinefieldCommand {
             .tabCompletion("set", "{minefield-arenas}", "finish")
             .tabCompletion("set", "{minefield-arenas}", "minplayers")
             .tabCompletion("set", "{minefield-arenas}", "maxplayers")
-            .tabCompletion("set", "{minefield-arenas}", "mine-ratio")
+            .tabCompletion("set", "{minefield-arenas}", "mine-count")
+            .tabCompletion("set", "{minefield-arenas}", "lives")
             .tabCompletion("set", "{minefield-arenas}", "hidden-block")
             .tabCompletion("set", "{minefield-arenas}", "clear-block")
             .tabCompletion("set", "{minefield-arenas}", "adjacent-block")
+            .tabCompletion("set", "{minefield-arenas}", "marker-block")
             .tabCompletion("set", "{minefield-arenas}", "mine-block")
             .tabCompletion("set", "{minefield-arenas}", "startcountdown")
             .tabCompletion("set", "{minefield-arenas}", "endingseconds")
-            .tabCompletion("set", "{minefield-arenas}", "completionbonus")
             .tabCompletion("set", "{minefield-arenas}", "name")
             .tabCompletion("select", "{minefield-arenas}", "spectator")
             .tabCompletion("select", "{minefield-arenas}", "arena")
@@ -157,11 +158,13 @@ public class MinefieldCommand {
         ctx.info(" - Min players: " + arena.getMinPlayers());
         ctx.info(" - Start countdown: " + minefield.startCountdownSeconds(arena) + " sec");
         ctx.info(" - Ending countdown: " + minefield.endingSeconds(arena) + " sec");
-        ctx.info(" - Mine ratio: " + minefield.mineRatio(arena));
-        ctx.info(" - Completion bonus: " + minefield.completionBonus(arena));
+        ctx.info(" - Mine count: " + minefield.configuredMineCount(arena));
+        ctx.info(" - Lives: " + (minefield.lives(arena) == 0 ? "unlimited" : minefield.lives(arena)));
+        ctx.info(" - Best time: " + MinefieldMiniGame.formatMillis(minefield.bestTimeMillis(arena)));
         ctx.info(" - Hidden block: " + minefield.hiddenBlock(arena));
         ctx.info(" - Clear block: " + minefield.clearBlock(arena));
         ctx.info(" - Adjacent block: " + minefield.adjacentBlock(arena));
+        ctx.info(" - Marker block: " + minefield.markerBlock(arena));
         ctx.info(" - Mine block: " + minefield.triggeredMineBlock(arena));
         ctx.info(" - Spectator: " + formatLocation(arena.getSpectatorSpawn()));
         ctx.info(" - Arena region: " + formatRegion(arena.get(MinefieldMiniGame.ARENA_REGION_KEY, SCRegion.class)));
@@ -368,6 +371,7 @@ public class MinefieldCommand {
 
         try {
             arena.set("suppressAutoStart", false);
+            minefield.refreshArenaRuntime(arena);
             arena.setStatus(MiniGameArena.ArenaStatus.WAITING);
             minefield.persistArenaEnabled(arena, true);
         } catch (MiniGameInvalidArenaConfigException exception) {
@@ -401,6 +405,7 @@ public class MinefieldCommand {
             case "spectator" -> {
                 Player player = requirePlayer(ctx);
                 arena.setSpectatorSpawn(player.getLocation().clone());
+                minefield.refreshArenaRuntime(arena);
                 showLocationPreview(player, "spectator", player.getLocation());
                 ctx.success("Spectator spawn updated for arena '" + arena.id() + "'.");
             }
@@ -409,6 +414,7 @@ public class MinefieldCommand {
                 SCRegion selection = requireSelection(ctx, player);
                 arena.setRegion(selection.copy());
                 arena.set(MinefieldMiniGame.ARENA_REGION_KEY, selection.copy());
+                minefield.refreshArenaRuntime(arena);
                 showRegionPreview(player, "arena", selection);
                 ctx.success("Arena region updated for arena '" + arena.id() + "'.");
             }
@@ -416,7 +422,7 @@ public class MinefieldCommand {
                 Player player = requirePlayer(ctx);
                 SCRegion selection = requireSelection(ctx, player);
                 arena.set(MinefieldMiniGame.START_REGION_KEY, selection.copy());
-                minefield.syncStartRegion(arena);
+                minefield.refreshArenaRuntime(arena);
                 showRegionPreview(player, "start", selection);
                 ctx.success("Start region updated for arena '" + arena.id() + "'.");
             }
@@ -424,6 +430,7 @@ public class MinefieldCommand {
                 Player player = requirePlayer(ctx);
                 SCRegion selection = requireSelection(ctx, player);
                 arena.set(MinefieldMiniGame.FIELD_REGION_KEY, selection.copy());
+                minefield.refreshArenaRuntime(arena);
                 showRegionPreview(player, "field", selection);
                 ctx.success("Field region updated for arena '" + arena.id() + "'.");
             }
@@ -431,6 +438,7 @@ public class MinefieldCommand {
                 Player player = requirePlayer(ctx);
                 SCRegion selection = requireSelection(ctx, player);
                 arena.set(MinefieldMiniGame.FINISH_REGION_KEY, selection.copy());
+                minefield.refreshArenaRuntime(arena);
                 showRegionPreview(player, "finish", selection);
                 ctx.success("Finish region updated for arena '" + arena.id() + "'.");
             }
@@ -441,6 +449,7 @@ public class MinefieldCommand {
                 if (arena.getMaxPlayers() < minPlayers) {
                     arena.setMaxPlayers(minPlayers);
                 }
+                minefield.refreshArenaRuntime(arena);
                 ctx.success("Minimum players set to " + arena.getMinPlayers() + " for arena '" + arena.id() + "'.");
             }
             case "maxplayers" -> {
@@ -451,45 +460,41 @@ public class MinefieldCommand {
                     return;
                 }
                 arena.setMaxPlayers(maxPlayers);
+                minefield.refreshArenaRuntime(arena);
                 ctx.success("Maximum players set to " + arena.getMaxPlayers() + " for arena '" + arena.id() + "'.");
             }
-            case "mine-ratio", "mineratio" -> {
+            case "mine-count", "minecount" -> {
                 ctx.checkArgsSizeAtLeast(4);
-                double ratio;
-                try {
-                    ratio = Double.parseDouble(ctx.getArg(3));
-                } catch (NumberFormatException exception) {
-                    ctx.returnError("Mine ratio must be a decimal value such as 0.18.");
-                    return;
-                }
-                if (ratio <= 0.0d || ratio >= 0.95d) {
-                    ctx.returnError("Mine ratio must be greater than 0 and lower than 0.95.");
-                    return;
-                }
-                arena.set(MinefieldMiniGame.MINE_RATIO_KEY, ratio);
-                ctx.success("Mine ratio set to " + ratio + " for arena '" + arena.id() + "'.");
+                int mineCount = ctx.getArgAsInt(3, 0, null, null);
+                arena.set(MinefieldMiniGame.CONFIGURED_MINE_COUNT_KEY, mineCount);
+                minefield.refreshArenaRuntime(arena);
+                ctx.success("Mine count set to " + mineCount + " for arena '" + arena.id() + "'.");
+            }
+            case "lives" -> {
+                ctx.checkArgsSizeAtLeast(4);
+                int lives = ctx.getArgAsInt(3, 0, null, null);
+                arena.set(MinefieldMiniGame.LIVES_KEY, lives);
+                minefield.refreshArenaRuntime(arena);
+                ctx.success("Lives set to " + (lives == 0 ? "unlimited" : lives) + " for arena '" + arena.id() + "'.");
             }
             case "hidden-block", "hiddenblock" -> setBlockMaterial(ctx, arena, MinefieldMiniGame.HIDDEN_BLOCK_KEY, "Hidden block");
             case "clear-block", "clearblock" -> setBlockMaterial(ctx, arena, MinefieldMiniGame.CLEAR_BLOCK_KEY, "Clear block");
             case "adjacent-block", "adjacentblock" -> setBlockMaterial(ctx, arena, MinefieldMiniGame.ADJACENT_BLOCK_KEY, "Adjacent block");
+            case "marker-block", "markerblock" -> setBlockMaterial(ctx, arena, MinefieldMiniGame.MARKER_BLOCK_KEY, "Marker block");
             case "mine-block", "mineblock" -> setBlockMaterial(ctx, arena, MinefieldMiniGame.TRIGGERED_MINE_BLOCK_KEY, "Mine block");
             case "startcountdown", "start-countdown" -> {
                 ctx.checkArgsSizeAtLeast(4);
                 int seconds = ctx.getArgAsInt(3, 1, null, null);
                 arena.set(MinefieldMiniGame.START_COUNTDOWN_SECONDS_KEY, seconds);
+                minefield.refreshArenaRuntime(arena);
                 ctx.success("Start countdown set to " + seconds + " seconds for arena '" + arena.id() + "'.");
             }
             case "endingseconds", "ending-seconds" -> {
                 ctx.checkArgsSizeAtLeast(4);
                 int seconds = ctx.getArgAsInt(3, 1, null, null);
                 arena.set(MinefieldMiniGame.ENDING_SECONDS_KEY, seconds);
+                minefield.refreshArenaRuntime(arena);
                 ctx.success("Ending countdown set to " + seconds + " seconds for arena '" + arena.id() + "'.");
-            }
-            case "completionbonus", "completion-bonus" -> {
-                ctx.checkArgsSizeAtLeast(4);
-                int bonus = ctx.getArgAsInt(3, 0, null, null);
-                arena.set(MinefieldMiniGame.COMPLETION_BONUS_KEY, bonus);
-                ctx.success("Completion bonus set to " + bonus + " for arena '" + arena.id() + "'.");
             }
             case "name" -> {
                 ctx.checkArgsSizeAtLeast(4);
@@ -590,6 +595,7 @@ public class MinefieldCommand {
             return;
         }
         arena.set(key, material);
+        minefield.refreshArenaRuntime(arena);
         ctx.success(label + " set to " + material + " for arena '" + arena.id() + "'.");
     }
 

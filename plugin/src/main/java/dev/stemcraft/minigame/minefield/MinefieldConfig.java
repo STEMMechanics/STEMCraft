@@ -20,12 +20,13 @@ import java.util.Locale;
 public class MinefieldConfig {
     static final int DEFAULT_START_COUNTDOWN_SECONDS = 30;
     static final int DEFAULT_ENDING_SECONDS = 20;
-    static final double DEFAULT_MINE_RATIO = 0.18d;
+    static final int DEFAULT_CONFIGURED_MINE_COUNT = 15;
+    static final int DEFAULT_LIVES = 1;
     static final Material DEFAULT_HIDDEN_BLOCK = Material.COBBLESTONE;
     static final Material DEFAULT_CLEAR_BLOCK = Material.WHITE_CONCRETE;
     static final Material DEFAULT_ADJACENT_BLOCK = Material.BLUE_CONCRETE;
+    static final Material DEFAULT_MARKER_BLOCK = Material.RED_CONCRETE;
     static final Material DEFAULT_TRIGGERED_MINE_BLOCK = Material.TNT;
-    static final int DEFAULT_COMPLETION_BONUS = 10;
 
     private final STEMCraftAPI api;
     private ConfigSection config;
@@ -61,6 +62,10 @@ public class MinefieldConfig {
             spectator = startSpawn(startRegion);
         }
 
+        int configuredMineCount = section.contains("mine-count")
+            ? section.getInt("mine-count", DEFAULT_CONFIGURED_MINE_COUNT)
+            : deriveMineCount(fieldRegion, section.getDouble("mine-ratio", 0.18d));
+
         return new MinefieldArenaRecord(
             arenaId,
             enabled,
@@ -75,12 +80,14 @@ public class MinefieldConfig {
             section.getInt("max-players", 12),
             section.getInt("start-countdown-seconds", DEFAULT_START_COUNTDOWN_SECONDS),
             section.getInt("ending-seconds", DEFAULT_ENDING_SECONDS),
-            section.getDouble("mine-ratio", DEFAULT_MINE_RATIO),
+            configuredMineCount,
+            section.getInt("lives", DEFAULT_LIVES),
             loadMaterial(section, "hidden-block", DEFAULT_HIDDEN_BLOCK),
             loadMaterial(section, "clear-block", DEFAULT_CLEAR_BLOCK),
             loadMaterial(section, "adjacent-block", DEFAULT_ADJACENT_BLOCK),
+            loadMaterial(section, "marker-block", DEFAULT_MARKER_BLOCK),
             loadMaterial(section, "triggered-mine-block", DEFAULT_TRIGGERED_MINE_BLOCK),
-            section.getInt("completion-bonus", DEFAULT_COMPLETION_BONUS)
+            Math.max(0L, section.getLong("best-time-millis", 0L))
         );
     }
 
@@ -101,12 +108,14 @@ public class MinefieldConfig {
         arenaConfig.set("max-players", arena.getMaxPlayers());
         arenaConfig.set("start-countdown-seconds", arena.get(MinefieldMiniGame.START_COUNTDOWN_SECONDS_KEY, Integer.class, DEFAULT_START_COUNTDOWN_SECONDS));
         arenaConfig.set("ending-seconds", arena.get(MinefieldMiniGame.ENDING_SECONDS_KEY, Integer.class, DEFAULT_ENDING_SECONDS));
-        arenaConfig.set("mine-ratio", arena.get(MinefieldMiniGame.MINE_RATIO_KEY, Double.class, DEFAULT_MINE_RATIO));
+        arenaConfig.set("mine-count", arena.get(MinefieldMiniGame.CONFIGURED_MINE_COUNT_KEY, Integer.class, DEFAULT_CONFIGURED_MINE_COUNT));
+        arenaConfig.set("lives", arena.get(MinefieldMiniGame.LIVES_KEY, Integer.class, DEFAULT_LIVES));
         arenaConfig.set("hidden-block", serializeMaterial(arena.get(MinefieldMiniGame.HIDDEN_BLOCK_KEY, Material.class, DEFAULT_HIDDEN_BLOCK)));
         arenaConfig.set("clear-block", serializeMaterial(arena.get(MinefieldMiniGame.CLEAR_BLOCK_KEY, Material.class, DEFAULT_CLEAR_BLOCK)));
         arenaConfig.set("adjacent-block", serializeMaterial(arena.get(MinefieldMiniGame.ADJACENT_BLOCK_KEY, Material.class, DEFAULT_ADJACENT_BLOCK)));
+        arenaConfig.set("marker-block", serializeMaterial(arena.get(MinefieldMiniGame.MARKER_BLOCK_KEY, Material.class, DEFAULT_MARKER_BLOCK)));
         arenaConfig.set("triggered-mine-block", serializeMaterial(arena.get(MinefieldMiniGame.TRIGGERED_MINE_BLOCK_KEY, Material.class, DEFAULT_TRIGGERED_MINE_BLOCK)));
-        arenaConfig.set("completion-bonus", arena.get(MinefieldMiniGame.COMPLETION_BONUS_KEY, Integer.class, DEFAULT_COMPLETION_BONUS));
+        arenaConfig.set("best-time-millis", Math.max(0L, arena.get(MinefieldMiniGame.BEST_TIME_MILLIS_KEY, Long.class, 0L)));
 
         config.save();
     }
@@ -234,24 +243,20 @@ public class MinefieldConfig {
     }
 
     private @Nullable Location startSpawn(@Nullable SCRegion startRegion) {
-        if (startRegion == null || startRegion.getWorld() == null) {
+        if (startRegion == null) {
             return null;
         }
+        return MinefieldMiniGame.resolveSpawn(startRegion, null);
+    }
 
-        Location min = startRegion.getMinimumLocation();
-        Location max = startRegion.getMaximumLocation();
-        Location center = new Location(
-            startRegion.getWorld(),
-            (min.getBlockX() + max.getBlockX() + 1) / 2.0d,
-            min.getBlockY(),
-            (min.getBlockZ() + max.getBlockZ() + 1) / 2.0d
-        );
-        if (startRegion.contains(center)) {
-            return center;
+    private int deriveMineCount(@Nullable SCRegion fieldRegion, double ratio) {
+        if (fieldRegion == null) {
+            return DEFAULT_CONFIGURED_MINE_COUNT;
         }
-
-        Location ground = startRegion.getRandomGroundLocation();
-        return ground != null ? ground : startRegion.getRandomLocation();
+        Location min = fieldRegion.getMinimumLocation();
+        Location max = fieldRegion.getMaximumLocation();
+        int totalCells = ((max.getBlockX() - min.getBlockX()) + 1) * ((max.getBlockZ() - min.getBlockZ()) + 1);
+        return Math.max(0, (int) Math.round(totalCells * Math.max(0.0d, ratio)));
     }
 
     private void ensureLoaded() {
