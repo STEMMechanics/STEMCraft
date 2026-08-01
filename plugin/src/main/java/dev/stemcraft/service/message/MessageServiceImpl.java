@@ -289,18 +289,30 @@ public class MessageServiceImpl extends BaseService implements MessageService {
     @Override
     public void broadcast(@NotNull String message, @Nullable List<Player> exclude, @NotNull Object... placeholders) {
         String serverMessage = render(null, message, placeholders);
-        Component serverComponent = TextUtil.colourise(tokens.apply(prefixes.broadcast()) + serverMessage);
+        Component serverComponent = formatBroadcastConsoleMessage(serverMessage);
         plugin.getComponentLogger().info(serverComponent);
 
         Collection<? extends Player> onlinePlayers = Bukkit.getOnlinePlayers();
         onlinePlayers.forEach(player -> {
             if (exclude == null || !exclude.contains(player)) {
                 String playerMessage = render(player, message, placeholders);
-                Component playerComponent = TextUtil.colourise(tokens.apply(prefixes.broadcast()) + playerMessage);
+                Component playerComponent = formatBroadcastPlayerMessage(playerMessage);
 
                 player.sendMessage(playerComponent);
             }
         });
+    }
+
+    static @NotNull Component formatBroadcastConsoleMessage(@NotNull String message) {
+        return TextUtil.colourise("[broadcast] " + message);
+    }
+
+    private @NotNull Component formatBroadcastPlayerMessage(@NotNull String message) {
+        return formatBroadcastPlayerMessage(tokens.apply(prefixes.broadcast()), message);
+    }
+
+    static @NotNull Component formatBroadcastPlayerMessage(@NotNull String prefix, @NotNull String message) {
+        return TextUtil.colourise(prefix + message);
     }
 
     /**

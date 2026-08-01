@@ -40,18 +40,18 @@ class PackMetaGeneratorTest {
 
         TestResourcePackWriter writer = new TestResourcePackWriter(
             tempDir,
-            new PackFormatRange(32, 75),
+            new PackFormatRange(32, 88),
             null
         );
         new PackMetaGenerator(service).generate(new ResourcePackBuildContext(
-            new ResourcePackBuildTarget("1.21.11", 75),
+            new ResourcePackBuildTarget("26.2", 88),
             writer,
             config
         ));
 
         JsonObject pack = readPack(tempDir);
         assertEquals(32, pack.get("min_format").getAsInt());
-        assertEquals(75, pack.get("max_format").getAsInt());
+        assertEquals(88, pack.get("max_format").getAsInt());
         assertEquals(64, pack.get("pack_format").getAsInt());
 
         JsonArray supportedFormats = pack.getAsJsonArray("supported_formats");
@@ -116,15 +116,15 @@ class PackMetaGeneratorTest {
 
         when(service.getConfig()).thenReturn(config);
         when(service.overlayBuildPlan()).thenReturn(List.of(
-            new ResourcePackServiceImpl.OverlayBuildPlanEntry("overlay_80_82", new PackFormatRange(80, 82))
+            new ResourcePackServiceImpl.OverlayBuildPlanEntry("overlay_89_92", new PackFormatRange(89, 92))
         ));
         when(config.getString("description", "A STEMCraft Resource Pack")).thenReturn("STEMCraft");
 
         Path output = tempDir.resolve("with-overlay");
         Files.createDirectories(output);
         new PackMetaGenerator(service).generate(new ResourcePackBuildContext(
-            new ResourcePackBuildTarget("1.21.11", 75),
-            new TestResourcePackWriter(output, new PackFormatRange(64, 75), null),
+            new ResourcePackBuildTarget("26.2", 88),
+            new TestResourcePackWriter(output, new PackFormatRange(64, 88), null),
             config
         ));
 
@@ -132,9 +132,9 @@ class PackMetaGeneratorTest {
         JsonObject overlays = root.getAsJsonObject("overlays");
         JsonArray entries = overlays.getAsJsonArray("entries");
         JsonObject entry = entries.get(0).getAsJsonObject();
-        assertEquals("overlay_80_82", entry.get("directory").getAsString());
-        assertEquals(80, entry.get("min_format").getAsInt());
-        assertEquals(82, entry.get("max_format").getAsInt());
+        assertEquals("overlay_89_92", entry.get("directory").getAsString());
+        assertEquals(89, entry.get("min_format").getAsInt());
+        assertEquals(92, entry.get("max_format").getAsInt());
     }
 
     private JsonObject readPack(Path resourcePackDir) throws Exception {

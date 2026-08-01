@@ -1,5 +1,6 @@
 package dev.stemcraft.minigame.bridge;
 
+import dev.stemcraft.api.minigame.MiniGameTeamSelectionInput;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.util.LocationUtil;
 import org.bukkit.Bukkit;
@@ -9,7 +10,6 @@ import org.bukkit.World;
 
 import java.util.List;
 import java.util.Map;
-
 public record BridgeArenaRecord(
         String arenaId,
         boolean enabled,
@@ -23,6 +23,8 @@ public record BridgeArenaRecord(
         int maxPlayers,
         int startCountdownSeconds,
         int endingSeconds,
+        MiniGameTeamSelectionInput teamSelectionInput,
+        SCRegion lobbyRegion,
         List<Material> dropItems,
         List<Material> dropSurfaceMaterials,
         Map<String, TeamDef> teams
@@ -32,6 +34,7 @@ public record BridgeArenaRecord(
         spectator = LocationUtil.copy(spectator);
         bridgeRegion = copyRegion(bridgeRegion);
         arenaRegion = copyRegion(arenaRegion);
+        lobbyRegion = copyRegion(lobbyRegion);
         dropItems = dropItems == null ? List.of() : List.copyOf(dropItems);
         dropSurfaceMaterials = dropSurfaceMaterials == null ? List.of() : List.copyOf(dropSurfaceMaterials);
         teams = teams == null ? Map.of() : Map.copyOf(teams);
@@ -55,6 +58,10 @@ public record BridgeArenaRecord(
     @Override
     public SCRegion arenaRegion() {
         return copyRegion(arenaRegion);
+    }
+
+    public SCRegion lobbyRegion() {
+        return copyRegion(lobbyRegion);
     }
 
     public World world() {

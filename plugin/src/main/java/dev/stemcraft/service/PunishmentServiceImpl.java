@@ -24,6 +24,8 @@ import com.destroystokyo.paper.profile.PlayerProfile;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigFile;
+import dev.stemcraft.api.service.profanity.ProfanityFilterResult;
+import dev.stemcraft.api.service.profanity.ProfanitySeverity;
 import dev.stemcraft.api.service.punishment.PunishmentAlertCallback;
 import dev.stemcraft.api.service.punishment.PunishmentRecord;
 import dev.stemcraft.api.service.punishment.PunishmentService;
@@ -61,6 +63,10 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
     private final List<Consumer<PunishmentRecord>> observers = new CopyOnWriteArrayList<>();
 
     private static final UUID SERVER_UUID = new UUID(0L, 0L);
+    private boolean profanityFilterEnabled;
+    private String profanityFilterAction;
+    private ProfanitySeverity profanityFilterMinimumSeverity;
+    private String profanityFilterBlockedMessage;
 
     /**
      * Constructor for PunishmentServiceImpl.
@@ -69,7 +75,7 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
      * @param api The STEMCraft API instance.
      */
     public PunishmentServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
-        super(plugin, api);
+        super(plugin, api, "punishments");
     }
 
     /**
@@ -77,6 +83,7 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
      */
     @Override
     public void onEnable() {
+        reloadSettings();
         ensureStorage();
         loadFromDatabase();
 
@@ -136,7 +143,10 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
                         return;
                     }
 
-                    String reason = ctx.getArgsAsString(2, "Kicked by " + ctx.getSenderName());
+                    String reason = moderatedReasonOrReturn(ctx.getArgsAsString(2, "Kicked by " + ctx.getSenderName()), cmd, ctx.getSender());
+                    if (reason == null) {
+                        return;
+                    }
                     Player actor = ctx.asPlayer();
                     this.record(target.getUniqueId(), actor, null, "kick", true, reason);
 
@@ -166,7 +176,10 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
                         return;
                     }
 
-                    String reason = ctx.getArgsAsString(2, "Warned by " + ctx.getSenderName());
+                    String reason = moderatedReasonOrReturn(ctx.getArgsAsString(2, "Warned by " + ctx.getSenderName()), cmd, ctx.getSender());
+                    if (reason == null) {
+                        return;
+                    }
                     Player actor = ctx.asPlayer();
                     this.record(target.getUniqueId(), actor, null, "warn", false, reason);
 
@@ -211,7 +224,10 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
                         }
                     }
 
-                    String reason = ctx.getArgsAsString(reasonIndex, pardon ? "Cancelled" : "Banned");
+                    String reason = moderatedReasonOrReturn(ctx.getArgsAsString(reasonIndex, pardon ? "Cancelled" : "Banned"), cmd, ctx.getSender());
+                    if (reason == null) {
+                        return;
+                    }
                     Player actor = ctx.asPlayer();
 
                     UUID targetUuid = target.getUniqueId();
@@ -260,10 +276,32 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
                         return;
                     }
 
-                    String reason = ctx.getArgsAsString(1, "Cancelled");
+                    String reason = moderatedReasonOrReturn(ctx.getArgsAsString(1, "Cancelled"), cmd, ctx.getSender());
+                    if (reason == null) {
+                        return;
+                    }
                     pardonBan(cmd, ctx.getSender(), target, ctx.asPlayer(), reason, ctx.getSenderName());
                 })
                 .register(STEMCraft.getPlugin());
+    }
+
+    @Override
+    public void onReload() {
+        super.onReload();
+        reloadSettings();
+    }
+
+    private void reloadSettings() {
+        profanityFilterEnabled = getConfigSection().getBoolean("profanity_filter.enabled", true);
+        profanityFilterAction = getConfigSection().getString("profanity_filter.action", "sanitize").trim().toLowerCase(Locale.ROOT);
+        profanityFilterMinimumSeverity = ProfanitySeverity.fromString(
+            getConfigSection().getString("profanity_filter.minimum_severity", "moderate"),
+            ProfanitySeverity.MODERATE
+        );
+        profanityFilterBlockedMessage = getConfigSection().getString(
+            "profanity_filter.blocked_message",
+            "Punishment reasons must not include profane language."
+        );
     }
 
     /**
@@ -299,6 +337,7 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
     }
 
     private synchronized void record(@NotNull UUID playerUuid, @Nullable Player actor, @Nullable Duration duration, @NotNull String type, boolean alerted, @NotNull String reason, boolean notifyObservers) {
+        String effectiveReason = sanitizeReason(reason);
         String playerName = PlayerUtil.name(playerUuid);
         if(playerName == null) {
             // ERROR PLAYER NOT FOUND!
@@ -317,7 +356,7 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
                 actor != null ? actor.getName() : "<server>",
                 type,
                 alerted,
-                reason,
+                effectiveReason,
                 now,
                 durationSeconds
         );
@@ -583,10 +622,8 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
         UUID targetUuid = target.getUniqueId();
         PlayerProfile profile = Bukkit.createProfile(targetUuid, target.getName());
         BanList<PlayerProfile> banList = Bukkit.getBanList(BanListType.PROFILE);
-        boolean bridgeActiveBan = plugin.webhookBridge() != null
-            && plugin.webhookBridge().hasActiveBan(targetUuid, target.getName());
 
-        if (findActiveBan(targetUuid) == null && !banList.isBanned(profile) && !bridgeActiveBan) {
+        if (findActiveBan(targetUuid) == null && !banList.isBanned(profile)) {
             cmd.error(sender, "PLAYER_NOT_BANNED", "player", target.getName());
             return;
         }
@@ -596,41 +633,46 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
         api.messages().broadcast("BAN_EXPIRED_BROADCAST", target.getPlayer(), "player", Objects.requireNonNull(target.getName()), "reason", reason, "actor", actorName);
     }
 
-    void syncLiftBan(UUID targetUuid, @Nullable String reason) {
-        PunishmentRecord activeBan = findActiveBan(targetUuid);
-        if (activeBan == null) {
-            return;
+    boolean pardonActiveBan(@NotNull UUID targetUuid, @Nullable Player actor, @NotNull String reason, @NotNull String actorName) {
+        OfflinePlayer target = Bukkit.getOfflinePlayer(targetUuid);
+        PlayerProfile profile = Bukkit.createProfile(targetUuid, target.getName());
+        BanList<PlayerProfile> banList = Bukkit.getBanList(BanListType.PROFILE);
+
+        if (findActiveBan(targetUuid) == null && !banList.isBanned(profile)) {
+            return false;
         }
 
-        this.record(targetUuid, null, Duration.ofSeconds(-1), "ban", true, reason == null || reason.isBlank() ? "Lifted by sync" : reason, false);
-        PlayerProfile profile = Bukkit.createProfile(targetUuid, activeBan.targetName());
-        Bukkit.getBanList(BanListType.PROFILE).pardon(profile);
+        this.record(targetUuid, actor, Duration.ofSeconds(-1), "ban", true, reason);
+        banList.pardon(profile);
+        api.messages().broadcast("BAN_EXPIRED_BROADCAST", target.getPlayer(), "player", Objects.requireNonNullElse(target.getName(), targetUuid.toString()), "reason", reason, "actor", actorName);
+        return true;
     }
 
-    void syncReconcileActiveBans(Set<UUID> activeBanUuids) {
-        Set<UUID> staleLocalBans = new LinkedHashSet<>();
-        synchronized (this) {
-            for (PunishmentRecord record : punishments) {
-                if (!"ban".equalsIgnoreCase(record.type())) {
-                    continue;
-                }
-                UUID targetUuid = record.targetUuid();
-                if (targetUuid == null) {
-                    continue;
-                }
-                PunishmentRecord activeBan = findActiveBan(targetUuid);
-                if (activeBan == null || activeBan.id() != record.id()) {
-                    continue;
-                }
-                if (!activeBanUuids.contains(targetUuid)) {
-                    staleLocalBans.add(targetUuid);
-                }
-            }
+    private @Nullable String moderatedReasonOrReturn(@NotNull String reason, dev.stemcraft.api.command.Command cmd, CommandSender sender) {
+        if (!profanityFilterEnabled || api.profanityFilter() == null || !api.profanityFilter().isEnabled()) {
+            return reason;
         }
 
-        for (UUID uuid : staleLocalBans) {
-            syncLiftBan(uuid, "Lifted by website sync");
+        ProfanityFilterResult result = api.profanityFilter().check(reason, profanityFilterMinimumSeverity);
+        if (!result.offensive()) {
+            return reason;
         }
+
+        if ("reject".equals(profanityFilterAction)) {
+            cmd.error(sender, profanityFilterBlockedMessage);
+            return null;
+        }
+
+        return result.cleanedText();
+    }
+
+    private @NotNull String sanitizeReason(@NotNull String reason) {
+        if (!profanityFilterEnabled || api.profanityFilter() == null || !api.profanityFilter().isEnabled()) {
+            return reason;
+        }
+
+        ProfanityFilterResult result = api.profanityFilter().check(reason, profanityFilterMinimumSeverity);
+        return result.offensive() ? result.cleanedText() : reason;
     }
 
     synchronized PunishmentRecord findActiveBan(UUID playerUuid) {

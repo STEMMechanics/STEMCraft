@@ -24,6 +24,8 @@ import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.Command;
 import dev.stemcraft.api.command.CommandContext;
+import dev.stemcraft.feature.PlayerWelcomeCommand;
+import dev.stemcraft.service.firstjoin.FirstJoinCommand;
 
 import java.util.Locale;
 import java.util.Map;
@@ -31,9 +33,13 @@ import java.util.Objects;
 
 public class STEMCraftCommand extends BaseCommand {
     private static final String PERMISSION = "stemcraft.command.stemcraft";
+    private final FirstJoinCommand firstJoinCommand;
+    private final PlayerWelcomeCommand playerWelcomeCommand;
 
     public STEMCraftCommand(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
+        this.firstJoinCommand = new FirstJoinCommand(plugin.firstJoin());
+        this.playerWelcomeCommand = new PlayerWelcomeCommand(plugin, api);
     }
 
     @Override
@@ -48,12 +54,21 @@ public class STEMCraftCommand extends BaseCommand {
         addTabCompletion("reload");
         addTabCompletion("reload", "locale");
         addTabCompletion("reload", "locales");
+        firstJoinCommand.addTabCompletions(this);
+        playerWelcomeCommand.addTabCompletions(this);
         register(plugin);
     }
 
     @Override
     public void onExecute(Command cmd, CommandContext ctx) {
         String action = Objects.requireNonNullElse(ctx.getArgLower(0), "status");
+
+        if (firstJoinCommand.handle(cmd, ctx)) {
+            return;
+        }
+        if (playerWelcomeCommand.handle(cmd, ctx)) {
+            return;
+        }
 
         switch (action) {
             case "status", "info" -> sendStatus(ctx);

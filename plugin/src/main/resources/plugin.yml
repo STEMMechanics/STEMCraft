@@ -6,5 +6,6 @@ load: STARTUP
 softdepend:
   - WorldEdit
   - Vault
+  - Geyser-Spigot
   - Floodgate
   - PlaceholderAPI

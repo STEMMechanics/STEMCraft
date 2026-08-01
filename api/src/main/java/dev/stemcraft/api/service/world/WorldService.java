@@ -38,6 +38,21 @@ public interface WorldService {
         SUBCOMMAND      // e.g. /world [subcommand] <world> [args]
     }
 
+    enum TransitionCommandPhase {
+        JOIN("join-commands"),
+        LEAVE("leave-commands");
+
+        private final String configPath;
+
+        TransitionCommandPhase(@NotNull String configPath) {
+            this.configPath = configPath;
+        }
+
+        public @NotNull String configPath() {
+            return configPath;
+        }
+    }
+
     /**
      * Check if a world with the given name exists on disk.
      *
@@ -172,6 +187,27 @@ public interface WorldService {
      */
     @NotNull ConfigSection getConfigSection(@NotNull World world);
     @NotNull ConfigSection getConfigSection(@NotNull String worldName);
+
+    /**
+     * Get configured world transition commands.
+     *
+     * @param worldName The world name.
+     * @param phase The transition phase.
+     * @return The configured commands.
+     */
+    @NotNull List<String> getWorldTransitionCommands(@NotNull String worldName, @NotNull TransitionCommandPhase phase);
+    default @NotNull List<String> getWorldTransitionCommands(@NotNull World world, @NotNull TransitionCommandPhase phase) {
+        return getWorldTransitionCommands(world.getName(), phase);
+    }
+
+    /**
+     * Replace the configured world transition commands.
+     *
+     * @param worldName The world name.
+     * @param phase The transition phase.
+     * @param commands The commands to store.
+     */
+    void setWorldTransitionCommands(@NotNull String worldName, @NotNull TransitionCommandPhase phase, @NotNull List<String> commands);
 
     /**
      * Register a world base setting.

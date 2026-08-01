@@ -43,8 +43,8 @@ public final class FontUtil {
             'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y',
             'Z', '0', '1', '2', '3', '4', '5', '6',
             '7', '8', '9', '#', '$', '%', '^', '&',
-            '-', '_', '=', '+', '/', '?', '\\')); // 6 px
-    private static final Set<Character> WIDTH_7 = new HashSet<>(Set.of('~', '@')); // 7 px
+            '-', '_', '=', '+', '/', '?', '\\', '■')); // 6 px
+    private static final Set<Character> WIDTH_7 = new HashSet<>(Set.of('~', '@', '★')); // 7 px
 
     /**
      * Calculate the pixel width of a string based on the default minecraft font.
@@ -63,19 +63,53 @@ public final class FontUtil {
      * @return The pixel width.
      */
     public static int calculatePixelWidth(String text) {
-        // Remove Minecraft color and formatting codes (e.g., §b, §l, etc.)
-        text = text.replaceAll("§[0-9a-fk-or]", "");
-
         int width = 0;
-        for (char c : text.toCharArray()) {
-            if (WIDTH_2.contains(c)) width += 2;
-            else if (WIDTH_3.contains(c)) width += 3;
-            else if (WIDTH_4.contains(c)) width += 4;
-            else if (WIDTH_5.contains(c)) width += 5;
-            else if (WIDTH_6.contains(c)) width += 6;
-            else if (WIDTH_7.contains(c)) width += 7;
-            else width += DEFAULT_WIDTH; // Fallback for unsupported characters
+        boolean bold = false;
+
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if ((c == '§' || c == '&') && i + 1 < text.length()) {
+                char code = Character.toLowerCase(text.charAt(i + 1));
+                if (isLegacyColourCode(code) || code == 'r') {
+                    bold = false;
+                    i++;
+                    continue;
+                }
+                if (code == 'l') {
+                    bold = true;
+                    i++;
+                    continue;
+                }
+                if (isLegacyFormatCode(code)) {
+                    i++;
+                    continue;
+                }
+            }
+
+            int charWidth = widthOf(c);
+            width += charWidth;
+            if (bold && c != ' ') {
+                width += 1;
+            }
         }
         return width;
+    }
+
+    private static int widthOf(char c) {
+        if (WIDTH_2.contains(c)) return 2;
+        if (WIDTH_3.contains(c)) return 3;
+        if (WIDTH_4.contains(c)) return 4;
+        if (WIDTH_5.contains(c)) return 5;
+        if (WIDTH_6.contains(c)) return 6;
+        if (WIDTH_7.contains(c)) return 7;
+        return DEFAULT_WIDTH;
+    }
+
+    private static boolean isLegacyColourCode(char code) {
+        return (code >= '0' && code <= '9') || (code >= 'a' && code <= 'f');
+    }
+
+    private static boolean isLegacyFormatCode(char code) {
+        return code == 'k' || code == 'm' || code == 'n' || code == 'o';
     }
 }

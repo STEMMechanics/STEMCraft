@@ -213,8 +213,13 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
             this.countdownMax = 0;
         }
 
+        if (newStatus == ArenaStatus.RUNNING) {
+            service.teamSelectionSupport().prepareArenaStart(this);
+        }
+
         MiniGameArenaHandler handler = service.getHandler(this.namespace());
         handler.onArenaStatusChanged(this, oldStatus, newStatus);
+        service.teamSelectionSupport().onArenaStatusChanged(this, oldStatus, newStatus);
         return this;
     }
 
@@ -245,6 +250,7 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         }
 
         handler.validate(this, result);
+        service.teamSelectionSupport().validateArenaSetup(this, result);
 
         this.validated = !result.hasErrors();
         this.lastValidation = result;
@@ -410,7 +416,10 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
             }
         }
 
-        if (!teams.isEmpty() && get("autoAssignTeams", Boolean.class, true) && mgPlayer.getTeam() == null) {
+        if (!teams.isEmpty()
+            && mgPlayer.getTeam() == null
+            && !service.teamSelectionSupport().usesTeamSelection(this)
+            && get("autoAssignTeams", Boolean.class, true)) {
             setRandomTeam(player);
         }
 
@@ -423,6 +432,7 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         }
 
         PlayerUtil.teleport(player, location);
+        service.teamSelectionSupport().onPlayerJoinedArena(this, player);
     }
 
     /**
@@ -1192,6 +1202,7 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         }
 
         service.unregisterPlayerArena(player, this);
+        service.teamSelectionSupport().onPlayerLeftArena(this);
         return mgPlayer;
     }
 

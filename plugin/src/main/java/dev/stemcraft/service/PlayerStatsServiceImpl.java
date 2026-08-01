@@ -329,24 +329,6 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
             .toList();
     }
 
-    @Override
-    public @NotNull Map<String, Object> buildWebhookStatsResponse(@Nullable String uuidText, @Nullable String username, @Nullable String statKey, @Nullable String period) {
-        QueryWindow window = QueryWindow.parse(period);
-        String normalizedKey = normalizeKey(statKey);
-        List<PlayerStatDefinition> selectedDefinitions = getSelectedDefinitions(normalizedKey);
-        List<PlayerStatsRecord> records = list(uuidText, username, normalizedKey, window.key);
-
-        Map<String, Object> response = new LinkedHashMap<>();
-        response.put("ok", true);
-        response.put("period", window.key);
-        response.put("period_days", window.days);
-        response.put("stats", selectedDefinitions.stream().map(this::toDefinitionMap).toList());
-        response.put("players", records.stream().map(this::toResponseMap).toList());
-        response.put("count", records.size());
-        response.put("timestamp", Instant.now().toString());
-        return response;
-    }
-
     private void configureDefaults() {
         ConfigSection section = getConfigSection();
         boolean changed = false;

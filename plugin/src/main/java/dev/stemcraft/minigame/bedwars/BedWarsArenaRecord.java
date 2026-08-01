@@ -1,5 +1,6 @@
 package dev.stemcraft.minigame.bedwars;
 
+import dev.stemcraft.api.minigame.MiniGameTeamSelectionInput;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.util.LocationUtil;
 import org.bukkit.Bukkit;
@@ -9,7 +10,6 @@ import org.bukkit.World;
 
 import java.util.List;
 import java.util.Map;
-
 public record BedWarsArenaRecord(
         String id,
         boolean enabled,
@@ -23,6 +23,8 @@ public record BedWarsArenaRecord(
         int startCountdownSeconds,
         int endingSeconds,
         int teamSize,
+        MiniGameTeamSelectionInput teamSelectionInput,
+        SCRegion lobbyRegion,
         List<Material> dropItems,
         List<Material> dropSurfaceMaterials,
         Map<String, TeamDef> teams
@@ -31,6 +33,7 @@ public record BedWarsArenaRecord(
         lobby = LocationUtil.copy(lobby);
         spectator = LocationUtil.copy(spectator);
         arenaRegion = copyRegion(arenaRegion);
+        lobbyRegion = copyRegion(lobbyRegion);
         dropItems = dropItems == null ? List.of() : List.copyOf(dropItems);
         dropSurfaceMaterials = dropSurfaceMaterials == null ? List.of() : List.copyOf(dropSurfaceMaterials);
         teams = teams == null ? Map.of() : Map.copyOf(teams);
@@ -49,6 +52,10 @@ public record BedWarsArenaRecord(
     @Override
     public SCRegion arenaRegion() {
         return copyRegion(arenaRegion);
+    }
+
+    public SCRegion lobbyRegion() {
+        return copyRegion(lobbyRegion);
     }
 
     public World world() {

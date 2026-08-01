@@ -26,12 +26,17 @@ import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.minigame.ArenaValidationResult;
 import dev.stemcraft.api.minigame.MiniGame;
 import dev.stemcraft.api.minigame.MiniGameArena;
+import dev.stemcraft.api.minigame.MiniGamePlayer;
 import dev.stemcraft.api.minigame.MiniGameTeam;
+import dev.stemcraft.api.minigame.MiniGameTeamSelectionInput;
+import dev.stemcraft.api.minigame.MiniGameTeamSelectionPolicy;
+import dev.stemcraft.api.util.PlaceholderUtil;
 import dev.stemcraft.api.service.playerstats.PlayerStatDefinition;
 import dev.stemcraft.api.util.StringUtil;
 import dev.stemcraft.exception.MiniGameInvalidArenaConfigException;
 import dev.stemcraft.minigame.BaseMiniGame;
 import dev.stemcraft.minigame.MiniGameHudConfigSupport;
+import dev.stemcraft.service.minigame.MiniGameTeamSelectionSupport;
 import lombok.Getter;
 import lombok.experimental.Accessors;
 import org.bukkit.Material;
@@ -40,16 +45,22 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 public class BridgeMiniGame extends BaseMiniGame {
     private static final String GOALS_TOTAL_STAT_KEY = "bridge_goals_total";
     private static final String WIN_STREAK_CURRENT_STAT_KEY = "bridge_win_streak_current";
     private static final String WIN_STREAK_BEST_STAT_KEY = "bridge_win_streak_best";
     private static final int HUD_LINE_HOLD_UPDATES = 3;
+    private static final List<String> DEFAULT_LOBBY_TEAM_LINES = List.of(
+        "{arena:lobby-team-line-1}",
+        "{arena:lobby-team-line-2}"
+    );
 
     @Getter
     @Accessors(fluent = true)
@@ -62,6 +73,7 @@ public class BridgeMiniGame extends BaseMiniGame {
     private MiniGame minigame;
 
     private ConfigFile configFile;
+    private TeamSelectionFormat teamSelectionFormat = TeamSelectionFormat.defaults();
 
     public BridgeMiniGame(STEMCraftAPI api) {
         super(api);
@@ -73,6 +85,7 @@ public class BridgeMiniGame extends BaseMiniGame {
         BridgeArenaHandler handler = new BridgeArenaHandler(api, this);
 
         minigame = createMiniGame(namespace, handler)
+            .setTeamSelectionPolicy(teamSelectionPolicy())
             .registerTeamPlaceholder("score", (arena, team, player) -> renderTeamScore(team))
             .registerPlayerPlaceholder("team-status", (arena, team, player) -> renderPlayerTeamStatus(player));
 
@@ -85,6 +98,7 @@ public class BridgeMiniGame extends BaseMiniGame {
         }
         configFile.setAutoSave(true);
         config.onEnable(configFile);
+        teamSelectionFormat = loadTeamSelectionFormat(configFile);
         MiniGameHudConfigSupport.apply(minigame, configFile, defaultHudDefinitions());
 
         new BridgeCommand(api, this).onEnable();
@@ -104,6 +118,10 @@ public class BridgeMiniGame extends BaseMiniGame {
                 ":purple_bed: <gold>Bridge</gold> <dark_gray>•</dark_gray> <aqua>Lobby</aqua>",
                 ":info_green: <gray>Joined</gray> <green>{arena:joined-players}</green>/<green>{arena:max-players}</green>",
                 ":question_blue: <gray>Need</gray> <yellow>{arena:min-players}</yellow> <gray>players</gray>",
+                ":location: <gray>Selected</gray> {player:selected-team}",
+                ":info_gray: <gray>Auto</gray> <white>{arena:auto-selected-count}</white>",
+                DEFAULT_LOBBY_TEAM_LINES.get(0),
+                DEFAULT_LOBBY_TEAM_LINES.get(1),
                 ":world: <gray>Map ID</gray> <gold>{arena:id}</gold>"
             ),
             HUD_LINE_HOLD_UPDATES
@@ -120,6 +138,10 @@ public class BridgeMiniGame extends BaseMiniGame {
                 ":click_action_right: <gold>Starts In</gold> <yellow>{arena:time-remaining}</yellow>",
                 ":info_green: <gray>Players</gray> <green>{arena:joined-players}</green>/<green>{arena:max-players}</green>",
                 ":question_blue: <gray>Need</gray> <yellow>{arena:min-players}</yellow>",
+                ":location: <gray>Selected</gray> {player:selected-team}",
+                ":info_gray: <gray>Auto</gray> <white>{arena:auto-selected-count}</white>",
+                DEFAULT_LOBBY_TEAM_LINES.get(0),
+                DEFAULT_LOBBY_TEAM_LINES.get(1),
                 ":world: <gray>Map ID</gray> <gold>{arena:id}</gold>"
             ),
             HUD_LINE_HOLD_UPDATES
@@ -181,6 +203,7 @@ public class BridgeMiniGame extends BaseMiniGame {
             .setMaxPlayers(16)
             .set("startCountdownSeconds", BridgeConfig.DEFAULT_START_COUNTDOWN_SECONDS)
             .set("endingSeconds", BridgeConfig.DEFAULT_ENDING_SECONDS);
+        MiniGameTeamSelectionSupport.applyArenaDefaults(arena);
 
         ensureTeams(arena);
         arena.set("dropItems", BridgeConfig.defaultDropItems());
@@ -219,6 +242,7 @@ public class BridgeMiniGame extends BaseMiniGame {
         }
 
         config.onEnable(configFile);
+        teamSelectionFormat = loadTeamSelectionFormat(configFile);
         MiniGameHudConfigSupport.apply(minigame, configFile, defaultHudDefinitions());
         unloadArenas(minigame, arena -> unregisterArenaStats(arena.id()));
         loadArenas();
@@ -250,6 +274,8 @@ public class BridgeMiniGame extends BaseMiniGame {
                     .set("arenaRegion", arenaDef.arenaRegion())
                     .set("startCountdownSeconds", arenaDef.startCountdownSeconds())
                     .set("endingSeconds", arenaDef.endingSeconds())
+                    .setLobbyRegion(arenaDef.lobbyRegion())
+                    .setTeamSelectionInput(arenaDef.teamSelectionInput())
                     .set("dropItems", new ArrayList<>(arenaDef.dropItems()))
                     .set("dropSurfaceMaterials", new ArrayList<>(arenaDef.dropSurfaceMaterials()));
 
@@ -440,4 +466,156 @@ public class BridgeMiniGame extends BaseMiniGame {
             default -> "<gray>" + displayName + "</gray>";
         };
     }
+
+    private @NotNull String renderTeamLabel(@NotNull MiniGameTeam team) {
+        String displayName = team.get("displayName", String.class, team.getName());
+        return switch (team.getName().toLowerCase(Locale.ROOT)) {
+            case "red" -> "<red>" + displayName + "</red>";
+            case "blue" -> "<blue>" + displayName + "</blue>";
+            default -> "<gray>" + displayName + "</gray>";
+        };
+    }
+
+    private @NotNull MiniGameTeamSelectionPolicy teamSelectionPolicy() {
+        return new MiniGameTeamSelectionPolicy() {
+            @Override
+            public @NotNull List<MiniGameTeam> assignableTeams(@NotNull MiniGameArena arena, @NotNull Map<org.bukkit.entity.Player, String> preferences) {
+                List<MiniGameTeam> teams = new ArrayList<>();
+                MiniGameTeam red = arena.getTeam("red");
+                MiniGameTeam blue = arena.getTeam("blue");
+                if (red != null) {
+                    teams.add(red);
+                }
+                if (blue != null) {
+                    teams.add(blue);
+                }
+                return teams;
+            }
+
+            @Override
+            public int teamCapacity(@NotNull MiniGameArena arena, @NotNull MiniGameTeam team) {
+                return Math.max(1, (arena.getMaxPlayers() + 1) / 2);
+            }
+
+            @Override
+            public int requiredActiveTeams(@NotNull MiniGameArena arena) {
+                return 2;
+            }
+
+            @Override
+            public @NotNull Set<MiniGameTeamSelectionInput> supportedInputs(@NotNull MiniGameArena arena) {
+                return Set.of(MiniGameTeamSelectionInput.FLOOR, MiniGameTeamSelectionInput.HOTBAR);
+            }
+
+            @Override
+            public @NotNull String renderTeamLabel(@NotNull MiniGameArena arena, @NotNull MiniGameTeam team) {
+                return teamSelectionFormat.renderLabel(team);
+            }
+
+            @Override
+            public @NotNull String renderLobbyTeamLine(@NotNull MiniGameArena arena,
+                                                       @NotNull MiniGameTeam team,
+                                                       int activePlayers,
+                                                       int maxPlayers,
+                                                       boolean viewerTeam) {
+                return teamSelectionFormat.renderLobby(team, activePlayers, maxPlayers, viewerTeam);
+            }
+        };
+    }
+
+    private @NotNull TeamSelectionFormat loadTeamSelectionFormat(@NotNull ConfigSection root) {
+        ConfigSection placeholders = root.getSection("placeholders");
+        TeamSelectionFormat defaults = TeamSelectionFormat.defaults();
+        if (defaults.applyDefaults(placeholders)) {
+            root.save();
+        }
+        return TeamSelectionFormat.from(placeholders, defaults);
+    }
+
+    private record TeamSelectionFormat(
+        @NotNull Map<String, String> teamColours,
+        @NotNull String lobbyRemainingPlayers,
+        @NotNull String lobbyTeamLine
+    ) {
+        private TeamSelectionFormat {
+            teamColours = new LinkedHashMap<>(teamColours);
+        }
+
+        static @NotNull TeamSelectionFormat defaults() {
+            return new TeamSelectionFormat(
+                Map.of(
+                    "red", "<red>Red</red>",
+                    "blue", "<blue>Blue</blue>"
+                ),
+                "<gray>({active}/{max})</gray>",
+                "{team} {state}"
+            );
+        }
+
+        static @NotNull TeamSelectionFormat from(@NotNull ConfigSection section, @NotNull TeamSelectionFormat defaults) {
+            Map<String, String> teamColours = new LinkedHashMap<>();
+            for (Map.Entry<String, String> entry : defaults.teamColours.entrySet()) {
+                String configKey = teamKey(entry.getKey());
+                teamColours.put(entry.getKey(), section.getString(configKey, entry.getValue()));
+            }
+
+            return new TeamSelectionFormat(
+                teamColours,
+                section.getString("lobby-team-state", defaults.lobbyRemainingPlayers),
+                section.getString("lobby-team-line", defaults.lobbyTeamLine)
+            );
+        }
+
+        boolean applyDefaults(@NotNull ConfigSection section) {
+            boolean changed = false;
+            for (Map.Entry<String, String> entry : teamColours.entrySet()) {
+                String configKey = teamKey(entry.getKey());
+                if (!section.contains(configKey)) {
+                    section.set(configKey, entry.getValue());
+                    changed = true;
+                }
+            }
+            changed |= setDefault(section, "lobby-team-state", lobbyRemainingPlayers);
+            changed |= setDefault(section, "lobby-team-line", lobbyTeamLine);
+            return changed;
+        }
+
+        @NotNull String renderLabel(@NotNull MiniGameTeam team) {
+            return teamColours.getOrDefault(team.getName().toLowerCase(Locale.ROOT), MiniGameTeamSelectionPolicy.defaultTeamLabel(team));
+        }
+
+        @NotNull String renderLobby(@NotNull MiniGameTeam team, int activePlayers, int maxPlayers, boolean viewerTeam) {
+            String teamLabel = renderLabel(team);
+            String state = PlaceholderUtil.apply(
+                lobbyRemainingPlayers,
+                "active", Integer.toString(activePlayers),
+                "count", Integer.toString(activePlayers),
+                "max", Integer.toString(maxPlayers)
+            );
+            return PlaceholderUtil.apply(
+                lobbyTeamLine,
+                "team", teamLabel,
+                "colour", teamLabel,
+                "color", teamLabel,
+                "state", state,
+                "you", viewerTeam ? "&7(You)" : "",
+                "active", Integer.toString(activePlayers),
+                "count", Integer.toString(activePlayers),
+                "max", Integer.toString(maxPlayers)
+            );
+        }
+
+        private static boolean setDefault(@NotNull ConfigSection section, @NotNull String key, @NotNull String value) {
+            if (section.contains(key)) {
+                return false;
+            }
+            section.set(key, value);
+            return true;
+        }
+
+        private static @NotNull String teamKey(@NotNull String teamId) {
+            return "team-" + teamId.toLowerCase(Locale.ROOT);
+        }
+    }
+
 }

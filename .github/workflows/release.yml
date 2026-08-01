@@ -1,0 +1,363 @@
+name: Release
+
+on:
+  push:
+    branches: [ '**' ]
+    paths:
+      - 'api/**'
+      - 'plugin/**'
+      - 'gradle/**'
+      - 'build.gradle'
+      - 'buildSource.gradle'
+      - 'gradle.properties'
+      - 'settings.gradle'
+      - 'gradlew'
+      - 'gradlew.bat'
+  workflow_dispatch:
+    inputs:
+      release:
+        description: Create a release from the default branch
+        required: false
+        default: false
+        type: boolean
+      build_name:
+        description: Optional release name
+        required: false
+        default: ''
+        type: string
+      changes_file:
+        description: Optional path to the release notes source file
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    name: Prepare Build Metadata
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.meta.outputs.should_release }}
+      build_number: ${{ steps.meta.outputs.build_number }}
+      tag: ${{ steps.meta.outputs.tag }}
+      release_name: ${{ steps.meta.outputs.release_name }}
+      changes_file: ${{ steps.meta.outputs.changes_file }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Calculate build metadata
+        id: meta
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          RUN_NUMBER: ${{ github.run_number }}
+          INPUT_RELEASE: ${{ inputs.release && 'true' || 'false' }}
+          INPUT_BUILD_NAME: ${{ inputs.build_name || '' }}
+          INPUT_CHANGES_FILE: ${{ inputs.changes_file || '' }}
+        run: |
+          set -eu
+
+          SHOULD_RELEASE=false
+          if [ "$REF_NAME" = "$DEFAULT_BRANCH" ] && {
+            [ "$EVENT_NAME" = "push" ] || [ "$INPUT_RELEASE" = "true" ];
+          }; then
+            SHOULD_RELEASE=true
+          fi
+
+          if [ "$SHOULD_RELEASE" = "true" ]; then
+            LAST_TAG="$(git tag --list 'build-*' | sed 's/build-//' | sort -n | tail -1)"
+            if [ -z "$LAST_TAG" ]; then
+              BUILD_NUMBER=1
+            else
+              BUILD_NUMBER=$((LAST_TAG + 1))
+            fi
+            TAG="build-$BUILD_NUMBER"
+          else
+            BUILD_NUMBER="$RUN_NUMBER"
+            TAG=""
+          fi
+
+          if [ -n "$INPUT_BUILD_NAME" ]; then
+            RELEASE_NAME="$INPUT_BUILD_NAME"
+          elif [ "$SHOULD_RELEASE" = "true" ]; then
+            RELEASE_NAME="Build $BUILD_NUMBER"
+          else
+            RELEASE_NAME="Build $BUILD_NUMBER (CI)"
+          fi
+
+          {
+            echo "should_release=$SHOULD_RELEASE"
+            echo "build_number=$BUILD_NUMBER"
+            echo "tag=$TAG"
+            echo "release_name=$RELEASE_NAME"
+            echo "changes_file=$INPUT_CHANGES_FILE"
+          } >> "$GITHUB_OUTPUT"
+
+  build-and-test:
+    name: Test and Build Plugin and API JARs
+    if: ${{ github.event_name != 'push' || github.ref_name == 'dev' || github.ref_name == github.event.repository.default_branch }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs:
+      - prepare
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Run analysis, tests, and build jars
+        env:
+          BUILD_NUMBER: ${{ needs.prepare.outputs.build_number }}
+        run: ./gradlew --no-daemon check :api:jar :plugin:jar
+
+      - name: Summarize SpotBugs report
+        if: always()
+        run: |
+          set +e
+
+          REPORT="plugin/build/reports/spotbugs/main.xml"
+          if [ ! -f "$REPORT" ]; then
+            echo "No SpotBugs XML report was generated." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          report = Path("plugin/build/reports/spotbugs/main.xml")
+          root = ET.parse(report).getroot()
+          bugs = root.findall("BugInstance")
+
+          print("## SpotBugs Report")
+          print()
+          print(f"Found {len(bugs)} bug instance(s) in `plugin/build/reports/spotbugs/main.xml`.")
+
+          if not bugs:
+            raise SystemExit(0)
+
+          print()
+          print("```text")
+          for bug in bugs[:20]:
+            bug_type = bug.get("type", "UNKNOWN")
+            long_message = bug.findtext("LongMessage", default=bug_type).strip()
+            source = bug.find("SourceLine")
+            location = "unknown location"
+            if source is not None:
+              source_file = source.get("sourcefile") or source.get("classname") or "unknown"
+              start = source.get("start")
+              location = f"{source_file}:{start}" if start else source_file
+            print(f"- [{bug_type}] {location} - {long_message}")
+          if len(bugs) > 20:
+            print(f"... and {len(bugs) - 20} more")
+          print("```")
+          PY
+
+      - name: Upload build reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-build-reports-${{ github.run_number }}
+          if-no-files-found: ignore
+          path: |
+            build/reports/problems/problems-report.html
+            api/build/reports/**
+            plugin/build/reports/**
+            plugin/build/test-results/**
+
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    needs:
+      - prepare
+      - build-and-test
+    if: needs.prepare.outputs.should_release == 'true'
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Build release JARs
+        env:
+          BUILD_NUMBER: ${{ needs.prepare.outputs.build_number }}
+        run: ./gradlew --no-daemon :api:jar :plugin:jar
+
+      - name: Collect release files
+        run: |
+          mkdir -p dist
+          cp api/build/libs/STEMCraft-API-*.jar dist/
+          cp plugin/build/libs/STEMCraft-*.jar dist/
+
+      - name: Create or update GitHub release and upload JARs
+        env:
+          BUILD_NUMBER: ${{ needs.prepare.outputs.build_number }}
+          CHANGES_FILE: ${{ needs.prepare.outputs.changes_file }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_NAME: ${{ needs.prepare.outputs.release_name }}
+          REPOSITORY: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -eu
+
+          short_sha="${SHA::10}"
+          cat > release-notes.txt <<EOF
+          Automated build \`${BUILD_NUMBER}\` for commit \`${short_sha}\`.
+          EOF
+
+          if [ -n "${CHANGES_FILE:-}" ] && [ -f "$CHANGES_FILE" ] && grep -q '[^[:space:]]' "$CHANGES_FILE"; then
+            {
+              echo
+              echo "## Manual Release Notes"
+              echo
+              cat "$CHANGES_FILE"
+              echo
+            } >> release-notes.txt
+          else
+            PREVIOUS_TAG="$(
+              git tag --list 'build-*' \
+                | grep -Fxv "${TAG:-}" \
+                | sort -V \
+                | tail -1
+            )"
+
+            if [ -n "$PREVIOUS_TAG" ]; then
+              RANGE="${PREVIOUS_TAG}..${SHA}"
+            else
+              RANGE="${SHA}"
+            fi
+
+            ci_skip_marker() {
+              commit_sha="$1"
+              changed_paths="$(
+                git diff-tree --no-commit-id --name-only -r "${commit_sha}^1" "$commit_sha" 2>/dev/null \
+                  || git diff-tree --no-commit-id --name-only -r "$commit_sha" 2>/dev/null \
+                  || true
+              )"
+
+              [ -n "$changed_paths" ] || return 1
+
+              while IFS= read -r changed_path; do
+                [ -n "$changed_path" ] || continue
+                case "$changed_path" in
+                  .github/*|docs/*|*.md|*.adoc|*.txt|LICENSE|NOTICE|CODEOWNERS|.editorconfig|.gitattributes|.gitignore)
+                    ;;
+                  *)
+                    return 1
+                    ;;
+                esac
+              done <<< "$changed_paths"
+
+              printf ' [ci skip]'
+            }
+
+            change_lines_file="$(mktemp)"
+            git log --first-parent --format='%H%x09%s' "$RANGE" | while IFS=$'\t' read -r commit_sha subject; do
+              [ -n "${commit_sha:-}" ] || continue
+
+              short_commit="$(git rev-parse --short=7 "$commit_sha")"
+              skip_marker="$(ci_skip_marker "$commit_sha" || true)"
+              detail="$(git show -s --format=%b "$commit_sha" | awk 'NF { print; exit }')"
+              if printf '%s\n' "$subject" | grep -Eq '^Merge pull request #[0-9]+ '; then
+                pr_number="$(printf '%s\n' "$subject" | sed -E 's/^Merge pull request #([0-9]+).*/\1/')"
+                summary="${detail:-$subject}"
+                printf '%s%s %s (#%s)\n' "$short_commit" "$skip_marker" "$summary" "$pr_number" >> "$change_lines_file"
+              else
+                printf '%s%s %s\n' "$short_commit" "$skip_marker" "$subject" >> "$change_lines_file"
+              fi
+            done
+
+            if [ -s "$change_lines_file" ]; then
+              CHANGE_LINES="$(cat "$change_lines_file")"
+            else
+              CHANGE_LINES="No code changes since the previous build tag."
+            fi
+            rm -f "$change_lines_file"
+
+            {
+              echo
+              echo "## What's Changed"
+              echo
+              printf '%s\n' "$CHANGE_LINES"
+              echo
+              if [ -n "$PREVIOUS_TAG" ]; then
+                echo "Full changelog: https://github.com/${REPOSITORY}/compare/${PREVIOUS_TAG}...${SHA}"
+                echo
+              fi
+              echo "## Assets"
+              echo "- STEMCraft plugin JAR"
+              echo "- STEMCraft API JAR"
+            } >> release-notes.txt
+          fi
+
+          if gh release view "$TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$TAG" \
+              --repo "$REPOSITORY" \
+              --title "$RELEASE_NAME" \
+              --notes-file release-notes.txt \
+              --target "$SHA"
+            gh release upload "$TAG" dist/* --repo "$REPOSITORY" --clobber
+          else
+            gh release create "$TAG" dist/* \
+              --repo "$REPOSITORY" \
+              --title "$RELEASE_NAME" \
+              --notes-file release-notes.txt \
+              --target "$SHA"
+          fi
+  publish-maven:
+    name: Publish API to Maven Repository
+    runs-on:
+      - self-hosted
+      - maven-publisher
+      
+    needs:
+      - prepare
+      - build-and-test
+      
+    if: needs.prepare.outputs.should_release == 'true'
+    
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        
+      - name: Set up Java 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Verify Maven mount
+        run: |
+          ls -ld /mnt/maven-public
+          touch /mnt/maven-public/.write-test
+          rm /mnt/maven-public/.write-test
+          
+      - name: Publish API
+        env:
+          BUILD_NUMBER: ${{ needs.prepare.outputs.build_number }}
+          MAVEN_REPO_DIR: /mnt/maven-public
+        run: ./gradlew --no-daemon :api:publish

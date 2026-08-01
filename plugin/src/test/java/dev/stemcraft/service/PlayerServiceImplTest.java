@@ -54,28 +54,4 @@ class PlayerServiceImplTest {
         service.show(hidden);
         assertTrue(observer.canSee(hidden));
     }
-
-    @Test
-    void whitelistUsesWebhookBridgeWhenEnforcementIsActive() {
-        WebhookBridgeServiceImpl bridge = mock(WebhookBridgeServiceImpl.class);
-        UUID uuid = UUID.randomUUID();
-        when(plugin.webhookBridge()).thenReturn(bridge);
-        when(bridge.isWhitelistEnforcementActive()).thenReturn(true);
-        when(bridge.isWhitelisted(uuid, "Alex", "java")).thenReturn(true);
-
-        assertTrue(service.isWhitelisted(uuid, "Alex", "java"));
-    }
-
-    @Test
-    void whitelistFallsBackToVanillaWhitelistRules() {
-        when(plugin.webhookBridge()).thenReturn(null);
-
-        server.setWhitelist(false);
-        assertTrue(service.isWhitelisted(UUID.randomUUID(), "Unknown", "java"));
-
-        server.setWhitelist(true);
-        hidden.setWhitelisted(true);
-        assertTrue(service.isWhitelisted(hidden.getUniqueId(), hidden.getName(), "java"));
-        assertFalse(service.isWhitelisted(UUID.randomUUID(), "Unknown", "java"));
-    }
 }

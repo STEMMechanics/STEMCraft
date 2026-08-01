@@ -29,9 +29,9 @@ import java.util.*;
 public interface WorldGeneration {
 
     /**
-     * Returns a sorted list of all registered chunk generator keys.
+     * Returns a sorted list of available chunk generator keys.
      *
-     * @return A list of registered chunk generator keys.
+     * @return A list of available chunk generator keys.
      */
     @NotNull List<String> list();
 
@@ -50,6 +50,21 @@ public interface WorldGeneration {
      * @return True if the generator is registered, false otherwise.
      */
     boolean isRegistered(@NotNull String key);
+
+    /**
+     * Checks if a chunk generator key is available for a world.
+     * <p>
+     * Registered STEMCraft generators are always available. Bukkit plugin
+     * generators are available only when the named plugin can provide a
+     * generator for the supplied world name.
+     *
+     * @param key The generator key or Bukkit plugin[:id] generator spec.
+     * @param worldName The world name the generator would be used for.
+     * @return True if the generator can be resolved, false otherwise.
+     */
+    default boolean isAvailable(@NotNull String key, @NotNull String worldName) {
+        return isRegistered(key);
+    }
 
     /**
      * Returns tab-completion suggestions for a generator's options.

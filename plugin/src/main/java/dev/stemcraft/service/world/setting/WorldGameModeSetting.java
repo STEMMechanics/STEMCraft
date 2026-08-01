@@ -28,6 +28,7 @@ import dev.stemcraft.api.service.world.WorldService;
 import org.bukkit.*;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
@@ -59,13 +60,15 @@ public class WorldGameModeSetting implements WorldBaseSetting {
     public void onEnable(@NotNull STEMCraftAPI api, @NotNull WorldService service) {
         this.service = service;
 
-        api.events().register(PlayerChangedWorldEvent.class, event -> {
-            Player player = event.getPlayer();
-            World world = player.getWorld();
+        api.events().register(PlayerJoinEvent.class, event -> applyConfiguredGameMode(event.getPlayer()));
+        api.events().register(PlayerChangedWorldEvent.class, event -> applyConfiguredGameMode(event.getPlayer()));
+    }
 
-            GameMode mode = get(world);
-            if (mode != null) player.setGameMode(mode);
-        });
+    void applyConfiguredGameMode(@NotNull Player player) {
+        GameMode mode = get(player.getWorld());
+        if (mode != null) {
+            player.setGameMode(mode);
+        }
     }
 
     /**

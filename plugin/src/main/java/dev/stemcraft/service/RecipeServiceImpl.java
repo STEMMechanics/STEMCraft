@@ -41,6 +41,7 @@ import java.util.Map;
  * Implementation of the RecipeService for managing custom recipes.
  */
 public class RecipeServiceImpl extends BaseService implements RecipeService {
+    private static final String MINECRAFT_NAMESPACE = "minecraft";
 
     /**
      * Constructor for RecipeServiceImpl.
@@ -112,7 +113,12 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
                     if (amount <= 0) amount = 1;
 
                     addStonecutter(inputMat, outputMat, amount);
-                    api.messages().info("RECIPE_STONECUTTER_RESULT", "input", inputMat.name(), "amount", String.valueOf(amount), "output", outputMat.name());
+                    api.messages().info(
+                        "RECIPE_STONECUTTER_RESULT",
+                        "input", formatMaterialName(inputMat),
+                        "amount", String.valueOf(amount),
+                        "output", formatMaterialName(outputMat)
+                    );
                 }
             }
         }
@@ -201,7 +207,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
                     recipe.addIngredient(m);
                 }
                 Bukkit.addRecipe(recipe);
-                api.messages().info("RECIPE_SHAPELESS_LOADED", "id" + id);
+                api.messages().info("RECIPE_SHAPELESS_LOADED", "id", id);
             }
         }
 
@@ -341,6 +347,15 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
      */
     private NamespacedKey key(String id) {
         return new NamespacedKey(plugin, id.toLowerCase());
+    }
+
+    private @NotNull String formatMaterialName(@NotNull Material material) {
+        NamespacedKey key = material.getKey();
+        if (MINECRAFT_NAMESPACE.equals(key.getNamespace())) {
+            return key.getKey();
+        }
+
+        return key.asString();
     }
 
     // Shaped: shape like new String[]{"ABC", "A A", " B "}

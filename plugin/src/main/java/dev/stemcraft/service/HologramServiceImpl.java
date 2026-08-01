@@ -24,6 +24,7 @@ import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.Command;
 import dev.stemcraft.api.command.CommandContext;
+import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.service.playerstats.PlayerStatDefinition;
 import dev.stemcraft.api.service.playerstats.PlayerStatValue;
 import dev.stemcraft.api.service.playerstats.PlayerStatsRecord;
@@ -32,19 +33,23 @@ import dev.stemcraft.api.service.hologram.HologramTypeHandler;
 import dev.stemcraft.api.event.world.WorldDeleteEvent;
 import dev.stemcraft.api.util.StringUtil;
 import dev.stemcraft.api.util.TextUtil;
+import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
+import org.bukkit.FluidCollisionMode;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.TextDisplay;
 import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.event.world.ChunkUnloadEvent;
 import org.bukkit.event.world.WorldLoadEvent;
 import org.bukkit.event.world.WorldUnloadEvent;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.util.RayTraceResult;
 import org.jetbrains.annotations.NotNull;
 import org.jspecify.annotations.NonNull;
 
@@ -59,11 +64,21 @@ public class HologramServiceImpl extends BaseService implements HologramService 
     private static final double LINE_SPACING = 0.25;
     private static final String STAT_LEADERBOARD_TYPE = "stat_leaderboard";
     private static final int DEFAULT_STAT_LEADERBOARD_LIMIT = 10;
+    private static final String STEMCRAFT_HOLOGRAM_TAG = "stemcraft:hologram";
+    private static final String VISIBILITY_TASK_ID = "service:hologram-visibility";
+    private static final long DEFAULT_VISIBILITY_UPDATE_TICKS = 10L;
+    private static final double DEFAULT_MAX_VISIBLE_DISTANCE = 32.0D;
     private static final DecimalFormat STAT_VALUE_FORMAT = new DecimalFormat("0.##");
 
     private final Map<Integer, HologramData> holograms = new HashMap<>();
     private final Map<Integer, List<UUID>> entitiesById = new HashMap<>();
     private final Map<String, HologramTypeHandler> handlers = new HashMap<>();
+    private final Map<UUID, Set<UUID>> hiddenExternalViewers = new HashMap<>();
+    private boolean visibilityEnabled = true;
+    private long visibilityUpdateTicks = DEFAULT_VISIBILITY_UPDATE_TICKS;
+    private double maxVisibleDistanceSquared = DEFAULT_MAX_VISIBLE_DISTANCE * DEFAULT_MAX_VISIBLE_DISTANCE;
+    private boolean requireLineOfSight = true;
+    private boolean applyToCitizensHolograms = true;
 
     /**
      * Constructor for HologramServiceImpl.
@@ -80,6 +95,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
      */
     public void onEnable() {
         ensureStorage();
+        reloadVisibilitySettings();
 
         registerType("", new HologramTypeHandler() {
             /** {@inheritDoc} */
@@ -217,14 +233,25 @@ public class HologramServiceImpl extends BaseService implements HologramService 
 
                 })
                 .register(plugin);
+
+        startVisibilityController();
     }
 
     /**
      * Shut down the hologram manager.
      */
     public void onDisable() {
+        stopVisibilityController();
+        restoreManagedVisibility();
         despawnAll();
         saveAll();
+    }
+
+    @Override
+    public void onReload() {
+        super.onReload();
+        reloadVisibilitySettings();
+        startVisibilityController();
     }
 
     /**
@@ -633,13 +660,23 @@ public class HologramServiceImpl extends BaseService implements HologramService 
                 entity.setSmall(true);
                 entity.setCustomNameVisible(true);
                 entity.customName(TextUtil.colourise(renderedLine));
+                entity.setVisibleByDefault(!visibilityEnabled);
                 entity.setPersistent(false);
+                entity.addScoreboardTag(STEMCRAFT_HOLOGRAM_TAG);
             });
             uuids.add(stand.getUniqueId());
             yOffset -= LINE_SPACING;
         }
 
         entitiesById.put(hologram.id, uuids);
+        if (visibilityEnabled) {
+            for (UUID uuid : uuids) {
+                Entity entity = findEntity(uuid);
+                if (entity != null) {
+                    syncVisibility(entity, false);
+                }
+            }
+        }
     }
 
     /**
@@ -842,6 +879,52 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         return (location.getBlockX() >> 4) == chunkX && (location.getBlockZ() >> 4) == chunkZ;
     }
 
+    static boolean isLikelyCitizensHologram(@Nullable Entity entity) {
+        if (entity == null || !entity.hasMetadata("NPC")) {
+            return false;
+        }
+
+        if (entity instanceof ArmorStand stand) {
+            return stand.isMarker()
+                && !stand.isVisible()
+                && stand.isCustomNameVisible()
+                && stand.customName() != null;
+        }
+
+        if (entity instanceof TextDisplay display) {
+            return !Component.empty().equals(display.text());
+        }
+
+        return false;
+    }
+
+    static boolean hasClearLineOfSight(@NotNull Player player, @NotNull Location target) {
+        World world = player.getWorld();
+        if (target.getWorld() == null || !world.equals(target.getWorld())) {
+            return false;
+        }
+
+        Location eye = player.getEyeLocation();
+        if (eye.distanceSquared(target) <= 0.0625D) {
+            return true;
+        }
+
+        var direction = target.toVector().subtract(eye.toVector());
+        double distance = direction.length();
+        if (distance <= 0.0001D) {
+            return true;
+        }
+
+        RayTraceResult hit = world.rayTraceBlocks(
+            eye,
+            direction.normalize(),
+            distance,
+            FluidCollisionMode.NEVER,
+            true
+        );
+        return hit == null;
+    }
+
     private record StatLeaderboardOptions(
         @NotNull String title,
         @NotNull String line,
@@ -962,6 +1045,229 @@ public class HologramServiceImpl extends BaseService implements HologramService 
                 return new ArrayList<>(Arrays.asList(yaml.split("\\R")));
             } catch (Exception ignoredToo) {
                 return new ArrayList<>();
+            }
+        }
+    }
+
+    private void reloadVisibilitySettings() {
+        ConfigSection section = getConfigSection();
+        boolean changed = false;
+
+        changed |= ensureDefault(section, "visibility.enabled", true);
+        changed |= ensureDefault(section, "visibility.update_ticks", DEFAULT_VISIBILITY_UPDATE_TICKS);
+        changed |= ensureDefault(section, "visibility.max_distance", DEFAULT_MAX_VISIBLE_DISTANCE);
+        changed |= ensureDefault(section, "visibility.require_line_of_sight", true);
+        changed |= ensureDefault(section, "visibility.apply_to_citizens", true);
+
+        if (changed) {
+            section.save();
+        }
+
+        visibilityEnabled = section.getBoolean("visibility.enabled", true);
+        visibilityUpdateTicks = Math.max(1L, section.getLong("visibility.update_ticks", DEFAULT_VISIBILITY_UPDATE_TICKS));
+        double maxVisibleDistance = Math.max(4.0D, section.getDouble("visibility.max_distance", DEFAULT_MAX_VISIBLE_DISTANCE));
+        maxVisibleDistanceSquared = maxVisibleDistance * maxVisibleDistance;
+        requireLineOfSight = section.getBoolean("visibility.require_line_of_sight", true);
+        applyToCitizensHolograms = section.getBoolean("visibility.apply_to_citizens", true);
+    }
+
+    private boolean ensureDefault(@NotNull ConfigSection section, @NotNull String path, @NotNull Object value) {
+        if (section.contains(path)) {
+            return false;
+        }
+        section.set(path, value);
+        return true;
+    }
+
+    private void startVisibilityController() {
+        stopVisibilityController();
+        if (!visibilityEnabled) {
+            restoreManagedVisibility();
+            return;
+        }
+
+        setStemcraftEntitiesVisibleByDefault(false);
+        api.tasks().repeating(VISIBILITY_TASK_ID, 1L, visibilityUpdateTicks, this::tickVisibility);
+        tickVisibility();
+    }
+
+    private void stopVisibilityController() {
+        api.tasks().cancel(VISIBILITY_TASK_ID);
+    }
+
+    private void tickVisibility() {
+        Set<UUID> activeExternalEntities = new HashSet<>();
+
+        for (World world : Bukkit.getWorlds()) {
+            for (Entity entity : world.getEntitiesByClasses(ArmorStand.class, TextDisplay.class)) {
+                if (!isManagedHologramEntity(entity)) {
+                    continue;
+                }
+
+                boolean external = isExternalManagedHologram(entity);
+                if (external) {
+                    activeExternalEntities.add(entity.getUniqueId());
+                }
+
+                syncVisibility(entity, external);
+            }
+        }
+
+        cleanupExternalVisibilityState(activeExternalEntities);
+    }
+
+    private boolean isManagedHologramEntity(@NotNull Entity entity) {
+        return entity.getScoreboardTags().contains(STEMCRAFT_HOLOGRAM_TAG)
+            || (applyToCitizensHolograms && isLikelyCitizensHologram(entity));
+    }
+
+    private boolean isExternalManagedHologram(@NotNull Entity entity) {
+        return !entity.getScoreboardTags().contains(STEMCRAFT_HOLOGRAM_TAG) && isLikelyCitizensHologram(entity);
+    }
+
+    private void syncVisibility(@NotNull Entity entity, boolean trackExternalState) {
+        if (!entity.isValid()) {
+            hiddenExternalViewers.remove(entity.getUniqueId());
+            return;
+        }
+
+        Location target = visibilityTargetLocation(entity);
+        World world = target.getWorld();
+        if (world == null) {
+            return;
+        }
+
+        Set<UUID> hiddenViewers = trackExternalState
+            ? hiddenExternalViewers.computeIfAbsent(entity.getUniqueId(), ignored -> new HashSet<>())
+            : null;
+
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            if (!player.isOnline() || !player.getWorld().equals(world)) {
+                continue;
+            }
+
+            boolean shouldShow = shouldShowTo(player, target);
+            if (shouldShow) {
+                if (!player.canSee(entity)) {
+                    player.showEntity(plugin, entity);
+                }
+                if (hiddenViewers != null) {
+                    hiddenViewers.remove(player.getUniqueId());
+                }
+                continue;
+            }
+
+            if (player.canSee(entity)) {
+                player.hideEntity(plugin, entity);
+            }
+            if (hiddenViewers != null) {
+                hiddenViewers.add(player.getUniqueId());
+            }
+        }
+
+        if (hiddenViewers != null && hiddenViewers.isEmpty()) {
+            hiddenExternalViewers.remove(entity.getUniqueId());
+        }
+    }
+
+    private boolean shouldShowTo(@NotNull Player player, @NotNull Location target) {
+        Location playerLocation = player.getLocation();
+        if (!playerLocation.getWorld().equals(target.getWorld())) {
+            return false;
+        }
+        if (playerLocation.distanceSquared(target) > maxVisibleDistanceSquared) {
+            return false;
+        }
+        return !requireLineOfSight || hasClearLineOfSight(player, target);
+    }
+
+    private @NotNull Location visibilityTargetLocation(@NotNull Entity entity) {
+        Location target = entity.getLocation().clone();
+        double verticalOffset = Math.max(0.25D, entity.getHeight() * 0.5D);
+        return target.add(0.0D, verticalOffset, 0.0D);
+    }
+
+    private void cleanupExternalVisibilityState(@NotNull Set<UUID> activeExternalEntities) {
+        Iterator<Map.Entry<UUID, Set<UUID>>> iterator = hiddenExternalViewers.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<UUID, Set<UUID>> entry = iterator.next();
+            Entity entity = findEntity(entry.getKey());
+            if (entity == null || !entity.isValid()) {
+                iterator.remove();
+                continue;
+            }
+
+            if (!activeExternalEntities.contains(entry.getKey())) {
+                restoreExternalVisibility(entity, entry.getValue());
+                iterator.remove();
+                continue;
+            }
+
+            entry.getValue().removeIf(playerId -> {
+                Player player = Bukkit.getPlayer(playerId);
+                return player == null || !player.isOnline();
+            });
+            if (entry.getValue().isEmpty()) {
+                iterator.remove();
+            }
+        }
+    }
+
+    private void restoreManagedVisibility() {
+        restoreStemcraftVisibility();
+        restoreExternalVisibility();
+    }
+
+    private void restoreStemcraftVisibility() {
+        setStemcraftEntitiesVisibleByDefault(true);
+
+        for (World world : Bukkit.getWorlds()) {
+            for (Entity entity : world.getEntitiesByClass(ArmorStand.class)) {
+                if (!entity.getScoreboardTags().contains(STEMCRAFT_HOLOGRAM_TAG)) {
+                    continue;
+                }
+
+                for (Player player : Bukkit.getOnlinePlayers()) {
+                    if (player.canSee(entity)) {
+                        continue;
+                    }
+                    player.showEntity(plugin, entity);
+                }
+            }
+        }
+    }
+
+    private void setStemcraftEntitiesVisibleByDefault(boolean visibleByDefault) {
+        for (World world : Bukkit.getWorlds()) {
+            for (Entity entity : world.getEntitiesByClass(ArmorStand.class)) {
+                if (!entity.getScoreboardTags().contains(STEMCRAFT_HOLOGRAM_TAG)) {
+                    continue;
+                }
+                entity.setVisibleByDefault(visibleByDefault);
+            }
+        }
+    }
+
+    private void restoreExternalVisibility() {
+        Iterator<Map.Entry<UUID, Set<UUID>>> iterator = hiddenExternalViewers.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<UUID, Set<UUID>> entry = iterator.next();
+            Entity entity = findEntity(entry.getKey());
+            if (entity != null && entity.isValid()) {
+                restoreExternalVisibility(entity, entry.getValue());
+            }
+            iterator.remove();
+        }
+    }
+
+    private void restoreExternalVisibility(@NotNull Entity entity, @NotNull Set<UUID> viewerIds) {
+        for (UUID viewerId : viewerIds) {
+            Player player = Bukkit.getPlayer(viewerId);
+            if (player == null || !player.isOnline()) {
+                continue;
+            }
+            if (!player.canSee(entity)) {
+                player.showEntity(plugin, entity);
             }
         }
     }

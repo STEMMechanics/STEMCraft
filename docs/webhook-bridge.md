@@ -1,6 +1,8 @@
 # Webhook Bridge Integration
 
-This document describes STEMCraft's website bridge behavior for account state, penalties, status, and player stats.
+This document is retained as historical reference only.
+
+The webhook bridge described here is no longer active runtime behavior in STEMCraft. Current builds keep the embedded web server and `/status` endpoint, but the old website event bridge, website-managed whitelist flow, and webhook sync behavior have been removed.
 
 ## Outbound Security
 
@@ -66,8 +68,8 @@ To avoid website account mismatches:
 
 ## Whitelist Authority
 
-Webhook bridge can enforce account whitelist state for login decisions.
-Blacklist authority is handled by webhook bridge state; whitelist authority should be centralized in one place (webhook bridge in this setup).
+Website whitelist enforcement has been removed.
+Access control now follows the server's native whitelist configuration.
 
 ## Operational Notes
 

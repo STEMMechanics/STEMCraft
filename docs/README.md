@@ -9,12 +9,12 @@ This directory contains operator and developer documentation for the STEMCraft p
 - [Minigame Placeholders](./minigame-placeholders.md)
 - [Developer API](./developer-api.md)
 - [Tab Completion Guide](./tab-completion.md)
-- [Webhook Bridge Integration](./webhook-bridge.md)
+- [Webhook Bridge Integration (Historical)](./webhook-bridge.md)
 
 ## Audience
 
 - Server owners/admins: start with [Features](./features.md), [Commands](./commands.md), and [Minigame Placeholders](./minigame-placeholders.md)
-- Website/integration developers: start with [Webhook Bridge Integration](./webhook-bridge.md)
+- Website/integration developers: note that the old webhook bridge is no longer part of the active runtime; [Webhook Bridge Integration](./webhook-bridge.md) is retained for historical reference only
 - Plugin developers integrating with STEMCraft internals: start with [Developer API](./developer-api.md) and [Tab Completion Guide](./tab-completion.md)
 
 ## Notes

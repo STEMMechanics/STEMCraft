@@ -40,6 +40,7 @@ import dev.stemcraft.service.message.MessageServiceImpl;
 import dev.stemcraft.service.minigame.MiniGameServiceImpl;
 import dev.stemcraft.service.resourcepack.ResourcePackServiceImpl;
 import dev.stemcraft.service.tabcompletion.TabCompleteServiceImpl;
+import dev.stemcraft.service.firstjoin.FirstJoinService;
 import dev.stemcraft.service.world.WorldServiceImpl;
 import io.papermc.paper.connection.PlayerLoginConnection;
 import io.papermc.paper.event.connection.PlayerConnectionValidateLoginEvent;
@@ -85,12 +86,14 @@ import java.util.regex.Pattern;
 @Accessors(fluent = true)
 public final class STEMCraft extends JavaPlugin {
     private static final Pattern VERSION_COMPONENT_PATTERN = Pattern.compile("\\d+");
+    private static final String BOOTSTRAP_ERROR_LOAD_CONFIG = "Could not load config.yml.";
     private static STEMCraftAPI api;
     private File cacheDir;
 
     private ChatServiceImpl chat;
     private CommandServiceImpl commands;
     private ConfigServiceImpl config;
+    private AuditServiceImpl audit;
     private DatabaseServiceImpl database;
     private EventServiceImpl events;
     private HologramServiceImpl holograms;
@@ -102,6 +105,7 @@ public final class STEMCraft extends JavaPlugin {
     private PlaceholderServiceImpl placeholders;
     private PlayerServiceImpl players;
     private PlayerStatsServiceImpl playerStats;
+    private ProfanityFilterServiceImpl profanityFilter;
     private PunishmentServiceImpl punishments;
     private RecipeServiceImpl recipes;
     private RegionServiceImpl regions;
@@ -109,7 +113,7 @@ public final class STEMCraft extends JavaPlugin {
     private SelectionServiceImpl selections;
     private TabCompleteServiceImpl tabComplete;
     private TaskServiceImpl tasks;
-    private WebhookBridgeServiceImpl webhookBridge;
+    private FirstJoinService firstJoin;
     private WebServiceImpl web;
     private WorldServiceImpl worlds;
 
@@ -150,7 +154,7 @@ public final class STEMCraft extends JavaPlugin {
         // Load configuration
         configFile = api.config().load("config.yml");
         if(configFile == null) {
-            error("STEMCRAFT_ERROR_LOAD_CONFIG");
+            error(BOOTSTRAP_ERROR_LOAD_CONFIG);
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
@@ -182,6 +186,7 @@ public final class STEMCraft extends JavaPlugin {
         debugging = configFile.getBoolean("debug", false);
 
         // Load managers
+        audit = new AuditServiceImpl(this, api);
         chat = new ChatServiceImpl(this, api);
         commands = new CommandServiceImpl(this, api);
         database = new DatabaseServiceImpl(this, api);
@@ -193,19 +198,22 @@ public final class STEMCraft extends JavaPlugin {
         placeholders = new PlaceholderServiceImpl(this, api);
         players = new PlayerServiceImpl(this, api);
         playerStats = new PlayerStatsServiceImpl(this, api);
+        profanityFilter = new ProfanityFilterServiceImpl(this, api);
         punishments = new PunishmentServiceImpl(this, api);
         recipes = new RecipeServiceImpl(this, api);
         regions = new RegionServiceImpl(this, api);
         resourcePack = new ResourcePackServiceImpl(this, api);
         selections = new SelectionServiceImpl(this, api);
         tabComplete = new TabCompleteServiceImpl(this, api);
-        webhookBridge = new WebhookBridgeServiceImpl(this, api);
         web = new WebServiceImpl(this, api);
+        firstJoin = new FirstJoinService(this, api);
         worlds = new WorldServiceImpl(this, api);
 
+        database.onEnable();
+        firstJoin.onEnable();
+        audit.onEnable();
         chat.onEnable();
         commands.onEnable();
-        database.onEnable();
         events.onEnable();
         holograms.onEnable();
         items.onEnable();
@@ -214,13 +222,13 @@ public final class STEMCraft extends JavaPlugin {
         placeholders.onEnable();
         players.onEnable();
         playerStats.onEnable();
+        profanityFilter.onEnable();
         punishments.onEnable();
         recipes.onEnable();
         regions.onEnable();
         resourcePack.onEnable();
         selections.onEnable();
         tabComplete.onEnable();
-        webhookBridge.onEnable();
         web.onEnable();
         worlds.onEnable();
 
@@ -265,7 +273,7 @@ public final class STEMCraft extends JavaPlugin {
                 UUID uuid = getUuid(event);
 
                 if (uuid == null) {
-                    // may be null (https://jd.papermc.io/paper/1.21.11/org/bukkit/profile/PlayerProfile.html)
+                    // may be null in the Paper API
                     // can’t reliably identify them here (offline mode / early stage / etc.)
                     return;
                 }
@@ -316,13 +324,13 @@ public final class STEMCraft extends JavaPlugin {
         disableService(minigames);
         disableService(worlds);
         disableService(web);
-        disableService(webhookBridge);
         disableService(tabComplete);
         disableService(resourcePack);
         disableService(selections);
         disableService(regions);
         disableService(recipes);
         disableService(punishments);
+        disableService(profanityFilter);
         disableService(playerStats);
         disableService(placeholders);
         disableService(players);
@@ -330,6 +338,8 @@ public final class STEMCraft extends JavaPlugin {
         disableService(items);
         disableService(holograms);
         disableService(events);
+        disableService(firstJoin);
+        disableService(audit);
         disableService(database);
         disableService(commands);
         disableService(chat);
@@ -528,7 +538,13 @@ public final class STEMCraft extends JavaPlugin {
             return components;
         }
 
-        Matcher matcher = VERSION_COMPONENT_PATTERN.matcher(version);
+        String normalizedVersion = version;
+        int buildSeparator = normalizedVersion.indexOf(".build.");
+        if (buildSeparator >= 0) {
+            normalizedVersion = normalizedVersion.substring(0, buildSeparator);
+        }
+
+        Matcher matcher = VERSION_COMPONENT_PATTERN.matcher(normalizedVersion);
         int index = 0;
         while (matcher.find() && index < components.length) {
             components[index++] = Integer.parseInt(matcher.group());
@@ -627,6 +643,12 @@ public final class STEMCraft extends JavaPlugin {
 
         int reloadedFeatures = 0;
         if (!localesOnly) {
+            if (motd != null) {
+                motd.onReload();
+            }
+            if (firstJoin != null) {
+                firstJoin.onReload();
+            }
             if (selections != null) {
                 selections.onReload();
             }
@@ -651,6 +673,15 @@ public final class STEMCraft extends JavaPlugin {
 
     public List<String> loadedFeatureIds() {
         return loadedFeatures.stream().map(BaseFeature::id).sorted().toList();
+    }
+
+    public <T extends BaseFeature> @Nullable T feature(@NotNull Class<T> type) {
+        for (BaseFeature feature : loadedFeatures) {
+            if (type.isInstance(feature)) {
+                return type.cast(feature);
+            }
+        }
+        return null;
     }
 
     public List<String> loadedCommandIds() {

@@ -27,12 +27,16 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Handler;
+import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.logging.LogRecord;
 import java.util.zip.ZipFile;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -44,7 +48,9 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyInt;
 
 class ResourcePackServiceImplTest {
     @TempDir
@@ -66,6 +72,8 @@ class ResourcePackServiceImplTest {
         assertEquals(64, ResourcePackServiceImpl.resolveResourcePackFormat(new int[] {1, 21, 8}));
         assertEquals(69, ResourcePackServiceImpl.resolveResourcePackFormat(new int[] {1, 21, 10}));
         assertEquals(75, ResourcePackServiceImpl.resolveResourcePackFormat(new int[] {1, 21, 11}));
+        assertEquals(84, ResourcePackServiceImpl.resolveResourcePackFormat(new int[] {26, 1, 2}));
+        assertEquals(88, ResourcePackServiceImpl.resolveResourcePackFormat(new int[] {26, 2, 0}));
     }
 
     @Test
@@ -79,6 +87,8 @@ class ResourcePackServiceImplTest {
     void resolveSupportedVersionRangeStartsAtEarliestKnownAndClampsToCurrentVersion() {
         assertEquals(32, ResourcePackServiceImpl.resolveSupportedVersionRange(new int[] {1, 21, 11})[0]);
         assertEquals(75, ResourcePackServiceImpl.resolveSupportedVersionRange(new int[] {1, 21, 11})[1]);
+        assertEquals(32, ResourcePackServiceImpl.resolveSupportedVersionRange(new int[] {26, 2, 0})[0]);
+        assertEquals(88, ResourcePackServiceImpl.resolveSupportedVersionRange(new int[] {26, 2, 0})[1]);
         assertEquals(32, ResourcePackServiceImpl.resolveSupportedVersionRange(new int[] {1, 21, 3})[0]);
         assertEquals(42, ResourcePackServiceImpl.resolveSupportedVersionRange(new int[] {1, 21, 3})[1]);
     }
@@ -87,53 +97,93 @@ class ResourcePackServiceImplTest {
     void resolveSupportedVersionRangeUsesConfiguredMinButKeepsCurrentMinecraftAsMax() {
         ConfigSectionView config = mock(ConfigSectionView.class);
         when(config.getInt("min_pack_format", 32)).thenReturn(65);
-        when(config.getInt("max_pack_format", 75)).thenReturn(69);
+        when(config.getInt("max_pack_format", 88)).thenReturn(69);
 
         List<String> warnings = new ArrayList<>();
         int[] supportedRange = ResourcePackServiceImpl.resolveSupportedVersionRange(
-            new int[] {1, 21, 11},
+            new int[] {26, 2, 0},
             config,
             warnings::add
         );
 
         assertEquals(65, supportedRange[0]);
-        assertEquals(75, supportedRange[1]);
+        assertEquals(88, supportedRange[1]);
         assertEquals(1, warnings.size());
     }
 
     @Test
     void resolveSupportedVersionRangeClampsConfiguredMinToCurrentMinecraftFormat() {
         ConfigSectionView config = mock(ConfigSectionView.class);
-        when(config.getInt("min_pack_format", 32)).thenReturn(80);
-        when(config.getInt("max_pack_format", 75)).thenReturn(75);
+        when(config.getInt("min_pack_format", 32)).thenReturn(90);
+        when(config.getInt("max_pack_format", 88)).thenReturn(88);
 
         List<String> warnings = new ArrayList<>();
         int[] supportedRange = ResourcePackServiceImpl.resolveSupportedVersionRange(
-            new int[] {1, 21, 11},
+            new int[] {26, 2, 0},
             config,
             warnings::add
         );
 
-        assertEquals(75, supportedRange[0]);
-        assertEquals(75, supportedRange[1]);
+        assertEquals(88, supportedRange[0]);
+        assertEquals(88, supportedRange[1]);
         assertEquals(1, warnings.size());
+    }
+
+    @Test
+    void recalculateSupportedVersionRangeLogsRepeatedMaxFormatMismatchOnlyOncePerLifecycle() throws Exception {
+        MockBukkit.mock();
+        Logger logger = Logger.getLogger("resource-pack-warning-test");
+        logger.setUseParentHandlers(false);
+        logger.setLevel(Level.ALL);
+        RecordingHandler handler = new RecordingHandler();
+        logger.addHandler(handler);
+
+        try {
+            STEMCraft plugin = mock(STEMCraft.class);
+            when(plugin.getLogger()).thenReturn(logger);
+
+            STEMCraftAPI api = mock(STEMCraftAPI.class);
+            ConfigSectionView config = mock(ConfigSectionView.class);
+            int currentFormat = ResourcePackServiceImpl.resolveResourcePackFormat(STEMCraft.getMinecraftVersion());
+            when(config.getInt("min_pack_format", 32)).thenReturn(32);
+            when(config.getInt(eq("max_pack_format"), anyInt())).thenReturn(currentFormat - 1);
+
+            TestService service = new TestService(plugin, api, config);
+            Method method = ResourcePackServiceImpl.class.getDeclaredMethod("recalculateSupportedVersionRange");
+            method.setAccessible(true);
+
+            method.invoke(service);
+            method.invoke(service);
+
+            long mismatchWarnings = handler.records.stream()
+                .filter(record -> record.getLevel().intValue() >= Level.WARNING.intValue())
+                .map(LogRecord::getMessage)
+                .filter(message -> message.contains(
+                    "Configured max_pack_format " + (currentFormat - 1) + " does not match the current Minecraft pack format " + currentFormat
+                ))
+                .count();
+
+            assertEquals(1, mismatchWarnings);
+        } finally {
+            logger.removeHandler(handler);
+        }
     }
 
     @Test
     void planFutureSegmentsSplitsRangesWhereGeneratorCompatibilityChanges() {
         List<PackFormatRange> plannedRanges = ResourcePackServiceImpl.planFutureSegments(
-            75,
+            88,
             List.of(
-                new PackFormatRange(64, 75),
-                new PackFormatRange(80, 85),
-                new PackFormatRange(64, 82)
+                new PackFormatRange(64, 88),
+                new PackFormatRange(90, 95),
+                new PackFormatRange(64, 92)
             )
         );
 
         assertEquals(3, plannedRanges.size());
-        assertEquals(new PackFormatRange(76, 79), plannedRanges.get(0));
-        assertEquals(new PackFormatRange(80, 82), plannedRanges.get(1));
-        assertEquals(new PackFormatRange(83, 85), plannedRanges.get(2));
+        assertEquals(new PackFormatRange(89, 89), plannedRanges.get(0));
+        assertEquals(new PackFormatRange(90, 92), plannedRanges.get(1));
+        assertEquals(new PackFormatRange(93, 95), plannedRanges.get(2));
     }
 
     @Test
@@ -179,8 +229,8 @@ class ResourcePackServiceImplTest {
         harness.service.registerGenerator(generator);
 
         assertEquals(2, harness.service.buildPlan().size());
-        assertEquals(75, harness.service.buildPlan().getFirst().packFormat());
-        assertEquals(82, harness.service.buildPlan().get(1).packFormat());
+        assertEquals(84, harness.service.buildPlan().getFirst().packFormat());
+        assertEquals(92, harness.service.buildPlan().get(1).packFormat());
         assertFalse(generator.supports(harness.service.buildPlan().getFirst()));
         assertTrue(generator.supports(harness.service.buildPlan().get(1)));
     }
@@ -224,7 +274,7 @@ class ResourcePackServiceImplTest {
 
         assertNotNull(generator.loadedConfig);
         assertEquals("ready", generator.loadedConfig.getString("marker"));
-        assertEquals(List.of(75), generator.generatedFormats);
+        assertEquals(List.of(84), generator.generatedFormats);
         assertZipContains(harness.resourcePackZip(), "direct.txt");
     }
 
@@ -246,11 +296,11 @@ class ResourcePackServiceImplTest {
         harness.service.registerGenerator(generator);
         harness.service.generatePack(null);
 
-        assertEquals(List.of(82), generator.generatedFormats);
+        assertEquals(List.of(92), generator.generatedFormats);
         try (ZipFile zip = new ZipFile(harness.resourcePackZip(), StandardCharsets.UTF_8)) {
             assertNull(zip.getEntry("future-writer.txt"), "Unexpected zip entry: future-writer.txt");
         }
-        assertZipContains(harness.resourcePackZip(), "overlays/overlay_80_82/future-writer.txt");
+        assertZipContains(harness.resourcePackZip(), "overlays/overlay_89_92/future-writer.txt");
     }
 
     @Test
@@ -302,9 +352,26 @@ class ResourcePackServiceImplTest {
             when(generatorsConfig.getSection("glyphs")).thenReturn(mock(ConfigSectionView.class));
             when(generatorsConfig.getSection("minecraft")).thenReturn(mock(ConfigSectionView.class));
             when(config.getInt("min_pack_format", 32)).thenReturn(32);
-            when(config.getInt("max_pack_format", 75)).thenReturn(75);
+            when(config.getInt("max_pack_format", 84)).thenReturn(84);
 
             service = new TestService(plugin, api, config);
+        }
+    }
+
+    private static final class RecordingHandler extends Handler {
+        private final List<LogRecord> records = new ArrayList<>();
+
+        @Override
+        public void publish(LogRecord record) {
+            records.add(record);
+        }
+
+        @Override
+        public void flush() {
+        }
+
+        @Override
+        public void close() {
         }
     }
 
@@ -338,7 +405,7 @@ class ResourcePackServiceImplTest {
             config.set("description", "Test Pack");
             config.set("bedrock.enabled", false);
             config.set("min_pack_format", 32);
-            config.set("max_pack_format", 75);
+            config.set("max_pack_format", 84);
             config.save();
 
             service = new TestService(plugin, api, config);
@@ -477,7 +544,7 @@ class ResourcePackServiceImplTest {
 
         @Override
         public @NotNull PackFormatRange supportedFormats() {
-            return new PackFormatRange(80, 82);
+            return new PackFormatRange(89, 92);
         }
     }
 
@@ -496,7 +563,7 @@ class ResourcePackServiceImplTest {
 
         @Override
         public @NotNull PackFormatRange supportedFormats() {
-            return new PackFormatRange(80, 82);
+            return new PackFormatRange(89, 92);
         }
 
         @Override

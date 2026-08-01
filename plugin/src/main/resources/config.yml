@@ -7,15 +7,11 @@ logging:
     success: "<dark_green><bold>[ \u2714 ]</bold></dark_green> "
     broadcast: "<dark_purple><bold>[ ! ]</bold></dark_purple> "
 
-whitelist_message: |-
-  This server is for our workshop players only.
-  
-  If you believe you should have access, please contact STEMMechanics.
-
-
 motd:
   title: "<blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple> <yellow><bold>STEMCRAFT</bold></yellow> <blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple>"
   text: "                   <yellow>★</yellow> <aqua>Enjoy your stay!</aqua> <yellow>★</yellow>"
+  center-title: false
+  center-text: false
 
 hub:
   world: world
@@ -37,33 +33,162 @@ custom-commands:
     run:
       - tpworld survival
 
+custom-portals:
+  enabled: true
+  portals: {}
+
+interactive-menus:
+  enabled: true
+
 web_server:
     enabled: true
     port: 8950
     path: www
 
-webhook_bridge:
-  enabled: false
-  site_webhook_url: "http://127.0.0.1:8080/webhooks/minecraft/server"
-  shared_secret: ""
-  server_name: "STEMCraft"
-  # Incoming website webhooks are served by the shared web_server on this path.
-  listen_path: "/stemcraft/webhook"
-  connect_timeout_millis: 5000
-  request_timeout_millis: 10000
-  replay_window_seconds: 300
-  debug_logging: false
-  enforce_account_whitelist: true
-  whitelist_kick_message: "You are not whitelisted on this server."
-  drop_stale_sync_managed_events: true
-  drop_sync_managed_events_missing_occurred_at: true
-  allow_status_requests: true
-  allow_player_stats_requests: true
-  allow_remote_commands: false
-  remote_command_max_output_chars: 12000
+first-join:
+  enabled: true
+  timeout-seconds: 60
+  maximum-attempts: 3
+  minimum-number: 1
+  maximum-number: 20
+  movement-tolerance: 0.5
+  verified-key: human_verified
+  bypass-permission: stemcraft.firstjoin.bypass
+
+minigames:
+  team-selection:
+    floor:
+      black:
+        - black_wool
+        - black_carpet
+        - black_concrete
+        - black_concrete_powder
+        - black_terracotta
+      blue:
+        - blue_wool
+        - blue_carpet
+        - blue_concrete
+        - blue_concrete_powder
+        - blue_terracotta
+      brown:
+        - brown_wool
+        - brown_carpet
+        - brown_concrete
+        - brown_concrete_powder
+        - brown_terracotta
+      cyan:
+        - cyan_wool
+        - cyan_carpet
+        - cyan_concrete
+        - cyan_concrete_powder
+        - cyan_terracotta
+      gray:
+        - gray_wool
+        - gray_carpet
+        - gray_concrete
+        - gray_concrete_powder
+        - gray_terracotta
+      green:
+        - green_wool
+        - green_carpet
+        - green_concrete
+        - green_concrete_powder
+        - green_terracotta
+      light_blue:
+        - light_blue_wool
+        - light_blue_carpet
+        - light_blue_concrete
+        - light_blue_concrete_powder
+        - light_blue_terracotta
+      light_gray:
+        - light_gray_wool
+        - light_gray_carpet
+        - light_gray_concrete
+        - light_gray_concrete_powder
+        - light_gray_terracotta
+      lime:
+        - lime_wool
+        - lime_carpet
+        - lime_concrete
+        - lime_concrete_powder
+        - lime_terracotta
+      magenta:
+        - magenta_wool
+        - magenta_carpet
+        - magenta_concrete
+        - magenta_concrete_powder
+        - magenta_terracotta
+      orange:
+        - orange_wool
+        - orange_carpet
+        - orange_concrete
+        - orange_concrete_powder
+        - orange_terracotta
+      pink:
+        - pink_wool
+        - pink_carpet
+        - pink_concrete
+        - pink_concrete_powder
+        - pink_terracotta
+      purple:
+        - purple_wool
+        - purple_carpet
+        - purple_concrete
+        - purple_concrete_powder
+        - purple_terracotta
+      red:
+        - red_wool
+        - red_carpet
+        - red_concrete
+        - red_concrete_powder
+        - red_terracotta
+      white:
+        - white_wool
+        - white_carpet
+        - white_concrete
+        - white_concrete_powder
+        - white_terracotta
+      yellow:
+        - yellow_wool
+        - yellow_carpet
+        - yellow_concrete
+        - yellow_concrete_powder
+        - yellow_terracotta
+
+player-welcome:
+  enabled: true
+  first-time: []
+  returning: []
+  anniversaries: {}
+  # Example:
+  # first-time:
+  #   - "<gold>🌟 Welcome to STEMCRAFT, {player}! 🌟"
+  #   - ""
+  #   - "<light_purple>Choose your adventure:"
+  #   - "<light_purple>🟣 CREATIVE</light_purple> <gray>← Build anything"
+  #   - "<aqua>🎮 MINIGAMES</aqua> <gray>↑ Play with friends"
+  #   - "<green>🟢 SURVIVAL</green> <gray>→ Explore and survive"
+  #   - ""
+  #   - "<yellow>Need help?</yellow> Click the Server Helper or type <white>/help"
+  #   - "<gray>Be kind, have fun, and keep personal information private."
+  # returning:
+  #   - "<green>Welcome back, {player}."
+  # anniversaries:
+  #   "1":
+  #     - "<gold>🎂 {player} is celebrating their {ordinal_year} cake day on STEMCRAFT."
+  #   "2":
+  #     - "<gold>🎂 {player} is celebrating their {ordinal_year} cake day on STEMCRAFT."
 
 player_stats:
   autosave_ticks: 1200
+
+holograms:
+  visibility:
+    enabled: true
+    update_ticks: 10
+    max_distance: 32
+    require_line_of_sight: true
+    apply_to_citizens: true
 
 dragon-respawn:
   enabled: false
@@ -83,34 +208,56 @@ chat:
   spam_message: "Please do not spam the chat"
   content_filter:
     enabled: true
-    timeout_millis: 10000
+    minimum_severity: mild
     allow_filtered_message: false
-    blocked_message: "Your message was blocked by the content filter."
-    unavailable_message: "Chat is temporarily unavailable while the content filter service is offline."
+    blocked_message: "Your message was blocked. Please keep chat family friendly."
+    warn_message: "Your message was blocked. Please keep chat family friendly."
+    kick_reason: "Repeated use of inappropriate language."
+    ban_reason: "Severe or repeated use of inappropriate language."
+    staff_alerts: true
+    staff_alert_permission: "stemcraft.moderation.alerts"
+    severity_points:
+      mild: 1
+      moderate: 2
+      high: 5
+      extreme: 10
+    score_decay:
+      amount: 1
+      every: 1h
     actions:
       "1":
-        count: 1
-        within: 5m
+        threshold: 3
         action: warn
       "2":
-        count: 2
-        within: 5m
-        action: warn
-      "3":
-        count: 3
-        within: 10m
+        threshold: 5
         action: kick
+      "3":
+        threshold: 6
+        action: ban
+        duration: 1h
       "4":
-        count: 4
-        within: 30m
+        threshold: 10
         action: ban
         duration: 7d
+  reports:
+    enabled: true
+    include_online_player_locations: true
+    staff_alert_permission: "stemcraft.moderation.alerts"
+
+punishments:
+  profanity_filter:
+    enabled: true
+    action: sanitize
+    minimum_severity: moderate
+    blocked_message: "Punishment reasons must not include profane language."
 
 player_logs:
     enabled: true
     max_days: 30
     tps_threshold: 15
     memory_threshold: 5MB
+    query_default_limit: 20
+    query_max_limit: 100
     blocks:
       place:
         - ".*SHULKER_BOX"

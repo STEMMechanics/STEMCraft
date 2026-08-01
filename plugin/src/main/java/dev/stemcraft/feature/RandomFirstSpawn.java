@@ -477,6 +477,14 @@ public class RandomFirstSpawn extends BaseFeature {
         return seenWorldEntries.contains(uuid.toString().toLowerCase(Locale.ROOT) + "|" + worldName.toLowerCase(Locale.ROOT));
     }
 
+    public void recordSeenWorldEntry(UUID uuid, World world, Location assignedSpawn) {
+        if (uuid == null || world == null || assignedSpawn == null) {
+            return;
+        }
+
+        markSeenWorld(uuid, world.getName(), assignedSpawn);
+    }
+
     private void markSeenWorld(UUID uuid, String worldName, Location assignedSpawn) {
         String uuidValue = uuid.toString().toLowerCase(Locale.ROOT);
         String worldValue = worldName.toLowerCase(Locale.ROOT);

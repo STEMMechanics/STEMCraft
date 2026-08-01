@@ -35,8 +35,12 @@ import dev.stemcraft.service.world.recorder.WorldChangeRecorder;
 import dev.stemcraft.service.world.setting.*;
 import lombok.Setter;
 import org.bukkit.*;
+import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.event.entity.EntityPortalEvent;
 import org.bukkit.event.block.BlockIgniteEvent;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.player.PlayerPortalEvent;
 import org.bukkit.event.world.WorldLoadEvent;
@@ -57,6 +61,8 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class WorldServiceImpl extends BaseService implements WorldService {
     private static final String DEFAULT_WORLD_OPERATION_ERROR = "unknown error";
+    private static final Path PAPER_DIMENSIONS_DIRECTORY = Path.of("dimensions", "minecraft");
+    private static final Set<String> RESERVED_PAPER_DIMENSION_NAMES = Set.of("overworld", "the_nether", "the_end");
     private final Map<String, WorldSettingData> settings = new ConcurrentHashMap<>();
     private final Map<String, String> lastWorldOperationErrors = new ConcurrentHashMap<>();
     private WorldCommand worldCommand;
@@ -69,6 +75,9 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      */
     private record WorldSettingData(WorldBaseSetting setting, SettingCommandMode mode) {}
     private record ConfiguredGeneratorSpec(String key, String options) {}
+    private record TransitionCommands(@NotNull List<String> commands) {}
+    private enum WorldStorageKind { ROOT, INTEGRATED_DIMENSION }
+    private record ResolvedWorldPath(@NotNull Path path, @NotNull WorldStorageKind kind, @Nullable String baseWorldName) {}
 
     @Setter
     private World defaultWorld;
@@ -142,6 +151,19 @@ public class WorldServiceImpl extends BaseService implements WorldService {
             deleteWorldSettings(event.getWorldName());
             purgeWorldScopedData(event.getWorldName());
         }, EventPriority.MONITOR, false);
+
+        api.events().register(PlayerJoinEvent.class, event ->
+            executeWorldTransitionCommands(event.getPlayer(), event.getPlayer().getWorld(), TransitionCommandPhase.JOIN)
+        );
+
+        api.events().register(PlayerChangedWorldEvent.class, event -> {
+            executeWorldTransitionCommands(event.getPlayer(), event.getFrom(), TransitionCommandPhase.LEAVE);
+            executeWorldTransitionCommands(event.getPlayer(), event.getPlayer().getWorld(), TransitionCommandPhase.JOIN);
+        });
+
+        api.events().register(PlayerQuitEvent.class, event ->
+            executeWorldTransitionCommands(event.getPlayer(), event.getPlayer().getWorld(), TransitionCommandPhase.LEAVE)
+        );
 
         registerSettingHandler(worldChangeRecorder, SettingCommandMode.SUBCOMMAND);
         registerSettingHandler(new WorldDenySpawnSetting(), SettingCommandMode.FLAG);
@@ -599,11 +621,108 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         return getConfigSection(world.getName());
     }
 
+    @Override
+    public @NotNull List<String> getWorldTransitionCommands(@NotNull String worldName, @NotNull TransitionCommandPhase phase) {
+        return readTransitionCommands(worldName, phase).commands();
+    }
+
+    @Override
+    public void setWorldTransitionCommands(@NotNull String worldName, @NotNull TransitionCommandPhase phase, @NotNull List<String> commands) {
+        List<String> normalizedCommands = normalizeTransitionCommands(commands);
+        writeTransitionCommands(worldName, phase, new TransitionCommands(normalizedCommands));
+    }
+
     @Nullable ConfigSection getExistingConfigSection(@NotNull String worldName) {
         if (!getConfigSection().isSection(worldName)) {
             return null;
         }
         return getConfigSection().getSection(worldName, false);
+    }
+
+    private @NotNull TransitionCommands readTransitionCommands(@NotNull String worldName, @NotNull TransitionCommandPhase phase) {
+        return readTransitionCommands(getExistingConfigSection(worldName), phase);
+    }
+
+    private @NotNull TransitionCommands readTransitionCommands(@Nullable ConfigSection worldConfig, @NotNull TransitionCommandPhase phase) {
+        if (worldConfig == null) {
+            return new TransitionCommands(List.of());
+        }
+
+        String path = phase.configPath();
+        if (worldConfig.isSection(path)) {
+            ConfigSection section = worldConfig.getSection(path, false);
+            if (section == null) {
+                return new TransitionCommands(List.of());
+            }
+
+            List<String> commands = new ArrayList<>();
+            boolean legacyAsPlayer = section.getBoolean("as-player", true);
+
+            String singleCommand = section.getString("command", "").trim();
+            if (!singleCommand.isBlank()) {
+                commands.add(applyLegacySenderPrefix(singleCommand, legacyAsPlayer));
+            }
+
+            for (String configuredCommand : section.getStringList("commands")) {
+                if (configuredCommand == null) {
+                    continue;
+                }
+                String normalized = configuredCommand.trim();
+                if (!normalized.isBlank()) {
+                    commands.add(applyLegacySenderPrefix(normalized, legacyAsPlayer));
+                }
+            }
+
+            return new TransitionCommands(List.copyOf(commands));
+        }
+
+        Object raw = worldConfig.get(path);
+        if (raw instanceof String singleCommand) {
+            String normalized = singleCommand.trim();
+            if (!normalized.isBlank()) {
+                return new TransitionCommands(List.of(normalized));
+            }
+        }
+
+        return new TransitionCommands(normalizeTransitionCommands(worldConfig.getStringList(path)));
+    }
+
+    private void writeTransitionCommands(
+        @NotNull String worldName,
+        @NotNull TransitionCommandPhase phase,
+        @NotNull TransitionCommands transitionCommands
+    ) {
+        ConfigSection worldConfig = getConfigSection(worldName);
+        ConfigSection section = worldConfig.createSection(phase.configPath(), true);
+        section.set("command", null);
+        section.set("commands", new ArrayList<>(transitionCommands.commands()));
+        saveConfig();
+    }
+
+    private @NotNull List<String> normalizeTransitionCommands(@NotNull List<String> commands) {
+        List<String> normalized = new ArrayList<>();
+        for (String configuredCommand : commands) {
+            if (configuredCommand == null) {
+                continue;
+            }
+            String trimmed = configuredCommand.trim();
+            if (!trimmed.isBlank()) {
+                normalized.add(trimmed);
+            }
+        }
+        return List.copyOf(normalized);
+    }
+
+    private @NotNull String applyLegacySenderPrefix(@NotNull String command, boolean asPlayer) {
+        if (hasExplicitSenderPrefix(command)) {
+            return command;
+        }
+        return asPlayer ? command : "server:" + command;
+    }
+
+    private boolean hasExplicitSenderPrefix(@NotNull String command) {
+        String lowered = command.toLowerCase(Locale.ROOT);
+        return lowered.startsWith("player:") || lowered.startsWith("server:");
     }
 
     private @Nullable ChunkGenerator resolveStoredGenerator(@NotNull String worldName) {
@@ -651,29 +770,16 @@ public class WorldServiceImpl extends BaseService implements WorldService {
             return worldGeneration.get(generator.key(), generator.options());
         }
 
-        String bukkitGeneratorName = toBukkitGeneratorSpec(generator.key(), generator.options());
-        ChunkGenerator resolved = WorldCreator.getGeneratorForName(worldName, bukkitGeneratorName, null);
-        if (resolved == null) {
-            throw new IllegalArgumentException("Unknown or unavailable Bukkit generator: " + bukkitGeneratorName);
-        }
-        return resolved;
+        return worldGeneration.resolveExternal(worldName, generator.key(), generator.options())
+            .orElseThrow(() -> new IllegalArgumentException(
+                "Unknown or unavailable Bukkit generator: " + formatExternalGeneratorSpec(generator.key(), generator.options())
+            ));
     }
 
-    private @NotNull String toBukkitGeneratorSpec(@NotNull String generatorKey, @NotNull String generatorOptions) {
+    private @NotNull String formatExternalGeneratorSpec(@NotNull String generatorKey, @NotNull String generatorOptions) {
         String key = generatorKey.trim();
         String options = generatorOptions.trim();
-        if (key.isEmpty()) {
-            throw new IllegalArgumentException("Generator name cannot be empty.");
-        }
-        if (options.isEmpty()) {
-            return key;
-        }
-        if (key.contains(":")) {
-            throw new IllegalArgumentException(
-                "Generator '" + key + "' already includes an id; remove generator options or use plugin:id only."
-            );
-        }
-        return key + ":" + options;
+        return options.isEmpty() || key.contains(":") ? key : key + ":" + options;
     }
   
     /**
@@ -816,6 +922,42 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      */
     private @Nullable Location handlePortalRouting(@NotNull PlayerPortalEvent event) {
         return handlePortalRouting(event.getFrom(), portalTypeFrom(event.getCause()));
+    }
+
+    private void executeWorldTransitionCommands(
+        @NotNull org.bukkit.entity.Player player,
+        @Nullable World world,
+        @NotNull TransitionCommandPhase phase
+    ) {
+        if (world == null) {
+            return;
+        }
+
+        TransitionCommands transitionCommands = readTransitionCommands(world.getName(), phase);
+        if (transitionCommands.commands().isEmpty()) {
+            return;
+        }
+
+        ConsoleCommandSender console = Bukkit.getConsoleSender();
+        for (String command : transitionCommands.commands()) {
+            String trimmed = command.trim();
+            if (trimmed.isBlank()) {
+                continue;
+            }
+
+            String lowered = trimmed.toLowerCase(Locale.ROOT);
+            if (lowered.startsWith("server:")) {
+                Bukkit.dispatchCommand(console, trimmed.substring("server:".length()).trim());
+                continue;
+            }
+
+            String playerCommand = lowered.startsWith("player:")
+                ? trimmed.substring("player:".length()).trim()
+                : trimmed;
+            if (!playerCommand.isBlank()) {
+                Bukkit.dispatchCommand(player, playerCommand);
+            }
+        }
     }
 
     private @Nullable Location handlePortalRouting(@NotNull EntityPortalEvent event) {
@@ -961,7 +1103,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         try {
             world = wc.createWorld();
         } catch (RuntimeException exception) {
-            boolean existingWorldFolder = Files.exists(worldRoot(name));
+            boolean existingWorldFolder = Files.exists(resolvedWorldPath(name).path());
             rememberWorldOperationError(name, describeWorldOperationFailure(exception, existingWorldFolder));
             plugin.getLogger().warning("Failed to load world '" + name + "': " + getLastWorldOperationErrorOrDefault(name));
             return null;
@@ -987,7 +1129,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      */
     @Override public void deleteWorld(@NotNull String name) throws IOException {
         requireUnloaded(name);
-        Path root = worldRoot(name);
+        Path root = resolvedWorldPath(name).path();
         if (!Files.exists(root)) return;
         try (var s = Files.walk(root)) {
             for (Path path : s.sorted(Comparator.reverseOrder()).toList()) {
@@ -1011,7 +1153,11 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      */
     @Override public void renameWorld(@NotNull String oldName, @NotNull String newName) throws IOException {
         requireUnloaded(oldName); requireUnloaded(newName);
-        Files.move(worldRoot(oldName), worldRoot(newName), StandardCopyOption.ATOMIC_MOVE);
+        ResolvedWorldPath source = resolvedWorldPath(oldName);
+        if (source.kind() == WorldStorageKind.INTEGRATED_DIMENSION) {
+            throw new IOException("Renaming integrated Paper dimensions is not supported. Rename the base world instead.");
+        }
+        Files.move(source.path(), worldRoot(newName), StandardCopyOption.ATOMIC_MOVE);
     }
 
     /**
@@ -1023,7 +1169,12 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      */
     @Override public void duplicateWorld(@NotNull String src, @NotNull String dst) throws IOException {
         requireUnloaded(src); requireUnloaded(dst);
-        Path s = worldRoot(src), d = worldRoot(dst);
+        ResolvedWorldPath source = resolvedWorldPath(src);
+        if (source.kind() == WorldStorageKind.INTEGRATED_DIMENSION) {
+            throw new IOException("Duplicating integrated Paper dimensions is not supported. Duplicate the base world instead.");
+        }
+        Path s = source.path();
+        Path d = worldRoot(dst);
         if (!Files.exists(s)) throw new IOException("Source world not found: " + src);
         try (var stream = Files.walk(s)) {
             stream.forEach(p -> {
@@ -1059,26 +1210,8 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         }
 
         // 2) World folders on disk
-        Path container = plugin.getServer().getWorldContainer().toPath();
-        try (var ds = Files.newDirectoryStream(container)) {
-            for (Path p : ds) {
-                if (!Files.isDirectory(p)) continue;
-
-                boolean isWorld =
-                        Files.exists(p.resolve("level.dat")) ||
-                                Files.isDirectory(p.resolve("region")) ||
-                                Files.isDirectory(p.resolve("playerdata")) ||
-                                Files.isDirectory(p.resolve("data")) ||
-                                Files.isDirectory(p.resolve("DIM-1").resolve("region")) ||
-                                Files.isDirectory(p.resolve("DIM1").resolve("region"));
-
-                if (isWorld) {
-                    Path fileName = p.getFileName();
-                    if (fileName != null) {
-                        names.add(fileName.toString());
-                    }
-                }
-            }
+        try {
+            names.addAll(discoverWorldNames(plugin.getServer().getWorldContainer().toPath()));
         } catch (IOException exception) {
             plugin.getLogger().warning("Failed to list worlds: " + exception.getMessage());
         }
@@ -1095,7 +1228,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      * @return The Path to the world folder.
      */
     @Override public @NotNull Path getWorldFolder(@NotNull String name) {
-        return worldRoot(name);
+        return resolvedWorldPath(name).path();
     }
 
     /**
@@ -1145,6 +1278,30 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      */
     private Path worldRoot(String name) {
         return plugin.getServer().getWorldContainer().toPath().resolve(name);
+    }
+
+    private @NotNull ResolvedWorldPath resolvedWorldPath(@NotNull String worldName) {
+        World loaded = Bukkit.getWorld(worldName);
+        if (loaded != null) {
+            Path path = loaded.getWorldPath();
+            WorldStorageKind kind = isIntegratedDimensionPath(path)
+                ? WorldStorageKind.INTEGRATED_DIMENSION
+                : WorldStorageKind.ROOT;
+            return new ResolvedWorldPath(path, kind, kind == WorldStorageKind.INTEGRATED_DIMENSION ? WorldUtil.baseName(worldName) : null);
+        }
+
+        Path directRoot = worldRoot(worldName);
+        if (isRecognizedWorldRoot(directRoot)) {
+            return new ResolvedWorldPath(directRoot, WorldStorageKind.ROOT, null);
+        }
+
+        World.Environment environment = WorldUtil.resolveEnvironment(worldName);
+        Path integratedPath = findIntegratedWorldPath(plugin.getServer().getWorldContainer().toPath(), worldName, environment);
+        if (integratedPath != null) {
+            return new ResolvedWorldPath(integratedPath, WorldStorageKind.INTEGRATED_DIMENSION, baseWorldNameFor(worldName, environment));
+        }
+
+        return new ResolvedWorldPath(directRoot, WorldStorageKind.ROOT, null);
     }
 
     /**
@@ -1228,6 +1385,117 @@ public class WorldServiceImpl extends BaseService implements WorldService {
 
     private @Nullable World firstLoadedWorld() {
         return Bukkit.getWorlds().isEmpty() ? null : Bukkit.getWorlds().getFirst();
+    }
+
+    static @NotNull Set<String> discoverWorldNames(@NotNull Path container) throws IOException {
+        Set<String> names = new LinkedHashSet<>();
+
+        for (Path path : recognizedWorldRoots(container)) {
+            Path fileName = path.getFileName();
+            if (fileName == null) {
+                continue;
+            }
+
+            String rootWorldName = fileName.toString();
+            names.add(rootWorldName);
+
+            if (Files.isDirectory(paperDimensionPath(path, World.Environment.NETHER))) {
+                names.add(rootWorldName + "_nether");
+            }
+            if (Files.isDirectory(paperDimensionPath(path, World.Environment.THE_END))) {
+                names.add(rootWorldName + "_the_end");
+            }
+
+            Path dimensionsRoot = path.resolve(PAPER_DIMENSIONS_DIRECTORY);
+            if (Files.isDirectory(dimensionsRoot)) {
+                try (var dimensions = Files.list(dimensionsRoot)) {
+                    dimensions
+                        .filter(Files::isDirectory)
+                        .map(Path::getFileName)
+                        .filter(Objects::nonNull)
+                        .map(Path::toString)
+                        .filter(name -> !RESERVED_PAPER_DIMENSION_NAMES.contains(name))
+                        .sorted()
+                        .forEach(names::add);
+                }
+            }
+        }
+
+        return names;
+    }
+
+    static @Nullable Path findIntegratedWorldPath(@NotNull Path container, @NotNull String worldName, @NotNull World.Environment environment) {
+        try {
+            for (Path root : recognizedWorldRoots(container)) {
+                if (environment == World.Environment.NORMAL) {
+                    Path customDimensionPath = root.resolve(PAPER_DIMENSIONS_DIRECTORY).resolve(worldName);
+                    if (Files.isDirectory(customDimensionPath)) {
+                        return customDimensionPath;
+                    }
+                    continue;
+                }
+
+                String baseWorldName = WorldUtil.baseName(worldName);
+                Path fileName = root.getFileName();
+                if (fileName == null || !fileName.toString().equals(baseWorldName)) {
+                    continue;
+                }
+
+                Path dimensionPath = paperDimensionPath(root, environment);
+                if (Files.isDirectory(dimensionPath)) {
+                    return dimensionPath;
+                }
+            }
+        } catch (IOException ignored) {
+            return null;
+        }
+
+        return null;
+    }
+
+    private static @NotNull List<Path> recognizedWorldRoots(@NotNull Path container) throws IOException {
+        List<Path> roots = new ArrayList<>();
+        try (var ds = Files.newDirectoryStream(container)) {
+            for (Path path : ds) {
+                if (isRecognizedWorldRoot(path)) {
+                    roots.add(path);
+                }
+            }
+        }
+        roots.sort(Comparator.comparing(path -> path.getFileName() == null ? "" : path.getFileName().toString()));
+        return roots;
+    }
+
+    static boolean isRecognizedWorldRoot(@NotNull Path path) {
+        if (!Files.isDirectory(path)) {
+            return false;
+        }
+
+        return Files.exists(path.resolve("level.dat"))
+            || Files.isDirectory(path.resolve("region"))
+            || Files.isDirectory(path.resolve("playerdata"))
+            || Files.isDirectory(path.resolve("data"))
+            || Files.isDirectory(path.resolve("DIM-1").resolve("region"))
+            || Files.isDirectory(path.resolve("DIM1").resolve("region"))
+            || Files.isDirectory(path.resolve(PAPER_DIMENSIONS_DIRECTORY));
+    }
+
+    static @NotNull Path paperDimensionPath(@NotNull Path rootWorldPath, @NotNull World.Environment environment) {
+        return switch (environment) {
+            case NETHER -> rootWorldPath.resolve(PAPER_DIMENSIONS_DIRECTORY).resolve("the_nether");
+            case THE_END -> rootWorldPath.resolve(PAPER_DIMENSIONS_DIRECTORY).resolve("the_end");
+            default -> rootWorldPath.resolve(PAPER_DIMENSIONS_DIRECTORY).resolve("overworld");
+        };
+    }
+
+    static boolean isIntegratedDimensionPath(@NotNull Path path) {
+        String normalized = path.normalize().toString().replace('\\', '/');
+        return normalized.contains("/dimensions/minecraft/")
+            || normalized.endsWith("/dimensions/minecraft");
+    }
+
+    private static @Nullable String baseWorldNameFor(@NotNull String worldName, @NotNull World.Environment environment) {
+        return environment == World.Environment.NORMAL ? null : WorldUtil.baseName(worldName);
     }
 
     private void rememberWorldOperationError(@NotNull String worldName, @NotNull String message) {
