@@ -723,8 +723,8 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
     }
 
     private void announceSupplyDrop(@NotNull MiniGameArena arena, @NotNull Location dropLocation) {
-        for (Player occupant : arena.getOccupants()) {
-            arena.info(occupant, supplyDropHint(occupant, dropLocation));
+        for (Player player : arena.getPlayers()) {
+            arena.info(player, supplyDropHint(player, dropLocation));
         }
     }
 

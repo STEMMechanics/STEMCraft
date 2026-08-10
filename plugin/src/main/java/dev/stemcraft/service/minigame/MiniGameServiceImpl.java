@@ -44,6 +44,8 @@ import org.bukkit.event.entity.EntityShootBowEvent;
 import org.bukkit.event.entity.FoodLevelChangeEvent;
 import org.bukkit.event.entity.ItemDespawnEvent;
 import org.bukkit.event.entity.ItemMergeEvent;
+import org.bukkit.event.inventory.CraftItemEvent;
+import org.bukkit.event.inventory.PrepareItemCraftEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
@@ -233,6 +235,32 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
 
             event.setCancelled(true);
             restoreFullHunger(player);
+        });
+
+        api.events().register(PrepareItemCraftEvent.class, event -> {
+            if (!(event.getView().getPlayer() instanceof Player player)) {
+                return;
+            }
+
+            MiniGameArenaImpl arena = findParticipantArena(player);
+            if (arena == null || isCraftingAllowed(arena)) {
+                return;
+            }
+
+            event.getInventory().setResult(null);
+        });
+
+        api.events().register(CraftItemEvent.class, event -> {
+            if (!(event.getWhoClicked() instanceof Player player)) {
+                return;
+            }
+
+            MiniGameArenaImpl arena = findParticipantArena(player);
+            if (arena == null || isCraftingAllowed(arena)) {
+                return;
+            }
+
+            event.setCancelled(true);
         });
 
         api.events().register(EntityExplodeEvent.class, event -> {
@@ -711,6 +739,10 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
         MiniGame miniGame = minigames.get(arena.namespace());
         boolean defaultValue = miniGame == null || miniGame.disablesHungerByDefault();
         return arena.get("disableHunger", Boolean.class, defaultValue);
+    }
+
+    private boolean isCraftingAllowed(@NotNull MiniGameArenaImpl arena) {
+        return arena.get("allowCrafting", Boolean.class, false);
     }
 
     private void restoreFullHunger(@NotNull Player player) {

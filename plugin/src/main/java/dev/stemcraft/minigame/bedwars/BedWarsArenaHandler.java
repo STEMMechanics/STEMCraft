@@ -161,7 +161,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
 
         Set<Location> blockLocations = placedBlocks(arena);
         if (blockLocations.remove(block.getLocation())) {
-            return HandlerEventResult.ALLOW;
+            return HandlerEventResult.ALLOW_NO_DROPS;
         }
 
         MiniGameTeam bedOwner = findBedOwner(arena, block.getLocation());
@@ -387,6 +387,13 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
                 damager.addKill();
                 bedWars.incrementStat("kills", arena, damager);
             }
+            arena.info(damagerPlayer, "<yellow>You eliminated</yellow> <red>" + player.getName() + "</red><yellow>.</yellow>");
+            broadcastInfoToOccupants(arena,
+                "<red>" + player.getName() + "</red> <gray>was eliminated by</gray> <gold>" + damagerPlayer.getName() + "</gold><gray>.</gray>",
+                damagerPlayer);
+        } else {
+            broadcastInfoToOccupants(arena,
+                "<red>" + player.getName() + "</red> <gray>was eliminated.</gray>");
         }
 
         MiniGameTeam team = arena.getPlayerTeam(player);
@@ -719,8 +726,8 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
     }
 
     private void announceSupplyDrop(@NotNull MiniGameArena arena, @NotNull Location dropLocation) {
-        for (Player occupant : arena.getOccupants()) {
-            arena.info(occupant, supplyDropHint(occupant, dropLocation));
+        for (Player player : arena.getPlayers()) {
+            arena.info(player, supplyDropHint(player, dropLocation));
         }
     }
 

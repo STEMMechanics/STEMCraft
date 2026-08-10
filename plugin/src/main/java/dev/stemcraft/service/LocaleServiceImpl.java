@@ -46,6 +46,7 @@ public class LocaleServiceImpl extends BaseService implements LocaleService {
     private String defaultLocale;
 
     private static final Pattern LOCALE_KEY_PATTERN = Pattern.compile("[A-Z]+_[A-Z_]+");
+    private static final Pattern DOTTED_LOCALE_KEY_PATTERN = Pattern.compile("[a-z0-9]+(?:[._-][a-z0-9]+)+");
     private final Set<String> missingKeysLogged = ConcurrentHashMap.newKeySet();
 
 
@@ -106,11 +107,6 @@ public class LocaleServiceImpl extends BaseService implements LocaleService {
             return key;
         }
 
-        // Fast-path: avoid locale lookup for normal text.
-        if (!LOCALE_KEY_PATTERN.matcher(key).matches()) {
-            return key;
-        }
-
         if (lang.isEmpty()) {
             lang = defaultLocale;
         }
@@ -133,6 +129,15 @@ public class LocaleServiceImpl extends BaseService implements LocaleService {
         if (raw == null && bundledCfg != null) {
             raw = bundledCfg.getString(key);
         }
+        if (raw != null) {
+            return raw;
+        }
+
+        // Fast-path: avoid treating normal text as a missing locale key.
+        if (!looksLikeLocaleKey(key)) {
+            return key;
+        }
+
         if (raw == null) {
             // Log missing keys once to avoid spam.
             String logKey = lang + ":" + key;
@@ -143,6 +148,11 @@ public class LocaleServiceImpl extends BaseService implements LocaleService {
         }
 
         return raw;
+    }
+
+    private boolean looksLikeLocaleKey(@NotNull String key) {
+        return LOCALE_KEY_PATTERN.matcher(key).matches()
+            || DOTTED_LOCALE_KEY_PATTERN.matcher(key).matches();
     }
 
     /**
