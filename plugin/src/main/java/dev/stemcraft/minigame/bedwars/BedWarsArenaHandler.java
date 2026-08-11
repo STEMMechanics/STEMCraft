@@ -396,7 +396,6 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
 
         java.util.logging.Logger.getLogger(BedWarsArenaHandler.class.getName())
             .warning("[STEMCraft] BedWars arena '" + arena.id() + "' has drop items configured but no valid drop locations matched the configured drop surface materials.");
-        broadcastInfoToOccupants(arena, "<yellow>Supply drops are enabled, but this arena has no valid drop locations for the configured drop surface materials.</yellow>");
     }
 
     private void handleDeath(MiniGameArena arena, Player player, @Nullable Player damagerPlayer) {

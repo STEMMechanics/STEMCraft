@@ -174,6 +174,19 @@ Framework-owned behavior:
 - countdown stop/reset when the minimum active-team requirement is no longer met
 - shared lobby placeholders such as `{player:selected-team}` and `{arena:lobby-team-line-1}`
 
+Shared supply-drop helpers on `MiniGameArena`:
+
+- `findRandomSupplyDropLocation(List<Material> allowedSurfaceMaterials, int attempts)`
+  searches the arena region for a valid landing column
+- `spawnSupplyDropCrate(ItemStack item, Location landingLocation)`
+  spawns the shared descending crate/parachute presentation and lands it as a loot chest
+- `clearAllSupplyDrops()`
+  removes active drop visuals and landed framework-managed drop chests
+
+The framework owns the crate animation and cleanup lifecycle. Individual
+minigames still choose the drop items, valid surface materials, and when to
+trigger drops.
+
 ## Resource Pack Generator Extension Point
 
 `ResourcePackGenerator` is now an interface-based extension point.

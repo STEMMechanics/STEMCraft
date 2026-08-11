@@ -64,7 +64,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
     private static final int TEAM_SCORE_START = 7;
     private static final int RUNNING_COUNTDOWN_SECONDS = 300;
     private static final int DROP_INTERVAL_SECONDS = 30;
-    private static final int TNT_FUSE_TICKS = 60;
+    private static final int TNT_FUSE_TICKS = 80;
     private static final int DROP_LOCATION_ATTEMPTS = 64;
     private static final int DROP_AVAILABILITY_CHECK_ATTEMPTS = 256;
 
@@ -619,7 +619,6 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
 
         java.util.logging.Logger.getLogger(BridgeArenaHandler.class.getName())
             .warning("[STEMCraft] Bridge arena '" + arena.id() + "' has drop items configured but no valid drop locations matched the configured drop surface materials.");
-        broadcastInfoToOccupants(arena, "<yellow>Supply drops are enabled, but this arena has no valid drop locations for the configured drop surface materials.</yellow>");
     }
 
     private void startWinnerCelebration(MiniGameArena arena, MiniGameTeam winner) {
