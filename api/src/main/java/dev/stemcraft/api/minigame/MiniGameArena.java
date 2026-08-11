@@ -29,6 +29,7 @@ import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -728,6 +729,14 @@ public interface MiniGameArena extends MessageService, HasMeta<MiniGameArena> {
      * @param markerLocation The anchor location to use for the drop signal.
      */
     void trackSupplyDrop(Item item, Location markerLocation);
+
+    /**
+     * Spawn a shared supply-drop crate that descends onto the target location and turns into a chest on landing.
+     *
+     * @param item The loot to place into the landed chest.
+     * @param landingLocation The target landing location above the accepted support block.
+     */
+    void spawnSupplyDropCrate(ItemStack item, Location landingLocation);
 
     /**
      * Clear all active supply-drop markers in this arena.

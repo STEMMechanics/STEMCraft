@@ -732,7 +732,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
         int distance = Math.max(1, (int) Math.round(horizontalDistance(player.getLocation(), dropLocation)));
         String direction = relativeDirection(player, dropLocation);
         String suffix = distance == 1 ? "block" : "blocks";
-        return "<gold>A supply drop has landed " + distance + " " + suffix + " " + direction + ".</gold>";
+        return "<gold>A supply drop is descending " + distance + " " + suffix + " " + direction + ".</gold>";
     }
 
     private double horizontalDistance(@NotNull Location from, @NotNull Location to) {
@@ -821,10 +821,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
         }
 
         ItemStack item = new ItemStack(configuredDrops.get(ThreadLocalRandom.current().nextInt(configuredDrops.size())));
-        Item droppedItem = dropLocation.getWorld().dropItem(dropLocation, item);
-        droppedItem.setPickupDelay(10);
-        trackedEntities(arena).add(droppedItem.getUniqueId());
-        arena.trackSupplyDrop(droppedItem, dropLocation);
+        arena.spawnSupplyDropCrate(item, dropLocation);
         announceSupplyDrop(arena, dropLocation);
         playSoundToOccupants(arena, Sound.ENTITY_ITEM_PICKUP, 0.6f, 1.35f);
     }

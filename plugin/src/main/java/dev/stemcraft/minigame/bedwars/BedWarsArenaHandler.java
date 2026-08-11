@@ -21,8 +21,11 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
+import org.bukkit.entity.TNTPrimed;
+import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.event.inventory.InventoryClickEvent;
@@ -50,6 +53,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
     private static final int RUNNING_COUNTDOWN_SECONDS = 1800;
     private static final int ENDING_COUNTDOWN_SECONDS = 15;
     private static final int DROP_INTERVAL_SECONDS = 30;
+    private static final int TNT_FUSE_TICKS = 80;
     private static final int DROP_LOCATION_ATTEMPTS = 64;
     private static final int DROP_AVAILABILITY_CHECK_ATTEMPTS = 256;
 
@@ -149,6 +153,11 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
             return HandlerEventResult.DENY;
         }
 
+        if (block.getType() == Material.TNT) {
+            primePlacedTnt(arena, player, block);
+            return HandlerEventResult.ALLOW;
+        }
+
         placedBlocks(arena).add(block.getLocation());
         return HandlerEventResult.ALLOW;
     }
@@ -195,6 +204,23 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
     @Override
     public HandlerEventResult onPlayerDropItem(MiniGameArena arena, Player player, ItemStack item) {
         return HandlerEventResult.DENY;
+    }
+
+    @Override
+    public void onEntityExplode(MiniGameArena arena, EntityExplodeEvent event) {
+        Player sourcePlayer = null;
+        if (event.getEntity() instanceof TNTPrimed primedTnt && primedTnt.getSource() instanceof Player player) {
+            sourcePlayer = player;
+        }
+
+        pruneExplosion(arena, sourcePlayer, event.blockList());
+        event.setYield(0.0f);
+    }
+
+    @Override
+    public void onBlockExplode(MiniGameArena arena, BlockExplodeEvent event) {
+        pruneExplosion(arena, null, event.blockList());
+        event.setYield(0.0f);
     }
 
     @Override
@@ -630,10 +656,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
         }
 
         ItemStack item = new ItemStack(configuredDrops.get(ThreadLocalRandom.current().nextInt(configuredDrops.size())));
-        Item droppedItem = dropLocation.getWorld().dropItem(dropLocation, item);
-        droppedItem.setPickupDelay(10);
-        trackedEntities(arena).add(droppedItem.getUniqueId());
-        arena.trackSupplyDrop(droppedItem, dropLocation);
+        arena.spawnSupplyDropCrate(item, dropLocation);
         announceSupplyDrop(arena, dropLocation);
         playSoundToOccupants(arena);
     }
@@ -687,7 +710,60 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
                 return shooter;
             }
         }
+        if (damager instanceof TNTPrimed primedTnt && primedTnt.getSource() instanceof Player sourcePlayer) {
+            return sourcePlayer;
+        }
         return null;
+    }
+
+    private void primePlacedTnt(@NotNull MiniGameArena arena, @NotNull Player player, @NotNull Block block) {
+        Location spawnLocation = block.getLocation().add(0.5d, 0.5d, 0.5d);
+        api.tasks().nextTick(() -> {
+            if (block.getType() != Material.TNT) {
+                return;
+            }
+
+            block.setType(Material.AIR, false);
+            TNTPrimed primedTnt = block.getWorld().spawn(spawnLocation, TNTPrimed.class);
+            primedTnt.setFuseTicks(TNT_FUSE_TICKS);
+            primedTnt.setSource(player);
+            trackedEntities(arena).add(primedTnt.getUniqueId());
+            playSoundToOccupants(arena, Sound.ENTITY_TNT_PRIMED, 0.9f, 1.0f);
+        });
+    }
+
+    private void pruneExplosion(@NotNull MiniGameArena arena, @Nullable Player sourcePlayer, @NotNull List<Block> blockList) {
+        if (arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
+            blockList.clear();
+            return;
+        }
+
+        Set<Location> placedBlocks = placedBlocks(arena);
+        Set<String> destroyedBeds = new HashSet<>();
+        blockList.removeIf(block -> {
+            Location location = block.getLocation();
+            if (placedBlocks.remove(location)) {
+                return false;
+            }
+
+            MiniGameTeam bedOwner = findBedOwner(arena, location);
+            if (bedOwner == null || !isBedBlock(block.getType())) {
+                return true;
+            }
+
+            String teamKey = bedOwner.getName().toLowerCase(Locale.ROOT);
+            if (destroyedBeds.contains(teamKey)) {
+                return true;
+            }
+            destroyedBeds.add(teamKey);
+
+            if (sourcePlayer == null) {
+                return true;
+            }
+
+            HandlerEventResult result = handleBedBreak(arena, sourcePlayer, block.getType(), bedOwner);
+            return result == HandlerEventResult.DENY;
+        });
     }
 
     private void forEachRegionBlock(SCRegion region, java.util.function.Consumer<Block> consumer) {
@@ -787,7 +863,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
         int distance = Math.max(1, (int) Math.round(horizontalDistance(player.getLocation(), dropLocation)));
         String direction = relativeDirection(player, dropLocation);
         String suffix = distance == 1 ? "block" : "blocks";
-        return "<gold>A supply drop has landed " + distance + " " + suffix + " " + direction + ".</gold>";
+        return "<gold>A supply drop is descending " + distance + " " + suffix + " " + direction + ".</gold>";
     }
 
     private double horizontalDistance(@NotNull Location from, @NotNull Location to) {
