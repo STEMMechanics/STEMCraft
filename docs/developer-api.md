@@ -183,9 +183,31 @@ Shared supply-drop helpers on `MiniGameArena`:
 - `clearAllSupplyDrops()`
   removes active drop visuals and landed framework-managed drop chests
 
+Shared player-pull helpers on `MiniGameArena`:
+
+- `pullPlayer(Player player, Location target, double blocksPerSecond)`
+  pulls one player toward a target location
+- `pullPlayers(Map<Player, Location> targets, double blocksPerSecond)`
+  pulls multiple players in one framework-managed sequence
+- `cancelPlayerPulls()`
+  cancels any active arena-managed player pull
+- `isPlayerBeingPulled(Player player)`
+  checks whether the framework currently has that player in a pull sequence
+
 The framework owns the crate animation and cleanup lifecycle. Individual
-minigames still choose the drop items, valid surface materials, and when to
-trigger drops.
+minigames still choose the drop items, valid surface materials, when to
+trigger drops, and which players should be pulled to which destinations.
+
+Protection service types available through `STEMCraftAPI`:
+
+- `ProtectionService`
+- `ProtectionType`
+- `ProtectionRule`
+- `ProtectionRequest`
+
+This is the shared path for requesting timed protections such as teleport
+damage immunity while allowing gameplay systems like minigames to deny those
+protections centrally through registered rules.
 
 ## Resource Pack Generator Extension Point
 

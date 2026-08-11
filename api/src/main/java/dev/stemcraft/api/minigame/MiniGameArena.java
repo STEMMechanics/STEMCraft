@@ -781,6 +781,72 @@ public interface MiniGameArena extends MessageService, HasMeta<MiniGameArena> {
     }
 
     /**
+     * Pull one arena occupant toward a target location at a fixed movement speed.
+     *
+     * @param player The player to pull.
+     * @param target The destination location.
+     * @param blocksPerSecond Straight-line movement speed in blocks per second.
+     */
+    default void pullPlayer(Player player, Location target, double blocksPerSecond) {
+        pullPlayer(player, target, blocksPerSecond, null);
+    }
+
+    /**
+     * Pull one arena occupant toward a target location at a fixed movement speed.
+     *
+     * @param player The player to pull.
+     * @param target The destination location.
+     * @param blocksPerSecond Straight-line movement speed in blocks per second.
+     * @param onComplete Optional callback invoked after the pull completes.
+     */
+    default void pullPlayer(Player player, Location target, double blocksPerSecond, Runnable onComplete) {
+        if (player == null || target == null) {
+            if (onComplete != null) {
+                onComplete.run();
+            }
+            return;
+        }
+        pullPlayers(Map.of(player, target), blocksPerSecond, onComplete);
+    }
+
+    /**
+     * Pull arena occupants toward explicit target locations at a fixed movement speed.
+     *
+     * Movement is applied in straight-line steps each tick until every target is reached.
+     *
+     * @param targets Destination locations keyed by player.
+     * @param blocksPerSecond Straight-line movement speed in blocks per second.
+     */
+    default void pullPlayers(Map<Player, Location> targets, double blocksPerSecond) {
+        pullPlayers(targets, blocksPerSecond, null);
+    }
+
+    /**
+     * Pull arena occupants toward explicit target locations at a fixed movement speed.
+     *
+     * Movement is applied in straight-line steps each tick until every target is reached.
+     * Any existing arena player pull is replaced.
+     *
+     * @param targets Destination locations keyed by player.
+     * @param blocksPerSecond Straight-line movement speed in blocks per second.
+     * @param onComplete Optional callback invoked after all pulls complete.
+     */
+    void pullPlayers(Map<Player, Location> targets, double blocksPerSecond, Runnable onComplete);
+
+    /**
+     * Cancel any active arena-managed player pulls.
+     */
+    void cancelPlayerPulls();
+
+    /**
+     * Check whether the player is currently being pulled by the arena framework.
+     *
+     * @param player The player to check.
+     * @return {@code true} if the player is currently being pulled.
+     */
+    boolean isPlayerBeingPulled(Player player);
+
+    /**
      * Reset the title to the default state for all players.
      */
     void resetTitle();

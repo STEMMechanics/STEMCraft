@@ -43,7 +43,7 @@ import java.util.function.Predicate;
 
 public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements MiniGameArena {
     private static final double SUPPLY_DROP_SPAWN_ABOVE_SURFACE_OFFSET = 0.15d;
-    private static final double SUPPLY_DROP_CRATE_START_Y = 190.0d;
+    private static final double SUPPLY_DROP_CRATE_START_HEIGHT_ABOVE_LANDING = 100.0d;
     private static final double SUPPLY_DROP_CRATE_DESCENT_PER_TICK = 0.24d;
     private static final double SUPPLY_DROP_PARACHUTE_HEIGHT = 4.0d;
     private static final BlockFace[] SUPPLY_DROP_SUPPORT_FACES = new BlockFace[] {
@@ -139,6 +139,7 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
     private final Set<String> activeCelebrationKeys = new HashSet<>();
     private final Map<UUID, SupplyDropMarker> supplyDropMarkers = new HashMap<>();
     private final Map<UUID, SupplyDropCrate> supplyDropCrates = new HashMap<>();
+    private final Map<UUID, PlayerTransition> playerTransitions = new HashMap<>();
     private final Map<UUID, Long> protectionUntil = new HashMap<>();
     private final Map<String, Map<Material, Integer>> kits = new HashMap<>();
 
@@ -977,7 +978,7 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         clearSupplyDropCrate(crateId);
 
         Location chestBlockLocation = chestBlock.getLocation();
-        double startY = Math.max(SUPPLY_DROP_CRATE_START_Y, chestBlockLocation.getY() + 8.0d);
+        double startY = chestBlockLocation.getY() + SUPPLY_DROP_CRATE_START_HEIGHT_ABOVE_LANDING;
         Location visualLocation = chestBlockLocation.clone();
         visualLocation.setY(startY);
 
@@ -1379,6 +1380,20 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
             + "-" + crateId.toString().replace('-', '_');
     }
 
+    private String playerPullTaskId() {
+        return "minigame-player-pull-" + NamespaceId.sanitizePath(namespace)
+            + "-" + NamespaceId.sanitizePath(id);
+    }
+
+    private double lerp(double from, double to, double progress) {
+        return from + ((to - from) * progress);
+    }
+
+    private double lerpAngle(double from, double to, double progress) {
+        double delta = ((to - from + 540.0d) % 360.0d) - 180.0d;
+        return from + (delta * progress);
+    }
+
     private @Nullable Block resolveSupplyDropChestBlock(@NotNull Location landingLocation) {
         Block origin = landingLocation.getBlock();
         for (int yOffset = 1; yOffset >= -3; yOffset--) {
@@ -1538,6 +1553,101 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
     }
 
     @Override
+    public void pullPlayers(Map<Player, Location> targets, double blocksPerSecond, Runnable onComplete) {
+        cancelPlayerPulls();
+
+        if (targets == null || targets.isEmpty()) {
+            if (onComplete != null) {
+                onComplete.run();
+            }
+            return;
+        }
+
+        double stepDistance = Math.max(0.05d, blocksPerSecond / 20.0d);
+        for (Map.Entry<Player, Location> entry : targets.entrySet()) {
+            Player player = entry.getKey();
+            Location target = entry.getValue();
+            if (player == null || target == null || target.getWorld() == null || !hasOccupant(player)) {
+                continue;
+            }
+
+            playerTransitions.put(
+                player.getUniqueId(),
+                new PlayerTransition(target.clone(), stepDistance)
+            );
+        }
+
+        if (playerTransitions.isEmpty()) {
+            if (onComplete != null) {
+                onComplete.run();
+            }
+            return;
+        }
+
+        String taskId = playerPullTaskId();
+        api.tasks().repeating(taskId, 0L, 1L, () -> {
+            Iterator<Map.Entry<UUID, PlayerTransition>> iterator = playerTransitions.entrySet().iterator();
+            while (iterator.hasNext()) {
+                Map.Entry<UUID, PlayerTransition> entry = iterator.next();
+                Player player = Bukkit.getPlayer(entry.getKey());
+                if (player == null || !hasOccupant(player)) {
+                    iterator.remove();
+                    continue;
+                }
+
+                PlayerTransition transition = entry.getValue();
+                Location target = transition.target();
+                if (target.getWorld() == null || player.getWorld() != target.getWorld()) {
+                    player.teleport(target);
+                    iterator.remove();
+                    continue;
+                }
+
+                Location current = player.getLocation();
+                double distance = current.distance(target);
+                if (distance <= transition.stepDistance()) {
+                    player.setVelocity(new org.bukkit.util.Vector());
+                    player.setFallDistance(0.0f);
+                    player.teleport(target);
+                    iterator.remove();
+                    continue;
+                }
+
+                double ratio = transition.stepDistance() / distance;
+                Location next = current.clone();
+                next.setX(lerp(current.getX(), target.getX(), ratio));
+                next.setY(lerp(current.getY(), target.getY(), ratio));
+                next.setZ(lerp(current.getZ(), target.getZ(), ratio));
+                next.setYaw((float) lerpAngle(current.getYaw(), target.getYaw(), ratio));
+                next.setPitch((float) lerpAngle(current.getPitch(), target.getPitch(), ratio));
+                player.setVelocity(new org.bukkit.util.Vector());
+                player.setFallDistance(0.0f);
+                player.teleport(next);
+            }
+
+            if (!playerTransitions.isEmpty()) {
+                return;
+            }
+
+            api.tasks().cancel(taskId);
+            if (onComplete != null) {
+                onComplete.run();
+            }
+        });
+    }
+
+    @Override
+    public void cancelPlayerPulls() {
+        api.tasks().cancel(playerPullTaskId());
+        playerTransitions.clear();
+    }
+
+    @Override
+    public boolean isPlayerBeingPulled(Player player) {
+        return player != null && playerTransitions.containsKey(player.getUniqueId());
+    }
+
+    @Override
     public void resetTitle() {
         players.forEach((player, minigamePlayer) -> player.resetTitle());
     }
@@ -1599,6 +1709,9 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
     }
 
     private record SupplyDropMarker(@NotNull String celebrationKey) {
+    }
+
+    private record PlayerTransition(@NotNull Location target, double stepDistance) {
     }
 
     private record SupplyDropParachutePart(int xOffset, int yOffset, int zOffset, @NotNull Material material) {
