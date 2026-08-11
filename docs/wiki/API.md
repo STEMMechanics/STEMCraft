@@ -109,6 +109,16 @@ At runtime the framework owns:
 - countdown reset when the current lobby state no longer satisfies minimum-team rules
 - shared placeholders such as `{player:selected-team}` and `{arena:lobby-team-line-1}`
 
+The minigame arena API also includes shared supply-drop helpers:
+
+- `MiniGameArena#findRandomSupplyDropLocation(...)`
+- `MiniGameArena#spawnSupplyDropCrate(...)`
+- `MiniGameArena#clearAllSupplyDrops()`
+
+These are used by BedWars and Bridge to share the same crate/parachute drop
+presentation while leaving item selection and drop timing in the minigame
+handlers.
+
 Example:
 
 ```java

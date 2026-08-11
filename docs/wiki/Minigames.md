@@ -37,6 +37,36 @@ The shared minigame framework handles:
 - common safety and world protection hooks
 - framework-managed team selection for compatible minigames
 
+## Shared Supply Drops
+
+The minigame framework also supports shared supply-drop spawning for games that
+want a common drop presentation and cleanup model.
+
+Current adopters:
+
+- BedWars
+- Bridge
+
+Framework behavior:
+
+- resolves valid drop landing locations from arena-configured `dropSurfaceMaterials`
+- spawns a descending chest display with a parachute canopy
+- converts the landed display into a real chest with the configured loot inside
+- removes the chest after it has been opened, emptied, and closed
+
+Arena API:
+
+- `MiniGameArena#findRandomSupplyDropLocation(...)`
+- `MiniGameArena#spawnSupplyDropCrate(...)`
+- `MiniGameArena#clearAllSupplyDrops()`
+
+Games still own:
+
+- which items can drop
+- which surface materials are valid
+- when drops are announced and spawned
+- any game-specific messaging around drop timing or availability
+
 ## Framework Team Selection
 
 Team minigames can now opt into framework-managed team selection through the
