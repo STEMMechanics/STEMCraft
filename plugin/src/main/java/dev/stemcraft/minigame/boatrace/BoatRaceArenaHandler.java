@@ -8,6 +8,8 @@ import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.service.region.RegionListener;
 import dev.stemcraft.api.util.NamespaceId;
 import dev.stemcraft.api.util.PlayerUtil;
+import dev.stemcraft.api.util.TeleportContext;
+import dev.stemcraft.api.util.TeleportOptions;
 import dev.stemcraft.api.util.TextUtil;
 import net.kyori.adventure.title.Title;
 import org.bukkit.Bukkit;
@@ -39,6 +41,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 public class BoatRaceArenaHandler implements MiniGameArenaHandler {
@@ -54,6 +57,16 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
     private static final double TNT_BOUNCE_MIN_HORIZONTAL_SPEED = 0.95d;
     private static final double TNT_BOUNCE_SUSTAIN_VERTICAL_VELOCITY = 0.45d;
     private static final long[] TNT_BOUNCE_SUSTAIN_DELAYS = {1L, 2L};
+    private static final int BOAT_MOUNT_ATTEMPTS = 5;
+    private static final int BOAT_RESPAWN_ATTEMPTS = 2;
+    private static final long BOAT_MOUNT_RETRY_DELAY_TICKS = 2L;
+    private static final double STARTING_BOAT_MAX_SPEED = 0.0d;
+    private static final double RUNNING_BOAT_MAX_SPEED = 0.4d;
+    private static final double STARTING_GRID_LOCK_THRESHOLD_SQUARED = 1.0e-4d;
+    private static final double STARTING_GRID_SNAP_THRESHOLD_SQUARED = 0.0625d;
+    private static final double STARTING_GRID_LOCK_VELOCITY_SQUARED = 1.0e-4d;
+    private static final String STARTING_GRID_LOCK_TASK_PREFIX = "boatrace-grid-lock:";
+    private static final String BOAT_MOUNT_TASK_PREFIX = "boatrace-boat-mount:";
 
     private final STEMCraftAPI api;
     private final BoatRaceMiniGame boatRace;
@@ -134,6 +147,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
     @Override
     public void onArenaUnload(MiniGameArena arena) {
         arena.stopWinnerCelebration();
+        cancelStartingGridLock(arena);
         despawnAllBoats(arena);
         removeRegionListeners(arena.id());
     }
@@ -183,6 +197,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         if (newStatus == MiniGameArena.ArenaStatus.WAITING) {
             arena.resetTitle();
             arena.stopWinnerCelebration();
+            cancelStartingGridLock(arena);
             clearSnowballSupply(arena);
             clearRaceState(arena);
             teleportPlayersToLobby(arena);
@@ -197,6 +212,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         }
 
         if (newStatus == MiniGameArena.ArenaStatus.RUNNING) {
+            cancelStartingGridLock(arena);
             prepareRunningState(arena);
             showRaceStartTitle(arena);
             playSoundToOccupants(arena, Sound.ENTITY_PLAYER_LEVELUP, 0.9f, 1.15f);
@@ -205,6 +221,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         }
 
         if (newStatus == MiniGameArena.ArenaStatus.ENDING) {
+            cancelStartingGridLock(arena);
             String winnerName = boatRace.winnerName(arena);
             clearSnowballSupply(arena);
             Player winner = resolveWinnerPlayer(arena);
@@ -221,6 +238,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         }
 
         if (newStatus == MiniGameArena.ArenaStatus.RESETTING) {
+            cancelStartingGridLock(arena);
             resetArena(arena);
             arena.setStatus(MiniGameArena.ArenaStatus.WAITING);
         }
@@ -311,6 +329,9 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
             if (!ownsBoat(arena, player, event.getVehicle().getUniqueId())) {
                 return;
             }
+            if (forcedBoatExitPlayers(arena).contains(player.getUniqueId())) {
+                return;
+            }
 
             event.setCancelled(true);
             api.tasks().nextTick(() -> remountPlayerIfNeeded(arena, player));
@@ -353,15 +374,8 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
             }
 
             Location gridLocation = assignedGridLocation(arena, rider);
-            Location currentLocation = event.getTo();
             if (gridLocation != null) {
-                if (hasDriftedFromGrid(currentLocation, gridLocation)) {
-                    Location corrected = gridLocation.clone();
-                    corrected.setYaw(currentLocation.getYaw());
-                    corrected.setPitch(currentLocation.getPitch());
-                    boat.teleport(corrected);
-                    boat.setVelocity(boat.getVelocity().zero());
-                }
+                freezeStartingGridBoat(boat, gridLocation);
             }
         });
     }
@@ -431,6 +445,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
 
     private void prepareStartingGrid(@NotNull MiniGameArena arena) {
         arena.stopWinnerCelebration();
+        cancelStartingGridLock(arena);
         clearRaceState(arena);
         boatRace.setWinner(arena, null);
 
@@ -451,9 +466,11 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         for (Player spectator : arena.getSpectators()) {
             Location spectatorSpawn = arena.getSpectatorSpawn();
             if (spectatorSpawn != null) {
-                spectator.teleport(spectatorSpawn);
+                teleportInternally(spectator, spectatorSpawn);
             }
         }
+
+        scheduleStartingGridLock(arena);
     }
 
     private void prepareRunningState(@NotNull MiniGameArena arena) {
@@ -466,6 +483,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
             player.setFireTicks(0);
             player.setFallDistance(0.0f);
             ensureSnowballSupply(player);
+            setAssignedBoatState(arena, player, true);
             remountPlayerIfNeeded(arena, player);
         }
     }
@@ -477,6 +495,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
     }
 
     private void clearRaceState(@NotNull MiniGameArena arena) {
+        cancelStartingGridLock(arena);
         despawnAllBoats(arena);
         boatRace.finishOrder(arena).clear();
         boatRace.lapProgress(arena).clear();
@@ -830,7 +849,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
                 return;
             }
 
-            player.teleport(spawn);
+            teleportInternally(player, spawn);
             api.tasks().nextTick(() -> {
                 if (!arena.hasPlayer(player)) {
                     return;
@@ -845,6 +864,11 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
     }
 
     private void spawnBoat(@NotNull MiniGameArena arena, @NotNull Player player, @NotNull Location location) {
+        spawnBoat(arena, player, location, BOAT_RESPAWN_ATTEMPTS);
+    }
+
+    private void spawnBoat(@NotNull MiniGameArena arena, @NotNull Player player, @NotNull Location location, int respawnAttemptsRemaining) {
+        cancelBoatMountTask(arena, player.getUniqueId());
         despawnBoat(arena, player.getUniqueId());
 
         Location spawn = location.clone();
@@ -852,31 +876,13 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
             return;
         }
 
-        player.teleport(spawn);
-
-        Entity entity = spawn.getWorld().spawnEntity(spawn, EntityType.OAK_BOAT);
-        if (!(entity instanceof Boat boat)) {
-            entity.remove();
-            return;
-        }
-
-        boat.setRotation(spawn.getYaw(), spawn.getPitch());
-        boat.setInvulnerable(true);
-        boat.setPersistent(false);
-        boat.setGravity(true);
-        boat.setSilent(true);
-        boat.setVelocity(boat.getVelocity().zero());
-        if (!boat.addPassenger(player)) {
-            api.tasks().nextTick(() -> {
-                if (boat.isValid() && arena.hasPlayer(player) && !boat.getPassengers().contains(player)) {
-                    boat.addPassenger(player);
-                }
-            });
-        }
-        boatRace.boatAssignments(arena).put(player.getUniqueId(), boat.getUniqueId());
+        forceBoatExit(arena, player);
+        teleportInternally(player, spawn);
+        api.tasks().nextTick(() -> spawnBoatEntity(arena, player, spawn, respawnAttemptsRemaining));
     }
 
     private void despawnBoat(@NotNull MiniGameArena arena, @NotNull UUID playerId) {
+        cancelBoatMountTask(arena, playerId);
         UUID boatId = boatRace.boatAssignments(arena).remove(playerId);
         if (boatId == null) {
             return;
@@ -898,7 +904,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         Entity entity = boatId == null ? null : findEntity(boatId);
         if (entity instanceof Boat boat) {
             if (!boat.getPassengers().contains(player)) {
-                boat.addPassenger(player);
+                scheduleBoatMountAttempt(arena, player, boat.getLocation().clone(), BOAT_MOUNT_ATTEMPTS, 0);
             }
             return;
         }
@@ -1021,7 +1027,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         }
         for (Player player : arena.getPlayers()) {
             if (!player.getWorld().equals(lobby.getWorld()) || player.getLocation().distanceSquared(lobby) > 4.0d) {
-                player.teleport(lobby);
+                teleportInternally(player, lobby);
             }
         }
     }
@@ -1084,7 +1090,214 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
     private boolean hasDriftedFromGrid(@NotNull Location currentLocation, @NotNull Location gridLocation) {
         double dx = currentLocation.getX() - gridLocation.getX();
         double dz = currentLocation.getZ() - gridLocation.getZ();
-        return (dx * dx) + (dz * dz) > 0.0025d;
+        return (dx * dx) + (dz * dz) > STARTING_GRID_LOCK_THRESHOLD_SQUARED;
+    }
+
+    private void spawnBoatEntity(@NotNull MiniGameArena arena,
+                                 @NotNull Player player,
+                                 @NotNull Location spawn,
+                                 int respawnAttemptsRemaining) {
+        if (!player.isOnline() || !arena.hasPlayer(player) || spawn.getWorld() == null) {
+            return;
+        }
+
+        Entity entity = spawn.getWorld().spawnEntity(spawn, EntityType.OAK_BOAT);
+        if (!(entity instanceof Boat boat)) {
+            entity.remove();
+            return;
+        }
+
+        boat.setRotation(spawn.getYaw(), spawn.getPitch());
+        boat.setInvulnerable(true);
+        boat.setPersistent(false);
+        boat.setGravity(true);
+        boat.setMaxSpeed(arena.getStatus() == MiniGameArena.ArenaStatus.STARTING ? STARTING_BOAT_MAX_SPEED : RUNNING_BOAT_MAX_SPEED);
+        boat.setSilent(true);
+        boat.setVelocity(new Vector());
+        boatRace.boatAssignments(arena).put(player.getUniqueId(), boat.getUniqueId());
+        scheduleBoatMountAttempt(arena, player, spawn, BOAT_MOUNT_ATTEMPTS, respawnAttemptsRemaining);
+    }
+
+    private void scheduleBoatMountAttempt(@NotNull MiniGameArena arena,
+                                          @NotNull Player player,
+                                          @NotNull Location spawn,
+                                          int mountAttemptsRemaining,
+                                          int respawnAttemptsRemaining) {
+        String taskId = boatMountTaskId(arena, player.getUniqueId());
+        api.tasks().cancel(taskId);
+        api.tasks().runOnceDelay(taskId, BOAT_MOUNT_RETRY_DELAY_TICKS, () -> attemptBoatMount(arena, player, spawn, mountAttemptsRemaining, respawnAttemptsRemaining));
+    }
+
+    private void attemptBoatMount(@NotNull MiniGameArena arena,
+                                  @NotNull Player player,
+                                  @NotNull Location spawn,
+                                  int mountAttemptsRemaining,
+                                  int respawnAttemptsRemaining) {
+        if (!player.isOnline() || !arena.hasPlayer(player)) {
+            return;
+        }
+        UUID boatId = boatRace.boatAssignments(arena).get(player.getUniqueId());
+        Entity entity = boatId == null ? null : findEntity(boatId);
+        if (!(entity instanceof Boat boat) || !boat.isValid()) {
+            if (respawnAttemptsRemaining > 0) {
+                spawnBoat(arena, player, spawn, respawnAttemptsRemaining - 1);
+            }
+            return;
+        }
+        if (boat.getPassengers().contains(player) && player.getVehicle() == boat) {
+            return;
+        }
+
+        if (player.getVehicle() != null && player.getVehicle() != boat) {
+            forceBoatExit(arena, player);
+        }
+
+        boat.setGravity(true);
+        boat.setMaxSpeed(arena.getStatus() == MiniGameArena.ArenaStatus.STARTING ? STARTING_BOAT_MAX_SPEED : RUNNING_BOAT_MAX_SPEED);
+        lockBoatToGrid(boat, boat.getLocation(), spawn);
+        teleportInternally(player, spawn.clone().add(0.0d, 0.25d, 0.0d));
+        boolean mounted = boat.addPassenger(player);
+        if (mounted && boat.getPassengers().contains(player) && player.getVehicle() == boat) {
+            return;
+        }
+
+        if (mountAttemptsRemaining > 1) {
+            scheduleBoatMountAttempt(arena, player, spawn, mountAttemptsRemaining - 1, respawnAttemptsRemaining);
+            return;
+        }
+
+        if (respawnAttemptsRemaining > 0) {
+            spawnBoat(arena, player, spawn, respawnAttemptsRemaining - 1);
+        }
+    }
+
+    private void lockBoatToGrid(@NotNull Boat boat, @Nullable Location currentLocation, @NotNull Location gridLocation) {
+        Location corrected = gridLocation.clone();
+        if (currentLocation != null
+            && !hasDriftedFromGrid(currentLocation, gridLocation)
+            && boat.getVelocity().lengthSquared() <= STARTING_GRID_LOCK_VELOCITY_SQUARED) {
+            corrected.setYaw(gridLocation.getYaw());
+            corrected.setPitch(gridLocation.getPitch());
+        }
+
+        boat.setGravity(true);
+        teleportBoatInternally(boat, corrected);
+        boat.setRotation(corrected.getYaw(), corrected.getPitch());
+        boat.setVelocity(new Vector());
+    }
+
+    private void freezeStartingGridBoat(@NotNull Boat boat, @NotNull Location gridLocation) {
+        boat.setGravity(true);
+        boat.setMaxSpeed(STARTING_BOAT_MAX_SPEED);
+        if (hasMeaningfullyDriftedFromGrid(boat.getLocation(), gridLocation)) {
+            teleportBoatInternally(boat, gridLocation);
+        }
+        boat.setRotation(gridLocation.getYaw(), gridLocation.getPitch());
+        boat.setVelocity(new Vector());
+    }
+
+    private boolean hasMeaningfullyDriftedFromGrid(@NotNull Location currentLocation, @NotNull Location gridLocation) {
+        double dx = currentLocation.getX() - gridLocation.getX();
+        double dz = currentLocation.getZ() - gridLocation.getZ();
+        return (dx * dx) + (dz * dz) > STARTING_GRID_SNAP_THRESHOLD_SQUARED;
+    }
+
+    @SuppressWarnings("unchecked")
+    private @NotNull Set<UUID> forcedBoatExitPlayers(@NotNull MiniGameArena arena) {
+        return arena.getOrCreate("forcedBoatExitPlayers", Set.class, LinkedHashSet::new);
+    }
+
+    private void forceBoatExit(@NotNull MiniGameArena arena, @NotNull Player player) {
+        if (player.getVehicle() == null) {
+            return;
+        }
+
+        Set<UUID> forced = forcedBoatExitPlayers(arena);
+        UUID playerId = player.getUniqueId();
+        forced.add(playerId);
+        TeleportContext.runWithOptions(playerId, TeleportOptions.INTERNAL, () -> player.leaveVehicle());
+        api.tasks().nextTick(() -> forced.remove(playerId));
+    }
+
+    private void teleportInternally(@NotNull Player player, @NotNull Location location) {
+        TeleportContext.runWithOptions(player.getUniqueId(), TeleportOptions.INTERNAL, () -> player.teleport(location));
+    }
+
+    private void teleportBoatInternally(@NotNull Boat boat, @NotNull Location location) {
+        Player rider = boat.getPassengers().stream()
+            .filter(Player.class::isInstance)
+            .map(Player.class::cast)
+            .findFirst()
+            .orElse(null);
+
+        if (rider == null) {
+            boat.teleport(location);
+            return;
+        }
+
+        TeleportContext.runWithOptions(rider.getUniqueId(), TeleportOptions.INTERNAL, () -> boat.teleport(location));
+    }
+
+    private void scheduleStartingGridLock(@NotNull MiniGameArena arena) {
+        String taskId = startingGridLockTaskId(arena);
+        api.tasks().cancel(taskId);
+        api.tasks().repeating(taskId, 0L, 1L, () -> {
+            if (arena.getStatus() != MiniGameArena.ArenaStatus.STARTING) {
+                api.tasks().cancel(taskId);
+                return;
+            }
+
+            for (Player player : arena.getPlayers()) {
+                Location gridLocation = assignedGridLocation(arena, player);
+                if (gridLocation == null) {
+                    continue;
+                }
+
+                UUID boatId = boatRace.boatAssignments(arena).get(player.getUniqueId());
+                Entity entity = boatId == null ? null : findEntity(boatId);
+                if (entity instanceof Boat boat) {
+                    freezeStartingGridBoat(boat, gridLocation);
+                    if (!boat.getPassengers().contains(player) || player.getVehicle() != boat) {
+                        if (!api.tasks().exists(boatMountTaskId(arena, player.getUniqueId()))) {
+                            scheduleBoatMountAttempt(arena, player, gridLocation.clone(), BOAT_MOUNT_ATTEMPTS, 0);
+                        }
+                    }
+                    continue;
+                }
+
+                if (!api.tasks().exists(boatMountTaskId(arena, player.getUniqueId()))) {
+                    remountPlayerIfNeeded(arena, player);
+                }
+            }
+        });
+    }
+
+    private void setAssignedBoatState(@NotNull MiniGameArena arena, @NotNull Player player, boolean running) {
+        UUID boatId = boatRace.boatAssignments(arena).get(player.getUniqueId());
+        Entity entity = boatId == null ? null : findEntity(boatId);
+        if (entity instanceof Boat boat) {
+            boat.setGravity(true);
+            boat.setMaxSpeed(running ? RUNNING_BOAT_MAX_SPEED : STARTING_BOAT_MAX_SPEED);
+            if (!running) {
+                boat.setVelocity(new Vector());
+            }
+        }
+    }
+
+    private void cancelStartingGridLock(@NotNull MiniGameArena arena) {
+        api.tasks().cancel(startingGridLockTaskId(arena));
+    }
+
+    private @NotNull String startingGridLockTaskId(@NotNull MiniGameArena arena) {
+        return STARTING_GRID_LOCK_TASK_PREFIX + arena.id();
+    }
+
+    private void cancelBoatMountTask(@NotNull MiniGameArena arena, @NotNull UUID playerId) {
+        api.tasks().cancel(boatMountTaskId(arena, playerId));
+    }
+
+    private @NotNull String boatMountTaskId(@NotNull MiniGameArena arena, @NotNull UUID playerId) {
+        return BOAT_MOUNT_TASK_PREFIX + arena.id() + ":" + playerId;
     }
 
     private @Nullable Location finishLookTarget(@NotNull MiniGameArena arena) {

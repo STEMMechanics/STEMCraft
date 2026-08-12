@@ -119,6 +119,36 @@ These are used by BedWars and Bridge to share the same crate/parachute drop
 presentation while leaving item selection and drop timing in the minigame
 handlers.
 
+The arena API also exposes lifecycle actions for entering and leaving a
+minigame:
+
+- `MiniGameArena#getJoinCommands()`
+- `MiniGameArena#setJoinCommands(...)`
+- `MiniGameArena#getLeaveCommands()`
+- `MiniGameArena#setLeaveCommands(...)`
+- `MiniGameArena#getJoinPermissions()`
+- `MiniGameArena#setJoinPermissions(...)`
+
+These actions fire when a player or spectator enters an arena from outside the
+minigame, and again when they fully leave it. Join permissions are attached
+for the duration of occupancy and are removed automatically on exit.
+
+Lifecycle command tokens:
+
+- `{player}`
+- `{uuid}`
+- `{arena}`
+- `{arena-name}`
+- `{minigame}`
+- `{namespace}`
+- `{role}`
+
+Lifecycle command execution rules:
+
+- `server:` runs the command as console
+- `player:` runs the command as the player
+- no prefix also runs as the player
+
 Example:
 
 ```java

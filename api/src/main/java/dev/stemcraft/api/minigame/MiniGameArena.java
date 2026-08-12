@@ -46,6 +46,9 @@ public interface MiniGameArena extends MessageService, HasMeta<MiniGameArena> {
     String LOBBY_REGION_META_KEY = "lobbyRegion";
     String TEAM_SELECTION_INPUT_META_KEY = "teamSelectionInput";
     String TEAM_SELECTION_INPUTS_META_KEY = "teamSelectionInputs";
+    String JOIN_COMMANDS_META_KEY = "joinCommands";
+    String LEAVE_COMMANDS_META_KEY = "leaveCommands";
+    String JOIN_PERMISSIONS_META_KEY = "joinPermissions";
 
     enum ArenaStatus {
         DISABLED,   // Arena is disabled/unavailable
@@ -183,6 +186,66 @@ public interface MiniGameArena extends MessageService, HasMeta<MiniGameArena> {
         set(TEAM_SELECTION_INPUT_META_KEY, input);
         set(TEAM_SELECTION_INPUTS_META_KEY, input == null ? List.of() : List.of(input));
         return this;
+    }
+
+    /**
+     * Get commands that should run when a player or spectator joins this arena from outside the minigame.
+     * Commands use the same prefix convention as world transition commands:
+     * {@code server:} runs as console, otherwise the command runs as the player.
+     *
+     * @return The configured join commands.
+     */
+    default List<String> getJoinCommands() {
+        return List.copyOf(getList(JOIN_COMMANDS_META_KEY, String.class, List.of()));
+    }
+
+    /**
+     * Set commands that should run when a player or spectator joins this arena from outside the minigame.
+     *
+     * @param commands The commands to run.
+     * @return The arena instance.
+     */
+    default MiniGameArena setJoinCommands(List<String> commands) {
+        return set(JOIN_COMMANDS_META_KEY, commands == null ? List.of() : new ArrayList<>(commands));
+    }
+
+    /**
+     * Get commands that should run when a player or spectator fully leaves this arena.
+     *
+     * @return The configured leave commands.
+     */
+    default List<String> getLeaveCommands() {
+        return List.copyOf(getList(LEAVE_COMMANDS_META_KEY, String.class, List.of()));
+    }
+
+    /**
+     * Set commands that should run when a player or spectator fully leaves this arena.
+     *
+     * @param commands The commands to run.
+     * @return The arena instance.
+     */
+    default MiniGameArena setLeaveCommands(List<String> commands) {
+        return set(LEAVE_COMMANDS_META_KEY, commands == null ? List.of() : new ArrayList<>(commands));
+    }
+
+    /**
+     * Get permissions that should be granted while a player or spectator is inside this arena.
+     * These permissions are attached on join and automatically removed on leave.
+     *
+     * @return The configured temporary permissions.
+     */
+    default List<String> getJoinPermissions() {
+        return List.copyOf(getList(JOIN_PERMISSIONS_META_KEY, String.class, List.of()));
+    }
+
+    /**
+     * Set permissions that should be granted while a player or spectator is inside this arena.
+     *
+     * @param permissions The permissions to attach.
+     * @return The arena instance.
+     */
+    default MiniGameArena setJoinPermissions(List<String> permissions) {
+        return set(JOIN_PERMISSIONS_META_KEY, permissions == null ? List.of() : new ArrayList<>(permissions));
     }
 
     /**

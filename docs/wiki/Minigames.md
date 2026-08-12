@@ -32,10 +32,67 @@ The shared minigame framework handles:
 - lobby, play, and spectator state transitions
 - spectator support
 - player occupancy tracking
+- join/leave lifecycle actions
 - HUD refresh loops
 - countdown/start handling
 - common safety and world protection hooks
 - framework-managed team selection for compatible minigames
+
+## Arena Lifecycle Actions
+
+The minigame framework can run shared join/leave actions when a player or
+spectator enters an arena from outside the minigame, and when they fully leave
+it again.
+
+Arena API:
+
+- `MiniGameArena#getJoinCommands()`
+- `MiniGameArena#setJoinCommands(...)`
+- `MiniGameArena#getLeaveCommands()`
+- `MiniGameArena#setLeaveCommands(...)`
+- `MiniGameArena#getJoinPermissions()`
+- `MiniGameArena#setJoinPermissions(...)`
+
+Framework behavior:
+
+- join commands run once when a player or spectator enters the minigame from outside
+- leave commands run once when that occupant fully leaves the minigame
+- join permissions are attached while the occupant remains in the arena
+- attached permissions are removed automatically on leave
+- swapping between player and spectator inside the same arena does not trigger a fake leave/join cycle
+
+Command execution rules:
+
+- `server: some command` runs as console
+- `player: some command` runs as the player
+- no prefix also runs as the player
+
+Available tokens:
+
+- `{player}`
+- `{uuid}`
+- `{arena}`
+- `{arena-name}`
+- `{minigame}`
+- `{namespace}`
+- `{role}` as `player` or `spectator`
+
+Example:
+
+```java
+MiniGameArena arena = game.createArena("example", world)
+    .setJoinCommands(List.of(
+        "server: say {player} joined {namespace}:{arena} as {role}",
+        "player: msg {player} Welcome to {arena-name}"
+    ))
+    .setLeaveCommands(List.of(
+        "server: say {player} left {namespace}:{arena}"
+    ))
+    .setJoinPermissions(List.of(
+        "example.arena.active",
+        "example.arena.{arena}"
+    ));
+```
 
 ## Shared Supply Drops
 
