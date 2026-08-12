@@ -35,6 +35,7 @@ import dev.stemcraft.api.service.motd.MotdService;
 import dev.stemcraft.api.service.player.PlayerService;
 import dev.stemcraft.api.service.playerstats.PlayerStatsService;
 import dev.stemcraft.api.service.placeholder.PlaceholderService;
+import dev.stemcraft.api.service.protection.ProtectionService;
 import dev.stemcraft.api.service.profanity.ProfanityFilterService;
 import dev.stemcraft.api.service.recipe.RecipeService;
 import dev.stemcraft.api.service.region.RegionService;
@@ -128,6 +129,11 @@ public interface STEMCraftAPI {
      * Get the placeholder service.
      */
     PlaceholderService placeholders();
+
+    /**
+     * Get the protection service.
+     */
+    ProtectionService protections();
 
     /**
      * Get the profanity filter service.

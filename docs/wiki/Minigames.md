@@ -116,6 +116,10 @@ Arena API:
 - `MiniGameArena#findRandomSupplyDropLocation(...)`
 - `MiniGameArena#spawnSupplyDropCrate(...)`
 - `MiniGameArena#clearAllSupplyDrops()`
+- `MiniGameArena#pullPlayer(...)`
+- `MiniGameArena#pullPlayers(...)`
+- `MiniGameArena#cancelPlayerPulls()`
+- `MiniGameArena#isPlayerBeingPulled(...)`
 
 Games still own:
 
@@ -123,6 +127,7 @@ Games still own:
 - which surface materials are valid
 - when drops are announced and spawned
 - any game-specific messaging around drop timing or availability
+- which players should be pulled and where they should end up
 
 ## Framework Team Selection
 

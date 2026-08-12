@@ -27,6 +27,7 @@ STEMCraftAPI api = STEMCraftAPI.api();
 - `motd()`
 - `players()`
 - `placeholders()`
+- `protections()`
 - `profanityFilter()`
 - `punishments()`
 - `playerStats()`
@@ -119,6 +120,17 @@ These are used by BedWars and Bridge to share the same crate/parachute drop
 presentation while leaving item selection and drop timing in the minigame
 handlers.
 
+The minigame arena API also includes shared player-pull helpers:
+
+- `MiniGameArena#pullPlayer(...)`
+- `MiniGameArena#pullPlayers(...)`
+- `MiniGameArena#cancelPlayerPulls()`
+- `MiniGameArena#isPlayerBeingPulled(...)`
+
+These let minigames apply a straight-line pull toward one or more target
+locations at a specified blocks-per-second speed while the framework owns the
+per-tick movement and active-pull tracking.
+
 The arena API also exposes lifecycle actions for entering and leaving a
 minigame:
 
@@ -170,7 +182,21 @@ MiniGameArena arena = game.createArena("example", world)
     .setLobbySpawn(world.getSpawnLocation())
     .setLobbyRegion(selectionRegion)
     .setTeamSelectionInput(MiniGameTeamSelectionInput.FLOOR);
+
+arena.pullPlayer(player, arena.getLobbySpawn(), 50.0d);
 ```
+
+### Protections
+
+The protection API includes:
+
+- `ProtectionService`
+- `ProtectionType`
+- `ProtectionRule`
+- `ProtectionRequest`
+
+Use this when a feature wants to request a temporary gameplay protection while
+leaving the final allow/deny decision to shared policy rules.
 
 ### Resource Packs
 

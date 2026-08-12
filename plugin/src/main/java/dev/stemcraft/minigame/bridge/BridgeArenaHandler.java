@@ -54,8 +54,10 @@ import org.jetbrains.annotations.Nullable;
 import org.jspecify.annotations.NonNull;
 
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.UUID;
@@ -65,6 +67,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
     private static final int RUNNING_COUNTDOWN_SECONDS = 300;
     private static final int DROP_INTERVAL_SECONDS = 30;
     private static final int TNT_FUSE_TICKS = 80;
+    private static final double SCORE_RESET_PULL_SPEED_BLOCKS_PER_SECOND = 50.0d;
     private static final int DROP_LOCATION_ATTEMPTS = 64;
     private static final int DROP_AVAILABILITY_CHECK_ATTEMPTS = 256;
 
@@ -152,6 +155,9 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
                 @Override
                 public void onExit(@NotNull Player player, @NotNull SCRegion region, @Nullable Location from, @Nullable Location to) {
                     if (arena.hasPlayer(player) && arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING) {
+                        if (arena.isPlayerBeingPulled(player)) {
+                            return;
+                        }
                         if (tryHandlePortalScore(arena, player, from, to)) {
                             return;
                         }
@@ -182,7 +188,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
                     if (!arena.hasPlayer(player) || arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
                         return;
                     }
-                    if (isRespawning(arena, player)) {
+                    if (isRespawning(arena, player) || arena.isPlayerBeingPulled(player)) {
                         return;
                     }
                     tryHandlePortalScore(arena, player, from, to);
@@ -193,6 +199,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
 
     @Override
     public void onArenaUnload(MiniGameArena arena) {
+        arena.cancelPlayerPulls();
         arena.stopWinnerCelebration();
         clearTrackedEntities(arena);
         String listenerPrefix = regionListenerPrefix(arena.id());
@@ -207,6 +214,9 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
         if (arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
             return HandlerEventResult.DENY;
         }
+        if (arena.isPlayerBeingPulled(player)) {
+            return HandlerEventResult.DENY;
+        }
 
         Set<Location> blockLocations = placedBlocks(arena);
         if (blockLocations.remove(block.getLocation())) {
@@ -218,6 +228,9 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
     @Override
     public HandlerEventResult onBlockPlace(MiniGameArena arena, Player player, org.bukkit.block.Block block) {
         if (arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
+            return HandlerEventResult.DENY;
+        }
+        if (arena.isPlayerBeingPulled(player)) {
             return HandlerEventResult.DENY;
         }
 
@@ -244,6 +257,9 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
             return HandlerEventResult.ALLOW;
         }
         if (arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
+            return HandlerEventResult.DENY;
+        }
+        if (arena.isPlayerBeingPulled(player)) {
             return HandlerEventResult.DENY;
         }
 
@@ -372,6 +388,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
     }
 
     private void startRound(MiniGameArena arena) {
+        arena.cancelPlayerPulls();
         arena.stopWinnerCelebration();
         clearPlacedBlocks(arena);
         clearTrackedEntities(arena);
@@ -390,6 +407,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
     }
 
     private void resetRound(MiniGameArena arena) {
+        arena.cancelPlayerPulls();
         arena.stopWinnerCelebration();
         clearPlacedBlocks(arena);
         clearTrackedEntities(arena);
@@ -509,10 +527,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
             return;
         }
 
-        for (Player arenaPlayer : arena.getPlayers()) {
-            equipPlayer(arena, arenaPlayer);
-            arena.teleportToTeamSpawn(arenaPlayer);
-        }
+        startScoreResetPull(arena);
     }
 
     private MiniGameTeam winningTeam(MiniGameArena arena) {
@@ -672,8 +687,50 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
         return respawningPlayers(arena).contains(player.getUniqueId());
     }
 
+    private boolean startScoreResetPull(@NotNull MiniGameArena arena) {
+        if (arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
+            return false;
+        }
+
+        Map<Player, Location> targets = new LinkedHashMap<>();
+        for (Player player : arena.getPlayers()) {
+            MiniGameTeam team = arena.getPlayerTeam(player);
+            Location spawn = team == null ? null : team.getSpawn();
+            if (spawn == null || spawn.getWorld() == null) {
+                continue;
+            }
+
+            equipPlayer(arena, player);
+            player.setVelocity(new Vector());
+            player.setFallDistance(0.0f);
+            targets.put(player, spawn.clone());
+        }
+
+        if (targets.isEmpty()) {
+            return false;
+        }
+
+        arena.showTitle(
+            "<gold><bold>Score!</bold></gold>",
+            "<gray>Resetting positions</gray>",
+            0,
+            900,
+            250
+        );
+        playSoundToOccupants(arena, Sound.ITEM_TRIDENT_RETURN, 0.9f, 1.0f);
+        arena.pullPlayers(targets, SCORE_RESET_PULL_SPEED_BLOCKS_PER_SECOND, () -> {
+            for (Player player : arena.getPlayers()) {
+                player.setHealth(PlayerUtil.getMaxHealth(player));
+            }
+        });
+        return true;
+    }
+
     private boolean tryHandlePortalScore(@NotNull MiniGameArena arena, @NotNull Player player, @Nullable Location from, @Nullable Location to) {
         if (from == null || to == null || !arena.hasPlayer(player) || arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
+            return false;
+        }
+        if (arena.isPlayerBeingPulled(player)) {
             return false;
         }
 

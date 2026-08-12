@@ -105,6 +105,7 @@ public final class STEMCraft extends JavaPlugin {
     private PlaceholderServiceImpl placeholders;
     private PlayerServiceImpl players;
     private PlayerStatsServiceImpl playerStats;
+    private ProtectionServiceImpl protections;
     private ProfanityFilterServiceImpl profanityFilter;
     private PunishmentServiceImpl punishments;
     private RecipeServiceImpl recipes;
@@ -198,6 +199,7 @@ public final class STEMCraft extends JavaPlugin {
         placeholders = new PlaceholderServiceImpl(this, api);
         players = new PlayerServiceImpl(this, api);
         playerStats = new PlayerStatsServiceImpl(this, api);
+        protections = new ProtectionServiceImpl(this, api);
         profanityFilter = new ProfanityFilterServiceImpl(this, api);
         punishments = new PunishmentServiceImpl(this, api);
         recipes = new RecipeServiceImpl(this, api);
@@ -222,6 +224,7 @@ public final class STEMCraft extends JavaPlugin {
         placeholders.onEnable();
         players.onEnable();
         playerStats.onEnable();
+        protections.onEnable();
         profanityFilter.onEnable();
         punishments.onEnable();
         recipes.onEnable();

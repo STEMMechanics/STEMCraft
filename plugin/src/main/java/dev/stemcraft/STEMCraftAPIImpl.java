@@ -29,6 +29,7 @@ import dev.stemcraft.api.service.motd.MotdService;
 import dev.stemcraft.api.service.player.PlayerService;
 import dev.stemcraft.api.service.playerstats.PlayerStatsService;
 import dev.stemcraft.api.service.placeholder.PlaceholderService;
+import dev.stemcraft.api.service.protection.ProtectionService;
 import dev.stemcraft.api.service.profanity.ProfanityFilterService;
 import dev.stemcraft.api.service.recipe.RecipeService;
 import dev.stemcraft.capability.HasMessagesImpl;
@@ -163,6 +164,12 @@ public class STEMCraftAPIImpl extends HasMessagesImpl implements STEMCraftAPI {
      */
     @Override
     public PlaceholderService placeholders() { return plugin.placeholders(); }
+
+    /**
+     * Get the protection service.
+     */
+    @Override
+    public ProtectionService protections() { return plugin.protections(); }
 
     /**
      * Get the profanity filter service.

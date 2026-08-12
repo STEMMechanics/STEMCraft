@@ -27,6 +27,7 @@ import dev.stemcraft.api.minigame.MiniGameArena;
 import dev.stemcraft.api.minigame.MiniGameArenaHandler;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.service.minigame.MiniGameService;
+import dev.stemcraft.api.service.protection.ProtectionType;
 import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.service.BaseService;
 import org.bukkit.Bukkit;
@@ -100,6 +101,9 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
             teamSelectionSupport = new MiniGameTeamSelectionSupport(api);
             teamSelectionSupport.attachService(this);
         }
+        api.protections().registerRule("minigame-teleport-damage", (player, request) ->
+            request.type() != ProtectionType.TELEPORT_DAMAGE || findPlayerArena(player) == null
+        );
 
         // Countdown Task
         api.tasks().repeating("minigame-countdown", 20, 20, () -> {
