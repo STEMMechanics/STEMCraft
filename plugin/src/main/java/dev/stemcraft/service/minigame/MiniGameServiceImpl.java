@@ -29,11 +29,13 @@ import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.service.minigame.MiniGameService;
 import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.service.BaseService;
+import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.AbstractArrow;
 import org.bukkit.entity.Player;
+import org.bukkit.permissions.PermissionAttachment;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
@@ -68,7 +70,8 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
     private final Map<String, Map<String, MiniGameArenaImpl>> arenasByNamespace = new HashMap<>();
     private final Map<UUID, ArenaOccupancy> players = new HashMap<>();
     private final Map<UUID, StoredPlayerState> prevPlayerStates = new HashMap<>();
-    private final MiniGameTeamSelectionSupport teamSelectionSupport;
+    private final Map<UUID, PermissionAttachment> minigamePermissionAttachments = new HashMap<>();
+    private MiniGameTeamSelectionSupport teamSelectionSupport;
 
     /**
      * Constructs a MiniGameServiceImpl instance.
@@ -78,13 +81,14 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
      */
     public MiniGameServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
-        this.teamSelectionSupport = new MiniGameTeamSelectionSupport(api, this);
     }
 
     @Override
     public void onReload() {
         super.onReload();
-        teamSelectionSupport.reloadConfig();
+        if (teamSelectionSupport != null) {
+            teamSelectionSupport.reloadConfig();
+        }
     }
 
     /**
@@ -92,6 +96,10 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
      */
     @Override
     public void onEnable() {
+        if (teamSelectionSupport == null) {
+            teamSelectionSupport = new MiniGameTeamSelectionSupport(api);
+            teamSelectionSupport.attachService(this);
+        }
 
         // Countdown Task
         api.tasks().repeating("minigame-countdown", 20, 20, () -> {
@@ -394,6 +402,7 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
 
     @Override
     public void onDisable() {
+        clearAllMinigamePermissionAttachments();
         for (MiniGame minigame : new ArrayList<>(minigames.values())) {
             for (MiniGameArena arena : new ArrayList<>(minigame.arenas())) {
                 minigame.removeArena(arena.id());
@@ -691,6 +700,101 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
         if (occupancy != null && occupancy.arena() == arena) {
             players.remove(player.getUniqueId());
         }
+    }
+
+    void applyArenaJoinActions(@NotNull MiniGameArena arena, @NotNull Player player, boolean spectator) {
+        attachArenaPermissions(arena, player, spectator);
+        executeArenaLifecycleCommands(arena.getJoinCommands(), arena, player, spectator);
+    }
+
+    void applyArenaLeaveActions(@NotNull MiniGameArena arena, @NotNull Player player, boolean spectator) {
+        executeArenaLifecycleCommands(arena.getLeaveCommands(), arena, player, spectator);
+        clearArenaPermissions(player.getUniqueId());
+    }
+
+    private void attachArenaPermissions(@NotNull MiniGameArena arena, @NotNull Player player, boolean spectator) {
+        clearArenaPermissions(player.getUniqueId());
+
+        List<String> permissions = arena.getJoinPermissions().stream()
+            .map(permission -> resolveArenaLifecycleTokens(permission, arena, player, spectator))
+            .map(String::trim)
+            .filter(permission -> !permission.isBlank())
+            .toList();
+        if (permissions.isEmpty()) {
+            return;
+        }
+
+        PermissionAttachment attachment = player.addAttachment(plugin);
+        for (String permission : permissions) {
+            attachment.setPermission(permission, true);
+        }
+        minigamePermissionAttachments.put(player.getUniqueId(), attachment);
+    }
+
+    private void clearArenaPermissions(@NotNull UUID playerId) {
+        PermissionAttachment attachment = minigamePermissionAttachments.remove(playerId);
+        if (attachment == null) {
+            return;
+        }
+
+        Player player = Bukkit.getPlayer(playerId);
+        if (player != null && player.isOnline()) {
+            player.removeAttachment(attachment);
+        }
+    }
+
+    private void clearAllMinigamePermissionAttachments() {
+        for (UUID playerId : new ArrayList<>(minigamePermissionAttachments.keySet())) {
+            clearArenaPermissions(playerId);
+        }
+    }
+
+    private void executeArenaLifecycleCommands(@NotNull List<String> commands,
+                                               @NotNull MiniGameArena arena,
+                                               @NotNull Player player,
+                                               boolean spectator) {
+        if (commands.isEmpty()) {
+            return;
+        }
+
+        for (String rawCommand : commands) {
+            String command = resolveArenaLifecycleTokens(rawCommand, arena, player, spectator).trim();
+            if (command.isBlank()) {
+                continue;
+            }
+
+            String lowered = command.toLowerCase(Locale.ROOT);
+            if (lowered.startsWith("server:")) {
+                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command.substring("server:".length()).trim());
+                continue;
+            }
+
+            String playerCommand = lowered.startsWith("player:")
+                ? command.substring("player:".length()).trim()
+                : command;
+            if (!playerCommand.isBlank()) {
+                Bukkit.dispatchCommand(player, playerCommand);
+            }
+        }
+    }
+
+    private @NotNull String resolveArenaLifecycleTokens(@Nullable String raw,
+                                                        @NotNull MiniGameArena arena,
+                                                        @NotNull Player player,
+                                                        boolean spectator) {
+        if (raw == null || raw.isBlank()) {
+            return "";
+        }
+
+        String role = spectator ? "spectator" : "player";
+        return raw
+            .replace("{player}", player.getName())
+            .replace("{uuid}", player.getUniqueId().toString())
+            .replace("{arena}", arena.id())
+            .replace("{arena-name}", arena.getName())
+            .replace("{minigame}", arena.namespace())
+            .replace("{namespace}", arena.namespace())
+            .replace("{role}", role);
     }
 
     private @NotNull List<MiniGameArenaImpl> findArenasForExplosion(@NotNull Location location, @NotNull List<org.bukkit.block.Block> blocks) {

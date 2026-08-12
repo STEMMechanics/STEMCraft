@@ -8,6 +8,7 @@ import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.service.event.EventService;
 import dev.stemcraft.api.service.region.RegionListener;
 import dev.stemcraft.api.service.region.RegionService;
+import dev.stemcraft.api.service.task.TaskService;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Sound;
@@ -40,6 +41,7 @@ class BoatRaceArenaHandlerTest {
     void finishRaceAdvanceShowsTitleForNextLap() throws Exception {
         STEMCraftAPI api = mock(STEMCraftAPI.class);
         EventService events = mock(EventService.class);
+        TaskService tasks = mock(TaskService.class);
         BoatRaceMiniGame boatRace = mock(BoatRaceMiniGame.class);
         MiniGameArena arena = mock(MiniGameArena.class);
         Player player = mock(Player.class);
@@ -51,6 +53,7 @@ class BoatRaceArenaHandlerTest {
         Map<UUID, Location> checkpointLocations = new LinkedHashMap<>();
 
         when(api.events()).thenReturn(events);
+        when(api.tasks()).thenReturn(tasks);
         when(events.register(any(Class.class), any())).thenReturn(listenerRegistration);
 
         when(arena.getStatus()).thenReturn(MiniGameArena.ArenaStatus.RUNNING);
@@ -88,10 +91,12 @@ class BoatRaceArenaHandlerTest {
 
             STEMCraftAPI api = mock(STEMCraftAPI.class);
             EventService events = mock(EventService.class);
+            TaskService tasks = mock(TaskService.class);
             BoatRaceMiniGame boatRace = mock(BoatRaceMiniGame.class);
             Listener listenerRegistration = mock(Listener.class);
 
             when(api.events()).thenReturn(events);
+            when(api.tasks()).thenReturn(tasks);
             when(events.register(any(Class.class), any())).thenReturn(listenerRegistration);
 
             BoatRaceArenaHandler handler = new BoatRaceArenaHandler(api, boatRace);
@@ -125,6 +130,7 @@ class BoatRaceArenaHandlerTest {
             STEMCraftAPI api = mock(STEMCraftAPI.class);
             EventService events = mock(EventService.class);
             RegionService regions = mock(RegionService.class);
+            TaskService tasks = mock(TaskService.class);
             BoatRaceMiniGame boatRace = mock(BoatRaceMiniGame.class);
             MiniGameArena arena = mock(MiniGameArena.class);
             Player player = mock(Player.class);
@@ -136,6 +142,7 @@ class BoatRaceArenaHandlerTest {
 
             when(api.events()).thenReturn(events);
             when(api.regions()).thenReturn(regions);
+            when(api.tasks()).thenReturn(tasks);
             when(events.register(any(Class.class), any())).thenReturn(listenerRegistration);
 
             when(arena.id()).thenReturn("test");
@@ -186,6 +193,7 @@ class BoatRaceArenaHandlerTest {
             STEMCraftAPI api = mock(STEMCraftAPI.class);
             EventService events = mock(EventService.class);
             RegionService regions = mock(RegionService.class);
+            TaskService tasks = mock(TaskService.class);
             BoatRaceMiniGame boatRace = mock(BoatRaceMiniGame.class);
             MiniGameArena arena = mock(MiniGameArena.class);
             Listener listenerRegistration = mock(Listener.class);
@@ -215,6 +223,7 @@ class BoatRaceArenaHandlerTest {
 
             when(api.events()).thenReturn(events);
             when(api.regions()).thenReturn(regions);
+            when(api.tasks()).thenReturn(tasks);
             when(events.register(any(Class.class), any())).thenReturn(listenerRegistration);
 
             when(arena.id()).thenReturn("test");

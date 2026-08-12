@@ -56,14 +56,17 @@ public final class MiniGameTeamSelectionSupport {
     private static final int AUTO_ASSIGNMENT_CANDIDATE_ATTEMPTS = 48;
 
     private final STEMCraftAPI api;
-    private final MiniGameServiceImpl service;
+    private MiniGameServiceImpl service;
     private Map<String, Set<Material>> floorSelectorMaterials = Map.of();
 
-    MiniGameTeamSelectionSupport(@NotNull STEMCraftAPI api, @NotNull MiniGameServiceImpl service) {
+    MiniGameTeamSelectionSupport(@NotNull STEMCraftAPI api) {
         this.api = api;
-        this.service = service;
         reloadConfig();
         registerListeners();
+    }
+
+    void attachService(@NotNull MiniGameServiceImpl service) {
+        this.service = service;
     }
 
     void reloadConfig() {
@@ -282,6 +285,10 @@ public final class MiniGameTeamSelectionSupport {
 
     private void registerListeners() {
         api.events().register(PlayerMoveEvent.class, event -> {
+            MiniGameServiceImpl service = this.service;
+            if (service == null) {
+                return;
+            }
             Location to = event.getTo();
             if (to == null || samePosition(event.getFrom(), to)) {
                 return;
@@ -304,6 +311,10 @@ public final class MiniGameTeamSelectionSupport {
         }, EventPriority.MONITOR, false);
 
         api.events().register(PlayerInteractEvent.class, event -> {
+            MiniGameServiceImpl service = this.service;
+            if (service == null) {
+                return;
+            }
             if (event.getAction() != Action.RIGHT_CLICK_AIR
                 && event.getAction() != Action.RIGHT_CLICK_BLOCK
                 && event.getAction() != Action.LEFT_CLICK_AIR
@@ -334,6 +345,10 @@ public final class MiniGameTeamSelectionSupport {
         }, EventPriority.NORMAL, false);
 
         api.events().register(InventoryClickEvent.class, event -> {
+            MiniGameServiceImpl service = this.service;
+            if (service == null) {
+                return;
+            }
             if (!(event.getWhoClicked() instanceof Player player)) {
                 return;
             }
@@ -694,6 +709,7 @@ public final class MiniGameTeamSelectionSupport {
     }
 
     private void refreshArenaHud(@NotNull MiniGameArena arena) {
+        MiniGameServiceImpl service = requireService();
         MiniGameImpl minigame = service.getMiniGameImpl(arena.namespace());
         if (minigame == null) {
             return;
@@ -903,8 +919,16 @@ public final class MiniGameTeamSelectionSupport {
     }
 
     private @Nullable MiniGameTeamSelectionPolicy policy(@NotNull MiniGameArena arena) {
+        MiniGameServiceImpl service = requireService();
         MiniGameImpl minigame = service.getMiniGameImpl(arena.namespace());
         return minigame == null ? null : minigame.getTeamSelectionPolicy();
+    }
+
+    private @NotNull MiniGameServiceImpl requireService() {
+        if (service == null) {
+            throw new IllegalStateException("MiniGameTeamSelectionSupport service not attached");
+        }
+        return service;
     }
 
     private @Nullable String currentLobbyViewerTeam(@NotNull MiniGameArena arena, @NotNull MiniGamePlayer viewer) {

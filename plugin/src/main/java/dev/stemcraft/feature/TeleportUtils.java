@@ -25,6 +25,8 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.Command;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.util.LocationUtil;
+import dev.stemcraft.api.util.TeleportContext;
+import dev.stemcraft.api.util.TeleportOptions;
 import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.api.util.WorldUtil;
 import org.bukkit.Bukkit;
@@ -92,19 +94,37 @@ public class TeleportUtils extends BaseFeature {
 
         // Track previous locations for /back
         api.events().register(PlayerTeleportEvent.class, event -> {
+            if (isNoOpTeleport(event.getFrom(), event.getTo())) {
+                return;
+            }
             Player player = event.getPlayer();
-            grantDamageProtection(player);
+            TeleportOptions options = TeleportContext.current(player.getUniqueId());
+            if (options.grantDamageProtection()) {
+                grantDamageProtection(player);
+            }
             Location from = event.getFrom();
-            setBackLocation(player.getUniqueId(), from);
-            setWorldLastLocation(player.getUniqueId(), from);
+            if (options.updateBackLocation()) {
+                setBackLocation(player.getUniqueId(), from);
+            }
+            if (options.updateWorldLastLocation()) {
+                setWorldLastLocation(player.getUniqueId(), from);
+            }
 
             Location to = event.getTo();
-            setWorldLastLocation(player.getUniqueId(), to);
+            if (options.updateWorldLastLocation()) {
+                setWorldLastLocation(player.getUniqueId(), to);
+            }
         });
 
         api.events().register(PlayerTeleportEvent.class, event -> {
             Location to = event.getTo();
             if (to == null) {
+                return;
+            }
+            if (isNoOpTeleport(event.getFrom(), to)) {
+                return;
+            }
+            if (!TeleportContext.current(event.getPlayer().getUniqueId()).logToConsole()) {
                 return;
             }
 
@@ -148,6 +168,7 @@ public class TeleportUtils extends BaseFeature {
         api.events().register(PlayerTeleportEvent.class, event -> {
             Location from = event.getFrom();
             Location to = event.getTo();
+            if (isNoOpTeleport(from, to)) return;
             if (from.getWorld() == null || to.getWorld() == null) return;
             if (from.getWorld().equals(to.getWorld())) return;
 
@@ -663,6 +684,10 @@ public class TeleportUtils extends BaseFeature {
                 api.messages().info(online, "TELEPORT_DAMAGE_PROTECTION_ENDED");
             }
         });
+    }
+
+    private boolean isNoOpTeleport(Location from, Location to) {
+        return from != null && to != null && from.equals(to);
     }
 
     private String damageProtectionTaskId(UUID uuid) {

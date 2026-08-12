@@ -1,6 +1,7 @@
 package dev.stemcraft.service.world.setting;
 
 import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.api.service.event.EventHandler;
 import dev.stemcraft.api.service.event.EventService;
 import dev.stemcraft.api.service.world.WorldService;
 import dev.stemcraft.config.ConfigFileImpl;
@@ -22,6 +23,7 @@ import java.nio.file.Path;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -51,7 +53,12 @@ class WorldGameModeSettingTest {
         when(service.getConfigSection(world)).thenReturn(config);
 
         EventService eventService = mock(EventService.class);
-        when(eventService.register(any(Class.class), any(), any(EventPriority.class), anyBoolean())).thenReturn(mock(Listener.class));
+        when(eventService.register(
+            eq(Event.class),
+            anyEventHandler(),
+            any(EventPriority.class),
+            anyBoolean()
+        )).thenReturn(mock(Listener.class));
 
         STEMCraftAPI api = mock(STEMCraftAPI.class);
         when(api.events()).thenReturn(eventService);
@@ -81,5 +88,10 @@ class WorldGameModeSettingTest {
         setting.applyConfiguredGameMode(player);
 
         assertEquals(GameMode.SURVIVAL, player.getGameMode());
+    }
+
+    @SuppressWarnings("unchecked")
+    private static EventHandler<Event> anyEventHandler() {
+        return (EventHandler<Event>) any(EventHandler.class);
     }
 }

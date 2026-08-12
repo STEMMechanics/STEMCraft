@@ -422,6 +422,7 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
     @Override
     public void addPlayer(Player player) {
         if (players.containsKey(player)) return;
+        boolean joiningFromOutside = !spectators.contains(player);
 
         MiniGameArenaImpl existingArena = service.findPlayerArena(player);
         if (existingArena != null && existingArena != this) {
@@ -478,6 +479,9 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         }
 
         PlayerUtil.teleport(player, location);
+        if (joiningFromOutside) {
+            service.applyArenaJoinActions(this, player, false);
+        }
         service.teamSelectionSupport().onPlayerJoinedArena(this, player);
     }
 
@@ -513,6 +517,7 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
     @Override
     public void addSpectator(Player player) {
         if (spectators.contains(player)) return;
+        boolean joiningFromOutside = !players.containsKey(player);
 
         MiniGameArenaImpl existingArena = service.findPlayerArena(player);
         if (existingArena != null && existingArena != this) {
@@ -541,6 +546,9 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         }
 
         PlayerUtil.teleport(player, location);
+        if (joiningFromOutside) {
+            service.applyArenaJoinActions(this, player, true);
+        }
     }
 
     @Override
@@ -1449,6 +1457,7 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         }
 
         service.restorePreviousPlayerState(player, restoreLocation);
+        service.applyArenaLeaveActions(this, player, false);
     }
 
     private void removeSpectatorInternal(Player player, boolean restoreLocation, boolean quitting) {
@@ -1457,6 +1466,7 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
             return;
         }
         service.restorePreviousPlayerState(player, restoreLocation);
+        service.applyArenaLeaveActions(this, player, true);
     }
 
     private @Nullable MiniGamePlayerImpl detachActiveProfile(Player player, boolean notifyHandler, boolean quitting) {
