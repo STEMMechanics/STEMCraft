@@ -28,6 +28,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -35,6 +36,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
 public final class MiniGameTeamSelectionSupport {
@@ -49,6 +51,9 @@ public final class MiniGameTeamSelectionSupport {
     public static final String CONFIG_INPUTS_PATH = "team-selection.inputs";
     public static final String LEGACY_CONFIG_FLOOR_ENABLED_PATH = "team-floor-selection.enabled";
     public static final String TEAM_SELECTION_PREFERENCE_KEY = "teamSelectionPreference";
+    private static final String RECENT_AUTO_ASSIGNMENT_HISTORY_KEY = "recentAutoAssignmentHistory";
+    private static final int RECENT_AUTO_ASSIGNMENT_HISTORY_LIMIT = 3;
+    private static final int AUTO_ASSIGNMENT_CANDIDATE_ATTEMPTS = 48;
 
     private final STEMCraftAPI api;
     private final MiniGameServiceImpl service;
@@ -150,7 +155,10 @@ public final class MiniGameTeamSelectionSupport {
             return;
         }
 
-        applyAssignments(arena);
+        Map<Player, String> preferences = preferences(arena);
+        Map<Player, String> assignments = buildAssignments(arena, preferences);
+        applyAssignments(arena, assignments);
+        recordRecentAutoAssignment(arena, assignments, preferences);
         clearLobbySelectors(arena);
     }
 
@@ -437,6 +445,10 @@ public final class MiniGameTeamSelectionSupport {
 
     private void applyAssignments(@NotNull MiniGameArena arena) {
         Map<Player, String> assignments = buildAssignments(arena, preferences(arena));
+        applyAssignments(arena, assignments);
+    }
+
+    private void applyAssignments(@NotNull MiniGameArena arena, @NotNull Map<Player, String> assignments) {
         for (Map.Entry<Player, String> entry : assignments.entrySet()) {
             Player player = entry.getKey();
             String teamId = entry.getValue();
@@ -449,7 +461,7 @@ public final class MiniGameTeamSelectionSupport {
 
     private @NotNull Map<Player, String> buildAssignments(@NotNull MiniGameArena arena,
                                                            @NotNull Map<Player, String> preferences) {
-        List<MiniGameTeam> teams = assignableTeams(arena, preferences(arena));
+        List<MiniGameTeam> teams = assignableTeams(arena, preferences);
         Map<String, Integer> occupancy = new LinkedHashMap<>();
         Map<String, Integer> capacity = new LinkedHashMap<>();
         for (MiniGameTeam team : teams) {
@@ -472,6 +484,7 @@ public final class MiniGameTeamSelectionSupport {
             }
         }
 
+        List<Player> autoPlayers = new ArrayList<>();
         for (Player player : arena.getPlayers()) {
             if (assignments.containsKey(player)) {
                 continue;
@@ -481,18 +494,54 @@ public final class MiniGameTeamSelectionSupport {
             if (isExplicitSelection(preferredTeam)) {
                 continue;
             }
+            autoPlayers.add(player);
+        }
 
-            String teamId = selectLeastFilledTeam(occupancy, capacity);
-            if (teamId == null && !teams.isEmpty()) {
-                teamId = teams.getFirst().getName();
+        assignments.putAll(selectAutoAssignments(arena, assignments, autoPlayers, occupancy, capacity));
+        return assignments;
+    }
+
+    private @NotNull Map<Player, String> selectAutoAssignments(@NotNull MiniGameArena arena,
+                                                               @NotNull Map<Player, String> lockedAssignments,
+                                                               @NotNull List<Player> autoPlayers,
+                                                               @NotNull Map<String, Integer> occupancy,
+                                                               @NotNull Map<String, Integer> capacity) {
+        if (autoPlayers.isEmpty()) {
+            return Map.of();
+        }
+
+        List<String> slots = availableTeamSlots(occupancy, capacity);
+        if (slots.size() < autoPlayers.size()) {
+            return Map.of();
+        }
+
+        ThreadLocalRandom random = ThreadLocalRandom.current();
+        List<String> history = new ArrayList<>(recentAutoAssignmentHistory(arena));
+        Map<Player, String> bestCandidate = Map.of();
+        int bestPenalty = Integer.MAX_VALUE;
+
+        for (int attempt = 0; attempt < AUTO_ASSIGNMENT_CANDIDATE_ATTEMPTS; attempt++) {
+            List<Player> shuffledPlayers = new ArrayList<>(autoPlayers);
+            List<String> shuffledSlots = new ArrayList<>(slots);
+            Collections.shuffle(shuffledPlayers, random);
+            Collections.shuffle(shuffledSlots, random);
+
+            Map<Player, String> candidate = new LinkedHashMap<>();
+            for (int i = 0; i < autoPlayers.size(); i++) {
+                candidate.put(shuffledPlayers.get(i), shuffledSlots.get(i));
             }
-            if (teamId != null) {
-                assignments.put(player, teamId);
-                occupancy.computeIfPresent(teamId, (ignored, count) -> count + 1);
+
+            int penalty = recentAssignmentPenalty(assignmentSignature(mergeAssignments(lockedAssignments, candidate)), history);
+            if (penalty < bestPenalty) {
+                bestPenalty = penalty;
+                bestCandidate = candidate;
+                if (penalty == 0) {
+                    break;
+                }
             }
         }
 
-        return assignments;
+        return bestCandidate;
     }
 
     private boolean updateFloorSelection(@NotNull MiniGameArena arena,
@@ -692,6 +741,67 @@ public final class MiniGameTeamSelectionSupport {
             .min(Map.Entry.comparingByValue())
             .map(Map.Entry::getKey)
             .orElse(null);
+    }
+
+    private @NotNull List<String> availableTeamSlots(@NotNull Map<String, Integer> occupancy,
+                                                     @NotNull Map<String, Integer> capacity) {
+        List<String> slots = new ArrayList<>();
+        for (Map.Entry<String, Integer> entry : capacity.entrySet()) {
+            String teamId = entry.getKey();
+            int remaining = Math.max(0, entry.getValue() - occupancy.getOrDefault(teamId, 0));
+            for (int i = 0; i < remaining; i++) {
+                slots.add(teamId);
+            }
+        }
+        return slots;
+    }
+
+    private @NotNull Map<Player, String> mergeAssignments(@NotNull Map<Player, String> lockedAssignments,
+                                                          @NotNull Map<Player, String> autoAssignments) {
+        Map<Player, String> merged = new LinkedHashMap<>(lockedAssignments);
+        merged.putAll(autoAssignments);
+        return merged;
+    }
+
+    @SuppressWarnings("unchecked")
+    private @NotNull List<String> recentAutoAssignmentHistory(@NotNull MiniGameArena arena) {
+        return arena.getOrCreate(RECENT_AUTO_ASSIGNMENT_HISTORY_KEY, List.class, ArrayList::new);
+    }
+
+    private void recordRecentAutoAssignment(@NotNull MiniGameArena arena,
+                                            @NotNull Map<Player, String> assignments,
+                                            @NotNull Map<Player, String> preferences) {
+        boolean hasAutoAssignments = assignments.entrySet().stream()
+            .anyMatch(entry -> !isExplicitSelection(preferences.getOrDefault(entry.getKey(), TeamNames.TEAM_AUTO)));
+        if (!hasAutoAssignments) {
+            return;
+        }
+
+        String signature = assignmentSignature(assignments);
+        List<String> history = recentAutoAssignmentHistory(arena);
+        history.remove(signature);
+        history.addFirst(signature);
+        while (history.size() > RECENT_AUTO_ASSIGNMENT_HISTORY_LIMIT) {
+            history.removeLast();
+        }
+    }
+
+    private int recentAssignmentPenalty(@NotNull String signature, @NotNull List<String> history) {
+        int penalty = 0;
+        int limit = Math.min(history.size(), RECENT_AUTO_ASSIGNMENT_HISTORY_LIMIT);
+        for (int i = 0; i < limit; i++) {
+            if (signature.equals(history.get(i))) {
+                penalty |= 1 << (RECENT_AUTO_ASSIGNMENT_HISTORY_LIMIT - 1 - i);
+            }
+        }
+        return penalty;
+    }
+
+    private @NotNull String assignmentSignature(@NotNull Map<Player, String> assignments) {
+        return assignments.entrySet().stream()
+            .sorted(Map.Entry.comparingByKey(Comparator.comparing(Player::getUniqueId)))
+            .map(entry -> entry.getKey().getUniqueId() + "=" + normalizeTeamId(entry.getValue()))
+            .collect(Collectors.joining("|"));
     }
 
     private boolean inputEnabled(@NotNull MiniGameArena arena, @NotNull MiniGameTeamSelectionInput input) {
