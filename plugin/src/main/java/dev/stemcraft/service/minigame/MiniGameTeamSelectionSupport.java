@@ -138,7 +138,6 @@ public final class MiniGameTeamSelectionSupport {
             return;
         }
 
-        updateFloorSelection(arena, player, player.getLocation(), true);
         reevaluateArena(arena);
         syncLobbySelectorInventory(arena, player);
     }
@@ -416,10 +415,12 @@ public final class MiniGameTeamSelectionSupport {
             return;
         }
 
-        applyAssignments(arena);
+        Map<Player, String> preferences = preferences(arena);
+        Map<Player, String> assignments = buildAssignments(arena, preferences);
+        applyAssignments(arena, assignments);
         syncLobbySelectorInventories(arena);
 
-        boolean startReady = canStart(arena);
+        boolean startReady = canStart(arena, preferences, assignments);
         if (arena.getStatus() == MiniGameArena.ArenaStatus.WAITING && startReady) {
             arena.setStatus(MiniGameArena.ArenaStatus.STARTING, startCountdownSeconds(arena));
             refreshArenaHud(arena);
@@ -441,16 +442,20 @@ public final class MiniGameTeamSelectionSupport {
     }
 
     private boolean canStart(@NotNull MiniGameArena arena) {
+        return canStart(arena, preferences(arena), buildAssignments(arena, preferences(arena)));
+    }
+
+    private boolean canStart(@NotNull MiniGameArena arena,
+                             @NotNull Map<Player, String> preferences,
+                             @NotNull Map<Player, String> assignments) {
         if (arena.numPlayers() < arena.getMinPlayers()) {
             return false;
         }
 
-        Map<Player, String> preferences = preferences(arena);
         if (requiredActiveTeams(arena) > 1 && allPlayersSelectedSameExplicitTeam(preferences, arena.numPlayers())) {
             return false;
         }
 
-        Map<Player, String> assignments = buildAssignments(arena, preferences);
         if (assignments.size() < arena.numPlayers()) {
             return false;
         }
@@ -534,6 +539,10 @@ public final class MiniGameTeamSelectionSupport {
         List<String> history = new ArrayList<>(recentAutoAssignmentHistory(arena));
         Map<Player, String> bestCandidate = Map.of();
         int bestPenalty = Integer.MAX_VALUE;
+        int requiredTeams = Math.max(1, requiredActiveTeams(arena));
+        List<String> assignableTeamIds = assignableTeams(arena, preferences(arena)).stream()
+            .map(MiniGameTeam::getName)
+            .toList();
 
         for (int attempt = 0; attempt < AUTO_ASSIGNMENT_CANDIDATE_ATTEMPTS; attempt++) {
             List<Player> shuffledPlayers = new ArrayList<>(autoPlayers);
@@ -542,11 +551,13 @@ public final class MiniGameTeamSelectionSupport {
             Collections.shuffle(shuffledSlots, random);
 
             Map<Player, String> candidate = new LinkedHashMap<>();
-            for (int i = 0; i < autoPlayers.size(); i++) {
+            seedMissingTeams(candidate, shuffledPlayers, shuffledSlots, lockedAssignments, assignableTeamIds, requiredTeams);
+            for (int i = 0; i < shuffledPlayers.size(); i++) {
                 candidate.put(shuffledPlayers.get(i), shuffledSlots.get(i));
             }
 
-            int penalty = recentAssignmentPenalty(assignmentSignature(mergeAssignments(lockedAssignments, candidate)), history);
+            Map<Player, String> mergedAssignments = mergeAssignments(lockedAssignments, candidate);
+            int penalty = recentAssignmentPenalty(assignmentSignature(mergedAssignments), history);
             if (penalty < bestPenalty) {
                 bestPenalty = penalty;
                 bestCandidate = candidate;
@@ -557,6 +568,50 @@ public final class MiniGameTeamSelectionSupport {
         }
 
         return bestCandidate;
+    }
+
+    private void seedMissingTeams(@NotNull Map<Player, String> candidate,
+                                  @NotNull List<Player> shuffledPlayers,
+                                  @NotNull List<String> shuffledSlots,
+                                  @NotNull Map<Player, String> lockedAssignments,
+                                  @NotNull List<String> assignableTeamIds,
+                                  int requiredTeams) {
+        if (requiredTeams <= 1 || shuffledPlayers.isEmpty()) {
+            return;
+        }
+
+        Set<String> activeTeams = lockedAssignments.values().stream()
+            .map(this::normalizeTeamId)
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        List<String> availableMissingTeams = new ArrayList<>();
+        for (String teamId : assignableTeamIds) {
+            String normalized = normalizeTeamId(teamId);
+            if (!activeTeams.contains(normalized) && shuffledSlots.stream().anyMatch(slot -> normalizeTeamId(slot).equals(normalized))) {
+                availableMissingTeams.add(teamId);
+            }
+        }
+
+        Collections.shuffle(availableMissingTeams, ThreadLocalRandom.current());
+        int teamsNeeded = Math.max(0, requiredTeams - activeTeams.size());
+        int playersToSeed = Math.min(Math.min(teamsNeeded, availableMissingTeams.size()), shuffledPlayers.size());
+        for (int i = 0; i < playersToSeed; i++) {
+            String teamId = availableMissingTeams.get(i);
+            Player player = shuffledPlayers.removeFirst();
+            removeFirstMatchingTeamSlot(shuffledSlots, teamId);
+            candidate.put(player, teamId);
+            activeTeams.add(normalizeTeamId(teamId));
+        }
+    }
+
+    private void removeFirstMatchingTeamSlot(@NotNull List<String> slots, @NotNull String teamId) {
+        String normalized = normalizeTeamId(teamId);
+        for (int i = 0; i < slots.size(); i++) {
+            if (normalizeTeamId(slots.get(i)).equals(normalized)) {
+                slots.remove(i);
+                return;
+            }
+        }
     }
 
     private boolean updateFloorSelection(@NotNull MiniGameArena arena,
@@ -596,13 +651,11 @@ public final class MiniGameTeamSelectionSupport {
         int x = location.getBlockX();
         int z = location.getBlockZ();
         int startY = location.getBlockY() - 1;
-        boolean sawAir = false;
         SCRegion lobbyRegion = arena.getLobbyRegion();
         for (int depth = 0; depth < FLOOR_SCAN_DEPTH; depth++) {
             org.bukkit.block.Block block = location.getWorld().getBlockAt(x, startY - depth, z);
             Material material = block.getType();
             if (material.isAir()) {
-                sawAir = true;
                 continue;
             }
 
@@ -614,9 +667,6 @@ public final class MiniGameTeamSelectionSupport {
             return teamId == null ? TeamNames.TEAM_AUTO : teamId;
         }
 
-        if (sawAir && previous != null && !previous.isBlank()) {
-            return previous;
-        }
         return TeamNames.TEAM_AUTO;
     }
 
@@ -728,7 +778,7 @@ public final class MiniGameTeamSelectionSupport {
             }
 
             miniGamePlayer.hudUpdate(
-                hud.bossbar(miniGamePlayer),
+                hud.bossbar(miniGamePlayer, false),
                 hud.bossbarColor(miniGamePlayer),
                 hud.scoreboard(miniGamePlayer)
             );

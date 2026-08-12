@@ -269,4 +269,19 @@ class MiniGamePlayerImpl extends HasMetaImpl<MiniGamePlayer> implements MiniGame
         bossBarFrame = (bossBarFrame + 1) % cycleLength;
         return index;
     }
+
+    int currentBossBarLineIndex(int size, int holdUpdates) {
+        if (size <= 0) {
+            return 0;
+        }
+
+        int effectiveHold = Math.max(1, holdUpdates);
+        int cycleLength = size * effectiveHold;
+        if (cycleLength <= 0) {
+            return 0;
+        }
+
+        int normalizedFrame = Math.floorMod(bossBarFrame, cycleLength);
+        return (normalizedFrame / effectiveHold) % size;
+    }
 }
