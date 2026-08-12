@@ -643,49 +643,9 @@ public class TeleportUtils extends BaseFeature {
                 .register(STEMCraft.getPlugin());
     }
 
-<<<<<<< HEAD
-    private void grantDamageProtection(Player player) {
-        if (player == null) {
-            return;
-        }
-        UUID uuid = player.getUniqueId();
-        if (player.getGameMode() != GameMode.SURVIVAL) {
-            damageProtectionUntil.remove(uuid);
-            api.tasks().cancel(damageProtectionTaskId(uuid));
-            return;
-        }
-
-        long protectionUntil = System.currentTimeMillis() + DAMAGE_PROTECTION_MILLIS;
-        damageProtectionUntil.put(uuid, protectionUntil);
-
-        api.tasks().runOnceDelay(damageProtectionTaskId(uuid), DAMAGE_PROTECTION_TICKS, () -> {
-            Long current = damageProtectionUntil.get(uuid);
-            if (current == null || current != protectionUntil) {
-                return;
-            }
-
-            if (System.currentTimeMillis() < current) {
-                return;
-            }
-
-            damageProtectionUntil.remove(uuid);
-            Player online = Bukkit.getPlayer(uuid);
-            if (online != null && online.isOnline() && online.getGameMode() == GameMode.SURVIVAL) {
-                api.messages().info(online, "TELEPORT_DAMAGE_PROTECTION_ENDED");
-            }
-        });
-    }
-
     private boolean isNoOpTeleport(Location from, Location to) {
         return from != null && to != null && from.equals(to);
     }
-
-    private String damageProtectionTaskId(UUID uuid) {
-        return "teleportutils:damage-protection-expire:" + uuid;
-    }
-
-=======
->>>>>>> 34c8ded (Add Bridge score reset pull transition)
     /**
      * Load warps from configuration.
      */

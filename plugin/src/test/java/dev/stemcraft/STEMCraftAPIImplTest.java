@@ -12,6 +12,7 @@ import dev.stemcraft.service.LocaleServiceImpl;
 import dev.stemcraft.service.MotdServiceImpl;
 import dev.stemcraft.service.PlaceholderServiceImpl;
 import dev.stemcraft.service.ProfanityFilterServiceImpl;
+import dev.stemcraft.service.ProtectionServiceImpl;
 import dev.stemcraft.service.PlayerServiceImpl;
 import dev.stemcraft.service.PlayerStatsServiceImpl;
 import dev.stemcraft.service.PunishmentServiceImpl;
@@ -66,6 +67,7 @@ class STEMCraftAPIImplTest {
         "motd",
         "players",
         "placeholders",
+        "protections",
         "profanityFilter",
         "punishments",
         "playerStats",
@@ -105,6 +107,7 @@ class STEMCraftAPIImplTest {
         MotdServiceImpl motd = mock(MotdServiceImpl.class);
         PlayerServiceImpl players = mock(PlayerServiceImpl.class);
         PlaceholderServiceImpl placeholders = mock(PlaceholderServiceImpl.class);
+        ProtectionServiceImpl protections = mock(ProtectionServiceImpl.class);
         ProfanityFilterServiceImpl profanityFilter = mock(ProfanityFilterServiceImpl.class);
         PunishmentServiceImpl punishments = mock(PunishmentServiceImpl.class);
         PlayerStatsServiceImpl playerStats = mock(PlayerStatsServiceImpl.class);
@@ -129,6 +132,7 @@ class STEMCraftAPIImplTest {
         when(plugin.motd()).thenReturn(motd);
         when(plugin.players()).thenReturn(players);
         when(plugin.placeholders()).thenReturn(placeholders);
+        when(plugin.protections()).thenReturn(protections);
         when(plugin.profanityFilter()).thenReturn(profanityFilter);
         when(plugin.punishments()).thenReturn(punishments);
         when(plugin.playerStats()).thenReturn(playerStats);
@@ -154,6 +158,7 @@ class STEMCraftAPIImplTest {
         expectedDelegates.put("motd", motd);
         expectedDelegates.put("players", players);
         expectedDelegates.put("placeholders", placeholders);
+        expectedDelegates.put("protections", protections);
         expectedDelegates.put("profanityFilter", profanityFilter);
         expectedDelegates.put("punishments", punishments);
         expectedDelegates.put("playerStats", playerStats);
