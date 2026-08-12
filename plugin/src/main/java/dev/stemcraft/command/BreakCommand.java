@@ -24,6 +24,7 @@ import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.Command;
 import dev.stemcraft.api.command.CommandContext;
+import dev.stemcraft.api.util.InventoryUtil;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
@@ -97,7 +98,7 @@ public class BreakCommand extends BaseCommand {
                     Block b = target.getRelative(x, y, z);
                     if (b.getType() == Material.AIR) continue;
 
-                    b.setType(Material.AIR, false); // no drops, no physics spam
+                    InventoryUtil.clearBlock(b, false); // no drops, no physics spam
                     broken++;
                 }
             }

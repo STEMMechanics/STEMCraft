@@ -74,6 +74,9 @@ public class NightfallConfig {
         double legacyTimeSpeedMultiplier = section.getDouble("time-speed-multiplier", 2.0d);
         double dayTimeSpeedMultiplier = section.getDouble("day-time-speed-multiplier", legacyTimeSpeedMultiplier);
         double nightTimeSpeedMultiplier = section.getDouble("night-time-speed-multiplier", legacyTimeSpeedMultiplier);
+        boolean allowLateJoin = section.getBoolean("allow-late-join", false);
+        int dropLootMinStacks = section.getInt("drop-loot-min-stacks", 2);
+        int dropLootMaxStacks = section.getInt("drop-loot-max-stacks", 4);
         int dropMinSeconds = section.getInt("drop-min-seconds", 1);
         int dropMaxSeconds = section.getInt("drop-max-seconds", 5);
         int dropMaxActiveItems = section.getInt("drop-max-active-items", 10);
@@ -87,6 +90,7 @@ public class NightfallConfig {
         int bloodMoonChancePercent = section.getInt("blood-moon-chance", 0);
         double bloodMoonZombieSpawnMultiplier = section.getDouble("blood-moon-zombie-spawn-multiplier", 2.0d);
         int bloodMoonBabyZombieChancePercent = section.getInt("blood-moon-baby-zombie-chance", 20);
+        int bloodMoonTntZombieChancePercent = section.getInt("blood-moon-tnt-zombie-chance", 3);
         String name = section.getString("name", StringUtil.beautify(arenaId));
         List<Location> generatorLocations = loadLocations(section, world, arenaId);
         Map<Integer, List<Material>> dropItems = loadDropItems(section, arenaId);
@@ -111,6 +115,9 @@ public class NightfallConfig {
             prepSeconds,
             dayTimeSpeedMultiplier,
             nightTimeSpeedMultiplier,
+            allowLateJoin,
+            dropLootMinStacks,
+            dropLootMaxStacks,
             dropMinSeconds,
             dropMaxSeconds,
             dropMaxActiveItems,
@@ -124,6 +131,7 @@ public class NightfallConfig {
             bloodMoonChancePercent,
             bloodMoonZombieSpawnMultiplier,
             bloodMoonBabyZombieChancePercent,
+            bloodMoonTntZombieChancePercent,
             generatorLocations,
             dropItems,
             pendingWorldRollback,
@@ -155,9 +163,12 @@ public class NightfallConfig {
         arenaConfig.set("prep-seconds", arena.get("prepSeconds", Integer.class, 300));
         double dayTimeSpeed = arena.get("dayTimeSpeedMultiplier", Double.class, 2.0d);
         double nightTimeSpeed = arena.get("nightTimeSpeedMultiplier", Double.class, 2.0d);
+        arenaConfig.set("allow-late-join", arena.get("allowLateJoin", Boolean.class, false));
         arenaConfig.set("time-speed-multiplier", dayTimeSpeed);
         arenaConfig.set("day-time-speed-multiplier", dayTimeSpeed);
         arenaConfig.set("night-time-speed-multiplier", nightTimeSpeed);
+        arenaConfig.set("drop-loot-min-stacks", arena.get("dropLootMinStacks", Integer.class, 2));
+        arenaConfig.set("drop-loot-max-stacks", arena.get("dropLootMaxStacks", Integer.class, 4));
         arenaConfig.set("drop-min-seconds", arena.get("dropMinSeconds", Integer.class, 1));
         arenaConfig.set("drop-max-seconds", arena.get("dropMaxSeconds", Integer.class, 5));
         arenaConfig.set("drop-max-active-items", arena.get("dropMaxActiveItems", Integer.class, 10));
@@ -172,6 +183,7 @@ public class NightfallConfig {
         arenaConfig.set("blood-moon-zombie-spawn-multiplier", arena.get("bloodMoonZombieSpawnMultiplier", Double.class, 2.0d));
         arenaConfig.remove("blood-moon-baby-zombies");
         arenaConfig.set("blood-moon-baby-zombie-chance", arena.get("bloodMoonBabyZombieChancePercent", Integer.class, 20));
+        arenaConfig.set("blood-moon-tnt-zombie-chance", arena.get("bloodMoonTntZombieChancePercent", Integer.class, 3));
         if (generatorLocations(arena).isEmpty()) {
             arenaConfig.set("generator-locations", new ArrayList<>());
         } else {

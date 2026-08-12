@@ -20,6 +20,11 @@
 
 package dev.stemcraft.api.util;
 
+import org.bukkit.Material;
+import org.bukkit.block.Block;
+import org.bukkit.block.Campfire;
+import org.bukkit.block.Chest;
+import org.bukkit.block.Container;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
@@ -29,6 +34,8 @@ import java.util.Objects;
  * Utility class for inventory-related operations.
  */
 public final class InventoryUtil {
+    private InventoryUtil() {
+    }
 
     /**
      * Converts the contents of an inventory to a string representation.
@@ -52,5 +59,37 @@ public final class InventoryUtil {
 
         if (out.isEmpty()) return "(empty)";
         return out.substring(0, out.length() - 2);
+    }
+
+    /**
+     * Clears any block-backed inventory/cooking contents for the given block state.
+     *
+     * @param block The block whose contents should be cleared.
+     */
+    public static void clearBlockContents(Block block) {
+        if (block.getState() instanceof Chest chest) {
+            chest.getInventory().clear();
+            return;
+        }
+        if (block.getState() instanceof Container container) {
+            container.getInventory().clear();
+            return;
+        }
+        if (block.getState() instanceof Campfire campfire) {
+            for (int slot = 0; slot < campfire.getSize(); slot++) {
+                campfire.setItem(slot, null);
+            }
+        }
+    }
+
+    /**
+     * Removes a block without leaving inventory contents behind.
+     *
+     * @param block The block to clear.
+     * @param applyPhysics Whether block removal should apply physics.
+     */
+    public static void clearBlock(Block block, boolean applyPhysics) {
+        clearBlockContents(block);
+        block.setType(Material.AIR, applyPhysics);
     }
 }

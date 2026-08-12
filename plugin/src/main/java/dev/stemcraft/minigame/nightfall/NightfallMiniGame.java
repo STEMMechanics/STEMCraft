@@ -13,8 +13,6 @@ import dev.stemcraft.api.util.StringUtil;
 import dev.stemcraft.exception.MiniGameInvalidArenaConfigException;
 import dev.stemcraft.minigame.BaseMiniGame;
 import dev.stemcraft.minigame.MiniGameHudConfigSupport;
-import lombok.Getter;
-import lombok.experimental.Accessors;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -32,14 +30,10 @@ public class NightfallMiniGame extends BaseMiniGame {
     private static final int HUD_LINE_HOLD_UPDATES = 5;
     private static final int LEGACY_HUD_LINE_HOLD_UPDATES = 3;
 
-    @Getter
-    @Accessors(fluent = true)
     private static final String namespace = "nightfall";
 
     private NightfallConfig config;
 
-    @Getter
-    @Accessors(fluent = true)
     private MiniGame minigame;
 
     private ConfigFile configFile;
@@ -47,6 +41,14 @@ public class NightfallMiniGame extends BaseMiniGame {
 
     public NightfallMiniGame(STEMCraftAPI api) {
         super(api);
+    }
+
+    public static @NotNull String namespace() {
+        return namespace;
+    }
+
+    public @Nullable MiniGame minigame() {
+        return minigame;
     }
 
     @Override
@@ -272,6 +274,9 @@ public class NightfallMiniGame extends BaseMiniGame {
             .set("prepSeconds", 300)
             .set("dayTimeSpeedMultiplier", 2.0d)
             .set("nightTimeSpeedMultiplier", 2.0d)
+            .set("allowLateJoin", false)
+            .set("dropLootMinStacks", 2)
+            .set("dropLootMaxStacks", 4)
             .set("dropMinSeconds", 1)
             .set("dropMaxSeconds", 5)
             .set("dropMaxActiveItems", 10)
@@ -285,6 +290,7 @@ public class NightfallMiniGame extends BaseMiniGame {
             .set("bloodMoonChancePercent", 0)
             .set("bloodMoonZombieSpawnMultiplier", 2.0d)
             .set("bloodMoonBabyZombieChancePercent", 20)
+            .set("bloodMoonTntZombieChancePercent", 3)
             .set("generatorLocations", new ArrayList<Location>())
             .set("dropItems", copyDropItems(defaultDropItems()));
     }
@@ -352,6 +358,9 @@ public class NightfallMiniGame extends BaseMiniGame {
                     .set("prepSeconds", arenaDef.prepSeconds())
                     .set("dayTimeSpeedMultiplier", arenaDef.dayTimeSpeedMultiplier())
                     .set("nightTimeSpeedMultiplier", arenaDef.nightTimeSpeedMultiplier())
+                    .set("allowLateJoin", arenaDef.allowLateJoin())
+                    .set("dropLootMinStacks", arenaDef.dropLootMinStacks())
+                    .set("dropLootMaxStacks", arenaDef.dropLootMaxStacks())
                     .set("dropMinSeconds", arenaDef.dropMinSeconds())
                     .set("dropMaxSeconds", arenaDef.dropMaxSeconds())
                     .set("dropMaxActiveItems", arenaDef.dropMaxActiveItems())
@@ -365,6 +374,7 @@ public class NightfallMiniGame extends BaseMiniGame {
                     .set("bloodMoonChancePercent", arenaDef.bloodMoonChancePercent())
                     .set("bloodMoonZombieSpawnMultiplier", arenaDef.bloodMoonZombieSpawnMultiplier())
                     .set("bloodMoonBabyZombieChancePercent", arenaDef.bloodMoonBabyZombieChancePercent())
+                    .set("bloodMoonTntZombieChancePercent", arenaDef.bloodMoonTntZombieChancePercent())
                     .set("generatorLocations", copyLocations(arenaDef.generatorLocations()))
                     .set("dropItems", copyDropItems(arenaDef.dropItems()))
                     .set("pendingWorldRollback", arenaDef.pendingWorldRollback())
@@ -493,6 +503,22 @@ public class NightfallMiniGame extends BaseMiniGame {
         return Math.max(1.0d, arena.get("nightTimeSpeedMultiplier", Double.class, 2.0d));
     }
 
+    public boolean allowLateJoin(@NotNull MiniGameArena arena) {
+        return arena.get("allowLateJoin", Boolean.class, false);
+    }
+
+    public int dropLootMinStacks(@NotNull MiniGameArena arena) {
+        int min = arena.get("dropLootMinStacks", Integer.class, 2);
+        int max = arena.get("dropLootMaxStacks", Integer.class, 4);
+        return Math.max(1, Math.min(min, Math.max(1, max)));
+    }
+
+    public int dropLootMaxStacks(@NotNull MiniGameArena arena) {
+        int min = arena.get("dropLootMinStacks", Integer.class, 2);
+        int max = arena.get("dropLootMaxStacks", Integer.class, 4);
+        return Math.max(Math.max(1, min), Math.max(1, max));
+    }
+
     public int dropMinSeconds(@NotNull MiniGameArena arena) {
         int min = arena.get("dropMinSeconds", Integer.class, 1);
         int max = arena.get("dropMaxSeconds", Integer.class, 5);
@@ -557,6 +583,10 @@ public class NightfallMiniGame extends BaseMiniGame {
 
     public int bloodMoonBabyZombieChancePercent(@NotNull MiniGameArena arena) {
         return Math.clamp(arena.get("bloodMoonBabyZombieChancePercent", Integer.class, 20), 0, 100);
+    }
+
+    public int bloodMoonTntZombieChancePercent(@NotNull MiniGameArena arena) {
+        return Math.clamp(arena.get("bloodMoonTntZombieChancePercent", Integer.class, 3), 0, 100);
     }
 
     public int currentNight(@NotNull MiniGameArena arena) {
@@ -886,7 +916,7 @@ public class NightfallMiniGame extends BaseMiniGame {
                 "<yellow>{player}</yellow> <gray>is down until sunrise.</gray>",
                 "<yellow>{player}</yellow> <gray>fell, but is back in the fight.</gray>",
                 "<yellow>{player}</yellow> <gray>fell, but will respawn right back in.</gray>",
-                ":warning_red: <dark_red>The blood moon rises. Doors are no longer safe.</dark_red>",
+                ":warning_red: <dark_red>The blood moon rises.</dark_red>",
                 "<gold>The night is clear. Dawn comes faster.</gold>"
             );
         }

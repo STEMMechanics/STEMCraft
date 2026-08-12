@@ -8,6 +8,7 @@ import dev.stemcraft.api.minigame.MiniGamePlayer;
 import dev.stemcraft.api.minigame.MiniGameTeam;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.service.region.RegionListener;
+import dev.stemcraft.api.util.InventoryUtil;
 import dev.stemcraft.api.util.NamespaceId;
 import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.api.util.StringUtil;
@@ -618,7 +619,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
 
         forEachRegionBlock(bedRegion, block -> {
             if (isBedBlock(block.getType())) {
-                block.setType(Material.AIR, false);
+                InventoryUtil.clearBlock(block, false);
             }
         });
     }
@@ -626,7 +627,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
     private void clearPlacedBlocks(MiniGameArena arena) {
         Set<Location> blocks = placedBlocks(arena);
         for (Location loc : new LinkedHashSet<>(blocks)) {
-            loc.getBlock().setType(Material.AIR);
+            InventoryUtil.clearBlock(loc.getBlock(), true);
         }
         blocks.clear();
     }
@@ -722,7 +723,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
                 return;
             }
 
-            block.setType(Material.AIR, false);
+            InventoryUtil.clearBlock(block, false);
             TNTPrimed primedTnt = block.getWorld().spawn(spawnLocation, TNTPrimed.class);
             primedTnt.setFuseTicks(TNT_FUSE_TICKS);
             primedTnt.setSource(player);
