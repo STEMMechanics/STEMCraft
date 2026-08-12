@@ -71,9 +71,12 @@ public class NightfallCommand {
             .tabCompletion("set", "{nightfall-arenas}", "maxplayers")
             .tabCompletion("set", "{nightfall-arenas}", "lives")
             .tabCompletion("set", "{nightfall-arenas}", "prepseconds")
+            .tabCompletion("set", "{nightfall-arenas}", "latejoin")
             .tabCompletion("set", "{nightfall-arenas}", "dropmindelay")
             .tabCompletion("set", "{nightfall-arenas}", "dropmaxdelay")
             .tabCompletion("set", "{nightfall-arenas}", "dropmaxactive")
+            .tabCompletion("set", "{nightfall-arenas}", "droplootmin")
+            .tabCompletion("set", "{nightfall-arenas}", "droplootmax")
             .tabCompletion("set", "{nightfall-arenas}", "zombiebasenightly")
             .tabCompletion("set", "{nightfall-arenas}", "zombienightlyincrease")
             .tabCompletion("set", "{nightfall-arenas}", "zombiehealthmultiplier")
@@ -184,12 +187,14 @@ public class NightfallCommand {
         ctx.info(" - Arena region: " + formatRegion(arena.get("arenaRegion", SCRegion.class)));
         ctx.info(" - Deaths: creative ghost until sunrise, then respawn at play spawn");
         ctx.info(" - Prep seconds: " + nightfall.prepSeconds(arena));
+        ctx.info(" - Late join: " + (nightfall.allowLateJoin(arena) ? "enabled" : "disabled"));
         ctx.info(" - Day time speed: " + String.format(Locale.ROOT, "%.2fx", nightfall.dayTimeSpeedMultiplier(arena)));
         ctx.info(" - Night time speed: " + String.format(Locale.ROOT, "%.2fx", nightfall.nightTimeSpeedMultiplier(arena)));
         ctx.info(" - Drop delay: " + (nightfall.dropsEnabled(arena)
             ? nightfall.dropMinSeconds(arena) + "-" + nightfall.dropMaxSeconds(arena) + " sec"
             : "disabled"));
         ctx.info(" - Drop max active items: " + nightfall.dropMaxActiveItems(arena));
+        ctx.info(" - Drop loot stacks: " + nightfall.dropLootMinStacks(arena) + "-" + nightfall.dropLootMaxStacks(arena));
         ctx.info(" - Drop radius: 5-20 blocks around each player with open sky");
         ctx.info(" - Zombie nightly base: " + nightfall.zombieBaseNightlySpawns(arena));
         ctx.info(" - Zombie nightly increase: " + nightfall.zombieNightlySpawnIncrease(arena));
@@ -253,8 +258,9 @@ public class NightfallCommand {
         }
         ensureNotInArena(ctx, targetPlayer);
 
-        if (arena.getStatus() == MiniGameArena.ArenaStatus.PREPARATION
-            || arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING
+        if ((!nightfall.allowLateJoin(arena)
+            && (arena.getStatus() == MiniGameArena.ArenaStatus.PREPARATION
+            || arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING))
             || arena.getStatus() == MiniGameArena.ArenaStatus.COOLDOWN
             || arena.getStatus() == MiniGameArena.ArenaStatus.ENDING) {
             arena.addSpectator(targetPlayer);
@@ -274,10 +280,11 @@ public class NightfallCommand {
     private void commandJoinAll(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2);
         MiniGameArena arena = requireArena(ctx);
-        boolean spectateOnly = arena.getStatus() == MiniGameArena.ArenaStatus.PREPARATION
-            || arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING
+        boolean spectateOnly = ((!nightfall.allowLateJoin(arena)
+            && (arena.getStatus() == MiniGameArena.ArenaStatus.PREPARATION
+            || arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING))
             || arena.getStatus() == MiniGameArena.ArenaStatus.COOLDOWN
-            || arena.getStatus() == MiniGameArena.ArenaStatus.ENDING;
+            || arena.getStatus() == MiniGameArena.ArenaStatus.ENDING);
         if (!spectateOnly && !arena.isJoinable()) {
             ctx.returnError("Arena '" + arena.id() + "' is not joinable right now.");
             return;
@@ -551,6 +558,21 @@ public class NightfallCommand {
                 arena.set("prepSeconds", prepSeconds);
                 ctx.success("Prep seconds set to " + prepSeconds + " for arena '" + arena.id() + "'.");
             }
+            case "latejoin" -> {
+                ctx.checkArgsSizeAtLeast(4);
+                String value = ctx.getArgLower(3);
+                Boolean enabled = switch (value) {
+                    case "true", "on", "yes", "enabled" -> true;
+                    case "false", "off", "no", "disabled" -> false;
+                    default -> null;
+                };
+                if (enabled == null) {
+                    ctx.returnError("Late join must be one of: true, false, on, off, yes, no.");
+                    return;
+                }
+                arena.set("allowLateJoin", enabled);
+                ctx.success("Late join " + (enabled ? "enabled" : "disabled") + " for arena '" + arena.id() + "'.");
+            }
             case "timespeed" -> {
                 ctx.checkArgsSizeAtLeast(4);
                 double multiplier = ctx.getArgAsDouble(3, 2.0d, 1.0d, null);
@@ -608,6 +630,24 @@ public class NightfallCommand {
                 int value = ctx.getArgAsInt(3, 10, 0, null);
                 arena.set("dropMaxActiveItems", value);
                 ctx.success("Maximum active drops set to " + value + " for arena '" + arena.id() + "'.");
+            }
+            case "droplootmin" -> {
+                ctx.checkArgsSizeAtLeast(4);
+                int value = ctx.getArgAsInt(3, 2, 1, null);
+                arena.set("dropLootMinStacks", value);
+                if (nightfall.dropLootMaxStacks(arena) < value) {
+                    arena.set("dropLootMaxStacks", value);
+                }
+                ctx.success("Minimum drop loot stacks set to " + value + " for arena '" + arena.id() + "'.");
+            }
+            case "droplootmax" -> {
+                ctx.checkArgsSizeAtLeast(4);
+                int value = ctx.getArgAsInt(3, 4, 1, null);
+                arena.set("dropLootMaxStacks", value);
+                if (nightfall.dropLootMinStacks(arena) > value) {
+                    arena.set("dropLootMinStacks", value);
+                }
+                ctx.success("Maximum drop loot stacks set to " + value + " for arena '" + arena.id() + "'.");
             }
             case "zombiebasenightly" -> {
                 ctx.checkArgsSizeAtLeast(4);

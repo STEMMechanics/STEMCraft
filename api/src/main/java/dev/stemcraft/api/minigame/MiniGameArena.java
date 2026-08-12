@@ -868,9 +868,26 @@ public interface MiniGameArena extends MessageService, HasMeta<MiniGameArena> {
     void spawnSupplyDropCrate(ItemStack item, Location landingLocation);
 
     /**
+     * Spawn a shared supply-drop crate that descends onto the target location and turns into a chest on landing.
+     *
+     * @param items The loot stacks to place into the landed chest.
+     * @param landingLocation The target landing location above the accepted support block.
+     */
+    void spawnSupplyDropCrate(Collection<ItemStack> items, Location landingLocation);
+
+    /**
      * Clear all active supply-drop markers in this arena.
      */
     void clearAllSupplyDrops();
+
+    /**
+     * Count currently active framework-managed supply drops in this arena.
+     *
+     * This includes both in-flight crate visuals and landed crates that have not yet been removed.
+     *
+     * @return The current active supply-drop count.
+     */
+    int countActiveSupplyDrops();
 
     /**
      * Find a valid supply-drop spawn location inside this arena's configured arena region.

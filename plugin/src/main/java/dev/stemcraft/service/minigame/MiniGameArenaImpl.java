@@ -8,6 +8,7 @@ import dev.stemcraft.api.minigame.MiniGamePlayer;
 import dev.stemcraft.api.minigame.MiniGameTeam;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.util.NamespaceId;
+import dev.stemcraft.api.util.InventoryUtil;
 import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.api.util.StringUtil;
 import dev.stemcraft.api.util.TextUtil;
@@ -196,6 +197,10 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
 
     @Override
     public boolean isJoinable() {
+        if (get("allowLateJoin", Boolean.class, false)
+            && (status == ArenaStatus.PREPARATION || status == ArenaStatus.RUNNING)) {
+            return true;
+        }
         if (get("allowRunningJoin", Boolean.class, false) && status == ArenaStatus.RUNNING) {
             return true;
         }
@@ -966,7 +971,24 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
 
     @Override
     public void spawnSupplyDropCrate(ItemStack item, Location landingLocation) {
-        if (item == null || item.getType().isAir() || landingLocation == null || landingLocation.getWorld() == null) {
+        if (item == null || item.getType().isAir()) {
+            return;
+        }
+        spawnSupplyDropCrate(List.of(item), landingLocation);
+    }
+
+    @Override
+    public void spawnSupplyDropCrate(Collection<ItemStack> items, Location landingLocation) {
+        if (items == null || landingLocation == null || landingLocation.getWorld() == null) {
+            return;
+        }
+
+        List<ItemStack> loot = items.stream()
+            .filter(Objects::nonNull)
+            .map(ItemStack::clone)
+            .filter(stack -> !stack.getType().isAir())
+            .toList();
+        if (loot.isEmpty()) {
             return;
         }
 
@@ -984,7 +1006,7 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
 
         SupplyDropCrate crate = new SupplyDropCrate(
             crateId,
-            item.clone(),
+            loot,
             chestBlockLocation,
             spawnSupplyDropChestDisplay(visualLocation),
             spawnSupplyDropParachuteDisplays(visualLocation)
@@ -1001,6 +1023,11 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         for (UUID crateId : new ArrayList<>(supplyDropCrates.keySet())) {
             clearSupplyDropCrate(crateId);
         }
+    }
+
+    @Override
+    public int countActiveSupplyDrops() {
+        return supplyDropMarkers.size() + supplyDropCrates.size();
     }
 
     @Override
@@ -1091,7 +1118,7 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
                 continue;
             }
 
-            chestBlock.setType(Material.AIR, false);
+            InventoryUtil.clearBlock(chestBlock, false);
             clearSupplyDropCrate(crateId);
         }
     }
@@ -1189,7 +1216,7 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         if (crate.landed()) {
             Block chestBlock = crate.chestBlockLocation().getBlock();
             if (chestBlock.getType() == Material.CHEST) {
-                chestBlock.setType(Material.AIR, false);
+                InventoryUtil.clearBlock(chestBlock, false);
             }
         }
     }
@@ -1287,7 +1314,7 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         chestBlock.setType(Material.CHEST, false);
         if (chestBlock.getState() instanceof Chest chest) {
             chest.getBlockInventory().clear();
-            chest.getBlockInventory().setItem(13, crate.loot().clone());
+            distributeSupplyDropLoot(chest, crate.loot());
             crate.setLanded(true);
             return;
         }
@@ -1398,12 +1425,17 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         Block origin = landingLocation.getBlock();
         for (int yOffset = 1; yOffset >= -3; yOffset--) {
             Block candidate = origin.getRelative(BlockFace.UP, yOffset);
-            if (!candidate.isPassable()) {
+            if (!isValidSupplyDropChestSpace(candidate)) {
                 continue;
             }
 
             Block support = candidate.getRelative(BlockFace.DOWN);
-            if (support.getType().isAir() || support.isPassable()) {
+            if (!isValidSupplyDropSupport(support)) {
+                continue;
+            }
+
+            Block above = candidate.getRelative(BlockFace.UP);
+            if (!isValidSupplyDropHeadroom(above)) {
                 continue;
             }
             return candidate;
@@ -1411,8 +1443,33 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         return null;
     }
 
+    private boolean isValidSupplyDropChestSpace(@NotNull Block block) {
+        return block.getType() == Material.CHEST || block.getType().isAir();
+    }
+
+    private boolean isValidSupplyDropSupport(@NotNull Block block) {
+        return !block.getType().isAir() && !block.isPassable() && !block.isLiquid();
+    }
+
+    private boolean isValidSupplyDropHeadroom(@NotNull Block block) {
+        return (block.getType().isAir() || block.isPassable()) && !block.isLiquid();
+    }
+
     private static @NotNull Material parachuteStripe(int zOffset) {
         return Math.floorMod(zOffset, 2) == 0 ? Material.WHITE_WOOL : Material.RED_WOOL;
+    }
+
+    private void distributeSupplyDropLoot(@NotNull Chest chest, @NotNull List<ItemStack> loot) {
+        List<Integer> slots = new ArrayList<>(27);
+        for (int slot = 0; slot < 27; slot++) {
+            slots.add(slot);
+        }
+        Collections.shuffle(slots, ThreadLocalRandom.current());
+
+        int limit = Math.min(loot.size(), slots.size());
+        for (int i = 0; i < limit; i++) {
+            chest.getBlockInventory().setItem(slots.get(i), loot.get(i).clone());
+        }
     }
 
     private @Nullable Location highestSupplyDropLocation(
@@ -1719,7 +1776,7 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
 
     private static final class SupplyDropCrate {
         private final UUID id;
-        private final ItemStack loot;
+        private final List<ItemStack> loot;
         private final Location chestBlockLocation;
         private final UUID chestDisplayId;
         private final List<UUID> parachuteDisplayIds;
@@ -1729,13 +1786,13 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
 
         private SupplyDropCrate(
             @NotNull UUID id,
-            @NotNull ItemStack loot,
+            @NotNull List<ItemStack> loot,
             @NotNull Location chestBlockLocation,
             @NotNull UUID chestDisplayId,
             @NotNull List<UUID> parachuteDisplayIds
         ) {
             this.id = id;
-            this.loot = loot;
+            this.loot = List.copyOf(loot);
             this.chestBlockLocation = chestBlockLocation.clone();
             this.chestDisplayId = chestDisplayId;
             this.parachuteDisplayIds = List.copyOf(parachuteDisplayIds);
@@ -1746,7 +1803,7 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
             return id;
         }
 
-        private @NotNull ItemStack loot() {
+        private @NotNull List<ItemStack> loot() {
             return loot;
         }
 

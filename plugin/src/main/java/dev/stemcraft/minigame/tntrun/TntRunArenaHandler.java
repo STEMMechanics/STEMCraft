@@ -6,6 +6,7 @@ import dev.stemcraft.api.minigame.MiniGameArena;
 import dev.stemcraft.api.minigame.MiniGameArenaHandler;
 import dev.stemcraft.api.minigame.MiniGamePlayer;
 import dev.stemcraft.api.model.SCRegion;
+import dev.stemcraft.api.util.InventoryUtil;
 import dev.stemcraft.api.util.NamespaceId;
 import dev.stemcraft.api.util.PlayerUtil;
 import org.bukkit.Bukkit;
@@ -463,7 +464,7 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
             if (!isDecayBlock(arena, block)) {
                 return;
             }
-            block.setType(org.bukkit.Material.AIR, false);
+            InventoryUtil.clearBlock(block, false);
             block.getWorld().playSound(block.getLocation().add(0.5d, 0.5d, 0.5d), Sound.BLOCK_SAND_BREAK, 0.35f, 1.45f);
         });
     }
