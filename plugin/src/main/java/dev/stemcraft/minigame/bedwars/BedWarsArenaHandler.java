@@ -241,6 +241,8 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
             MiniGameTeam winner = determineWinner(arena);
             arena.set("winnerTeam", winner == null ? "" : winner.getName());
             if (winner != null) {
+                bedWars.minigame().rewardWinners(arena, arena.getTeamPlayers(winner.getName()).stream()
+                    .map(Player::getUniqueId).toList());
                 for (Player player : arena.getTeamPlayers(winner.getName())) {
                     MiniGamePlayer mgPlayer = arena.getPlayer(player);
                     if (mgPlayer != null) {

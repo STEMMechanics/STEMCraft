@@ -182,6 +182,7 @@ public class MinefieldArenaHandler implements MiniGameArenaHandler {
             if (!"-".equals(minefield.winnerName(arena))) {
                 Player winner = Bukkit.getPlayerExact(minefield.winnerName(arena));
                 if (winner != null) {
+                    minefield.minigame().rewardWinners(arena, List.of(winner.getUniqueId()));
                     arena.startWinnerCelebration(winner.getLocation(), 4);
                 }
                 broadcastToOccupants(arena, "<gold>" + minefield.resultLine(arena) + "</gold>");

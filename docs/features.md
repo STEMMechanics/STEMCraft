@@ -132,3 +132,4 @@ Physical notice boards render player-created headers, short messages, and author
 - Restrict creative, no anvil repair cost, no throwing potions, skip night, etc.
 - Survival QOL: 3×3 hoe harvesting, crop protection, stack refill, stronger leads, faster powered minecarts and leaf decay, named-mob information, anvil/durability warnings, animal barrels, fried eggs, and automatic End Dragon respawning. See [survival-qol.md](survival-qol.md).
 - Configuration-defined custom items support names, lore, food values, placement rules, Java/Bedrock models, and custom recipe results. See [custom-items.md](custom-items.md).
+- Portable multi-item Gifts can be created through the API and mailed automatically to minigame winners. See [gifts.md](gifts.md).

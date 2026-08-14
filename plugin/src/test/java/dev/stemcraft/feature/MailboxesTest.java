@@ -3,6 +3,8 @@ package dev.stemcraft.feature;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.service.database.DatabaseService;
 import dev.stemcraft.api.service.hologram.HologramService;
+import dev.stemcraft.api.service.item.ItemService;
+import dev.stemcraft.api.service.mailbox.MailSendRequest;
 import dev.stemcraft.api.service.player.PlayerService;
 import dev.stemcraft.api.service.placedobject.PlacedBlockRef;
 import dev.stemcraft.api.service.placedobject.PlacedObject;
@@ -27,6 +29,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -38,8 +41,35 @@ import static org.mockito.Mockito.when;
 class MailboxesTest {
 
     @Test
-    void mailLetterIncludesSenderMessageAndItems() throws Exception {
+    void explicitMailDelayOverridesConfiguredDeliveryDelay() throws Exception {
         Mailboxes mailboxes = new Mailboxes(mock(STEMCraftAPI.class));
+        Field delay = Mailboxes.class.getDeclaredField("deliveryBaseDelayTicks");
+        delay.setAccessible(true);
+        delay.setLong(mailboxes, 72_000L);
+        long queuedAt = 1_000_000L;
+
+        assertEquals(queuedAt, invokePrivate(mailboxes, "resolveDeliverAfter",
+            new Class<?>[] { long.class, long.class }, queuedAt, 0L));
+        assertEquals(queuedAt + 15_000L, invokePrivate(mailboxes, "resolveDeliverAfter",
+            new Class<?>[] { long.class, long.class }, queuedAt, 300L));
+        assertEquals(queuedAt + 3_600_000L, invokePrivate(mailboxes, "resolveDeliverAfter",
+            new Class<?>[] { long.class, long.class }, queuedAt, -1L));
+
+        UUID recipient = UUID.randomUUID();
+        assertEquals(0L, new MailSendRequest("Rewards", recipient, "Winner", java.util.List.of(), 0L).deliveryDelayTicks());
+        assertEquals(-1L, new MailSendRequest("Rewards", recipient, "Normal", java.util.List.of()).deliveryDelayTicks());
+    }
+
+    @Test
+    void mailLetterIncludesSenderMessageAndItems() throws Exception {
+        STEMCraftAPI api = mock(STEMCraftAPI.class);
+        ItemService items = mock(ItemService.class);
+        when(api.items()).thenReturn(items);
+        when(items.getItemName(any(ItemStack.class))).thenAnswer(invocation -> {
+            ItemStack item = invocation.getArgument(0);
+            return item.getType() == Material.DIAMOND ? "Diamond" : "Bread";
+        });
+        Mailboxes mailboxes = new Mailboxes(api);
 
         @SuppressWarnings("unchecked")
         java.util.List<net.kyori.adventure.text.Component> pages =
@@ -57,8 +87,31 @@ class MailboxesTest {
             .collect(java.util.stream.Collectors.joining("\n"));
         assertTrue(contents.contains("From: Alex"));
         assertTrue(contents.contains("Enjoy these supplies!"));
-        assertTrue(contents.contains("3x diamond"));
-        assertTrue(contents.contains("5x bread"));
+        assertTrue(contents.contains("3x Diamond"));
+        assertTrue(contents.contains("5x Bread"));
+    }
+
+    @Test
+    void mailLetterUsesItemServiceNameForCustomItems() throws Exception {
+        STEMCraftAPI api = mock(STEMCraftAPI.class);
+        ItemService items = mock(ItemService.class);
+        when(api.items()).thenReturn(items);
+        ItemStack gift = new ItemStack(Material.STICK);
+        when(items.getItemName(gift)).thenReturn("Gift");
+        Mailboxes mailboxes = new Mailboxes(api);
+
+        @SuppressWarnings("unchecked")
+        java.util.List<net.kyori.adventure.text.Component> pages =
+            (java.util.List<net.kyori.adventure.text.Component>) invokePrivate(
+                mailboxes, "buildMailLetterPages",
+                new Class<?>[] { String.class, String.class, java.util.List.class },
+                "Minigame Rewards", "Congratulations!", java.util.List.of(gift));
+
+        String contents = pages.stream()
+            .map(PlainTextComponentSerializer.plainText()::serialize)
+            .collect(java.util.stream.Collectors.joining("\n"));
+        assertTrue(contents.contains("1x Gift"));
+        assertFalse(contents.contains("1x Stick"));
     }
 
     @AfterEach

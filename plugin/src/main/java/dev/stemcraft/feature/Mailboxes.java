@@ -738,7 +738,7 @@ public class Mailboxes extends BaseFeature implements MailboxService {
     }
 
     private @NotNull String describeItem(@NotNull ItemStack item) {
-        String name = item.getType().name().toLowerCase(Locale.ROOT).replace('_', ' ');
+        String name = api.items().getItemName(item);
         return item.getAmount() + "x " + name;
     }
 
@@ -1015,7 +1015,8 @@ public class Mailboxes extends BaseFeature implements MailboxService {
             senderName,
             new Recipient(recipient.uuid(), recipient.name()),
             message,
-            packedItems
+            packedItems,
+            request.deliveryDelayTicks()
         );
         api.tasks().nextTick(this::processMailQueue);
         return MailSendResult.success();
@@ -1082,9 +1083,10 @@ public class Mailboxes extends BaseFeature implements MailboxService {
                            @NotNull String senderName,
                            @NotNull Recipient recipient,
                            @NotNull String message,
-                           ItemStack @NotNull [] outgoingItems) {
+                           ItemStack @NotNull [] outgoingItems,
+                           long deliveryDelayTicks) {
         long queuedAt = System.currentTimeMillis();
-        long deliverAfter = resolveDeliverAfter(queuedAt);
+        long deliverAfter = resolveDeliverAfter(queuedAt, deliveryDelayTicks);
         String payload = serializeInventory(outgoingItems);
 
         api.database().update(
@@ -1122,6 +1124,11 @@ public class Mailboxes extends BaseFeature implements MailboxService {
 
     private long resolveDeliverAfter(long queuedAt) {
         return queuedAt + (Math.max(0L, deliveryBaseDelayTicks) * 50L);
+    }
+
+    private long resolveDeliverAfter(long queuedAt, long deliveryDelayTicks) {
+        if (deliveryDelayTicks == -1L) return resolveDeliverAfter(queuedAt);
+        return queuedAt + (deliveryDelayTicks * 50L);
     }
 
     private void processMailQueue() {

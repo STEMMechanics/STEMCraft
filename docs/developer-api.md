@@ -21,8 +21,10 @@ From `STEMCraftAPI`, you can access:
 - `database()` - SQL execution/query helpers
 - `dialogs()` - cross-platform Java/Bedrock input dialogs
 - `events()` - event registration helpers
+- `gifts()` - portable multi-item gifts and item-spec parsing
 - `holograms()` - hologram operations
-- `items()` - custom item helpers
+- `items()` - custom item helpers, including `getItemName(ItemStack)` for the
+  player-facing name of vanilla, renamed, or STEMCraft custom items
 - `locales()` - locale/text resolution
 - `mailboxes()` - queued mail and item delivery
 - `messages()` - formatted messaging and token processing
@@ -81,6 +83,22 @@ MailSendResult result = api.mailboxes().send(new MailSendRequest(
 ```
 
 Use `result.queued()` and `result.message()` to inspect the outcome. See [Mailboxes](./mailboxes.md) for the complete feature guide.
+
+Mail uses the configured delivery delay by default (`-1`). Pass a tick delay as the final constructor argument to override it: `0` delivers on the next queue pass, while a positive value applies that delay. This example delays delivery by 15 seconds:
+
+```java
+api.mailboxes().send(new MailSendRequest(
+    "Minigame Rewards",
+    recipientUuid,
+    "Congratulations!",
+    List.of(gift),
+    300L
+));
+```
+
+## Gift API
+
+`GiftService` creates a single custom Gift containing multiple stacks. Gifts can be built from `ItemStack` values or compact item specifications and sent through the Mailbox API. See [Gifts](./gifts.md).
 
 ## Dynamic Hologram API
 

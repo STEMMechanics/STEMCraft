@@ -104,6 +104,7 @@ public class BedWarsMiniGame extends BaseMiniGame {
         config.onEnable(configFile);
         teamLineFormat = loadTeamLineFormat(configFile);
         MiniGameHudConfigSupport.apply(minigame, configFile, defaultHudDefinitions());
+        configureRewards(minigame, configFile);
 
         new BedWarsCommand(api, this).onEnable();
         loadArenas();
@@ -247,6 +248,7 @@ public class BedWarsMiniGame extends BaseMiniGame {
         config.onEnable(configFile);
         teamLineFormat = loadTeamLineFormat(configFile);
         MiniGameHudConfigSupport.apply(minigame, configFile, defaultHudDefinitions());
+        configureRewards(minigame, configFile);
         unloadArenas(minigame, arena -> unregisterArenaStats(arena.id()));
         loadArenas();
         return true;

@@ -2,9 +2,12 @@ package dev.stemcraft.api.minigame;
 
 import org.bukkit.World;
 import org.bukkit.entity.Player;
+import dev.stemcraft.api.config.ConfigSectionView;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.Collection;
+import java.util.UUID;
 
 public interface MiniGame {
 
@@ -115,6 +118,17 @@ public interface MiniGame {
      * @return The configured team selection policy, or {@code null} if none is configured.
      */
     @Nullable MiniGameTeamSelectionPolicy getTeamSelectionPolicy();
+
+    /** Configures optional framework-managed winner gifts. */
+    default MiniGame configureRewards(@Nullable ConfigSectionView rewards) { return this; }
+
+    /** Sends one configured random gift to each supplied winner through mail. */
+    default void rewardWinners(Collection<UUID> winnerUuids) { }
+
+    /** Sends configured winner gifts with arena details available to mail placeholders. */
+    default void rewardWinners(@Nullable MiniGameArena arena, Collection<UUID> winnerUuids) {
+        rewardWinners(winnerUuids);
+    }
 
     /**
      * Gets the list of all arenas in this mini-game.

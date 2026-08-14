@@ -1,0 +1,7 @@
+custom-items:
+  gift:
+    material: STICK
+    name: "<gold>Gift"
+    texture: "item/gift"
+    max-stack-size: 1
+    placement: DENY

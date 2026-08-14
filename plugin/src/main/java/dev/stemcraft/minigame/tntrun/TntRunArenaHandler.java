@@ -192,6 +192,7 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
             Player winner = resolveWinnerPlayer(arena);
             tntRun.setWinner(arena, winner);
             if (winner != null) {
+                tntRun.minigame().rewardWinners(arena, List.of(winner.getUniqueId()));
                 arena.startWinnerCelebration(winner.getLocation(), 4);
                 broadcastToOccupants(arena, "<gold>TNT Run Over!</gold> <yellow>" + winner.getName() + "</yellow> <gray>wins.</gray>");
             } else {

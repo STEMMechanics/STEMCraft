@@ -31,6 +31,7 @@ import dev.stemcraft.api.service.item.ItemService;
 import dev.stemcraft.api.service.item.CustomItemPropertyHandler;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.util.TextUtil;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Bukkit;
@@ -59,6 +60,7 @@ import java.util.Map;
 import java.io.File;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.Locale;
 
 /**
  * Implementation of the ItemService for managing item attributes and custom items.
@@ -477,6 +479,8 @@ public class ItemServiceImpl extends BaseService implements ItemService {
                 return (PersistentDataType<Z, T>) PersistentDataType.DOUBLE;
             } else if (typeClass == Float.class) {
                 return (PersistentDataType<Z, T>) PersistentDataType.FLOAT;
+            } else if (typeClass == byte[].class) {
+                return (PersistentDataType<Z, T>) PersistentDataType.BYTE_ARRAY;
             }
         } else {
             if (object instanceof String) {
@@ -489,6 +493,8 @@ public class ItemServiceImpl extends BaseService implements ItemService {
                 return (PersistentDataType<Z, T>) PersistentDataType.DOUBLE;
             } else if (object instanceof Float) {
                 return (PersistentDataType<Z, T>) PersistentDataType.FLOAT;
+            } else if (object instanceof byte[]) {
+                return (PersistentDataType<Z, T>) PersistentDataType.BYTE_ARRAY;
             }
         }
         // Add more types if needed
@@ -648,5 +654,23 @@ public class ItemServiceImpl extends BaseService implements ItemService {
         }
         String id = getAttrib(item, ATTR_ITEM_ID_KEY, String.class, "");
         return id.isBlank() ? null : id;
+    }
+
+    @Override
+    public @NotNull String getItemName(@NotNull ItemStack item) {
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null && meta.hasDisplayName() && meta.displayName() != null) {
+            String displayName = PlainTextComponentSerializer.plainText().serialize(meta.displayName()).trim();
+            if (!displayName.isBlank()) return displayName;
+        }
+        String materialName = item.getType().name().toLowerCase(Locale.ROOT).replace('_', ' ');
+        StringBuilder result = new StringBuilder(materialName.length());
+        boolean capitalize = true;
+        for (int index = 0; index < materialName.length(); index++) {
+            char character = materialName.charAt(index);
+            result.append(capitalize ? Character.toUpperCase(character) : character);
+            capitalize = character == ' ';
+        }
+        return result.toString();
     }
 }

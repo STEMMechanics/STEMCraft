@@ -7,6 +7,7 @@ import dev.stemcraft.service.ConfigServiceImpl;
 import dev.stemcraft.service.DatabaseServiceImpl;
 import dev.stemcraft.service.EventServiceImpl;
 import dev.stemcraft.service.HologramServiceImpl;
+import dev.stemcraft.service.GiftServiceImpl;
 import dev.stemcraft.service.ItemServiceImpl;
 import dev.stemcraft.service.ImageMapServiceImpl;
 import dev.stemcraft.service.LocaleServiceImpl;
@@ -65,6 +66,7 @@ class STEMCraftAPIImplTest {
         "database",
         "dialogs",
         "events",
+        "gifts",
         "holograms",
         "imageMaps",
         "items",
@@ -110,6 +112,7 @@ class STEMCraftAPIImplTest {
         DatabaseServiceImpl database = mock(DatabaseServiceImpl.class);
         DialogServiceImpl dialogs = mock(DialogServiceImpl.class);
         EventServiceImpl events = mock(EventServiceImpl.class);
+        GiftServiceImpl gifts = mock(GiftServiceImpl.class);
         HologramServiceImpl holograms = mock(HologramServiceImpl.class);
         ItemServiceImpl items = mock(ItemServiceImpl.class);
         ImageMapServiceImpl imageMaps = mock(ImageMapServiceImpl.class);
@@ -140,6 +143,7 @@ class STEMCraftAPIImplTest {
         when(plugin.database()).thenReturn(database);
         when(plugin.dialogs()).thenReturn(dialogs);
         when(plugin.events()).thenReturn(events);
+        when(plugin.gifts()).thenReturn(gifts);
         when(plugin.holograms()).thenReturn(holograms);
         when(plugin.items()).thenReturn(items);
         when(plugin.imageMaps()).thenReturn(imageMaps);
@@ -171,6 +175,7 @@ class STEMCraftAPIImplTest {
         expectedDelegates.put("database", database);
         expectedDelegates.put("dialogs", dialogs);
         expectedDelegates.put("events", events);
+        expectedDelegates.put("gifts", gifts);
         expectedDelegates.put("holograms", holograms);
         expectedDelegates.put("items", items);
         expectedDelegates.put("imageMaps", imageMaps);

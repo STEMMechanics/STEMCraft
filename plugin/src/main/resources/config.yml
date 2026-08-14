@@ -689,3 +689,15 @@ bindings:
   click_action_left: "\uE133"
   click_action_right: "\uE134"
   chest: "\uE135"
+gifts:
+  ui:
+    create-title: "Create Gift"
+    edit-title: "Edit Gift"
+    inspect-title: "Gift Contents"
+  messages:
+    opened: "/success/You opened your gift!"
+    player-only: "Only players can edit Gifts."
+    hold-gift: "/error/Hold a Gift in your main hand."
+    empty: "/error/A Gift must contain at least one item."
+    created: "/success/Gift created."
+    updated: "/success/Gift updated."

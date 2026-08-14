@@ -1,0 +1,4 @@
+pack:
+  enabled: true
+  namespace: stemcraft
+  description: "STEMCraft Gifts"
