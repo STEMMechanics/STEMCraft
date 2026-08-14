@@ -20,14 +20,14 @@ The survival QOL feature provides small configurable improvements without changi
 - Anvils warn at the configured level before the vanilla 40-level `Too Expensive` limit. The old `no_anvil_repair_cost` feature is disabled by default so this warning is meaningful.
 - Tools and armour warn when an incoming durability loss crosses 10% and again at 2%. Both thresholds and messages are configurable.
 
-## Animal crates
+## Animal barrels
 
-Craft an Animal Crate with a lead at the top centre and sticks in every other slot except the centre. Hold an empty crate and sneak-right-click a chicken, rabbit, frog, or cat to capture it. Right-click a block with the filled crate to release it into the adjacent space.
+Combine a vanilla barrel and lead to craft an Animal Barrel. Hold an empty Animal Barrel and sneak-right-click a chicken, rabbit, frog, or cat to capture it. Right-click a block with the filled barrel to release it into the adjacent space. Animal Barrels cannot be placed as storage blocks.
 
-Crates preserve the animal's custom name, baby/adult state, tame owner, and species variant where applicable. Tamed animals can only be captured by their owner unless the player has `stemcraft.animalcrate.others`. Crates are deliberately unstackable.
+Animal Barrels preserve the animal's custom name, baby/adult state, tame owner, and species variant where applicable. Tamed animals can only be captured by their owner unless the player has `stemcraft.animalbarrel.others`. Animal Barrels are deliberately unstackable.
 
 ## End dragon
 
 After an Ender Dragon dies in an eligible End world, a persistent respawn task initiates another fight after `dragon-respawn.days`. The task survives server restarts. Set `dragon-respawn.worlds` to restrict the feature to selected End worlds.
 
-All settings and player-facing messages are under `survival-qol`, `animal-crates`, `leaf_decay_random_tick`, and `dragon-respawn` in `config.yml`.
+All settings and player-facing messages are under `survival-qol`, `animal-barrels`, `leaf_decay_random_tick`, and `dragon-respawn` in `config.yml`.

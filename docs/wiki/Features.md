@@ -38,7 +38,7 @@ Features are discovered from `dev.stemcraft.feature` and loaded through `BaseFea
 | `LeafDecayRandomTickFeature` | Custom leaf decay processing and world setting integration |
 | `LeafDecayTickSpeedSetting` | World setting companion used by the leaf decay system |
 | `SurvivalQolFeature` | Farming, transport, inventory, mob information, and equipment warnings |
-| `AnimalCrates` | Craftable crates for carrying supported small animals |
+| `AnimalBarrels` | Craftable barrels for carrying supported small animals |
 
 ## Item, Inventory, and Death Handling
 

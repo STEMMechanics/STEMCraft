@@ -510,10 +510,10 @@ survival-qol:
     critical-percent: 2
     warning-message: "/warn/⚠ Your {item} is getting badly damaged!"
     critical-message: "/warn/⚠ Your {item} is about to break!"
-animal-crates:
+animal-barrels:
   enabled: true
-  item-name: "Animal Crate"
-  filled-name: "Animal Crate ({animal})"
+  item-name: "Animal Barrel"
+  filled-name: "Animal Barrel ({animal})"
   messages:
     not-owner: "/error/That animal belongs to another player."
     no-space: "/error/There is not enough room to release that animal."
