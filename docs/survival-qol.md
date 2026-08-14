@@ -35,3 +35,6 @@ Animal Barrels preserve the animal's custom name, baby/adult state, tame owner, 
 After an Ender Dragon dies in an eligible End world, a persistent respawn task initiates another fight after `dragon-respawn.days`. The task survives server restarts. Set `dragon-respawn.worlds` to restrict the feature to selected End worlds.
 
 All settings and player-facing messages are under `survival-qol`, `animal-barrels`, `custom-items`, `leaf_decay_random_tick`, and `dragon-respawn` in `config.yml`.
+
+Admins can create a populated animal barrel with `/give <player> stemcraft:animal_barrel[animal=chicken]`.
+Supported animals are `chicken`, `rabbit`, `frog`, and `cat`. Omitting the property gives an empty Animal Barrel.

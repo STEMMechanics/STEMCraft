@@ -28,6 +28,7 @@ import dev.stemcraft.api.service.item.JavaItemVisualDefinition;
 import dev.stemcraft.api.service.item.BedrockItemVisualDefinition;
 import dev.stemcraft.api.service.item.CustomItemPlacementMode;
 import dev.stemcraft.api.service.item.ItemService;
+import dev.stemcraft.api.service.item.CustomItemPropertyHandler;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.util.TextUtil;
 import org.bukkit.Material;
@@ -66,6 +67,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
     private static final String ATTR_ITEM_ID_KEY = "custom-item-id";
     private final Map<String, ItemStack> itemTemplates = new HashMap<>();
     private final Map<String, CustomItemDefinition> itemDefinitions = new LinkedHashMap<>();
+    private final Map<String, CustomItemPropertyHandler> propertyHandlers = new HashMap<>();
     private final Set<Integer> configuredModelData = new HashSet<>();
     private dev.stemcraft.api.command.Command giveCommand;
     private org.bukkit.command.Command originalGiveCommand;
@@ -218,23 +220,30 @@ public class ItemServiceImpl extends BaseService implements ItemService {
     }
 
     private void executeGive(dev.stemcraft.api.command.CommandContext context) {
-        if (context.args().size() < 2) {
+        List<String> arguments = context.rawArgs();
+        if (arguments.size() < 2) {
             context.error("Usage: /give <targets> <item> [count]");
             return;
         }
         org.bukkit.command.CommandSender sender = context.getSender();
-        String targetArgument = context.args().get(0);
-        String itemArgument = context.args().get(1);
-        ItemStack probe = createCustomItem(itemArgument);
+        String targetArgument = arguments.get(0);
+        String itemArgument = arguments.get(1);
+        ItemStack probe;
+        try {
+            probe = createCustomItem(itemArgument);
+        } catch (IllegalArgumentException exception) {
+            context.error(exception.getMessage());
+            return;
+        }
         if (probe == null) {
-            Bukkit.dispatchCommand(sender, "minecraft:give " + String.join(" ", context.args()));
+            Bukkit.dispatchCommand(sender, "minecraft:give " + String.join(" ", arguments));
             return;
         }
         int amount = 1;
-        if (context.args().size() > 2) {
-            try { amount = Math.max(1, Math.min(99 * 36, Integer.parseInt(context.args().get(2)))); }
+        if (arguments.size() > 2) {
+            try { amount = Math.max(1, Math.min(99 * 36, Integer.parseInt(arguments.get(2)))); }
             catch (NumberFormatException exception) {
-                context.error("Invalid item count: {count}", "count", context.args().get(2));
+                context.error("Invalid item count: {count}", "count", arguments.get(2));
                 return;
             }
         }
@@ -528,9 +537,11 @@ public class ItemServiceImpl extends BaseService implements ItemService {
             return null;
         }
 
-        ItemStack template = itemTemplates.get(id);
+        CustomItemSpecification specification = parseCustomItemSpecification(id);
+        ItemStack template = itemTemplates.get(specification.id());
         if (template == null) {
-            String path = id.contains(":") ? id.substring(id.indexOf(':') + 1) : id;
+            String path = specification.id().contains(":")
+                ? specification.id().substring(specification.id().indexOf(':') + 1) : specification.id();
             template = itemTemplates.get(path.replace('_', '-'));
         }
         if (template == null) {
@@ -539,8 +550,49 @@ public class ItemServiceImpl extends BaseService implements ItemService {
 
         ItemStack stack = template.clone();
         stack.setAmount(quantity);
+        if (!specification.properties().isEmpty()) {
+            String path = normaliseCustomItemId(specification.id());
+            CustomItemPropertyHandler handler = propertyHandlers.get(path);
+            if (handler == null) throw new IllegalArgumentException("Custom item '" + specification.id()
+                + "' does not support properties.");
+            handler.apply(stack, specification.properties());
+        }
         return stack;
     }
+
+    @Override
+    public void registerCustomItemPropertyHandler(@NotNull String id, @NotNull CustomItemPropertyHandler handler) {
+        propertyHandlers.put(normaliseCustomItemId(id), handler);
+    }
+
+    @Override
+    public void unregisterCustomItemPropertyHandler(@NotNull String id) {
+        propertyHandlers.remove(normaliseCustomItemId(id));
+    }
+
+    private static String normaliseCustomItemId(String id) {
+        String path = id.contains(":") ? id.substring(id.indexOf(':') + 1) : id;
+        return path.replace('_', '-').toLowerCase(java.util.Locale.ROOT);
+    }
+
+    private static CustomItemSpecification parseCustomItemSpecification(String value) {
+        int open = value.indexOf('[');
+        if (open < 0) return new CustomItemSpecification(value, Map.of());
+        if (!value.endsWith("]") || open == 0) throw new IllegalArgumentException("Invalid custom item properties: " + value);
+        String id = value.substring(0, open);
+        String body = value.substring(open + 1, value.length() - 1).trim();
+        if (body.isEmpty()) return new CustomItemSpecification(id, Map.of());
+        Map<String, String> properties = new LinkedHashMap<>();
+        for (String entry : body.split(",")) {
+            String[] pair = entry.split("=", 2);
+            if (pair.length != 2 || pair[0].isBlank() || pair[1].isBlank())
+                throw new IllegalArgumentException("Invalid custom item property: " + entry.trim());
+            properties.put(pair[0].trim().toLowerCase(java.util.Locale.ROOT), pair[1].trim());
+        }
+        return new CustomItemSpecification(id, Collections.unmodifiableMap(properties));
+    }
+
+    private record CustomItemSpecification(String id, Map<String, String> properties) { }
 
     /**
      * Checks if the given ItemStack matches the custom item with the specified id.

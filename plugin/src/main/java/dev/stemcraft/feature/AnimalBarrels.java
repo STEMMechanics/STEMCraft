@@ -43,6 +43,7 @@ public final class AnimalBarrels extends BaseFeature {
     @Override
     public void onEnable() {
         registerItem();
+        api.items().registerCustomItemPropertyHandler(ITEM_ID, this::applyProperties);
         api.events().register(PlayerInteractEntityEvent.class, this::capture, EventPriority.HIGHEST, true);
         api.events().register(PlayerInteractEvent.class, this::release, EventPriority.HIGHEST, true);
         api.events().register(org.bukkit.event.block.BlockPlaceEvent.class, event -> {
@@ -52,6 +53,7 @@ public final class AnimalBarrels extends BaseFeature {
 
     @Override
     public void onDisable() {
+        api.items().unregisterCustomItemPropertyHandler(ITEM_ID);
         api.recipes().remove("stemcraft:animal-barrel");
     }
 
@@ -64,6 +66,24 @@ public final class AnimalBarrels extends BaseFeature {
         api.items().registerCustomItem(ITEM_ID, crate);
         // Remove the earlier dedicated recipe: ordinary vanilla barrels are the empty carrier.
         api.recipes().remove("stemcraft:animal-barrel");
+    }
+
+    private void applyProperties(ItemStack item, java.util.Map<String, String> properties) {
+        if (properties.size() != 1 || !properties.containsKey("animal"))
+            throw new IllegalArgumentException("Animal Barrel supports only the 'animal' property.");
+        EntityType type;
+        try {
+            type = EntityType.valueOf(properties.get("animal").trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("Unknown Animal Barrel animal: " + properties.get("animal"));
+        }
+        if (!ALLOWED.contains(type))
+            throw new IllegalArgumentException("Animal Barrels support chicken, rabbit, frog, or cat.");
+        api.items().addAttrib(item, TYPE, type.name());
+        ItemMeta meta = item.getItemMeta();
+        meta.displayName(net.kyori.adventure.text.Component.text(getConfigSection()
+            .getString("filled-name", "Animal Barrel ({animal})").replace("{animal}", friendly(type.name()))));
+        item.setItemMeta(meta);
     }
 
     private void capture(PlayerInteractEntityEvent event) {
