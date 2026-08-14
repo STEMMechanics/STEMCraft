@@ -41,6 +41,8 @@ custom-commands:
 
 custom-portals:
   enabled: true
+  # Teleport as soon as a player enters a registered portal block. Set false to use the vanilla portal warm-up.
+  instant-teleport: true
   portals: {}
 
 mailboxes:

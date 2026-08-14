@@ -22,7 +22,10 @@ This is the active command surface registered by STEMCraft.
 - `/portal list`
 - `/portal info <id>`
 - `/portal set <id> <world|here> [spawn|x y z [yaw pitch]]`
+- `/portal repair <id>` rescans a rebuilt portal while preserving its destination
 - `/portal delete <id>`
+
+Custom portals teleport immediately by default. Set `custom-portals.instant-teleport` to `false` to retain the vanilla portal warm-up.
 - `/tpall`
 - `/tphere <player>`
 - `/tpspawn <world> [player]`
