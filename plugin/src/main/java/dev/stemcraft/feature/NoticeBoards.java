@@ -27,8 +27,10 @@ import java.sql.ResultSet;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
 
@@ -48,6 +50,7 @@ public final class NoticeBoards extends BaseFeature {
     private String cachedTitleImagePath = "";
     private long cachedTitleImageModified = Long.MIN_VALUE;
     private BufferedImage cachedTitleImage;
+    private final Map<UUID, Long> lastBoardClicks = new HashMap<>();
     private static final Color[] PAPER_COLOURS = {
         new Color(247, 231, 164),
         new Color(226, 238, 190),
@@ -89,6 +92,7 @@ public final class NoticeBoards extends BaseFeature {
         if (command != null) {
             command.unregister();
         }
+        lastBoardClicks.clear();
         loadBoards().forEach(board -> api.imageMaps().delete(displayId(board.id())));
     }
 
@@ -128,6 +132,7 @@ public final class NoticeBoards extends BaseFeature {
             .tabCompletion("remove")
             .tabCompletion("board", "create")
             .tabCompletion("board", "delete")
+            .permission("stemcraft.noticeboard.admin")
             .executor(this::onCommand)
             .register(STEMCraft.getPlugin());
     }
@@ -138,7 +143,7 @@ public final class NoticeBoards extends BaseFeature {
             return;
         }
         switch (ctx.getArgLower(0)) {
-            case "post" -> openPostDialog(ctx);
+            case "post" -> openAdminPostDialog(ctx);
             case "mine" -> listOwnPosts(ctx);
             case "remove" -> removePost(ctx);
             case "board" -> manageBoard(ctx);
@@ -146,30 +151,71 @@ public final class NoticeBoards extends BaseFeature {
         }
     }
 
-    private void openPostDialog(CommandContext ctx) {
+    private void openAdminPostDialog(CommandContext ctx) {
         Player player = ctx.asPlayer();
         if (player == null) {
             ctx.error("Only players can post notices.");
             return;
         }
-        boolean opened = api.dialogs().create("noticeboard:post")
-            .title(net.kyori.adventure.text.Component.text("Post a notice"))
-            .body(net.kyori.adventure.text.Component.text("Notices remain on the board for 14 days."))
-            .textInput("header", net.kyori.adventure.text.Component.text("Header"), "", MAX_HEADER_LENGTH)
-            .multilineTextInput("message", net.kyori.adventure.text.Component.text("Short message"), "", MAX_MESSAGE_LENGTH, 4)
-            .submit(net.kyori.adventure.text.Component.text("Post"), response -> createPost(player, response))
+        openNoticeEditor(player, null, false);
+    }
+
+    private void handleBoardClick(Player player) {
+        long now = System.currentTimeMillis();
+        Long previous = lastBoardClicks.put(player.getUniqueId(), now);
+        if (previous != null && now - previous < 500L) {
+            return;
+        }
+        List<NoticePost> posts = activePosts(player.getUniqueId());
+        if (posts.isEmpty()) {
+            openNoticeEditor(player, null, true);
+            return;
+        }
+        NoticePost post = posts.getFirst();
+        boolean opened = api.dialogs().create("noticeboard:manage")
+            .title(net.kyori.adventure.text.Component.text("Your notice"))
+            .body(net.kyori.adventure.text.Component.text(post.header() + "\n\n" + post.message()))
+            .action(net.kyori.adventure.text.Component.text("Edit"), () -> openNoticeEditor(player, post, true))
+            .action(net.kyori.adventure.text.Component.text("Delete"), () -> deletePlayerPost(player, post))
             .cancel(net.kyori.adventure.text.Component.text("Cancel"), () -> { })
             .open(player);
         if (!opened) {
-            ctx.error("Could not open the notice dialog.");
+            api.messages().error(player, "Could not open the notice dialog.");
         }
     }
 
-    private void createPost(Player player, DialogResponse response) {
+    private void openNoticeEditor(Player player, NoticePost existing, boolean enforceSingleNotice) {
+        String title = existing == null ? "Post a notice" : "Edit your notice";
+        String header = existing == null ? "" : existing.header();
+        String message = existing == null ? "" : existing.message();
+        boolean opened = api.dialogs().create(existing == null ? "noticeboard:post" : "noticeboard:edit")
+            .title(net.kyori.adventure.text.Component.text(title))
+            .body(net.kyori.adventure.text.Component.text("Notices remain on the board for 14 days."))
+            .textInput("header", net.kyori.adventure.text.Component.text("Header"), header, MAX_HEADER_LENGTH)
+            .multilineTextInput("message", net.kyori.adventure.text.Component.text("Short message"), message, MAX_MESSAGE_LENGTH, 4)
+            .submit(net.kyori.adventure.text.Component.text(existing == null ? "Post" : "Save"), response -> {
+                if (existing == null) {
+                    createPost(player, response, enforceSingleNotice);
+                } else {
+                    updatePost(player, existing, response);
+                }
+            })
+            .cancel(net.kyori.adventure.text.Component.text("Cancel"), () -> { })
+            .open(player);
+        if (!opened) {
+            api.messages().error(player, "Could not open the notice dialog.");
+        }
+    }
+
+    private void createPost(Player player, DialogResponse response, boolean enforceSingleNotice) {
         String header = response.text("header").trim();
         String message = response.text("message").trim();
         if (header.isBlank() || message.isBlank()) {
             api.messages().error(player, "A header and message are required.");
+            return;
+        }
+        if (enforceSingleNotice && !activePosts(player.getUniqueId()).isEmpty()) {
+            api.messages().error(player, "You already have an active notice. Click the board to edit or delete it.");
             return;
         }
         UUID id = UUID.randomUUID();
@@ -193,6 +239,58 @@ public final class NoticeBoards extends BaseFeature {
         } else {
             api.messages().error(player, "Could not save your notice.");
         }
+    }
+
+    private void updatePost(Player player, NoticePost post, DialogResponse response) {
+        String header = response.text("header").trim();
+        String message = response.text("message").trim();
+        if (header.isBlank() || message.isBlank()) {
+            api.messages().error(player, "A header and message are required.");
+            return;
+        }
+        long now = System.currentTimeMillis();
+        int changed = api.database().update("""
+            UPDATE notice_board_posts
+            SET author_name = ?, header = ?, message = ?, created_at = ?, expires_at = ?
+            WHERE id = ? AND author_uuid = ?
+            """, statement -> {
+            statement.setString(1, player.getName());
+            statement.setString(2, header);
+            statement.setString(3, message);
+            statement.setLong(4, now);
+            statement.setLong(5, now + retentionMillis);
+            statement.setString(6, post.id().toString());
+            statement.setString(7, player.getUniqueId().toString());
+        });
+        if (changed == 1) {
+            displayPage = 0;
+            refreshBoards();
+            api.messages().success(player, "Your notice has been updated for another 14 days.");
+        } else {
+            api.messages().error(player, "That notice is no longer available.");
+        }
+    }
+
+    private void deletePlayerPost(Player player, NoticePost post) {
+        int changed = api.database().update(
+            "DELETE FROM notice_board_posts WHERE id = ? AND author_uuid = ?",
+            statement -> {
+                statement.setString(1, post.id().toString());
+                statement.setString(2, player.getUniqueId().toString());
+            });
+        if (changed == 1) {
+            refreshBoards();
+            api.messages().success(player, "Your notice has been deleted.");
+        } else {
+            api.messages().error(player, "That notice is no longer available.");
+        }
+    }
+
+    private List<NoticePost> activePosts(UUID playerUuid) {
+        return loadPosts("WHERE author_uuid = ? AND expires_at > ? ORDER BY created_at DESC", statement -> {
+            statement.setString(1, playerUuid.toString());
+            statement.setLong(2, System.currentTimeMillis());
+        });
     }
 
     private void listOwnPosts(CommandContext ctx) {
@@ -308,12 +406,14 @@ public final class NoticeBoards extends BaseFeature {
     private void restoreBoard(NoticeBoard board) {
         api.imageMaps().create(displayId(board.id()), board.location(), board.facing(), board.columns(), board.rows());
         api.imageMaps().render(displayId(board.id()), renderBoard(board));
+        api.imageMaps().onClick(displayId(board.id()), click -> handleBoardClick(click.player()));
     }
 
     private void refreshBoards() {
         for (NoticeBoard board : loadBoards()) {
             if (!api.imageMaps().exists(displayId(board.id()))) {
                 api.imageMaps().create(displayId(board.id()), board.location(), board.facing(), board.columns(), board.rows());
+                api.imageMaps().onClick(displayId(board.id()), click -> handleBoardClick(click.player()));
             }
             api.imageMaps().render(displayId(board.id()), renderBoard(board));
         }

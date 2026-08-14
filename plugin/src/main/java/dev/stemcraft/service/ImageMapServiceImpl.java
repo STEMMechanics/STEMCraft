@@ -3,6 +3,7 @@ package dev.stemcraft.service;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.service.imagemap.ImageMapDisplay;
+import dev.stemcraft.api.service.imagemap.ImageMapClick;
 import dev.stemcraft.api.service.imagemap.ImageMapService;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -13,6 +14,8 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.GlowItemFrame;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.MapMeta;
+import org.bukkit.event.player.PlayerInteractEntityEvent;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.map.MapCanvas;
 import org.bukkit.map.MapRenderer;
 import org.bukkit.map.MapView;
@@ -26,20 +29,47 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 /** Runtime implementation of wall-mounted image-map mosaics. */
 public final class ImageMapServiceImpl extends BaseService implements ImageMapService {
     private static final String ENTITY_TAG = "stemcraft:image-map";
     private final Map<String, ManagedDisplay> displays = new HashMap<>();
+    private final Map<String, Consumer<ImageMapClick>> clickHandlers = new HashMap<>();
 
     public ImageMapServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
     }
 
     @Override
+    public void onEnable() {
+        api.events().register(PlayerInteractEntityEvent.class, event -> {
+            if (event.getHand() != EquipmentSlot.HAND) {
+                return;
+            }
+            UUID clickedId = event.getRightClicked().getUniqueId();
+            for (ManagedDisplay display : displays.values()) {
+                int index = display.frameIds.indexOf(clickedId);
+                if (index < 0) {
+                    continue;
+                }
+                event.setCancelled(true);
+                Consumer<ImageMapClick> callback = clickHandlers.get(display.definition.id());
+                if (callback != null) {
+                    int column = index % display.definition.columns();
+                    int row = index / display.definition.columns();
+                    callback.accept(new ImageMapClick(display.definition.id(), event.getPlayer(), column, row));
+                }
+                return;
+            }
+        });
+    }
+
+    @Override
     public void onDisable() {
         displays.values().forEach(this::removeFrames);
         displays.clear();
+        clickHandlers.clear();
     }
 
     @Override
@@ -121,12 +151,26 @@ public final class ImageMapServiceImpl extends BaseService implements ImageMapSe
             return false;
         }
         removeFrames(removed);
+        clickHandlers.remove(id);
         return true;
     }
 
     @Override
     public boolean exists(@NotNull String id) {
         return displays.containsKey(id);
+    }
+
+    @Override
+    public void onClick(@NotNull String id, @NotNull Consumer<ImageMapClick> callback) {
+        if (!displays.containsKey(id)) {
+            throw new IllegalArgumentException("Unknown image-map display: " + id);
+        }
+        clickHandlers.put(id, callback);
+    }
+
+    @Override
+    public void clearClickHandler(@NotNull String id) {
+        clickHandlers.remove(id);
     }
 
     private void ensureFrames(ManagedDisplay display) {

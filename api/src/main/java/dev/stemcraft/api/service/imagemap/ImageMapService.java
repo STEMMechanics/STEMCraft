@@ -5,6 +5,7 @@ import org.bukkit.block.BlockFace;
 import org.jetbrains.annotations.NotNull;
 
 import java.awt.image.BufferedImage;
+import java.util.function.Consumer;
 
 /** Creates and updates multi-map image displays mounted on walls. */
 public interface ImageMapService {
@@ -23,4 +24,12 @@ public interface ImageMapService {
 
     /** Returns whether a display is currently registered. */
     boolean exists(@NotNull String id);
+
+    /** Registers or replaces the callback invoked when a player clicks a display tile. */
+    default void onClick(@NotNull String id, @NotNull Consumer<ImageMapClick> callback) {
+        throw new UnsupportedOperationException("This image-map implementation does not support clicks");
+    }
+
+    /** Removes the click callback for a display without deleting the display. */
+    default void clearClickHandler(@NotNull String id) { }
 }

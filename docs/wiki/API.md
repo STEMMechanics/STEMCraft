@@ -52,7 +52,7 @@ STEMCraftAPI api = STEMCraftAPI.api();
 
 `HologramService#createDynamic(...)` registers location- or entity-anchored, player-specific holograms under a stable type/context key. Use `refreshDynamic(...)` after state changes and `deleteDynamic(...)` when the owning object is removed. The service manages Java/Bedrock rendering and world/chunk lifecycle.
 
-`ImageMapService` creates wall-mounted filled-map mosaics and renders a `BufferedImage` across them. Callers use stable string IDs and do not manage the underlying maps or item frames.
+`ImageMapService` creates wall-mounted filled-map mosaics and renders a `BufferedImage` across them. Callers use stable string IDs, can register per-display tile click callbacks, and do not manage the underlying maps or item frames.
 
 ### Dialogs
 

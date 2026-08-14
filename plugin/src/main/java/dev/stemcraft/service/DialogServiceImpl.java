@@ -66,12 +66,14 @@ public final class DialogServiceImpl extends BaseService implements DialogServic
     private final class Builder implements DialogBuilder {
         private final String reference;
         private final List<TextInput> inputs = new ArrayList<>();
+        private final List<DialogButton> actions = new ArrayList<>();
         private Component title = Component.empty();
         private Component body = Component.empty();
         private Component submitLabel = Component.text("Submit");
         private Component cancelLabel = Component.text("Cancel");
         private Consumer<DialogResponse> submitCallback = response -> { };
         private Runnable cancelCallback = () -> { };
+        private boolean submitConfigured;
 
         private Builder(String reference) {
             this.reference = reference;
@@ -115,6 +117,14 @@ public final class DialogServiceImpl extends BaseService implements DialogServic
         public DialogBuilder submit(Component label, Consumer<DialogResponse> callback) {
             submitLabel = Objects.requireNonNull(label, "label");
             submitCallback = Objects.requireNonNull(callback, "callback");
+            submitConfigured = true;
+            return this;
+        }
+
+        @Override
+        public DialogBuilder action(Component label, Runnable callback) {
+            actions.add(new DialogButton(Objects.requireNonNull(label, "label"),
+                Objects.requireNonNull(callback, "callback")));
             return this;
         }
 
@@ -157,7 +167,15 @@ public final class DialogServiceImpl extends BaseService implements DialogServic
                     return inputBuilder.build();
                 }).map(DialogInput.class::cast).toList();
 
-                ActionButton submit = ActionButton.builder(submitLabel).width(150).action(submitAction).build();
+                List<ActionButton> buttons = new ArrayList<>();
+                if (submitConfigured) {
+                    buttons.add(ActionButton.builder(submitLabel).width(150).action(submitAction).build());
+                }
+                for (DialogButton action : actions) {
+                    DialogAction dialogAction = DialogAction.customClick(
+                        (response, audience) -> runSync(action.callback()), options);
+                    buttons.add(ActionButton.builder(action.label()).width(150).action(dialogAction).build());
+                }
                 ActionButton cancel = ActionButton.builder(cancelLabel).width(150).action(cancelAction).build();
                 DialogBase base = DialogBase.builder(title)
                     .canCloseWithEscape(false)
@@ -167,7 +185,7 @@ public final class DialogServiceImpl extends BaseService implements DialogServic
                     .build();
                 Dialog dialog = Dialog.create(factory -> factory.empty()
                     .base(base)
-                    .type(DialogType.multiAction(List.of(submit), cancel, 1)));
+                    .type(DialogType.multiAction(buttons, cancel, Math.min(3, Math.max(1, buttons.size())))));
                 player.showDialog(dialog);
                 return true;
             } catch (LinkageError | RuntimeException exception) {
@@ -176,6 +194,9 @@ public final class DialogServiceImpl extends BaseService implements DialogServic
         }
 
         private boolean openBedrock(Player player) {
+            if (!actions.isEmpty() && inputs.isEmpty() && !submitConfigured) {
+                return openBedrockActions(player);
+            }
             try {
                 GeyserConnection connection = GeyserApi.api().connectionByUuid(player.getUniqueId());
                 if (connection == null) {
@@ -219,6 +240,45 @@ public final class DialogServiceImpl extends BaseService implements DialogServic
             }
         }
 
+        private boolean openBedrockActions(Player player) {
+            try {
+                GeyserConnection connection = GeyserApi.api().connectionByUuid(player.getUniqueId());
+                if (connection == null) {
+                    return false;
+                }
+                ClassLoader geyserLoader = connection.getClass().getClassLoader();
+                Class<?> simpleFormClass = Class.forName("org.geysermc.cumulus.form.SimpleForm", true, geyserLoader);
+                Object form = simpleFormClass.getMethod("builder").invoke(null);
+                invoke(form, "title", new Class<?>[]{String.class}, plain(title));
+                invoke(form, "content", new Class<?>[]{String.class}, plain(body));
+                for (DialogButton action : actions) {
+                    invoke(form, "button", new Class<?>[]{String.class}, plain(action.label()));
+                }
+                invoke(form, "button", new Class<?>[]{String.class}, plain(cancelLabel));
+                Consumer<Object> validHandler = response -> runSync(() -> {
+                    Object value = invoke(response, "clickedButtonId", new Class<?>[0]);
+                    int selected = value instanceof Number number ? number.intValue() : -1;
+                    if (selected >= 0 && selected < actions.size()) {
+                        actions.get(selected).callback().run();
+                    } else {
+                        cancelCallback.run();
+                    }
+                });
+                invoke(form, "validResultHandler", new Class<?>[]{Consumer.class}, validHandler);
+                invoke(form, "closedOrInvalidResultHandler", new Class<?>[]{Runnable.class},
+                    (Runnable) () -> runSync(cancelCallback));
+                Object builtForm = invoke(form, "build", new Class<?>[0]);
+                Class<?> formClass = Class.forName("org.geysermc.cumulus.form.Form", true, geyserLoader);
+                Method sendForm = connection.getClass().getMethod("sendForm", formClass);
+                return Boolean.TRUE.equals(sendForm.invoke(connection, builtForm));
+            } catch (LinkageError | ReflectiveOperationException | RuntimeException exception) {
+                plugin.getLogger().warning("[dialogs] Failed to open Bedrock action dialog '" + reference
+                    + "' for " + player.getName() + ": " + exception.getClass().getSimpleName()
+                    + ": " + exception.getMessage());
+                return false;
+            }
+        }
+
         private Object invoke(Object target, String method, Class<?>[] parameterTypes, Object... arguments) {
             try {
                 return target.getClass().getMethod(method, parameterTypes).invoke(target, arguments);
@@ -251,4 +311,6 @@ public final class DialogServiceImpl extends BaseService implements DialogServic
                              int maxLength,
                              int lines) {
     }
+
+    private record DialogButton(@NotNull Component label, @NotNull Runnable callback) { }
 }

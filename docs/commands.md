@@ -56,6 +56,8 @@ This is the active command surface registered by STEMCraft.
 - `/noticeboard board create <id> [columns] [rows]`
 - `/noticeboard board delete <id>`
 
+All `/noticeboard` commands require `stemcraft.noticeboard.admin`. Normal players create and manage their single active notice by clicking a physical notice board; the admin `post` command may create additional notices.
+
 ## Moderation
 
 - `/ban ...`

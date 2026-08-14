@@ -4,11 +4,14 @@ Notice boards are physical graphical map displays for short player-created survi
 
 Each visible post contains a header, short message, and author. Creation and expiry timestamps are stored internally but are not shown. Posts are removed automatically after 14 days by default.
 
-## Player commands
+## Player interaction
 
-- `/noticeboard post` opens the cross-platform posting dialog.
-- `/noticeboard mine` lists the player's active posts and short IDs.
-- `/noticeboard remove <post-id>` removes one of the player's posts.
+Players click any map tile on a physical board. Java item-frame interactions and Bedrock interactions translated by Geyser use the same image-map callback.
+
+- A player without an active notice receives the create dialog.
+- A player with an active notice receives Edit, Delete, and Cancel choices.
+- Editing pre-fills the current header and message and resets the 14-day lifetime when saved.
+- Clicking limits each player to one active notice.
 
 ## Board administration
 
@@ -19,6 +22,8 @@ Players with `stemcraft.noticeboard.admin` can create a board while looking at i
 ```
 
 The default board is four maps wide and three maps high. The board faces the player creating it. Remove it with `/noticeboard board delete <id>`. All physical boards display the same server notice collection.
+
+All `/noticeboard` command paths require `stemcraft.noticeboard.admin`. Administrators can use `/noticeboard post` to create additional notices without the one-active-notice click limit, `/noticeboard mine` to list their posts, and `/noticeboard remove <post-id>` to remove any post.
 
 Each notice column is approximately two maps wide, so a 4×3 board has two notice columns, a 6×3 board has three, and an 8×3 board has four. Notice cards retain a consistent readable width instead of stretching across wider boards.
 
@@ -45,7 +50,12 @@ The independent image-map service can be used by other features and plugins:
 ```java
 api.imageMaps().create("quests:lobby", bottomLeftBlock, BlockFace.NORTH, 4, 3);
 api.imageMaps().render("quests:lobby", bufferedImage);
+api.imageMaps().onClick("quests:lobby", click -> {
+    Player player = click.player();
+    int column = click.tileColumn();
+    int row = click.tileRow();
+});
 api.imageMaps().delete("quests:lobby");
 ```
 
-The location is the bottom-left backing block as viewed from the front. The service scales and splits the image into 128×128 map tiles and manages the item frames.
+The location is the bottom-left backing block as viewed from the front. The service scales and splits the image into 128×128 map tiles, manages the item frames, and reports the clicked display tile.
