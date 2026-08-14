@@ -240,7 +240,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
         if (probe == null) {
             List<String> vanillaArguments = new java.util.ArrayList<>(arguments);
             org.bukkit.entity.Player exactPlayer = Bukkit.getPlayerExact(exactTargetName);
-            if (exactPlayer != null) vanillaArguments.set(0, exactPlayer.getUniqueId().toString());
+            if (exactPlayer != null) vanillaArguments.set(0, vanillaPlayerTarget(exactPlayer.getName()));
             try {
                 Bukkit.dispatchCommand(sender, "minecraft:give " + String.join(" ", vanillaArguments));
             } catch (org.bukkit.command.CommandException exception) {
@@ -292,6 +292,11 @@ public class ItemServiceImpl extends BaseService implements ItemService {
             return target.substring(1, target.length() - 1).replace("\\\"", "\"").replace("\\\\", "\\");
         }
         return target;
+    }
+
+    private static String vanillaPlayerTarget(String name) {
+        if (name.matches("[A-Za-z0-9_]{1,16}")) return name;
+        return "\"" + name.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
     }
 
     private void handleCampfireInput(PlayerInteractEvent event) {
