@@ -135,6 +135,7 @@ public final class NoticeBoards extends BaseFeature {
         command = api.commands().create("noticeboard")
             .description("Post and manage survival notice boards")
             .usage("/noticeboard <post|list|mine|edit|expiry|remove|board>")
+            .ignoreArg(2)
             .tabCompletion("post")
             .tabCompletion("list")
             .tabCompletion("mine")
