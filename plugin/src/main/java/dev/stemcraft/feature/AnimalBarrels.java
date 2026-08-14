@@ -62,17 +62,15 @@ public final class AnimalBarrels extends BaseFeature {
         meta.setMaxStackSize(1);
         crate.setItemMeta(meta);
         api.items().registerCustomItem(ITEM_ID, crate);
+        // Remove the earlier dedicated recipe: ordinary vanilla barrels are the empty carrier.
         api.recipes().remove("stemcraft:animal-barrel");
-        ItemStack recipeResult = api.items().createCustomItem(ITEM_ID);
-        if (recipeResult != null) api.recipes().addShapeless("animal-barrel", recipeResult,
-            Material.BARREL, Material.LEAD);
     }
 
     private void capture(PlayerInteractEntityEvent event) {
         Player player = event.getPlayer();
         if (!player.isSneaking() || event.getHand() != EquipmentSlot.HAND || !ALLOWED.contains(event.getRightClicked().getType())) return;
         ItemStack held = player.getInventory().getItemInMainHand();
-        if (!api.items().isCustomItemId(ITEM_ID, held) || api.items().hasAttrib(held, TYPE)) return;
+        if (held.getType() != Material.BARREL || api.items().getCustomItemId(held) != null) return;
         Entity animal = event.getRightClicked();
         if (animal instanceof Tameable tameable && tameable.isTamed() && tameable.getOwnerUniqueId() != null
             && !tameable.getOwnerUniqueId().equals(player.getUniqueId()) && !player.hasPermission("stemcraft.animalbarrel.others")) {
@@ -80,7 +78,11 @@ public final class AnimalBarrels extends BaseFeature {
             return;
         }
         event.setCancelled(true);
-        ItemStack filled = held.clone();
+        ItemStack filled = api.items().createCustomItem(ITEM_ID);
+        if (filled == null) {
+            api.messages().send(player, getConfigSection().getString("messages.capture-failed", "/error/Could not prepare the animal barrel."));
+            return;
+        }
         api.items().addAttrib(filled, TYPE, animal.getType().name());
         api.items().addAttrib(filled, BABY, animal instanceof Ageable ageable && !ageable.isAdult());
         if (animal.customName() != null) api.items().addAttrib(filled, NAME,
@@ -94,7 +96,13 @@ public final class AnimalBarrels extends BaseFeature {
         meta.displayName(net.kyori.adventure.text.Component.text(getConfigSection().getString("filled-name", "Animal Barrel ({animal})")
             .replace("{animal}", friendly(animal.getType().name()))));
         filled.setItemMeta(meta);
-        player.getInventory().setItemInMainHand(filled);
+        if (held.getAmount() == 1) {
+            player.getInventory().setItemInMainHand(filled);
+        } else {
+            held.subtract(1);
+            var overflow = player.getInventory().addItem(filled);
+            overflow.values().forEach(item -> player.getWorld().dropItemNaturally(player.getLocation(), item));
+        }
         animal.remove();
         api.messages().send(player, getConfigSection().getString("messages.captured", "/success/Picked up {animal}."),
             "animal", friendly(animal.getType().name()));
@@ -115,8 +123,7 @@ public final class AnimalBarrels extends BaseFeature {
         event.setCancelled(true);
         Entity spawned = location.getWorld().spawnEntity(location, type);
         restore(spawned, held);
-        ItemStack empty = api.items().createCustomItem(ITEM_ID);
-        event.getPlayer().getInventory().setItemInMainHand(empty);
+        event.getPlayer().getInventory().setItemInMainHand(new ItemStack(Material.BARREL));
         api.messages().send(event.getPlayer(), getConfigSection().getString("messages.released", "/success/Released {animal}."),
             "animal", friendly(type.name()));
     }

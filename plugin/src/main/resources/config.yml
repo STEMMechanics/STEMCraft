@@ -515,6 +515,7 @@ animal-barrels:
   item-name: "Animal Barrel"
   filled-name: "Animal Barrel ({animal})"
   messages:
+    capture-failed: "/error/Could not prepare the animal barrel."
     not-owner: "/error/That animal belongs to another player."
     no-space: "/error/There is not enough room to release that animal."
     captured: "/success/Picked up {animal}."

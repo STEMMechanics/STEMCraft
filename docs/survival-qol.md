@@ -22,7 +22,7 @@ The survival QOL feature provides small configurable improvements without changi
 
 ## Animal barrels
 
-Combine a vanilla barrel and lead to craft an Animal Barrel. Hold an empty Animal Barrel and sneak-right-click a chicken, rabbit, frog, or cat to capture it. Right-click a block with the filled barrel to release it into the adjacent space. Animal Barrels cannot be placed as storage blocks.
+Hold an ordinary vanilla barrel and sneak-right-click a chicken, rabbit, frog, or cat to capture it. One barrel is consumed and replaced by an unstackable `Animal Barrel (Chicken)`, for example. Right-click a block with the filled barrel to release it into the adjacent space; it then returns to an ordinary barrel. Filled Animal Barrels cannot be placed as storage blocks.
 
 Animal Barrels preserve the animal's custom name, baby/adult state, tame owner, and species variant where applicable. Tamed animals can only be captured by their owner unless the player has `stemcraft.animalbarrel.others`. Animal Barrels are deliberately unstackable.
 
