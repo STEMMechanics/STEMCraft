@@ -34,7 +34,7 @@ notice-boards:
   title-image: ""
 ```
 
-Board and notice text uses Minecraft's map font. Notices use several paper colours, a stable slight rotation, a pin, three wrapped message lines, and the author name.
+Board and notice text uses Minecraft's map font. Notices use several paper colours, stable slight rotations and offsets, a pin, three generously spaced message lines, and a larger author line.
 
 ## Image-map API
 

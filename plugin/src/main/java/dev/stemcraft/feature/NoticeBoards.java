@@ -375,22 +375,24 @@ public final class NoticeBoards extends BaseFeature {
         card.setColor(new Color(126, 55, 42));
         card.fillOval(centerX - 3, padding + 4, 6, 6);
         card.setColor(new Color(72, 48, 31));
-        drawMinecraftText(card, post.header(), padding + 10, padding + 12, 2, true);
-        int lineY = padding + 34;
-        for (String line : wrapMinecraft(post.message(), width - 20, 3, 2)) {
-            drawMinecraftText(card, line, padding + 10, lineY, 2, false);
-            lineY += 14;
+        drawMinecraftText(card, fitMinecraft(post.header(), width - 20, 2), padding + 10, padding + 12, 2, true);
+        int lineY = padding + 35;
+        for (String line : wrapMinecraft(post.message(), width - 20, 3, 1)) {
+            drawMinecraftText(card, line, padding + 10, lineY, 1, false);
+            lineY += 12;
         }
-        String by = "Posted by " + post.authorName();
-        int byScale = minecraftWidth(by, 2) <= width - 20 ? 2 : 1;
-        drawMinecraftText(card, by, padding + width - minecraftWidth(by, byScale) - 9,
-            padding + height - 12, byScale, false);
+        String by = fitMinecraft("Posted by " + post.authorName(), width - 20, 2);
+        drawMinecraftText(card, by, padding + width - minecraftWidth(by, 2) - 9,
+            padding + height - 17, 2, false);
         card.dispose();
 
-        double degrees = (Math.floorMod(post.id().hashCode() / 7, 7) - 3) * 0.45;
+        int hash = post.id().hashCode();
+        int offsetX = Math.floorMod(hash / 31, 9) - 4;
+        int offsetY = Math.floorMod(hash / 127, 7) - 3;
+        double degrees = (Math.floorMod(hash / 7, 7) - 3) * 0.45;
         AffineTransform original = graphics.getTransform();
-        graphics.rotate(Math.toRadians(degrees), x + width / 2.0, y + height / 2.0);
-        graphics.drawImage(paper, x - padding, y - padding, null);
+        graphics.rotate(Math.toRadians(degrees), x + offsetX + width / 2.0, y + offsetY + height / 2.0);
+        graphics.drawImage(paper, x + offsetX - padding, y + offsetY - padding, null);
         graphics.setTransform(original);
     }
 
@@ -411,6 +413,18 @@ public final class NoticeBoards extends BaseFeature {
         }
         if (!line.isEmpty() && lines.size() < maximumLines) lines.add(line.toString());
         return lines;
+    }
+
+    private static String fitMinecraft(String text, int width, int scale) {
+        if (minecraftWidth(text, scale) <= width) {
+            return text;
+        }
+        String suffix = "...";
+        StringBuilder fitted = new StringBuilder(text);
+        while (!fitted.isEmpty() && minecraftWidth(fitted + suffix, scale) > width) {
+            fitted.deleteCharAt(fitted.length() - 1);
+        }
+        return fitted.toString().stripTrailing() + suffix;
     }
 
     private void drawBoardTitle(Graphics2D graphics, int width) {
