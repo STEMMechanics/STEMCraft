@@ -194,7 +194,8 @@ public class ItemServiceImpl extends BaseService implements ItemService {
     private void registerGiveCommand() {
         api.tabComplete().register("give-target", (player, args) -> {
             java.util.List<String> targets = new java.util.ArrayList<>(
-                Bukkit.getOnlinePlayers().stream().map(org.bukkit.entity.Player::getName).toList());
+                Bukkit.getOnlinePlayers().stream().map(org.bukkit.entity.Player::getName)
+                    .map(ItemServiceImpl::quoteTargetIfNeeded).toList());
             targets.addAll(java.util.List.of("@s", "@p", "@a", "@r", "@e"));
             return targets;
         });
@@ -228,6 +229,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
         }
         org.bukkit.command.CommandSender sender = context.getSender();
         String targetArgument = arguments.get(0);
+        String exactTargetName = unquoteTarget(targetArgument);
         String itemArgument = arguments.get(1);
         ItemStack probe;
         try {
@@ -238,7 +240,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
         }
         if (probe == null) {
             List<String> vanillaArguments = new java.util.ArrayList<>(arguments);
-            org.bukkit.entity.Player exactPlayer = Bukkit.getPlayerExact(targetArgument);
+            org.bukkit.entity.Player exactPlayer = Bukkit.getPlayerExact(exactTargetName);
             if (exactPlayer != null) vanillaArguments.set(0, exactPlayer.getUniqueId().toString());
             try {
                 Bukkit.dispatchCommand(sender, "minecraft:give " + String.join(" ", vanillaArguments));
@@ -257,7 +259,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
             }
         }
         java.util.List<org.bukkit.entity.Entity> selected;
-        org.bukkit.entity.Player exactPlayer = Bukkit.getPlayerExact(targetArgument);
+        org.bukkit.entity.Player exactPlayer = Bukkit.getPlayerExact(exactTargetName);
         if (exactPlayer != null) {
             selected = java.util.List.of(exactPlayer);
         } else {
@@ -284,6 +286,18 @@ public class ItemServiceImpl extends BaseService implements ItemService {
         }
         context.success("Gave {amount} [{item}] to {recipients} player(s)",
             "amount", amount, "item", itemArgument, "recipients", recipients);
+    }
+
+    private static String quoteTargetIfNeeded(String name) {
+        if (name.matches("[A-Za-z0-9_]{1,16}")) return name;
+        return "\"" + name.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+    }
+
+    private static String unquoteTarget(String target) {
+        if (target.length() >= 2 && target.startsWith("\"") && target.endsWith("\"")) {
+            return target.substring(1, target.length() - 1).replace("\\\"", "\"").replace("\\\\", "\\");
+        }
+        return target;
     }
 
     private void handleCampfireInput(PlayerInteractEvent event) {
