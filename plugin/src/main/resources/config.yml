@@ -325,6 +325,28 @@ player_logs:
         - ".*_ORE"
         - "ANCIENT_DEBRIS"
 
+custom-items:
+  fried-egg:
+    # Use an edible vanilla base; the client model below supplies the fried-egg appearance.
+    material: DRIED_KELP
+    name: "<gold>Fried Egg"
+    placement: DENY
+    food:
+      nutrition: 3
+      saturation: 2.4
+      always-edible: false
+    clients:
+      java:
+        custom-model-data: 46003
+        item-model: "stemcraft_survival:fried_egg"
+        model: "stemcraft_survival:item/fried_egg"
+        texture: "stemcraft_survival:item/fried_egg"
+      bedrock:
+        identifier: "stemcraft:fried_egg"
+        icon: "fried_egg"
+        texture: "stemcraft_survival:item/fried_egg"
+        display-name: "Fried Egg"
+
 recipes:
   # Remove some annoying / useless recipes
   remove:
@@ -391,6 +413,12 @@ recipes:
 
   # Furnace recipes
   furnace:
+    fried_egg:
+      input: EGG
+      result: "custom:fried-egg"
+      amount: 1
+      exp: 0.1
+      time: 200
     cook_rotten_flesh:
       input: ROTTEN_FLESH
       result: LEATHER
@@ -400,6 +428,12 @@ recipes:
 
   # Smoker recipes (faster food)
   smoker:
+    fried_egg_smoker:
+      input: EGG
+      result: "custom:fried-egg"
+      amount: 1
+      exp: 0.1
+      time: 100
     cook_kelp_fast:
       input: KELP
       result: DRIED_KELP
@@ -418,6 +452,12 @@ recipes:
 
   # Campfire recipes (free cooking)
   campfire:
+    fried_egg_campfire:
+      input: EGG
+      result: "custom:fried-egg"
+      amount: 1
+      exp: 0.1
+      time: 600
     campfire_fish:
       input: COD
       result: COOKED_COD
@@ -520,16 +560,6 @@ animal-barrels:
     no-space: "/error/There is not enough room to release that animal."
     captured: "/success/Picked up {animal}."
     released: "/success/Released {animal}."
-fried-eggs:
-  enabled: true
-  name: "Fried Egg"
-  nutrition: 3
-  saturation: 2.4
-  always-edible: false
-  experience: 0.1
-  furnace-ticks: 200
-  smoker-ticks: 100
-  campfire-ticks: 600
 naughty:
   allowed_commands:
     - "hub"

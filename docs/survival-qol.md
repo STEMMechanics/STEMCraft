@@ -22,7 +22,7 @@ The survival QOL feature provides small configurable improvements without changi
 
 ## Fried eggs
 
-Cook a vanilla egg in a furnace, smoker, or over a campfire to make a Fried Egg. It uses the vanilla egg icon but behaves as food, restoring three hunger points and 2.4 saturation by default. Nutrition, saturation, experience, and each cooking time are configurable under `fried-eggs`.
+Cook a vanilla egg in a furnace, smoker, or over a campfire to make a Fried Egg. It has its own Java and Bedrock model and behaves as food, restoring three hunger points and 2.4 saturation by default. The item is declared under `custom-items.fried-egg`; its furnace, smoker, and campfire recipes use `result: custom:fried-egg` in the normal `recipes` configuration.
 
 ## Animal barrels
 
@@ -34,4 +34,4 @@ Animal Barrels preserve the animal's custom name, baby/adult state, tame owner, 
 
 After an Ender Dragon dies in an eligible End world, a persistent respawn task initiates another fight after `dragon-respawn.days`. The task survives server restarts. Set `dragon-respawn.worlds` to restrict the feature to selected End worlds.
 
-All settings and player-facing messages are under `survival-qol`, `animal-barrels`, `fried-eggs`, `leaf_decay_random_tick`, and `dragon-respawn` in `config.yml`.
+All settings and player-facing messages are under `survival-qol`, `animal-barrels`, `custom-items`, `leaf_decay_random_tick`, and `dragon-respawn` in `config.yml`.

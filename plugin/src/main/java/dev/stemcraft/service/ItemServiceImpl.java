@@ -23,8 +23,14 @@ package dev.stemcraft.service;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.service.item.CustomItemDefinition;
+import dev.stemcraft.api.service.item.CustomItemClientDefinition;
+import dev.stemcraft.api.service.item.JavaItemVisualDefinition;
+import dev.stemcraft.api.service.item.BedrockItemVisualDefinition;
 import dev.stemcraft.api.service.item.CustomItemPlacementMode;
 import dev.stemcraft.api.service.item.ItemService;
+import dev.stemcraft.api.config.ConfigSection;
+import dev.stemcraft.api.util.TextUtil;
+import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
@@ -66,6 +72,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
      */
     @Override
     public void onEnable() {
+        loadConfiguredItems();
         api.events().register(PlayerDropItemEvent.class, (event) -> {
             ItemStack item = event.getItemDrop().getItemStack();
             ItemMeta meta = item.getItemMeta();
@@ -90,6 +97,71 @@ public class ItemServiceImpl extends BaseService implements ItemService {
                 event.setCancelled(true);
             }
         });
+    }
+
+    private void loadConfiguredItems() {
+        var config = api.config().load("config.yml");
+        ConfigSection items = config == null ? null : config.getSection("custom-items", false);
+        if (items == null) return;
+        for (String id : items.getKeys(false)) {
+            ConfigSection section = items.getSection(id, false);
+            if (section == null) continue;
+            Material material = Material.matchMaterial(section.getString("material", "").trim());
+            if (material == null) {
+                plugin.getLogger().warning("[items] Custom item '" + id + "' has an invalid material");
+                continue;
+            }
+            try {
+                ItemStack template = new ItemStack(material);
+                ItemMeta meta = template.getItemMeta();
+                String name = section.getString("name", "").trim();
+                if (!name.isBlank()) meta.displayName(TextUtil.colourise(name));
+                List<net.kyori.adventure.text.Component> lore = section.getStringList("lore").stream()
+                    .map(TextUtil::colourise).toList();
+                if (!lore.isEmpty()) meta.lore(lore);
+                int maxStackSize = section.getInt("max-stack-size", 0);
+                if (maxStackSize > 0) meta.setMaxStackSize(Math.min(99, maxStackSize));
+                if (section.contains("glint")) meta.setEnchantmentGlintOverride(section.getBoolean("glint", false));
+                ConfigSection food = section.getSection("food", false);
+                if (food != null) {
+                    var component = meta.getFood();
+                    component.setNutrition(Math.max(0, food.getInt("nutrition", 0)));
+                    component.setSaturation((float) Math.max(0D, food.getDouble("saturation", 0D)));
+                    component.setCanAlwaysEat(food.getBoolean("always-edible", false));
+                    meta.setFood(component);
+                }
+                template.setItemMeta(meta);
+                CustomItemPlacementMode placement = CustomItemPlacementMode.valueOf(
+                    section.getString("placement", "DENY").trim().toUpperCase(java.util.Locale.ROOT));
+                registerCustomItem(new CustomItemDefinition(id, template, placement, null, parseClients(section)));
+            } catch (IllegalArgumentException exception) {
+                plugin.getLogger().warning("[items] Could not load custom item '" + id + "': " + exception.getMessage());
+            }
+        }
+    }
+
+    private CustomItemClientDefinition parseClients(ConfigSection item) {
+        ConfigSection clients = item.getSection("clients", false);
+        if (clients == null) return null;
+        JavaItemVisualDefinition java = null;
+        BedrockItemVisualDefinition bedrock = null;
+        ConfigSection javaSection = clients.getSection("java", false);
+        if (javaSection != null) {
+            java = new JavaItemVisualDefinition(
+                javaSection.getInt("custom-model-data", 0),
+                javaSection.getString("item-model", ""),
+                javaSection.getString("model", ""),
+                javaSection.getString("texture", ""));
+        }
+        ConfigSection bedrockSection = clients.getSection("bedrock", false);
+        if (bedrockSection != null) {
+            bedrock = new BedrockItemVisualDefinition(
+                bedrockSection.getString("identifier", ""),
+                bedrockSection.getString("icon", ""),
+                bedrockSection.getString("texture", ""),
+                bedrockSection.getString("display-name", item.getString("name", "Custom Item")));
+        }
+        return java == null && bedrock == null ? null : new CustomItemClientDefinition(java, bedrock);
     }
 
     /**

@@ -131,13 +131,13 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
                 if (rSec == null) continue;
 
                 String resultMatStr = rSec.getString("result");
-                Material resultMat = Material.matchMaterial(resultMatStr.toUpperCase(Locale.ROOT));
-                if (resultMat == null) {
-                    plugin.getLogger().warning("shaped." + id + " unknown result material: " + resultMatStr);
-                    continue;
-                }
                 int amount = rSec.getInt("amount", 1);
                 if (amount <= 0) amount = 1;
+                ItemStack result = createRecipeResult(resultMatStr, amount);
+                if (result == null) {
+                    plugin.getLogger().warning("shaped." + id + " unknown result: " + resultMatStr);
+                    continue;
+                }
 
                 List<String> shapeList = rSec.getStringList("shape");
                 if (shapeList.isEmpty()) {
@@ -168,7 +168,6 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
                     ingMap.put(c, m);
                 }
 
-                ItemStack result = new ItemStack(resultMat, amount);
                 addShaped(id, result, shape, ingMap);
                 api.messages().info("RECIPE_SHAPED_LOADED", "id", id);
             }
@@ -182,13 +181,13 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
                 if (rSec == null) continue;
 
                 String resultMatStr = rSec.getString("result");
-                Material resultMat = Material.matchMaterial(resultMatStr.toUpperCase(Locale.ROOT));
-                if (resultMat == null) {
-                    plugin.getLogger().warning("shapeless." + id + " unknown result material: " + resultMatStr);
-                    continue;
-                }
                 int amount = rSec.getInt("amount", 1);
                 if (amount <= 0) amount = 1;
+                ItemStack result = createRecipeResult(resultMatStr, amount);
+                if (result == null) {
+                    plugin.getLogger().warning("shapeless." + id + " unknown result: " + resultMatStr);
+                    continue;
+                }
 
                 List<String> ingList = rSec.getStringList("ingredients");
                 if (ingList.isEmpty()) {
@@ -196,7 +195,6 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
                     continue;
                 }
 
-                ItemStack result = new ItemStack(resultMat, amount);
                 ShapelessRecipe recipe = new ShapelessRecipe(key(id), result);
                 for (String matStr : ingList) {
                     Material m = Material.matchMaterial(matStr.toUpperCase(Locale.ROOT));
@@ -225,9 +223,9 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
                 if (rSec == null) continue;
 
                 String resultMatStr = rSec.getString("result");
-                Material resultMat = Material.matchMaterial(resultMatStr.toUpperCase(Locale.ROOT));
-                if (resultMat == null) {
-                    plugin.getLogger().warning("smithing_transform." + id + " unknown result material: " + resultMatStr);
+                ItemStack result = createRecipeResult(resultMatStr, rSec.getInt("amount", 1));
+                if (result == null) {
+                    plugin.getLogger().warning("smithing_transform." + id + " unknown result: " + resultMatStr);
                     continue;
                 }
 
@@ -244,7 +242,6 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
                     continue;
                 }
 
-                ItemStack result = new ItemStack(resultMat);
                 RecipeChoice template = new RecipeChoice.MaterialChoice(templateMat);
                 RecipeChoice base     = new RecipeChoice.MaterialChoice(baseMat);
                 RecipeChoice addition = new RecipeChoice.MaterialChoice(addMat);
@@ -304,15 +301,12 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
             int time         = rSec.getInt("time", 200);
 
             Material inputMat  = Material.matchMaterial(inputStr.toUpperCase(Locale.ROOT));
-            Material resultMat = Material.matchMaterial(resultStr.toUpperCase(Locale.ROOT));
-
-            if (inputMat == null || resultMat == null) {
-                plugin.getLogger().warning(type + "." + id + " invalid materials");
+            ItemStack result = createRecipeResult(resultStr, amount);
+            if (inputMat == null || result == null) {
+                plugin.getLogger().warning(type + "." + id + " invalid input or result");
                 continue;
             }
             if (amount <= 0) amount = 1;
-
-            ItemStack result = new ItemStack(resultMat, amount);
 
             switch (type) {
                 case "furnace" -> addFurnace(id, inputMat, result, exp, time);
@@ -324,6 +318,16 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
             }
             api.messages().info("RECIPE_COOKING_LOADED", "type", type, "id", id);
         }
+    }
+
+    private ItemStack createRecipeResult(String configured, int amount) {
+        if (configured == null || configured.isBlank()) return null;
+        String value = configured.trim();
+        String customId = value.regionMatches(true, 0, "custom:", 0, 7) ? value.substring(7) : value;
+        ItemStack custom = api.items().createCustomItem(customId, Math.max(1, amount));
+        if (custom != null) return custom;
+        Material material = Material.matchMaterial(value.toUpperCase(Locale.ROOT));
+        return material == null ? null : new ItemStack(material, Math.max(1, amount));
     }
 
     /**
