@@ -72,8 +72,14 @@ public class CommandContextImpl implements CommandContext {
         java.util.Set<String> flagSet = new java.util.HashSet<>();
         java.util.Map<String, String> optionMap = new java.util.HashMap<>();
 
-        for (String arg : args) {
+        for (int position = 0; position < args.size(); position++) {
+            String arg = args.get(position);
             if (arg == null || arg.isEmpty()) {
+                continue;
+            }
+
+            if (command.isPositionalArgument(position)) {
+                positional.add(arg);
                 continue;
             }
 

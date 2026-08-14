@@ -60,6 +60,17 @@ public interface CommandBuilder {
     CommandBuilder permission(String permission);
 
     /**
+     * Forces the zero-based argument positions to remain positional, even when
+     * a value resembles a flag or a {@code key:value} option.
+     *
+     * @param positions zero-based argument positions
+     * @return The command builder.
+     */
+    default CommandBuilder positionalArguments(int... positions) {
+        throw new UnsupportedOperationException("This command builder does not support positional argument rules");
+    }
+
+    /**
      * Add a tab completion for the command.
      *
      * @param completions The tab completions.

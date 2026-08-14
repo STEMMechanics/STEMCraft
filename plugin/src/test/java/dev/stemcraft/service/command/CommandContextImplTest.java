@@ -104,6 +104,19 @@ class CommandContextImplTest {
     }
 
     @Test
+    void preservesForcedPositionalNamespacedArgument() {
+        Command command = mock(Command.class);
+        when(command.getLabel()).thenReturn("give");
+        when(command.isPositionalArgument(1)).thenReturn(true);
+
+        CommandContextImpl ctx = new CommandContextImpl(command, sender, "give",
+            List.of("Target", "stemcraft:fried_egg", "4", "mode:test"));
+
+        assertEquals(List.of("Target", "stemcraft:fried_egg", "4"), ctx.args());
+        assertEquals("test", ctx.getOption("mode"));
+    }
+
+    @Test
     void checkMethodsAndReturnMethodsUseCommandExceptions() {
         Command command = mock(Command.class);
         when(command.getUsage()).thenReturn("/root <player>");

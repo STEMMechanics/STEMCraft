@@ -210,6 +210,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
             .description("Give an item to one or more players")
             .usage("/give <targets> <item> [count]")
             .permission("minecraft.command.give")
+            .positionalArguments(1)
             .executor((unusedApi, unusedCommand, context) -> executeGive(context));
         builder.tabCompletion("{give-target}", "{give-item}");
         builder.tabCompletion("{give-target}", "{give-item}", "{number}");
@@ -220,7 +221,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
     }
 
     private void executeGive(dev.stemcraft.api.command.CommandContext context) {
-        List<String> arguments = context.rawArgs();
+        List<String> arguments = context.args();
         if (arguments.size() < 2) {
             context.error("Usage: /give <targets> <item> [count]");
             return;

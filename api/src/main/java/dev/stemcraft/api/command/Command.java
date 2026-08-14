@@ -49,6 +49,9 @@ public interface Command extends HasMessages {
      * @return the command permission.
      */
     String getPermission();
+
+    /** Returns whether this zero-based argument position must remain positional. */
+    default boolean isPositionalArgument(int position) { return false; }
     
     /**
      * Register the command on the server.
