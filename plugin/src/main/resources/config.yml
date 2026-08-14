@@ -520,6 +520,16 @@ animal-barrels:
     no-space: "/error/There is not enough room to release that animal."
     captured: "/success/Picked up {animal}."
     released: "/success/Released {animal}."
+fried-eggs:
+  enabled: true
+  name: "Fried Egg"
+  nutrition: 3
+  saturation: 2.4
+  always-edible: false
+  experience: 0.1
+  furnace-ticks: 200
+  smoker-ticks: 100
+  campfire-ticks: 600
 naughty:
   allowed_commands:
     - "hub"

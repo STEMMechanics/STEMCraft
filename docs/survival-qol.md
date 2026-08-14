@@ -20,6 +20,10 @@ The survival QOL feature provides small configurable improvements without changi
 - Anvils warn at the configured level before the vanilla 40-level `Too Expensive` limit. The old `no_anvil_repair_cost` feature is disabled by default so this warning is meaningful.
 - Tools and armour warn when an incoming durability loss crosses 10% and again at 2%. Both thresholds and messages are configurable.
 
+## Fried eggs
+
+Cook a vanilla egg in a furnace, smoker, or over a campfire to make a Fried Egg. It uses the vanilla egg icon but behaves as food, restoring three hunger points and 2.4 saturation by default. Nutrition, saturation, experience, and each cooking time are configurable under `fried-eggs`.
+
 ## Animal barrels
 
 Hold an ordinary vanilla barrel and sneak-right-click a chicken, rabbit, frog, or cat to capture it. One barrel is consumed and replaced by an unstackable `Animal Barrel (Chicken)`, for example. Right-click a block with the filled barrel to release it into the adjacent space; it then returns to an ordinary barrel. Filled Animal Barrels cannot be placed as storage blocks.
@@ -30,4 +34,4 @@ Animal Barrels preserve the animal's custom name, baby/adult state, tame owner, 
 
 After an Ender Dragon dies in an eligible End world, a persistent respawn task initiates another fight after `dragon-respawn.days`. The task survives server restarts. Set `dragon-respawn.worlds` to restrict the feature to selected End worlds.
 
-All settings and player-facing messages are under `survival-qol`, `animal-barrels`, `leaf_decay_random_tick`, and `dragon-respawn` in `config.yml`.
+All settings and player-facing messages are under `survival-qol`, `animal-barrels`, `fried-eggs`, `leaf_decay_random_tick`, and `dragon-respawn` in `config.yml`.
