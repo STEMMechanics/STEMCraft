@@ -117,6 +117,18 @@ class CommandContextImplTest {
     }
 
     @Test
+    void combinesQuotedArgumentsAndRemovesQuotesBeforeParsing() {
+        Command command = mock(Command.class);
+
+        CommandContextImpl ctx = new CommandContextImpl(command, sender, "example",
+            List.of("this", "\"is", "three\"", "args", "message:\"hello", "world\""));
+
+        assertEquals(List.of("this", "is three", "args"), ctx.args());
+        assertEquals(List.of("this", "is three", "args", "message:hello world"), ctx.rawArgs());
+        assertEquals("hello world", ctx.getOption("message"));
+    }
+
+    @Test
     void checkMethodsAndReturnMethodsUseCommandExceptions() {
         Command command = mock(Command.class);
         when(command.getUsage()).thenReturn("/root <player>");

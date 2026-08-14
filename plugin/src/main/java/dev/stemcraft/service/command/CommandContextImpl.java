@@ -64,16 +64,18 @@ public class CommandContextImpl implements CommandContext {
         this.sender = sender;
         this.labelUsed = labelUsed.toLowerCase(Locale.ROOT);
 
-        // Preserve original args
-        this.rawArgs = List.copyOf(args);
+        List<String> logicalArgs = CommandArgumentTokenizer.tokenize(args);
+
+        // Preserve logical arguments before flag and key-value parsing.
+        this.rawArgs = List.copyOf(logicalArgs);
 
         // Parse into positional args, flags, and key-value options
         java.util.List<String> positional = new java.util.ArrayList<>();
         java.util.Set<String> flagSet = new java.util.HashSet<>();
         java.util.Map<String, String> optionMap = new java.util.HashMap<>();
 
-        for (int position = 0; position < args.size(); position++) {
-            String arg = args.get(position);
+        for (int position = 0; position < logicalArgs.size(); position++) {
+            String arg = logicalArgs.get(position);
             if (arg == null || arg.isEmpty()) {
                 continue;
             }
