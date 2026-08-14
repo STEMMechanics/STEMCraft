@@ -325,28 +325,6 @@ player_logs:
         - ".*_ORE"
         - "ANCIENT_DEBRIS"
 
-custom-items:
-  fried-egg:
-    # Use an edible vanilla base; the client model below supplies the fried-egg appearance.
-    material: DRIED_KELP
-    name: "<gold>Fried Egg"
-    placement: DENY
-    food:
-      nutrition: 3
-      saturation: 2.4
-      always-edible: false
-    clients:
-      java:
-        custom-model-data: 46003
-        item-model: "stemcraft_survival:fried_egg"
-        model: "stemcraft_survival:item/fried_egg"
-        texture: "stemcraft_survival:item/fried_egg"
-      bedrock:
-        identifier: "stemcraft:fried_egg"
-        icon: "fried_egg"
-        texture: "stemcraft_survival:item/fried_egg"
-        display-name: "Fried Egg"
-
 recipes:
   # Remove some annoying / useless recipes
   remove:

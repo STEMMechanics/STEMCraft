@@ -1,12 +1,13 @@
 # Configurable custom items
 
-Simple custom items can be declared under `custom-items` in `config.yml` without writing a feature class. Each item is registered with the Item API and can be created by other plugins with `api.items().createCustomItem("fried-egg")`.
+Simple custom items can be declared under `custom-items` in a data-pack `config.yml` or `configs/*.yml` without writing a feature class. Keeping the definition beside its texture makes the pack portable. Definitions in the plugin's main `config.yml` are also supported for items without pack assets. Each item is registered with the Item API and can be created by other plugins with `api.items().createCustomItem("fried-egg")`.
 
 ```yaml
 custom-items:
   fried-egg:
     material: DRIED_KELP
     name: "<gold>Fried Egg"
+    texture: "item/fried_egg"
     lore:
       - "<gray>Warm and crispy"
     placement: DENY       # DENY or VANILLA
@@ -16,22 +17,25 @@ custom-items:
       nutrition: 3
       saturation: 2.4
       always-edible: false
-    clients:              # optional custom Java/Bedrock appearance
-      java:
-        custom-model-data: 46003
-        item-model: "stemcraft_survival:fried_egg"
-        model: "stemcraft_survival:item/fried_egg"
-        texture: "stemcraft_survival:item/fried_egg"
-      bedrock:
-        identifier: "stemcraft:fried_egg"
-        icon: "fried_egg"
-        texture: "stemcraft_survival:item/fried_egg"
-        display-name: "Fried Egg"
 ```
 
 The `material` controls the server-side behaviour. For food, choose an edible base material and override its food values. `placement: DENY` prevents a block-based item from being placed. Names and lore support MiniMessage formatting.
 
-Client definitions use the existing resource-pack custom-item pipeline. The texture path above resolves to `assets/stemcraft_survival/textures/item/fried_egg.png` inside the generated Java pack and is copied into the generated Bedrock pack. Java model and item-definition JSON are generated automatically.
+The pack directory name supplies the namespace (`stemcraft-survival` becomes `stemcraft_survival`). The item ID and single `texture` value derive the Java item/model definitions, Bedrock identifier and icon, and a stable auto-assigned custom-model-data value. `name` is reused as Bedrock's plain display name. The texture above resolves to `contents/stemcraft_survival/textures/item/fried_egg.png`, is included in the generated Java pack, and is copied into the generated Bedrock pack.
+
+Unusual items can override only the derived values they need:
+
+```yaml
+    overrides:
+      java:
+        custom-model-data: 46003
+        item-model: "another_namespace:special_item"
+        model: "another_namespace:item/special_item"
+      bedrock:
+        identifier: "another_namespace:special_item"
+        icon: "special_item"
+        display-name: "Special Item"
+```
 
 ## Recipe results
 

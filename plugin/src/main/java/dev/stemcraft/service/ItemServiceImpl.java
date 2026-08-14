@@ -48,6 +48,9 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.io.File;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Implementation of the ItemService for managing item attributes and custom items.
@@ -56,6 +59,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
     private static final String ATTR_ITEM_ID_KEY = "custom-item-id";
     private final Map<String, ItemStack> itemTemplates = new HashMap<>();
     private final Map<String, CustomItemDefinition> itemDefinitions = new LinkedHashMap<>();
+    private final Set<Integer> configuredModelData = new HashSet<>();
 
     /**
      * Constructor for ItemServiceImpl.
@@ -100,8 +104,33 @@ public class ItemServiceImpl extends BaseService implements ItemService {
     }
 
     private void loadConfiguredItems() {
+        plugin.exportBundledDirectory("data-packs");
         var config = api.config().load("config.yml");
         ConfigSection items = config == null ? null : config.getSection("custom-items", false);
+        loadConfiguredItems(items, "stemcraft");
+        File dataPacks = new File(plugin.getDataFolder(), "data-packs");
+        File[] packDirectories = dataPacks.listFiles(File::isDirectory);
+        if (packDirectories == null) return;
+        for (File packDirectory : packDirectories) {
+            File packConfigFile = new File(packDirectory, "config.yml");
+            if (!packConfigFile.isFile()) continue;
+            ConfigSection packConfig = api.config().load(packConfigFile);
+            if (packConfig == null || !packConfig.getBoolean("pack.enabled", true)) continue;
+            String namespace = packConfig.getString("pack.namespace",
+                packDirectory.getName().toLowerCase(java.util.Locale.ROOT).replace('-', '_'));
+            loadConfiguredItems(packConfig.getSection("custom-items", false), namespace);
+            File configsDirectory = new File(packDirectory, "configs");
+            File[] configFiles = configsDirectory.listFiles((directory, name) ->
+                name.toLowerCase(java.util.Locale.ROOT).endsWith(".yml"));
+            if (configFiles == null) continue;
+            for (File configFile : configFiles) {
+                ConfigSection extraConfig = api.config().load(configFile);
+                if (extraConfig != null) loadConfiguredItems(extraConfig.getSection("custom-items", false), namespace);
+            }
+        }
+    }
+
+    private void loadConfiguredItems(ConfigSection items, String namespace) {
         if (items == null) return;
         for (String id : items.getKeys(false)) {
             ConfigSection section = items.getSection(id, false);
@@ -133,35 +162,51 @@ public class ItemServiceImpl extends BaseService implements ItemService {
                 template.setItemMeta(meta);
                 CustomItemPlacementMode placement = CustomItemPlacementMode.valueOf(
                     section.getString("placement", "DENY").trim().toUpperCase(java.util.Locale.ROOT));
-                registerCustomItem(new CustomItemDefinition(id, template, placement, null, parseClients(section)));
+                registerCustomItem(new CustomItemDefinition(id, template, placement, null,
+                    parseClients(section, namespace, id, name)));
             } catch (IllegalArgumentException exception) {
                 plugin.getLogger().warning("[items] Could not load custom item '" + id + "': " + exception.getMessage());
             }
         }
     }
 
-    private CustomItemClientDefinition parseClients(ConfigSection item) {
-        ConfigSection clients = item.getSection("clients", false);
-        if (clients == null) return null;
-        JavaItemVisualDefinition java = null;
-        BedrockItemVisualDefinition bedrock = null;
-        ConfigSection javaSection = clients.getSection("java", false);
-        if (javaSection != null) {
-            java = new JavaItemVisualDefinition(
-                javaSection.getInt("custom-model-data", 0),
-                javaSection.getString("item-model", ""),
-                javaSection.getString("model", ""),
-                javaSection.getString("texture", ""));
+    private CustomItemClientDefinition parseClients(ConfigSection item, String namespace, String id, String name) {
+        String texture = item.getString("texture", "").trim();
+        if (texture.isBlank()) return null;
+        String safeId = id.toLowerCase(java.util.Locale.ROOT).replace('-', '_');
+        String textureId = texture.contains(":") ? texture : namespace + ":" + texture;
+        ConfigSection overrides = item.getSection("overrides", false);
+        ConfigSection javaOverrides = overrides == null ? null : overrides.getSection("java", false);
+        ConfigSection bedrockOverrides = overrides == null ? null : overrides.getSection("bedrock", false);
+        int customModelData;
+        if (javaOverrides != null && javaOverrides.contains("custom-model-data")) {
+            customModelData = javaOverrides.getInt("custom-model-data", 0);
+            if (!configuredModelData.add(customModelData)) {
+                throw new IllegalArgumentException("duplicate custom-model-data " + customModelData);
+            }
+        } else {
+            customModelData = allocateModelData(namespace + ":" + id);
         }
-        ConfigSection bedrockSection = clients.getSection("bedrock", false);
-        if (bedrockSection != null) {
-            bedrock = new BedrockItemVisualDefinition(
-                bedrockSection.getString("identifier", ""),
-                bedrockSection.getString("icon", ""),
-                bedrockSection.getString("texture", ""),
-                bedrockSection.getString("display-name", item.getString("name", "Custom Item")));
-        }
-        return java == null && bedrock == null ? null : new CustomItemClientDefinition(java, bedrock);
+        String itemModel = javaOverrides == null ? namespace + ":" + safeId
+            : javaOverrides.getString("item-model", namespace + ":" + safeId);
+        String model = javaOverrides == null ? textureId
+            : javaOverrides.getString("model", textureId);
+        JavaItemVisualDefinition java = new JavaItemVisualDefinition(customModelData, itemModel, model, textureId);
+        String defaultIcon = textureId.substring(textureId.indexOf(':') + 1).replace('/', '_');
+        String identifier = bedrockOverrides == null ? namespace + ":" + safeId
+            : bedrockOverrides.getString("identifier", namespace + ":" + safeId);
+        String icon = bedrockOverrides == null ? defaultIcon : bedrockOverrides.getString("icon", defaultIcon);
+        String displayName = bedrockOverrides == null ? TextUtil.stripColour(name)
+            : bedrockOverrides.getString("display-name", TextUtil.stripColour(name));
+        BedrockItemVisualDefinition bedrock = new BedrockItemVisualDefinition(identifier, icon, textureId,
+            displayName.isBlank() ? id : displayName);
+        return new CustomItemClientDefinition(java, bedrock);
+    }
+
+    private int allocateModelData(String key) {
+        int value = 50_000 + Math.floorMod(key.hashCode(), 900_000);
+        while (!configuredModelData.add(value)) value++;
+        return value;
     }
 
     /**

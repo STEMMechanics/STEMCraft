@@ -1,0 +1,11 @@
+custom-items:
+  fried-egg:
+    # Namespace, Java model, Bedrock identifier/icon/display name and model data are derived automatically.
+    material: DRIED_KELP
+    name: "<gold>Fried Egg"
+    texture: "item/fried_egg"
+    placement: DENY
+    food:
+      nutrition: 3
+      saturation: 2.4
+      always-edible: false
