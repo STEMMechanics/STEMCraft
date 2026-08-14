@@ -76,6 +76,7 @@ mailboxes:
 notice-boards:
   enabled: true
   retention-days: 14
+  server-author: "STEMCraft"
   title: "SERVER NOTICE / REQUEST BOARD ★★★★★"
   # Optional PNG path, relative to the STEMCraft data folder. Missing images fall back to title text.
   title-image: ""
@@ -103,7 +104,9 @@ notice-boards:
   commands:
     help: "/info/Use /noticeboard post, /noticeboard mine, or /noticeboard board create <id> [columns] [rows]."
     unknown: "/error/Unknown noticeboard command."
-    only-player-post: "/error/Only players can post notices."
+    server-post-usage: "/error/Usage: /noticeboard post <header> | <message>"
+    server-post-too-long: "/error/Header must be at most {header_max} characters and message at most {message_max} characters."
+    server-posted: "/success/Server notice posted for {days} days."
     only-player-list: "/error/Only players can list their notices."
     no-active: "/info/You have no active notices."
     active-title: "/info/Your active notices:"

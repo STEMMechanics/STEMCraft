@@ -35,6 +35,7 @@ When there are more active notices than fit on the display, the board rotates to
 notice-boards:
   enabled: true
   retention-days: 14
+  server-author: "STEMCraft"
   title: "SERVER NOTICE / REQUEST BOARD ★★★★★"
   # Optional PNG, relative to plugins/STEMCraft (or an absolute path).
   # The configured title text is used when it is blank, missing, or unreadable.
@@ -63,6 +64,14 @@ notice-boards:
 ```
 
 The `commands` subsection in the bundled configuration also exposes every administrator command response. Message values pass through the message service, so type/context directives such as `/success/` and `/survival//info/` are supported. `{days}`, `{id}`, and `{header}` are replaced where applicable.
+
+The server console can post without a dialog:
+
+```text
+/noticeboard post Server maintenance | Survival will restart in ten minutes.
+```
+
+The pipe separates the header from the message. Server notices use the configured `server-author`, bypass the one-notice player limit, and expire normally.
 
 Board and notice text uses Minecraft's map font at a consistent 1.5× scale. Notices use several paper colours, stable slight rotations and offsets, a pin, and three fully supported message lines. Available board slots are deterministically shuffled per board and page, leaving natural gaps when a page is not full without moving posts on every refresh.
 

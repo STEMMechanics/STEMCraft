@@ -51,6 +51,7 @@ This is the active command surface registered by STEMCraft.
 - `/mailbox send <player> [message]`
 - `/mailbox <queue|view|release|hold|delete|item> ...`
 - `/noticeboard post`
+- `/noticeboard post <header> | <message>` from the server console
 - `/noticeboard mine`
 - `/noticeboard remove <post-id>`
 - `/noticeboard board create <id> [columns] [rows]`

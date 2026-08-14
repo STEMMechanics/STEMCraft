@@ -37,6 +37,7 @@ import java.util.UUID;
 
 /** Player-created notices rendered on physical image-map boards. */
 public final class NoticeBoards extends BaseFeature {
+    private static final UUID SERVER_AUTHOR_UUID = new UUID(0L, 0L);
     private static final String EXPIRY_TASK = "feature:notice-boards-expiry";
     private static final String ROTATION_TASK = "feature:notice-boards-rotation";
     private static final long DEFAULT_RETENTION_MILLIS = Duration.ofDays(14).toMillis();
@@ -155,10 +156,55 @@ public final class NoticeBoards extends BaseFeature {
     private void openAdminPostDialog(CommandContext ctx) {
         Player player = ctx.asPlayer();
         if (player == null) {
-            sendConfigured(ctx, "commands.only-player-post", "/error/Only players can post notices.");
+            createServerPost(ctx);
             return;
         }
         openNoticeEditor(player, null, false);
+    }
+
+    private void createServerPost(CommandContext ctx) {
+        int separator = -1;
+        for (int index = 1; index < ctx.args().size(); index++) {
+            if ("|".equals(ctx.args().get(index))) {
+                separator = index;
+                break;
+            }
+        }
+        if (separator <= 1 || separator >= ctx.args().size() - 1) {
+            sendConfigured(ctx, "commands.server-post-usage",
+                "/error/Usage: /noticeboard post <header> | <message>");
+            return;
+        }
+        String header = String.join(" ", ctx.args().subList(1, separator)).trim();
+        String message = String.join(" ", ctx.args().subList(separator + 1, ctx.args().size())).trim();
+        if (header.length() > MAX_HEADER_LENGTH || message.length() > MAX_MESSAGE_LENGTH) {
+            sendConfigured(ctx, "commands.server-post-too-long",
+                "/error/Header must be at most {header_max} characters and message at most {message_max} characters.",
+                "header_max", MAX_HEADER_LENGTH, "message_max", MAX_MESSAGE_LENGTH);
+            return;
+        }
+        long now = System.currentTimeMillis();
+        String author = configured("server-author", "STEMCraft");
+        int changed = api.database().update("""
+            INSERT INTO notice_board_posts (id, author_uuid, author_name, header, message, created_at, expires_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, statement -> {
+            statement.setString(1, UUID.randomUUID().toString());
+            statement.setString(2, SERVER_AUTHOR_UUID.toString());
+            statement.setString(3, author);
+            statement.setString(4, header);
+            statement.setString(5, message);
+            statement.setLong(6, now);
+            statement.setLong(7, now + retentionMillis);
+        });
+        if (changed == 1) {
+            displayPage = 0;
+            refreshBoards();
+            sendConfigured(ctx, "commands.server-posted", "/success/Server notice posted for {days} days.",
+                "days", retentionDays());
+        } else {
+            sendConfigured(ctx, "messages.save-failed", "/error/Could not save your notice.");
+        }
     }
 
     private void handleBoardClick(Player player) {
