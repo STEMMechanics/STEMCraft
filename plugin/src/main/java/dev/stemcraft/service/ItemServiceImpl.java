@@ -165,7 +165,8 @@ public class ItemServiceImpl extends BaseService implements ItemService {
                 ItemStack template = new ItemStack(material);
                 ItemMeta meta = template.getItemMeta();
                 String name = section.getString("name", "").trim();
-                if (!name.isBlank()) meta.displayName(TextUtil.colourise(name));
+                if (!name.isBlank()) meta.displayName(TextUtil.colourise(name)
+                    .decoration(net.kyori.adventure.text.format.TextDecoration.ITALIC, false));
                 List<net.kyori.adventure.text.Component> lore = section.getStringList("lore").stream()
                     .map(TextUtil::colourise).toList();
                 if (!lore.isEmpty()) meta.lore(lore);
