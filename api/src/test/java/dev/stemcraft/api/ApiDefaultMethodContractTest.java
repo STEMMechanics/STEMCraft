@@ -671,6 +671,11 @@ class ApiDefaultMethodContractTest {
         }
 
         @Override
+        public @Nullable ResolvedPlayer resolveIdentity(@Nullable String input) {
+            return null;
+        }
+
+        @Override
         public boolean isWhitelisted(@Nullable UUID uuid, @Nullable String username, @Nullable String platform) {
             this.lastUuid = uuid;
             this.lastUsername = username;

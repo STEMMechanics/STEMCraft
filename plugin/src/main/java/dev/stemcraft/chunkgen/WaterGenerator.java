@@ -31,7 +31,7 @@ import java.util.Random;
 /**
  * Chunk generator that creates an ocean-style world with a flat seabed.
  * <p>
- * Configuration string format: "<waterLevel>[:<seabedY>]"
+ * Configuration string format: {@code <waterLevel>[:<seabedY>]}
  * Example: "80" creates a water world with the surface at Y=80.
  * Example: "80:48" creates a water world with the water surface at Y=80 and the seabed at Y=48.
  */

@@ -24,11 +24,13 @@ import dev.stemcraft.api.service.command.CommandService;
 import dev.stemcraft.api.service.audit.AuditService;
 import dev.stemcraft.api.service.config.ConfigService;
 import dev.stemcraft.api.service.database.DatabaseService;
+import dev.stemcraft.api.service.dialog.DialogService;
 import dev.stemcraft.api.service.event.EventService;
 import dev.stemcraft.api.service.motd.MotdService;
 import dev.stemcraft.api.service.player.PlayerService;
 import dev.stemcraft.api.service.playerstats.PlayerStatsService;
 import dev.stemcraft.api.service.placeholder.PlaceholderService;
+import dev.stemcraft.api.service.placedobject.PlacedObjectService;
 import dev.stemcraft.api.service.protection.ProtectionService;
 import dev.stemcraft.api.service.profanity.ProfanityFilterService;
 import dev.stemcraft.api.service.recipe.RecipeService;
@@ -37,8 +39,10 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.service.hologram.HologramService;
 import dev.stemcraft.api.service.item.ItemService;
 import dev.stemcraft.api.service.locale.LocaleService;
+import dev.stemcraft.api.service.mailbox.MailboxService;
 import dev.stemcraft.api.service.message.MessageService;
 import dev.stemcraft.api.service.region.RegionService;
+import dev.stemcraft.api.service.resourcepack.ResourcePackService;
 import dev.stemcraft.api.service.selection.SelectionService;
 import dev.stemcraft.api.service.task.TaskService;
 import dev.stemcraft.api.service.punishment.PunishmentService;
@@ -110,6 +114,12 @@ public class STEMCraftAPIImpl extends HasMessagesImpl implements STEMCraftAPI {
     }
 
     /**
+     * Get the cross-platform dialog service.
+     */
+    @Override
+    public DialogService dialogs() { return plugin.dialogs(); }
+
+    /**
      * Get the event service.
      */
     @Override
@@ -134,6 +144,12 @@ public class STEMCraftAPIImpl extends HasMessagesImpl implements STEMCraftAPI {
     public LocaleService locales() { return plugin.locales(); }
 
     /**
+     * Get the mailbox delivery service.
+     */
+    @Override
+    public MailboxService mailboxes() { return plugin.mailboxes(); }
+
+    /**
      * Get the messenger service.
      */
     @Override
@@ -152,6 +168,12 @@ public class STEMCraftAPIImpl extends HasMessagesImpl implements STEMCraftAPI {
      */
     @Override
     public MotdService motd() { return plugin.motd(); }
+
+    /**
+     * Get the placed object service.
+     */
+    @Override
+    public PlacedObjectService placedObjects() { return plugin.placedObjects(); }
 
     /**
      * Get the player log service.
@@ -188,6 +210,12 @@ public class STEMCraftAPIImpl extends HasMessagesImpl implements STEMCraftAPI {
      */
     @Override
     public PlayerStatsService playerStats() { return plugin.playerStats(); }
+
+    /**
+     * Get the resource pack service.
+     */
+    @Override
+    public ResourcePackService resourcePacks() { return plugin.resourcePack(); }
 
     /**
      * Get the recipe service.

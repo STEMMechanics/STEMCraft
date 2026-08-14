@@ -21,6 +21,9 @@ These are the runtime services instantiated in `STEMCraft.java` and exposed thro
 | Database | `DatabaseServiceImpl` | SQLite execution, query helpers, and migration version tracking |
 | Events | `EventServiceImpl` | Simplified event listener registration |
 | Holograms | `HologramServiceImpl` | Hologram creation, lookup, and command tooling |
+| Dialogs | `DialogServiceImpl` | Cross-platform Paper and Geyser input dialogs |
+| Mailboxes | `Mailboxes` | Queued letter/item delivery and mailbox state |
+| Placed objects | `PlacedObjectServiceImpl` | Persistent managed block/entity assemblies |
 | Items | `ItemServiceImpl` | Custom item metadata/helpers |
 | Minigames | `MiniGameServiceImpl` | Arena runtime management, player occupancy, and minigame coordination |
 | MOTD | `MotdServiceImpl` | Server list MOTD handling |

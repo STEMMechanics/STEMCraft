@@ -1,5 +1,9 @@
 # Features
 
+## Mailboxes
+
+Mailboxes provide delayed player and server deliveries containing a written letter and optional items. Offline notifications are delivered on join, and a player-specific hologram indicates waiting mail. Runtime text, dialog labels, messages, and delivery timing are configurable under `mailboxes`.
+
 Features are discovered from `dev.stemcraft.feature` and loaded through `BaseFeature`.
 
 ## World and Travel

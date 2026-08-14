@@ -11,6 +11,7 @@ import dev.stemcraft.service.ItemServiceImpl;
 import dev.stemcraft.service.LocaleServiceImpl;
 import dev.stemcraft.service.MotdServiceImpl;
 import dev.stemcraft.service.PlaceholderServiceImpl;
+import dev.stemcraft.service.PlacedObjectServiceImpl;
 import dev.stemcraft.service.ProfanityFilterServiceImpl;
 import dev.stemcraft.service.ProtectionServiceImpl;
 import dev.stemcraft.service.PlayerServiceImpl;
@@ -18,6 +19,9 @@ import dev.stemcraft.service.PlayerStatsServiceImpl;
 import dev.stemcraft.service.PunishmentServiceImpl;
 import dev.stemcraft.service.RecipeServiceImpl;
 import dev.stemcraft.service.RegionServiceImpl;
+import dev.stemcraft.service.DialogServiceImpl;
+import dev.stemcraft.api.service.mailbox.MailboxService;
+import dev.stemcraft.service.resourcepack.ResourcePackServiceImpl;
 import dev.stemcraft.service.SelectionServiceImpl;
 import dev.stemcraft.service.TaskServiceImpl;
 import dev.stemcraft.service.WebServiceImpl;
@@ -58,19 +62,23 @@ class STEMCraftAPIImplTest {
         "commands",
         "config",
         "database",
+        "dialogs",
         "events",
         "holograms",
         "items",
         "locales",
+        "mailboxes",
         "messages",
         "minigames",
         "motd",
+        "placedObjects",
         "players",
         "placeholders",
         "protections",
         "profanityFilter",
         "punishments",
         "playerStats",
+        "resourcePacks",
         "recipes",
         "selections",
         "regions",
@@ -98,19 +106,23 @@ class STEMCraftAPIImplTest {
         CommandServiceImpl commands = mock(CommandServiceImpl.class);
         ConfigServiceImpl config = mock(ConfigServiceImpl.class);
         DatabaseServiceImpl database = mock(DatabaseServiceImpl.class);
+        DialogServiceImpl dialogs = mock(DialogServiceImpl.class);
         EventServiceImpl events = mock(EventServiceImpl.class);
         HologramServiceImpl holograms = mock(HologramServiceImpl.class);
         ItemServiceImpl items = mock(ItemServiceImpl.class);
         LocaleServiceImpl locales = mock(LocaleServiceImpl.class);
+        MailboxService mailboxes = mock(MailboxService.class);
         MessageServiceImpl messages = mock(MessageServiceImpl.class);
         MiniGameServiceImpl minigames = mock(MiniGameServiceImpl.class);
         MotdServiceImpl motd = mock(MotdServiceImpl.class);
+        PlacedObjectServiceImpl placedObjects = mock(PlacedObjectServiceImpl.class);
         PlayerServiceImpl players = mock(PlayerServiceImpl.class);
         PlaceholderServiceImpl placeholders = mock(PlaceholderServiceImpl.class);
         ProtectionServiceImpl protections = mock(ProtectionServiceImpl.class);
         ProfanityFilterServiceImpl profanityFilter = mock(ProfanityFilterServiceImpl.class);
         PunishmentServiceImpl punishments = mock(PunishmentServiceImpl.class);
         PlayerStatsServiceImpl playerStats = mock(PlayerStatsServiceImpl.class);
+        ResourcePackServiceImpl resourcePacks = mock(ResourcePackServiceImpl.class);
         RecipeServiceImpl recipes = mock(RecipeServiceImpl.class);
         SelectionServiceImpl selections = mock(SelectionServiceImpl.class);
         RegionServiceImpl regions = mock(RegionServiceImpl.class);
@@ -123,19 +135,23 @@ class STEMCraftAPIImplTest {
         when(plugin.commands()).thenReturn(commands);
         when(plugin.config()).thenReturn(config);
         when(plugin.database()).thenReturn(database);
+        when(plugin.dialogs()).thenReturn(dialogs);
         when(plugin.events()).thenReturn(events);
         when(plugin.holograms()).thenReturn(holograms);
         when(plugin.items()).thenReturn(items);
         when(plugin.locales()).thenReturn(locales);
+        when(plugin.mailboxes()).thenReturn(mailboxes);
         when(plugin.messages()).thenReturn(messages);
         when(plugin.minigames()).thenReturn(minigames);
         when(plugin.motd()).thenReturn(motd);
+        when(plugin.placedObjects()).thenReturn(placedObjects);
         when(plugin.players()).thenReturn(players);
         when(plugin.placeholders()).thenReturn(placeholders);
         when(plugin.protections()).thenReturn(protections);
         when(plugin.profanityFilter()).thenReturn(profanityFilter);
         when(plugin.punishments()).thenReturn(punishments);
         when(plugin.playerStats()).thenReturn(playerStats);
+        when(plugin.resourcePack()).thenReturn(resourcePacks);
         when(plugin.recipes()).thenReturn(recipes);
         when(plugin.selections()).thenReturn(selections);
         when(plugin.regions()).thenReturn(regions);
@@ -149,19 +165,23 @@ class STEMCraftAPIImplTest {
         expectedDelegates.put("commands", commands);
         expectedDelegates.put("config", config);
         expectedDelegates.put("database", database);
+        expectedDelegates.put("dialogs", dialogs);
         expectedDelegates.put("events", events);
         expectedDelegates.put("holograms", holograms);
         expectedDelegates.put("items", items);
         expectedDelegates.put("locales", locales);
+        expectedDelegates.put("mailboxes", mailboxes);
         expectedDelegates.put("messages", messages);
         expectedDelegates.put("minigames", minigames);
         expectedDelegates.put("motd", motd);
+        expectedDelegates.put("placedObjects", placedObjects);
         expectedDelegates.put("players", players);
         expectedDelegates.put("placeholders", placeholders);
         expectedDelegates.put("protections", protections);
         expectedDelegates.put("profanityFilter", profanityFilter);
         expectedDelegates.put("punishments", punishments);
         expectedDelegates.put("playerStats", playerStats);
+        expectedDelegates.put("resourcePacks", resourcePacks);
         expectedDelegates.put("recipes", recipes);
         expectedDelegates.put("selections", selections);
         expectedDelegates.put("regions", regions);

@@ -19,6 +19,7 @@ The list below reflects the active built-in command roots in source.
 | `/world` | `WorldCommand` | World lifecycle, inspection, settings, and join/leave command editing |
 | `/resourcepack` | `ResourcePackCommand` | Pack delivery and pack build operations |
 | `/hologram` | `HologramServiceImpl` | Hologram creation and editing |
+| `/mailbox` | `Mailboxes` | Send mail and administer the delivery queue |
 | `/audit` | `AuditServiceImpl` | Audit review |
 | `/moderation` | `ChatServiceImpl` | Moderation incident review |
 | `/reports` | `ChatServiceImpl` | Player report review |

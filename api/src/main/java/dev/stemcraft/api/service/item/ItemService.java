@@ -24,6 +24,7 @@ import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
+import java.util.Collection;
 
 /**
  * Service for managing item attributes and custom items.
@@ -89,6 +90,29 @@ public interface ItemService {
     default @Nullable ItemStack createCustomItem(@NotNull String id) { return createCustomItem(id, 1); }
 
     /**
+     * Registers a richer custom item definition, including placement and
+     * client presentation metadata.
+     *
+     * @param definition The custom item definition.
+     */
+    void registerCustomItem(@NotNull CustomItemDefinition definition);
+
+    /**
+     * Gets the registered definition for the given custom item id.
+     *
+     * @param id The custom item id.
+     * @return The definition, or null if none is registered.
+     */
+    @Nullable CustomItemDefinition customItemDefinition(@NotNull String id);
+
+    /**
+     * Returns all registered custom item definitions.
+     *
+     * @return Registered definitions.
+     */
+    @NotNull Collection<CustomItemDefinition> customItemDefinitions();
+
+    /**
      * Checks if the given ItemStack is the specified custom item.
      *
      * @param id The unique identifier for the custom item.
@@ -98,7 +122,7 @@ public interface ItemService {
     boolean isCustomItemId(@NotNull String id, @NotNull ItemStack item);
 
     /**
-     * Returns the ld of the custom item on this stack, if any.
+     * Returns the id of the custom item on this stack, if any.
      *
      * @param item The ItemStack to check.
      * @return The custom item id, or null if not a custom item.

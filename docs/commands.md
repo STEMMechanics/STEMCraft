@@ -48,6 +48,8 @@ This is the active command surface registered by STEMCraft.
 - `/book save <author> <title>` stores the book under a title-derived key; existing hyphens in the title are preserved
 - `/resourcepack [send] [player]`
 - `/resourcepack zip`
+- `/mailbox send <player> [message]`
+- `/mailbox <queue|view|release|hold|delete|item> ...`
 
 ## Moderation
 
