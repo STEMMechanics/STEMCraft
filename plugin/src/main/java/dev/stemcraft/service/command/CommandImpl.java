@@ -486,7 +486,8 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
                 }
 
                 List<String> values = parseValue(tabCompletionItem, player, args);
-                if (values.contains(arg)) {
+                String comparableArg = unquoteCompletionArg(arg);
+                if (values.stream().anyMatch(value -> unquoteCompletionArg(value).equals(comparableArg))) {
                     argIndex++;
                     return MatchResult.MATCHED;
                 }
@@ -592,6 +593,7 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
         // remove non-matching items from the results based on what the player has already entered
         if (!args[args.length - 1].isEmpty()) {
             String arg = args[args.length - 1];
+            String comparableArg = unquoteCompletionArg(arg);
 
             // if the player has only a dash in the arg, only show dash arguments
             if (arg.equals("-")) {
@@ -613,9 +615,16 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
 
             // remove items in tabCompletionResults that do not contain the current arg text
 
-            tabCompletionResults.removeIf(item -> !item.contains(arg));
+            tabCompletionResults.removeIf(item -> !unquoteCompletionArg(item).contains(comparableArg));
         }
 
         return tabCompletionResults;
+    }
+
+    private static String unquoteCompletionArg(String value) {
+        if (value == null || value.isEmpty()) return value;
+        int start = value.startsWith("\"") ? 1 : 0;
+        int end = value.endsWith("\"") && value.length() > start ? value.length() - 1 : value.length();
+        return value.substring(start, end);
     }
 }

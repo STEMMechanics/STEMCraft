@@ -194,8 +194,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
     private void registerGiveCommand() {
         api.tabComplete().register("give-target", (player, args) -> {
             java.util.List<String> targets = new java.util.ArrayList<>(
-                Bukkit.getOnlinePlayers().stream().map(org.bukkit.entity.Player::getName)
-                    .map(ItemServiceImpl::quoteTargetIfNeeded).toList());
+                Bukkit.getOnlinePlayers().stream().map(org.bukkit.entity.Player::getName).toList());
             targets.addAll(java.util.List.of("@s", "@p", "@a", "@r", "@e"));
             return targets;
         });
@@ -286,11 +285,6 @@ public class ItemServiceImpl extends BaseService implements ItemService {
         }
         context.success("Gave {amount} [{item}] to {recipients} player(s)",
             "amount", amount, "item", itemArgument, "recipients", recipients);
-    }
-
-    private static String quoteTargetIfNeeded(String name) {
-        if (name.matches("[A-Za-z0-9_]{1,16}")) return name;
-        return "\"" + name.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
     }
 
     private static String unquoteTarget(String target) {
