@@ -35,9 +35,7 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.Bukkit;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
-import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
-import org.bukkit.event.server.ServerCommandEvent;
 import org.bukkit.event.block.Action;
 import org.bukkit.block.Campfire;
 import org.bukkit.inventory.CampfireRecipe;
@@ -68,6 +66,8 @@ public class ItemServiceImpl extends BaseService implements ItemService {
     private final Map<String, ItemStack> itemTemplates = new HashMap<>();
     private final Map<String, CustomItemDefinition> itemDefinitions = new LinkedHashMap<>();
     private final Set<Integer> configuredModelData = new HashSet<>();
+    private dev.stemcraft.api.command.Command giveCommand;
+    private org.bukkit.command.Command originalGiveCommand;
 
     /**
      * Constructor for ItemServiceImpl.
@@ -85,12 +85,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
     @Override
     public void onEnable() {
         loadConfiguredItems();
-        api.events().register(PlayerCommandPreprocessEvent.class, event -> {
-            if (handleGiveCommand(event.getPlayer(), event.getMessage().substring(1))) event.setCancelled(true);
-        });
-        api.events().register(ServerCommandEvent.class, event -> {
-            if (handleGiveCommand(event.getSender(), event.getCommand())) event.setCancelled(true);
-        });
+        registerGiveCommand();
         api.events().register(PlayerInteractEvent.class, this::handleCampfireInput);
         api.events().register(PlayerDropItemEvent.class, (event) -> {
             ItemStack item = event.getItemDrop().getItemStack();
@@ -116,6 +111,14 @@ public class ItemServiceImpl extends BaseService implements ItemService {
                 event.setCancelled(true);
             }
         });
+    }
+
+    @Override
+    public void onDisable() {
+        if (giveCommand != null) giveCommand.unregister();
+        if (originalGiveCommand != null) Bukkit.getCommandMap().getKnownCommands().put("give", originalGiveCommand);
+        giveCommand = null;
+        originalGiveCommand = null;
     }
 
     private void loadConfiguredItems() {
@@ -189,28 +192,61 @@ public class ItemServiceImpl extends BaseService implements ItemService {
         }
     }
 
-    private boolean handleGiveCommand(org.bukkit.command.CommandSender sender, String commandLine) {
-        String[] args = commandLine.trim().split("\\s+");
-        if (args.length < 3 || !(args[0].equalsIgnoreCase("give") || args[0].equalsIgnoreCase("minecraft:give"))) {
-            return false;
+    private void registerGiveCommand() {
+        api.tabComplete().register("give-target", (player, args) -> {
+            java.util.List<String> targets = new java.util.ArrayList<>(
+                Bukkit.getOnlinePlayers().stream().map(org.bukkit.entity.Player::getName).toList());
+            targets.addAll(java.util.List.of("@s", "@p", "@a", "@r", "@e"));
+            return targets;
+        });
+        api.tabComplete().register("give-item", (player, args) -> {
+            java.util.List<String> items = new java.util.ArrayList<>();
+            for (Material material : Material.values()) {
+                if (material.isItem()) items.add("minecraft:" + material.getKey().getKey());
+            }
+            itemTemplates.keySet().stream().map(id -> "stemcraft:" + id.replace('-', '_')).forEach(items::add);
+            return items;
+        });
+        var builder = api.commands().create("give")
+            .description("Give an item to one or more players")
+            .usage("/give <targets> <item> [count]")
+            .permission("minecraft.command.give")
+            .executor((unusedApi, unusedCommand, context) -> executeGive(context));
+        builder.tabCompletion("{give-target}", "{give-item}");
+        builder.tabCompletion("{give-target}", "{give-item}", "{number}");
+        originalGiveCommand = Bukkit.getCommandMap().getCommand("give");
+        giveCommand = builder.register(STEMCraft.getPlugin());
+        org.bukkit.command.Command registered = Bukkit.getCommandMap().getCommand("stemcraft:give");
+        if (registered != null) Bukkit.getCommandMap().getKnownCommands().put("give", registered);
+    }
+
+    private void executeGive(dev.stemcraft.api.command.CommandContext context) {
+        if (context.args().size() < 2) {
+            context.error("Usage: /give <targets> <item> [count]");
+            return;
         }
-        ItemStack probe = createCustomItem(args[2]);
-        if (probe == null) return false;
-        if (!sender.hasPermission("minecraft.command.give")) return false;
+        org.bukkit.command.CommandSender sender = context.getSender();
+        String targetArgument = context.args().get(0);
+        String itemArgument = context.args().get(1);
+        ItemStack probe = createCustomItem(itemArgument);
+        if (probe == null) {
+            Bukkit.dispatchCommand(sender, "minecraft:give " + String.join(" ", context.args()));
+            return;
+        }
         int amount = 1;
-        if (args.length > 3) {
-            try { amount = Math.max(1, Math.min(99 * 36, Integer.parseInt(args[3]))); }
+        if (context.args().size() > 2) {
+            try { amount = Math.max(1, Math.min(99 * 36, Integer.parseInt(context.args().get(2)))); }
             catch (NumberFormatException exception) {
-                sender.sendMessage("Invalid item count: " + args[3]);
-                return true;
+                context.error("Invalid item count: {count}", "count", context.args().get(2));
+                return;
             }
         }
         java.util.List<org.bukkit.entity.Entity> selected;
         try {
-            selected = Bukkit.selectEntities(sender, args[1]);
+            selected = Bukkit.selectEntities(sender, targetArgument);
         } catch (IllegalArgumentException exception) {
-            sender.sendMessage(exception.getMessage());
-            return true;
+            context.error(exception.getMessage() == null ? "Invalid target selector." : exception.getMessage());
+            return;
         }
         int recipients = 0;
         for (org.bukkit.entity.Entity entity : selected) {
@@ -218,7 +254,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
             int remaining = amount;
             int maximum = probe.getMaxStackSize();
             while (remaining > 0) {
-                ItemStack stack = createCustomItem(args[2], Math.min(maximum, remaining));
+                ItemStack stack = createCustomItem(itemArgument, Math.min(maximum, remaining));
                 if (stack == null) break;
                 player.getInventory().addItem(stack).values()
                     .forEach(item -> player.getWorld().dropItemNaturally(player.getLocation(), item));
@@ -226,8 +262,8 @@ public class ItemServiceImpl extends BaseService implements ItemService {
             }
             recipients++;
         }
-        sender.sendMessage("Gave " + amount + " [" + args[2] + "] to " + recipients + " player(s)");
-        return true;
+        context.success("Gave {amount} [{item}] to {recipients} player(s)",
+            "amount", amount, "item", itemArgument, "recipients", recipients);
     }
 
     private void handleCampfireInput(PlayerInteractEvent event) {

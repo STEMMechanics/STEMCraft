@@ -59,13 +59,13 @@ Material results such as `result: COOKED_COD` continue to work unchanged.
 
 ## Giving configured items
 
-The plugin selectively extends the vanilla give command. When the item argument resolves to a configured item, selectors and counts work normally:
+STEMCraft registers the bare `/give` command so its command tree includes configured items as well as all vanilla materials. When the item argument resolves to a configured item, selectors and counts work normally:
 
 ```text
 /give @s stemcraft:fried_egg
 /give James stemcraft:fried_egg 16
 ```
 
-The namespace is accepted as a convenient command form; underscores in the path resolve to hyphens in the configured ID. If the item is not configured, the command is left untouched for Minecraft to process normally. Item components after the count remain a vanilla-only facility.
+The namespace is accepted as a convenient command form; underscores in the path resolve to hyphens in the configured ID. Vanilla item requests are delegated to `minecraft:give`, retaining Minecraft's item-component syntax and behaviour. Item components after the count remain a vanilla-only facility.
 
 `interactions.campfire-input` is disabled unless explicitly set. When enabled, right-clicking a campfire with an input that has a campfire recipe for that custom item inserts one input into an empty slot instead of executing the input's normal interaction. Fried Eggs enable it because raw eggs are otherwise thrown.
