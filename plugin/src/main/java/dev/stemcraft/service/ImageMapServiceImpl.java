@@ -15,6 +15,7 @@ import org.bukkit.entity.GlowItemFrame;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.MapMeta;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.map.MapCanvas;
 import org.bukkit.map.MapRenderer;
@@ -26,6 +27,7 @@ import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -63,6 +65,8 @@ public final class ImageMapServiceImpl extends BaseService implements ImageMapSe
                 return;
             }
         });
+        api.events().register(PlayerJoinEvent.class, event ->
+            api.tasks().runLater(20L, () -> sendMaps(event.getPlayer())));
     }
 
     @Override
@@ -234,25 +238,35 @@ public final class ImageMapServiceImpl extends BaseService implements ImageMapSe
         return id.replaceAll("[^A-Za-z0-9_.-]", "_");
     }
 
+    private void sendMaps(org.bukkit.entity.Player player) {
+        if (!player.isOnline()) {
+            return;
+        }
+        for (ManagedDisplay display : displays.values()) {
+            for (MapView view : display.views) {
+                player.sendMap(view);
+            }
+        }
+    }
+
     private static final class ImageRenderer extends MapRenderer {
         private BufferedImage image;
-        private boolean rendered;
+        private final java.util.Set<UUID> renderedPlayers = new HashSet<>();
 
         private ImageRenderer(BufferedImage image) {
-            super(false);
+            super(true);
             this.image = image;
         }
 
         private void setImage(BufferedImage image) {
             this.image = image;
-            this.rendered = false;
+            renderedPlayers.clear();
         }
 
         @Override
         public void render(@NotNull MapView map, @NotNull MapCanvas canvas, @NotNull org.bukkit.entity.Player player) {
-            if (!rendered) {
+            if (renderedPlayers.add(player.getUniqueId())) {
                 canvas.drawImage(0, 0, image);
-                rendered = true;
             }
         }
     }

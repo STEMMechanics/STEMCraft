@@ -9,6 +9,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
+import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.map.MapFont;
 import org.bukkit.map.MinecraftFont;
@@ -139,7 +140,7 @@ public final class NoticeBoards extends BaseFeature {
 
     private void onCommand(STEMCraftAPI unused, Command unusedCommand, CommandContext ctx) {
         if (ctx.args().isEmpty()) {
-            ctx.info("Use /noticeboard post, /noticeboard mine, or /noticeboard board create <id> [columns] [rows].");
+            sendConfigured(ctx, "commands.help", "/info/Use /noticeboard post, /noticeboard mine, or /noticeboard board create <id> [columns] [rows].");
             return;
         }
         switch (ctx.getArgLower(0)) {
@@ -147,14 +148,14 @@ public final class NoticeBoards extends BaseFeature {
             case "mine" -> listOwnPosts(ctx);
             case "remove" -> removePost(ctx);
             case "board" -> manageBoard(ctx);
-            default -> ctx.error("Unknown noticeboard command.");
+            default -> sendConfigured(ctx, "commands.unknown", "/error/Unknown noticeboard command.");
         }
     }
 
     private void openAdminPostDialog(CommandContext ctx) {
         Player player = ctx.asPlayer();
         if (player == null) {
-            ctx.error("Only players can post notices.");
+            sendConfigured(ctx, "commands.only-player-post", "/error/Only players can post notices.");
             return;
         }
         openNoticeEditor(player, null, false);
@@ -173,37 +174,41 @@ public final class NoticeBoards extends BaseFeature {
         }
         NoticePost post = posts.getFirst();
         boolean opened = api.dialogs().create("noticeboard:manage")
-            .title(net.kyori.adventure.text.Component.text("Your notice"))
+            .title(configuredComponent("dialog.manage-title", "Your notice"))
             .body(net.kyori.adventure.text.Component.text(post.header() + "\n\n" + post.message()))
-            .action(net.kyori.adventure.text.Component.text("Edit"), () -> openNoticeEditor(player, post, true))
-            .action(net.kyori.adventure.text.Component.text("Delete"), () -> deletePlayerPost(player, post))
-            .cancel(net.kyori.adventure.text.Component.text("Cancel"), () -> { })
+            .action(configuredComponent("dialog.edit-label", "Edit"), () -> openNoticeEditor(player, post, true))
+            .action(configuredComponent("dialog.delete-label", "Delete"), () -> deletePlayerPost(player, post))
+            .cancel(configuredComponent("dialog.cancel-label", "Cancel"), () -> { })
             .open(player);
         if (!opened) {
-            api.messages().error(player, "Could not open the notice dialog.");
+            sendConfigured(player, "messages.dialog-open-failed", "/error/Could not open the notice dialog.");
         }
     }
 
     private void openNoticeEditor(Player player, NoticePost existing, boolean enforceSingleNotice) {
-        String title = existing == null ? "Post a notice" : "Edit your notice";
+        String title = existing == null
+            ? configured("dialog.create-title", "Post a notice")
+            : configured("dialog.edit-title", "Edit your notice");
         String header = existing == null ? "" : existing.header();
         String message = existing == null ? "" : existing.message();
         boolean opened = api.dialogs().create(existing == null ? "noticeboard:post" : "noticeboard:edit")
             .title(net.kyori.adventure.text.Component.text(title))
-            .body(net.kyori.adventure.text.Component.text("Notices remain on the board for 14 days."))
-            .textInput("header", net.kyori.adventure.text.Component.text("Header"), header, MAX_HEADER_LENGTH)
-            .multilineTextInput("message", net.kyori.adventure.text.Component.text("Short message"), message, MAX_MESSAGE_LENGTH, 4)
-            .submit(net.kyori.adventure.text.Component.text(existing == null ? "Post" : "Save"), response -> {
+            .body(configuredComponent("dialog.lifetime", "Notices remain on the board for {days} days.",
+                "days", retentionDays()))
+            .textInput("header", configuredComponent("dialog.header-label", "Header"), header, MAX_HEADER_LENGTH)
+            .multilineTextInput("message", configuredComponent("dialog.message-label", "Short message"), message, MAX_MESSAGE_LENGTH, 4)
+            .submit(existing == null ? configuredComponent("dialog.post-label", "Post")
+                : configuredComponent("dialog.save-label", "Save"), response -> {
                 if (existing == null) {
                     createPost(player, response, enforceSingleNotice);
                 } else {
                     updatePost(player, existing, response);
                 }
             })
-            .cancel(net.kyori.adventure.text.Component.text("Cancel"), () -> { })
+            .cancel(configuredComponent("dialog.cancel-label", "Cancel"), () -> { })
             .open(player);
         if (!opened) {
-            api.messages().error(player, "Could not open the notice dialog.");
+            sendConfigured(player, "messages.dialog-open-failed", "/error/Could not open the notice dialog.");
         }
     }
 
@@ -211,11 +216,11 @@ public final class NoticeBoards extends BaseFeature {
         String header = response.text("header").trim();
         String message = response.text("message").trim();
         if (header.isBlank() || message.isBlank()) {
-            api.messages().error(player, "A header and message are required.");
+            sendConfigured(player, "messages.required", "/error/A header and message are required.");
             return;
         }
         if (enforceSingleNotice && !activePosts(player.getUniqueId()).isEmpty()) {
-            api.messages().error(player, "You already have an active notice. Click the board to edit or delete it.");
+            sendConfigured(player, "messages.already-active", "/error/You already have an active notice. Click the board to edit or delete it.");
             return;
         }
         UUID id = UUID.randomUUID();
@@ -235,9 +240,10 @@ public final class NoticeBoards extends BaseFeature {
         if (changed == 1) {
             displayPage = 0;
             refreshBoards();
-            api.messages().success(player, "Your notice has been posted for 14 days.");
+            sendConfigured(player, "messages.posted", "/success/Your notice has been posted for {days} days.",
+                "days", retentionDays());
         } else {
-            api.messages().error(player, "Could not save your notice.");
+            sendConfigured(player, "messages.save-failed", "/error/Could not save your notice.");
         }
     }
 
@@ -245,7 +251,7 @@ public final class NoticeBoards extends BaseFeature {
         String header = response.text("header").trim();
         String message = response.text("message").trim();
         if (header.isBlank() || message.isBlank()) {
-            api.messages().error(player, "A header and message are required.");
+            sendConfigured(player, "messages.required", "/error/A header and message are required.");
             return;
         }
         long now = System.currentTimeMillis();
@@ -265,9 +271,10 @@ public final class NoticeBoards extends BaseFeature {
         if (changed == 1) {
             displayPage = 0;
             refreshBoards();
-            api.messages().success(player, "Your notice has been updated for another 14 days.");
+            sendConfigured(player, "messages.updated", "/success/Your notice has been updated for another {days} days.",
+                "days", retentionDays());
         } else {
-            api.messages().error(player, "That notice is no longer available.");
+            sendConfigured(player, "messages.unavailable", "/error/That notice is no longer available.");
         }
     }
 
@@ -280,9 +287,9 @@ public final class NoticeBoards extends BaseFeature {
             });
         if (changed == 1) {
             refreshBoards();
-            api.messages().success(player, "Your notice has been deleted.");
+            sendConfigured(player, "messages.deleted", "/success/Your notice has been deleted.");
         } else {
-            api.messages().error(player, "That notice is no longer available.");
+            sendConfigured(player, "messages.unavailable", "/error/That notice is no longer available.");
         }
     }
 
@@ -296,7 +303,7 @@ public final class NoticeBoards extends BaseFeature {
     private void listOwnPosts(CommandContext ctx) {
         Player player = ctx.asPlayer();
         if (player == null) {
-            ctx.error("Only players can list their notices.");
+            sendConfigured(ctx, "commands.only-player-list", "/error/Only players can list their notices.");
             return;
         }
         List<NoticePost> posts = loadPosts("WHERE author_uuid = ? AND expires_at > ? ORDER BY created_at DESC",
@@ -305,43 +312,44 @@ public final class NoticeBoards extends BaseFeature {
                 statement.setLong(2, System.currentTimeMillis());
             });
         if (posts.isEmpty()) {
-            ctx.info("You have no active notices.");
+            sendConfigured(ctx, "commands.no-active", "/info/You have no active notices.");
             return;
         }
-        ctx.info("Your active notices:");
+        sendConfigured(ctx, "commands.active-title", "/info/Your active notices:");
         for (NoticePost post : posts) {
-            ctx.info(post.id().toString().substring(0, 8) + " - " + post.header());
+            sendConfigured(ctx, "commands.active-entry", "{id} - {header}",
+                "id", post.id().toString().substring(0, 8), "header", post.header());
         }
     }
 
     private void removePost(CommandContext ctx) {
         Player player = ctx.asPlayer();
         if (player == null || ctx.args().size() < 2) {
-            ctx.error("Usage: /noticeboard remove <post-id>");
+            sendConfigured(ctx, "commands.remove-usage", "/error/Usage: /noticeboard remove <post-id>");
             return;
         }
         NoticePost post = findPost(ctx.args().get(1));
         if (post == null) {
-            ctx.error("Notice not found.");
+            sendConfigured(ctx, "commands.not-found", "/error/Notice not found.");
             return;
         }
         if (!post.authorUuid().equals(player.getUniqueId()) && !player.hasPermission("stemcraft.noticeboard.admin")) {
-            ctx.error("You can only remove your own notices.");
+            sendConfigured(ctx, "commands.not-owner", "/error/You can only remove your own notices.");
             return;
         }
         api.database().update("DELETE FROM notice_board_posts WHERE id = ?", statement -> statement.setString(1, post.id().toString()));
         refreshBoards();
-        ctx.success("Notice removed.");
+        sendConfigured(ctx, "commands.removed", "/success/Notice removed.");
     }
 
     private void manageBoard(CommandContext ctx) {
         Player player = ctx.asPlayer();
         if (player == null || !player.hasPermission("stemcraft.noticeboard.admin")) {
-            ctx.error("You do not have permission to manage notice boards.");
+            sendConfigured(ctx, "commands.no-permission", "/error/You do not have permission to manage notice boards.");
             return;
         }
         if (ctx.args().size() < 3) {
-            ctx.error("Usage: /noticeboard board <create|delete> <id> [columns] [rows]");
+            sendConfigured(ctx, "commands.board-usage", "/error/Usage: /noticeboard board <create|delete> <id> [columns] [rows]");
             return;
         }
         String action = ctx.getArgLower(1);
@@ -349,16 +357,16 @@ public final class NoticeBoards extends BaseFeature {
         if (action.equals("delete")) {
             api.database().update("DELETE FROM notice_boards WHERE id = ?", statement -> statement.setString(1, id));
             api.imageMaps().delete(displayId(id));
-            ctx.success("Notice board removed.");
+            sendConfigured(ctx, "commands.board-removed", "/success/Notice board removed.");
             return;
         }
         if (!action.equals("create")) {
-            ctx.error("Usage: /noticeboard board <create|delete> <id> [columns] [rows]");
+            sendConfigured(ctx, "commands.board-usage", "/error/Usage: /noticeboard board <create|delete> <id> [columns] [rows]");
             return;
         }
         Block target = player.getTargetBlockExact(8);
         if (target == null || target.getType().isAir()) {
-            ctx.error("Look at the bottom-left backing block for the board.");
+            sendConfigured(ctx, "commands.target-block", "/error/Look at the bottom-left backing block for the board.");
             return;
         }
         int columns = parseDimension(ctx, 3, DEFAULT_COLUMNS);
@@ -379,7 +387,8 @@ public final class NoticeBoards extends BaseFeature {
             statement.setInt(8, rows);
         });
         restoreBoard(new NoticeBoard(id, target.getLocation(), facing, columns, rows));
-        ctx.success("Notice board created. The targeted block is its bottom-left backing block.");
+        sendConfigured(ctx, "commands.board-created",
+            "/success/Notice board created. The targeted block is its bottom-left backing block.");
     }
 
     private int parseDimension(CommandContext ctx, int index, int fallback) {
@@ -668,6 +677,31 @@ public final class NoticeBoards extends BaseFeature {
 
     private static String displayId(String boardId) {
         return "notice-board:" + boardId;
+    }
+
+    private int retentionDays() {
+        return Math.max(1, (int) Duration.ofMillis(retentionMillis).toDays());
+    }
+
+    private String configured(String path, String fallback, Object... placeholders) {
+        String value = getConfigSection().getString(path, fallback);
+        for (int index = 0; index + 1 < placeholders.length; index += 2) {
+            value = value.replace("{" + placeholders[index] + "}", String.valueOf(placeholders[index + 1]));
+        }
+        return value;
+    }
+
+    private net.kyori.adventure.text.Component configuredComponent(String path, String fallback,
+                                                                    Object... placeholders) {
+        return net.kyori.adventure.text.Component.text(configured(path, fallback, placeholders));
+    }
+
+    private void sendConfigured(CommandContext context, String path, String fallback, Object... placeholders) {
+        sendConfigured(context.getSender(), path, fallback, placeholders);
+    }
+
+    private void sendConfigured(CommandSender sender, String path, String fallback, Object... placeholders) {
+        api.messages().send(sender, configured(path, fallback, placeholders));
     }
 
     private record NoticeBoard(String id, Location location, BlockFace facing, int columns, int rows) { }

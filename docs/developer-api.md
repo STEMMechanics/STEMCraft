@@ -356,7 +356,7 @@ api.imageMaps().onClick("quests:lobby", click -> handleClick(click.player(), cli
 api.imageMaps().delete("quests:lobby");
 ```
 
-The location is the bottom-left backing block when viewing the display from the front. Click callbacks receive the player and selected map tile on both Java and Geyser-translated Bedrock interactions. Runtime registrations and callbacks are recreated by the owning feature after restart.
+The location is the bottom-left backing block when viewing the display from the front. Click callbacks receive the player and selected map tile on both Java and Geyser-translated Bedrock interactions. Map canvases are contextual per viewer and active maps are resent after player join, ensuring reconnecting players receive dynamic pixels as well as the item frames. Runtime registrations and callbacks are recreated by the owning feature after restart.
 
 - Prefer service interfaces from `api/src/main/java/dev/stemcraft/api/service/...`.
 - Keep world/player data in DB for persistent state; keep YAML for static configuration.

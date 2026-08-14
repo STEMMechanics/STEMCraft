@@ -39,7 +39,30 @@ notice-boards:
   # Optional PNG, relative to plugins/STEMCraft (or an absolute path).
   # The configured title text is used when it is blank, missing, or unreadable.
   title-image: ""
+  dialog:
+    manage-title: "Your notice"
+    create-title: "Post a notice"
+    edit-title: "Edit your notice"
+    lifetime: "Notices remain on the board for {days} days."
+    header-label: "Header"
+    message-label: "Short message"
+    edit-label: "Edit"
+    delete-label: "Delete"
+    post-label: "Post"
+    save-label: "Save"
+    cancel-label: "Cancel"
+  messages:
+    dialog-open-failed: "/error/Could not open the notice dialog."
+    required: "/error/A header and message are required."
+    already-active: "/error/You already have an active notice. Click the board to edit or delete it."
+    posted: "/success/Your notice has been posted for {days} days."
+    save-failed: "/error/Could not save your notice."
+    updated: "/success/Your notice has been updated for another {days} days."
+    unavailable: "/error/That notice is no longer available."
+    deleted: "/success/Your notice has been deleted."
 ```
+
+The `commands` subsection in the bundled configuration also exposes every administrator command response. Message values pass through the message service, so type/context directives such as `/success/` and `/survival//info/` are supported. `{days}`, `{id}`, and `{header}` are replaced where applicable.
 
 Board and notice text uses Minecraft's map font at a consistent 1.5× scale. Notices use several paper colours, stable slight rotations and offsets, a pin, and three fully supported message lines. Available board slots are deterministically shuffled per board and page, leaving natural gaps when a page is not full without moving posts on every refresh.
 
