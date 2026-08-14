@@ -52,6 +52,8 @@ STEMCraftAPI api = STEMCraftAPI.api();
 
 `HologramService#createDynamic(...)` registers location- or entity-anchored, player-specific holograms under a stable type/context key. Use `refreshDynamic(...)` after state changes and `deleteDynamic(...)` when the owning object is removed. The service manages Java/Bedrock rendering and world/chunk lifecycle.
 
+`ImageMapService` creates wall-mounted filled-map mosaics and renders a `BufferedImage` across them. Callers use stable string IDs and do not manage the underlying maps or item frames.
+
 ### Dialogs
 
 `DialogService` exposes one fluent input-dialog builder backed by Paper dialogs on Java and Geyser Cumulus forms on Bedrock. Builders support body text, single- and multiline inputs, submit callbacks, and cancellation callbacks.

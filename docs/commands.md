@@ -50,6 +50,11 @@ This is the active command surface registered by STEMCraft.
 - `/resourcepack zip`
 - `/mailbox send <player> [message]`
 - `/mailbox <queue|view|release|hold|delete|item> ...`
+- `/noticeboard post`
+- `/noticeboard mine`
+- `/noticeboard remove <post-id>`
+- `/noticeboard board create <id> [columns] [rows]`
+- `/noticeboard board delete <id>`
 
 ## Moderation
 

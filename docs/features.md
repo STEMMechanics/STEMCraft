@@ -119,6 +119,10 @@
 
 ## Additional Gameplay Features
 
+### Notice boards
+
+Physical notice boards render player-created headers, short messages, and author names across map mosaics. Posting uses the cross-platform dialog service, and notices expire automatically after 14 days by default. See [Notice boards](./notice-boards.md).
+
 - Hub behavior and `/hub`
 - Player tab list formatting
 - Coordinates in action bar / boss bar (`/coord`, `/coordbar`)

@@ -90,3 +90,7 @@ The task service is more than a Bukkit scheduler wrapper. It also supports:
 - delayed and repeating execution
 - retryable workflows
 - persistent tasks stored in SQLite so scheduled work can survive restarts
+
+### Image maps
+
+The image-map service creates wall-mounted mosaics, renders supplied images across their map tiles, and owns the related map and item-frame lifecycle.

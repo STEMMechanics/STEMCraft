@@ -100,6 +100,7 @@ public final class STEMCraft extends JavaPlugin {
     private DialogServiceImpl dialogs;
     private EventServiceImpl events;
     private HologramServiceImpl holograms;
+    private ImageMapServiceImpl imageMaps;
     private ItemServiceImpl items;
     private LocaleServiceImpl locales;
     private MessageServiceImpl messages;
@@ -199,6 +200,7 @@ public final class STEMCraft extends JavaPlugin {
         dialogs = new DialogServiceImpl(this, api);
         events = new EventServiceImpl(this, api);
         holograms = new HologramServiceImpl(this, api);
+        imageMaps = new ImageMapServiceImpl(this, api);
         items = new ItemServiceImpl(this, api);
         minigames = new MiniGameServiceImpl(this, api);
         motd = new MotdServiceImpl(this, api);
@@ -226,6 +228,7 @@ public final class STEMCraft extends JavaPlugin {
         commands.onEnable();
         events.onEnable();
         holograms.onEnable();
+        imageMaps.onEnable();
         items.onEnable();
         minigames.onEnable();
         motd.onEnable();
@@ -349,6 +352,7 @@ public final class STEMCraft extends JavaPlugin {
         disableService(players);
         disableService(motd);
         disableService(items);
+        disableService(imageMaps);
         disableService(holograms);
         disableService(events);
         disableService(firstJoin);

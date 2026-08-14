@@ -345,6 +345,18 @@ See bundled implementations in:
 
 ## Notes for Third-Party Plugins
 
+### Image-map displays
+
+`ImageMapService` renders a `BufferedImage` across a wall-mounted mosaic of filled maps. Displays use stable string IDs and can be created, updated, and deleted without callers managing map IDs or item-frame entities.
+
+```java
+api.imageMaps().create("quests:lobby", backingBlock, BlockFace.NORTH, 4, 3);
+api.imageMaps().render("quests:lobby", image);
+api.imageMaps().delete("quests:lobby");
+```
+
+The location is the bottom-left backing block when viewing the display from the front. Runtime registrations are recreated by the owning feature after restart.
+
 - Prefer service interfaces from `api/src/main/java/dev/stemcraft/api/service/...`.
 - Keep world/player data in DB for persistent state; keep YAML for static configuration.
 - Use locale keys + `messages()` when possible, rather than hardcoding text.

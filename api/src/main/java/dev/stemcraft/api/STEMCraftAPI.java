@@ -29,6 +29,7 @@ import dev.stemcraft.api.service.event.EventService;
 import dev.stemcraft.api.service.config.ConfigService;
 import dev.stemcraft.api.service.hologram.HologramService;
 import dev.stemcraft.api.service.item.ItemService;
+import dev.stemcraft.api.service.imagemap.ImageMapService;
 import dev.stemcraft.api.service.locale.LocaleService;
 import dev.stemcraft.api.service.mailbox.MailboxService;
 import dev.stemcraft.api.service.message.MessageService;
@@ -108,6 +109,9 @@ public interface STEMCraftAPI {
      * Get the item service.
      */
     ItemService items();
+
+    /** Get the image-map display service. */
+    ImageMapService imageMaps();
 
     /**
      * Get the locale service.

@@ -73,6 +73,11 @@ mailboxes:
     mailbox-full: "/survival//warn/Your mailbox is full."
     received: "/survival//info/<gold>You received mail from {sender}."
 
+notice-boards:
+  enabled: true
+  retention-days: 14
+  title: "SERVER NOTICE / REQUEST BOARD ★★★★★"
+
 interactive-menus:
   enabled: true
 
