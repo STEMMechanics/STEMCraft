@@ -26,8 +26,10 @@ import java.io.IOException;
 import java.sql.ResultSet;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Random;
 import java.util.UUID;
 
 /** Player-created notices rendered on physical image-map boards. */
@@ -343,9 +345,12 @@ public final class NoticeBoards extends BaseFeature {
         int pages = Math.max(1, (posts.size() + capacity - 1) / capacity);
         int page = Math.floorMod(displayPage, pages);
         int start = page * capacity;
-        for (int index = 0; index < Math.min(capacity, posts.size() - start); index++) {
-            int column = index % gridColumns;
-            int row = index / gridColumns;
+        int visibleCount = Math.min(capacity, posts.size() - start);
+        List<Integer> slots = randomizedSlots(board, page, capacity);
+        for (int index = 0; index < visibleCount; index++) {
+            int slot = slots.get(index);
+            int column = slot % gridColumns;
+            int row = slot / gridColumns;
             drawPost(graphics, posts.get(start + index), 12 + column * (cardWidth + 10), top + row * cardHeight,
                 cardWidth, cardHeight - 8);
         }
@@ -379,14 +384,14 @@ public final class NoticeBoards extends BaseFeature {
         card.setColor(new Color(72, 48, 31));
         drawMinecraftText(card, fitMinecraft(post.header(), width - 20, TEXT_SCALE), padding + 10, padding + 12,
             TEXT_SCALE, true);
-        int lineY = padding + 35;
+        int lineY = padding + 28;
         for (String line : wrapMinecraft(post.message(), width - 20, 3, TEXT_SCALE)) {
             drawMinecraftText(card, line, padding + 10, lineY, TEXT_SCALE, false);
-            lineY += 14;
+            lineY += 13;
         }
         String by = fitMinecraft("Posted by " + post.authorName(), width - 20, TEXT_SCALE);
         drawMinecraftText(card, by, padding + width - minecraftWidth(by, TEXT_SCALE) - 9,
-            padding + height - 15, TEXT_SCALE, false);
+            padding + height - 14, TEXT_SCALE, false);
         card.dispose();
 
         int hash = post.id().hashCode();
@@ -397,6 +402,16 @@ public final class NoticeBoards extends BaseFeature {
         graphics.rotate(Math.toRadians(degrees), x + offsetX + width / 2.0, y + offsetY + height / 2.0);
         graphics.drawImage(paper, x + offsetX - padding, y + offsetY - padding, null);
         graphics.setTransform(original);
+    }
+
+    private static List<Integer> randomizedSlots(NoticeBoard board, int page, int capacity) {
+        List<Integer> slots = new ArrayList<>(capacity);
+        for (int slot = 0; slot < capacity; slot++) {
+            slots.add(slot);
+        }
+        long seed = 31L * board.id().hashCode() + page;
+        Collections.shuffle(slots, new Random(seed));
+        return slots;
     }
 
     private static List<String> wrapMinecraft(String text, int width, int maximumLines, double scale) {
