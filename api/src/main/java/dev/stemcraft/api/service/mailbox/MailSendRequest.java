@@ -32,7 +32,8 @@ public record MailSendRequest(@Nullable UUID senderUuid,
                               @NotNull UUID recipientUuid,
                               @NotNull String message,
                               @NotNull List<ItemStack> items,
-                              @Nullable Location sourceLocation) {
+                              @Nullable Location sourceLocation,
+                              long deliveryDelayTicks) {
     public MailSendRequest {
         recipientUuid = Objects.requireNonNull(recipientUuid, "recipientUuid");
         senderName = senderName == null ? null : senderName.trim();
@@ -43,6 +44,18 @@ public record MailSendRequest(@Nullable UUID senderUuid,
         items = Objects.requireNonNull(items, "items");
         items = items.stream().filter(Objects::nonNull).map(ItemStack::clone).toList();
         sourceLocation = sourceLocation == null ? null : sourceLocation.clone();
+        if (deliveryDelayTicks < -1L) {
+            throw new IllegalArgumentException("deliveryDelayTicks must be -1 or greater");
+        }
+    }
+
+    public MailSendRequest(@Nullable UUID senderUuid,
+                           @Nullable String senderName,
+                           @NotNull UUID recipientUuid,
+                           @NotNull String message,
+                           @NotNull List<ItemStack> items,
+                           @Nullable Location sourceLocation) {
+        this(senderUuid, senderName, recipientUuid, message, items, sourceLocation, -1L);
     }
 
     public MailSendRequest(@NotNull UUID senderUuid,
@@ -59,6 +72,22 @@ public record MailSendRequest(@Nullable UUID senderUuid,
                            @NotNull List<ItemStack> items,
                            @Nullable Location sourceLocation) {
         this(null, senderName, recipientUuid, message, items, sourceLocation);
+    }
+
+    public MailSendRequest(@NotNull UUID senderUuid,
+                           @NotNull UUID recipientUuid,
+                           @NotNull String message,
+                           @NotNull List<ItemStack> items,
+                           long deliveryDelayTicks) {
+        this(senderUuid, null, recipientUuid, message, items, null, deliveryDelayTicks);
+    }
+
+    public MailSendRequest(@NotNull String senderName,
+                           @NotNull UUID recipientUuid,
+                           @NotNull String message,
+                           @NotNull List<ItemStack> items,
+                           long deliveryDelayTicks) {
+        this(null, senderName, recipientUuid, message, items, null, deliveryDelayTicks);
     }
 
     public MailSendRequest(@NotNull UUID senderUuid,

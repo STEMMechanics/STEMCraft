@@ -99,6 +99,7 @@ public final class STEMCraft extends JavaPlugin {
     private DatabaseServiceImpl database;
     private DialogServiceImpl dialogs;
     private EventServiceImpl events;
+    private GiftServiceImpl gifts;
     private HologramServiceImpl holograms;
     private ItemServiceImpl items;
     private LocaleServiceImpl locales;
@@ -198,6 +199,7 @@ public final class STEMCraft extends JavaPlugin {
         database = new DatabaseServiceImpl(this, api);
         dialogs = new DialogServiceImpl(this, api);
         events = new EventServiceImpl(this, api);
+        gifts = new GiftServiceImpl(this, api);
         holograms = new HologramServiceImpl(this, api);
         items = new ItemServiceImpl(this, api);
         minigames = new MiniGameServiceImpl(this, api);
@@ -227,6 +229,7 @@ public final class STEMCraft extends JavaPlugin {
         events.onEnable();
         holograms.onEnable();
         items.onEnable();
+        gifts.onEnable();
         minigames.onEnable();
         motd.onEnable();
         placeholders.onEnable();
@@ -348,6 +351,7 @@ public final class STEMCraft extends JavaPlugin {
         disableService(placedObjects);
         disableService(players);
         disableService(motd);
+        disableService(gifts);
         disableService(items);
         disableService(holograms);
         disableService(events);

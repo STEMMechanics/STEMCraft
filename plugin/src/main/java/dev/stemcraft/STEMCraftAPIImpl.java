@@ -37,6 +37,7 @@ import dev.stemcraft.api.service.recipe.RecipeService;
 import dev.stemcraft.capability.HasMessagesImpl;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.service.hologram.HologramService;
+import dev.stemcraft.api.service.gift.GiftService;
 import dev.stemcraft.api.service.item.ItemService;
 import dev.stemcraft.api.service.locale.LocaleService;
 import dev.stemcraft.api.service.mailbox.MailboxService;
@@ -130,6 +131,9 @@ public class STEMCraftAPIImpl extends HasMessagesImpl implements STEMCraftAPI {
      */
     @Override
     public HologramService holograms() { return plugin.holograms(); }
+
+    @Override
+    public GiftService gifts() { return plugin.gifts(); }
 
     /**
      * Get the item service.

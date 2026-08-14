@@ -326,6 +326,8 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
             MiniGameTeam winner = winningTeam(arena);
             if (winner != null) {
                 updateWinStreakStats(arena, winner);
+                bridge.minigame().rewardWinners(arena, arena.getTeamPlayers(winner.getName()).stream()
+                    .map(Player::getUniqueId).toList());
             } else {
                 resetWinStreakStats(arena);
             }

@@ -7,6 +7,7 @@ import dev.stemcraft.service.ConfigServiceImpl;
 import dev.stemcraft.service.DatabaseServiceImpl;
 import dev.stemcraft.service.EventServiceImpl;
 import dev.stemcraft.service.HologramServiceImpl;
+import dev.stemcraft.service.GiftServiceImpl;
 import dev.stemcraft.service.ItemServiceImpl;
 import dev.stemcraft.service.LocaleServiceImpl;
 import dev.stemcraft.service.MotdServiceImpl;
@@ -64,6 +65,7 @@ class STEMCraftAPIImplTest {
         "database",
         "dialogs",
         "events",
+        "gifts",
         "holograms",
         "items",
         "locales",
@@ -108,6 +110,7 @@ class STEMCraftAPIImplTest {
         DatabaseServiceImpl database = mock(DatabaseServiceImpl.class);
         DialogServiceImpl dialogs = mock(DialogServiceImpl.class);
         EventServiceImpl events = mock(EventServiceImpl.class);
+        GiftServiceImpl gifts = mock(GiftServiceImpl.class);
         HologramServiceImpl holograms = mock(HologramServiceImpl.class);
         ItemServiceImpl items = mock(ItemServiceImpl.class);
         LocaleServiceImpl locales = mock(LocaleServiceImpl.class);
@@ -137,6 +140,7 @@ class STEMCraftAPIImplTest {
         when(plugin.database()).thenReturn(database);
         when(plugin.dialogs()).thenReturn(dialogs);
         when(plugin.events()).thenReturn(events);
+        when(plugin.gifts()).thenReturn(gifts);
         when(plugin.holograms()).thenReturn(holograms);
         when(plugin.items()).thenReturn(items);
         when(plugin.locales()).thenReturn(locales);
@@ -167,6 +171,7 @@ class STEMCraftAPIImplTest {
         expectedDelegates.put("database", database);
         expectedDelegates.put("dialogs", dialogs);
         expectedDelegates.put("events", events);
+        expectedDelegates.put("gifts", gifts);
         expectedDelegates.put("holograms", holograms);
         expectedDelegates.put("items", items);
         expectedDelegates.put("locales", locales);

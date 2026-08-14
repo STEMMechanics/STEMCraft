@@ -140,4 +140,14 @@ public interface ItemService {
      * @return The custom item id, or null if not a custom item.
      */
     @Nullable String getCustomItemId(@Nullable ItemStack item);
+
+    /**
+     * Returns the player-facing plain-text name of an item stack.
+     * Custom or renamed item display names take precedence over the backing
+     * Minecraft material name.
+     *
+     * @param item The item stack to name.
+     * @return The display name, or a readable Minecraft material name.
+     */
+    @NotNull String getItemName(@NotNull ItemStack item);
 }

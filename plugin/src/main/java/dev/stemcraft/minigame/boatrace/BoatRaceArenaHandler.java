@@ -226,6 +226,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
             clearSnowballSupply(arena);
             Player winner = resolveWinnerPlayer(arena);
             if (winner != null) {
+                boatRace.minigame().rewardWinners(arena, List.of(winner.getUniqueId()));
                 startWinnerCelebration(arena, winner);
                 broadcastToOccupants(arena, "<gold>Race Over!</gold> <yellow>" + winner.getName() + "</yellow> <gray>wins the race.</gray>");
             } else if (!"-".equals(winnerName)) {

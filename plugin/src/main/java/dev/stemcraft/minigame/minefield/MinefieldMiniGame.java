@@ -81,6 +81,7 @@ public class MinefieldMiniGame extends BaseMiniGame {
         configFile.setAutoSave(true);
         config.onEnable(configFile);
         MiniGameHudConfigSupport.apply(minigame, configFile, defaultHudDefinitions());
+        configureRewards(minigame, configFile);
 
         new MinefieldCommand(api, this).onEnable();
         loadArenas();
@@ -214,6 +215,7 @@ public class MinefieldMiniGame extends BaseMiniGame {
 
         config.onEnable(configFile);
         MiniGameHudConfigSupport.apply(minigame, configFile, defaultHudDefinitions());
+        configureRewards(minigame, configFile);
         unloadArenas(minigame);
         loadArenas();
         return true;

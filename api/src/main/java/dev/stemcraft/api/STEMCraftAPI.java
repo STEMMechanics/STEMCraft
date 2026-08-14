@@ -28,6 +28,7 @@ import dev.stemcraft.api.service.dialog.DialogService;
 import dev.stemcraft.api.service.event.EventService;
 import dev.stemcraft.api.service.config.ConfigService;
 import dev.stemcraft.api.service.hologram.HologramService;
+import dev.stemcraft.api.service.gift.GiftService;
 import dev.stemcraft.api.service.item.ItemService;
 import dev.stemcraft.api.service.locale.LocaleService;
 import dev.stemcraft.api.service.mailbox.MailboxService;
@@ -103,6 +104,9 @@ public interface STEMCraftAPI {
      * Get the hologram service.
      */
     HologramService holograms();
+
+    /** Get the portable gift service. */
+    GiftService gifts();
 
     /**
      * Get the item service.

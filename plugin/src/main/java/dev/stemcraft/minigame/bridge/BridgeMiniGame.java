@@ -100,6 +100,7 @@ public class BridgeMiniGame extends BaseMiniGame {
         config.onEnable(configFile);
         teamSelectionFormat = loadTeamSelectionFormat(configFile);
         MiniGameHudConfigSupport.apply(minigame, configFile, defaultHudDefinitions());
+        configureRewards(minigame, configFile);
 
         new BridgeCommand(api, this).onEnable();
         loadArenas();
@@ -244,6 +245,7 @@ public class BridgeMiniGame extends BaseMiniGame {
         config.onEnable(configFile);
         teamSelectionFormat = loadTeamSelectionFormat(configFile);
         MiniGameHudConfigSupport.apply(minigame, configFile, defaultHudDefinitions());
+        configureRewards(minigame, configFile);
         unloadArenas(minigame, arena -> unregisterArenaStats(arena.id()));
         loadArenas();
         return true;
