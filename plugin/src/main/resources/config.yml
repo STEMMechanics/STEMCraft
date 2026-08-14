@@ -77,6 +77,8 @@ notice-boards:
   enabled: true
   retention-days: 14
   title: "SERVER NOTICE / REQUEST BOARD ★★★★★"
+  # Optional PNG path, relative to the STEMCraft data folder. Missing images fall back to title text.
+  title-image: ""
 
 interactive-menus:
   enabled: true

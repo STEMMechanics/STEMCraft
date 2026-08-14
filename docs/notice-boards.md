@@ -29,7 +29,12 @@ notice-boards:
   enabled: true
   retention-days: 14
   title: "SERVER NOTICE / REQUEST BOARD ★★★★★"
+  # Optional PNG, relative to plugins/STEMCraft (or an absolute path).
+  # The configured title text is used when it is blank, missing, or unreadable.
+  title-image: ""
 ```
+
+Board and notice text uses Minecraft's map font. Notices use several paper colours, a stable slight rotation, a pin, three wrapped message lines, and the author name.
 
 ## Image-map API
 
