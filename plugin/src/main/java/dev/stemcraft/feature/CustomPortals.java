@@ -34,6 +34,7 @@ import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.player.PlayerPortalEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -62,10 +63,13 @@ public class CustomPortals extends BaseFeature {
     private static final int PORTAL_SCAN_RADIUS = 1;
     private static final int TARGET_BLOCK_DISTANCE = 8;
     private static final int MAX_PORTAL_BLOCKS = 4096;
+    private static final long INSTANT_TELEPORT_GUARD_MILLIS = 1000L;
     private static final Pattern PORTAL_ID_PATTERN = Pattern.compile("^[a-z0-9][a-z0-9_-]*$");
 
     private final Map<String, PortalDefinition> portals = new LinkedHashMap<>();
     private final Map<PortalBlockKey, PortalDefinition> portalBlockIndex = new LinkedHashMap<>();
+    private final Map<UUID, Long> instantTeleportGuards = new LinkedHashMap<>();
+    private boolean instantTeleport;
     private Command command;
 
     record PortalBlockKey(String worldName, int x, int y, int z) {
@@ -237,16 +241,19 @@ public class CustomPortals extends BaseFeature {
 
     @Override
     public void onEnable() {
+        instantTeleport = getConfigSection().getBoolean("instant-teleport", true);
         registerTabCompletions();
         registerCommand();
         loadPortalsFromConfig();
 
         api.events().register(PlayerPortalEvent.class, this::handlePortalEvent, EventPriority.HIGHEST, true);
+        api.events().register(PlayerMoveEvent.class, this::handlePlayerMove, EventPriority.HIGHEST, true);
     }
 
     @Override
     public void onReload() {
         super.onReload();
+        instantTeleport = getConfigSection().getBoolean("instant-teleport", true);
         loadPortalsFromConfig();
     }
 
@@ -259,6 +266,7 @@ public class CustomPortals extends BaseFeature {
 
         portals.clear();
         portalBlockIndex.clear();
+        instantTeleportGuards.clear();
     }
 
     private void registerTabCompletions() {
@@ -272,7 +280,7 @@ public class CustomPortals extends BaseFeature {
 
         command = api.commands().create(COMMAND_LABEL)
             .description("Define custom nether portal destinations.")
-            .usage("Usage: /portal <list|info|set|delete> ...")
+            .usage("Usage: /portal <list|info|set|repair|delete> ...")
             .permission(COMMAND_PERMISSION)
             .tabCompletion("list")
             .tabCompletion("info", "{custom-portal-id}")
@@ -280,6 +288,7 @@ public class CustomPortals extends BaseFeature {
             .tabCompletion("set", "{custom-portal-id}", "here")
             .tabCompletion("set", "{custom-portal-id}", "{world}")
             .tabCompletion("set", "{custom-portal-id}", "{world}", "spawn")
+            .tabCompletion("repair", "{custom-portal-id}")
             .tabCompletion("delete", "{custom-portal-id}")
             .executor((unused, cmd, ctx) -> handleCommand(ctx))
             .register(STEMCraft.getPlugin());
@@ -295,8 +304,9 @@ public class CustomPortals extends BaseFeature {
         switch (subCommand) {
             case "info" -> handleInfo(ctx);
             case "set" -> handleSet(ctx);
+            case "repair" -> handleRepair(ctx);
             case "delete", "remove" -> handleDelete(ctx);
-            default -> ctx.returnError("Usage: /portal <list|info|set|delete> ...");
+            default -> ctx.returnError("Usage: /portal <list|info|set|repair|delete> ...");
         }
     }
 
@@ -390,6 +400,66 @@ public class CustomPortals extends BaseFeature {
         ctx.returnSuccess("Deleted custom portal '" + portalId + "'.");
     }
 
+    private void handleRepair(@NotNull CommandContext ctx) {
+        ctx.checkArgsSizeAtLeast(2, "Usage: /portal repair <id>");
+        ctx.checkNotConsole("This command must be run in-game.");
+
+        String portalId = normalizePortalId(ctx.getArg(1));
+        PortalDefinition existing = findPortal(portalId);
+        if (existing == null) {
+            ctx.returnError("Custom portal not found: " + ctx.getArg(1));
+            return;
+        }
+
+        Player player = Objects.requireNonNull(ctx.asPlayer());
+        Block seedBlock = findPortalSeed(player);
+        if (seedBlock == null) {
+            ctx.returnError("Stand inside the rebuilt lit nether portal, or look directly at it, before running this command.");
+            return;
+        }
+
+        Set<PortalBlockKey> blocks = collectPortalBlocks(seedBlock);
+        if (blocks.isEmpty()) {
+            ctx.returnError("Could not resolve the connected nether portal blocks.");
+            return;
+        }
+
+        PortalDefinition overlap = findOverlappingPortal(blocks, portalId);
+        if (overlap != null) {
+            ctx.returnError("This portal overlaps custom portal '" + overlap.id() + "'. Delete or update that one first.");
+            return;
+        }
+
+        PortalDefinition repaired = repairDefinition(existing, blocks);
+        portals.put(portalId, repaired);
+        rebuildPortalBlockIndex();
+        savePortal(repaired);
+        ctx.returnSuccess("Repaired portal '" + portalId + "' using " + blocks.size()
+            + " portal blocks; destination remains " + formatDestination(existing.destination()) + ".");
+    }
+
+    static @NotNull PortalDefinition repairDefinition(@NotNull PortalDefinition existing,
+                                                       @NotNull Set<PortalBlockKey> blocks) {
+        return new PortalDefinition(existing.id(), existing.destination(), blocks);
+    }
+
+    private void handlePlayerMove(@NotNull PlayerMoveEvent event) {
+        if (!instantTeleport || event.getTo() == null) {
+            return;
+        }
+
+        PortalBlockKey destinationBlock = PortalBlockKey.fromBlock(event.getTo().getBlock());
+        PortalBlockKey previousBlock = PortalBlockKey.fromBlock(event.getFrom().getBlock());
+        if (destinationBlock == null || destinationBlock.equals(previousBlock)) {
+            return;
+        }
+
+        PortalDefinition definition = portalBlockIndex.get(destinationBlock);
+        if (definition != null) {
+            teleportThroughPortal(event.getPlayer(), definition, true);
+        }
+    }
+
     private void handlePortalEvent(@NotNull PlayerPortalEvent event) {
         if (event.getCause() != org.bukkit.event.player.PlayerTeleportEvent.TeleportCause.NETHER_PORTAL) {
             return;
@@ -400,7 +470,25 @@ public class CustomPortals extends BaseFeature {
             return;
         }
 
-        Location destination = resolveDestination(event.getPlayer(), definition.destination());
+        if (instantTeleport) {
+            event.setCancelled(true);
+            teleportThroughPortal(event.getPlayer(), definition, true);
+            return;
+        }
+
+        event.setCancelled(true);
+        teleportThroughPortal(event.getPlayer(), definition, false);
+    }
+
+    private void teleportThroughPortal(@NotNull Player player,
+                                       @NotNull PortalDefinition definition,
+                                       boolean guardRepeatedTeleport) {
+        long now = System.currentTimeMillis();
+        if (guardRepeatedTeleport && instantTeleportGuards.getOrDefault(player.getUniqueId(), 0L) > now) {
+            return;
+        }
+
+        Location destination = resolveDestination(player, definition.destination());
         if (destination == null) {
             STEMCraft.getPlugin().getLogger().warning(
                 "Skipping custom portal '" + definition.id() + "' because destination world '"
@@ -409,9 +497,11 @@ public class CustomPortals extends BaseFeature {
             return;
         }
 
-        rememberForcedDestination(event.getPlayer(), definition.destination(), destination);
-        event.setCancelled(true);
-        PlayerUtil.teleport(event.getPlayer(), destination);
+        if (guardRepeatedTeleport) {
+            instantTeleportGuards.put(player.getUniqueId(), now + INSTANT_TELEPORT_GUARD_MILLIS);
+        }
+        rememberForcedDestination(player, definition.destination(), destination);
+        PlayerUtil.teleport(player, destination);
     }
 
     private void loadPortalsFromConfig() {

@@ -139,4 +139,32 @@ class CustomPortalsTest {
         assertTrue(blocks.contains(new CustomPortals.PortalBlockKey("lobby", 11, 65, 10)));
         assertTrue(blocks.contains(new CustomPortals.PortalBlockKey("lobby", 11, 66, 10)));
     }
+
+    @Test
+    void repairDefinitionReplacesBlocksAndPreservesDestination() {
+        CustomPortals.PortalDestination destination = new CustomPortals.PortalDestination(
+            "survival",
+            CustomPortals.PortalDestinationMode.WORLD_SPAWN,
+            0.0d,
+            0.0d,
+            0.0d,
+            0.0f,
+            0.0f
+        );
+        CustomPortals.PortalDefinition existing = new CustomPortals.PortalDefinition(
+            "survival",
+            destination,
+            Set.of(new CustomPortals.PortalBlockKey("lobby", 1, 64, 1))
+        );
+        Set<CustomPortals.PortalBlockKey> rebuiltBlocks = Set.of(
+            new CustomPortals.PortalBlockKey("lobby", 10, 70, 10),
+            new CustomPortals.PortalBlockKey("lobby", 10, 71, 10)
+        );
+
+        CustomPortals.PortalDefinition repaired = CustomPortals.repairDefinition(existing, rebuiltBlocks);
+
+        assertEquals(existing.id(), repaired.id());
+        assertEquals(destination, repaired.destination());
+        assertEquals(rebuiltBlocks, repaired.blocks());
+    }
 }

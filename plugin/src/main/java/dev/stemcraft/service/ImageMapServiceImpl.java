@@ -145,6 +145,7 @@ public final class ImageMapServiceImpl extends BaseService implements ImageMapSe
                 }
             }
         }
+        ensureFrameItems(display);
         return true;
     }
 
@@ -179,10 +180,33 @@ public final class ImageMapServiceImpl extends BaseService implements ImageMapSe
 
     private void ensureFrames(ManagedDisplay display) {
         if (display.frameIds.size() != display.definition.columns() * display.definition.rows()
-            || display.frameIds.stream().anyMatch(id -> Bukkit.getEntity(id) == null)) {
+            || display.frameIds.stream().anyMatch(id -> !(Bukkit.getEntity(id) instanceof GlowItemFrame))) {
             removeFrames(display);
             display.frameIds.clear();
             spawnFrames(display);
+        }
+    }
+
+    private void ensureFrameItems(ManagedDisplay display) {
+        int count = Math.min(display.frameIds.size(), display.views.size());
+        for (int index = 0; index < count; index++) {
+            Entity entity = Bukkit.getEntity(display.frameIds.get(index));
+            if (!(entity instanceof GlowItemFrame frame)) {
+                continue;
+            }
+
+            ItemStack current = frame.getItem();
+            if (current.getType() == Material.FILLED_MAP
+                && current.getItemMeta() instanceof MapMeta currentMeta
+                && currentMeta.getMapView() == display.views.get(index)) {
+                continue;
+            }
+
+            ItemStack map = new ItemStack(Material.FILLED_MAP);
+            MapMeta meta = (MapMeta) map.getItemMeta();
+            meta.setMapView(display.views.get(index));
+            map.setItemMeta(meta);
+            frame.setItem(map, false);
         }
     }
 
