@@ -237,7 +237,15 @@ public class ItemServiceImpl extends BaseService implements ItemService {
             return;
         }
         if (probe == null) {
-            Bukkit.dispatchCommand(sender, "minecraft:give " + String.join(" ", arguments));
+            List<String> vanillaArguments = new java.util.ArrayList<>(arguments);
+            org.bukkit.entity.Player exactPlayer = Bukkit.getPlayerExact(targetArgument);
+            if (exactPlayer != null) vanillaArguments.set(0, exactPlayer.getUniqueId().toString());
+            try {
+                Bukkit.dispatchCommand(sender, "minecraft:give " + String.join(" ", vanillaArguments));
+            } catch (org.bukkit.command.CommandException exception) {
+                Throwable cause = exception.getCause();
+                context.error(cause == null || cause.getMessage() == null ? exception.getMessage() : cause.getMessage());
+            }
             return;
         }
         int amount = 1;
@@ -249,11 +257,16 @@ public class ItemServiceImpl extends BaseService implements ItemService {
             }
         }
         java.util.List<org.bukkit.entity.Entity> selected;
-        try {
-            selected = Bukkit.selectEntities(sender, targetArgument);
-        } catch (IllegalArgumentException exception) {
-            context.error(exception.getMessage() == null ? "Invalid target selector." : exception.getMessage());
-            return;
+        org.bukkit.entity.Player exactPlayer = Bukkit.getPlayerExact(targetArgument);
+        if (exactPlayer != null) {
+            selected = java.util.List.of(exactPlayer);
+        } else {
+            try {
+                selected = Bukkit.selectEntities(sender, targetArgument);
+            } catch (IllegalArgumentException exception) {
+                context.error(exception.getMessage() == null ? "Invalid target selector." : exception.getMessage());
+                return;
+            }
         }
         int recipients = 0;
         for (org.bukkit.entity.Entity entity : selected) {
