@@ -19,14 +19,17 @@ From `STEMCraftAPI`, you can access:
 - `commands()` - command registration
 - `config()` - YAML config files/sections
 - `database()` - SQL execution/query helpers
+- `dialogs()` - cross-platform Java/Bedrock input dialogs
 - `events()` - event registration helpers
 - `holograms()` - hologram operations
 - `items()` - custom item helpers
 - `locales()` - locale/text resolution
+- `mailboxes()` - queued mail and item delivery
 - `messages()` - formatted messaging and token processing
 - `minigames()` - minigame framework
 - `motd()` - MOTD control
 - `players()` - player utilities/logging service
+- `placedObjects()` - persistent placed block/entity assemblies
 - `punishments()` - punishment records/actions
 - `playerStats()` - stat recording/query/export
 - `recipes()` - custom recipes
@@ -63,6 +66,88 @@ final class ExampleEvents {
     }
 }
 ```
+
+## Mailbox API
+
+`MailboxService#send(MailSendRequest)` queues a written letter and optional item stacks. Recipients use only their UUID; STEMCraft resolves their current known name internally. Senders use either a player UUID or a system/plugin display string.
+
+```java
+MailSendResult result = api.mailboxes().send(new MailSendRequest(
+    "Daily Rewards",
+    recipientUuid,
+    "Here is today's reward.",
+    List.of(new ItemStack(Material.EMERALD, 2))
+));
+```
+
+Use `result.queued()` and `result.message()` to inspect the outcome. See [Mailboxes](./mailboxes.md) for the complete feature guide.
+
+## Dynamic Hologram API
+
+Dynamic holograms are runtime registrations identified by a stable type and context. They can be anchored to a location or an entity UUID and can provide player-specific visibility and content.
+
+```java
+api.holograms().createDynamic(
+    "quest",
+    questId,
+    npcUuid,
+    2.2D,
+    player -> quest.isAvailableTo(player),
+    player -> Component.text("!")
+);
+```
+
+State changes should invalidate the affected rendering:
+
+```java
+api.holograms().refreshDynamic("quest", questId, player);
+api.holograms().deleteDynamic("quest", questId);
+```
+
+The service manages Java/Bedrock rendering, player movement, world and chunk availability, moving entity anchors, range/line-of-sight rules, and resource-pack token refreshes. Dynamic registrations are intentionally not persisted; the owning feature re-registers them from its own stable records during startup.
+
+## Cross-platform Dialog API
+
+`DialogService` builds one logical form for both Paper's Java dialog UI and Geyser's Bedrock Cumulus forms.
+
+```java
+boolean opened = api.dialogs().create("example:feedback")
+    .title(Component.text("Feedback"))
+    .body(Component.text("Tell us what happened."))
+    .textInput("subject", Component.text("Subject"), "", 64)
+    .multilineTextInput("message", Component.text("Message"), "", 256, 4)
+    .submit(Component.text("Send"), response -> {
+        String subject = response.text("subject");
+        String message = response.text("message");
+    })
+    .cancel(Component.text("Cancel"), () -> { })
+    .open(player);
+```
+
+`open` returns `false` if the appropriate client UI cannot be opened. Callbacks run on the server thread.
+
+## Message Types and Contexts
+
+Messages can provide an explicit `MessageType` and optional context:
+
+```java
+api.messages().send(player, MessageType.INFO, "survival", "You have mail");
+```
+
+Configured strings can route themselves with leading directives:
+
+- `/info/<gold>You have mail`
+- `/survival//info/<gold>You have mail`
+- `/info//survival/<gold>You have mail`
+- `/survival/info/<gold>You have mail`
+
+Directives are processed only at the beginning of trusted plugin/config messages. Player-authored chat is not directive-processed. Later directives override earlier values.
+
+Context prefixes are configured under `logging.contexts`. Optional `show-when` and `hide-when` rules support world globs and permissions, including `!` negation. With only `show-when`, the implicit default is hidden; with `hide-when`, or with both keys, the implicit default is shown. An unknown context simply adds no prefix.
+
+## Custom Items and Placed Objects
+
+`CustomItemDefinition` combines an item template, placement mode, placed-object type, and Java/Bedrock client presentation metadata. `PlacedObjectService` persists stable assemblies containing a primary block plus role-labelled block/entity links. Features should resolve and delete assemblies through this service instead of storing transient Bukkit entity references.
 
 ## Database Example
 

@@ -127,7 +127,7 @@ public final class StringUtil {
      * Capitalizes the first letter of each word in a string.
      *
      * @param str The input string.
-     * @param ignoreColors Whether to ignore color codes (e.g., &a, &b).
+     * @param ignoreColors Whether to ignore color codes (for example, {@code &a} and {@code &b}).
      * @return The capitalized string.
      */
     public static String capitalize(String str, Boolean ignoreColors) {

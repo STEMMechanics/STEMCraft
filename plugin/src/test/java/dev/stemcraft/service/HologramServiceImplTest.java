@@ -1,5 +1,7 @@
 package dev.stemcraft.service;
 
+import dev.stemcraft.STEMCraft;
+import dev.stemcraft.api.STEMCraftAPI;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -122,5 +124,22 @@ class HologramServiceImplTest {
             .thenReturn(null);
 
         assertTrue(HologramServiceImpl.hasClearLineOfSight(player, target));
+    }
+
+    @Test
+    void dynamicHologramsReplaceAndDeleteByStableTypeAndContext() throws Exception {
+        HologramServiceImpl service = new HologramServiceImpl(mock(STEMCraft.class), mock(STEMCraftAPI.class));
+
+        service.createDynamic("mailbox", "mailbox-id", new Location(world, 1, 70, 1),
+            player -> false, player -> Component.text("first"));
+        service.createDynamic("mailbox", "mailbox-id", new Location(world, 2, 70, 2),
+            player -> false, player -> Component.text("second"));
+
+        java.lang.reflect.Field field = HologramServiceImpl.class.getDeclaredField("dynamicHolograms");
+        field.setAccessible(true);
+        assertTrue(((java.util.Map<?, ?>) field.get(service)).size() == 1);
+
+        service.deleteDynamic("mailbox", "mailbox-id");
+        assertTrue(((java.util.Map<?, ?>) field.get(service)).isEmpty());
     }
 }

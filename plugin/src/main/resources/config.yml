@@ -6,6 +6,12 @@ logging:
     error: "<red>\uE132</red> "
     success: "<dark_green><bold>[ \u2714 ]</bold></dark_green> "
     broadcast: "<dark_purple><bold>[ ! ]</bold></dark_purple> "
+  contexts:
+    survival:
+      prefix: "[:sword: <gold><bold>SURVIVAL</bold></gold>] "
+      hide-when:
+        worlds:
+          - "survival*"
 
 motd:
   title: "<blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple> <yellow><bold>STEMCRAFT</bold></yellow> <blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple>"
@@ -36,6 +42,36 @@ custom-commands:
 custom-portals:
   enabled: true
   portals: {}
+
+mailboxes:
+  enabled: true
+  hologram:
+    text: ":mail_large:"
+  delivery:
+    # Initial delivery delay before mail is delivered to the recipient inbox.
+    base-delay: 72000
+    # How often the delivery queue runs, in ticks.
+    process-mail-queue: 20
+    # Minimum time between "mailbox full" notices to the same player, in ticks.
+    mailbox-full-cooldown: 72000
+  dialog:
+    title: "STEMCraft Mail"
+    notice: "<yellow>This message and all items in the mailbox will be sent to the player below.</yellow>"
+    recipient-label: "Send to"
+    message-label: "Message"
+    send-label: "Send"
+    cancel-label: "Cancel"
+    open-failed: "/error/Could not open the mail dialog. Your items remain in the mailbox."
+    cancelled: "/info/Send mail cancelled. Your items remain in the mailbox."
+  messages:
+    place-failed: "/error/Failed to place mailbox: {error}"
+    recipient-required: "/error/Enter the name of the player you want to send this mail to."
+    recipient-not-found: "/error/Could not find a player named '{recipient}'."
+    self-recipient: "/error/You cannot send mail to yourself."
+    too-many-items: "/error/You cannot send that many items to a player at once."
+    queued: "/success/Mail sent to {recipient}"
+    mailbox-full: "/survival//warn/Your mailbox is full."
+    received: "/survival//info/<gold>You received mail from {sender}."
 
 interactive-menus:
   enabled: true

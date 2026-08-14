@@ -35,6 +35,8 @@ import dev.stemcraft.chunkgen.FlatGenerator;
 import dev.stemcraft.chunkgen.WaterGenerator;
 import dev.stemcraft.chunkgen.VoidGenerator;
 import dev.stemcraft.feature.BaseFeature;
+import dev.stemcraft.feature.Mailboxes;
+import dev.stemcraft.api.service.mailbox.MailboxService;
 import dev.stemcraft.service.command.CommandServiceImpl;
 import dev.stemcraft.service.message.MessageServiceImpl;
 import dev.stemcraft.service.minigame.MiniGameServiceImpl;
@@ -95,6 +97,7 @@ public final class STEMCraft extends JavaPlugin {
     private ConfigServiceImpl config;
     private AuditServiceImpl audit;
     private DatabaseServiceImpl database;
+    private DialogServiceImpl dialogs;
     private EventServiceImpl events;
     private HologramServiceImpl holograms;
     private ItemServiceImpl items;
@@ -102,7 +105,9 @@ public final class STEMCraft extends JavaPlugin {
     private MessageServiceImpl messages;
     private MiniGameServiceImpl minigames;
     private MotdServiceImpl motd;
+    private MailboxService mailboxes;
     private PlaceholderServiceImpl placeholders;
+    private PlacedObjectServiceImpl placedObjects;
     private PlayerServiceImpl players;
     private PlayerStatsServiceImpl playerStats;
     private ProtectionServiceImpl protections;
@@ -191,12 +196,14 @@ public final class STEMCraft extends JavaPlugin {
         chat = new ChatServiceImpl(this, api);
         commands = new CommandServiceImpl(this, api);
         database = new DatabaseServiceImpl(this, api);
+        dialogs = new DialogServiceImpl(this, api);
         events = new EventServiceImpl(this, api);
         holograms = new HologramServiceImpl(this, api);
         items = new ItemServiceImpl(this, api);
         minigames = new MiniGameServiceImpl(this, api);
         motd = new MotdServiceImpl(this, api);
         placeholders = new PlaceholderServiceImpl(this, api);
+        placedObjects = new PlacedObjectServiceImpl(this, api);
         players = new PlayerServiceImpl(this, api);
         playerStats = new PlayerStatsServiceImpl(this, api);
         protections = new ProtectionServiceImpl(this, api);
@@ -212,6 +219,7 @@ public final class STEMCraft extends JavaPlugin {
         worlds = new WorldServiceImpl(this, api);
 
         database.onEnable();
+        dialogs.onEnable();
         firstJoin.onEnable();
         audit.onEnable();
         chat.onEnable();
@@ -222,6 +230,7 @@ public final class STEMCraft extends JavaPlugin {
         minigames.onEnable();
         motd.onEnable();
         placeholders.onEnable();
+        placedObjects.onEnable();
         players.onEnable();
         playerStats.onEnable();
         protections.onEnable();
@@ -336,6 +345,7 @@ public final class STEMCraft extends JavaPlugin {
         disableService(profanityFilter);
         disableService(playerStats);
         disableService(placeholders);
+        disableService(placedObjects);
         disableService(players);
         disableService(motd);
         disableService(items);
@@ -344,6 +354,7 @@ public final class STEMCraft extends JavaPlugin {
         disableService(firstJoin);
         disableService(audit);
         disableService(database);
+        disableService(dialogs);
         disableService(commands);
         disableService(chat);
 
@@ -479,6 +490,9 @@ public final class STEMCraft extends JavaPlugin {
         }
 
         feature.onEnable();
+        if (feature instanceof Mailboxes mailboxFeature) {
+            mailboxes = mailboxFeature;
+        }
         loadedFeatures.add(feature);
         debug("STEMCRAFT_FEATURE_LOADED", "name", feature.id());
     }

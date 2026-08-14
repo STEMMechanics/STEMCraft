@@ -21,10 +21,15 @@
 package dev.stemcraft.api.service.hologram;
 
 import org.bukkit.Location;
+import org.bukkit.entity.Player;
+import net.kyori.adventure.text.Component;
 import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
 import java.util.List;
+import java.util.UUID;
+import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * Service for managing holograms in the Minecraft world.
@@ -112,4 +117,34 @@ public interface HologramService {
      */
     void save(@Nullable Integer id);
     default void saveAll() { save(null); }
+
+    /**
+     * Creates or replaces a player-specific hologram identified by a stable type and context.
+     * Dynamic holograms are runtime registrations and are not persisted by the service.
+     */
+    void createDynamic(@NotNull String type,
+                       @NotNull String context,
+                       @NotNull Location location,
+                       @NotNull Predicate<Player> visibility,
+                       @NotNull Function<Player, Component> content);
+
+    /** Creates or replaces a dynamic hologram anchored above an entity such as an NPC. */
+    void createDynamic(@NotNull String type,
+                       @NotNull String context,
+                       @NotNull UUID anchorEntityUuid,
+                       double verticalOffset,
+                       @NotNull Predicate<Player> visibility,
+                       @NotNull Function<Player, Component> content);
+
+    /** Invalidates all rendered instances of a dynamic hologram. */
+    void refreshDynamic(@NotNull String type, @NotNull String context);
+
+    /** Invalidates one player's rendered instance of a dynamic hologram. */
+    void refreshDynamic(@NotNull String type, @NotNull String context, @NotNull Player player);
+
+    /** Invalidates every registered dynamic hologram, for example after token changes. */
+    void refreshDynamic();
+
+    /** Deletes a dynamic hologram and all of its rendered entities. */
+    void deleteDynamic(@NotNull String type, @NotNull String context);
 }

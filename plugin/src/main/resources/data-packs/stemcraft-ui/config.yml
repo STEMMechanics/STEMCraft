@@ -1,4 +1,12 @@
 font_images:
+  contexts/survival:
+    file: font/contexts/survival.png
+    ascent: 8
+    height: 8
+  contexts/creative:
+    file: font/contexts/creative.png
+    ascent: 8
+    height: 8
   accept:
     char: 
     file: font/accept.png

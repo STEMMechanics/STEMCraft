@@ -18,14 +18,17 @@ STEMCraftAPI api = STEMCraftAPI.api();
 - `config()`
 - `audit()`
 - `database()`
+- `dialogs()`
 - `events()`
 - `holograms()`
 - `items()`
 - `locales()`
+- `mailboxes()`
 - `messages()`
 - `minigames()`
 - `motd()`
 - `players()`
+- `placedObjects()`
 - `placeholders()`
 - `protections()`
 - `profanityFilter()`
@@ -40,6 +43,26 @@ STEMCraftAPI api = STEMCraftAPI.api();
 - `worlds()`
 
 ## Main Extension Areas
+
+### Mailboxes
+
+`MailboxService` queues letters and item stacks to a recipient UUID. `MailSendRequest` accepts either a player UUID or system string as its sender; player names are resolved internally. See the repository's `docs/mailboxes.md` for examples.
+
+### Dynamic Holograms
+
+`HologramService#createDynamic(...)` registers location- or entity-anchored, player-specific holograms under a stable type/context key. Use `refreshDynamic(...)` after state changes and `deleteDynamic(...)` when the owning object is removed. The service manages Java/Bedrock rendering and world/chunk lifecycle.
+
+### Dialogs
+
+`DialogService` exposes one fluent input-dialog builder backed by Paper dialogs on Java and Geyser Cumulus forms on Bedrock. Builders support body text, single- and multiline inputs, submit callbacks, and cancellation callbacks.
+
+### Messages
+
+`MessageService` supports explicit `MessageType` and optional configured contexts. Trusted strings may begin with routing directives such as `/survival//info/`; player-authored chat is never directive-processed.
+
+### Custom Items and Placed Objects
+
+Rich custom item definitions include Java/Bedrock visual metadata and managed placement behavior. `PlacedObjectService` persists stable block/entity assemblies with role-labelled links.
 
 ### Commands
 

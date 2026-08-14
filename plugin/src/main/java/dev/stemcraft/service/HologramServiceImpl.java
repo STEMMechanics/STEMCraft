@@ -33,6 +33,7 @@ import dev.stemcraft.api.service.hologram.HologramTypeHandler;
 import dev.stemcraft.api.event.world.WorldDeleteEvent;
 import dev.stemcraft.api.util.StringUtil;
 import dev.stemcraft.api.util.TextUtil;
+import dev.stemcraft.api.util.PlayerUtil;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
@@ -40,6 +41,7 @@ import org.bukkit.FluidCollisionMode;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.ArmorStand;
+import org.bukkit.entity.Display;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
@@ -56,6 +58,8 @@ import org.jspecify.annotations.NonNull;
 import javax.annotation.Nullable;
 import java.text.DecimalFormat;
 import java.util.*;
+import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * Implementation of the HologramService for managing holograms in the game.
@@ -65,6 +69,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
     private static final String STAT_LEADERBOARD_TYPE = "stat_leaderboard";
     private static final int DEFAULT_STAT_LEADERBOARD_LIMIT = 10;
     private static final String STEMCRAFT_HOLOGRAM_TAG = "stemcraft:hologram";
+    private static final String STEMCRAFT_DYNAMIC_HOLOGRAM_TAG = "stemcraft:dynamic-hologram";
     private static final String VISIBILITY_TASK_ID = "service:hologram-visibility";
     private static final long DEFAULT_VISIBILITY_UPDATE_TICKS = 10L;
     private static final double DEFAULT_MAX_VISIBLE_DISTANCE = 32.0D;
@@ -73,6 +78,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
     private final Map<Integer, HologramData> holograms = new HashMap<>();
     private final Map<Integer, List<UUID>> entitiesById = new HashMap<>();
     private final Map<String, HologramTypeHandler> handlers = new HashMap<>();
+    private final Map<DynamicKey, DynamicHologram> dynamicHolograms = new HashMap<>();
     private final Map<UUID, Set<UUID>> hiddenExternalViewers = new HashMap<>();
     private boolean visibilityEnabled = true;
     private long visibilityUpdateTicks = DEFAULT_VISIBILITY_UPDATE_TICKS;
@@ -243,6 +249,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
     public void onDisable() {
         stopVisibilityController();
         restoreManagedVisibility();
+        clearDynamicHolograms();
         despawnAll();
         saveAll();
     }
@@ -538,6 +545,88 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         }
     }
 
+    @Override
+    public void createDynamic(@NotNull String type,
+                              @NotNull String context,
+                              @NotNull Location location,
+                              @NotNull Predicate<Player> visibility,
+                              @NotNull Function<Player, Component> content) {
+        if (location.getWorld() == null) {
+            throw new IllegalArgumentException("Dynamic hologram location must have a world");
+        }
+        putDynamic(type, context, new LocationAnchor(location.clone()), visibility, content);
+    }
+
+    @Override
+    public void createDynamic(@NotNull String type,
+                              @NotNull String context,
+                              @NotNull UUID anchorEntityUuid,
+                              double verticalOffset,
+                              @NotNull Predicate<Player> visibility,
+                              @NotNull Function<Player, Component> content) {
+        putDynamic(type, context, new EntityAnchor(anchorEntityUuid, verticalOffset), visibility, content);
+    }
+
+    private void putDynamic(@NotNull String type,
+                            @NotNull String context,
+                            @NotNull DynamicAnchor anchor,
+                            @NotNull Predicate<Player> visibility,
+                            @NotNull Function<Player, Component> content) {
+        DynamicKey key = dynamicKey(type, context);
+        DynamicHologram previous = dynamicHolograms.remove(key);
+        if (previous != null) {
+            removeDynamicInstances(previous);
+        }
+        DynamicHologram hologram = new DynamicHologram(key, anchor, visibility, content);
+        dynamicHolograms.put(key, hologram);
+        syncDynamicHologram(hologram);
+    }
+
+    @Override
+    public void refreshDynamic(@NotNull String type, @NotNull String context) {
+        DynamicHologram hologram = dynamicHolograms.get(dynamicKey(type, context));
+        if (hologram == null) {
+            return;
+        }
+        removeDynamicInstances(hologram);
+        syncDynamicHologram(hologram);
+    }
+
+    @Override
+    public void refreshDynamic(@NotNull String type, @NotNull String context, @NotNull Player player) {
+        DynamicHologram hologram = dynamicHolograms.get(dynamicKey(type, context));
+        if (hologram == null) {
+            return;
+        }
+        removeDynamicInstance(hologram, player.getUniqueId());
+        syncDynamicViewer(hologram, player, hologram.anchor.resolve());
+    }
+
+    @Override
+    public void refreshDynamic() {
+        for (DynamicHologram hologram : dynamicHolograms.values()) {
+            removeDynamicInstances(hologram);
+        }
+        tickDynamicHolograms();
+    }
+
+    @Override
+    public void deleteDynamic(@NotNull String type, @NotNull String context) {
+        DynamicHologram hologram = dynamicHolograms.remove(dynamicKey(type, context));
+        if (hologram != null) {
+            removeDynamicInstances(hologram);
+        }
+    }
+
+    private @NotNull DynamicKey dynamicKey(@NotNull String type, @NotNull String context) {
+        String normalizedType = StringUtil.slugify(type);
+        String normalizedContext = context.trim();
+        if (normalizedType.isBlank() || normalizedContext.isBlank()) {
+            throw new IllegalArgumentException("Dynamic hologram type and context cannot be blank");
+        }
+        return new DynamicKey(normalizedType, normalizedContext);
+    }
+
     /**
      * Save all holograms to the configuration.
      */
@@ -711,6 +800,59 @@ public class HologramServiceImpl extends BaseService implements HologramService 
             }
         }
         return null;
+    }
+
+    private interface DynamicAnchor {
+        @Nullable Location resolve();
+    }
+
+    private record LocationAnchor(@NotNull Location location) implements DynamicAnchor {
+        @Override
+        public @NotNull Location resolve() {
+            return location.clone();
+        }
+    }
+
+    private record EntityAnchor(@NotNull UUID entityUuid, double verticalOffset) implements DynamicAnchor {
+        @Override
+        public @Nullable Location resolve() {
+            Entity entity = Bukkit.getEntity(entityUuid);
+            return entity == null || !entity.isValid()
+                ? null
+                : entity.getLocation().add(0.0D, verticalOffset, 0.0D);
+        }
+    }
+
+    private record DynamicKey(@NotNull String type, @NotNull String context) { }
+
+    private static final class DynamicHologram {
+        private final DynamicKey key;
+        private final DynamicAnchor anchor;
+        private final Predicate<Player> visibility;
+        private final Function<Player, Component> content;
+        private final Map<UUID, DynamicInstance> instances = new HashMap<>();
+
+        private DynamicHologram(DynamicKey key,
+                                DynamicAnchor anchor,
+                                Predicate<Player> visibility,
+                                Function<Player, Component> content) {
+            this.key = key;
+            this.anchor = anchor;
+            this.visibility = visibility;
+            this.content = content;
+        }
+    }
+
+    private static final class DynamicInstance {
+        private final UUID entityUuid;
+        private final boolean bedrock;
+        private final Component content;
+
+        private DynamicInstance(UUID entityUuid, boolean bedrock, Component content) {
+            this.entityUuid = entityUuid;
+            this.bedrock = bedrock;
+            this.content = content;
+        }
     }
 
     /**
@@ -1091,11 +1233,163 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         tickVisibility();
     }
 
+    private void tickDynamicHolograms() {
+        for (DynamicHologram hologram : dynamicHolograms.values()) {
+            syncDynamicHologram(hologram);
+        }
+    }
+
+    private void syncDynamicHologram(@NotNull DynamicHologram hologram) {
+        Location anchor = hologram.anchor.resolve();
+        Set<UUID> onlinePlayers = new HashSet<>();
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            onlinePlayers.add(player.getUniqueId());
+            syncDynamicViewer(hologram, player, anchor);
+        }
+        for (UUID viewerId : new HashSet<>(hologram.instances.keySet())) {
+            if (!onlinePlayers.contains(viewerId)) {
+                removeDynamicInstance(hologram, viewerId);
+            }
+        }
+    }
+
+    private void syncDynamicViewer(@NotNull DynamicHologram hologram,
+                                   @NotNull Player player,
+                                   @Nullable Location anchor) {
+        if (anchor == null || anchor.getWorld() == null
+            || !anchor.getWorld().isChunkLoaded(anchor.getBlockX() >> 4, anchor.getBlockZ() >> 4)
+            || !player.isOnline() || !player.getWorld().equals(anchor.getWorld())
+            || !safeVisible(hologram, player)
+            || (visibilityEnabled && !shouldShowTo(player, anchor))) {
+            removeDynamicInstance(hologram, player.getUniqueId());
+            return;
+        }
+
+        boolean bedrock = PlayerUtil.isBedrock(player);
+        DynamicInstance current = hologram.instances.get(player.getUniqueId());
+        Entity entity = current == null ? null : findEntity(current.entityUuid);
+        if (entity == null || !entity.isValid() || current.bedrock != bedrock) {
+            removeDynamicInstance(hologram, player.getUniqueId());
+            Component content = dynamicContent(hologram, player);
+            if (content == null || content.equals(Component.empty())) {
+                return;
+            }
+            entity = spawnDynamicEntity(anchor, content, bedrock);
+            hologram.instances.put(player.getUniqueId(),
+                new DynamicInstance(entity.getUniqueId(), bedrock, content));
+        } else {
+            Location target = bedrock ? anchor.clone().subtract(0.0D, 0.7D, 0.0D) : anchor;
+            if (!entity.getWorld().equals(target.getWorld())
+                || entity.getLocation().distanceSquared(target) > 0.0001D) {
+                updateDynamicEntity(entity, anchor, current.content, bedrock);
+            }
+        }
+
+        player.showEntity(plugin, entity);
+    }
+
+    private @Nullable Component dynamicContent(@NotNull DynamicHologram hologram, @NotNull Player player) {
+        try {
+            return Objects.requireNonNullElse(hologram.content.apply(player), Component.empty());
+        } catch (RuntimeException exception) {
+            plugin.getLogger().warning("[holograms] Content provider failed for "
+                + hologram.key.type + ":" + hologram.key.context + ": " + exception.getMessage());
+            return null;
+        }
+    }
+
+    private boolean safeVisible(@NotNull DynamicHologram hologram, @NotNull Player player) {
+        try {
+            return hologram.visibility.test(player);
+        } catch (RuntimeException exception) {
+            plugin.getLogger().warning("[holograms] Visibility provider failed for "
+                + hologram.key.type + ":" + hologram.key.context + ": " + exception.getMessage());
+            return false;
+        }
+    }
+
+    private @NotNull Entity spawnDynamicEntity(@NotNull Location anchor,
+                                                @NotNull Component content,
+                                                boolean bedrock) {
+        World world = Objects.requireNonNull(anchor.getWorld());
+        if (bedrock) {
+            Location standLocation = anchor.clone().subtract(0.0D, 0.7D, 0.0D);
+            return world.spawn(standLocation, ArmorStand.class, entity -> {
+                entity.customName(content);
+                entity.setCustomNameVisible(true);
+                entity.setVisible(false);
+                entity.setMarker(true);
+                entity.setSmall(true);
+                entity.setBasePlate(false);
+                entity.setArms(false);
+                configureDynamicEntity(entity);
+            });
+        }
+        return world.spawn(anchor, TextDisplay.class, entity -> {
+            entity.text(content);
+            entity.setBillboard(Display.Billboard.CENTER);
+            entity.setAlignment(TextDisplay.TextAlignment.CENTER);
+            entity.setSeeThrough(true);
+            entity.setShadowed(true);
+            entity.setViewRange((float) Math.sqrt(maxVisibleDistanceSquared));
+            configureDynamicEntity(entity);
+        });
+    }
+
+    private void configureDynamicEntity(@NotNull Entity entity) {
+        entity.setVisibleByDefault(false);
+        entity.setPersistent(false);
+        entity.setInvulnerable(true);
+        entity.setGravity(false);
+        entity.setSilent(true);
+        entity.addScoreboardTag(STEMCRAFT_DYNAMIC_HOLOGRAM_TAG);
+    }
+
+    private void updateDynamicEntity(@NotNull Entity entity,
+                                     @NotNull Location anchor,
+                                     @NotNull Component content,
+                                     boolean bedrock) {
+        Location target = bedrock ? anchor.clone().subtract(0.0D, 0.7D, 0.0D) : anchor;
+        if (!entity.getWorld().equals(target.getWorld()) || entity.getLocation().distanceSquared(target) > 0.0001D) {
+            entity.teleport(target);
+        }
+        if (entity instanceof TextDisplay display) {
+            display.text(content);
+        } else if (entity instanceof ArmorStand stand) {
+            stand.customName(content);
+        }
+    }
+
+    private void removeDynamicInstance(@NotNull DynamicHologram hologram, @NotNull UUID viewerId) {
+        DynamicInstance instance = hologram.instances.remove(viewerId);
+        if (instance == null) {
+            return;
+        }
+        Entity entity = findEntity(instance.entityUuid);
+        if (entity != null) {
+            entity.remove();
+        }
+    }
+
+    private void removeDynamicInstances(@NotNull DynamicHologram hologram) {
+        for (UUID viewerId : new HashSet<>(hologram.instances.keySet())) {
+            removeDynamicInstance(hologram, viewerId);
+        }
+    }
+
+    private void clearDynamicHolograms() {
+        for (DynamicHologram hologram : dynamicHolograms.values()) {
+            removeDynamicInstances(hologram);
+        }
+        dynamicHolograms.clear();
+    }
+
     private void stopVisibilityController() {
         api.tasks().cancel(VISIBILITY_TASK_ID);
     }
 
     private void tickVisibility() {
+        tickDynamicHolograms();
         Set<UUID> activeExternalEntities = new HashSet<>();
 
         for (World world : Bukkit.getWorlds()) {

@@ -47,6 +47,24 @@
 - Bedrock integration:
   - Writes Bedrock manifest/texture metadata/glyph maps
   - Optional automatic Geyser reload after `/resourcepack zip`
+- Font-image tokens may use path-like names such as `:contexts/survival:`.
+- Glyphs without an explicit character are assigned the next collision-free codepoint and retain stable assignments across builds.
+
+## Contextual Messages
+
+- Trusted config messages can declare a type and context through leading directives such as `/survival//info/`.
+- Contexts add configured prefixes only when their world/permission `show-when` and `hide-when` rules apply.
+- Player-authored messages cannot inject message type or context directives.
+
+## Mailboxes
+
+- Placeable custom mailbox with queued, delayed delivery.
+- Java Paper dialog and Bedrock Geyser form for player-to-player composition.
+- Every delivery includes a written letter describing its sender, message, and items.
+- Offline delivery notifications are replayed when the recipient joins.
+- Player-specific Java/Bedrock holograms appear while delivered mail is waiting.
+- Public API supports server/plugin deliveries using a recipient UUID and either a sender UUID or sender string.
+- See [Mailboxes](./mailboxes.md) for configuration and API examples.
 
 ## First Join Check
 

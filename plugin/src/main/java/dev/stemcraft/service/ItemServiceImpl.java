@@ -22,17 +22,25 @@ package dev.stemcraft.service;
 
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.api.service.item.CustomItemDefinition;
+import dev.stemcraft.api.service.item.CustomItemPlacementMode;
 import dev.stemcraft.api.service.item.ItemService;
 import org.bukkit.NamespacedKey;
+import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.components.CustomModelDataComponent;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -41,6 +49,7 @@ import java.util.Map;
 public class ItemServiceImpl extends BaseService implements ItemService {
     private static final String ATTR_ITEM_ID_KEY = "custom-item-id";
     private final Map<String, ItemStack> itemTemplates = new HashMap<>();
+    private final Map<String, CustomItemDefinition> itemDefinitions = new LinkedHashMap<>();
 
     /**
      * Constructor for ItemServiceImpl.
@@ -69,6 +78,16 @@ public class ItemServiceImpl extends BaseService implements ItemService {
                 if (getAttrib(item, "no-drop", Integer.class, 0) == 1) {
                     event.setCancelled(true);
                 }
+            }
+        });
+
+        api.events().register(BlockPlaceEvent.class, event -> {
+            CustomItemDefinition definition = customItemDefinition(getCustomItemId(event.getItemInHand()));
+            if (definition == null) {
+                return;
+            }
+            if (definition.placementMode() == CustomItemPlacementMode.DENY) {
+                event.setCancelled(true);
             }
         });
     }
@@ -217,6 +236,43 @@ public class ItemServiceImpl extends BaseService implements ItemService {
         itemTemplates.put(id, cloned);
     }
 
+    @Override
+    public void registerCustomItem(@NotNull CustomItemDefinition definition) {
+        ItemStack template = definition.template().clone();
+        ItemMeta meta = template.getItemMeta();
+        if (meta != null && definition.clients() != null && definition.clients().java() != null) {
+            NamespacedKey itemModel = NamespacedKey.fromString(definition.clients().java().itemModelId());
+            if (itemModel == null) {
+                throw new IllegalArgumentException("Invalid item model id '" + definition.clients().java().itemModelId() + "'");
+            }
+            meta.setItemModel(itemModel);
+            CustomModelDataComponent customModelData = meta.getCustomModelDataComponent();
+            customModelData.setFloats(List.of((float) definition.clients().java().customModelData()));
+            meta.setCustomModelDataComponent(customModelData);
+            if (!template.setItemMeta(meta)) {
+                throw new IllegalStateException("Failed to apply item metadata for custom item '" + definition.id() + "'");
+            }
+        }
+        registerCustomItem(definition.id(), template);
+        itemDefinitions.put(definition.id(), new CustomItemDefinition(
+            definition.id(),
+            template,
+            definition.placementMode(),
+            definition.managedObjectType(),
+            definition.clients()
+        ));
+    }
+
+    @Override
+    public @Nullable CustomItemDefinition customItemDefinition(@NotNull String id) {
+        return itemDefinitions.get(id);
+    }
+
+    @Override
+    public @NotNull Collection<CustomItemDefinition> customItemDefinitions() {
+        return Collections.unmodifiableCollection(itemDefinitions.values());
+    }
+
     /**
      * Creates a new ItemStack instance of the custom item with the given id and quantity.
      *
@@ -264,6 +320,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
         if (item == null) {
             return null;
         }
-        return getAttrib(item, ATTR_ITEM_ID_KEY, String.class, "");
+        String id = getAttrib(item, ATTR_ITEM_ID_KEY, String.class, "");
+        return id.isBlank() ? null : id;
     }
 }

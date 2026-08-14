@@ -25,6 +25,18 @@ The main `config.yml` covers many areas, including:
 - recipes
 - player stats options
 - web/resource-pack configuration
+- message type prefixes and conditional contexts under `logging`
+- mailbox delivery, hologram, dialog, and notification text under `mailboxes`
+
+## Message Contexts
+
+Contexts are configured under `logging.contexts.<name>`. Each context has a `prefix` and optional `show-when`/`hide-when` world or permission rules. World values support `*` globs and `!` negation. A context with only `show-when` defaults to hidden; otherwise it defaults to shown. Unknown contexts are ignored without error.
+
+Trusted configured messages may start with directives such as `/info/`, `/survival//info/`, or `/survival/info/` to select a type and context.
+
+## Mailboxes
+
+`mailboxes.delivery` controls queue timing, `mailboxes.hologram.text` controls the player-specific waiting-mail marker, and `mailboxes.dialog`/`mailboxes.messages` contain all compose UI and notification strings. Hologram text supports MiniMessage and generated glyph tokens.
 
 ## Locales
 

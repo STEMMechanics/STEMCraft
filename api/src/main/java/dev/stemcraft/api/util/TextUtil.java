@@ -199,7 +199,8 @@ public final class TextUtil {
     }
 
     /**
-     * Converts formatted text to a legacy string using ampersand colour codes (e.g., &a, &7).
+     * Converts formatted text to a legacy string using ampersand colour codes
+     * (for example, {@code &a} and {@code &7}).
      *
      * @param input the formatted text, may be null.
      * @return the legacy-formatted string with ampersand colour codes.
@@ -260,7 +261,7 @@ public final class TextUtil {
     }
 
     /**
-     * Reverts section sign (§) colour codes back to ampersand (&) codes in a string.
+     * Reverts section sign (§) colour codes back to ampersand ({@code &}) codes in a string.
      *
      * @param input the string with section colour codes, may be null.
      * @return the string with ampersand colour codes.
