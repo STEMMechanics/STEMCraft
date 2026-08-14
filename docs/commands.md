@@ -50,6 +50,18 @@ This is the active command surface registered by STEMCraft.
 - `/resourcepack zip`
 - `/mailbox send <player> [message]`
 - `/mailbox <queue|view|release|hold|delete|item> ...`
+- `/noticeboard post`
+- `/noticeboard post <header> | <message>` from the server console
+- `/noticeboard mine`
+- `/noticeboard list [page]`
+- `/noticeboard edit <post-id>` opens an edit dialog
+- `/noticeboard edit <post-id> <header> | <message>` edits directly (including from console)
+- `/noticeboard expiry <post-id> <duration|-1>`; examples include `1d`, `14h`, and `-1` for no expiry
+- `/noticeboard remove <post-id>`
+- `/noticeboard board create <id> [columns] [rows]`
+- `/noticeboard board delete <id>`
+
+All `/noticeboard` commands require `stemcraft.noticeboard.admin`. Normal players create and manage their single active notice by clicking a physical notice board; the admin `post` command may create additional notices.
 
 ## Moderation
 

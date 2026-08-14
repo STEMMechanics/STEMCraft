@@ -68,3 +68,5 @@ Common feature characteristics:
 - focused ownership over one gameplay concern
 
 If a new capability is optional and domain-specific, it usually belongs in `dev.stemcraft.feature`.
+
+Notice boards provide graphical lobby boards containing player-authored headers, short messages, and author names. Posts expire automatically and are displayed through the reusable image-map service.

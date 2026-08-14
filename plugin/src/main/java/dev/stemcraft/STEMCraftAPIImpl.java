@@ -38,6 +38,7 @@ import dev.stemcraft.capability.HasMessagesImpl;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.service.hologram.HologramService;
 import dev.stemcraft.api.service.item.ItemService;
+import dev.stemcraft.api.service.imagemap.ImageMapService;
 import dev.stemcraft.api.service.locale.LocaleService;
 import dev.stemcraft.api.service.mailbox.MailboxService;
 import dev.stemcraft.api.service.message.MessageService;
@@ -136,6 +137,10 @@ public class STEMCraftAPIImpl extends HasMessagesImpl implements STEMCraftAPI {
      */
     @Override
     public ItemService items() { return plugin.items(); }
+
+    /** Get the image-map display service. */
+    @Override
+    public ImageMapService imageMaps() { return plugin.imageMaps(); }
 
     /**
      * Get the locale service.

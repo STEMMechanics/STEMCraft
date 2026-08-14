@@ -34,6 +34,11 @@ public interface DialogBuilder {
 
     DialogBuilder submit(Component label, Consumer<DialogResponse> callback);
 
+    /** Adds a non-submit action button, primarily for choice dialogs without inputs. */
+    default DialogBuilder action(Component label, Runnable callback) {
+        throw new UnsupportedOperationException("This dialog implementation does not support action buttons");
+    }
+
     DialogBuilder cancel(Component label, Runnable callback);
 
     /**

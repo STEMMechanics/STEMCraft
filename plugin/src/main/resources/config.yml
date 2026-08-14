@@ -73,6 +73,64 @@ mailboxes:
     mailbox-full: "/survival//warn/Your mailbox is full."
     received: "/survival//info/<gold>You received mail from {sender}."
 
+notice-boards:
+  enabled: true
+  retention-days: 14
+  server-author: "STEMCraft"
+  title: "SERVER NOTICE / REQUEST BOARD ★★★★★"
+  # Optional PNG path, relative to the STEMCraft data folder. Missing images fall back to title text.
+  title-image: ""
+  dialog:
+    manage-title: "Your notice"
+    create-title: "Post a notice"
+    edit-title: "Edit your notice"
+    admin-edit-title: "Edit notice by {author}"
+    lifetime: "Notices remain on the board for {days} days."
+    header-label: "Header"
+    message-label: "Short message"
+    edit-label: "Edit"
+    delete-label: "Delete"
+    post-label: "Post"
+    save-label: "Save"
+    cancel-label: "Cancel"
+  messages:
+    dialog-open-failed: "/error/Could not open the notice dialog."
+    required: "/error/A header and message are required."
+    already-active: "/error/You already have an active notice. Click the board to edit or delete it."
+    posted: "/success/Your notice has been posted for {days} days."
+    save-failed: "/error/Could not save your notice."
+    updated: "/success/Your notice has been updated for another {days} days."
+    unavailable: "/error/That notice is no longer available."
+    deleted: "/success/Your notice has been deleted."
+  commands:
+    help: "/info/Use /noticeboard post, list, edit, expiry, remove, or board."
+    unknown: "/error/Unknown noticeboard command."
+    server-post-usage: "/error/Usage: /noticeboard post <header> | <message>"
+    server-post-too-long: "/error/Header must be at most {header_max} characters and message at most {message_max} characters."
+    server-posted: "/success/Server notice posted for {days} days."
+    only-player-list: "/error/Only players can list their notices."
+    no-active: "/info/You have no active notices."
+    active-title: "/info/Your active notices:"
+    active-entry: "{id} - {header}"
+    list-title: "Notice board posts"
+    list-empty: "No active notice-board posts."
+    edit-usage: "/error/Usage: /noticeboard edit <post-id> [header | message]"
+    edit-invalid: "/error/A header and message within the configured limits are required."
+    edited: "/success/Notice {id} updated."
+    expiry-usage: "/error/Usage: /noticeboard expiry <post-id> <1d|14h|-1>"
+    expiry-invalid: "/error/Use a positive duration such as 1d or 14h, or -1 for no expiry."
+    expiry-set: "/success/Notice {id} expiry set to {expiry}."
+    expiry-never: "never"
+    remove-usage: "/error/Usage: /noticeboard remove <post-id>"
+    not-found: "/error/Notice not found."
+    not-owner: "/error/You can only remove your own notices."
+    removed: "/success/Notice removed."
+    no-permission: "/error/You do not have permission to manage notice boards."
+    board-usage: "/error/Usage: /noticeboard board <create|delete> <id> [columns] [rows]"
+    board-removed: "/success/Notice board removed."
+    target-block: "/error/Look at the bottom-left backing block for the board."
+    board-created: "/success/Notice board created. The targeted block is its bottom-left backing block."
+
 interactive-menus:
   enabled: true
 
