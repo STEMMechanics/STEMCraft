@@ -51,6 +51,9 @@ import java.util.function.Consumer;
 
 /** Renders the dialog API using Paper dialogs or Geyser Cumulus forms. */
 public final class DialogServiceImpl extends BaseService implements DialogService {
+    private static final int JAVA_CONTENT_WIDTH = 300;
+    private static final int JAVA_BUTTON_WIDTH = 120;
+
     public DialogServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
     }
@@ -158,7 +161,7 @@ public final class DialogServiceImpl extends BaseService implements DialogServic
 
                 List<DialogInput> dialogInputs = inputs.stream().map(input -> {
                     TextDialogInput.Builder inputBuilder = DialogInput.text(input.key(), input.label())
-                        .width(400)
+                        .width(JAVA_CONTENT_WIDTH)
                         .initial(input.initialValue())
                         .maxLength(input.maxLength());
                     if (input.lines() > 1) {
@@ -169,18 +172,18 @@ public final class DialogServiceImpl extends BaseService implements DialogServic
 
                 List<ActionButton> buttons = new ArrayList<>();
                 if (submitConfigured) {
-                    buttons.add(ActionButton.builder(submitLabel).width(150).action(submitAction).build());
+                    buttons.add(ActionButton.builder(submitLabel).width(JAVA_BUTTON_WIDTH).action(submitAction).build());
                 }
                 for (DialogButton action : actions) {
                     DialogAction dialogAction = DialogAction.customClick(
                         (response, audience) -> runSync(action.callback()), options);
-                    buttons.add(ActionButton.builder(action.label()).width(150).action(dialogAction).build());
+                    buttons.add(ActionButton.builder(action.label()).width(JAVA_BUTTON_WIDTH).action(dialogAction).build());
                 }
-                ActionButton cancel = ActionButton.builder(cancelLabel).width(150).action(cancelAction).build();
+                ActionButton cancel = ActionButton.builder(cancelLabel).width(JAVA_BUTTON_WIDTH).action(cancelAction).build();
                 DialogBase base = DialogBase.builder(title)
                     .canCloseWithEscape(false)
                     .afterAction(DialogBase.DialogAfterAction.CLOSE)
-                    .body(List.of(DialogBody.plainMessage(body, 400)))
+                    .body(List.of(DialogBody.plainMessage(body, JAVA_CONTENT_WIDTH)))
                     .inputs(dialogInputs)
                     .build();
                 Dialog dialog = Dialog.create(factory -> factory.empty()
