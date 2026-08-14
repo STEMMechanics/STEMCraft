@@ -53,6 +53,10 @@ This is the active command surface registered by STEMCraft.
 - `/noticeboard post`
 - `/noticeboard post <header> | <message>` from the server console
 - `/noticeboard mine`
+- `/noticeboard list [page]`
+- `/noticeboard edit <post-id>` opens an edit dialog
+- `/noticeboard edit <post-id> <header> | <message>` edits directly (including from console)
+- `/noticeboard expiry <post-id> <duration|-1>`; examples include `1d`, `14h`, and `-1` for no expiry
 - `/noticeboard remove <post-id>`
 - `/noticeboard board create <id> [columns] [rows]`
 - `/noticeboard board delete <id>`

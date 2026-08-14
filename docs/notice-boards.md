@@ -23,7 +23,9 @@ Players with `stemcraft.noticeboard.admin` can create a board while looking at i
 
 The default board is four maps wide and three maps high. The board faces the player creating it. Remove it with `/noticeboard board delete <id>`. All physical boards display the same server notice collection.
 
-All `/noticeboard` command paths require `stemcraft.noticeboard.admin`. Administrators can use `/noticeboard post` to create additional notices without the one-active-notice click limit, `/noticeboard mine` to list their posts, and `/noticeboard remove <post-id>` to remove any post.
+All `/noticeboard` command paths require `stemcraft.noticeboard.admin`. Administrators can use `/noticeboard post` to create additional notices without the one-active-notice click limit. `/noticeboard list [page]` shows every active post and provides ChatMenu Edit, Expiry, and Delete actions. `/noticeboard edit <post-id>` opens a pre-filled dialog for any player's post; console can use `/noticeboard edit <post-id> <header> | <message>`. `/noticeboard remove <post-id>` removes any post from either player or console.
+
+Set a post's remaining lifetime with `/noticeboard expiry <post-id> <duration>`, for example `1d`, `14h`, or a compound value such as `1d12h`. Use `-1` for a permanent post. Admin edits preserve the existing expiry; player edits through the board reset their post to the configured retention period.
 
 Each notice column is approximately two maps wide, so a 4×3 board has two notice columns, a 6×3 board has three, and an 8×3 board has four. Notice cards retain a consistent readable width instead of stretching across wider boards.
 
@@ -44,6 +46,7 @@ notice-boards:
     manage-title: "Your notice"
     create-title: "Post a notice"
     edit-title: "Edit your notice"
+    admin-edit-title: "Edit notice by {author}"
     lifetime: "Notices remain on the board for {days} days."
     header-label: "Header"
     message-label: "Short message"
@@ -63,7 +66,7 @@ notice-boards:
     deleted: "/success/Your notice has been deleted."
 ```
 
-The `commands` subsection in the bundled configuration also exposes every administrator command response. Message values pass through the message service, so type/context directives such as `/success/` and `/survival//info/` are supported. `{days}`, `{id}`, and `{header}` are replaced where applicable.
+The `commands` subsection in the bundled configuration also exposes every administrator command response and list heading. Message values pass through the message service, so type/context directives such as `/success/` and `/survival//info/` are supported. `{days}`, `{id}`, `{header}`, `{author}`, and `{expiry}` are replaced where applicable.
 
 The server console can post without a dialog:
 

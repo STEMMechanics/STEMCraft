@@ -5,6 +5,12 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.Command;
 import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.service.dialog.DialogResponse;
+import dev.stemcraft.api.util.TimeUtil;
+import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.event.HoverEvent;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.block.Block;
@@ -128,9 +134,12 @@ public final class NoticeBoards extends BaseFeature {
     private void registerCommand() {
         command = api.commands().create("noticeboard")
             .description("Post and manage survival notice boards")
-            .usage("/noticeboard <post|mine|remove|board>")
+            .usage("/noticeboard <post|list|mine|edit|expiry|remove|board>")
             .tabCompletion("post")
+            .tabCompletion("list")
             .tabCompletion("mine")
+            .tabCompletion("edit")
+            .tabCompletion("expiry")
             .tabCompletion("remove")
             .tabCompletion("board", "create")
             .tabCompletion("board", "delete")
@@ -146,7 +155,10 @@ public final class NoticeBoards extends BaseFeature {
         }
         switch (ctx.getArgLower(0)) {
             case "post" -> openAdminPostDialog(ctx);
+            case "list" -> listPosts(ctx);
             case "mine" -> listOwnPosts(ctx);
+            case "edit" -> editPost(ctx);
+            case "expiry" -> setPostExpiry(ctx);
             case "remove" -> removePost(ctx);
             case "board" -> manageBoard(ctx);
             default -> sendConfigured(ctx, "commands.unknown", "/error/Unknown noticeboard command.");
@@ -340,7 +352,7 @@ public final class NoticeBoards extends BaseFeature {
     }
 
     private List<NoticePost> activePosts(UUID playerUuid) {
-        return loadPosts("WHERE author_uuid = ? AND expires_at > ? ORDER BY created_at DESC", statement -> {
+        return loadPosts("WHERE author_uuid = ? AND (expires_at = -1 OR expires_at > ?) ORDER BY created_at DESC", statement -> {
             statement.setString(1, playerUuid.toString());
             statement.setLong(2, System.currentTimeMillis());
         });
@@ -352,7 +364,7 @@ public final class NoticeBoards extends BaseFeature {
             sendConfigured(ctx, "commands.only-player-list", "/error/Only players can list their notices.");
             return;
         }
-        List<NoticePost> posts = loadPosts("WHERE author_uuid = ? AND expires_at > ? ORDER BY created_at DESC",
+        List<NoticePost> posts = loadPosts("WHERE author_uuid = ? AND (expires_at = -1 OR expires_at > ?) ORDER BY created_at DESC",
             statement -> {
                 statement.setString(1, player.getUniqueId().toString());
                 statement.setLong(2, System.currentTimeMillis());
@@ -368,10 +380,45 @@ public final class NoticeBoards extends BaseFeature {
         }
     }
 
-    private void removePost(CommandContext ctx) {
-        Player player = ctx.asPlayer();
-        if (player == null || ctx.args().size() < 2) {
-            sendConfigured(ctx, "commands.remove-usage", "/error/Usage: /noticeboard remove <post-id>");
+    private void listPosts(CommandContext ctx) {
+        int page = 1;
+        if (ctx.args().size() > 1) {
+            try { page = Math.max(1, Integer.parseInt(ctx.args().get(1))); }
+            catch (NumberFormatException ignored) { }
+        }
+        List<NoticePost> posts = loadPosts("WHERE expires_at = -1 OR expires_at > ? ORDER BY created_at DESC",
+            statement -> statement.setLong(1, System.currentTimeMillis()));
+        ChatMenuUtil.render(ctx.getSender(),
+            Component.text(configured("commands.list-title", "Notice board posts"), NamedTextColor.AQUA),
+            "noticeboard list", page, posts.size(), (start, count, isPlayer) -> {
+                List<Component> lines = new ArrayList<>();
+                for (int index = start; index < Math.min(start + count, posts.size()); index++) {
+                    NoticePost post = posts.get(index);
+                    String id = post.id().toString().substring(0, 8);
+                    Component line = Component.text(id, NamedTextColor.YELLOW)
+                        .append(Component.text(" " + post.authorName() + " — ", NamedTextColor.GRAY))
+                        .append(Component.text(post.header(), NamedTextColor.WHITE))
+                        .append(Component.text(" (" + formatExpiry(post.expiresAt()) + ")", NamedTextColor.DARK_GRAY));
+                    if (isPlayer) {
+                        line = line.append(Component.text(" "))
+                            .append(actionButton("[Edit]", NamedTextColor.BLUE,
+                                ClickEvent.runCommand("/noticeboard edit " + id), "Edit this post"))
+                            .append(Component.text(" "))
+                            .append(actionButton("[Expiry]", NamedTextColor.GOLD,
+                                ClickEvent.suggestCommand("/noticeboard expiry " + id + " "), "Set expiry, e.g. 1d or -1"))
+                            .append(Component.text(" "))
+                            .append(actionButton("[Del]", NamedTextColor.RED,
+                                ClickEvent.runCommand("/noticeboard remove " + id), "Remove this post"));
+                    }
+                    lines.add(line);
+                }
+                return lines;
+            }, configured("commands.list-empty", "No active notice-board posts."));
+    }
+
+    private void editPost(CommandContext ctx) {
+        if (ctx.args().size() < 2) {
+            sendConfigured(ctx, "commands.edit-usage", "/error/Usage: /noticeboard edit <post-id> [header | message]");
             return;
         }
         NoticePost post = findPost(ctx.args().get(1));
@@ -379,8 +426,105 @@ public final class NoticeBoards extends BaseFeature {
             sendConfigured(ctx, "commands.not-found", "/error/Notice not found.");
             return;
         }
-        if (!post.authorUuid().equals(player.getUniqueId()) && !player.hasPermission("stemcraft.noticeboard.admin")) {
-            sendConfigured(ctx, "commands.not-owner", "/error/You can only remove your own notices.");
+        Player player = ctx.asPlayer();
+        if (player != null && ctx.args().size() == 2) {
+            openAdminEditDialog(player, post);
+            return;
+        }
+        int separator = findSeparator(ctx, 2);
+        if (separator <= 2 || separator >= ctx.args().size() - 1) {
+            sendConfigured(ctx, "commands.edit-usage", "/error/Usage: /noticeboard edit <post-id> <header> | <message>");
+            return;
+        }
+        saveAdminEdit(ctx.getSender(), post, String.join(" ", ctx.args().subList(2, separator)).trim(),
+            String.join(" ", ctx.args().subList(separator + 1, ctx.args().size())).trim());
+    }
+
+    private void openAdminEditDialog(Player player, NoticePost post) {
+        boolean opened = api.dialogs().create("noticeboard:admin-edit")
+            .title(configuredComponent("dialog.admin-edit-title", "Edit notice by {author}", "author", post.authorName()))
+            .textInput("header", configuredComponent("dialog.header-label", "Header"), post.header(), MAX_HEADER_LENGTH)
+            .multilineTextInput("message", configuredComponent("dialog.message-label", "Short message"), post.message(), MAX_MESSAGE_LENGTH, 4)
+            .submit(configuredComponent("dialog.save-label", "Save"), response ->
+                saveAdminEdit(player, post, response.text("header").trim(), response.text("message").trim()))
+            .cancel(configuredComponent("dialog.cancel-label", "Cancel"), () -> { })
+            .open(player);
+        if (!opened) sendConfigured(player, "messages.dialog-open-failed", "/error/Could not open the notice dialog.");
+    }
+
+    private void saveAdminEdit(CommandSender sender, NoticePost post, String header, String message) {
+        if (header.isBlank() || message.isBlank() || header.length() > MAX_HEADER_LENGTH || message.length() > MAX_MESSAGE_LENGTH) {
+            sendConfigured(sender, "commands.edit-invalid", "/error/A header and message within the configured limits are required.");
+            return;
+        }
+        int changed = api.database().update("UPDATE notice_board_posts SET header = ?, message = ? WHERE id = ?", statement -> {
+            statement.setString(1, header);
+            statement.setString(2, message);
+            statement.setString(3, post.id().toString());
+        });
+        if (changed == 1) {
+            refreshBoards();
+            sendConfigured(sender, "commands.edited", "/success/Notice {id} updated.", "id", post.id().toString().substring(0, 8));
+        } else sendConfigured(sender, "commands.not-found", "/error/Notice not found.");
+    }
+
+    private void setPostExpiry(CommandContext ctx) {
+        if (ctx.args().size() < 3) {
+            sendConfigured(ctx, "commands.expiry-usage", "/error/Usage: /noticeboard expiry <post-id> <1d|14h|-1>");
+            return;
+        }
+        NoticePost post = findPost(ctx.args().get(1));
+        if (post == null) {
+            sendConfigured(ctx, "commands.not-found", "/error/Notice not found.");
+            return;
+        }
+        long expiresAt;
+        try {
+            if ("-1".equals(ctx.args().get(2))) expiresAt = -1L;
+            else {
+                long seconds = TimeUtil.parseDuration(ctx.args().get(2));
+                if (seconds <= 0) throw new IllegalArgumentException();
+                expiresAt = Math.addExact(System.currentTimeMillis(), Math.multiplyExact(seconds, 1000L));
+            }
+        } catch (IllegalArgumentException | ArithmeticException exception) {
+            sendConfigured(ctx, "commands.expiry-invalid", "/error/Use a positive duration such as 1d or 14h, or -1 for no expiry.");
+            return;
+        }
+        long value = expiresAt;
+        api.database().update("UPDATE notice_board_posts SET expires_at = ? WHERE id = ?", statement -> {
+            statement.setLong(1, value);
+            statement.setString(2, post.id().toString());
+        });
+        refreshBoards();
+        sendConfigured(ctx, "commands.expiry-set", "/success/Notice {id} expiry set to {expiry}.",
+            "id", post.id().toString().substring(0, 8), "expiry", formatExpiry(expiresAt));
+    }
+
+    private int findSeparator(CommandContext ctx, int start) {
+        for (int index = start; index < ctx.args().size(); index++) {
+            if ("|".equals(ctx.args().get(index))) return index;
+        }
+        return -1;
+    }
+
+    private String formatExpiry(long expiresAt) {
+        if (expiresAt == -1L) return configured("commands.expiry-never", "never");
+        return TimeUtil.formatShortDuration(Math.max(0L, (expiresAt - System.currentTimeMillis() + 999L) / 1000L));
+    }
+
+    private Component actionButton(String text, NamedTextColor color, ClickEvent clickEvent, String hoverText) {
+        return Component.text(text, color).clickEvent(clickEvent)
+            .hoverEvent(HoverEvent.showText(Component.text(hoverText)));
+    }
+
+    private void removePost(CommandContext ctx) {
+        if (ctx.args().size() < 2) {
+            sendConfigured(ctx, "commands.remove-usage", "/error/Usage: /noticeboard remove <post-id>");
+            return;
+        }
+        NoticePost post = findPost(ctx.args().get(1));
+        if (post == null) {
+            sendConfigured(ctx, "commands.not-found", "/error/Notice not found.");
             return;
         }
         api.database().update("DELETE FROM notice_board_posts WHERE id = ?", statement -> statement.setString(1, post.id().toString()));
@@ -447,7 +591,7 @@ public final class NoticeBoards extends BaseFeature {
     }
 
     private void purgeExpired() {
-        int removed = api.database().update("DELETE FROM notice_board_posts WHERE expires_at <= ?",
+        int removed = api.database().update("DELETE FROM notice_board_posts WHERE expires_at <> -1 AND expires_at <= ?",
             statement -> statement.setLong(1, System.currentTimeMillis()));
         if (removed > 0) {
             refreshBoards();
@@ -488,7 +632,7 @@ public final class NoticeBoards extends BaseFeature {
 
         drawBoardTitle(graphics, width);
 
-        List<NoticePost> posts = loadPosts("WHERE expires_at > ? ORDER BY created_at DESC",
+        List<NoticePost> posts = loadPosts("WHERE expires_at = -1 OR expires_at > ? ORDER BY created_at DESC",
             statement -> statement.setLong(1, System.currentTimeMillis()));
         int top = 62;
         int availableHeight = height - top - 15;
