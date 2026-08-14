@@ -50,8 +50,8 @@ public interface Command extends HasMessages {
      */
     String getPermission();
 
-    /** Returns whether this zero-based argument position must remain positional. */
-    default boolean isPositionalArgument(int position) { return false; }
+    /** Returns whether parsing should be skipped for this zero-based argument position. */
+    default boolean isIgnoredArg(int position) { return false; }
     
     /**
      * Register the command on the server.

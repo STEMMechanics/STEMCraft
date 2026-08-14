@@ -210,7 +210,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
             .description("Give an item to one or more players")
             .usage("/give <targets> <item> [count]")
             .permission("minecraft.command.give")
-            .positionalArguments(1)
+            .ignoreArg(1)
             .executor((unusedApi, unusedCommand, context) -> executeGive(context));
         builder.tabCompletion("{give-target}", "{give-item}");
         builder.tabCompletion("{give-target}", "{give-item}", "{number}");

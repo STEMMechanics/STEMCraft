@@ -63,7 +63,7 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
 
     @Getter
     private final List<String[]> tabCompletions = new ArrayList<>();
-    private final Set<Integer> positionalArguments = new HashSet<>();
+    private final Set<Integer> ignoredArgs = new HashSet<>();
 
     /**
      * The underlying Bukkit command instance after registration.
@@ -85,7 +85,7 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
      */
     public CommandImpl(STEMCraftAPI api, String label, String description, String usage, List<String> aliases,
                        String permission, CommandExecutor executor, List<String[]> tabCompletions,
-                       Set<Integer> positionalArguments) {
+                       Set<Integer> ignoredArgs) {
         this.label = label;
         this.description = description;
         this.usage = usage;
@@ -93,12 +93,12 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
         this.permission = permission;
         this.executor = executor;
         this.tabCompletions.addAll(tabCompletions);
-        this.positionalArguments.addAll(positionalArguments);
+        this.ignoredArgs.addAll(ignoredArgs);
     }
 
     @Override
-    public boolean isPositionalArgument(int position) {
-        return positionalArguments.contains(position);
+    public boolean isIgnoredArg(int position) {
+        return ignoredArgs.contains(position);
     }
 
     /**

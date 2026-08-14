@@ -40,7 +40,7 @@ public class CommandBuilderImpl implements CommandBuilder {
     private String permission = "";
     private CommandExecutor executor;
     private final List<String[]> tabCompletions = new ArrayList<>();
-    private final Set<Integer> positionalArguments = new HashSet<>();
+    private final Set<Integer> ignoredArgs = new HashSet<>();
 
     /**
      * Constructor for CommandBuilderImpl.
@@ -109,10 +109,10 @@ public class CommandBuilderImpl implements CommandBuilder {
     }
 
     @Override
-    public CommandBuilder positionalArguments(int... positions) {
+    public CommandBuilder ignoreArg(int... positions) {
         for (int position : positions) {
             if (position < 0) throw new IllegalArgumentException("Argument positions cannot be negative");
-            positionalArguments.add(position);
+            ignoredArgs.add(position);
         }
         return this;
     }
@@ -147,7 +147,7 @@ public class CommandBuilderImpl implements CommandBuilder {
      */
     public Command register(JavaPlugin plugin) {
         Command command = new CommandImpl(api, label, description, usage, aliases, permission, executor,
-            tabCompletions, positionalArguments);
+            tabCompletions, ignoredArgs);
         command.register(plugin);
         return command;
     }

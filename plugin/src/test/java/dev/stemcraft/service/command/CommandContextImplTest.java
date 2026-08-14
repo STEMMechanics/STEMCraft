@@ -104,10 +104,10 @@ class CommandContextImplTest {
     }
 
     @Test
-    void preservesForcedPositionalNamespacedArgument() {
+    void preservesIgnoredNamespacedArgumentWithoutParsingIt() {
         Command command = mock(Command.class);
         when(command.getLabel()).thenReturn("give");
-        when(command.isPositionalArgument(1)).thenReturn(true);
+        when(command.isIgnoredArg(1)).thenReturn(true);
 
         CommandContextImpl ctx = new CommandContextImpl(command, sender, "give",
             List.of("Target", "stemcraft:fried_egg", "4", "mode:test"));

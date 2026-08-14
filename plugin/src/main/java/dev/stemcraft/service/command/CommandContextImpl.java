@@ -78,7 +78,7 @@ public class CommandContextImpl implements CommandContext {
                 continue;
             }
 
-            if (command.isPositionalArgument(position)) {
+            if (command.isIgnoredArg(position)) {
                 positional.add(arg);
                 continue;
             }
