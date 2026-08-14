@@ -202,7 +202,12 @@ public final class MiniGameTeamSelectionSupport {
             }
         }
 
-        if (changed || status == MiniGameArena.ArenaStatus.STARTING) {
+        // Rebuilding auto assignments is intentionally random. Only do it when a
+        // player's floor selection actually changes; reevaluating every STARTING
+        // tick makes auto-selected players visibly swap teams throughout the
+        // countdown. Joins, leaves, and status changes already reevaluate through
+        // their dedicated callbacks.
+        if (changed) {
             reevaluateArena(arena);
         }
     }
