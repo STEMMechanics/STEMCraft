@@ -17,6 +17,9 @@ custom-items:
       nutrition: 3
       saturation: 2.4
       always-edible: false
+    interactions:
+      # Opt in when a throwable recipe input must be inserted onto a campfire.
+      campfire-input: true
 ```
 
 The `material` controls the server-side behaviour. For food, choose an edible base material and override its food values. `placement: DENY` prevents a block-based item from being placed. Names and lore support MiniMessage formatting.
@@ -53,3 +56,16 @@ recipes:
 ```
 
 Material results such as `result: COOKED_COD` continue to work unchanged.
+
+## Giving configured items
+
+The plugin selectively extends the vanilla give command. When the item argument resolves to a configured item, selectors and counts work normally:
+
+```text
+/give @s stemcraft:fried_egg
+/give James stemcraft:fried_egg 16
+```
+
+The namespace is accepted as a convenient command form; underscores in the path resolve to hyphens in the configured ID. If the item is not configured, the command is left untouched for Minecraft to process normally. Item components after the count remain a vanilla-only facility.
+
+`interactions.campfire-input` is disabled unless explicitly set. When enabled, right-clicking a campfire with an input that has a campfire recipe for that custom item inserts one input into an empty slot instead of executing the input's normal interaction. Fried Eggs enable it because raw eggs are otherwise thrown.

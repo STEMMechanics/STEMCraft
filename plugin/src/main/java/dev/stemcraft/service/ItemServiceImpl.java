@@ -32,8 +32,16 @@ import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.util.TextUtil;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
+import org.bukkit.Bukkit;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
+import org.bukkit.event.player.PlayerCommandPreprocessEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.server.ServerCommandEvent;
+import org.bukkit.event.block.Action;
+import org.bukkit.block.Campfire;
+import org.bukkit.inventory.CampfireRecipe;
+import org.bukkit.GameMode;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.components.CustomModelDataComponent;
@@ -77,6 +85,13 @@ public class ItemServiceImpl extends BaseService implements ItemService {
     @Override
     public void onEnable() {
         loadConfiguredItems();
+        api.events().register(PlayerCommandPreprocessEvent.class, event -> {
+            if (handleGiveCommand(event.getPlayer(), event.getMessage().substring(1))) event.setCancelled(true);
+        });
+        api.events().register(ServerCommandEvent.class, event -> {
+            if (handleGiveCommand(event.getSender(), event.getCommand())) event.setCancelled(true);
+        });
+        api.events().register(PlayerInteractEvent.class, this::handleCampfireInput);
         api.events().register(PlayerDropItemEvent.class, (event) -> {
             ItemStack item = event.getItemDrop().getItemStack();
             ItemMeta meta = item.getItemMeta();
@@ -160,6 +175,10 @@ public class ItemServiceImpl extends BaseService implements ItemService {
                     meta.setFood(component);
                 }
                 template.setItemMeta(meta);
+                ConfigSection interactions = section.getSection("interactions", false);
+                if (interactions != null && interactions.getBoolean("campfire-input", false)) {
+                    addAttrib(template, "campfire-input", 1);
+                }
                 CustomItemPlacementMode placement = CustomItemPlacementMode.valueOf(
                     section.getString("placement", "DENY").trim().toUpperCase(java.util.Locale.ROOT));
                 registerCustomItem(new CustomItemDefinition(id, template, placement, null,
@@ -168,6 +187,72 @@ public class ItemServiceImpl extends BaseService implements ItemService {
                 plugin.getLogger().warning("[items] Could not load custom item '" + id + "': " + exception.getMessage());
             }
         }
+    }
+
+    private boolean handleGiveCommand(org.bukkit.command.CommandSender sender, String commandLine) {
+        String[] args = commandLine.trim().split("\\s+");
+        if (args.length < 3 || !(args[0].equalsIgnoreCase("give") || args[0].equalsIgnoreCase("minecraft:give"))) {
+            return false;
+        }
+        ItemStack probe = createCustomItem(args[2]);
+        if (probe == null) return false;
+        if (!sender.hasPermission("minecraft.command.give")) return false;
+        int amount = 1;
+        if (args.length > 3) {
+            try { amount = Math.max(1, Math.min(99 * 36, Integer.parseInt(args[3]))); }
+            catch (NumberFormatException exception) {
+                sender.sendMessage("Invalid item count: " + args[3]);
+                return true;
+            }
+        }
+        java.util.List<org.bukkit.entity.Entity> selected;
+        try {
+            selected = Bukkit.selectEntities(sender, args[1]);
+        } catch (IllegalArgumentException exception) {
+            sender.sendMessage(exception.getMessage());
+            return true;
+        }
+        int recipients = 0;
+        for (org.bukkit.entity.Entity entity : selected) {
+            if (!(entity instanceof org.bukkit.entity.Player player)) continue;
+            int remaining = amount;
+            int maximum = probe.getMaxStackSize();
+            while (remaining > 0) {
+                ItemStack stack = createCustomItem(args[2], Math.min(maximum, remaining));
+                if (stack == null) break;
+                player.getInventory().addItem(stack).values()
+                    .forEach(item -> player.getWorld().dropItemNaturally(player.getLocation(), item));
+                remaining -= stack.getAmount();
+            }
+            recipients++;
+        }
+        sender.sendMessage("Gave " + amount + " [" + args[2] + "] to " + recipients + " player(s)");
+        return true;
+    }
+
+    private void handleCampfireInput(PlayerInteractEvent event) {
+        if (event.getAction() != Action.RIGHT_CLICK_BLOCK || event.getClickedBlock() == null
+            || !(event.getClickedBlock().getState() instanceof Campfire campfire) || event.getItem() == null) return;
+        CampfireRecipe recipe = Bukkit.getRecipesFor(event.getItem()).stream()
+            .filter(CampfireRecipe.class::isInstance).map(CampfireRecipe.class::cast)
+            .filter(candidate -> getAttrib(candidate.getResult(), "campfire-input", Integer.class, 0) == 1)
+            .findFirst().orElse(null);
+        if (recipe == null) return;
+        int slot = -1;
+        for (int index = 0; index < campfire.getSize(); index++) {
+            ItemStack existing = campfire.getItem(index);
+            if (existing == null || existing.getType().isAir()) { slot = index; break; }
+        }
+        if (slot < 0) return;
+        event.setCancelled(true);
+        ItemStack input = event.getItem().clone();
+        input.setAmount(1);
+        campfire.setItem(slot, input);
+        campfire.setCookTime(slot, 0);
+        campfire.setCookTimeTotal(slot, recipe.getCookingTime());
+        campfire.startCooking(slot);
+        campfire.update(true);
+        if (event.getPlayer().getGameMode() != GameMode.CREATIVE) event.getItem().subtract(1);
     }
 
     private CustomItemClientDefinition parseClients(ConfigSection item, String namespace, String id, String name) {
@@ -404,6 +489,10 @@ public class ItemServiceImpl extends BaseService implements ItemService {
         }
 
         ItemStack template = itemTemplates.get(id);
+        if (template == null) {
+            String path = id.contains(":") ? id.substring(id.indexOf(':') + 1) : id;
+            template = itemTemplates.get(path.replace('_', '-'));
+        }
         if (template == null) {
             return null;
         }
