@@ -337,7 +337,7 @@ public final class NoticeBoards extends BaseFeature {
             statement -> statement.setLong(1, System.currentTimeMillis()));
         int top = 62;
         int availableHeight = height - top - 15;
-        int gridColumns = width >= 384 ? 2 : 1;
+        int gridColumns = Math.max(1, board.columns() / 2);
         int cardWidth = (width - 24 - (gridColumns - 1) * 10) / gridColumns;
         int cardHeight = 94;
         int gridRows = Math.max(1, availableHeight / cardHeight);

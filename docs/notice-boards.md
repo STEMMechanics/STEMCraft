@@ -20,6 +20,8 @@ Players with `stemcraft.noticeboard.admin` can create a board while looking at i
 
 The default board is four maps wide and three maps high. The board faces the player creating it. Remove it with `/noticeboard board delete <id>`. All physical boards display the same server notice collection.
 
+Each notice column is approximately two maps wide, so a 4×3 board has two notice columns, a 6×3 board has three, and an 8×3 board has four. Notice cards retain a consistent readable width instead of stretching across wider boards.
+
 When there are more active notices than fit on the display, the board rotates to the next group automatically every 30 seconds.
 
 ## Configuration
