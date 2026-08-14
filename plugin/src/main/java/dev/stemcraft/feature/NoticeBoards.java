@@ -39,6 +39,7 @@ public final class NoticeBoards extends BaseFeature {
     private static final int DEFAULT_ROWS = 3;
     private static final int MAX_HEADER_LENGTH = 36;
     private static final int MAX_MESSAGE_LENGTH = 160;
+    private static final double TEXT_SCALE = 1.5D;
     private Command command;
     private long retentionMillis = DEFAULT_RETENTION_MILLIS;
     private int displayPage;
@@ -350,7 +351,8 @@ public final class NoticeBoards extends BaseFeature {
         }
         if (posts.isEmpty()) {
             graphics.setColor(new Color(230, 220, 195));
-            drawMinecraftCentered(graphics, "No notices have been posted yet.", width / 2, height / 2, 2, false);
+            drawMinecraftCentered(graphics, "No notices have been posted yet.", width / 2, height / 2,
+                TEXT_SCALE, false);
         }
         graphics.dispose();
         return image;
@@ -375,15 +377,16 @@ public final class NoticeBoards extends BaseFeature {
         card.setColor(new Color(126, 55, 42));
         card.fillOval(centerX - 3, padding + 4, 6, 6);
         card.setColor(new Color(72, 48, 31));
-        drawMinecraftText(card, fitMinecraft(post.header(), width - 20, 2), padding + 10, padding + 12, 2, true);
+        drawMinecraftText(card, fitMinecraft(post.header(), width - 20, TEXT_SCALE), padding + 10, padding + 12,
+            TEXT_SCALE, true);
         int lineY = padding + 35;
-        for (String line : wrapMinecraft(post.message(), width - 20, 3, 1)) {
-            drawMinecraftText(card, line, padding + 10, lineY, 1, false);
-            lineY += 12;
+        for (String line : wrapMinecraft(post.message(), width - 20, 3, TEXT_SCALE)) {
+            drawMinecraftText(card, line, padding + 10, lineY, TEXT_SCALE, false);
+            lineY += 14;
         }
-        String by = fitMinecraft("Posted by " + post.authorName(), width - 20, 2);
-        drawMinecraftText(card, by, padding + width - minecraftWidth(by, 2) - 9,
-            padding + height - 17, 2, false);
+        String by = fitMinecraft("Posted by " + post.authorName(), width - 20, TEXT_SCALE);
+        drawMinecraftText(card, by, padding + width - minecraftWidth(by, TEXT_SCALE) - 9,
+            padding + height - 15, TEXT_SCALE, false);
         card.dispose();
 
         int hash = post.id().hashCode();
@@ -396,7 +399,7 @@ public final class NoticeBoards extends BaseFeature {
         graphics.setTransform(original);
     }
 
-    private static List<String> wrapMinecraft(String text, int width, int maximumLines, int scale) {
+    private static List<String> wrapMinecraft(String text, int width, int maximumLines, double scale) {
         List<String> lines = new ArrayList<>();
         StringBuilder line = new StringBuilder();
         for (String word : text.replace('\n', ' ').split("\\s+")) {
@@ -415,7 +418,7 @@ public final class NoticeBoards extends BaseFeature {
         return lines;
     }
 
-    private static String fitMinecraft(String text, int width, int scale) {
+    private static String fitMinecraft(String text, int width, double scale) {
         if (minecraftWidth(text, scale) <= width) {
             return text;
         }
@@ -438,8 +441,8 @@ public final class NoticeBoards extends BaseFeature {
         }
         String title = getConfigSection().getString("title", "SERVER NOTICE / REQUEST BOARD ★★★★★");
         graphics.setColor(new Color(255, 221, 133));
-        int scale = minecraftWidth(title, 3) <= width - 24 ? 3 : 2;
-        drawMinecraftCentered(graphics, title, width / 2, 18, scale, true);
+        drawMinecraftCentered(graphics, fitMinecraft(title, width - 24, TEXT_SCALE), width / 2, 18,
+            TEXT_SCALE, true);
     }
 
     private BufferedImage loadTitleImage() {
@@ -471,25 +474,31 @@ public final class NoticeBoards extends BaseFeature {
         return cachedTitleImage;
     }
 
-    private static int minecraftWidth(String text, int scale) {
-        return MinecraftFont.Font.getWidth(minecraftSafe(text)) * scale;
+    private static int minecraftWidth(String text, double scale) {
+        return (int) Math.round(MinecraftFont.Font.getWidth(minecraftSafe(text)) * scale);
     }
 
     private static void drawMinecraftCentered(Graphics2D graphics, String text, int centerX, int y,
-                                                int scale, boolean bold) {
+                                                double scale, boolean bold) {
         drawMinecraftText(graphics, text, centerX - minecraftWidth(text, scale) / 2, y, scale, bold);
     }
 
-    private static void drawMinecraftText(Graphics2D graphics, String text, int x, int y, int scale, boolean bold) {
+    private static void drawMinecraftText(Graphics2D graphics, String text, int x, int y,
+                                           double scale, boolean bold) {
         String safe = minecraftSafe(text);
-        int cursor = x;
+        double cursor = x;
         for (char character : safe.toCharArray()) {
             MapFont.CharacterSprite sprite = MinecraftFont.Font.getChar(character);
             if (sprite == null) continue;
             for (int column = 0; column < sprite.getWidth(); column++) {
                 for (int row = 0; row < sprite.getHeight(); row++) {
                     if (sprite.get(row, column)) {
-                        graphics.fillRect(cursor + column * scale, y + row * scale, scale + (bold ? 1 : 0), scale);
+                        int left = (int) Math.round(cursor + column * scale);
+                        int top = (int) Math.round(y + row * scale);
+                        int right = (int) Math.round(cursor + (column + 1) * scale);
+                        int bottom = (int) Math.round(y + (row + 1) * scale);
+                        graphics.fillRect(left, top, Math.max(1, right - left) + (bold ? 1 : 0),
+                            Math.max(1, bottom - top));
                     }
                 }
             }
