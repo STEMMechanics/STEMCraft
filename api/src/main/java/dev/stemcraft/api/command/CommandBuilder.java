@@ -60,6 +60,18 @@ public interface CommandBuilder {
     CommandBuilder permission(String permission);
 
     /**
+     * Marks zero-based argument positions that the context parser must ignore.
+     * Ignored arguments remain in the positional argument list without being
+     * interpreted as flags or {@code key:value} options.
+     *
+     * @param positions zero-based argument positions
+     * @return The command builder.
+     */
+    default CommandBuilder ignoreArg(int... positions) {
+        throw new UnsupportedOperationException("This command builder does not support ignored arguments");
+    }
+
+    /**
      * Add a tab completion for the command.
      *
      * @param completions The tab completions.

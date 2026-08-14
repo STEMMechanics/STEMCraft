@@ -56,6 +56,7 @@ public final class LeafDecayRandomTickFeature extends BaseFeature {
     private final Map<UUID, Set<Long>> allowedDecayTicks = new HashMap<>();
 
     private int scanRadius;
+    private int defaultTickSpeed;
     private long candidateRetentionTicks;
     private long tickCounter;
 
@@ -120,6 +121,7 @@ public final class LeafDecayRandomTickFeature extends BaseFeature {
 
     private void reloadSettings() {
         scanRadius = Math.max(1, getConfigSection().getInt("scan_radius", 7));
+        defaultTickSpeed = Math.max(0, getConfigSection().getInt("default_tick_speed", 8));
         candidateRetentionTicks = Math.max(20L, getConfigSection().getLong("candidate_retention_ticks", 1200L));
     }
 
@@ -128,13 +130,13 @@ public final class LeafDecayRandomTickFeature extends BaseFeature {
 
         for (World world : Bukkit.getWorlds()) {
             String configured = api.worlds().getSetting(world, LeafDecayTickSpeedSetting.KEY);
-            if (configured == null || !isOverrideActive(world)) {
+            if (!isOverrideActive(world)) {
                 decayCandidates.remove(world.getUID());
                 allowedDecayTicks.remove(world.getUID());
                 continue;
             }
 
-            int tickSpeed = Integer.parseInt(configured);
+            int tickSpeed = configured == null || configured.equals("unset") ? defaultTickSpeed : Integer.parseInt(configured);
             Map<Long, Long> candidates = decayCandidates.get(world.getUID());
             if (candidates == null || candidates.isEmpty()) {
                 continue;
@@ -222,11 +224,8 @@ public final class LeafDecayRandomTickFeature extends BaseFeature {
 
     private boolean isOverrideActive(World world) {
         String configured = api.worlds().getSetting(world, LeafDecayTickSpeedSetting.KEY);
-        if (configured == null || configured.equals("unset")) {
-            return false;
-        }
-
-        return !"deny".equals(api.worlds().getSetting(world, "leaf-decay"));
+        return (configured != null && !configured.equals("unset") || defaultTickSpeed > 0)
+            && !"deny".equals(api.worlds().getSetting(world, "leaf-decay"));
     }
 
     private boolean isAllowedDecay(UUID worldId, long key) {

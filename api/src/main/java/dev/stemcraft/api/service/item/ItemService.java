@@ -90,6 +90,18 @@ public interface ItemService {
     default @Nullable ItemStack createCustomItem(@NotNull String id) { return createCustomItem(id, 1); }
 
     /**
+     * Registers a handler for bracket properties on a custom item identifier.
+     * For example, {@code stemcraft:animal_barrel[animal=chicken]}.
+     *
+     * @param id custom item identifier
+     * @param handler property handler
+     */
+    void registerCustomItemPropertyHandler(@NotNull String id, @NotNull CustomItemPropertyHandler handler);
+
+    /** Removes a previously registered bracket-property handler. */
+    void unregisterCustomItemPropertyHandler(@NotNull String id);
+
+    /**
      * Registers a richer custom item definition, including placement and
      * client presentation metadata.
      *

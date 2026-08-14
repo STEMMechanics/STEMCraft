@@ -63,6 +63,7 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
 
     @Getter
     private final List<String[]> tabCompletions = new ArrayList<>();
+    private final Set<Integer> ignoredArgs = new HashSet<>();
 
     /**
      * The underlying Bukkit command instance after registration.
@@ -82,7 +83,9 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
      * @param executor The command executor.
      * @param tabCompletions The tab completion patterns.
      */
-    public CommandImpl(STEMCraftAPI api, String label, String description, String usage, List<String> aliases, String permission, CommandExecutor executor, List<String[]> tabCompletions) {
+    public CommandImpl(STEMCraftAPI api, String label, String description, String usage, List<String> aliases,
+                       String permission, CommandExecutor executor, List<String[]> tabCompletions,
+                       Set<Integer> ignoredArgs) {
         this.label = label;
         this.description = description;
         this.usage = usage;
@@ -90,6 +93,12 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
         this.permission = permission;
         this.executor = executor;
         this.tabCompletions.addAll(tabCompletions);
+        this.ignoredArgs.addAll(ignoredArgs);
+    }
+
+    @Override
+    public boolean isIgnoredArg(int position) {
+        return ignoredArgs.contains(position);
     }
 
     /**
@@ -507,6 +516,7 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
      */
     @Override
     public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull org.bukkit.command.Command cmd, @NotNull String label, String[] args) {
+        args = CommandArgumentTokenizer.tokenize(Arrays.asList(args)).toArray(String[]::new);
         Player player = (sender instanceof Player p) ? p : null;
         List<String> tabCompletionResults = new ArrayList<>();
         List<String> optionArgsAvailable = new ArrayList<>();
@@ -609,4 +619,5 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
 
         return tabCompletionResults;
     }
+
 }

@@ -285,7 +285,7 @@ holograms:
     apply_to_citizens: true
 
 dragon-respawn:
-  enabled: false
+  enabled: true
   days: 3
   # Optional allow-list of End world names.
   # Leave empty to allow all THE_END worlds.
@@ -533,7 +533,7 @@ deny_spawn_eggs:
 drop_player_heads:
   enabled: true
 no_anvil_repair_cost:
-  enabled: true
+  enabled: false
 rebalance_iron_golem:
   enabled: true
   min_drops: 3
@@ -541,7 +541,43 @@ rebalance_iron_golem:
 leaf_decay_random_tick:
   enabled: true
   scan_radius: 7
+  # Leaf candidates processed per tick when no world override is configured.
+  default_tick_speed: 8
   candidate_retention_ticks: 1200
+survival-qol:
+  enabled: true
+  hoe-harvest:
+    enabled: true
+  stronger-leads: true
+  disable-crop-trampling: true
+  auto-refill: true
+  named-mob-info:
+    enabled: true
+    message: "/info/{name} • {type} • {health}/{max_health} health • Owner: {owner}"
+  anvil-warning:
+    enabled: true
+    level: 35
+    message: "/warn/This anvil operation costs {levels} levels and is close to becoming Too Expensive!"
+  powered-minecarts:
+    enabled: true
+    multiplier: 1.08
+    max-speed: 0.8
+  durability-warning:
+    enabled: true
+    warning-percent: 10
+    critical-percent: 2
+    warning-message: "/warn/⚠ Your {item} is getting badly damaged!"
+    critical-message: "/warn/⚠ Your {item} is about to break!"
+animal-barrels:
+  enabled: true
+  item-name: "Animal Barrel"
+  filled-name: "Animal Barrel ({animal})"
+  messages:
+    capture-failed: "/error/Could not prepare the animal barrel."
+    not-owner: "/error/That animal belongs to another player."
+    no-space: "/error/There is not enough room to release that animal."
+    captured: "/success/Picked up {animal}."
+    released: "/success/Released {animal}."
 naughty:
   allowed_commands:
     - "hub"

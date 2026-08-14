@@ -104,6 +104,31 @@ class CommandContextImplTest {
     }
 
     @Test
+    void preservesIgnoredNamespacedArgumentWithoutParsingIt() {
+        Command command = mock(Command.class);
+        when(command.getLabel()).thenReturn("give");
+        when(command.isIgnoredArg(1)).thenReturn(true);
+
+        CommandContextImpl ctx = new CommandContextImpl(command, sender, "give",
+            List.of("Target", "stemcraft:fried_egg", "4", "mode:test"));
+
+        assertEquals(List.of("Target", "stemcraft:fried_egg", "4"), ctx.args());
+        assertEquals("test", ctx.getOption("mode"));
+    }
+
+    @Test
+    void combinesQuotedArgumentsAndRemovesQuotesBeforeParsing() {
+        Command command = mock(Command.class);
+
+        CommandContextImpl ctx = new CommandContextImpl(command, sender, "example",
+            List.of("this", "\"is", "three\"", "args", "message:\"hello", "world\""));
+
+        assertEquals(List.of("this", "is three", "args"), ctx.args());
+        assertEquals(List.of("this", "is three", "args", "message:hello world"), ctx.rawArgs());
+        assertEquals("hello world", ctx.getOption("message"));
+    }
+
+    @Test
     void checkMethodsAndReturnMethodsUseCommandExceptions() {
         Command command = mock(Command.class);
         when(command.getUsage()).thenReturn("/root <player>");
