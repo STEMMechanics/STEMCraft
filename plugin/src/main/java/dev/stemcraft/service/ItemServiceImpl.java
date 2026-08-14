@@ -179,15 +179,6 @@ public class ItemServiceImpl extends BaseService implements ItemService {
                     meta.setFood(component);
                 }
                 template.setItemMeta(meta);
-                ConfigSection cooking = section.getSection("cooking", false);
-                boolean placeRecipeInput = cooking != null
-                    && cooking.getBoolean("place-recipe-input-on-campfire", false);
-                // Accept the short-lived original key so an already-exported test config continues working.
-                ConfigSection interactions = section.getSection("interactions", false);
-                if (interactions != null && interactions.getBoolean("campfire-input", false)) placeRecipeInput = true;
-                if (placeRecipeInput) {
-                    addAttrib(template, "place-recipe-input-on-campfire", 1);
-                }
                 CustomItemPlacementMode placement = CustomItemPlacementMode.valueOf(
                     section.getString("placement", "DENY").trim().toUpperCase(java.util.Locale.ROOT));
                 registerCustomItem(new CustomItemDefinition(id, template, placement, null,
@@ -281,7 +272,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
             org.bukkit.inventory.Recipe candidate = recipes.next();
             if (candidate instanceof CampfireRecipe campfireRecipe
                 && campfireRecipe.getInputChoice().test(event.getItem())
-                && getAttrib(campfireRecipe.getResult(), "place-recipe-input-on-campfire", Integer.class, 0) == 1) {
+                && event.getItem().getType() == Material.EGG) {
                 recipe = campfireRecipe;
                 break;
             }

@@ -391,12 +391,6 @@ recipes:
 
   # Furnace recipes
   furnace:
-    fried_egg:
-      input: EGG
-      result: "custom:fried-egg"
-      amount: 1
-      exp: 0.1
-      time: 200
     cook_rotten_flesh:
       input: ROTTEN_FLESH
       result: LEATHER
@@ -406,12 +400,6 @@ recipes:
 
   # Smoker recipes (faster food)
   smoker:
-    fried_egg_smoker:
-      input: EGG
-      result: "custom:fried-egg"
-      amount: 1
-      exp: 0.1
-      time: 100
     cook_kelp_fast:
       input: KELP
       result: DRIED_KELP
@@ -430,12 +418,6 @@ recipes:
 
   # Campfire recipes (free cooking)
   campfire:
-    fried_egg_campfire:
-      input: EGG
-      result: "custom:fried-egg"
-      amount: 1
-      exp: 0.1
-      time: 600
     campfire_fish:
       input: COD
       result: COOKED_COD

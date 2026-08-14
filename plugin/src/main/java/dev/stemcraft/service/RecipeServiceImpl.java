@@ -36,6 +36,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.io.File;
 
 /**
  * Implementation of the RecipeService for managing custom recipes.
@@ -65,7 +66,27 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
      * Load recipes from the configuration.
      */
     private void loadFromConfig() {
-        ConfigSection recipesSec = getConfigSection();
+        loadRecipes(getConfigSection());
+        File dataPacks = new File(plugin.getDataFolder(), "data-packs");
+        File[] packDirectories = dataPacks.listFiles(File::isDirectory);
+        if (packDirectories == null) return;
+        for (File packDirectory : packDirectories) {
+            File root = new File(packDirectory, "config.yml");
+            ConfigSection rootConfig = root.isFile() ? api.config().load(root) : null;
+            if (rootConfig == null || !rootConfig.getBoolean("pack.enabled", true)) continue;
+            loadRecipes(rootConfig.getSection("recipes", false));
+            File configs = new File(packDirectory, "configs");
+            File[] files = configs.listFiles((directory, name) -> name.toLowerCase(Locale.ROOT).endsWith(".yml"));
+            if (files != null) for (File file : files) loadRecipesFromFile(file);
+        }
+    }
+
+    private void loadRecipesFromFile(File file) {
+        ConfigSection config = api.config().load(file);
+        if (config != null) loadRecipes(config.getSection("recipes", false));
+    }
+
+    private void loadRecipes(ConfigSection recipesSec) {
         if (recipesSec == null) return;
 
         /* -------- REMOVE -------- */

@@ -17,9 +17,6 @@ custom-items:
       nutrition: 3
       saturation: 2.4
       always-edible: false
-    cooking:
-      # Opt in when a throwable recipe input must be inserted onto a campfire.
-      place-recipe-input-on-campfire: true
 ```
 
 The `material` controls the server-side behaviour. For food, choose an edible base material and override its food values. `placement: DENY` prevents a block-based item from being placed. Names and lore support MiniMessage formatting.
@@ -42,14 +39,14 @@ Unusual items can override only the derived values they need:
 
 ## Recipe results
 
-Every configurable shaped, shapeless, cooking, or smithing-transform recipe can return a configured item by prefixing its ID with `custom:`:
+Every configurable shaped, shapeless, cooking, or smithing-transform recipe can return a configured item using the same public namespaced ID accepted by `/give`. Recipes may be placed beside `custom-items` in the same data-pack configuration:
 
 ```yaml
 recipes:
   furnace:
     fried_egg:
       input: EGG
-      result: "custom:fried-egg"
+      result: "stemcraft:fried_egg"
       amount: 1
       exp: 0.1
       time: 200
@@ -68,4 +65,4 @@ STEMCraft registers the bare `/give` command so its command tree includes config
 
 The namespace is accepted as a convenient command form; underscores in the path resolve to hyphens in the configured ID. Vanilla item requests are delegated to `minecraft:give`, retaining Minecraft's item-component syntax and behaviour. Item components after the count remain a vanilla-only facility.
 
-`cooking.place-recipe-input-on-campfire` is disabled unless explicitly set. When enabled on a custom result, right-clicking a campfire with an item accepted by its campfire recipe inserts one input into an empty slot instead of executing the input's normal interaction. Fried Eggs enable it because raw eggs are otherwise thrown.
+When a registered campfire recipe accepts `EGG`, STEMCraft automatically inserts the egg into an empty campfire slot instead of allowing its normal throwing interaction. No custom-item flag is required; removing the campfire recipe removes the override.

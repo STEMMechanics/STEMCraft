@@ -9,6 +9,26 @@ custom-items:
       nutrition: 3
       saturation: 2.4
       always-edible: false
-    cooking:
-      # Eggs normally throw when used; place the input for this item's matching recipe instead.
-      place-recipe-input-on-campfire: true
+
+recipes:
+  furnace:
+    fried_egg:
+      input: EGG
+      result: "stemcraft:fried_egg"
+      amount: 1
+      exp: 0.1
+      time: 200
+  smoker:
+    fried_egg_smoker:
+      input: EGG
+      result: "stemcraft:fried_egg"
+      amount: 1
+      exp: 0.1
+      time: 100
+  campfire:
+    fried_egg_campfire:
+      input: EGG
+      result: "stemcraft:fried_egg"
+      amount: 1
+      exp: 0.1
+      time: 600
