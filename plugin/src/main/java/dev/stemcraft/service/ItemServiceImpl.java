@@ -37,6 +37,7 @@ import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.EventPriority;
 import org.bukkit.block.Campfire;
 import org.bukkit.inventory.CampfireRecipe;
 import org.bukkit.GameMode;
@@ -86,7 +87,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
     public void onEnable() {
         loadConfiguredItems();
         registerGiveCommand();
-        api.events().register(PlayerInteractEvent.class, this::handleCampfireInput);
+        api.events().register(PlayerInteractEvent.class, this::handleCampfireInput, EventPriority.HIGHEST, false);
         api.events().register(PlayerDropItemEvent.class, (event) -> {
             ItemStack item = event.getItemDrop().getItemStack();
             ItemMeta meta = item.getItemMeta();
@@ -178,9 +179,14 @@ public class ItemServiceImpl extends BaseService implements ItemService {
                     meta.setFood(component);
                 }
                 template.setItemMeta(meta);
+                ConfigSection cooking = section.getSection("cooking", false);
+                boolean placeRecipeInput = cooking != null
+                    && cooking.getBoolean("place-recipe-input-on-campfire", false);
+                // Accept the short-lived original key so an already-exported test config continues working.
                 ConfigSection interactions = section.getSection("interactions", false);
-                if (interactions != null && interactions.getBoolean("campfire-input", false)) {
-                    addAttrib(template, "campfire-input", 1);
+                if (interactions != null && interactions.getBoolean("campfire-input", false)) placeRecipeInput = true;
+                if (placeRecipeInput) {
+                    addAttrib(template, "place-recipe-input-on-campfire", 1);
                 }
                 CustomItemPlacementMode placement = CustomItemPlacementMode.valueOf(
                     section.getString("placement", "DENY").trim().toUpperCase(java.util.Locale.ROOT));
@@ -269,10 +275,17 @@ public class ItemServiceImpl extends BaseService implements ItemService {
     private void handleCampfireInput(PlayerInteractEvent event) {
         if (event.getAction() != Action.RIGHT_CLICK_BLOCK || event.getClickedBlock() == null
             || !(event.getClickedBlock().getState() instanceof Campfire campfire) || event.getItem() == null) return;
-        CampfireRecipe recipe = Bukkit.getRecipesFor(event.getItem()).stream()
-            .filter(CampfireRecipe.class::isInstance).map(CampfireRecipe.class::cast)
-            .filter(candidate -> getAttrib(candidate.getResult(), "campfire-input", Integer.class, 0) == 1)
-            .findFirst().orElse(null);
+        CampfireRecipe recipe = null;
+        java.util.Iterator<org.bukkit.inventory.Recipe> recipes = Bukkit.recipeIterator();
+        while (recipes.hasNext()) {
+            org.bukkit.inventory.Recipe candidate = recipes.next();
+            if (candidate instanceof CampfireRecipe campfireRecipe
+                && campfireRecipe.getInputChoice().test(event.getItem())
+                && getAttrib(campfireRecipe.getResult(), "place-recipe-input-on-campfire", Integer.class, 0) == 1) {
+                recipe = campfireRecipe;
+                break;
+            }
+        }
         if (recipe == null) return;
         int slot = -1;
         for (int index = 0; index < campfire.getSize(); index++) {

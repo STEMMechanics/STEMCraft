@@ -17,9 +17,9 @@ custom-items:
       nutrition: 3
       saturation: 2.4
       always-edible: false
-    interactions:
+    cooking:
       # Opt in when a throwable recipe input must be inserted onto a campfire.
-      campfire-input: true
+      place-recipe-input-on-campfire: true
 ```
 
 The `material` controls the server-side behaviour. For food, choose an edible base material and override its food values. `placement: DENY` prevents a block-based item from being placed. Names and lore support MiniMessage formatting.
@@ -68,4 +68,4 @@ STEMCraft registers the bare `/give` command so its command tree includes config
 
 The namespace is accepted as a convenient command form; underscores in the path resolve to hyphens in the configured ID. Vanilla item requests are delegated to `minecraft:give`, retaining Minecraft's item-component syntax and behaviour. Item components after the count remain a vanilla-only facility.
 
-`interactions.campfire-input` is disabled unless explicitly set. When enabled, right-clicking a campfire with an input that has a campfire recipe for that custom item inserts one input into an empty slot instead of executing the input's normal interaction. Fried Eggs enable it because raw eggs are otherwise thrown.
+`cooking.place-recipe-input-on-campfire` is disabled unless explicitly set. When enabled on a custom result, right-clicking a campfire with an item accepted by its campfire recipe inserts one input into an empty slot instead of executing the input's normal interaction. Fried Eggs enable it because raw eggs are otherwise thrown.

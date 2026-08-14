@@ -9,6 +9,6 @@ custom-items:
       nutrition: 3
       saturation: 2.4
       always-edible: false
-    interactions:
-      # Eggs normally throw when used; allow matching campfire recipes to insert one instead.
-      campfire-input: true
+    cooking:
+      # Eggs normally throw when used; place the input for this item's matching recipe instead.
+      place-recipe-input-on-campfire: true

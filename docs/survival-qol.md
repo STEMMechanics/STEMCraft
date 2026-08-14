@@ -22,7 +22,7 @@ The survival QOL feature provides small configurable improvements without changi
 
 ## Fried eggs
 
-Cook a vanilla egg in a furnace, smoker, or over a campfire to make a Fried Egg. Its opt-in `interactions.campfire-input` flag makes right-click insert the otherwise throwable egg into an empty campfire slot. It has its own Java and Bedrock model and behaves as food, restoring three hunger points and 2.4 saturation by default. The item is declared under `custom-items.fried-egg` in the survival data-pack config; its furnace, smoker, and campfire recipes use `result: custom:fried-egg` in the normal recipes configuration. Administrators can obtain it with `/give @s stemcraft:fried_egg`.
+Cook a vanilla egg in a furnace, smoker, or over a campfire to make a Fried Egg. Its opt-in `cooking.place-recipe-input-on-campfire` setting makes right-click insert the otherwise throwable egg into an empty campfire slot. It has its own Java and Bedrock model and behaves as food, restoring three hunger points and 2.4 saturation by default. The item is declared under `custom-items.fried-egg` in the survival data-pack config; its furnace, smoker, and campfire recipes use `result: custom:fried-egg` in the normal recipes configuration. Administrators can obtain it with `/give @s stemcraft:fried_egg`.
 
 ## Animal barrels
 
