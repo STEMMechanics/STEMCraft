@@ -275,6 +275,7 @@ public class NightfallMiniGame extends BaseMiniGame {
             .set("dayTimeSpeedMultiplier", 2.0d)
             .set("nightTimeSpeedMultiplier", 2.0d)
             .set("allowLateJoin", false)
+            .set("allowCrafting", true)
             .set("dropLootMinStacks", 2)
             .set("dropLootMaxStacks", 4)
             .set("dropMinSeconds", 1)
@@ -292,6 +293,7 @@ public class NightfallMiniGame extends BaseMiniGame {
             .set("bloodMoonZombieSpawnMultiplier", 2.0d)
             .set("bloodMoonBabyZombieChancePercent", 20)
             .set("bloodMoonTntZombieChancePercent", 3)
+            .set("bloodMoonEscalation", BloodMoonEscalation.defaults())
             .set("generatorLocations", new ArrayList<Location>())
             .set("dropItems", copyDropItems(defaultDropItems()));
     }
@@ -360,6 +362,7 @@ public class NightfallMiniGame extends BaseMiniGame {
                     .set("dayTimeSpeedMultiplier", arenaDef.dayTimeSpeedMultiplier())
                     .set("nightTimeSpeedMultiplier", arenaDef.nightTimeSpeedMultiplier())
                     .set("allowLateJoin", arenaDef.allowLateJoin())
+                    .set("allowCrafting", true)
                     .set("dropLootMinStacks", arenaDef.dropLootMinStacks())
                     .set("dropLootMaxStacks", arenaDef.dropLootMaxStacks())
                     .set("dropMinSeconds", arenaDef.dropMinSeconds())
@@ -377,6 +380,7 @@ public class NightfallMiniGame extends BaseMiniGame {
                     .set("bloodMoonZombieSpawnMultiplier", arenaDef.bloodMoonZombieSpawnMultiplier())
                     .set("bloodMoonBabyZombieChancePercent", arenaDef.bloodMoonBabyZombieChancePercent())
                     .set("bloodMoonTntZombieChancePercent", arenaDef.bloodMoonTntZombieChancePercent())
+                    .set("bloodMoonEscalation", arenaDef.bloodMoonEscalation())
                     .set("generatorLocations", copyLocations(arenaDef.generatorLocations()))
                     .set("dropItems", copyDropItems(arenaDef.dropItems()))
                     .set("pendingWorldRollback", arenaDef.pendingWorldRollback())
@@ -593,6 +597,18 @@ public class NightfallMiniGame extends BaseMiniGame {
 
     public int bloodMoonTntZombieChancePercent(@NotNull MiniGameArena arena) {
         return Math.clamp(arena.get("bloodMoonTntZombieChancePercent", Integer.class, 3), 0, 100);
+    }
+
+    public @NotNull BloodMoonEscalation bloodMoonEscalation(@NotNull MiniGameArena arena) {
+        return arena.get("bloodMoonEscalation", BloodMoonEscalation.class, BloodMoonEscalation.defaults());
+    }
+
+    public int bloodMoonTntZombieChancePercentForNight(@NotNull MiniGameArena arena) {
+        BloodMoonEscalation escalation = bloodMoonEscalation(arena);
+        int night = Math.max(1, currentNight(arena));
+        int scaled = bloodMoonTntZombieChancePercent(arena)
+            + Math.max(0, night - 1) * Math.max(0, escalation.tntIncreasePerNight());
+        return Math.clamp(scaled, 0, Math.clamp(escalation.tntMaximumChance(), 0, 100));
     }
 
     public int currentNight(@NotNull MiniGameArena arena) {

@@ -45,6 +45,7 @@ public record NightfallArenaRecord(
         double bloodMoonZombieSpawnMultiplier,
         int bloodMoonBabyZombieChancePercent,
         int bloodMoonTntZombieChancePercent,
+        BloodMoonEscalation bloodMoonEscalation,
         List<Location> generatorLocations,
         Map<Integer, List<Material>> dropItems,
         boolean pendingWorldRollback,

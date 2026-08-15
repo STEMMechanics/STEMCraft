@@ -4,6 +4,7 @@ import dev.stemcraft.api.minigame.MiniGameArena;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -55,5 +56,22 @@ class NightfallMiniGameDefaultsTest {
         assertEquals(0, nightfall.dropMinSeconds(arena));
         assertEquals(0, nightfall.dropMaxSeconds(arena));
         org.junit.jupiter.api.Assertions.assertFalse(nightfall.dropsEnabled(arena));
+    }
+
+    @Test
+    void bloodMoonTntChanceEscalatesByNightAndStopsAtConfiguredCap() {
+        MiniGameArena arena = mock(MiniGameArena.class);
+        NightfallMiniGame nightfall = new NightfallMiniGame(null);
+
+        when(arena.get("bloodMoonTntZombieChancePercent", Integer.class, 3)).thenReturn(3);
+        when(arena.get("bloodMoonEscalation", BloodMoonEscalation.class, BloodMoonEscalation.defaults()))
+            .thenReturn(BloodMoonEscalation.defaults());
+        when(arena.get("currentNight", Integer.class, 0)).thenReturn(8);
+
+        assertEquals(17, nightfall.bloodMoonTntZombieChancePercentForNight(arena));
+
+        when(arena.get("currentNight", Integer.class, 0)).thenReturn(20);
+        assertEquals(25, nightfall.bloodMoonTntZombieChancePercentForNight(arena));
+        assertTrue(nightfall.bloodMoonEscalation(arena).spongeRadius() > 0);
     }
 }

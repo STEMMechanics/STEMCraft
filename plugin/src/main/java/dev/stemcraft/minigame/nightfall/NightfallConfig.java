@@ -92,6 +92,17 @@ public class NightfallConfig {
         double bloodMoonZombieSpawnMultiplier = section.getDouble("blood-moon-zombie-spawn-multiplier", 2.0d);
         int bloodMoonBabyZombieChancePercent = section.getInt("blood-moon-baby-zombie-chance", 20);
         int bloodMoonTntZombieChancePercent = section.getInt("blood-moon-tnt-zombie-chance", 3);
+        BloodMoonEscalation escalationDefaults = BloodMoonEscalation.defaults();
+        BloodMoonEscalation bloodMoonEscalation = new BloodMoonEscalation(
+            section.getInt("blood-moon-tnt-chance-increase-per-night", escalationDefaults.tntIncreasePerNight()),
+            section.getInt("blood-moon-tnt-maximum-chance", escalationDefaults.tntMaximumChance()),
+            section.getInt("blood-moon-bucket-start-night", escalationDefaults.bucketStartNight()),
+            section.getInt("blood-moon-sponge-start-night", escalationDefaults.spongeStartNight()),
+            section.getInt("blood-moon-sponge-radius", escalationDefaults.spongeRadius()),
+            section.getInt("blood-moon-builder-start-night", escalationDefaults.builderStartNight()),
+            section.getInt("blood-moon-axe-start-night", escalationDefaults.axeStartNight()),
+            section.getInt("blood-moon-knockback-start-night", escalationDefaults.knockbackStartNight()),
+            section.getDouble("blood-moon-knockback-resistance", escalationDefaults.knockbackResistance()));
         String name = section.getString("name", StringUtil.beautify(arenaId));
         List<Location> generatorLocations = loadLocations(section, world, arenaId);
         Map<Integer, List<Material>> dropItems = loadDropItems(section, arenaId);
@@ -134,6 +145,7 @@ public class NightfallConfig {
             bloodMoonZombieSpawnMultiplier,
             bloodMoonBabyZombieChancePercent,
             bloodMoonTntZombieChancePercent,
+            bloodMoonEscalation,
             generatorLocations,
             dropItems,
             pendingWorldRollback,
@@ -187,6 +199,16 @@ public class NightfallConfig {
         arenaConfig.remove("blood-moon-baby-zombies");
         arenaConfig.set("blood-moon-baby-zombie-chance", arena.get("bloodMoonBabyZombieChancePercent", Integer.class, 20));
         arenaConfig.set("blood-moon-tnt-zombie-chance", arena.get("bloodMoonTntZombieChancePercent", Integer.class, 3));
+        BloodMoonEscalation escalation = arena.get("bloodMoonEscalation", BloodMoonEscalation.class, BloodMoonEscalation.defaults());
+        arenaConfig.set("blood-moon-tnt-chance-increase-per-night", escalation.tntIncreasePerNight());
+        arenaConfig.set("blood-moon-tnt-maximum-chance", escalation.tntMaximumChance());
+        arenaConfig.set("blood-moon-bucket-start-night", escalation.bucketStartNight());
+        arenaConfig.set("blood-moon-sponge-start-night", escalation.spongeStartNight());
+        arenaConfig.set("blood-moon-sponge-radius", escalation.spongeRadius());
+        arenaConfig.set("blood-moon-builder-start-night", escalation.builderStartNight());
+        arenaConfig.set("blood-moon-axe-start-night", escalation.axeStartNight());
+        arenaConfig.set("blood-moon-knockback-start-night", escalation.knockbackStartNight());
+        arenaConfig.set("blood-moon-knockback-resistance", escalation.knockbackResistance());
         if (generatorLocations(arena).isEmpty()) {
             arenaConfig.set("generator-locations", new ArrayList<>());
         } else {
