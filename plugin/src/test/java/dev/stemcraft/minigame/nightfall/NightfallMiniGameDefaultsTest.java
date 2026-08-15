@@ -14,11 +14,13 @@ class NightfallMiniGameDefaultsTest {
         NightfallMiniGame nightfall = new NightfallMiniGame(null);
 
         when(arena.get("dropMaxActiveItems", Integer.class, 10)).thenReturn(10);
+        when(arena.get("dropGroupDistance", Integer.class, 100)).thenReturn(100);
         when(arena.get("zombieNightlyHealthMultiplier", Double.class, 1.05d)).thenReturn(1.05d);
         when(arena.get("bloodMoonZombieSpawnMultiplier", Double.class, 2.0d)).thenReturn(2.0d);
         when(arena.get("bloodMoonBabyZombieChancePercent", Integer.class, 20)).thenReturn(20);
 
         assertEquals(10, nightfall.dropMaxActiveItems(arena));
+        assertEquals(100, nightfall.dropGroupDistance(arena));
         assertEquals(1.05d, nightfall.zombieNightlyHealthMultiplier(arena), 0.0001d);
         assertEquals(2.0d, nightfall.bloodMoonZombieSpawnMultiplier(arena), 0.0001d);
         assertEquals(20, nightfall.bloodMoonBabyZombieChancePercent(arena));
@@ -30,11 +32,13 @@ class NightfallMiniGameDefaultsTest {
         NightfallMiniGame nightfall = new NightfallMiniGame(null);
 
         when(arena.get("dropMaxActiveItems", Integer.class, 10)).thenReturn(-3);
+        when(arena.get("dropGroupDistance", Integer.class, 100)).thenReturn(-1);
         when(arena.get("zombieNightlyHealthMultiplier", Double.class, 1.05d)).thenReturn(0.5d);
         when(arena.get("bloodMoonZombieSpawnMultiplier", Double.class, 2.0d)).thenReturn(0.75d);
         when(arena.get("bloodMoonBabyZombieChancePercent", Integer.class, 20)).thenReturn(120);
 
         assertEquals(0, nightfall.dropMaxActiveItems(arena));
+        assertEquals(0, nightfall.dropGroupDistance(arena));
         assertEquals(1.0d, nightfall.zombieNightlyHealthMultiplier(arena), 0.0001d);
         assertEquals(1.0d, nightfall.bloodMoonZombieSpawnMultiplier(arena), 0.0001d);
         assertEquals(100, nightfall.bloodMoonBabyZombieChancePercent(arena));

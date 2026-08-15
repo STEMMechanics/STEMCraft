@@ -75,6 +75,7 @@ public class NightfallCommand {
             .tabCompletion("set", "{nightfall-arenas}", "dropmindelay")
             .tabCompletion("set", "{nightfall-arenas}", "dropmaxdelay")
             .tabCompletion("set", "{nightfall-arenas}", "dropmaxactive")
+            .tabCompletion("set", "{nightfall-arenas}", "dropgroupdistance")
             .tabCompletion("set", "{nightfall-arenas}", "droplootmin")
             .tabCompletion("set", "{nightfall-arenas}", "droplootmax")
             .tabCompletion("set", "{nightfall-arenas}", "zombiebasenightly")
@@ -194,6 +195,7 @@ public class NightfallCommand {
             ? nightfall.dropMinSeconds(arena) + "-" + nightfall.dropMaxSeconds(arena) + " sec"
             : "disabled"));
         ctx.info(" - Drop max active items: " + nightfall.dropMaxActiveItems(arena));
+        ctx.info(" - Drop group distance: " + nightfall.dropGroupDistance(arena) + " blocks");
         ctx.info(" - Drop loot stacks: " + nightfall.dropLootMinStacks(arena) + "-" + nightfall.dropLootMaxStacks(arena));
         ctx.info(" - Drop radius: 5-20 blocks around each player with open sky");
         ctx.info(" - Zombie nightly base: " + nightfall.zombieBaseNightlySpawns(arena));
@@ -630,6 +632,12 @@ public class NightfallCommand {
                 int value = ctx.getArgAsInt(3, 10, 0, null);
                 arena.set("dropMaxActiveItems", value);
                 ctx.success("Maximum active drops set to " + value + " for arena '" + arena.id() + "'.");
+            }
+            case "dropgroupdistance" -> {
+                ctx.checkArgsSizeAtLeast(4);
+                int value = ctx.getArgAsInt(3, 100, 0, null);
+                arena.set("dropGroupDistance", value);
+                ctx.success("Drop group distance set to " + value + " blocks for arena '" + arena.id() + "'.");
             }
             case "droplootmin" -> {
                 ctx.checkArgsSizeAtLeast(4);

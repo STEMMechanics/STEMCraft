@@ -33,6 +33,7 @@ public record NightfallArenaRecord(
         int dropMinSeconds,
         int dropMaxSeconds,
         int dropMaxActiveItems,
+        int dropGroupDistance,
         int zombieBaseNightlySpawns,
         int zombieNightlySpawnIncrease,
         double zombieNightlyHealthMultiplier,
