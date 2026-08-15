@@ -151,6 +151,10 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         if (dropMaxActiveItems < 0) {
             result.addError("Maximum active drops cannot be negative.", "dropMaxActiveItems");
         }
+        int dropGroupDistance = arena.get("dropGroupDistance", Integer.class, 100);
+        if (dropGroupDistance < 0) {
+            result.addError("Drop group distance cannot be negative.", "dropGroupDistance");
+        }
         if (nightfall.zombieWaveIntervalSeconds(arena) < 1) {
             result.addError("Zombie wave interval must be at least 1 second.", "zombieWaveIntervalSeconds");
         }
@@ -520,7 +524,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
 
     private void tickDrops(@NotNull MiniGameArena arena) {
         Map<Integer, List<Material>> dropItems = nightfall.dropItems(arena);
-        List<Player> activePlayers = activeSurvivors(arena);
+        List<Player> activePlayers = dropGroupRepresentatives(activeSurvivors(arena), nightfall.dropGroupDistance(arena));
         int maxActiveDrops = nightfall.dropMaxActiveItems(arena);
         if (dropItems.isEmpty() || activePlayers.isEmpty() || maxActiveDrops <= 0 || !nightfall.dropsEnabled(arena)) {
             return;
@@ -576,6 +580,38 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
             }
             dueAt.put(playerId, now + randomDropDelayMillis(arena));
         }
+    }
+
+    /**
+     * Returns one player per connected proximity group. If A is close to B and B is close to C,
+     * all three share one drop even when A and C are farther apart than the configured distance.
+     */
+    private @NotNull List<Player> dropGroupRepresentatives(@NotNull List<Player> players, int groupDistance) {
+        List<Player> representatives = new ArrayList<>();
+        Set<UUID> assigned = new HashSet<>();
+        double maxDistanceSquared = (double) groupDistance * groupDistance;
+
+        for (Player seed : players) {
+            if (!assigned.add(seed.getUniqueId())) {
+                continue;
+            }
+            representatives.add(seed);
+            List<Player> pending = new ArrayList<>();
+            pending.add(seed);
+            for (int index = 0; index < pending.size(); index++) {
+                Player current = pending.get(index);
+                for (Player candidate : players) {
+                    if (assigned.contains(candidate.getUniqueId())
+                            || !sameWorld(current.getLocation(), candidate.getLocation())
+                            || dropHorizontalDistanceSquared(current.getLocation(), candidate.getLocation()) > maxDistanceSquared) {
+                        continue;
+                    }
+                    assigned.add(candidate.getUniqueId());
+                    pending.add(candidate);
+                }
+            }
+        }
+        return representatives;
     }
 
     private void tickNightCycle(@NotNull MiniGameArena arena) {

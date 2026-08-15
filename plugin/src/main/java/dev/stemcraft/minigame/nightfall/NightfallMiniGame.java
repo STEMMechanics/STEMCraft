@@ -280,6 +280,7 @@ public class NightfallMiniGame extends BaseMiniGame {
             .set("dropMinSeconds", 1)
             .set("dropMaxSeconds", 5)
             .set("dropMaxActiveItems", 10)
+            .set("dropGroupDistance", 100)
             .set("zombieBaseNightlySpawns", 4)
             .set("zombieNightlySpawnIncrease", 3)
             .set("zombieNightlyHealthMultiplier", 1.05d)
@@ -364,6 +365,7 @@ public class NightfallMiniGame extends BaseMiniGame {
                     .set("dropMinSeconds", arenaDef.dropMinSeconds())
                     .set("dropMaxSeconds", arenaDef.dropMaxSeconds())
                     .set("dropMaxActiveItems", arenaDef.dropMaxActiveItems())
+                    .set("dropGroupDistance", arenaDef.dropGroupDistance())
                     .set("zombieBaseNightlySpawns", arenaDef.zombieBaseNightlySpawns())
                     .set("zombieNightlySpawnIncrease", arenaDef.zombieNightlySpawnIncrease())
                     .set("zombieNightlyHealthMultiplier", arenaDef.zombieNightlyHealthMultiplier())
@@ -543,6 +545,10 @@ public class NightfallMiniGame extends BaseMiniGame {
 
     public int dropMaxActiveItems(@NotNull MiniGameArena arena) {
         return Math.max(0, arena.get("dropMaxActiveItems", Integer.class, 10));
+    }
+
+    public int dropGroupDistance(@NotNull MiniGameArena arena) {
+        return Math.max(0, arena.get("dropGroupDistance", Integer.class, 100));
     }
 
     public int zombieBaseNightlySpawns(@NotNull MiniGameArena arena) {

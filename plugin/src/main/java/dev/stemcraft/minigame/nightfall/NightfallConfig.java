@@ -80,6 +80,7 @@ public class NightfallConfig {
         int dropMinSeconds = section.getInt("drop-min-seconds", 1);
         int dropMaxSeconds = section.getInt("drop-max-seconds", 5);
         int dropMaxActiveItems = section.getInt("drop-max-active-items", 10);
+        int dropGroupDistance = section.getInt("drop-group-distance", 100);
         int zombieBaseNightlySpawns = section.getInt("zombie-base-nightly-spawns", 4);
         int zombieNightlySpawnIncrease = section.getInt("zombie-nightly-spawn-increase", 3);
         double zombieNightlyHealthMultiplier = section.getDouble("zombie-nightly-health-multiplier", 1.05d);
@@ -121,6 +122,7 @@ public class NightfallConfig {
             dropMinSeconds,
             dropMaxSeconds,
             dropMaxActiveItems,
+            dropGroupDistance,
             zombieBaseNightlySpawns,
             zombieNightlySpawnIncrease,
             zombieNightlyHealthMultiplier,
@@ -172,6 +174,7 @@ public class NightfallConfig {
         arenaConfig.set("drop-min-seconds", arena.get("dropMinSeconds", Integer.class, 1));
         arenaConfig.set("drop-max-seconds", arena.get("dropMaxSeconds", Integer.class, 5));
         arenaConfig.set("drop-max-active-items", arena.get("dropMaxActiveItems", Integer.class, 10));
+        arenaConfig.set("drop-group-distance", arena.get("dropGroupDistance", Integer.class, 100));
         arenaConfig.set("zombie-base-nightly-spawns", arena.get("zombieBaseNightlySpawns", Integer.class, 4));
         arenaConfig.set("zombie-nightly-spawn-increase", arena.get("zombieNightlySpawnIncrease", Integer.class, 3));
         arenaConfig.set("zombie-nightly-health-multiplier", arena.get("zombieNightlyHealthMultiplier", Double.class, 1.05d));
