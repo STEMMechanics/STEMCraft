@@ -44,6 +44,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.block.SignChangeEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerEditBookEvent;
 import org.bukkit.inventory.meta.BookMeta;
 
@@ -88,10 +89,9 @@ public class ChatServiceImpl extends BaseService {
 
     private String filterCommand;
 
-    private final Map<UUID, Long> lastChatAt = new ConcurrentHashMap<>();
-
-    private long spamCooldownMs;
-    private String spamMessage;
+    private final Map<UUID, DuplicateMessageState> duplicateMessages = new ConcurrentHashMap<>();
+    private int duplicateMessageLimit;
+    private String duplicateMessageWarning;
     private boolean contentFilterEnabled;
     private ProfanitySeverity contentFilterMinimumSeverity;
     private String contentFilterBlockedMessage;
@@ -165,21 +165,17 @@ public class ChatServiceImpl extends BaseService {
             if (plugin.firstJoin() != null && plugin.firstJoin().hasActiveSession(event.getPlayer().getUniqueId())) {
                 return;
             }
-            long now = System.currentTimeMillis();
             UUID uuid = event.getPlayer().getUniqueId();
 
             String plain = PLAIN.serialize(event.message());
 
-            if (spamCooldownMs > 0) {
-                Long last = lastChatAt.put(uuid, now);
-                if (last != null && (now - last) < spamCooldownMs) {
-                    event.setCancelled(true);
-                    recordCommunicationAudit("chat", event.getPlayer(), plain, plain, event.getPlayer().getLocation(), Map.of(
-                        "result", "spam_blocked"
-                    ));
-                    api.tasks().nextTick(() -> api.messages().warn(event.getPlayer(), spamMessage));
-                    return;
-                }
+            if (isDuplicateMessageBlocked(uuid, plain)) {
+                event.setCancelled(true);
+                recordCommunicationAudit("chat", event.getPlayer(), plain, plain, event.getPlayer().getLocation(), Map.of(
+                    "result", "duplicate_blocked"
+                ));
+                api.tasks().nextTick(() -> api.messages().warn(event.getPlayer(), duplicateMessageWarning));
+                return;
             }
 
             String effectiveMessage = plain;
@@ -282,6 +278,9 @@ public class ChatServiceImpl extends BaseService {
             }
         }, EventPriority.HIGH, true);
 
+        api.events().register(PlayerQuitEvent.class,
+            event -> duplicateMessages.remove(event.getPlayer().getUniqueId()));
+
         api.events().register(PlayerEditBookEvent.class, event -> {
             BookMeta meta = event.getNewBookMeta();
             EncodedBookContent encoded = encodeBookContent(meta);
@@ -330,8 +329,10 @@ public class ChatServiceImpl extends BaseService {
         );
         filterCommand = getConfigSection().getString("filter_command", "");
 
-        spamCooldownMs = (long) (getConfigSection().getDouble("spam_cooldown", 1.5) * 1000L);
-        spamMessage = getConfigSection().getString("spam_message", "Please do not spam the chat");
+        duplicateMessageLimit = Math.max(0, getConfigSection().getInt("duplicate_message_limit", 2));
+        duplicateMessageWarning = getConfigSection().getString(
+            "duplicate_message_warning", "Please do not repeat the same message");
+        duplicateMessages.clear();
         contentFilterEnabled = getConfigSection().getBoolean("content_filter.enabled", true);
         contentFilterMinimumSeverity = ProfanitySeverity.fromString(
             getConfigSection().getString("content_filter.minimum_severity", "mild"),
@@ -367,6 +368,25 @@ public class ChatServiceImpl extends BaseService {
             "stemcraft.moderation.alerts"
         );
         loadModerationActionRules();
+    }
+
+    boolean isDuplicateMessageBlocked(UUID playerId, String message) {
+        if (duplicateMessageLimit <= 0) {
+            return false;
+        }
+        String normalized = message.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
+        DuplicateMessageState previous = duplicateMessages.get(playerId);
+        int count = previous != null && previous.message().equals(normalized) ? previous.count() + 1 : 1;
+        duplicateMessages.put(playerId, new DuplicateMessageState(normalized, count));
+        return count > duplicateMessageLimit;
+    }
+
+    void configureDuplicateMessageLimitForTest(int limit) {
+        duplicateMessageLimit = Math.max(0, limit);
+        duplicateMessages.clear();
+    }
+
+    private record DuplicateMessageState(String message, int count) {
     }
 
     private ModerationDecision moderatePlayerMessage(Player player, String messageType, String message, Location location, Map<String, Object> context) {
