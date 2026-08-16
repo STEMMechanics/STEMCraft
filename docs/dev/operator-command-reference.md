@@ -11,7 +11,8 @@ This is the active command surface registered by STEMCraft.
 - Custom command aliases run as the player by default; prefix a run entry with `server:` or `player:` to force the sender
 - Custom command aliases support `{player}` and `{uuid}` placeholders in run entries
 - `/webserver <start|stop|enable|disable>`
-- `/world <record|create|delete|info|load|list|duplicate|listgenerators|setspawn|id|joincommands|leavecommands|addjoincommand|addleavecommand|setjoincommand|setleavecommand|removejoincommand|removeleavecommand|flags|time|weather|tickspeed|gamemode|nether|end|randomspawn>`
+- `/world <record|create|delete|info|displayname|load|list|duplicate|listgenerators|setspawn|id|joincommands|leavecommands|addjoincommand|addleavecommand|setjoincommand|setleavecommand|removejoincommand|removeleavecommand|flags|time|weather|tickspeed|gamemode|nether|end|randomspawn>`
+- `/world displayname <world> <name|clear>` sets the player-facing world name or restores its automatic name; `/world info [world]` shows the effective name and whether it is custom
 - `/world create <name> [generator|plugin[:id]] [generatorOptions]` accepts STEMCraft generators and Bukkit plugin generators such as `PlotSquared` or `Plugin:id`
 - `/world joincommands [world] [page]` and `/world leavecommands [world] [page]` open the in-chat world transition command editors
 - `/world addjoincommand <world> <command>` and `/world addleavecommand <world> <command>` append commands run on world join/leave

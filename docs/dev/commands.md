@@ -74,6 +74,7 @@ The `/world` command is one of the most important operator surfaces. It covers:
 
 - create, load, unload, duplicate, and delete
 - world inspection via `/world info`
+- player-facing world names via `/world displayname <world> <name|clear>`
 - stored generator selection
 - world settings such as time, weather, tick speed, gamemode, nether, end, and random spawn
 - join/leave command editors:
