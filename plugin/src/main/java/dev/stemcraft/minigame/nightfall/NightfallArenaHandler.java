@@ -768,7 +768,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
 
             String from = cardinalDirection(direction.clone().multiply(-1.0d));
             broadcastPlainToOccupants(arena, "A treasure-bearing comet is approaching from the " + from
-                + "! Impact expected near " + impact.getBlockX() + ", " + impact.getBlockZ() + " — take cover!");
+                + " — take cover!");
             playSoundToOccupants(arena, Sound.ENTITY_WITHER_SPAWN, 1.0f, 0.65f);
             api.comets().launch(impact, direction, settings.loot().toArray(CometLoot[]::new));
             launched++;
