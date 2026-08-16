@@ -295,6 +295,7 @@ public class NightfallMiniGame extends BaseMiniGame {
             .set("bloodMoonTntZombieChancePercent", 3)
             .set("bloodMoonEscalation", BloodMoonEscalation.defaults())
             .set("bloodMoonComets", BloodMoonCometSettings.defaults())
+            .set("lobbyLocations", new ArrayList<>(List.of(world.getSpawnLocation().clone())))
             .set("generatorLocations", new ArrayList<Location>())
             .set("dropItems", copyDropItems(defaultDropItems()));
     }
@@ -383,6 +384,7 @@ public class NightfallMiniGame extends BaseMiniGame {
                     .set("bloodMoonTntZombieChancePercent", arenaDef.bloodMoonTntZombieChancePercent())
                     .set("bloodMoonEscalation", arenaDef.bloodMoonEscalation())
                     .set("bloodMoonComets", arenaDef.bloodMoonComets())
+                    .set("lobbyLocations", copyLocations(arenaDef.lobbyLocations()))
                     .set("generatorLocations", copyLocations(arenaDef.generatorLocations()))
                     .set("dropItems", copyDropItems(arenaDef.dropItems()))
                     .set("pendingWorldRollback", arenaDef.pendingWorldRollback())
@@ -466,6 +468,14 @@ public class NightfallMiniGame extends BaseMiniGame {
     @SuppressWarnings("unchecked")
     public @NotNull List<Location> generatorLocations(@NotNull MiniGameArena arena) {
         return arena.getOrCreate("generatorLocations", List.class, ArrayList::new);
+    }
+
+    @SuppressWarnings("unchecked")
+    public @NotNull List<Location> lobbyLocations(@NotNull MiniGameArena arena) {
+        return arena.getOrCreate("lobbyLocations", List.class, () -> {
+            Location lobby = arena.getLobbySpawn();
+            return lobby == null ? new ArrayList<>() : new ArrayList<>(List.of(lobby.clone()));
+        });
     }
 
     @SuppressWarnings("unchecked")

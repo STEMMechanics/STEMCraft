@@ -31,10 +31,12 @@ public class NightfallConfig {
     private static final String RECOVERY_WEATHER_KEY = "saved-weather-setting";
 
     private final STEMCraftAPI api;
+    private final NightfallMiniGame nightfall;
     private ConfigSection config;
 
     public NightfallConfig(STEMCraftAPI api, NightfallMiniGame nightfall) {
         this.api = api;
+        this.nightfall = nightfall;
     }
 
     public void onEnable(ConfigSection config) {
@@ -60,6 +62,8 @@ public class NightfallConfig {
         if (lobby == null) {
             lobby = spawn;
         }
+        List<Location> lobbyLocations = loadOptionalLocations(section, world, arenaId, "lobby-locations");
+        if (lobbyLocations.isEmpty()) lobbyLocations = List.of(lobby.clone());
         Location spectator = loadLocation(section, world, arenaId, "spectator", false);
         if (spectator == null) {
             spectator = lobby;
@@ -118,6 +122,7 @@ public class NightfallConfig {
             name,
             worldName,
             lobby,
+            lobbyLocations,
             spectator,
             spawn,
             arenaRegion,
@@ -169,6 +174,7 @@ public class NightfallConfig {
         arenaConfig.set("world", arena.world().getName());
         arenaConfig.set("name", arena.getName());
         arenaConfig.set("lobby", serializeLocation(lobbySpawn, arena.id(), "lobby"));
+        arenaConfig.set("lobby-locations", serializeLocations(nightfall.lobbyLocations(arena), arena.id()));
         arenaConfig.set("spectator", serializeLocation(spectatorSpawn, arena.id(), "spectator"));
         arenaConfig.set("spawn", serializeLocation(playSpawn, arena.id(), "spawn"));
         arenaConfig.set("arena", serializeRegion(arena.get("arenaRegion", SCRegion.class), arena.id()));
@@ -368,6 +374,23 @@ public class NightfallConfig {
             }
             locations.add(location);
             index++;
+        }
+        return locations;
+    }
+
+    private @NotNull List<Location> loadOptionalLocations(@NotNull ConfigSection section, @NotNull World world,
+                                                           @NotNull String arenaId, @NotNull String key) {
+        List<String> values = section.getStringList(key);
+        List<Location> locations = new ArrayList<>();
+        int index = 0;
+        for (String value : values) {
+            index++;
+            Location location = LocationUtil.deserialize(value, world);
+            if (location == null || location.getWorld() == null || !world.equals(location.getWorld())) {
+                throw new MiniGameInvalidArenaConfigException(
+                    "Location '" + key + "' #" + index + " for arena '" + arenaId + "' is invalid.");
+            }
+            locations.add(location);
         }
         return locations;
     }

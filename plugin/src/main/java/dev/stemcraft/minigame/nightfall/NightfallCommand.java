@@ -41,7 +41,7 @@ public class NightfallCommand {
 
         api.commands().create("nightfall")
             .permission("stemcraft.command.nightfall")
-            .usage("/nightfall <list|info|create|delete|join|joinall|spectate|leave|start|stop|restart|cycle|respawn|save|reload|validate|enable|disable|set|select|sel|show|generators|addgenerator|setgenerator|removegenerator|dropblocks|adddropblock|setdropweight|removedropblock>")
+            .usage("/nightfall <list|info|create|delete|join|joinall|spectate|leave|start|stop|restart|cycle|respawn|save|reload|validate|enable|disable|set|select|sel|show|lobbies|addlobby|setlobby|removelobby|generators|addgenerator|setgenerator|removegenerator|dropblocks|adddropblock|setdropweight|removedropblock>")
             .tabCompletion("list")
             .tabCompletion("info")
             .tabCompletion("info", "{nightfall-arenas}")
@@ -106,6 +106,10 @@ public class NightfallCommand {
             .tabCompletion("show", "{nightfall-arenas}", "spectator")
             .tabCompletion("show", "{nightfall-arenas}", "spawn")
             .tabCompletion("show", "{nightfall-arenas}", "generator")
+            .tabCompletion("lobbies", "{nightfall-arenas}")
+            .tabCompletion("addlobby", "{nightfall-arenas}")
+            .tabCompletion("setlobby", "{nightfall-arenas}")
+            .tabCompletion("removelobby", "{nightfall-arenas}")
             .tabCompletion("generators", "{nightfall-arenas}")
             .tabCompletion("addgenerator", "{nightfall-arenas}")
             .tabCompletion("setgenerator", "{nightfall-arenas}")
@@ -139,6 +143,10 @@ public class NightfallCommand {
                     case "set" -> commandSet(ctx);
                     case "select", "sel" -> commandSelect(ctx);
                     case "show" -> commandShow(ctx);
+                    case "lobbies" -> commandLobbies(ctx);
+                    case "addlobby" -> commandAddLobby(ctx);
+                    case "setlobby" -> commandSetLobby(ctx);
+                    case "removelobby" -> commandRemoveLobby(ctx);
                     case "generators" -> commandGenerators(ctx);
                     case "addgenerator" -> commandAddGenerator(ctx);
                     case "setgenerator" -> commandSetGenerator(ctx);
@@ -182,7 +190,8 @@ public class NightfallCommand {
         ctx.info(" - Min players: " + arena.getMinPlayers());
         ctx.info(" - Start countdown: " + nightfall.startCountdownSeconds(arena) + " sec");
         ctx.info(" - Reset countdown: " + nightfall.endingSeconds(arena) + " sec");
-        ctx.info(" - Lobby: " + formatLocation(arena.getLobbySpawn()));
+        ctx.info(" - Lobbies: " + nightfall.lobbyLocations(arena).size()
+            + " (fallback " + formatLocation(arena.getLobbySpawn()) + ")");
         ctx.info(" - Spectator: " + formatLocation(arena.getSpectatorSpawn()));
         ctx.info(" - Spawn: " + formatLocation(nightfall.playSpawn(arena)));
         ctx.info(" - Arena region: " + formatRegion(arena.get("arenaRegion", SCRegion.class)));
@@ -507,6 +516,9 @@ public class NightfallCommand {
                 Player player = requirePlayer(ctx);
                 ensureArenaWorld(ctx, arena, player.getLocation(), "Lobby spawn");
                 arena.setLobbySpawn(player.getLocation());
+                List<Location> lobbies = nightfall.lobbyLocations(arena);
+                if (lobbies.isEmpty()) lobbies.add(player.getLocation().clone());
+                else lobbies.set(0, player.getLocation().clone());
                 showLocationPreview(player, "lobby", player.getLocation());
                 ctx.success("Lobby spawn updated for arena '" + arena.id() + "'.");
             }
@@ -819,6 +831,51 @@ public class NightfallCommand {
         for (int i = 0; i < generators.size(); i++) {
             ctx.info(" - #" + (i + 1) + " " + formatLocation(generators.get(i)));
         }
+    }
+
+    private void commandLobbies(CommandContext ctx) {
+        MiniGameArena arena = requireArena(ctx);
+        List<Location> lobbies = nightfall.lobbyLocations(arena);
+        ctx.info("Lobby locations for arena '" + arena.id() + "':");
+        for (int i = 0; i < lobbies.size(); i++) {
+            ctx.info(" - #" + (i + 1) + " " + formatLocation(lobbies.get(i)));
+        }
+    }
+
+    private void commandAddLobby(CommandContext ctx) {
+        Player player = requirePlayer(ctx);
+        MiniGameArena arena = requireArena(ctx);
+        ensureArenaWorld(ctx, arena, player.getLocation(), "Lobby location");
+        nightfall.lobbyLocations(arena).add(player.getLocation().clone());
+        showLocationPreview(player, "lobby-add", player.getLocation());
+        ctx.success("Added lobby location " + nightfall.lobbyLocations(arena).size()
+            + " to arena '" + arena.id() + "'.");
+    }
+
+    private void commandSetLobby(CommandContext ctx) {
+        ctx.checkArgsSizeAtLeast(3);
+        Player player = requirePlayer(ctx);
+        MiniGameArena arena = requireArena(ctx);
+        int index = requireOneBasedIndex(ctx, 2, nightfall.lobbyLocations(arena).size(), "lobby");
+        ensureArenaWorld(ctx, arena, player.getLocation(), "Lobby location");
+        nightfall.lobbyLocations(arena).set(index, player.getLocation().clone());
+        if (index == 0) arena.setLobbySpawn(player.getLocation().clone());
+        showLocationPreview(player, "lobby-set-" + index, player.getLocation());
+        ctx.success("Updated lobby location " + (index + 1) + " for arena '" + arena.id() + "'.");
+    }
+
+    private void commandRemoveLobby(CommandContext ctx) {
+        ctx.checkArgsSizeAtLeast(3);
+        MiniGameArena arena = requireArena(ctx);
+        List<Location> lobbies = nightfall.lobbyLocations(arena);
+        if (lobbies.size() <= 1) {
+            ctx.returnError("Arena '" + arena.id() + "' must keep at least one lobby location.");
+            return;
+        }
+        int index = requireOneBasedIndex(ctx, 2, lobbies.size(), "lobby");
+        lobbies.remove(index);
+        arena.setLobbySpawn(lobbies.getFirst().clone());
+        ctx.success("Removed lobby location " + (index + 1) + " from arena '" + arena.id() + "'.");
     }
 
     private void commandAddGenerator(CommandContext ctx) {

@@ -16,6 +16,7 @@ public record NightfallArenaRecord(
         String name,
         String worldName,
         Location lobby,
+        List<Location> lobbyLocations,
         Location spectator,
         Location spawn,
         SCRegion arenaRegion,
@@ -55,6 +56,9 @@ public record NightfallArenaRecord(
 ) {
     public NightfallArenaRecord {
         lobby = copyLocation(lobby);
+        lobbyLocations = lobbyLocations == null || lobbyLocations.isEmpty()
+                ? (lobby == null ? List.of() : List.of(copyLocation(lobby)))
+                : lobbyLocations.stream().map(NightfallArenaRecord::copyLocation).toList();
         spectator = copyLocation(spectator);
         spawn = copyLocation(spawn);
         arenaRegion = copyRegion(arenaRegion);
@@ -75,6 +79,11 @@ public record NightfallArenaRecord(
     @Override
     public Location lobby() {
         return copyLocation(lobby);
+    }
+
+    @Override
+    public List<Location> lobbyLocations() {
+        return lobbyLocations.stream().map(NightfallArenaRecord::copyLocation).toList();
     }
 
     @Override

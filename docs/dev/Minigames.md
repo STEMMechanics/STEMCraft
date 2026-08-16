@@ -238,6 +238,27 @@ Blood Moon builder zombies do not create blocks. When stuck, they may relocate a
 (dirt variants, grass, podzol, mycelium, or mud) to bridge or climb. Stone, wood, ores, and other harder or
 valuable blocks are not eligible.
 
+## Nightfall Random Match Lobbies
+
+A Nightfall arena may define one or more lobby locations. When the first player joins an empty waiting
+match, one location is selected randomly and retained for every player joining that match. The selection is
+cleared when the lobby empties or the match resets. Existing arenas with only `lobby` configured are treated
+as a one-location list.
+
+```yml
+lobby: 0.5,70,0.5,0,0
+lobby-locations:
+  - 0.5,70,0.5,0,0
+  - 450.5,75,-220.5,90,0
+```
+
+Administration commands:
+
+- `/nightfall lobbies <arena>`
+- `/nightfall addlobby <arena>`
+- `/nightfall setlobby <arena> <number>`
+- `/nightfall removelobby <arena> <number>`
+
 ## Integration Points
 
 For plugin developers, the important API types are:

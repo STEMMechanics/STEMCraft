@@ -216,6 +216,12 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         if (arena.getLobbySpawn() != null && !arena.world().equals(arena.getLobbySpawn().getWorld())) {
             result.addError("Lobby spawn must be in the arena world.", "lobbySpawn");
         }
+        if (nightfall.lobbyLocations(arena).isEmpty()) {
+            result.addError("At least one lobby location is required.", "lobbyLocations");
+        } else if (nightfall.lobbyLocations(arena).stream()
+            .anyMatch(location -> location.getWorld() == null || !arena.world().equals(location.getWorld()))) {
+            result.addError("All lobby locations must be in the arena world.", "lobbyLocations");
+        }
         if (arena.getSpectatorSpawn() != null && !arena.world().equals(arena.getSpectatorSpawn().getWorld())) {
             result.addError("Spectator spawn must be in the arena world.", "spectatorSpawn");
         }
@@ -287,6 +293,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         arena.set("bloodMoonActive", false);
         arena.set("activeSurvivorCount", 0);
         arena.set("zombiesRemaining", 0);
+        arena.set("selectedLobbyLocation", null);
 
         SCRegion arenaRegion = arena.get("arenaRegion", SCRegion.class);
         if (arenaRegion != null) {
@@ -415,6 +422,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         if (newStatus == MiniGameArena.ArenaStatus.RESETTING) {
             debugArenaEvent(arena, "Entering RESETTING.");
             resetRound(arena);
+            arena.set("selectedLobbyLocation", null);
             arena.setStatus(MiniGameArena.ArenaStatus.WAITING);
         }
     }
@@ -455,6 +463,9 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
     public Location onPlayerJoinArena(MiniGameArena arena, Player player) {
         hideDownedPlayersFrom(arena, player);
         MiniGameArena.ArenaStatus status = arena.getStatus();
+        if (status == MiniGameArena.ArenaStatus.WAITING || status == MiniGameArena.ArenaStatus.STARTING) {
+            selectLobbyForMatch(arena);
+        }
         if (status == MiniGameArena.ArenaStatus.PREPARATION || status == MiniGameArena.ArenaStatus.RUNNING) {
             initializeParticipantForRound(arena, player);
         }
@@ -463,6 +474,10 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         }
         if (arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING) {
             return activeSpawn(arena);
+        }
+        if (arena.getStatus() == MiniGameArena.ArenaStatus.WAITING
+            || arena.getStatus() == MiniGameArena.ArenaStatus.STARTING) {
+            return selectedLobbyForMatch(arena);
         }
         return assignedPreparationSpawn(arena, player);
     }
@@ -498,6 +513,24 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         } else if (isActiveRoundStatus(arena)) {
             checkForMatchEnd(arena);
         }
+        if (arena.getPlayers().isEmpty()
+            && (arena.getStatus() == MiniGameArena.ArenaStatus.WAITING
+                || arena.getStatus() == MiniGameArena.ArenaStatus.STARTING)) {
+            arena.set("selectedLobbyLocation", null);
+        }
+    }
+
+    private void selectLobbyForMatch(@NotNull MiniGameArena arena) {
+        if (arena.get("selectedLobbyLocation", Location.class) != null) return;
+        List<Location> locations = nightfall.lobbyLocations(arena);
+        Location selected = locations.isEmpty() ? arena.getLobbySpawn()
+            : locations.get(ThreadLocalRandom.current().nextInt(locations.size()));
+        if (selected != null) arena.set("selectedLobbyLocation", selected.clone());
+    }
+
+    private @Nullable Location selectedLobbyForMatch(@NotNull MiniGameArena arena) {
+        Location selected = arena.get("selectedLobbyLocation", Location.class);
+        return selected != null ? selected.clone() : arena.getLobbySpawn();
     }
 
     @Override

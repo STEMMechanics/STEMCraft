@@ -17,3 +17,6 @@ In later Nightfall Blood Moons, treasure-bearing comets may cross the sky and st
 impact is extremely dangerous, but the geode and scattered mineral blocks make the crash site valuable.
 Later Blood Moon zombies can also overcome simple traps by moving nearby soft terrain blocks, so dirt and
 mud defenses will not hold them forever.
+
+Nightfall maps may also rotate between several pre-game gathering areas. Everyone joining the same match is
+sent to the same randomly selected lobby; the location can change for the next match.
