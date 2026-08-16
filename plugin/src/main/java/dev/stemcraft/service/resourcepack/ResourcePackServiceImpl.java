@@ -1191,6 +1191,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
         textureRoot.addProperty("texture_name", "atlas.items");
         JsonObject textureData = new JsonObject();
         textureRoot.add("texture_data", textureData);
+        JsonArray flipbookTextures = new JsonArray();
         StringBuilder signatureBuilder = new StringBuilder("bedrock|pack=").append(packName).append("|build=").append(buildNonce);
 
         JsonObject glyphMap = new JsonObject();
@@ -1298,6 +1299,21 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
             JsonObject texDef = new JsonObject();
             texDef.addProperty("textures", "textures/items/" + customItem.icon());
             textureData.add(customItem.icon(), texDef);
+            try {
+                BufferedImage image = ImageIO.read(destination.toFile());
+                if (image != null && image.getHeight() > image.getWidth()
+                    && image.getHeight() % image.getWidth() == 0) {
+                    JsonObject flipbook = new JsonObject();
+                    flipbook.addProperty("flipbook_texture", "textures/items/" + customItem.icon());
+                    flipbook.addProperty("atlas_tile", customItem.icon());
+                    flipbook.addProperty("ticks_per_frame", 6);
+                    flipbook.addProperty("blend_frames", false);
+                    flipbookTextures.add(flipbook);
+                }
+            } catch (IOException exception) {
+                plugin.getLogger().warning("[resource-pack] Failed reading custom item animation '"
+                    + customItem.bedrockIdentifier() + "': " + exception.getMessage());
+            }
             signatureBuilder
                 .append("|custom-item=").append(customItem.bedrockIdentifier())
                 .append("|javaItem=").append(customItem.javaItemId())
@@ -1314,6 +1330,13 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
                 new GsonBuilder().setPrettyPrinting().create().toJson(textureRoot),
                 StandardCharsets.UTF_8
             );
+            if (!flipbookTextures.isEmpty()) {
+                Files.writeString(
+                    bedrockPackDir.resolve("textures").resolve("flipbook_textures.json"),
+                    new GsonBuilder().setPrettyPrinting().create().toJson(flipbookTextures),
+                    StandardCharsets.UTF_8
+                );
+            }
 
             Files.writeString(
                 bedrockPackDir.resolve("glyph-map.json"),
@@ -1378,6 +1401,22 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
                 bedrock.displayName(),
                 source
             ));
+            for (dev.stemcraft.api.service.item.CustomItemClientDefinition state : definition.visualStates().values()) {
+                if (state.java() == null || state.bedrock() == null) continue;
+                dev.stemcraft.api.service.item.JavaItemVisualDefinition stateJava = state.java();
+                dev.stemcraft.api.service.item.BedrockItemVisualDefinition stateBedrock = state.bedrock();
+                String[] stateTextureParts = splitNamespacedPath(stateBedrock.texturePath());
+                Path stateSource = javaPackRoot.resolve("assets").resolve(stateTextureParts[0])
+                    .resolve("textures").resolve(stateTextureParts[1] + ".png");
+                if (!Files.exists(stateSource) || !Files.isRegularFile(stateSource)) {
+                    plugin.getLogger().warning("[resource-pack] Missing custom item state texture for '"
+                        + definition.id() + "': " + stateSource);
+                    continue;
+                }
+                entries.add(new BedrockCustomItemPackEntry(
+                    definition.template().getType().getKey().toString(), stateJava.itemModelId(),
+                    stateBedrock.identifier(), stateBedrock.icon(), stateBedrock.displayName(), stateSource));
+            }
         }
         return entries;
     }

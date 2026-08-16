@@ -45,6 +45,9 @@ custom-portals:
   instant-teleport: true
   portals: {}
 
+slime-buckets:
+  enabled: true
+
 mailboxes:
   enabled: true
   hologram:

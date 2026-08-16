@@ -1,0 +1,35 @@
+custom-items:
+  slime-bucket:
+    material: BUCKET
+    name: "<green>Slime in a Bucket"
+    texture: "stemcraft_slime_buckets:item/slime_bucket"
+    placement: DENY
+    max-stack-size: 1
+    visual-states:
+      excited:
+        texture: "stemcraft_slime_buckets:item/slime_bucket_excited"
+        overrides:
+          bedrock:
+            display-name: "Slime in a Bucket"
+
+  magma-cube-bucket:
+    material: BUCKET
+    name: "<gold>Magma Cube in a Bucket"
+    texture: "stemcraft_slime_buckets:item/magma_cube_bucket"
+    placement: DENY
+    max-stack-size: 1
+
+recipes:
+  shapeless:
+    slime_bucket:
+      ingredients:
+        - BUCKET
+        - SLIME_BALL
+      result: "stemcraft:slime_bucket"
+      amount: 1
+    magma_cube_bucket:
+      ingredients:
+        - BUCKET
+        - MAGMA_CREAM
+      result: "stemcraft:magma_cube_bucket"
+      amount: 1

@@ -22,6 +22,7 @@
   * [Recipes](items-and-crafting/recipes.md)
   * [Fried Eggs](items-and-crafting/fried-eggs.md)
   * [Gifts](items-and-crafting/gifts.md)
+  * [Slime and Magma Buckets](items-and-crafting/slime-and-magma-buckets.md)
 * [Minigames](minigames/README.md)
 * [Commands](commands/README.md)
 * [Safety & Community](safety-and-community/README.md)

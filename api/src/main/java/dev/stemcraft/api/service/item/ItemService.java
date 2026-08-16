@@ -125,6 +125,16 @@ public interface ItemService {
     @NotNull Collection<CustomItemDefinition> customItemDefinitions();
 
     /**
+     * Changes only the client visual used by a custom item. Passing {@code null}
+     * restores its normal visual; all other item data is preserved.
+     *
+     * @return true when the item and requested state are valid
+     */
+    default boolean applyCustomItemVisualState(@NotNull ItemStack item, @Nullable String state) {
+        return false;
+    }
+
+    /**
      * Checks if the given ItemStack is the specified custom item.
      *
      * @param id The unique identifier for the custom item.

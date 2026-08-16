@@ -186,8 +186,17 @@ public class ItemServiceImpl extends BaseService implements ItemService {
                 template.setItemMeta(meta);
                 CustomItemPlacementMode placement = CustomItemPlacementMode.valueOf(
                     section.getString("placement", "DENY").trim().toUpperCase(java.util.Locale.ROOT));
-                registerCustomItem(new CustomItemDefinition(id, template, placement, null,
-                    parseClients(section, namespace, id, name)));
+                CustomItemClientDefinition clients = parseClients(section, namespace, id, name);
+                Map<String, CustomItemClientDefinition> visualStates = new LinkedHashMap<>();
+                ConfigSection states = section.getSection("visual-states", false);
+                if (states != null) {
+                    for (String state : states.getKeys(false)) {
+                        ConfigSection stateSection = states.getSection(state, false);
+                        if (stateSection != null) visualStates.put(state, parseClients(
+                            stateSection, namespace, id + "_" + state, name));
+                    }
+                }
+                registerCustomItem(new CustomItemDefinition(id, template, placement, null, clients, visualStates));
             } catch (IllegalArgumentException exception) {
                 plugin.getLogger().warning("[items] Could not load custom item '" + id + "': " + exception.getMessage());
             }
@@ -544,7 +553,8 @@ public class ItemServiceImpl extends BaseService implements ItemService {
             template,
             definition.placementMode(),
             definition.managedObjectType(),
-            definition.clients()
+            definition.clients(),
+            definition.visualStates()
         ));
     }
 
@@ -556,6 +566,29 @@ public class ItemServiceImpl extends BaseService implements ItemService {
     @Override
     public @NotNull Collection<CustomItemDefinition> customItemDefinitions() {
         return Collections.unmodifiableCollection(itemDefinitions.values());
+    }
+
+    @Override
+    public boolean applyCustomItemVisualState(@NotNull ItemStack item, @Nullable String state) {
+        String id = getCustomItemId(item);
+        CustomItemDefinition definition = id == null ? null : customItemDefinition(id);
+        if (definition == null) return false;
+        CustomItemClientDefinition clients = state == null || state.isBlank()
+            ? definition.clients() : definition.visualStates().get(state);
+        if (clients == null || clients.java() == null) return false;
+        return applyClientVisual(item, clients);
+    }
+
+    static boolean applyClientVisual(@NotNull ItemStack item, @NotNull CustomItemClientDefinition clients) {
+        if (clients.java() == null) return false;
+        ItemMeta meta = item.getItemMeta();
+        NamespacedKey model = NamespacedKey.fromString(clients.java().itemModelId());
+        if (model == null) return false;
+        meta.setItemModel(model);
+        CustomModelDataComponent data = meta.getCustomModelDataComponent();
+        data.setFloats(List.of((float) clients.java().customModelData()));
+        meta.setCustomModelDataComponent(data);
+        return item.setItemMeta(meta);
     }
 
     /**
