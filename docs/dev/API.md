@@ -46,7 +46,7 @@ STEMCraftAPI api = STEMCraftAPI.api();
 
 ### Mailboxes
 
-`MailboxService` queues letters and item stacks to a recipient UUID. `MailSendRequest` accepts either a player UUID or system string as its sender; player names are resolved internally. See the repository's `docs/mailboxes.md` for examples.
+`MailboxService` queues letters and item stacks to a recipient UUID. `MailSendRequest` accepts either a player UUID or system string as its sender; player names are resolved internally. See [mailboxes.md](mailboxes.md) for examples.
 
 ### Dynamic Holograms
 
@@ -270,6 +270,6 @@ Useful supporting API types include:
 
 The repository already contains longer-form API notes in:
 
-- `docs/developer-api.md`
+- `docs/dev/developer-api.md`
 - `docs/STEMCRAFT_API.md`
-- `docs/tab-completion.md`
+- `docs/dev/tab-completion.md`
