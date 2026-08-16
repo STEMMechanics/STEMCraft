@@ -1,8 +1,12 @@
 package dev.stemcraft.feature;
 
 import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.api.util.PlayerUtil;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.entity.EntityPickupItemEvent;
@@ -15,6 +19,7 @@ import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.inventory.ItemStack;
@@ -22,11 +27,14 @@ import org.bukkit.inventory.PlayerInventory;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.UUID;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Keeps Slime in a Bucket visuals synchronized with the holder's slime chunk. */
 public final class SlimeBuckets extends BaseFeature {
     static final String SLIME_BUCKET_ID = "slime-bucket";
     static final String EXCITED_STATE = "excited";
+    private final Map<UUID, Boolean> bedrockExcitedStates = new HashMap<>();
 
     public SlimeBuckets(STEMCraftAPI api) {
         super(api);
@@ -39,6 +47,7 @@ public final class SlimeBuckets extends BaseFeature {
         api.events().register(PlayerChangedWorldEvent.class, event -> refreshNextTick(event.getPlayer()));
         api.events().register(PlayerJoinEvent.class, event -> refreshNextTick(event.getPlayer()));
         api.events().register(PlayerRespawnEvent.class, event -> refreshNextTick(event.getPlayer()));
+        api.events().register(PlayerQuitEvent.class, event -> bedrockExcitedStates.remove(event.getPlayer().getUniqueId()));
         api.events().register(PlayerItemHeldEvent.class, event -> refreshNextTick(event.getPlayer()));
         api.events().register(PlayerSwapHandItemsEvent.class, event -> refreshNextTick(event.getPlayer()));
         api.events().register(InventoryClickEvent.class, event -> {
@@ -66,6 +75,7 @@ public final class SlimeBuckets extends BaseFeature {
     @Override
     public void onDisable() {
         Bukkit.getOnlinePlayers().forEach(this::normalizeInventory);
+        bedrockExcitedStates.clear();
     }
 
     private void onMove(@NotNull PlayerMoveEvent event) {
@@ -88,19 +98,55 @@ public final class SlimeBuckets extends BaseFeature {
 
     private void refresh(@NotNull Player player) {
         PlayerInventory inventory = player.getInventory();
-        normalizeStorage(inventory);
+        boolean visualsChanged = false;
+        visualsChanged |= normalizeStorage(inventory);
         var top = player.getOpenInventory().getTopInventory();
         for (int slot = 0; slot < top.getSize(); slot++) {
             ItemStack item = top.getItem(slot);
-            if (setExcited(item, false)) top.setItem(slot, item);
+            if (setExcited(item, false)) {
+                top.setItem(slot, item);
+                visualsChanged = true;
+            }
         }
         ItemStack cursor = player.getItemOnCursor();
-        if (setExcited(cursor, false)) player.setItemOnCursor(cursor);
+        if (setExcited(cursor, false)) {
+            player.setItemOnCursor(cursor);
+            visualsChanged = true;
+        }
         boolean excited = player.getChunk().isSlimeChunk();
         ItemStack mainHand = inventory.getItemInMainHand();
-        if (setExcited(mainHand, excited)) inventory.setItemInMainHand(mainHand);
+        boolean mainSlimeBucket = api.items().isCustomItemId(SLIME_BUCKET_ID, mainHand);
+        if (setExcited(mainHand, excited)) {
+            inventory.setItemInMainHand(mainHand);
+            visualsChanged = true;
+        }
         ItemStack offHand = inventory.getItemInOffHand();
-        if (setExcited(offHand, excited)) inventory.setItemInOffHand(offHand);
+        boolean offhandSlimeBucket = api.items().isCustomItemId(SLIME_BUCKET_ID, offHand);
+        if (setExcited(offHand, excited)) {
+            inventory.setItemInOffHand(offHand);
+            visualsChanged = true;
+        }
+        if (PlayerUtil.isBedrock(player)) {
+            if (visualsChanged) player.updateInventory();
+            updateBedrockFeedback(player, mainSlimeBucket || offhandSlimeBucket, excited);
+        }
+    }
+
+    private void updateBedrockFeedback(Player player, boolean held, boolean excited) {
+        UUID playerId = player.getUniqueId();
+        if (!held) {
+            bedrockExcitedStates.remove(playerId);
+            return;
+        }
+        Boolean previous = bedrockExcitedStates.put(playerId, excited);
+        if (previous != null && previous == excited) return;
+        if (excited) {
+            player.sendActionBar(Component.text("The slime in your bucket is excited!", NamedTextColor.GREEN));
+            player.playSound(player.getLocation(), Sound.ENTITY_SLIME_JUMP, 0.7f, 1.25f);
+        } else if (previous != null) {
+            player.sendActionBar(Component.text("The slime in your bucket calms down.", NamedTextColor.YELLOW));
+            player.playSound(player.getLocation(), Sound.ENTITY_SLIME_SQUISH, 0.6f, 0.9f);
+        }
     }
 
     private void normalizeInventory(@NotNull Player player) {
@@ -110,11 +156,16 @@ public final class SlimeBuckets extends BaseFeature {
         if (setExcited(offHand, false)) inventory.setItemInOffHand(offHand);
     }
 
-    private void normalizeStorage(PlayerInventory inventory) {
+    private boolean normalizeStorage(PlayerInventory inventory) {
+        boolean changed = false;
         for (int slot = 0; slot < inventory.getStorageContents().length; slot++) {
             ItemStack item = inventory.getItem(slot);
-            if (setExcited(item, false)) inventory.setItem(slot, item);
+            if (setExcited(item, false)) {
+                inventory.setItem(slot, item);
+                changed = true;
+            }
         }
+        return changed;
     }
 
     private boolean setExcited(ItemStack item, boolean excited) {

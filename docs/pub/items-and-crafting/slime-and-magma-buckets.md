@@ -17,6 +17,9 @@ The server determines the chunk state. Teleporting, changing worlds, logging in,
 hands, or moving the item through an inventory updates its appearance automatically. A dropped bucket returns
 to its normal appearance.
 
+Bedrock players also receive a short action-bar message and slime sound when the bucket becomes excited or
+calms down.
+
 Magma Cube in a Bucket is currently a collectible custom item and does not detect chunks.
 
 Administrators can obtain the items for testing with `/give @s stemcraft:slime_bucket` and

@@ -15,3 +15,7 @@ enchantments, and other components. Passing `null` restores the default state.
 The resource-pack generator emits Java models for every visual state. The excited texture's `.png.mcmeta`
 loops its two vertical frames. Bedrock generation emits a separate Geyser model mapping for the state and
 adds vertically stacked custom-item textures to `textures/flipbook_textures.json`.
+
+Bedrock model changes force an inventory resynchronization. Because Bedrock item-atlas animation support can
+vary with the active Geyser/client version, Bedrock holders also receive an action-bar message and slime sound
+when the authoritative state changes.
