@@ -1,4 +1,4 @@
-# STEMCraft Documentation
+# STEMCraft Developer and Administrator Documentation
 
 This directory contains operator and developer documentation for the STEMCraft plugin.
 
