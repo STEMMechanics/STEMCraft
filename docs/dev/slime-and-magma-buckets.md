@@ -19,3 +19,11 @@ adds vertically stacked custom-item textures to `textures/flipbook_textures.json
 Bedrock model changes force an inventory resynchronization. Because Bedrock item-atlas animation support can
 vary with the active Geyser/client version, Bedrock holders also receive an action-bar message and slime sound
 when the authoritative state changes.
+
+Java clients briefly play their normal hand re-equip animation when the item model changes. This can look as
+though the bucket lowers or drops, but no item entity is spawned and the server never removes the bucket from
+the player's hand.
+
+The public handbook uses copies of the supplied item textures in `docs/pub/.gitbook/assets`. Its excited GIF
+is generated directly from the two 16×16 frames in `slime_bucket_excited.png`; it is documentation artwork
+only and is not bundled into the game resource pack.
