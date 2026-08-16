@@ -1,5 +1,7 @@
 # Lead Iron Golems with Poppies
 
+<img src="../.gitbook/assets/Iron_Golem_JE2_BE2.webp" alt="A Minecraft Iron Golem holding out a poppy" width="260">
+
 Need to move an Iron Golem? Hold a normal **Poppy in your main hand**. Golems within about **10 blocks** become interested and walk after you.
 
 - The Poppy is not consumed.
@@ -14,4 +16,3 @@ A Poppy does not make an angry Iron Golem friendly. Never approach one that want
 {% endhint %}
 
 > **Image placeholder — leading golems:** Add a daytime third-person screenshot of a player walking with a Poppy clearly visible in their main hand while two Iron Golems follow along a path. Include a small crossed-swords inset demonstrating that a golem in combat ignores the Poppy. Use large, child-friendly captions: “Hold a Poppy” and “Golems follow”.
-

@@ -16,3 +16,7 @@ Some comets carry valuable blocks that become embedded in exposed ground around 
 Wait until the impact sequence has completely finished before approaching. Follow the crash scar to the geode at its far end, then search the exposed walls and surrounding terrain for loot.
 
 Comets are intended to create a server-wide risk-and-reward event: the impact is dangerous and permanently destructive, but reaching the crash site first may be worthwhile.
+
+> **Image placeholder — comet story:** Add three wide screenshots in order: the glowing magma sphere crossing the sky with its fire trail, the angled ground impact carving one long crash scar, and the partial amethyst geode at the very end with mineral blocks scattered nearby. Draw a dashed flight path across the first two images and add large captions: “Take cover”, “Wait”, and “Search after the crash”.
+
+Nightfall can also call comets during its later stages. Read the [Nightfall guide](../minigames/nightfall.md) before attempting a match.
