@@ -27,6 +27,19 @@ Features are discovered from `dev.stemcraft.feature` and loaded through `BaseFea
 | `PlayerTabList` | Header/footer tab list rendering and update loop |
 | `PlayerGameMessages` | Join, quit, death, and related configurable player messages |
 
+`PlayerTabList` treats its header, footer, and `name_format` as MiniMessage. Both `gray` and `grey` tag spellings
+are accepted. `{world}` uses the shared player-facing world name, while `{world-raw}` exposes the underlying
+world folder name. By default, underscores become words and multi-part map names treat their first word as a
+category: `bedwars_amazon` becomes `Bedwars: Amazon`, while dimension suffixes remain natural, such as
+`survival_nether` becoming `Survival Nether` and `bedwars_forest_nether` becoming
+`Bedwars: Forest Nether`. Override any generated name for Player Tab and Coordinates with:
+
+```yaml
+worlds:
+  world:
+    display-name: "World"
+```
+
 ## Survival and World Behavior
 
 | Feature | Purpose |

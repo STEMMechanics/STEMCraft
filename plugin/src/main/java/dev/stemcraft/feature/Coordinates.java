@@ -23,7 +23,6 @@ package dev.stemcraft.feature;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.util.DirectionUtil;
-import dev.stemcraft.api.util.StringUtil;
 import dev.stemcraft.api.util.WorldTimeUtil;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -114,7 +113,7 @@ public class Coordinates extends BaseFeature {
                     return;
                 }
 
-                String world = StringUtil.capitalize(StringUtil.beautify(player.getLocation().getWorld().getName()));
+                String world = api.worlds().getDisplayName(player.getWorld());
                 String time = WorldTimeUtil.toClockQuarter(player.getLocation().getWorld());
                 String direction = DirectionUtil.getCompassDirection(player.getLocation().getYaw());
 

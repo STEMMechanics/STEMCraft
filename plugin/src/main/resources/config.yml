@@ -32,6 +32,10 @@ hub:
       command: "tb leave"
       as-player: true
 
+worlds:
+  world:
+    display-name: "World"
+
 custom-commands:
   survival:
     permission: stemcraft.command.survival
