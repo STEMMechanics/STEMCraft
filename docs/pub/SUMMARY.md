@@ -1,0 +1,18 @@
+# Table of contents
+
+* [Welcome](README.md)
+  * [Rules](master/rules.md)
+  * [Client Mods](master/client-mods.md)
+  * [Staff Team](master/staff-team.md)
+* [News](news.md)
+* [Events](events.md)
+* [Rebalances](rebalances.md)
+* [Custom Items](custom-items/README.md)
+  * [Coins](custom-items/coins.md)
+  * [Traders](custom-items/traders.md)
+  * [Waystones](custom-items/waystones.md)
+* [Survival Cities](survival-cities.md)
+* [FAQs](faqs.md)
+* [Commands](commands/README.md)
+  * [WorldEdit](commands/worldedit.md)
+* [Gallery](gallery.md)
