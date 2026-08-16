@@ -2,13 +2,13 @@
 
 Zombie drops are not rubbish anymore! You can turn Rotten Flesh into farming supplies, leather, wolf treats, bait, or a strange stew.
 
-| Dog Treat | Zombie Bait |
-| :---: | :---: |
-| <img src="../.gitbook/assets/dog-treat.png" alt="A small bone wrapped in dried meat" width="128"> | <img src="../.gitbook/assets/zombie-bait.png" alt="A tied bundle of smelly rotten flesh" width="128"> |
-| Heals tamed wolves | Attracts zombies |
+|                                                   Dog Treat                                                   |                                                    Zombie Bait                                                    |
+| :-----------------------------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------------------------: |
+| <img src="../../.gitbook/assets/dog-treat.png" alt="A small bone wrapped in dried meat" data-size="original"> | <img src="../../.gitbook/assets/zombie-bait.png" alt="A tied bundle of smelly rotten flesh" data-size="original"> |
+|                                               Heals tamed wolves                                              |                                                  Attracts zombies                                                 |
 
 {% hint style="info" %}
-If these items look like an ordinary Bone or Rotten Flesh, accept the [STEMCraft resource pack](../getting-started/resource-pack.md).
+If these items look like an ordinary Bone or Rotten Flesh, accept the [STEMCraft resource pack](../../getting-started/resource-pack.md).
 {% endhint %}
 
 ## Compost Rotten Flesh into Bone Meal
@@ -29,7 +29,7 @@ Every Rotten Flesh reliably fills one level, so an empty Composter takes exactly
 Fill all nine crafting squares with **Rotten Flesh**.
 
 | Rotten Flesh | Rotten Flesh | Rotten Flesh |
-| :---: | :---: | :---: |
+| :----------: | :----------: | :----------: |
 | Rotten Flesh | Rotten Flesh | Rotten Flesh |
 | Rotten Flesh | Rotten Flesh | Rotten Flesh |
 
@@ -39,18 +39,18 @@ Fill all nine crafting squares with **Rotten Flesh**.
 
 Use four **Rotten Flesh** and one **Bone**. This recipe is shapeless, so the ingredients may go in any squares.
 
-| Empty | Rotten Flesh | Empty |
-| :---: | :---: | :---: |
-| Rotten Flesh | **Bone** | Rotten Flesh |
-| Empty | Rotten Flesh | Empty |
+|     Empty    | Rotten Flesh |     Empty    |
+| :----------: | :----------: | :----------: |
+| Rotten Flesh |   **Bone**   | Rotten Flesh |
+|     Empty    | Rotten Flesh |     Empty    |
 
 **You receive:** 2 Dog Treats.
 
 Right-click a **tamed wolf** with a Dog Treat to:
 
-- Heal it by more than ordinary Rotten Flesh.
-- Put it into normal breeding mode if it is an adult, healthy, and ready to breed.
-- Keep it safe from the Hunger effect.
+* Heal it by more than ordinary Rotten Flesh.
+* Put it into normal breeding mode if it is an adult, healthy, and ready to breed.
+* Keep it safe from the Hunger effect.
 
 Players cannot eat Dog Treats.
 
@@ -60,18 +60,18 @@ Players cannot eat Dog Treats.
 
 Combine four **Rotten Flesh**, one **Spider Eye**, and one **String**. The recipe is shapeless.
 
-| Rotten Flesh | String | Rotten Flesh |
-| :---: | :---: | :---: |
-| Empty | **Spider Eye** | Empty |
-| Rotten Flesh | Empty | Rotten Flesh |
+| Rotten Flesh |     String     | Rotten Flesh |
+| :----------: | :------------: | :----------: |
+|     Empty    | **Spider Eye** |     Empty    |
+| Rotten Flesh |      Empty     | Rotten Flesh |
 
 **You receive:** 1 Zombie Bait.
 
 Zombies smell bait from farther away:
 
-- Keeping it anywhere in your inventory increases their detection range to about **1.5× normal**.
-- Holding it in either hand increases their detection range to about **2× normal**.
-- Dropping it attracts zombies within about **20 blocks**.
+* Keeping it anywhere in your inventory increases their detection range to about **1.5× normal**.
+* Holding it in either hand increases their detection range to about **2× normal**.
+* Dropping it attracts zombies within about **20 blocks**.
 
 Throw bait away from yourself, into a reachable pit, or along a path into a trap. Zombies walk to it using normal paths. The first zombie that reaches the dropped stack eats one piece. Zombie Bait cannot be eaten by players.
 
@@ -85,16 +85,16 @@ Walls still matter. Zombies only follow dropped bait when they can find a valid 
 
 Combine one **Bowl**, one **Rotten Flesh**, one **Brown Mushroom**, and one **Red Mushroom**. The recipe is shapeless and does not replace any vanilla Suspicious Stew recipes.
 
-| Brown Mushroom | Bowl | Red Mushroom |
-| :---: | :---: | :---: |
-| Empty | **Rotten Flesh** | Empty |
-| Empty | Empty | Empty |
+| Brown Mushroom |       Bowl       | Red Mushroom |
+| :------------: | :--------------: | :----------: |
+|      Empty     | **Rotten Flesh** |     Empty    |
+|      Empty     |       Empty      |     Empty    |
 
 **You receive:** 1 Rotten Flesh Stew.
 
 Eating it gives approximately:
 
-- **20 seconds of Night Vision**
-- **10 seconds of Hunger**
+* **20 seconds of Night Vision**
+* **10 seconds of Hunger**
 
 It is useful in the dark, but zombie cooking has consequences!

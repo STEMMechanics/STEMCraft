@@ -2,16 +2,27 @@
 description: The player handbook for the STEMCraft Minecraft server.
 ---
 
-# STEMCraft Player Handbook
+# Welcome
 
 <figure><img src=".gitbook/assets/lobby.png" alt=""><figcaption></figcaption></figure>
 
-STEMCraft is a community-driven Minecraft server created and managed by [STEMMechanics](https://www.stemmechanics.com.au/). This handbook is for players: how to join, play Survival and minigames, use player commands, and get help.
+Whether you're joining for the first time, building in Survival, creating something amazing, or jumping into a minigame, you'll find everything you need to get started and make the most of STEMCraft.
 
-Start with [Getting Started](getting-started/README.md), or jump to [Survival](survival/README.md), [Minigames](minigames/README.md), or [Safety & Community](safety-and-community/README.md).
+{% hint style="success" %}
+**New to STEMCraft?**
 
-{% hint style="info" %}
-Developer, API, configuration, and administrator documentation lives in the repository's `docs/dev` directory and GitHub Wiki, not in this handbook.
+Start with [Getting Started](getting-started/) to learn how to join and what to do when you first arrive.
 {% endhint %}
 
-News, galleries, events, and staff information are published by STEMMechanics and through the community's social channels and Discord.
+### Need help finding something?
+
+Use the menu to explore [Survival](survival/), [Creative](creative.md), [Minigames](minigames/), [Commands](commands/), [Safety & Community](safety-and-community/) and more.
+
+Can't find what you're looking for? Ask us on [Discord](https://stemmech.com.au/discord) and we'll help you out.
+
+{% hint style="info" %}
+**Looking for more about STEMCraft?**
+
+Visit the [STEMCraft website](https://www.stemmechanics.com.au/stemcraft) for server information, events and workshops.
+{% endhint %}
+
