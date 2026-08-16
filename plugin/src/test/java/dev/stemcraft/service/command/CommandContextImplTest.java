@@ -85,6 +85,7 @@ class CommandContextImplTest {
         assertEquals("5m", ctx.getArg(-1, null));
         assertEquals("yes 5 1.5 2.5 command-tests 5m", ctx.getArgsAsString(2, ""));
         assertEquals("Target yes 5 1.5 2.5 command-tests 5m", ctx.getArgsAsString());
+        assertEquals("5 1.5 2.5 command-tests 5m", ctx.getArgsAsString(3, ""));
         assertTrue(ctx.getArgAsBoolean(1));
         assertEquals(5, ctx.getArgAsInt(2, 0, 1, 10));
         assertEquals(2.0f, ctx.getArgAsFloat(3, 0.0f, 2.0f, 3.0f));

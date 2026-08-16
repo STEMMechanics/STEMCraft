@@ -373,7 +373,7 @@ public class WorldCommand {
             return;
         }
 
-        String requestedName = ctx.getArgsAsString(2, "").trim();
+        String requestedName = ctx.getArgsAsString(3, "").trim();
         ConfigSection config = worldService.getConfigSection(worldName);
         if (requestedName.equalsIgnoreCase("clear")) {
             config.set("display-name", null);
