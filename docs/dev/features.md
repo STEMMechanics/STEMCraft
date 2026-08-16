@@ -40,6 +40,7 @@ Features are discovered from `dev.stemcraft.feature` and loaded through `BaseFea
 | `SurvivalQolFeature` | Farming, transport, inventory, mob information, and equipment warnings |
 | `AnimalBarrels` | Craftable barrels for carrying supported small animals |
 | `FriedEggs` | Cooked eggs with configurable food values and cooking methods |
+| `CometFeature` | API-launched destructive sky events with heat, crash scars, geodes, and optional loot |
 
 ## Item, Inventory, and Death Handling
 

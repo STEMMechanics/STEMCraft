@@ -35,7 +35,9 @@ import dev.stemcraft.chunkgen.FlatGenerator;
 import dev.stemcraft.chunkgen.WaterGenerator;
 import dev.stemcraft.chunkgen.VoidGenerator;
 import dev.stemcraft.feature.BaseFeature;
+import dev.stemcraft.feature.CometFeature;
 import dev.stemcraft.feature.Mailboxes;
+import dev.stemcraft.api.service.comet.CometService;
 import dev.stemcraft.api.service.mailbox.MailboxService;
 import dev.stemcraft.service.command.CommandServiceImpl;
 import dev.stemcraft.service.message.MessageServiceImpl;
@@ -107,6 +109,7 @@ public final class STEMCraft extends JavaPlugin {
     private MessageServiceImpl messages;
     private MiniGameServiceImpl minigames;
     private MotdServiceImpl motd;
+    private CometService comets;
     private MailboxService mailboxes;
     private PlaceholderServiceImpl placeholders;
     private PlacedObjectServiceImpl placedObjects;
@@ -498,6 +501,9 @@ public final class STEMCraft extends JavaPlugin {
         }
 
         feature.onEnable();
+        if (feature instanceof CometFeature cometFeature) {
+            comets = cometFeature;
+        }
         if (feature instanceof Mailboxes mailboxFeature) {
             mailboxes = mailboxFeature;
         }

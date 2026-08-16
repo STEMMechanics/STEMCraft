@@ -18,6 +18,7 @@ These are the runtime services instantiated in `STEMCraft.java` and exposed thro
 | Audit | `AuditServiceImpl` | Structured audit logging and audit command surfaces |
 | Chat | `ChatServiceImpl` | Moderation workflows, reports, mute-all state, and report review surfaces |
 | Commands | `CommandServiceImpl` | Fluent command registration API used by the rest of the plugin |
+| Comets | `CometFeature` | API-launched destructive comet events and per-event loot |
 | Database | `DatabaseServiceImpl` | SQLite execution, query helpers, and migration version tracking |
 | Events | `EventServiceImpl` | Simplified event listener registration |
 | Holograms | `HologramServiceImpl` | Hologram creation, lookup, and command tooling |
