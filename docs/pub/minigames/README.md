@@ -1,22 +1,22 @@
 # Minigames
 
-The version/26.2.x plugin contains modules for:
+Want a quick race, a team battle, or a survival challenge? Choose a game below to learn its goal before you jump in.
 
-* BedWars
-* Boat Race
-* Bridge
-* Minefield
-* Nightfall
-* Parkour
-* SkyBlock
-* TNT Run
+| Game | What you will do |
+| --- | --- |
+| [BedWars](bedwars.md) | Protect your bed and break the other teams' beds. |
+| [Boat Race](boat-race.md) | Steer through every checkpoint and race to the finish. |
+| [Bridge](bridge.md) | Build across the gap and reach the other team's goal. |
+| [Minefield](minefield.md) | Find a safe route across a hidden minefield. |
+| [Nightfall](nightfall.md) | Prepare by day and survive stronger zombie nights. |
+| [Parkour](parkour.md) | Jump through a course as quickly as you can. |
+| [SkyBlock](skyblock.md) | Grow a tiny floating island into a home. |
+| [TNT Run](tnt-run.md) | Keep moving while the floor disappears. |
 
-Which games and arenas are available depends on live server configuration. Join games through the server's menus, signs, portals, or player-facing game commands where provided. Active games can use team selection, heads-up displays, countdowns, leaderboards, supply drops, and mailed winner Gifts; the exact combination varies by game and arena.
+Which games and arenas are open depends on the live server. Use the lobby's menus, signs, or portals. If a game command is available, typing the game command by itself shows its choices.
 
-In later Nightfall Blood Moons, treasure-bearing comets may cross the sky and strike inside the arena. The
-impact is extremely dangerous, but the geode and scattered mineral blocks make the crash site valuable.
-Later Blood Moon zombies can also overcome simple traps by moving nearby soft terrain blocks, so dirt and
-mud defenses will not hold them forever.
+{% hint style="info" %}
+Look at the countdown, scoreboard, boss bars, and messages during a game. They tell you when a round starts, your progress, and who won.
+{% endhint %}
 
-Nightfall maps may also rotate between several pre-game gathering areas. Everyone joining the same match is
-sent to the same randomly selected lobby; the location can change for the next match.
+> **Image placeholder — minigame lobby map:** Add one bright, wide screenshot of the minigame lobby with numbered arrows pointing to each game's portal or sign. Under it, add a matching numbered key with the game names. Keep labels large enough to read on a tablet.
