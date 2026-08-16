@@ -236,7 +236,10 @@ blood-moon-comets:
 
 Blood Moon builder zombies do not create blocks. When stuck, they may relocate a nearby soft terrain block
 (dirt variants, grass, podzol, mycelium, or mud) to bridge or climb. Stone, wood, ores, and other harder or
-valuable blocks are not eligible.
+valuable blocks are not eligible. `blood-moon-builder-source-removal-chance` controls whether the source
+terrain is actually removed; it defaults to `70`, giving the zombie a 30% chance to duplicate the soft block.
+It can also be changed with
+`/nightfall set <arena> bloodmoonbuildersourceremovalchance <0-100>`.
 
 ## Nightfall Random Match Lobbies
 

@@ -88,6 +88,7 @@ public class NightfallCommand {
             .tabCompletion("set", "{nightfall-arenas}", "bloodmoonchance")
             .tabCompletion("set", "{nightfall-arenas}", "bloodmoonmultiplier")
             .tabCompletion("set", "{nightfall-arenas}", "bloodmoonbabychance")
+            .tabCompletion("set", "{nightfall-arenas}", "bloodmoonbuildersourceremovalchance")
             .tabCompletion("set", "{nightfall-arenas}", "timespeed")
             .tabCompletion("set", "{nightfall-arenas}", "daytimespeed")
             .tabCompletion("set", "{nightfall-arenas}", "nighttimespeed")
@@ -216,6 +217,8 @@ public class NightfallCommand {
         ctx.info(" - Blood moon chance: " + nightfall.bloodMoonChancePercent(arena) + "%");
         ctx.info(" - Blood moon spawn multiplier: " + String.format(Locale.ROOT, "%.2fx", nightfall.bloodMoonZombieSpawnMultiplier(arena)));
         ctx.info(" - Blood moon baby zombie chance: " + nightfall.bloodMoonBabyZombieChancePercent(arena) + "%");
+        ctx.info(" - Blood moon builder source removal chance: "
+            + nightfall.bloodMoonBuilderSourceRemovalChancePercent(arena) + "%");
         ctx.info(" - Drop tiers: " + nightfall.dropItems(arena).size() + " (" + nightfall.dropItemCount(arena) + " items)");
         if (validation.hasErrors()) {
             ctx.warn(" - Validation: failed");
@@ -736,6 +739,13 @@ public class NightfallCommand {
                 int value = ctx.getArgAsInt(3, 20, 0, 100);
                 arena.set("bloodMoonBabyZombieChancePercent", value);
                 ctx.success("Blood moon baby zombie chance set to " + value + "% for arena '" + arena.id() + "'.");
+            }
+            case "bloodmoonbuildersourceremovalchance" -> {
+                ctx.checkArgsSizeAtLeast(4);
+                int value = ctx.getArgAsInt(3, 70, 0, 100);
+                arena.set("bloodMoonBuilderSourceRemovalChancePercent", value);
+                ctx.success("Blood moon builder source removal chance set to " + value
+                    + "% for arena '" + arena.id() + "'.");
             }
             case "name" -> {
                 ctx.checkArgsSizeAtLeast(4);

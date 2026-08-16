@@ -108,6 +108,8 @@ public class NightfallConfig {
             section.getInt("blood-moon-axe-start-night", escalationDefaults.axeStartNight()),
             section.getInt("blood-moon-knockback-start-night", escalationDefaults.knockbackStartNight()),
             section.getDouble("blood-moon-knockback-resistance", escalationDefaults.knockbackResistance()));
+        int bloodMoonBuilderSourceRemovalChancePercent = Math.clamp(
+            section.getInt("blood-moon-builder-source-removal-chance", 70), 0, 100);
         BloodMoonCometSettings bloodMoonComets = loadBloodMoonComets(section, arenaId);
         String name = section.getString("name", StringUtil.beautify(arenaId));
         List<Location> generatorLocations = loadLocations(section, world, arenaId);
@@ -153,6 +155,7 @@ public class NightfallConfig {
             bloodMoonBabyZombieChancePercent,
             bloodMoonTntZombieChancePercent,
             bloodMoonEscalation,
+            bloodMoonBuilderSourceRemovalChancePercent,
             bloodMoonComets,
             generatorLocations,
             dropItems,
@@ -215,6 +218,8 @@ public class NightfallConfig {
         arenaConfig.set("blood-moon-sponge-start-night", escalation.spongeStartNight());
         arenaConfig.set("blood-moon-sponge-radius", escalation.spongeRadius());
         arenaConfig.set("blood-moon-builder-start-night", escalation.builderStartNight());
+        arenaConfig.set("blood-moon-builder-source-removal-chance",
+            nightfall.bloodMoonBuilderSourceRemovalChancePercent(arena));
         arenaConfig.set("blood-moon-axe-start-night", escalation.axeStartNight());
         arenaConfig.set("blood-moon-knockback-start-night", escalation.knockbackStartNight());
         arenaConfig.set("blood-moon-knockback-resistance", escalation.knockbackResistance());

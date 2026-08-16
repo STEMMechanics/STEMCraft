@@ -21,6 +21,7 @@ class NightfallMiniGameDefaultsTest {
         when(arena.get("bloodMoonBabyZombieChancePercent", Integer.class, 20)).thenReturn(20);
         when(arena.get("bloodMoonComets", BloodMoonCometSettings.class, BloodMoonCometSettings.defaults()))
             .thenReturn(BloodMoonCometSettings.defaults());
+        when(arena.get("bloodMoonBuilderSourceRemovalChancePercent", Integer.class, 70)).thenReturn(70);
 
         assertEquals(10, nightfall.dropMaxActiveItems(arena));
         assertEquals(100, nightfall.dropGroupDistance(arena));
@@ -30,6 +31,7 @@ class NightfallMiniGameDefaultsTest {
         assertEquals(8, nightfall.bloodMoonComets(arena).startNight());
         assertEquals(20, nightfall.bloodMoonComets(arena).chancePercent());
         assertEquals(4, nightfall.bloodMoonComets(arena).loot().size());
+        assertEquals(70, nightfall.bloodMoonBuilderSourceRemovalChancePercent(arena));
     }
 
     @Test

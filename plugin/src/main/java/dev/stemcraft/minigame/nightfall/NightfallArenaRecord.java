@@ -47,6 +47,7 @@ public record NightfallArenaRecord(
         int bloodMoonBabyZombieChancePercent,
         int bloodMoonTntZombieChancePercent,
         BloodMoonEscalation bloodMoonEscalation,
+        int bloodMoonBuilderSourceRemovalChancePercent,
         BloodMoonCometSettings bloodMoonComets,
         List<Location> generatorLocations,
         Map<Integer, List<Material>> dropItems,

@@ -1201,9 +1201,12 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         Block source = findZombieBuildingSource(arena, zombie, placement);
         if (source == null) return null;
         Material material = source.getType();
-        session.captureBlock(source);
         session.captureBlock(placement);
-        source.setType(Material.AIR, true);
+        if (ThreadLocalRandom.current().nextInt(100)
+            < nightfall.bloodMoonBuilderSourceRemovalChancePercent(arena)) {
+            session.captureBlock(source);
+            source.setType(Material.AIR, true);
+        }
         placement.setType(material, true);
         resetZombieStuckTracking(arena, zombie);
         return material;

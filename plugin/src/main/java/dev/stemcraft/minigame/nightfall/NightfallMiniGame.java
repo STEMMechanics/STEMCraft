@@ -294,6 +294,7 @@ public class NightfallMiniGame extends BaseMiniGame {
             .set("bloodMoonBabyZombieChancePercent", 20)
             .set("bloodMoonTntZombieChancePercent", 3)
             .set("bloodMoonEscalation", BloodMoonEscalation.defaults())
+            .set("bloodMoonBuilderSourceRemovalChancePercent", 70)
             .set("bloodMoonComets", BloodMoonCometSettings.defaults())
             .set("lobbyLocations", new ArrayList<>(List.of(world.getSpawnLocation().clone())))
             .set("generatorLocations", new ArrayList<Location>())
@@ -383,6 +384,8 @@ public class NightfallMiniGame extends BaseMiniGame {
                     .set("bloodMoonBabyZombieChancePercent", arenaDef.bloodMoonBabyZombieChancePercent())
                     .set("bloodMoonTntZombieChancePercent", arenaDef.bloodMoonTntZombieChancePercent())
                     .set("bloodMoonEscalation", arenaDef.bloodMoonEscalation())
+                    .set("bloodMoonBuilderSourceRemovalChancePercent",
+                        arenaDef.bloodMoonBuilderSourceRemovalChancePercent())
                     .set("bloodMoonComets", arenaDef.bloodMoonComets())
                     .set("lobbyLocations", copyLocations(arenaDef.lobbyLocations()))
                     .set("generatorLocations", copyLocations(arenaDef.generatorLocations()))
@@ -617,6 +620,10 @@ public class NightfallMiniGame extends BaseMiniGame {
 
     public @NotNull BloodMoonCometSettings bloodMoonComets(@NotNull MiniGameArena arena) {
         return arena.get("bloodMoonComets", BloodMoonCometSettings.class, BloodMoonCometSettings.defaults());
+    }
+
+    public int bloodMoonBuilderSourceRemovalChancePercent(@NotNull MiniGameArena arena) {
+        return Math.clamp(arena.get("bloodMoonBuilderSourceRemovalChancePercent", Integer.class, 70), 0, 100);
     }
 
     public int bloodMoonTntZombieChancePercentForNight(@NotNull MiniGameArena arena) {
