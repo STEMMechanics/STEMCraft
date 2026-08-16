@@ -145,7 +145,9 @@ public class SkipNight extends BaseFeature {
     }
 
     private void reloadNightConfig() {
-        skipPercentage = getConfigSection().getDouble("required", 0.25d);
+        double configuredPercentage = getConfigSection().getDouble("required", 0.25d);
+        skipPercentage = Double.isFinite(configuredPercentage)
+            ? Math.max(0.0d, Math.min(1.0d, configuredPercentage)) : 0.25d;
         skipRandomTickSpeed = getConfigSection().getInt("random_tick_speed", 300);
         List<String> worldsList = getConfigSection().getStringList("worlds");
 
@@ -175,7 +177,10 @@ public class SkipNight extends BaseFeature {
      * @param world The world to update.
      */
     private void updateSleepers(World world) {
-        List<Player> players = world.getPlayers();
+        List<Player> players = world.getPlayers().stream()
+            .filter(player -> player.getGameMode() == GameMode.SURVIVAL)
+            .filter(player -> !player.isDead())
+            .toList();
         int numPlayers = players.size();
         int numSleepers = 0;
 
@@ -185,7 +190,7 @@ public class SkipNight extends BaseFeature {
             }
         }
 
-        int required = (int)Math.round(numPlayers * skipPercentage);
+        int required = requiredSleeperCount(numPlayers, skipPercentage);
         BossBar bar = worlds.get(world);
 
         if (numSleepers == 0) {
@@ -206,7 +211,7 @@ public class SkipNight extends BaseFeature {
         } else {
             bar.setTitle(title);
         }
-        bar.setProgress((double) numSleepers / required);
+        bar.setProgress(sleeperProgress(numSleepers, required));
 
         for (Player player : bar.getPlayers()) {
             if (player.getLocation().getWorld() != world || player.getGameMode() != GameMode.SURVIVAL) {
@@ -233,6 +238,18 @@ public class SkipNight extends BaseFeature {
                 skipNightFinish(world);
             }
         }
+    }
+
+    static int requiredSleeperCount(int eligiblePlayers, double requiredPercentage) {
+        if (eligiblePlayers <= 0) return 0;
+        double percentage = Double.isFinite(requiredPercentage)
+            ? Math.max(0.0d, Math.min(1.0d, requiredPercentage)) : 1.0d;
+        return Math.max(1, (int) Math.ceil(eligiblePlayers * percentage));
+    }
+
+    static double sleeperProgress(int sleepers, int required) {
+        if (required <= 0) return 0.0d;
+        return Math.max(0.0d, Math.min(1.0d, (double) sleepers / required));
     }
 
     /**
