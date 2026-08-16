@@ -208,6 +208,36 @@ Each built-in minigame owns its own command namespace. These commands typically 
 
 The exact subcommands differ by minigame because each game has different arena data requirements.
 
+## Nightfall Blood Moon Comets
+
+Nightfall arenas can launch treasure-bearing comets during later Blood Moons. The impact is selected near
+the surviving player cluster while keeping the configured crash corridor inside the arena and away from
+the play spawn, spectator spawn, and generators. Comet changes are recorded by the arena world-change
+session and are restored with the rest of the arena.
+
+```yml
+blood-moon-comets:
+  enabled: true
+  start-night: 8
+  chance: 20
+  chance-increase-per-night: 10
+  maximum-chance: 60
+  maximum-per-night: 1
+  minimum-player-distance: 25
+  maximum-player-distance: 50
+  arena-edge-buffer: 30
+  path-safety-length: 120
+  loot:
+    GOLD_BLOCK: 2-8
+    EMERALD_BLOCK: 1-4
+    IRON_BLOCK: 3-10
+    DIAMOND_BLOCK: 0-2
+```
+
+Blood Moon builder zombies do not create blocks. When stuck, they may relocate a nearby soft terrain block
+(dirt variants, grass, podzol, mycelium, or mud) to bridge or climb. Stone, wood, ores, and other harder or
+valuable blocks are not eligible.
+
 ## Integration Points
 
 For plugin developers, the important API types are:

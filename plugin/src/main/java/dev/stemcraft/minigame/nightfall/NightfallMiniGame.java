@@ -294,6 +294,7 @@ public class NightfallMiniGame extends BaseMiniGame {
             .set("bloodMoonBabyZombieChancePercent", 20)
             .set("bloodMoonTntZombieChancePercent", 3)
             .set("bloodMoonEscalation", BloodMoonEscalation.defaults())
+            .set("bloodMoonComets", BloodMoonCometSettings.defaults())
             .set("generatorLocations", new ArrayList<Location>())
             .set("dropItems", copyDropItems(defaultDropItems()));
     }
@@ -381,6 +382,7 @@ public class NightfallMiniGame extends BaseMiniGame {
                     .set("bloodMoonBabyZombieChancePercent", arenaDef.bloodMoonBabyZombieChancePercent())
                     .set("bloodMoonTntZombieChancePercent", arenaDef.bloodMoonTntZombieChancePercent())
                     .set("bloodMoonEscalation", arenaDef.bloodMoonEscalation())
+                    .set("bloodMoonComets", arenaDef.bloodMoonComets())
                     .set("generatorLocations", copyLocations(arenaDef.generatorLocations()))
                     .set("dropItems", copyDropItems(arenaDef.dropItems()))
                     .set("pendingWorldRollback", arenaDef.pendingWorldRollback())
@@ -601,6 +603,10 @@ public class NightfallMiniGame extends BaseMiniGame {
 
     public @NotNull BloodMoonEscalation bloodMoonEscalation(@NotNull MiniGameArena arena) {
         return arena.get("bloodMoonEscalation", BloodMoonEscalation.class, BloodMoonEscalation.defaults());
+    }
+
+    public @NotNull BloodMoonCometSettings bloodMoonComets(@NotNull MiniGameArena arena) {
+        return arena.get("bloodMoonComets", BloodMoonCometSettings.class, BloodMoonCometSettings.defaults());
     }
 
     public int bloodMoonTntZombieChancePercentForNight(@NotNull MiniGameArena arena) {

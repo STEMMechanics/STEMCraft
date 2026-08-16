@@ -7,6 +7,7 @@ import dev.stemcraft.api.service.event.EventService;
 import dev.stemcraft.api.service.task.TaskService;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
 import org.bukkit.inventory.PlayerInventory;
@@ -20,6 +21,8 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -28,6 +31,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class NightfallArenaHandlerTest {
+    @Test
+    void zombiesOnlyBuildWithSoftTerrain() {
+        assertTrue(NightfallArenaHandler.isZombieBuildingMaterial(Material.DIRT));
+        assertTrue(NightfallArenaHandler.isZombieBuildingMaterial(Material.GRASS_BLOCK));
+        assertTrue(NightfallArenaHandler.isZombieBuildingMaterial(Material.MUD));
+        assertFalse(NightfallArenaHandler.isZombieBuildingMaterial(Material.STONE));
+        assertFalse(NightfallArenaHandler.isZombieBuildingMaterial(Material.OAK_PLANKS));
+        assertFalse(NightfallArenaHandler.isZombieBuildingMaterial(Material.DIAMOND_ORE));
+    }
+
     @Test
     void runningLateJoinIsInitializedAsSurvivalParticipant() {
         STEMCraftAPI api = mock(STEMCraftAPI.class);

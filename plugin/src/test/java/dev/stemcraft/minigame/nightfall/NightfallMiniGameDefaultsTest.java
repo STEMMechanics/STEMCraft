@@ -19,12 +19,17 @@ class NightfallMiniGameDefaultsTest {
         when(arena.get("zombieNightlyHealthMultiplier", Double.class, 1.05d)).thenReturn(1.05d);
         when(arena.get("bloodMoonZombieSpawnMultiplier", Double.class, 2.0d)).thenReturn(2.0d);
         when(arena.get("bloodMoonBabyZombieChancePercent", Integer.class, 20)).thenReturn(20);
+        when(arena.get("bloodMoonComets", BloodMoonCometSettings.class, BloodMoonCometSettings.defaults()))
+            .thenReturn(BloodMoonCometSettings.defaults());
 
         assertEquals(10, nightfall.dropMaxActiveItems(arena));
         assertEquals(100, nightfall.dropGroupDistance(arena));
         assertEquals(1.05d, nightfall.zombieNightlyHealthMultiplier(arena), 0.0001d);
         assertEquals(2.0d, nightfall.bloodMoonZombieSpawnMultiplier(arena), 0.0001d);
         assertEquals(20, nightfall.bloodMoonBabyZombieChancePercent(arena));
+        assertEquals(8, nightfall.bloodMoonComets(arena).startNight());
+        assertEquals(20, nightfall.bloodMoonComets(arena).chancePercent());
+        assertEquals(4, nightfall.bloodMoonComets(arena).loot().size());
     }
 
     @Test

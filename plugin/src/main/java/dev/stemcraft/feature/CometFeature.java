@@ -5,6 +5,7 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.service.comet.CometLoot;
 import dev.stemcraft.api.service.comet.CometService;
+import dev.stemcraft.api.service.world.WorldChangeSession;
 import org.bukkit.Chunk;
 import org.bukkit.Color;
 import org.bukkit.GameMode;
@@ -353,7 +354,7 @@ public final class CometFeature extends BaseFeature implements CometService {
                     if (x * x + y * y + z * z > radiusSquared) continue;
                     Block block = world.getBlockAt(
                         centre.getBlockX() + x, centre.getBlockY() + y, centre.getBlockZ() + z);
-                    if (block.getType() != Material.BEDROCK) block.setType(Material.AIR, false);
+                    if (block.getType() != Material.BEDROCK) setBlock(block, Material.AIR, false);
                 }
             }
         }
@@ -380,7 +381,7 @@ public final class CometFeature extends BaseFeature implements CometService {
                     if (x * x + y * y + z * z > radiusSquared) continue;
                     Block block = world.getBlockAt(
                         centre.getBlockX() + x, centre.getBlockY() + y, centre.getBlockZ() + z);
-                    if (block.getType() != Material.BEDROCK) block.setType(Material.AIR, false);
+                    if (block.getType() != Material.BEDROCK) setBlock(block, Material.AIR, false);
                 }
             }
         }
@@ -402,6 +403,7 @@ public final class CometFeature extends BaseFeature implements CometService {
                     if (x != minX && x != maxX && y != minY && y != maxY && z != minZ && z != maxZ) continue;
                     Block block = world.getBlockAt(x, y, z);
                     if (block.getType() == Material.WATER) {
+                        captureBlock(block);
                         block.setBlockData(block.getBlockData().clone(), true);
                     }
                 }
@@ -415,7 +417,7 @@ public final class CometFeature extends BaseFeature implements CometService {
             int z = impact.getBlockZ() + ThreadLocalRandom.current().nextInt(-18, 19);
             Block ground = world.getHighestBlockAt(x, z);
             if (isStableMagmaSurface(ground)) {
-                ground.setType(Material.MAGMA_BLOCK, true);
+                setBlock(ground, Material.MAGMA_BLOCK, true);
             }
         }
     }
@@ -466,13 +468,13 @@ public final class CometFeature extends BaseFeature implements CometService {
                         && local.clone().crossProduct(opening).lengthSquared() < openingRadius * openingRadius;
                     Block block = world.getBlockAt(cx + x, cy + y, cz + z);
                     if (openingCone || distance < geodeRadius - 2.2d) {
-                        block.setType(Material.AIR, false);
+                        setBlock(block, Material.AIR, false);
                     } else if (distance > geodeRadius - 0.8d) {
-                        block.setType(Material.SMOOTH_BASALT, false);
+                        setBlock(block, Material.SMOOTH_BASALT, false);
                     } else if (distance > geodeRadius - 1.5d) {
-                        block.setType(Material.CALCITE, false);
+                        setBlock(block, Material.CALCITE, false);
                     } else {
-                        block.setType(ThreadLocalRandom.current().nextDouble() < 0.18d
+                        setBlock(block, ThreadLocalRandom.current().nextDouble() < 0.18d
                             ? Material.BUDDING_AMETHYST : Material.AMETHYST_BLOCK, false);
                     }
                 }
@@ -495,7 +497,7 @@ public final class CometFeature extends BaseFeature implements CometService {
                 Block block = world.getBlockAt(terminal.getBlockX() + x,
                     terminal.getBlockY() + y, terminal.getBlockZ() + z);
                 if (occupied.contains(block) || !isExposedLootSurface(block)) continue;
-                block.setType(entry.material(), false);
+                setBlock(block, entry.material(), false);
                 occupied.add(block);
                 amount--;
             }
@@ -527,6 +529,17 @@ public final class CometFeature extends BaseFeature implements CometService {
 
     private boolean isOpen(Block block) {
         return block.getType().isAir() || block.isLiquid();
+    }
+
+    private void setBlock(Block block, Material material, boolean applyPhysics) {
+        if (block.getType() == material) return;
+        captureBlock(block);
+        block.setType(material, applyPhysics);
+    }
+
+    private void captureBlock(Block block) {
+        WorldChangeSession session = api.worlds().changes(block.getWorld());
+        if (session.isRecording()) session.captureBlock(block);
     }
 
     private void finish(String taskId, List<BlockDisplay> displays) {

@@ -9,6 +9,7 @@ import dev.stemcraft.api.minigame.MiniGameArenaHandler;
 import dev.stemcraft.api.minigame.MiniGamePlayer;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.service.region.RegionListener;
+import dev.stemcraft.api.service.comet.CometLoot;
 import dev.stemcraft.api.service.world.WorldChangeSession;
 import dev.stemcraft.api.util.NamespaceId;
 import dev.stemcraft.api.util.PlayerUtil;
@@ -706,10 +707,110 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         arena.set("nextWaveAt", System.currentTimeMillis());
         arena.set("nightFastForwarding", false);
         arena.set("timeSpeedCarry", 0.0d);
+        arena.set("bloodMoonCometsLaunched", 0);
 
         broadcastToOccupants(arena, nightfall.nightStartMessage(night));
         playSoundToOccupants(arena, Sound.ENTITY_ZOMBIE_AMBIENT, 0.75f, 0.9f);
+        tryLaunchBloodMoonComet(arena, night);
         updateArenaStateCounters(arena);
+    }
+
+    private void tryLaunchBloodMoonComet(@NotNull MiniGameArena arena, int night) {
+        BloodMoonCometSettings settings = nightfall.bloodMoonComets(arena);
+        if (!nightfall.isBloodMoonActive(arena) || !settings.enabled() || night < settings.startNight()
+            || settings.maximumPerNight() <= 0) {
+            return;
+        }
+
+        int launched = arena.get("bloodMoonCometsLaunched", Integer.class, 0);
+        int chance = Math.min(settings.maximumChancePercent(), settings.chancePercent()
+            + Math.max(0, night - settings.startNight()) * settings.chanceIncreasePerNight());
+        while (launched < settings.maximumPerNight()
+            && chance > 0 && ThreadLocalRandom.current().nextInt(100) < chance) {
+            Vector direction = randomHorizontalDirection();
+            Location impact = findBloodMoonCometImpact(arena, settings, direction);
+            if (impact == null) {
+                break;
+            }
+
+            String from = cardinalDirection(direction.clone().multiply(-1.0d));
+            broadcastPlainToOccupants(arena, "A treasure-bearing comet is approaching from the " + from
+                + "! Impact expected near " + impact.getBlockX() + ", " + impact.getBlockZ() + " — take cover!");
+            playSoundToOccupants(arena, Sound.ENTITY_WITHER_SPAWN, 1.0f, 0.65f);
+            api.comets().launch(impact, direction, settings.loot().toArray(CometLoot[]::new));
+            launched++;
+            arena.set("bloodMoonCometsLaunched", launched);
+        }
+    }
+
+    private @Nullable Location findBloodMoonCometImpact(@NotNull MiniGameArena arena,
+                                                         @NotNull BloodMoonCometSettings settings,
+                                                         @NotNull Vector direction) {
+        List<Player> players = activeSurvivors(arena);
+        if (players.isEmpty()) return null;
+
+        double centerX = players.stream().mapToDouble(player -> player.getLocation().getX()).average().orElse(0.0d);
+        double centerZ = players.stream().mapToDouble(player -> player.getLocation().getZ()).average().orElse(0.0d);
+        World world = arena.world();
+        for (int attempt = 0; attempt < RANDOM_LOCATION_ATTEMPTS; attempt++) {
+            double angle = ThreadLocalRandom.current().nextDouble(Math.PI * 2.0d);
+            double distance = settings.minimumPlayerDistance() == settings.maximumPlayerDistance()
+                ? settings.minimumPlayerDistance()
+                : ThreadLocalRandom.current().nextDouble(settings.minimumPlayerDistance(),
+                    settings.maximumPlayerDistance());
+            int x = (int) Math.floor(centerX + Math.cos(angle) * distance);
+            int z = (int) Math.floor(centerZ + Math.sin(angle) * distance);
+            Location impact = world.getHighestBlockAt(x, z).getLocation().add(0.5d, 1.0d, 0.5d);
+            if (isSafeCometImpact(arena, impact, direction, settings, players)) return impact;
+        }
+        return null;
+    }
+
+    private boolean isSafeCometImpact(@NotNull MiniGameArena arena, @NotNull Location impact,
+                                      @NotNull Vector direction, @NotNull BloodMoonCometSettings settings,
+                                      @NotNull List<Player> players) {
+        double minimumSquared = settings.minimumPlayerDistance() * (double) settings.minimumPlayerDistance();
+        double maximumSquared = settings.maximumPlayerDistance() * (double) settings.maximumPlayerDistance();
+        boolean nearPlayers = false;
+        for (Player player : players) {
+            double distance = horizontalDistanceSquared(impact, player.getLocation());
+            if (distance < minimumSquared) return false;
+            nearPlayers |= distance <= maximumSquared;
+        }
+        if (!nearPlayers || !awayFromProtectedLocations(arena, impact, settings.arenaEdgeBuffer())) return false;
+
+        Vector lateral = new Vector(-direction.getZ(), 0.0d, direction.getX()).normalize();
+        for (int distance = 0; distance <= settings.pathSafetyLength(); distance += 5) {
+            Location center = impact.clone().add(direction.clone().multiply(distance));
+            for (int side : new int[] {-settings.arenaEdgeBuffer(), 0, settings.arenaEdgeBuffer()}) {
+                Location sample = center.clone().add(lateral.clone().multiply(side));
+                sample.setY(arena.world().getHighestBlockYAt(sample.getBlockX(), sample.getBlockZ()) + 1.0d);
+                if (!insideArena(arena, sample)) return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean awayFromProtectedLocations(@NotNull MiniGameArena arena, @NotNull Location impact, int buffer) {
+        double bufferSquared = buffer * (double) buffer;
+        List<Location> protectedLocations = new ArrayList<>(nightfall.generatorLocations(arena));
+        Location playSpawn = nightfall.playSpawn(arena);
+        if (playSpawn != null) protectedLocations.add(playSpawn);
+        Location spectatorSpawn = arena.getSpectatorSpawn();
+        if (spectatorSpawn != null) protectedLocations.add(spectatorSpawn);
+        return protectedLocations.stream().noneMatch(location -> sameWorld(impact, location)
+            && horizontalDistanceSquared(impact, location) < bufferSquared);
+    }
+
+    private Vector randomHorizontalDirection() {
+        double angle = ThreadLocalRandom.current().nextDouble(Math.PI * 2.0d);
+        return new Vector(Math.cos(angle), 0.0d, Math.sin(angle));
+    }
+
+    private String cardinalDirection(@NotNull Vector direction) {
+        double angle = Math.toDegrees(Math.atan2(-direction.getX(), direction.getZ()));
+        return new String[] {"south", "south-west", "west", "north-west", "north", "north-east", "east", "south-east"}
+            [(int) Math.round((angle + 360.0d) / 45.0d) % 8];
     }
 
     private void endNight(@NotNull MiniGameArena arena) {
@@ -810,8 +911,9 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
                 continue;
             }
 
-            if (night >= escalation.builderStartNight() && tryBuildTowardTarget(arena, session, zombie)) {
-                showZombieUtilityItem(arena, zombie, Material.DIRT);
+            if (night >= escalation.builderStartNight()) {
+                Material buildingMaterial = tryBuildTowardTarget(arena, session, zombie);
+                if (buildingMaterial != null) showZombieUtilityItem(arena, zombie, buildingMaterial);
             }
         }
     }
@@ -1045,28 +1147,51 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         arena.world().createExplosion(explosionLocation, BLOOD_MOON_TNT_EXPLOSION_POWER, false, true);
     }
 
-    private boolean tryBuildTowardTarget(@NotNull MiniGameArena arena,
-                                         @NotNull WorldChangeSession session,
-                                         @NotNull Zombie zombie) {
+    private @Nullable Material tryBuildTowardTarget(@NotNull MiniGameArena arena,
+                                                     @NotNull WorldChangeSession session,
+                                                     @NotNull Zombie zombie) {
         LivingEntity target = zombie.getTarget();
         if (!(target instanceof Player player) || !arena.hasPlayer(player)) {
             resetZombieStuckTracking(arena, zombie);
-            return false;
+            return null;
         }
 
         if (!isZombieStuck(arena, zombie)) {
-            return false;
+            return null;
         }
 
         Block placement = resolveZombieBuildPlacement(arena, zombie, player);
         if (placement == null) {
-            return false;
+            return null;
         }
 
+        Block source = findZombieBuildingSource(arena, zombie, placement);
+        if (source == null) return null;
+        Material material = source.getType();
+        session.captureBlock(source);
         session.captureBlock(placement);
-        placement.setType(Material.DIRT, true);
+        source.setType(Material.AIR, true);
+        placement.setType(material, true);
         resetZombieStuckTracking(arena, zombie);
-        return true;
+        return material;
+    }
+
+    private @Nullable Block findZombieBuildingSource(@NotNull MiniGameArena arena, @NotNull Zombie zombie,
+                                                       @NotNull Block placement) {
+        Block origin = zombie.getLocation().getBlock();
+        List<Block> candidates = new ArrayList<>();
+        candidates.add(origin.getRelative(BlockFace.DOWN));
+        candidates.add(origin.getRelative(BlockFace.DOWN, 2));
+        for (BlockFace face : CARDINAL_FACES) candidates.add(origin.getRelative(face).getRelative(BlockFace.DOWN));
+        return candidates.stream().filter(block -> !block.equals(placement))
+            .filter(block -> insideArena(arena, block.getLocation()))
+            .filter(block -> isZombieBuildingMaterial(block.getType())).findFirst().orElse(null);
+    }
+
+    static boolean isZombieBuildingMaterial(@NotNull Material material) {
+        return material == Material.DIRT || material == Material.COARSE_DIRT || material == Material.ROOTED_DIRT
+            || material == Material.GRASS_BLOCK || material == Material.PODZOL || material == Material.MYCELIUM
+            || material == Material.MUD;
     }
 
     private boolean isZombieStuck(@NotNull MiniGameArena arena, @NotNull Zombie zombie) {
@@ -1559,6 +1684,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         bloodMoonTntZombies(arena).clear();
         burningZombieFireDueAt(arena).clear();
         arena.set("bloodMoonPendingExplosions", 0);
+        arena.set("bloodMoonCometsLaunched", 0);
         updateArenaStateCounters(arena);
     }
 
