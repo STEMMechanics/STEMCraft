@@ -25,6 +25,7 @@ import dev.stemcraft.api.config.ConfigSection;
 import org.bukkit.Bukkit;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import net.milkbowl.vault.chat.Chat;
 import org.bukkit.entity.Player;
@@ -170,13 +171,14 @@ public class PlayerTabList extends BaseFeature {
             footer = applyPlaceholders(footer, p, prefix, suffix, online, max);
 
             // header/footer: MiniMessage
-            p.sendPlayerListHeaderAndFooter(mm.deserialize(header), mm.deserialize(footer));
+            p.sendPlayerListHeaderAndFooter(
+                mm.deserialize(normalizeMiniMessage(header)),
+                mm.deserialize(normalizeMiniMessage(footer))
+            );
 
-            // tab name: build as legacy (Vault is legacy), then deserialize once
+            // Config uses MiniMessage. Vault placeholders are converted from legacy before insertion.
             String nameLine = applyPlaceholders(nameFormat, p, prefix, suffix, online, max);
-            nameLine = trimVisible(nameLine, maxNameLen);
-
-            Component tabName = legacyToComponent(nameLine);
+            Component tabName = trimVisible(mm.deserialize(normalizeMiniMessage(nameLine)), maxNameLen);
             p.playerListName(tabName);
         }
     }
@@ -207,14 +209,15 @@ public class PlayerTabList extends BaseFeature {
 
         String out = s
                 .replace("{player}", p.getName())
-                .replace("{world}", p.getWorld().getName())
+                .replace("{world}", api.worlds().getDisplayName(p.getWorld()))
+                .replace("{world-raw}", p.getWorld().getName())
                 .replace("{ping}", String.valueOf(ping))
                 .replace("{ping-colour}", "<" + pingColour + ">")
                 .replace("{/ping-colour}", "</" + pingColour + ">")
                 .replace("{online}", String.valueOf(online))
                 .replace("{max}", String.valueOf(max))
-                .replace("{prefix}", prefix == null ? "" : prefix)
-                .replace("{suffix}", suffix == null ? "" : suffix);
+                .replace("{prefix}", legacyToMiniMessage(prefix))
+                .replace("{suffix}", legacyToMiniMessage(suffix));
 
         // glyph bindings (turn :roles/stemcraft: into the char)
         out = api.messages().tokens().apply(out);
@@ -252,9 +255,9 @@ public class PlayerTabList extends BaseFeature {
      * @param legacy The legacy formatted string.
      * @return The corresponding Component.
      */
-    private Component legacyToComponent(String legacy) {
-        if (legacy == null || legacy.isBlank()) return Component.empty();
-        return LegacyComponentSerializer.legacySection().deserialize(legacy);
+    private String legacyToMiniMessage(String legacy) {
+        if (legacy == null || legacy.isBlank()) return "";
+        return mm.serialize(LegacyComponentSerializer.legacySection().deserialize(legacy));
     }
 
     /**
@@ -275,11 +278,32 @@ public class PlayerTabList extends BaseFeature {
      * @param maxLen The maximum visible length.
      * @return The trimmed string.
      */
-    private static String trimVisible(String s, int maxLen) {
-        if (s == null) return "";
-        if (maxLen <= 0) return s;
-        if (s.length() <= maxLen) return s;
-        return s.substring(0, maxLen);
+    static Component trimVisible(Component component, int maxLen) {
+        if (maxLen <= 0 || PlainTextComponentSerializer.plainText().serialize(component).length() <= maxLen) {
+            return component;
+        }
+        String legacy = LegacyComponentSerializer.legacySection().serialize(component);
+        StringBuilder trimmed = new StringBuilder();
+        int visible = 0;
+        for (int index = 0; index < legacy.length() && visible < maxLen; index++) {
+            char current = legacy.charAt(index);
+            trimmed.append(current);
+            if (current == '§' && index + 1 < legacy.length()) {
+                trimmed.append(legacy.charAt(++index));
+            } else {
+                visible++;
+            }
+        }
+        return LegacyComponentSerializer.legacySection().deserialize(trimmed.toString());
+    }
+
+    static String normalizeMiniMessage(String input) {
+        if (input == null) return "";
+        return input
+            .replace("<dark_grey>", "<dark_gray>")
+            .replace("</dark_grey>", "</dark_gray>")
+            .replace("<grey>", "<gray>")
+            .replace("</grey>", "</gray>");
     }
 
     private boolean ensureDefault(ConfigSection section, String path, Object value) {

@@ -26,6 +26,7 @@ import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -187,6 +188,54 @@ public interface WorldService {
      */
     @NotNull ConfigSection getConfigSection(@NotNull World world);
     @NotNull ConfigSection getConfigSection(@NotNull String worldName);
+
+    /**
+     * Get the player-facing name of a world. Configure this with
+     * {@code worlds.<world>.display-name}; otherwise a beautified folder name is used.
+     *
+     * @param world The world to name.
+     * @return The configured or generated display name.
+     */
+    default @NotNull String getDisplayName(@NotNull World world) {
+        String configured = getConfigSection(world).getString("display-name", "").trim();
+        return configured.isEmpty() ? defaultDisplayName(world.getName()) : configured;
+    }
+
+    /**
+     * Turn a world folder name into a readable player-facing fallback.
+     * The first underscore-delimited word is treated as a category when a
+     * distinct map name follows it. Dimension suffixes remain part of the name.
+     *
+     * @param worldName The raw world folder name.
+     * @return A readable display name.
+     */
+    static @NotNull String defaultDisplayName(@NotNull String worldName) {
+        String[] rawParts = worldName.trim().split("_+");
+        List<String> parts = new ArrayList<>();
+        for (String rawPart : rawParts) {
+            if (!rawPart.isBlank()) parts.add(capitalizeWorldWord(rawPart));
+        }
+        if (parts.isEmpty()) return worldName;
+
+        int dimensionWords = 0;
+        int size = parts.size();
+        if (size >= 2 && parts.get(size - 2).equalsIgnoreCase("the")
+            && parts.get(size - 1).equalsIgnoreCase("end")) {
+            dimensionWords = 2;
+        } else if (parts.get(size - 1).equalsIgnoreCase("nether")) {
+            dimensionWords = 1;
+        }
+
+        int namedWords = size - dimensionWords;
+        String joined = String.join(" ", parts);
+        if (namedWords <= 1) return joined;
+        return parts.getFirst() + ": " + String.join(" ", parts.subList(1, size));
+    }
+
+    private static @NotNull String capitalizeWorldWord(@NotNull String word) {
+        if (word.isEmpty()) return word;
+        return Character.toUpperCase(word.charAt(0)) + word.substring(1);
+    }
 
     /**
      * Get configured world transition commands.
