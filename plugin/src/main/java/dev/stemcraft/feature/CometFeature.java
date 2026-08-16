@@ -3,6 +3,7 @@ package dev.stemcraft.feature;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigSection;
+import dev.stemcraft.api.service.comet.CometLoot;
 import dev.stemcraft.api.service.comet.CometService;
 import org.bukkit.Chunk;
 import org.bukkit.Color;
@@ -15,6 +16,7 @@ import org.bukkit.Sound;
 import org.bukkit.Tag;
 import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.entity.BlockDisplay;
 import org.bukkit.entity.Display;
 import org.bukkit.entity.LivingEntity;
@@ -97,12 +99,22 @@ public final class CometFeature extends BaseFeature implements CometService {
 
     @Override
     public void launch(Location impact) {
+        launch(impact, new CometLoot[0]);
+    }
+
+    @Override
+    public void launch(Location impact, CometLoot... loot) {
         double angle = ThreadLocalRandom.current().nextDouble(Math.PI * 2.0d);
-        launch(impact, new Vector(Math.cos(angle), 0.0d, Math.sin(angle)));
+        launch(impact, new Vector(Math.cos(angle), 0.0d, Math.sin(angle)), loot);
     }
 
     @Override
     public void launch(Location impact, Vector direction) {
+        launch(impact, direction, new CometLoot[0]);
+    }
+
+    @Override
+    public void launch(Location impact, Vector direction, CometLoot... loot) {
         if (impact.getWorld() == null) throw new IllegalArgumentException("Impact location must have a world");
         Vector horizontal = direction.clone().setY(0.0d);
         if (horizontal.lengthSquared() < 0.001d) {
@@ -110,8 +122,10 @@ public final class CometFeature extends BaseFeature implements CometService {
         }
         horizontal.normalize();
         Location target = impact.clone();
+        List<CometLoot> requestedLoot = List.of(loot.clone());
         if (!STEMCraft.getPlugin().getServer().isPrimaryThread()) {
-            api.tasks().runLater(0L, () -> launch(target, horizontal));
+            api.tasks().runLater(0L, () -> launch(target, horizontal,
+                requestedLoot.toArray(CometLoot[]::new)));
             return;
         }
 
@@ -126,10 +140,10 @@ public final class CometFeature extends BaseFeature implements CometService {
         double approachLength = (safeStartY - target.getY()) / -approach.getY();
         Location start = target.clone().subtract(approach.clone().multiply(approachLength));
         start.setY(safeStartY);
-        launchComet(start, target);
+        launchComet(start, target, requestedLoot);
     }
 
-    private void launchComet(Location start, Location impact) {
+    private void launchComet(Location start, Location impact, List<CometLoot> loot) {
         World world = impact.getWorld();
         Vector horizontalDirection = impact.toVector().subtract(start.toVector()).setY(0.0d).normalize();
         Set<Chunk> crashChunks = loadCrashChunks(world, impact, horizontalDirection);
@@ -178,7 +192,7 @@ public final class CometFeature extends BaseFeature implements CometService {
             if (age[0] >= flightTicks) {
                 flightChunks.forEach(chunk -> chunk.removePluginChunkTicket(STEMCraft.getPlugin()));
                 flightChunks.clear();
-                beginImpact(taskId, displays, start, impact, crashChunks);
+                beginImpact(taskId, displays, start, impact, crashChunks, loot);
             }
         });
         api.tasks().runLater(flightTicks + impactExplosions * 3L + 100L,
@@ -266,7 +280,7 @@ public final class CometFeature extends BaseFeature implements CometService {
     }
 
     private void beginImpact(String taskId, List<BlockDisplay> displays, Location start, Location impact,
-                             Set<Chunk> crashChunks) {
+                             Set<Chunk> crashChunks, List<CometLoot> loot) {
         finish(taskId, displays);
         World world = impact.getWorld();
         Vector crashDirection = impact.toVector().subtract(start.toVector()).setY(0.0d).normalize();
@@ -298,6 +312,7 @@ public final class CometFeature extends BaseFeature implements CometService {
                 .multiply(explosionPower + geodeRadius * 0.5d));
             if (!waterImpact) scatterMagma(world, impact);
             createPartialGeode(world, terminal, terminalDirection);
+            scatterLoot(world, terminal, loot);
             if (waterImpact) wakeNearbyWater(world, impact, 28);
             crashChunks.forEach(chunk -> chunk.removePluginChunkTicket(STEMCraft.getPlugin()));
             crashChunks.clear();
@@ -410,6 +425,10 @@ public final class CometFeature extends BaseFeature implements CometService {
         if (material.isAir() || block.isLiquid() || !material.isSolid()) return false;
         if (Tag.LEAVES.isTagged(material) || Tag.LOGS.isTagged(material) || Tag.PLANKS.isTagged(material)) return false;
 
+        return isNaturalTerrain(material);
+    }
+
+    private boolean isNaturalTerrain(Material material) {
         // Debris belongs in the terrain, never on player builds, vegetation, or other temporary surfaces.
         String name = material.name();
         return material == Material.GRASS_BLOCK
@@ -459,6 +478,55 @@ public final class CometFeature extends BaseFeature implements CometService {
                 }
             }
         }
+    }
+
+    private void scatterLoot(World world, Location terminal, List<CometLoot> loot) {
+        if (loot.isEmpty()) return;
+        Set<Block> occupied = new LinkedHashSet<>();
+        int radius = geodeRadius + 6;
+        for (CometLoot entry : loot) {
+            int amount = ThreadLocalRandom.current().nextInt(entry.minimum(), entry.maximum() + 1);
+            int attempts = Math.max(80, amount * 100);
+            while (amount > 0 && attempts-- > 0) {
+                int x = ThreadLocalRandom.current().nextInt(-radius, radius + 1);
+                int y = ThreadLocalRandom.current().nextInt(-radius, radius + 1);
+                int z = ThreadLocalRandom.current().nextInt(-radius, radius + 1);
+                if (x * x + y * y + z * z > radius * radius) continue;
+                Block block = world.getBlockAt(terminal.getBlockX() + x,
+                    terminal.getBlockY() + y, terminal.getBlockZ() + z);
+                if (occupied.contains(block) || !isExposedLootSurface(block)) continue;
+                block.setType(entry.material(), false);
+                occupied.add(block);
+                amount--;
+            }
+        }
+    }
+
+    private boolean isExposedLootSurface(Block block) {
+        Material material = block.getType();
+        if (!material.isSolid() || material == Material.BEDROCK
+            || Tag.LEAVES.isTagged(material) || Tag.LOGS.isTagged(material) || Tag.PLANKS.isTagged(material)) {
+            return false;
+        }
+        return isReplaceableLootTerrain(material)
+            && (isOpen(block.getRelative(BlockFace.UP))
+            || isOpen(block.getRelative(BlockFace.DOWN))
+            || isOpen(block.getRelative(BlockFace.NORTH))
+            || isOpen(block.getRelative(BlockFace.SOUTH))
+            || isOpen(block.getRelative(BlockFace.EAST))
+            || isOpen(block.getRelative(BlockFace.WEST)));
+    }
+
+    private boolean isReplaceableLootTerrain(Material material) {
+        return isNaturalTerrain(material)
+            || material == Material.SMOOTH_BASALT
+            || material == Material.CALCITE
+            || material == Material.AMETHYST_BLOCK
+            || material == Material.BUDDING_AMETHYST;
+    }
+
+    private boolean isOpen(Block block) {
+        return block.getType().isAir() || block.isLiquid();
     }
 
     private void finish(String taskId, List<BlockDisplay> displays) {

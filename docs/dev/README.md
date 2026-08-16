@@ -6,6 +6,7 @@ This directory contains operator and developer documentation for the STEMCraft p
 
 - [Commands](./commands.md)
 - [Features](./features.md)
+- [Comets](./comets.md)
 - [Mailboxes](./mailboxes.md)
 - [Notice Boards](./notice-boards.md)
 - [Minigame Placeholders](./minigame-placeholders.md)

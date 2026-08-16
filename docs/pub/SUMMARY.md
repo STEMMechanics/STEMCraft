@@ -9,6 +9,7 @@
 * [Survival](survival/README.md)
   * [Quality of Life](survival/quality-of-life.md)
   * [Changes from Vanilla](survival/changes-from-vanilla.md)
+  * [Comets](survival/comets.md)
   * [Mailboxes](survival/mailboxes.md)
   * [Notice Boards](survival/notice-boards.md)
   * [Graves](survival/graves.md)

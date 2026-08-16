@@ -15,6 +15,7 @@ STEMCraftAPI api = STEMCraftAPI.api();
 `STEMCraftAPI` exposes the following runtime service families:
 
 - `commands()`
+- `comets()`
 - `config()`
 - `audit()`
 - `database()`
@@ -43,6 +44,10 @@ STEMCraftAPI api = STEMCraftAPI.api();
 - `worlds()`
 
 ## Main Extension Areas
+
+### Comets
+
+`CometService` launches destructive comet events at an impact location. Calls may use a random direction or supply a horizontal direction, with optional `CometLoot` block ranges scattered around the terminal geode. See [comets.md](comets.md).
 
 ### Mailboxes
 

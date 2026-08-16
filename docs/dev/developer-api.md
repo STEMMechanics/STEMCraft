@@ -17,6 +17,7 @@ final class ExamplePluginBootstrap {
 From `STEMCraftAPI`, you can access:
 
 - `commands()` - command registration
+- `comets()` - destructive comet events with optional direction and loot
 - `config()` - YAML config files/sections
 - `database()` - SQL execution/query helpers
 - `dialogs()` - cross-platform Java/Bedrock input dialogs
@@ -99,6 +100,21 @@ api.mailboxes().send(new MailSendRequest(
 ## Gift API
 
 `GiftService` creates a single custom Gift containing multiple stacks. Gifts can be built from `ItemStack` values or compact item specifications and sent through the Mailbox API. See [Gifts](./gifts.md).
+
+## Comet API
+
+`CometService` launches a comet at an exact impact location with either a random or supplied horizontal direction. Optional `CometLoot` entries place randomized reward blocks around the terminal geode.
+
+```java
+api.comets().launch(
+    impactLocation,
+    new Vector(1, 0, -1),
+    new CometLoot(Material.GOLD_BLOCK, 2, 15),
+    new CometLoot(Material.EMERALD_BLOCK, 1, 4)
+);
+```
+
+See [Comets](./comets.md) for behavior, overloads, validation, and configuration.
 
 ## Dynamic Hologram API
 
