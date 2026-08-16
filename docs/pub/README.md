@@ -11,7 +11,7 @@ Whether you're joining for the first time, building in Survival, creating someth
 {% hint style="success" %}
 **New to STEMCraft?**
 
-Start with [Getting Started](getting-started/) to learn how to join and what to do when you first arrive.
+Start with [Getting Started](getting-started.md) to learn how to join and what to do when you first arrive.
 {% endhint %}
 
 ### Need help finding something?

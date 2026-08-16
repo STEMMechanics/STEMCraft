@@ -8,7 +8,7 @@ Zombie drops are not rubbish anymore! You can turn Rotten Flesh into farming sup
 |                                               Heals tamed wolves                                              |                                                  Attracts zombies                                                 |
 
 {% hint style="info" %}
-If these items look like an ordinary Bone or Rotten Flesh, accept the [STEMCraft resource pack](../../getting-started/resource-pack.md).
+If these items look like an ordinary Bone or Rotten Flesh, accept the [STEMCraft resource pack](/broken/pages/gEBfbQIuBp8F6L9SpNSg).
 {% endhint %}
 
 ## Compost Rotten Flesh into Bone Meal

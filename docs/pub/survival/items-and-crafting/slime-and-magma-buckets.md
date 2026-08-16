@@ -8,7 +8,7 @@ You can craft two little creatures in buckets. Both work for Java and Bedrock pl
 | Normal                                                                                                                    | Excited in a slime chunk                                                                                                                           | Collectible                                                                                                                           |
 
 {% hint style="info" %}
-If either bucket looks like an ordinary bucket, make sure you accepted the [server resource pack](../../getting-started/resource-pack.md).
+If either bucket looks like an ordinary bucket, make sure you accepted the [server resource pack](/broken/pages/gEBfbQIuBp8F6L9SpNSg).
 {% endhint %}
 
 ## Make a Slime in a Bucket

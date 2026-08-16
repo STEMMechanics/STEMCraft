@@ -4,27 +4,27 @@ Commands are short instructions typed into Minecraft chat. Start with `/`, then 
 
 ## Getting around
 
-| Command | Purpose |
-| --- | --- |
-| `/hub` | Return to the hub. |
-| `/spawn` | Return to an available world spawn. |
-| `/back` | Return to your previous stored location when allowed. |
-| `/warp <name>` | Travel to an available named warp. |
+| Command        | Purpose                                               |
+| -------------- | ----------------------------------------------------- |
+| `/hub`         | Return to the hub.                                    |
+| `/spawn`       | Return to an available world spawn.                   |
+| `/back`        | Return to your previous stored location when allowed. |
+| `/warp <name>` | Travel to an available named warp.                    |
 
 ## Helpful displays and support
 
-| Command | Purpose |
-| --- | --- |
-| `/coord` | Toggle coordinate information above your hotbar. |
-| `/coordbar` | Toggle world, time, and direction in a boss bar. |
-| `/resourcepack` | Ask the server to resend its Java resource pack. |
-| `/report <message>` | Send a player report to staff. |
+| Command             | Purpose                                          |
+| ------------------- | ------------------------------------------------ |
+| `/coord`            | Toggle coordinate information above your hotbar. |
+| `/coordbar`         | Toggle world, time, and direction in a boss bar. |
+| `/resourcepack`     | Ask the server to resend its Java resource pack. |
+| `/report <message>` | Send a player report to staff.                   |
 
-Read [Sleeping, Coordinates & Worlds](../survival/sleeping-and-navigation.md) for pictures of the displays. If a texture looks wrong, see the [Resource Pack guide](../getting-started/resource-pack.md). If somebody is breaking the rules, read [Reporting Players](../safety-and-community/reporting.md).
+Read [Sleeping, Coordinates & Worlds](../survival/sleeping-and-navigation.md) for pictures of the displays. If a texture looks wrong, see the [Resource Pack guide](/broken/pages/gEBfbQIuBp8F6L9SpNSg). If somebody is breaking the rules, read [Reporting Players](../safety-and-community/reporting.md).
 
 ## Minigames
 
-The plugin includes `/bedwars`, `/boatrace`, `/bridge`, `/minefield`, `/nightfall`, `/parkour`, `/skyblock`, and `/tntrun`. Player choices such as `list`, `info`, `join`, `spectate`, and `leave` may be available. The lobby's [Minigame guide](../minigames/README.md), menus, signs, and portals are usually the easiest way to begin.
+The plugin includes `/bedwars`, `/boatrace`, `/bridge`, `/minefield`, `/nightfall`, `/parkour`, `/skyblock`, and `/tntrun`. Player choices such as `list`, `info`, `join`, `spectate`, and `leave` may be available. The lobby's [Minigame guide](../minigames/), menus, signs, and portals are usually the easiest way to begin.
 
 {% hint style="warning" %}
 Never type a command that another player gives you unless you understand what it does. Ask a staff member if you are unsure.

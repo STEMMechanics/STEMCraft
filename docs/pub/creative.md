@@ -2,8 +2,7 @@
 
 Want to build without worrying about gathering resources? The **Creative world** gives you your own plot where you can build, experiment and create using Creative mode.
 
-> 📷 **IMAGE: Creative world overview**\
-> A wide screenshot looking across the Creative plots, ideally showing several interesting player builds.
+<figure><img src=".gitbook/assets/creative-view.png" alt=""><figcaption></figcaption></figure>
 
 {% hint style="info" %}
 The Creative world is separate from Survival. Builds and items cannot be transferred between the two worlds.
@@ -29,8 +28,7 @@ Before you can start building, you'll need a plot of your own.
 3. Type `/plot claim`.
 4. That's it! The plot is now yours and you can start building.
 
-> 📷 **IMAGE: Empty Creative plot**\
-> Screenshot from inside an unclaimed plot. Include the surrounding road or plot boundary so it's obvious what area the player will be claiming.
+<figure><img src=".gitbook/assets/empty-plot.png" alt=""><figcaption></figcaption></figure>
 
 {% hint style="success" %}
 **Want us to find a plot for you?**

@@ -1,11 +1,7 @@
 # Table of contents
 
 * [Welcome](README.md)
-* [Getting Started](getting-started/README.md)
-  * [Connecting](getting-started/connecting.md)
-  * [Java & Bedrock](getting-started/java-and-bedrock.md)
-  * [Resource Pack](getting-started/resource-pack.md)
-  * [SimpleChat Voice Chat](getting-started/voice-chat.md)
+* [Getting Started](getting-started.md)
 * [Creative](creative.md)
 * [Survival](survival/README.md)
   * [Sleeping, Coordinates & Worlds](survival/sleeping-and-navigation.md)
