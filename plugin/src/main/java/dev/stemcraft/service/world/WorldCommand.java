@@ -94,6 +94,8 @@ public class WorldCommand {
                 .tabCompletion("delete", "{world}")
                 .tabCompletion("info")
                 .tabCompletion("info", "{world-any}")
+                .tabCompletion("displayname", "{world-any}")
+                .tabCompletion("displayname", "{world-any}", "clear")
                 .tabCompletion("load", "{world-offline}")
                 .tabCompletion("unload", "{world}")
                 .tabCompletion("list")
@@ -147,6 +149,7 @@ public class WorldCommand {
             case "create" -> handleSubCommandCreate(ctx);
             case "delete" -> handleSubCommandDelete(ctx);
             case "info" -> handleSubCommandInfo(ctx);
+            case "displayname" -> handleSubCommandDisplayName(ctx);
             case "load" -> handleSubCommandLoad(ctx);
             case "unload" -> handleSubCommandUnload(ctx);
             case "list" -> handleSubCommandList(ctx);
@@ -355,6 +358,42 @@ public class WorldCommand {
         }
 
         renderUnloadedWorldInfo(ctx, requestedName);
+    }
+
+    /**
+     * Set or clear the player-facing display name for a world.
+     *
+     * @param ctx The command context.
+     */
+    public void handleSubCommandDisplayName(CommandContext ctx) {
+        ctx.checkArgsSizeAtLeast(3, "WORLD_COMMAND_USAGE_DISPLAY_NAME");
+        String worldName = ctx.getArg(1);
+        if (!api.worlds().worldExists(worldName) && Bukkit.getWorld(worldName) == null) {
+            ctx.returnError("WORLD_NOT_FOUND", "world", worldName);
+            return;
+        }
+
+        String requestedName = ctx.getArgsAsString(2, "").trim();
+        ConfigSection config = worldService.getConfigSection(worldName);
+        if (requestedName.equalsIgnoreCase("clear")) {
+            config.set("display-name", null);
+            config.save();
+            ctx.returnSuccess(
+                "WORLD_DISPLAY_NAME_CLEARED",
+                "world", worldName,
+                "display_name", WorldService.defaultDisplayName(worldName)
+            );
+            return;
+        }
+
+        if (requestedName.isBlank()) {
+            ctx.returnError("WORLD_COMMAND_USAGE_DISPLAY_NAME");
+            return;
+        }
+
+        config.set("display-name", requestedName);
+        config.save();
+        ctx.returnSuccess("WORLD_DISPLAY_NAME_SET", "world", worldName, "display_name", requestedName);
     }
 
     /**
@@ -722,6 +761,7 @@ public class WorldCommand {
         ConfigSection config = worldService.getConfigSection(world);
 
         ctx.info("World '" + world.getName() + "':");
+        ctx.info(" - Display name: " + describeDisplayName(world.getName(), config));
         ctx.info(" - Status: loaded");
         ctx.info(" - Environment: " + formatEnvironment(world.getEnvironment()));
         ctx.info(" - UUID: " + world.getUID());
@@ -744,6 +784,7 @@ public class WorldCommand {
         ConfigSection config = worldService.getExistingConfigSection(worldName);
 
         ctx.info("World '" + worldName + "':");
+        ctx.info(" - Display name: " + describeDisplayName(worldName, config));
         ctx.info(" - Status: unloaded");
         ctx.info(" - Environment: " + formatEnvironment(WorldUtil.resolveEnvironment(worldName)));
         ctx.info(" - Generator: " + describeConfiguredGenerator(config));
@@ -920,6 +961,13 @@ public class WorldCommand {
         Object rawOptions = generatorSection.get("options");
         String options = rawOptions instanceof String value ? value.trim() : "";
         return formatGeneratorDetail(key, options);
+    }
+
+    static @NotNull String describeDisplayName(@NotNull String worldName, @Nullable ConfigSection config) {
+        String configured = config == null ? "" : config.getString("display-name", "").trim();
+        return configured.isEmpty()
+            ? WorldService.defaultDisplayName(worldName) + " (automatic)"
+            : configured + " (custom)";
     }
 
     private @NotNull String describeWeather(@NotNull World world) {
