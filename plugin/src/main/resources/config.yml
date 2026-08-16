@@ -385,6 +385,31 @@ player_logs:
         - ".*_ORE"
         - "ANCIENT_DEBRIS"
 
+rotten-flesh-uses:
+  enabled: true
+  composting:
+    enabled: true
+  dog-treat:
+    heal: 12.0
+    love-mode-ticks: 600
+  zombie-bait:
+    carried-range-multiplier: 1.5
+    held-range-multiplier: 2.0
+    dropped-range: 20.0
+    consume-distance: 1.5
+    path-speed: 1.1
+    update-ticks: 10
+  stew:
+    night-vision-ticks: 400
+    hunger-ticks: 200
+
+iron-golem-poppy:
+  enabled: true
+  range: 10.0
+  path-speed: 1.0
+  switch-advantage: 2.0
+  update-ticks: 10
+
 recipes:
   # Remove some annoying / useless recipes
   remove:
