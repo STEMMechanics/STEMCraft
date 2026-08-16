@@ -11,29 +11,30 @@ This wiki mirrors the current source tree and is intended to give server operato
 
 ## Start Here
 
-- [Architecture](./Architecture)
-- [Services](./Services)
-- [Features](./Features)
-- [Commands](./Commands)
-- [API](./API)
-- [Minigames](./Minigames)
-- [Configuration](./Configuration)
+- [Architecture](./Architecture.md)
+- [Services](./Services.md)
+- [Features](./Features.md)
+- [Commands](./Commands.md)
+- [API](./API.md)
+- [Minigames](./Minigames.md)
+- [Configuration](./Configuration.md)
 
 ## Audience
 
-- Server owners: start with [Features](./Features), [Commands](./Commands), and [Configuration](./Configuration)
-- Plugin developers: start with [API](./API), [Services](./Services), and [Architecture](./Architecture)
+- Server owners: start with [Features](./Features.md), [Commands](./Commands.md), and [Configuration](./Configuration.md)
+- Plugin developers: start with [API](./API.md), [Services](./Services.md), and [Architecture](./Architecture.md)
 - Contributors: use this wiki as the high-level index, then follow the package paths back into source
 
 ## Source of Truth
 
-The wiki content is authored from this repository under `docs/wiki`.
+The wiki content is authored from this repository under `docs/dev`.
 
 - Bootstrap and registration flow: `plugin/src/main/java/dev/stemcraft/STEMCraft.java`
 - Public API: `api/src/main/java/dev/stemcraft/api`
 - Runtime implementations: `plugin/src/main/java/dev/stemcraft`
-- Operator docs already in-repo: `docs/`
+- Developer and operator docs: `docs/dev/`
+- Player handbook: `docs/pub/`
 
 ## Publishing Model
 
-When `docs/wiki/**` changes on the repository default branch, GitHub Actions syncs this directory into the GitHub wiki repository.
+When `docs/dev/**` changes on the repository default branch, GitHub Actions syncs this directory into the GitHub wiki repository.

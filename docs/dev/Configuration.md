@@ -9,7 +9,7 @@ STEMCraft uses a mix of YAML configuration, locale files, bundled defaults, and 
 | `config.yml` | Primary operator configuration |
 | `plugin/src/main/resources/locales/*.yml` | Locale keys and user-facing text |
 | `docs/` | In-repo operator and developer documentation |
-| `docs/wiki/` | Source content for the GitHub wiki |
+| `docs/dev/` | Developer/admin documentation and source content for the GitHub wiki |
 | `data-packs/` and resource-pack data | Resource-pack and related generated content |
 | SQLite DB | Runtime persistence for stats, punishments, reports, tasks, and other mutable state |
 
@@ -80,6 +80,6 @@ Examples of DB-backed runtime state:
 
 The GitHub wiki is sourced from this directory:
 
-- `docs/wiki`
+- `docs/dev`
 
 After changes are merged into the repository default branch, the `wiki-sync` workflow publishes them to the GitHub wiki repository.
