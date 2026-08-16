@@ -234,6 +234,18 @@ blood-moon-comets:
     DIAMOND_BLOCK: 0-2
 ```
 
+All comet settings and loot entries can also be managed in-game:
+
+- `/nightfall comets <arena>` displays the effective settings.
+- `/nightfall comets <arena> set <setting> <value>` changes a setting.
+- `/nightfall comets <arena> loot` lists the loot table.
+- `/nightfall comets <arena> addloot <material> <minimum> <maximum>` adds an entry.
+- `/nightfall comets <arena> setloot <number> <material> <minimum> <maximum>` replaces an entry.
+- `/nightfall comets <arena> removeloot <number>` removes an entry.
+
+Supported setting names are `enabled`, `startnight`, `chance`, `chanceincrease`, `maximumchance`,
+`maximumpernight`, `minimumdistance`, `maximumdistance`, `edgebuffer`, and `pathsafetylength`.
+
 Blood Moon builder zombies do not create blocks. When stuck, they may relocate a nearby soft terrain block
 (dirt variants, grass, podzol, mycelium, or mud) to bridge or climb. Stone, wood, ores, and other harder or
 valuable blocks are not eligible. `blood-moon-builder-source-removal-chance` controls whether the source
