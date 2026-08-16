@@ -300,8 +300,8 @@ distance_difficulty:
 chat:
   format: "{prefix}{player}: {message}{suffix}"
   filter_command: ""
-  spam_cooldown: 3
-  spam_message: "Please do not spam the chat"
+  duplicate_message_limit: 2
+  duplicate_message_warning: "Please do not repeat the same message"
   content_filter:
     enabled: true
     minimum_severity: mild
