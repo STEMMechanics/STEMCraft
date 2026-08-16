@@ -208,6 +208,72 @@ Each built-in minigame owns its own command namespace. These commands typically 
 
 The exact subcommands differ by minigame because each game has different arena data requirements.
 
+## Nightfall Blood Moon Comets
+
+Nightfall arenas can launch treasure-bearing comets during later Blood Moons. The impact is selected near
+the surviving player cluster while keeping the configured crash corridor inside the arena and away from
+the play spawn, spectator spawn, and generators. Comet changes are recorded by the arena world-change
+session and are restored with the rest of the arena.
+
+```yml
+blood-moon-comets:
+  enabled: true
+  start-night: 8
+  chance: 20
+  chance-increase-per-night: 10
+  maximum-chance: 60
+  maximum-per-night: 1
+  minimum-player-distance: 25
+  maximum-player-distance: 50
+  arena-edge-buffer: 30
+  path-safety-length: 120
+  loot:
+    GOLD_BLOCK: 2-8
+    EMERALD_BLOCK: 1-4
+    IRON_BLOCK: 3-10
+    DIAMOND_BLOCK: 0-2
+```
+
+All comet settings and loot entries can also be managed in-game:
+
+- `/nightfall comets <arena>` displays the effective settings.
+- `/nightfall comets <arena> set <setting> <value>` changes a setting.
+- `/nightfall comets <arena> loot` lists the loot table.
+- `/nightfall comets <arena> addloot <material> <minimum> <maximum>` adds an entry.
+- `/nightfall comets <arena> setloot <number> <material> <minimum> <maximum>` replaces an entry.
+- `/nightfall comets <arena> removeloot <number>` removes an entry.
+
+Supported setting names are `enabled`, `startnight`, `chance`, `chanceincrease`, `maximumchance`,
+`maximumpernight`, `minimumdistance`, `maximumdistance`, `edgebuffer`, and `pathsafetylength`.
+
+Blood Moon builder zombies do not create blocks. When stuck, they may relocate a nearby soft terrain block
+(dirt variants, grass, podzol, mycelium, or mud) to bridge or climb. Stone, wood, ores, and other harder or
+valuable blocks are not eligible. `blood-moon-builder-source-removal-chance` controls whether the source
+terrain is actually removed; it defaults to `70`, giving the zombie a 30% chance to duplicate the soft block.
+It can also be changed with
+`/nightfall set <arena> bloodmoonbuildersourceremovalchance <0-100>`.
+
+## Nightfall Random Match Lobbies
+
+A Nightfall arena may define one or more lobby locations. When the first player joins an empty waiting
+match, one location is selected randomly and retained for every player joining that match. The selection is
+cleared when the lobby empties or the match resets. Existing arenas with only `lobby` configured are treated
+as a one-location list.
+
+```yml
+lobby: 0.5,70,0.5,0,0
+lobby-locations:
+  - 0.5,70,0.5,0,0
+  - 450.5,75,-220.5,90,0
+```
+
+Administration commands:
+
+- `/nightfall lobbies <arena>`
+- `/nightfall addlobby <arena>`
+- `/nightfall setlobby <arena> <number>`
+- `/nightfall removelobby <arena> <number>`
+
 ## Integration Points
 
 For plugin developers, the important API types are:

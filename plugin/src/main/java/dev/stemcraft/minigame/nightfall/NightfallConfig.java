@@ -4,6 +4,7 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.minigame.MiniGameArena;
 import dev.stemcraft.api.model.SCRegion;
+import dev.stemcraft.api.service.comet.CometLoot;
 import dev.stemcraft.api.util.LocationUtil;
 import dev.stemcraft.api.util.StringUtil;
 import dev.stemcraft.exception.MiniGameInvalidArenaConfigException;
@@ -30,10 +31,12 @@ public class NightfallConfig {
     private static final String RECOVERY_WEATHER_KEY = "saved-weather-setting";
 
     private final STEMCraftAPI api;
+    private final NightfallMiniGame nightfall;
     private ConfigSection config;
 
     public NightfallConfig(STEMCraftAPI api, NightfallMiniGame nightfall) {
         this.api = api;
+        this.nightfall = nightfall;
     }
 
     public void onEnable(ConfigSection config) {
@@ -59,6 +62,8 @@ public class NightfallConfig {
         if (lobby == null) {
             lobby = spawn;
         }
+        List<Location> lobbyLocations = loadOptionalLocations(section, world, arenaId, "lobby-locations");
+        if (lobbyLocations.isEmpty()) lobbyLocations = List.of(lobby.clone());
         Location spectator = loadLocation(section, world, arenaId, "spectator", false);
         if (spectator == null) {
             spectator = lobby;
@@ -92,6 +97,20 @@ public class NightfallConfig {
         double bloodMoonZombieSpawnMultiplier = section.getDouble("blood-moon-zombie-spawn-multiplier", 2.0d);
         int bloodMoonBabyZombieChancePercent = section.getInt("blood-moon-baby-zombie-chance", 20);
         int bloodMoonTntZombieChancePercent = section.getInt("blood-moon-tnt-zombie-chance", 3);
+        BloodMoonEscalation escalationDefaults = BloodMoonEscalation.defaults();
+        BloodMoonEscalation bloodMoonEscalation = new BloodMoonEscalation(
+            section.getInt("blood-moon-tnt-chance-increase-per-night", escalationDefaults.tntIncreasePerNight()),
+            section.getInt("blood-moon-tnt-maximum-chance", escalationDefaults.tntMaximumChance()),
+            section.getInt("blood-moon-bucket-start-night", escalationDefaults.bucketStartNight()),
+            section.getInt("blood-moon-sponge-start-night", escalationDefaults.spongeStartNight()),
+            section.getInt("blood-moon-sponge-radius", escalationDefaults.spongeRadius()),
+            section.getInt("blood-moon-builder-start-night", escalationDefaults.builderStartNight()),
+            section.getInt("blood-moon-axe-start-night", escalationDefaults.axeStartNight()),
+            section.getInt("blood-moon-knockback-start-night", escalationDefaults.knockbackStartNight()),
+            section.getDouble("blood-moon-knockback-resistance", escalationDefaults.knockbackResistance()));
+        int bloodMoonBuilderSourceRemovalChancePercent = Math.clamp(
+            section.getInt("blood-moon-builder-source-removal-chance", 70), 0, 100);
+        BloodMoonCometSettings bloodMoonComets = loadBloodMoonComets(section, arenaId);
         String name = section.getString("name", StringUtil.beautify(arenaId));
         List<Location> generatorLocations = loadLocations(section, world, arenaId);
         Map<Integer, List<Material>> dropItems = loadDropItems(section, arenaId);
@@ -105,6 +124,7 @@ public class NightfallConfig {
             name,
             worldName,
             lobby,
+            lobbyLocations,
             spectator,
             spawn,
             arenaRegion,
@@ -134,6 +154,9 @@ public class NightfallConfig {
             bloodMoonZombieSpawnMultiplier,
             bloodMoonBabyZombieChancePercent,
             bloodMoonTntZombieChancePercent,
+            bloodMoonEscalation,
+            bloodMoonBuilderSourceRemovalChancePercent,
+            bloodMoonComets,
             generatorLocations,
             dropItems,
             pendingWorldRollback,
@@ -154,6 +177,7 @@ public class NightfallConfig {
         arenaConfig.set("world", arena.world().getName());
         arenaConfig.set("name", arena.getName());
         arenaConfig.set("lobby", serializeLocation(lobbySpawn, arena.id(), "lobby"));
+        arenaConfig.set("lobby-locations", serializeLocations(nightfall.lobbyLocations(arena), arena.id()));
         arenaConfig.set("spectator", serializeLocation(spectatorSpawn, arena.id(), "spectator"));
         arenaConfig.set("spawn", serializeLocation(playSpawn, arena.id(), "spawn"));
         arenaConfig.set("arena", serializeRegion(arena.get("arenaRegion", SCRegion.class), arena.id()));
@@ -187,6 +211,20 @@ public class NightfallConfig {
         arenaConfig.remove("blood-moon-baby-zombies");
         arenaConfig.set("blood-moon-baby-zombie-chance", arena.get("bloodMoonBabyZombieChancePercent", Integer.class, 20));
         arenaConfig.set("blood-moon-tnt-zombie-chance", arena.get("bloodMoonTntZombieChancePercent", Integer.class, 3));
+        BloodMoonEscalation escalation = arena.get("bloodMoonEscalation", BloodMoonEscalation.class, BloodMoonEscalation.defaults());
+        arenaConfig.set("blood-moon-tnt-chance-increase-per-night", escalation.tntIncreasePerNight());
+        arenaConfig.set("blood-moon-tnt-maximum-chance", escalation.tntMaximumChance());
+        arenaConfig.set("blood-moon-bucket-start-night", escalation.bucketStartNight());
+        arenaConfig.set("blood-moon-sponge-start-night", escalation.spongeStartNight());
+        arenaConfig.set("blood-moon-sponge-radius", escalation.spongeRadius());
+        arenaConfig.set("blood-moon-builder-start-night", escalation.builderStartNight());
+        arenaConfig.set("blood-moon-builder-source-removal-chance",
+            nightfall.bloodMoonBuilderSourceRemovalChancePercent(arena));
+        arenaConfig.set("blood-moon-axe-start-night", escalation.axeStartNight());
+        arenaConfig.set("blood-moon-knockback-start-night", escalation.knockbackStartNight());
+        arenaConfig.set("blood-moon-knockback-resistance", escalation.knockbackResistance());
+        writeBloodMoonComets(arenaConfig, arena.get("bloodMoonComets", BloodMoonCometSettings.class,
+            BloodMoonCometSettings.defaults()));
         if (generatorLocations(arena).isEmpty()) {
             arenaConfig.set("generator-locations", new ArrayList<>());
         } else {
@@ -345,6 +383,23 @@ public class NightfallConfig {
         return locations;
     }
 
+    private @NotNull List<Location> loadOptionalLocations(@NotNull ConfigSection section, @NotNull World world,
+                                                           @NotNull String arenaId, @NotNull String key) {
+        List<String> values = section.getStringList(key);
+        List<Location> locations = new ArrayList<>();
+        int index = 0;
+        for (String value : values) {
+            index++;
+            Location location = LocationUtil.deserialize(value, world);
+            if (location == null || location.getWorld() == null || !world.equals(location.getWorld())) {
+                throw new MiniGameInvalidArenaConfigException(
+                    "Location '" + key + "' #" + index + " for arena '" + arenaId + "' is invalid.");
+            }
+            locations.add(location);
+        }
+        return locations;
+    }
+
     private @NotNull Map<Integer, List<Material>> loadDropItems(@NotNull ConfigSection section, @NotNull String arenaId) {
         ConfigSection itemSection = section.getSection("items", false);
         if (itemSection == null) {
@@ -395,6 +450,76 @@ public class NightfallConfig {
             throw new MiniGameInvalidArenaConfigException("Arena '" + arenaId + "' must define at least one drop item tier.");
         }
         return new LinkedHashMap<>(items);
+    }
+
+    private @NotNull BloodMoonCometSettings loadBloodMoonComets(@NotNull ConfigSection arenaSection,
+                                                                  @NotNull String arenaId) {
+        BloodMoonCometSettings defaults = BloodMoonCometSettings.defaults();
+        ConfigSection section = arenaSection.getSection("blood-moon-comets", false);
+        if (section == null) return defaults;
+
+        ConfigSection lootSection = section.getSection("loot", false);
+        List<CometLoot> loot = new ArrayList<>();
+        if (lootSection == null) {
+            loot.addAll(defaults.loot());
+        } else {
+            for (String key : lootSection.getKeys(false)) {
+                Material material = Material.matchMaterial(key);
+                if (material == null || material.isAir() || !material.isBlock()) {
+                    throw new MiniGameInvalidArenaConfigException(
+                        "Arena '" + arenaId + "' has an invalid comet loot block '" + key + "'.");
+                }
+                int[] range = parseCometLootRange(lootSection.getString(key), arenaId, key);
+                loot.add(new CometLoot(material, range[0], range[1]));
+            }
+        }
+
+        int minimumDistance = Math.max(0, section.getInt("minimum-player-distance", defaults.minimumPlayerDistance()));
+        int maximumDistance = Math.max(minimumDistance,
+            section.getInt("maximum-player-distance", defaults.maximumPlayerDistance()));
+        return new BloodMoonCometSettings(
+            section.getBoolean("enabled", defaults.enabled()),
+            Math.max(1, section.getInt("start-night", defaults.startNight())),
+            Math.clamp(section.getInt("chance", defaults.chancePercent()), 0, 100),
+            Math.max(0, section.getInt("chance-increase-per-night", defaults.chanceIncreasePerNight())),
+            Math.clamp(section.getInt("maximum-chance", defaults.maximumChancePercent()), 0, 100),
+            Math.max(0, section.getInt("maximum-per-night", defaults.maximumPerNight())),
+            minimumDistance,
+            maximumDistance,
+            Math.max(0, section.getInt("arena-edge-buffer", defaults.arenaEdgeBuffer())),
+            Math.max(1, section.getInt("path-safety-length", defaults.pathSafetyLength())),
+            loot);
+    }
+
+    private int[] parseCometLootRange(String value, String arenaId, String material) {
+        String[] parts = value == null ? new String[0] : value.trim().split("-", 2);
+        try {
+            int minimum = Integer.parseInt(parts[0].trim());
+            int maximum = parts.length == 1 ? minimum : Integer.parseInt(parts[1].trim());
+            if (minimum < 0 || maximum < minimum || maximum > 4096) throw new NumberFormatException();
+            return new int[] {minimum, maximum};
+        } catch (NumberFormatException | ArrayIndexOutOfBoundsException exception) {
+            throw new MiniGameInvalidArenaConfigException("Arena '" + arenaId
+                + "' has an invalid comet loot range for '" + material + "': '" + value + "'.");
+        }
+    }
+
+    private void writeBloodMoonComets(ConfigSection arenaSection, BloodMoonCometSettings settings) {
+        ConfigSection section = arenaSection.createSection("blood-moon-comets", true);
+        section.set("enabled", settings.enabled());
+        section.set("start-night", settings.startNight());
+        section.set("chance", settings.chancePercent());
+        section.set("chance-increase-per-night", settings.chanceIncreasePerNight());
+        section.set("maximum-chance", settings.maximumChancePercent());
+        section.set("maximum-per-night", settings.maximumPerNight());
+        section.set("minimum-player-distance", settings.minimumPlayerDistance());
+        section.set("maximum-player-distance", settings.maximumPlayerDistance());
+        section.set("arena-edge-buffer", settings.arenaEdgeBuffer());
+        section.set("path-safety-length", settings.pathSafetyLength());
+        ConfigSection loot = section.createSection("loot", true);
+        for (CometLoot entry : settings.loot()) {
+            loot.set(entry.material().name(), entry.minimum() + "-" + entry.maximum());
+        }
     }
 
     private @NotNull Map<Integer, List<Material>> convertLegacyDropBlocks(@NotNull ConfigSection blockSection, @NotNull String arenaId) {

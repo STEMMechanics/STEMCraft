@@ -453,12 +453,14 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         }
 
         service.storePreviousPlayerState(player);
-        service.prepareActivePlayer(player);
         if (mgPlayer == null) {
             mgPlayer = new MiniGamePlayerImpl(service, player);
         }
         players.put(player, mgPlayer);
         service.registerPlayerArena(player, this, false);
+        // Register occupancy before changing game mode so features which ignore
+        // minigame-managed transitions (such as GameModeInventories) can see it.
+        service.prepareActivePlayer(player);
 
         if (mgPlayer.getTeam() != null) {
             MiniGameTeamImpl preservedTeam = teams.get(mgPlayer.getTeam());
@@ -537,13 +539,14 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         }
 
         service.storePreviousPlayerState(player);
-        service.prepareSpectatorPlayer(player);
         if (spectatorProfile == null) {
             spectatorProfile = new MiniGamePlayerImpl(service, player);
         }
         spectators.add(player);
         spectatorProfiles.put(player, spectatorProfile);
         service.registerPlayerArena(player, this, true);
+        // As with active players, occupancy must exist before the game-mode event.
+        service.prepareSpectatorPlayer(player);
 
         MiniGameArenaHandler handler = service.getHandler(namespace);
         Location location = handler.onPlayerJoinSpectator(this, player);
