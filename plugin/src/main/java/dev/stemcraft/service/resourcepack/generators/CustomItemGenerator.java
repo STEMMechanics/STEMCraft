@@ -27,6 +27,11 @@ public class CustomItemGenerator extends AbstractResourcePackGenerator {
             JavaItemVisualDefinition java = clients.java();
             writeGeneratedModel(context, java);
             writeItemDefinition(context, java);
+            for (CustomItemClientDefinition state : definition.visualStates().values()) {
+                if (state.java() == null) continue;
+                writeGeneratedModel(context, state.java());
+                writeItemDefinition(context, state.java());
+            }
         }
     }
 

@@ -26,6 +26,18 @@ The `material` controls the server-side behaviour. For food, choose an edible ba
 
 The pack directory name supplies the namespace (`stemcraft-survival` becomes `stemcraft_survival`). The item ID and single `texture` value derive the Java item/model definitions, Bedrock identifier and icon, and a stable auto-assigned custom-model-data value. `name` is reused as Bedrock's plain display name. The texture above resolves to `contents/stemcraft_survival/textures/item/fried_egg.png`, is included in the generated Java pack, and is copied into the generated Bedrock pack.
 
+Items can define internal visual states without creating another player-facing item:
+
+```yaml
+    visual-states:
+      excited:
+        texture: "item/slime_bucket_excited"
+```
+
+Apply a state with `ItemService#applyCustomItemVisualState(item, "excited")`; pass `null` to restore the normal
+visual. State changes preserve the item's logical ID and all unrelated item metadata. Each state receives
+equivalent generated Java and Bedrock/Geyser definitions.
+
 Unusual items can override only the derived values they need:
 
 ```yaml
