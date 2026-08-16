@@ -91,6 +91,7 @@
 - Messages are sent directly to the player without message prefixes.
 - Supports MiniMessage formatting plus placeholder expansion such as `{player}`, `{world}`, `{years}`, `{ordinal_year}`, and `{first_join_date}`.
 - Anniversary "cake day" broadcasts are driven by persisted first-join state in DB (`player_welcome_state`).
+- Returning welcomes can optionally append a "while you were away" summary based on recent player activity (`player_welcome_activity`).
 - Blank or missing message lists are ignored.
 
 ## Web Status Endpoint

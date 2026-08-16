@@ -256,6 +256,11 @@ player-welcome:
   first-time: []
   returning: []
   anniversaries: {}
+  away-summary:
+    enabled: true
+    limit: 3
+    heading: "<gray>While you were away:</gray>"
+    line: "<gray>-</gray> <white>{player}</white> <gray>was online {ago} ago</gray>"
   # Example:
   # first-time:
   #   - "<gold>🌟 Welcome to STEMCRAFT, {player}! 🌟"
@@ -269,6 +274,11 @@ player-welcome:
   #   - "<gray>Be kind, have fun, and keep personal information private."
   # returning:
   #   - "<green>Welcome back, {player}."
+  # away-summary:
+  #   enabled: true
+  #   limit: 3
+  #   heading: "<gray>While you were away:</gray>"
+  #   line: "<gray>-</gray> <white>{player}</white> <gray>was online {ago} ago</gray>"
   # anniversaries:
   #   "1":
   #     - "<gold>🎂 {player} is celebrating their {ordinal_year} cake day on STEMCRAFT."

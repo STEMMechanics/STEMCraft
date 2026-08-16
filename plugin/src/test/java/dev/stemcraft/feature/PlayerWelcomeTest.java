@@ -62,6 +62,17 @@ class PlayerWelcomeTest {
     }
 
     @Test
+    void formatAgoUsesHumanFriendlyBuckets() {
+        assertEquals("just now", PlayerWelcome.formatAgo(10_000L));
+        assertEquals("1 minute", PlayerWelcome.formatAgo(60_000L));
+        assertEquals("59 minutes", PlayerWelcome.formatAgo(59L * 60_000L));
+        assertEquals("1 hour", PlayerWelcome.formatAgo(60L * 60_000L));
+        assertEquals("23 hours", PlayerWelcome.formatAgo(23L * 60L * 60_000L));
+        assertEquals("1 day", PlayerWelcome.formatAgo(24L * 60L * 60_000L));
+        assertEquals("3 days", PlayerWelcome.formatAgo(3L * 24L * 60L * 60_000L));
+    }
+
+    @Test
     void messagePathRequiresYearForAnniversaryMessages() {
         assertEquals("first-time", PlayerWelcome.messagePath(PlayerWelcome.MessageKind.FIRST_TIME, null));
         assertEquals("returning", PlayerWelcome.messagePath(PlayerWelcome.MessageKind.RETURNING, null));
