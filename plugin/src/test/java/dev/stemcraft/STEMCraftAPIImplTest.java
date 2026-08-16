@@ -22,6 +22,7 @@ import dev.stemcraft.service.PunishmentServiceImpl;
 import dev.stemcraft.service.RecipeServiceImpl;
 import dev.stemcraft.service.RegionServiceImpl;
 import dev.stemcraft.service.DialogServiceImpl;
+import dev.stemcraft.api.service.comet.CometService;
 import dev.stemcraft.api.service.mailbox.MailboxService;
 import dev.stemcraft.service.resourcepack.ResourcePackServiceImpl;
 import dev.stemcraft.service.SelectionServiceImpl;
@@ -61,6 +62,7 @@ import static org.mockito.Mockito.when;
 class STEMCraftAPIImplTest {
     private static final List<String> SERVICE_ACCESSOR_NAMES = List.of(
         "audit",
+        "comets",
         "commands",
         "config",
         "database",
@@ -107,6 +109,7 @@ class STEMCraftAPIImplTest {
         when(plugin.isMaintenanceMode()).thenReturn(true);
 
         AuditServiceImpl audit = mock(AuditServiceImpl.class);
+        CometService comets = mock(CometService.class);
         CommandServiceImpl commands = mock(CommandServiceImpl.class);
         ConfigServiceImpl config = mock(ConfigServiceImpl.class);
         DatabaseServiceImpl database = mock(DatabaseServiceImpl.class);
@@ -138,6 +141,7 @@ class STEMCraftAPIImplTest {
         WorldServiceImpl worlds = mock(WorldServiceImpl.class);
 
         when(plugin.audit()).thenReturn(audit);
+        when(plugin.comets()).thenReturn(comets);
         when(plugin.commands()).thenReturn(commands);
         when(plugin.config()).thenReturn(config);
         when(plugin.database()).thenReturn(database);
@@ -170,6 +174,7 @@ class STEMCraftAPIImplTest {
 
         expectedDelegates = new LinkedHashMap<>();
         expectedDelegates.put("audit", audit);
+        expectedDelegates.put("comets", comets);
         expectedDelegates.put("commands", commands);
         expectedDelegates.put("config", config);
         expectedDelegates.put("database", database);

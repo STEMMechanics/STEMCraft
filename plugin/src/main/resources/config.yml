@@ -668,6 +668,24 @@ selection_preview:
   max_view_distance: 96.0
   flash_material: GLOWSTONE
 
+comet:
+  enabled: true
+  start-y: 290
+  landing-angle-degrees: 10.0 # flight and crash scar meet at this pitch
+  flight-ticks: 400 # 20 seconds
+  trail-length: 40.0
+  impact-explosions: 10
+  crash-scar-length: 80.0 # constrained to 50-100 blocks
+  crash-scar-radius: 6
+  explosion-power: 10.0
+  fire: true
+  warning-radius: 200
+  heat-radius: 16.0
+  lethal-heat-radius: 5.0
+  heat-damage: 8.0 # maximum damage every 5 ticks, reducing with distance
+  geode-radius: 8
+  magma-debris: 60
+
 
 bindings:
   crafting_table: "\uE120"
