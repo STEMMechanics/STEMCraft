@@ -28,7 +28,7 @@ Add a server with the address **play.stemcraft.com.au** and port **19132**.
 
 <figure><img src=".gitbook/assets/bedrock-connect.jpeg" alt="Bedrock Edition server settings"><figcaption><p>Bedrock Edition connection settings</p></figcaption></figure>
 
-### Consoles
+## Consoles
 
 {% hint style="danger" %}
 Some consoles don't include an **Add Server** option, so joining custom Minecraft servers like STEMCraft may require additional setup.
@@ -36,7 +36,7 @@ Some consoles don't include an **Add Server** option, so joining custom Minecraf
 Unfortunately, we're unable to provide support for console connection methods, as the steps vary between consoles and can involve changing your device or network settings.
 {% endhint %}
 
-### Accept the Resource Pack
+## Accept the Resource Pack
 
 When you connect, Minecraft will ask you to accept the **STEMCraft resource pack**.
 
@@ -50,7 +50,7 @@ The resource pack adds STEMCraft's custom items, textures, icons and other speci
 Reconnect and make sure you've accepted the resource pack. Java players can also type `/resourcepack` to have the pack sent again.
 {% endhint %}
 
-### Your First Join
+## Your First Join
 
 The first time you connect to STEMCraft, you may be asked a **simple maths question**.
 
@@ -58,7 +58,7 @@ Type your answer into Minecraft chat and send it. This quick check helps us keep
 
 Once you've completed the check, you're ready to explore STEMCraft!
 
-### Where Next?
+## Where Next?
 
 When you arrive, you'll start in the **STEMCraft Hub**.
 
