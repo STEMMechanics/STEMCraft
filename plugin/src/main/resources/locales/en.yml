@@ -38,6 +38,8 @@ MAINTENANCE_STATUS: "Maintenance mode is currently {state}."
 MAINTENANCE_INVALID_OPTION: "Invalid option. Use /maintenance <on|off>."
 
 DENY_SPAWN_EGG: "You do not have permission to use spawn eggs."
+SKIP_NIGHT_BOSSBAR_TITLE: "{sleeping}/{required} players sleeping"
+SKIP_NIGHT_ENOUGH_PLAYERS: "Enough players are sleeping. Skipping the night..."
 RANDOM_FIRST_SPAWN_TELEPORTED: "You were spawned at a random location in <yellow>{world}</yellow>."
 RANDOM_FIRST_SPAWN_FALLBACK: "Could not find a suitable random first spawn for {player} in world {world}; using world spawn."
 RANDOM_FIRST_SPAWN_WORLD_NOT_FOUND: "Random first spawn config references missing world {world}."
