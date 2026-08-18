@@ -31,6 +31,7 @@ import org.jetbrains.annotations.NotNull;
 import javax.annotation.Nullable;
 import java.io.File;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -67,6 +68,14 @@ public class ConfigServiceImpl extends BaseService implements ConfigService {
                 }
             }
         });
+    }
+
+    @Override
+    public void onSave() {
+        for (ConfigFile file : files.values()) if (file.isDirty()) file.save();
+        List<String> dirty = files.entrySet().stream().filter(entry -> entry.getValue().isDirty())
+            .map(Map.Entry::getKey).sorted().toList();
+        if (!dirty.isEmpty()) throw new IllegalStateException("Config files remain unsaved: " + String.join(", ", dirty));
     }
 
     /**

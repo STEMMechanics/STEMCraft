@@ -61,6 +61,9 @@ public abstract class BaseFeature {
         resetConfigCache();
     }
 
+    /** Called when all pending feature state should be persisted without disabling it. */
+    public void onSave() { }
+
     /**
      * Called when the feature is being disabled.
      */

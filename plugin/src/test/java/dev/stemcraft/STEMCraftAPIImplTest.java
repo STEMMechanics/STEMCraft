@@ -26,6 +26,7 @@ import dev.stemcraft.api.service.comet.CometService;
 import dev.stemcraft.api.service.mailbox.MailboxService;
 import dev.stemcraft.service.resourcepack.ResourcePackServiceImpl;
 import dev.stemcraft.service.SelectionServiceImpl;
+import dev.stemcraft.service.SaveServiceImpl;
 import dev.stemcraft.service.TaskServiceImpl;
 import dev.stemcraft.service.WebServiceImpl;
 import dev.stemcraft.service.command.CommandServiceImpl;
@@ -86,6 +87,7 @@ class STEMCraftAPIImplTest {
         "playerStats",
         "resourcePacks",
         "recipes",
+        "saves",
         "selections",
         "regions",
         "tabComplete",
@@ -133,6 +135,7 @@ class STEMCraftAPIImplTest {
         PlayerStatsServiceImpl playerStats = mock(PlayerStatsServiceImpl.class);
         ResourcePackServiceImpl resourcePacks = mock(ResourcePackServiceImpl.class);
         RecipeServiceImpl recipes = mock(RecipeServiceImpl.class);
+        SaveServiceImpl saves = mock(SaveServiceImpl.class);
         SelectionServiceImpl selections = mock(SelectionServiceImpl.class);
         RegionServiceImpl regions = mock(RegionServiceImpl.class);
         TabCompleteServiceImpl tabComplete = mock(TabCompleteServiceImpl.class);
@@ -165,6 +168,7 @@ class STEMCraftAPIImplTest {
         when(plugin.playerStats()).thenReturn(playerStats);
         when(plugin.resourcePack()).thenReturn(resourcePacks);
         when(plugin.recipes()).thenReturn(recipes);
+        when(plugin.saves()).thenReturn(saves);
         when(plugin.selections()).thenReturn(selections);
         when(plugin.regions()).thenReturn(regions);
         when(plugin.tabComplete()).thenReturn(tabComplete);
@@ -198,6 +202,7 @@ class STEMCraftAPIImplTest {
         expectedDelegates.put("playerStats", playerStats);
         expectedDelegates.put("resourcePacks", resourcePacks);
         expectedDelegates.put("recipes", recipes);
+        expectedDelegates.put("saves", saves);
         expectedDelegates.put("selections", selections);
         expectedDelegates.put("regions", regions);
         expectedDelegates.put("tabComplete", tabComplete);

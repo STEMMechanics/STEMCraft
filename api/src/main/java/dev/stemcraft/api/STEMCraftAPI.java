@@ -47,6 +47,7 @@ import dev.stemcraft.api.service.recipe.RecipeService;
 import dev.stemcraft.api.service.region.RegionService;
 import dev.stemcraft.api.service.resourcepack.ResourcePackService;
 import dev.stemcraft.api.service.selection.SelectionService;
+import dev.stemcraft.api.service.save.SaveService;
 import dev.stemcraft.api.service.task.TaskService;
 import dev.stemcraft.api.service.punishment.PunishmentService;
 import dev.stemcraft.api.service.tabcomplete.TabCompleteService;
@@ -195,6 +196,9 @@ public interface STEMCraftAPI {
      * Get the selection/highlight service.
      */
     SelectionService selections();
+
+    /** Get the STEMCraft and extension save coordinator. */
+    SaveService saves();
 
     /**
      * Get the region service.

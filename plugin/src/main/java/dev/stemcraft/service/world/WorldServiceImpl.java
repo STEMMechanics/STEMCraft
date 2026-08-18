@@ -295,6 +295,11 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         if(worldCommand != null) worldCommand.onDisable();
     }
 
+    @Override
+    public void onSave() {
+        if (worldChangeRecorder != null) worldChangeRecorder.onSave();
+    }
+
     /**
      * Get the world command instance.
      *

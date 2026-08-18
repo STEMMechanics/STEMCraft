@@ -39,6 +39,7 @@ import dev.stemcraft.feature.CometFeature;
 import dev.stemcraft.feature.Mailboxes;
 import dev.stemcraft.api.service.comet.CometService;
 import dev.stemcraft.api.service.mailbox.MailboxService;
+import dev.stemcraft.api.service.save.SaveReport;
 import dev.stemcraft.service.command.CommandServiceImpl;
 import dev.stemcraft.service.message.MessageServiceImpl;
 import dev.stemcraft.service.minigame.MiniGameServiceImpl;
@@ -69,10 +70,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Enumeration;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -122,6 +125,7 @@ public final class STEMCraft extends JavaPlugin {
     private RegionServiceImpl regions;
     private ResourcePackServiceImpl resourcePack;
     private SelectionServiceImpl selections;
+    private SaveServiceImpl saves;
     private TabCompleteServiceImpl tabComplete;
     private TaskServiceImpl tasks;
     private FirstJoinService firstJoin;
@@ -159,6 +163,7 @@ public final class STEMCraft extends JavaPlugin {
         // Load pre-early services
         config = new ConfigServiceImpl(this, api);
         tasks = new TaskServiceImpl(this, api);
+        saves = new SaveServiceImpl(this, api);
         tasks.onEnable();
         config.onEnable();
 
@@ -342,6 +347,13 @@ public final class STEMCraft extends JavaPlugin {
     /** {@inheritDoc} */
     @Override
     public void onDisable() {
+        if (saves != null) {
+            SaveReport report = saves.saveAll();
+            if (!report.successful()) {
+                getLogger().severe("STEMCraft shutdown save completed with " + report.failures().size() + " failure(s): "
+                    + String.join(", ", report.failures().keySet()));
+            }
+        }
         disableService(minigames);
         disableService(worlds);
         disableService(web);
@@ -372,6 +384,57 @@ public final class STEMCraft extends JavaPlugin {
         disableService(tasks);
         disableService(locales);
         disableService(messages);
+    }
+
+    /** Save all active STEMCraft features, services, configs, and registered extensions. */
+    public SaveReport saveStemCraftState() {
+        Map<String, String> failures = new LinkedHashMap<>();
+        int attempted = 0;
+        int succeeded = 0;
+
+        for (BaseFeature feature : loadedFeatures) {
+            attempted++;
+            if (runSaveParticipant("feature:" + feature.id(), feature::onSave, failures)) succeeded++;
+        }
+        for (BaseService service : loadedCoreServices()) {
+            attempted++;
+            if (runSaveParticipant("service:" + service.getId(), service::onSave, failures)) succeeded++;
+        }
+        if (saves != null) {
+            SaveReport extensions = saves.saveExtensions();
+            attempted += extensions.attempted();
+            succeeded += extensions.succeeded();
+            failures.putAll(extensions.failures());
+        }
+        return new SaveReport(attempted, succeeded, failures);
+    }
+
+    private List<BaseService> loadedCoreServices() {
+        List<BaseService> services = new ArrayList<>();
+        for (Field field : STEMCraft.class.getDeclaredFields()) {
+            if (!BaseService.class.isAssignableFrom(field.getType())) continue;
+            try {
+                Object value = field.get(this);
+                if (value instanceof BaseService service && service != saves) services.add(service);
+            } catch (IllegalAccessException exception) {
+                throw new IllegalStateException("Could not inspect STEMCraft services", exception);
+            }
+        }
+        services.sort(Comparator.comparing(BaseService::getId));
+        return services;
+    }
+
+    private boolean runSaveParticipant(String id, Runnable participant, Map<String, String> failures) {
+        try {
+            participant.run();
+            return true;
+        } catch (RuntimeException exception) {
+            String message = exception.getMessage();
+            failures.put(id, exception.getClass().getSimpleName()
+                + (message == null || message.isBlank() ? "" : ": " + message));
+            getLogger().log(java.util.logging.Level.SEVERE, "Could not save " + id, exception);
+            return false;
+        }
     }
 
     /** {@inheritDoc} */

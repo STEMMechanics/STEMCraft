@@ -155,6 +155,12 @@ public class Mailboxes extends BaseFeature implements MailboxService {
         api.tasks().cancel(QUEUE_TASK_ID);
     }
 
+    @Override
+    public void onSave() {
+        persistOpenMailboxInventories();
+        persistPendingMailDrafts();
+    }
+
     private void reloadSettings() {
         deliveryBaseDelayTicks = getConfigSection().getLong("delivery.base-delay", DEFAULT_DELIVERY_BASE_DELAY_TICKS);
         queueProcessPeriodTicks = Math.max(1L, getConfigSection().getLong("delivery.process-mail-queue", DEFAULT_QUEUE_PROCESS_PERIOD_TICKS));

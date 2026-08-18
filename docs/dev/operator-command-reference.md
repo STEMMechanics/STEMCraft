@@ -5,7 +5,8 @@ This is the active command surface registered by STEMCraft.
 ## Core / Admin
 
 - `/maintenance <on|off>`
-- `/stemcraft <status|version|reload|firstjoin|welcome>`
+- `/stemcraft <status|version|save|reload|firstjoin|welcome>`
+- `/stemcraft save` flushes pending state owned by STEMCraft and extensions registered through its Save API; Bukkit world and vanilla player saves remain the server's responsibility
 - `/stemcraft welcome <show|preview|clear|addline|insertline|setline|removeline|addblank|insertblank> <first|returning|anniversary [year]> ...`
 - `/customcommands <list|info|create|delete|setlabel|setpermission|addcommand|setcommand|removecommand>`
 - Custom command aliases run as the player by default; prefix a run entry with `server:` or `player:` to force the sender
