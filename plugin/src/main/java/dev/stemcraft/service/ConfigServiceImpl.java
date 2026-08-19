@@ -61,19 +61,13 @@ public class ConfigServiceImpl extends BaseService implements ConfigService {
      */
     @Override
     public void onEnable() {
-        api.tasks().repeating(AUTO_SAVE_INTERVAL, () -> {
-            for (ConfigFile file : files.values()) {
-                if (file.isAutoSave() && file.isDirty()) {
-                    file.save();
-                }
-            }
-        });
+        api.tasks().repeating(AUTO_SAVE_INTERVAL, onSave);
     }
 
     @Override
     public void onSave() {
-        for (ConfigFile file : files.values()) if (file.isDirty()) file.save();
-        List<String> dirty = files.entrySet().stream().filter(entry -> entry.getValue().isDirty())
+        for (ConfigFile file : files.values()) if (file.isAutoSave() && file.isDirty()) file.save();
+        List<String> dirty = files.entrySet().stream().filter(entry -> entry.getValue().isAutoSave() && entry.getValue().isDirty())
             .map(Map.Entry::getKey).sorted().toList();
         if (!dirty.isEmpty()) throw new IllegalStateException("Config files remain unsaved: " + String.join(", ", dirty));
     }
