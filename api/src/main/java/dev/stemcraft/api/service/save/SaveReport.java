@@ -10,7 +10,7 @@ import java.util.Map;
 /** Immutable result from a complete STEMCraft save checkpoint. */
 public record SaveReport(int attempted, int succeeded, Map<String, String> failures) {
     public SaveReport {
-        failures = Map.copyOf(new LinkedHashMap<>(failures));
+        failures = Map.copyOf(failures);
     }
 
     public boolean successful() { return failures.isEmpty(); }
