@@ -65,7 +65,7 @@ public class ConfigServiceImpl extends BaseService implements ConfigService {
     }
 
     @Override
-    public void onSave() {
+    public void onSave() throws IllegalStateException {
         for (ConfigFile file : files.values()) if (file.isAutoSave() && file.isDirty()) file.save();
         List<String> dirty = files.entrySet().stream().filter(entry -> entry.getValue().isAutoSave() && entry.getValue().isDirty())
             .map(Map.Entry::getKey).sorted().toList();
