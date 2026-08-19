@@ -573,7 +573,7 @@ WEBHOOK_HISTORY_SCOPE_INVALID: "Unknown history scope '{scope}'. Use send, recei
 WEBHOOK_HISTORY_ENTRY: " - {timestamp} {event} {result} status={status} delivery={delivery} target={target}"
 WEBHOOK_HISTORY_ENTRY_DETAIL: " - {timestamp} {event} {result} status={status} delivery={delivery} target={target} detail={detail}"
 
-STEMCRAFT_COMMAND_DESCRIPTION: "Show STEMCraft status, save pending state, or reload configuration."
+STEMCRAFT_COMMAND_DESCRIPTION: "Manage the STEMCraft plugin."
 STEMCRAFT_COMMAND_USAGE: "/stemcraft <status|version|save|reload [locale]>"
 STEMCRAFT_COMMAND_VERSION: "STEMCraft version {version}"
 STEMCRAFT_COMMAND_STATUS_HEADER: "STEMCraft status for version {version}:"
