@@ -78,7 +78,7 @@ public final class SaveServiceImpl extends BaseService implements SaveService {
         return new SaveReport(snapshot.size(), succeeded, failures);
     }
 
-    private String normalizeId(String id) {
+    private String normalizeId(String id) throws IllegalArgumentException {
         String normalized = Objects.requireNonNull(id, "id").trim().toLowerCase(Locale.ROOT);
         if (!normalized.matches("[a-z0-9][a-z0-9._-]*")) {
             throw new IllegalArgumentException("Save participant id must contain only letters, numbers, '.', '_' or '-'");
