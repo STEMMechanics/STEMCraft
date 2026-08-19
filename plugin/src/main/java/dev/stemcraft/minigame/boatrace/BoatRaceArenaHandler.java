@@ -17,6 +17,7 @@ import org.bukkit.Color;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
 import org.bukkit.entity.Boat;
 import org.bukkit.entity.Entity;
@@ -29,6 +30,7 @@ import org.bukkit.event.vehicle.VehicleDestroyEvent;
 import org.bukkit.event.vehicle.VehicleExitEvent;
 import org.bukkit.event.vehicle.VehicleMoveEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.projectiles.ProjectileSource;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -67,6 +69,8 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
     private static final double STARTING_GRID_LOCK_VELOCITY_SQUARED = 1.0e-4d;
     private static final String STARTING_GRID_LOCK_TASK_PREFIX = "boatrace-grid-lock:";
     private static final String BOAT_MOUNT_TASK_PREFIX = "boatrace-boat-mount:";
+    private static final String PENDING_BOAT_SPAWNS_KEY = "pendingBoatSpawns";
+    private static final NamespacedKey BOAT_ARENA_KEY = new NamespacedKey("stemcraft", "boatrace-boat-arena");
 
     private final STEMCraftAPI api;
     private final BoatRaceMiniGame boatRace;
@@ -148,7 +152,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
     public void onArenaUnload(MiniGameArena arena) {
         arena.stopWinnerCelebration();
         cancelStartingGridLock(arena);
-        despawnAllBoats(arena);
+        removeCourseBoats(arena);
         removeRegionListeners(arena.id());
     }
 
@@ -497,7 +501,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
 
     private void clearRaceState(@NotNull MiniGameArena arena) {
         cancelStartingGridLock(arena);
-        despawnAllBoats(arena);
+        removeCourseBoats(arena);
         boatRace.finishOrder(arena).clear();
         boatRace.lapProgress(arena).clear();
         tntBounceCooldowns(arena).clear();
@@ -879,11 +883,14 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
 
         forceBoatExit(arena, player);
         teleportInternally(player, spawn);
-        api.tasks().nextTick(() -> spawnBoatEntity(arena, player, spawn, respawnAttemptsRemaining));
+        UUID spawnToken = UUID.randomUUID();
+        pendingBoatSpawns(arena).put(player.getUniqueId(), spawnToken);
+        api.tasks().nextTick(() -> spawnBoatEntity(arena, player, spawn, respawnAttemptsRemaining, spawnToken));
     }
 
     private void despawnBoat(@NotNull MiniGameArena arena, @NotNull UUID playerId) {
         cancelBoatMountTask(arena, playerId);
+        pendingBoatSpawns(arena).remove(playerId);
         UUID boatId = boatRace.boatAssignments(arena).remove(playerId);
         if (boatId == null) {
             return;
@@ -898,6 +905,26 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         for (UUID playerId : new LinkedHashSet<>(boatRace.boatAssignments(arena).keySet())) {
             despawnBoat(arena, playerId);
         }
+    }
+
+    private void removeCourseBoats(@NotNull MiniGameArena arena) {
+        pendingBoatSpawns(arena).clear();
+        despawnAllBoats(arena);
+        SCRegion arenaRegion = arena.get("arenaRegion", SCRegion.class);
+        for (Entity entity : new ArrayList<>(arena.world().getEntities())) {
+            if (!(entity instanceof Boat boat)) {
+                continue;
+            }
+            String taggedArena = boat.getPersistentDataContainer().get(BOAT_ARENA_KEY, PersistentDataType.STRING);
+            if (arena.id().equals(taggedArena) || (arenaRegion != null && arenaRegion.contains(boat.getLocation()))) {
+                boat.remove();
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private @NotNull Map<UUID, UUID> pendingBoatSpawns(@NotNull MiniGameArena arena) {
+        return arena.getOrCreate(PENDING_BOAT_SPAWNS_KEY, Map.class, LinkedHashMap::new);
     }
 
     private void remountPlayerIfNeeded(@NotNull MiniGameArena arena, @NotNull Player player) {
@@ -1097,8 +1124,19 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
     private void spawnBoatEntity(@NotNull MiniGameArena arena,
                                  @NotNull Player player,
                                  @NotNull Location spawn,
-                                 int respawnAttemptsRemaining) {
+                                 int respawnAttemptsRemaining,
+                                 @NotNull UUID spawnToken) {
+        if (!pendingBoatSpawns(arena).remove(player.getUniqueId(), spawnToken)) {
+            return;
+        }
         if (!player.isOnline() || !arena.hasPlayer(player) || spawn.getWorld() == null) {
+            return;
+        }
+
+        UUID assignedBoatId = boatRace.boatAssignments(arena).get(player.getUniqueId());
+        Entity assignedBoat = assignedBoatId == null ? null : findEntity(assignedBoatId);
+        if (assignedBoat instanceof Boat boat && boat.isValid()) {
+            scheduleBoatMountAttempt(arena, player, boat.getLocation().clone(), BOAT_MOUNT_ATTEMPTS, respawnAttemptsRemaining);
             return;
         }
 
@@ -1115,6 +1153,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         boat.setMaxSpeed(arena.getStatus() == MiniGameArena.ArenaStatus.STARTING ? STARTING_BOAT_MAX_SPEED : RUNNING_BOAT_MAX_SPEED);
         boat.setSilent(true);
         boat.setVelocity(new Vector());
+        boat.getPersistentDataContainer().set(BOAT_ARENA_KEY, PersistentDataType.STRING, arena.id());
         boatRace.boatAssignments(arena).put(player.getUniqueId(), boat.getUniqueId());
         scheduleBoatMountAttempt(arena, player, spawn, BOAT_MOUNT_ATTEMPTS, respawnAttemptsRemaining);
     }
