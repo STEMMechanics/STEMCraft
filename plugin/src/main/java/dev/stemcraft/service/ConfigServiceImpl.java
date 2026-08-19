@@ -61,7 +61,7 @@ public class ConfigServiceImpl extends BaseService implements ConfigService {
      */
     @Override
     public void onEnable() {
-        api.tasks().repeating(AUTO_SAVE_INTERVAL, onSave);
+        api.tasks().repeating(AUTO_SAVE_INTERVAL, this::onSave);
     }
 
     @Override
