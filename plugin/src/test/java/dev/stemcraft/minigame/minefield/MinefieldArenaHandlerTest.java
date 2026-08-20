@@ -42,33 +42,64 @@ class MinefieldArenaHandlerTest {
     void carveGuaranteedPathConnectsEntryToExitInsideBounds() {
         MinefieldArenaHandler handler = newHandler();
         MinefieldArenaHandler.FieldBounds bounds = new MinefieldArenaHandler.FieldBounds(0, 4, 64, 0, 4);
+        Set<String> playable = Set.of(
+            "0,1", "1,1", "2,1", "2,2", "3,2", "4,2", "4,3"
+        );
         Set<String> path = handler.carveGuaranteedPath(
             bounds,
+            playable,
             new Location(null, -2.0d, 64.0d, 1.0d),
             new Location(null, 9.0d, 64.0d, 3.0d),
             new Random(7L)
         );
 
         assertTrue(path.contains("0,1"));
-        assertTrue(path.contains("4,3"));
-        assertFalse(path.stream().anyMatch(key -> {
-            String[] parts = key.split(",");
-            int x = Integer.parseInt(parts[0]);
-            int z = Integer.parseInt(parts[1]);
-            return !bounds.contains(x, z);
-        }));
+        assertTrue(path.contains("4,2"));
+        assertTrue(path.stream().allMatch(playable::contains));
     }
 
     @Test
     void buildMineLayoutLeavesProtectedPathSafe() {
         MinefieldArenaHandler handler = newHandler();
         MinefieldArenaHandler.FieldBounds bounds = new MinefieldArenaHandler.FieldBounds(0, 5, 64, 0, 1);
+        Set<String> playable = Set.of(
+            "0,0", "1,0", "2,0", "3,0", "4,0", "5,0",
+            "0,1", "1,1", "2,1", "3,1", "4,1", "5,1"
+        );
         Set<String> protectedCells = Set.of("0,0", "1,0", "2,0", "3,0", "4,0", "5,0");
 
-        Set<String> mines = handler.buildMineLayout(bounds, 0.5d, protectedCells, new Random(3L));
+        Set<String> mines = handler.buildMineLayout(bounds, playable, 6, protectedCells, new Random(3L));
 
         assertTrue(mines.stream().noneMatch(protectedCells::contains));
         assertEquals(6, mines.size());
+    }
+
+    @Test
+    void buildMineLayoutClampsToAvailableCells() {
+        MinefieldArenaHandler handler = newHandler();
+        MinefieldArenaHandler.FieldBounds bounds = new MinefieldArenaHandler.FieldBounds(0, 2, 64, 0, 0);
+        Set<String> playable = Set.of("0,0", "1,0", "2,0");
+        Set<String> protectedCells = Set.of("0,0");
+
+        Set<String> mines = handler.buildMineLayout(bounds, playable, 10, protectedCells, new Random(7L));
+
+        assertEquals(Set.of("1,0", "2,0"), mines);
+    }
+
+    @Test
+    void carveGuaranteedPathReturnsEmptyWhenGapSplitsField() {
+        MinefieldArenaHandler handler = newHandler();
+        MinefieldArenaHandler.FieldBounds bounds = new MinefieldArenaHandler.FieldBounds(0, 3, 64, 0, 0);
+
+        Set<String> path = handler.carveGuaranteedPath(
+            bounds,
+            Set.of("0,0", "1,0", "3,0"),
+            new Location(null, -1.0d, 64.0d, 0.0d),
+            new Location(null, 4.0d, 64.0d, 0.0d),
+            new Random(1L)
+        );
+
+        assertTrue(path.isEmpty());
     }
 
     @Test

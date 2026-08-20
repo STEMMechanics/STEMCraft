@@ -20,12 +20,14 @@ public record MinefieldArenaRecord(
     int maxPlayers,
     int startCountdownSeconds,
     int endingSeconds,
-    double mineRatio,
+    int configuredMineCount,
+    int lives,
     Material hiddenBlock,
     Material clearBlock,
     Material adjacentBlock,
+    Material markerBlock,
     Material triggeredMineBlock,
-    int completionBonus
+    long bestTimeMillis
 ) {
     public MinefieldArenaRecord {
         spectator = spectator == null ? null : spectator.clone();
@@ -65,30 +67,10 @@ public record MinefieldArenaRecord(
     }
 
     public Location startSpawn() {
-        World world = startRegion == null ? world() : startRegion.getWorld();
-        if (world == null || startRegion == null) {
+        if (startRegion == null) {
             return spectator == null ? null : spectator.clone();
         }
-
-        Location min = startRegion.getMinimumLocation();
-        Location max = startRegion.getMaximumLocation();
-        Location center = new Location(
-            world,
-            (min.getBlockX() + max.getBlockX() + 1) / 2.0d,
-            min.getBlockY(),
-            (min.getBlockZ() + max.getBlockZ() + 1) / 2.0d
-        );
-        if (startRegion.contains(center)) {
-            return center;
-        }
-
-        Location ground = startRegion.getRandomGroundLocation();
-        if (ground != null) {
-            return ground;
-        }
-
-        Location fallback = startRegion.getRandomLocation();
-        return fallback == null ? center : fallback;
+        return MinefieldMiniGame.resolveSpawn(startRegion, spectator);
     }
 
     private static SCRegion copyRegion(SCRegion region) {

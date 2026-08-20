@@ -11,11 +11,13 @@ import dev.stemcraft.api.util.StringUtil;
 import dev.stemcraft.exception.MiniGameInvalidArenaConfigException;
 import dev.stemcraft.minigame.BaseMiniGame;
 import dev.stemcraft.minigame.MiniGameHudConfigSupport;
+import dev.stemcraft.minigame.TimedRecordLeaderboard;
 import lombok.Getter;
 import lombok.experimental.Accessors;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
+import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -31,22 +33,29 @@ public class MinefieldMiniGame extends BaseMiniGame {
     static final String ARENA_REGION_KEY = "arenaRegion";
     static final String START_COUNTDOWN_SECONDS_KEY = "startCountdownSeconds";
     static final String ENDING_SECONDS_KEY = "endingSeconds";
-    static final String MINE_RATIO_KEY = "mineRatio";
+    static final String CONFIGURED_MINE_COUNT_KEY = "configuredMineCount";
+    static final String LIVES_KEY = "lives";
     static final String HIDDEN_BLOCK_KEY = "hiddenBlock";
     static final String CLEAR_BLOCK_KEY = "clearBlock";
     static final String ADJACENT_BLOCK_KEY = "adjacentBlock";
+    static final String MARKER_BLOCK_KEY = "markerBlock";
     static final String TRIGGERED_MINE_BLOCK_KEY = "triggeredMineBlock";
-    static final String COMPLETION_BONUS_KEY = "completionBonus";
+    static final String BEST_TIME_MILLIS_KEY = "bestTimeMillis";
     static final String WINNER_NAME_KEY = "winnerName";
     static final String RESULT_LINE_KEY = "resultLine";
     static final String MINE_COUNT_KEY = "mineCount";
     static final String REVEALED_SAFE_COUNT_KEY = "revealedSafeCount";
+    static final String PLAYER_LIVES_LEFT_KEY = "livesLeft";
+    static final String PLAYER_ELIMINATED_KEY = "eliminated";
+    static final String PLAYER_RUN_START_MILLIS_KEY = "runStartMillis";
+    static final String PLAYER_RUN_TIME_MILLIS_KEY = "runTimeMillis";
 
     @Getter
     @Accessors(fluent = true)
     private static final String namespace = "minefield";
 
     private MinefieldConfig config;
+    private MinefieldArenaHandler handler;
 
     @Getter
     @Accessors(fluent = true)
@@ -61,14 +70,18 @@ public class MinefieldMiniGame extends BaseMiniGame {
     @Override
     public void onLoad() {
         config = new MinefieldConfig(api, this);
-        MinefieldArenaHandler handler = new MinefieldArenaHandler(api, this);
+        handler = new MinefieldArenaHandler(api, this);
         handler.initialize();
 
         minigame = createMiniGame(namespace, handler)
             .registerArenaPlaceholder("winner", (arena, team, player) -> arena == null ? "-" : winnerName(arena))
             .registerArenaPlaceholder("result", (arena, team, player) -> arena == null ? "-" : resultLine(arena))
+            .registerArenaPlaceholder("best-time", (arena, team, player) -> arena == null ? "-" : formatMillis(bestTimeMillis(arena)))
             .registerArenaPlaceholder("mine-count", (arena, team, player) -> arena == null ? "0" : Integer.toString(mineCount(arena)))
+            .registerArenaPlaceholder("configured-mine-count", (arena, team, player) -> arena == null ? "0" : Integer.toString(configuredMineCount(arena)))
             .registerArenaPlaceholder("safe-revealed", (arena, team, player) -> arena == null ? "0" : Integer.toString(revealedSafeCount(arena)))
+            .registerPlayerPlaceholder("lives", (arena, team, player) -> player == null ? "0" : Integer.toString(livesLeft(player)))
+            .registerPlayerPlaceholder("time", (arena, team, player) -> player == null ? "-" : displayRunTime(player))
             .registerPlayerPlaceholder("progress", (arena, team, player) -> player == null ? "0%" : progressDisplay(player))
             .registerPlayerPlaceholder("state", (arena, team, player) -> player == null ? "idle" : playerState(player));
 
@@ -91,49 +104,59 @@ public class MinefieldMiniGame extends BaseMiniGame {
         Map<MiniGameArena.ArenaStatus, MiniGameHudConfigSupport.HudDefinition> definitions = new LinkedHashMap<>();
         definitions.put(MiniGameArena.ArenaStatus.WAITING, new MiniGameHudConfigSupport.HudDefinition(
             List.of(
-                "<gradient:#3b82f6:#f97316><bold>{arena:name}</bold></gradient>",
+                "<gradient:#f59e0b:#ef4444><bold>{arena:name}</bold></gradient>",
                 ":info_blue: <aqua>Waiting</aqua> <dark_gray>•</dark_gray> <green>{arena:joined-players}</green>/<green>{arena:max-players}</green>"
             ),
             List.of(
-                "<gradient:#3b82f6:#f97316><bold>{arena:name}</bold></gradient>",
+                "<gradient:#f59e0b:#ef4444><bold>{arena:name}</bold></gradient>",
                 "",
-                ":question_blue: <gray>Players</gray> <green>{arena:joined-players}</green>/<green>{arena:max-players}</green>",
-                ":warning_yellow: <gray>Need</gray> <yellow>{arena:min-players}</yellow>",
-                ":world: <gray>Map</gray> <gold>{arena:id}</gold>"
+                ":warning_yellow: <gold>Minefield</gold> <dark_gray>•</dark_gray> <aqua>Lobby</aqua>",
+                ":info_green: <gray>Joined</gray> <green>{arena:joined-players}</green>/<green>{arena:max-players}</green>",
+                ":question_blue: <gray>Need</gray> <yellow>{arena:min-players}</yellow> <gray>players</gray>",
+                ":question_blue: <gray>Mines</gray> <blue>{arena:configured-mine-count}</blue>",
+                ":clock: <gray>Record</gray> <gold>{arena:best-time}</gold>",
+                ":world: <gray>Map ID</gray> <gold>{arena:id}</gold>"
             ),
             3,
             "BLUE"
         ));
         definitions.put(MiniGameArena.ArenaStatus.STARTING, new MiniGameHudConfigSupport.HudDefinition(
             List.of(
-                "<gradient:#3b82f6:#f97316><bold>{arena:name}</bold></gradient>",
+                "<gradient:#f59e0b:#ef4444><bold>{arena:name}</bold></gradient>",
                 ":click_action_right: <gold>Starting in</gold> <yellow>{arena:time-remaining}</yellow>",
-                ":location: <gray>Progress</gray> <aqua>{player:progress}</aqua>"
+                ":heart: <gray>Lives</gray> <red>{player:lives}</red>"
             ),
             List.of(
-                "<gradient:#3b82f6:#f97316><bold>{arena:name}</bold></gradient>",
+                "<gradient:#f59e0b:#ef4444><bold>{arena:name}</bold></gradient>",
                 "",
                 ":click_action_right: <gold>Starts In</gold> <yellow>{arena:time-remaining}</yellow>",
-                ":question_blue: <gray>Players</gray> <green>{arena:joined-players}</green>/<green>{arena:max-players}</green>",
-                ":location: <gray>Progress</gray> <aqua>{player:progress}</aqua>"
+                ":info_green: <gray>Players</gray> <green>{arena:joined-players}</green>/<green>{arena:max-players}</green>",
+                ":question_blue: <gray>Need</gray> <yellow>{arena:min-players}</yellow>",
+                ":question_blue: <gray>Mines</gray> <blue>{arena:configured-mine-count}</blue>",
+                ":heart: <gray>Lives</gray> <red>{player:lives}</red>",
+                ":clock: <gray>Record</gray> <gold>{arena:best-time}</gold>",
+                ":world: <gray>Map ID</gray> <gold>{arena:id}</gold>"
             ),
             3,
             "GOLD"
         ));
         definitions.put(MiniGameArena.ArenaStatus.RUNNING, new MiniGameHudConfigSupport.HudDefinition(
             List.of(
-                "<gradient:#3b82f6:#f97316><bold>{arena:name}</bold></gradient>",
-                ":info_green: <gray>Revealed</gray> <white>{arena:safe-revealed}</white>",
-                ":question_blue: <gray>Mines</gray> <blue>{arena:mine-count}</blue>",
-                ":location: <gray>Progress</gray> <aqua>{player:progress}</aqua>"
+                "<gradient:#f59e0b:#ef4444><bold>{arena:name}</bold></gradient>",
+                ":location: <gray>Progress</gray> <aqua>{player:progress}</aqua>",
+                ":clock: <gray>Time</gray> <gold>{player:time}</gold>",
+                ":heart: <gray>Lives</gray> <red>{player:lives}</red>"
             ),
             List.of(
-                "<gradient:#3b82f6:#f97316><bold>{arena:name}</bold></gradient>",
+                "<gradient:#f59e0b:#ef4444><bold>{arena:name}</bold></gradient>",
                 "",
-                ":info_green: <gray>Revealed</gray> <white>{arena:safe-revealed}</white>",
+                ":warning_yellow: <gold>Minefield</gold> <dark_gray>•</dark_gray> <aqua>Run</aqua>",
                 ":question_blue: <gray>Mines</gray> <blue>{arena:mine-count}</blue>",
+                ":info_green: <gray>Revealed</gray> <white>{arena:safe-revealed}</white>",
                 ":location: <gray>Progress</gray> <aqua>{player:progress}</aqua>",
-                ":star: <gray>Score</gray> <gold>{player:score}</gold>",
+                ":heart: <gray>Lives</gray> <red>{player:lives}</red>",
+                ":clock: <gray>Time</gray> <gold>{player:time}</gold>",
+                ":clock: <gray>Record</gray> <gold>{arena:best-time}</gold>",
                 ":warning_yellow: <gray>Status</gray> <yellow>{player:state}</yellow>"
             ),
             2,
@@ -141,17 +164,19 @@ public class MinefieldMiniGame extends BaseMiniGame {
         ));
         definitions.put(MiniGameArena.ArenaStatus.ENDING, new MiniGameHudConfigSupport.HudDefinition(
             List.of(
-                "<gradient:#3b82f6:#f97316><bold>{arena:name}</bold></gradient>",
+                "<gradient:#f59e0b:#ef4444><bold>{arena:name}</bold></gradient>",
                 ":warning_yellow: <gold>{arena:result}</gold>",
-                ":info_green: <gray>Reset in</gray> <yellow>{arena:time-remaining}</yellow>"
+                ":click_action_right: <gray>Reset in</gray> <yellow>{arena:time-remaining}</yellow>"
             ),
             List.of(
-                "<gradient:#3b82f6:#f97316><bold>{arena:name}</bold></gradient>",
+                "<gradient:#f59e0b:#ef4444><bold>{arena:name}</bold></gradient>",
                 "",
                 ":warning_yellow: <gold>{arena:result}</gold>",
                 ":info_green: <gray>Winner</gray> <yellow>{arena:winner}</yellow>",
+                ":clock: <gray>Time</gray> <gold>{player:time}</gold>",
+                ":clock: <gray>Record</gray> <gold>{arena:best-time}</gold>",
                 ":click_action_right: <gray>Reset In</gray> <yellow>{arena:time-remaining}</yellow>",
-                ":star: <gray>Score</gray> <gold>{player:score}</gold>"
+                ":heart: <gray>Lives</gray> <red>{player:lives}</red>"
             ),
             2,
             "GREEN"
@@ -176,12 +201,14 @@ public class MinefieldMiniGame extends BaseMiniGame {
             .set(FINISH_REGION_KEY, null)
             .set(START_COUNTDOWN_SECONDS_KEY, MinefieldConfig.DEFAULT_START_COUNTDOWN_SECONDS)
             .set(ENDING_SECONDS_KEY, MinefieldConfig.DEFAULT_ENDING_SECONDS)
-            .set(MINE_RATIO_KEY, MinefieldConfig.DEFAULT_MINE_RATIO)
+            .set(CONFIGURED_MINE_COUNT_KEY, MinefieldConfig.DEFAULT_CONFIGURED_MINE_COUNT)
+            .set(LIVES_KEY, MinefieldConfig.DEFAULT_LIVES)
             .set(HIDDEN_BLOCK_KEY, MinefieldConfig.DEFAULT_HIDDEN_BLOCK)
             .set(CLEAR_BLOCK_KEY, MinefieldConfig.DEFAULT_CLEAR_BLOCK)
             .set(ADJACENT_BLOCK_KEY, MinefieldConfig.DEFAULT_ADJACENT_BLOCK)
+            .set(MARKER_BLOCK_KEY, MinefieldConfig.DEFAULT_MARKER_BLOCK)
             .set(TRIGGERED_MINE_BLOCK_KEY, MinefieldConfig.DEFAULT_TRIGGERED_MINE_BLOCK)
-            .set(COMPLETION_BONUS_KEY, MinefieldConfig.DEFAULT_COMPLETION_BONUS)
+            .set(BEST_TIME_MILLIS_KEY, 0L)
             .set(WINNER_NAME_KEY, "-")
             .set(RESULT_LINE_KEY, "Waiting for players")
             .set(MINE_COUNT_KEY, 0)
@@ -248,12 +275,14 @@ public class MinefieldMiniGame extends BaseMiniGame {
                     .set(FINISH_REGION_KEY, record.finishRegion())
                     .set(START_COUNTDOWN_SECONDS_KEY, record.startCountdownSeconds())
                     .set(ENDING_SECONDS_KEY, record.endingSeconds())
-                    .set(MINE_RATIO_KEY, record.mineRatio())
+                    .set(CONFIGURED_MINE_COUNT_KEY, record.configuredMineCount())
+                    .set(LIVES_KEY, record.lives())
                     .set(HIDDEN_BLOCK_KEY, record.hiddenBlock())
                     .set(CLEAR_BLOCK_KEY, record.clearBlock())
                     .set(ADJACENT_BLOCK_KEY, record.adjacentBlock())
+                    .set(MARKER_BLOCK_KEY, record.markerBlock())
                     .set(TRIGGERED_MINE_BLOCK_KEY, record.triggeredMineBlock())
-                    .set(COMPLETION_BONUS_KEY, record.completionBonus())
+                    .set(BEST_TIME_MILLIS_KEY, record.bestTimeMillis())
                     .set(WINNER_NAME_KEY, "-")
                     .set(RESULT_LINE_KEY, "Waiting for players")
                     .set(MINE_COUNT_KEY, 0)
@@ -285,7 +314,14 @@ public class MinefieldMiniGame extends BaseMiniGame {
         if (startRegion == null) {
             return;
         }
-        arena.setLobbySpawn(centerOfRegion(startRegion));
+        arena.setLobbySpawn(resolveSpawn(startRegion, arena.getLobbySpawn()));
+    }
+
+    public void refreshArenaRuntime(@NotNull MiniGameArena arena) {
+        syncStartRegion(arena);
+        if (handler != null) {
+            handler.refreshArena(arena);
+        }
     }
 
     public int startCountdownSeconds(@NotNull MiniGameArena arena) {
@@ -296,12 +332,12 @@ public class MinefieldMiniGame extends BaseMiniGame {
         return Math.max(1, arena.get(ENDING_SECONDS_KEY, Integer.class, MinefieldConfig.DEFAULT_ENDING_SECONDS));
     }
 
-    public double mineRatio(@NotNull MiniGameArena arena) {
-        return Math.max(0.0d, Math.min(0.9d, arena.get(MINE_RATIO_KEY, Double.class, MinefieldConfig.DEFAULT_MINE_RATIO)));
+    public int configuredMineCount(@NotNull MiniGameArena arena) {
+        return Math.max(0, arena.get(CONFIGURED_MINE_COUNT_KEY, Integer.class, MinefieldConfig.DEFAULT_CONFIGURED_MINE_COUNT));
     }
 
-    public int completionBonus(@NotNull MiniGameArena arena) {
-        return Math.max(0, arena.get(COMPLETION_BONUS_KEY, Integer.class, MinefieldConfig.DEFAULT_COMPLETION_BONUS));
+    public int lives(@NotNull MiniGameArena arena) {
+        return Math.max(0, arena.get(LIVES_KEY, Integer.class, MinefieldConfig.DEFAULT_LIVES));
     }
 
     public @NotNull Material hiddenBlock(@NotNull MiniGameArena arena) {
@@ -316,8 +352,20 @@ public class MinefieldMiniGame extends BaseMiniGame {
         return arena.get(ADJACENT_BLOCK_KEY, Material.class, MinefieldConfig.DEFAULT_ADJACENT_BLOCK);
     }
 
+    public @NotNull Material markerBlock(@NotNull MiniGameArena arena) {
+        return arena.get(MARKER_BLOCK_KEY, Material.class, MinefieldConfig.DEFAULT_MARKER_BLOCK);
+    }
+
     public @NotNull Material triggeredMineBlock(@NotNull MiniGameArena arena) {
         return arena.get(TRIGGERED_MINE_BLOCK_KEY, Material.class, MinefieldConfig.DEFAULT_TRIGGERED_MINE_BLOCK);
+    }
+
+    public long bestTimeMillis(@NotNull MiniGameArena arena) {
+        return Math.max(0L, arena.get(BEST_TIME_MILLIS_KEY, Long.class, 0L));
+    }
+
+    public void setBestTimeMillis(@NotNull MiniGameArena arena, long value) {
+        arena.set(BEST_TIME_MILLIS_KEY, Math.max(0L, value));
     }
 
     public @NotNull String winnerName(@NotNull MiniGameArena arena) {
@@ -352,6 +400,40 @@ public class MinefieldMiniGame extends BaseMiniGame {
         arena.set(REVEALED_SAFE_COUNT_KEY, Math.max(0, value));
     }
 
+    public int livesLeft(@NotNull dev.stemcraft.api.minigame.MiniGamePlayer player) {
+        MiniGameArena arena = player.arena();
+        if (arena == null) {
+            return 0;
+        }
+
+        int configuredLives = lives(arena);
+        if (configuredLives == 0) {
+            return 0;
+        }
+        return Math.max(0, player.get(PLAYER_LIVES_LEFT_KEY, Integer.class, configuredLives));
+    }
+
+    public @NotNull String displayRunTime(@NotNull dev.stemcraft.api.minigame.MiniGamePlayer player) {
+        MiniGameArena arena = player.arena();
+        if (arena == null) {
+            return "-";
+        }
+
+        long recorded = player.get(PLAYER_RUN_TIME_MILLIS_KEY, Long.class, 0L);
+        if (recorded > 0L) {
+            return formatMillis(recorded);
+        }
+
+        if (arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING) {
+            long startedAt = player.get(PLAYER_RUN_START_MILLIS_KEY, Long.class, 0L);
+            if (startedAt > 0L) {
+                return formatMillis(Math.max(0L, System.currentTimeMillis() - startedAt));
+            }
+        }
+
+        return "-";
+    }
+
     private @NotNull String progressDisplay(@NotNull dev.stemcraft.api.minigame.MiniGamePlayer player) {
         return player.get("progressPercent", Integer.class, 0) + "%";
     }
@@ -364,6 +446,9 @@ public class MinefieldMiniGame extends BaseMiniGame {
         if (arena.hasSpectator(player.getPlayer())) {
             return "spectating";
         }
+        if (player.get(PLAYER_ELIMINATED_KEY, Boolean.class, false)) {
+            return "out";
+        }
         return switch (arena.getStatus()) {
             case WAITING -> "waiting";
             case STARTING -> "ready";
@@ -373,10 +458,14 @@ public class MinefieldMiniGame extends BaseMiniGame {
         };
     }
 
-    private @NotNull Location centerOfRegion(@NotNull SCRegion region) {
+    public static @NotNull String formatMillis(long durationMillis) {
+        return TimedRecordLeaderboard.formatMillis(durationMillis);
+    }
+
+    static @Nullable Location resolveSpawn(@NotNull SCRegion region, @Nullable Location fallbackLocation) {
         World world = region.getWorld();
         if (world == null) {
-            throw new IllegalArgumentException("Region must have a world.");
+            return fallbackLocation == null ? null : fallbackLocation.clone();
         }
 
         Location min = region.getMinimumLocation();
@@ -384,11 +473,20 @@ public class MinefieldMiniGame extends BaseMiniGame {
         Location center = new Location(
             world,
             (min.getBlockX() + max.getBlockX() + 1) / 2.0d,
-            min.getBlockY(),
+            max.getBlockY() + 1.0d,
             (min.getBlockZ() + max.getBlockZ() + 1) / 2.0d
         );
-        if (region.contains(center)) {
+        if (isSafeStandLocation(center)) {
             return center;
+        }
+
+        for (int x = min.getBlockX(); x <= max.getBlockX(); x++) {
+            for (int z = min.getBlockZ(); z <= max.getBlockZ(); z++) {
+                Location candidate = new Location(world, x + 0.5d, max.getBlockY() + 1.0d, z + 0.5d);
+                if (isSafeStandLocation(candidate)) {
+                    return candidate;
+                }
+            }
         }
 
         Location ground = region.getRandomGroundLocation();
@@ -396,7 +494,23 @@ public class MinefieldMiniGame extends BaseMiniGame {
             return ground;
         }
 
-        Location fallback = region.getRandomLocation();
-        return fallback == null ? center : fallback;
+        Location random = region.getRandomLocation();
+        if (random != null && isSafeStandLocation(random)) {
+            return random;
+        }
+
+        return fallbackLocation == null ? center.clone() : fallbackLocation.clone();
+    }
+
+    private static boolean isSafeStandLocation(@NotNull Location location) {
+        World world = location.getWorld();
+        if (world == null) {
+            return false;
+        }
+
+        Block feet = world.getBlockAt(location.getBlockX(), location.getBlockY(), location.getBlockZ());
+        Block head = world.getBlockAt(location.getBlockX(), location.getBlockY() + 1, location.getBlockZ());
+        Block ground = world.getBlockAt(location.getBlockX(), location.getBlockY() - 1, location.getBlockZ());
+        return !ground.isPassable() && feet.isPassable() && head.isPassable();
     }
 }
