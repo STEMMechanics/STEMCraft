@@ -54,6 +54,12 @@ Custom portals teleport immediately by default. Set `custom-portals.instant-tele
 - `/resourcepack zip`
 - `/mailbox send <player> [message]`
 - `/mailbox <queue|view|release|hold|delete|item> ...`
+- `/quest [track [active-id|auto|off]|abandon <active-id>]`
+- `/quest admin` opens the clickable quest editor; see `quests.md` for all definition commands
+- `/quest admin edit <id> rewarditem <add|remove> ...` manages inventory-safe item rewards; overflow is mailed
+- `/quest admin npc-spawned [radius] [player]` lists spawned quest NPCs with clickable teleport and linked-quest actions
+- `/quest admin player <online-player>` displays the player's available, active, ready, cooldown, completed, locked, and disabled quests
+- `/quest admin test <start|advance|complete|reset> <id>` provides administrator test controls; `/quest admin test examples` restores missing bundled examples
 - `/noticeboard post`
 - `/noticeboard post <header> | <message>` from the server console
 - `/noticeboard mine`
@@ -96,6 +102,7 @@ Most commands follow `stemcraft.command.<command>`, for example:
 - `stemcraft.command.resourcepack`
 - `stemcraft.command.profanity`
 - `stemcraft.admin.firstjoin`
+- `stemcraft.quest.admin`
 
 For exact behavior and argument validation, see locale usage keys in:
 

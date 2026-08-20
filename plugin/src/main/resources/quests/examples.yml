@@ -1,0 +1,228 @@
+quests:
+  example-gathering-supplies:
+    title: "Gathering Supplies"
+    author: "The Camp Keeper"
+    description: "The campfire will not last through the night, and everyone is counting on me. Show me your axe skills by gathering 8 oak logs before darkness falls."
+    enabled: false
+    repeatable: false
+    objectives:
+      - type: collect
+        target: OAK_LOG
+        amount: 8
+        consume: true
+        label: "Gather 8 oak logs"
+    rewards:
+      description: "2 emeralds"
+      items:
+        - material: EMERALD
+          amount: 2
+
+  example-pest-control:
+    title: "Pest Control"
+    author: "The Watch Captain"
+    description: "I have watched zombies gather along the road each night. Defeat 3 of them so the next traveller has a safer journey than the last."
+    enabled: false
+    repeatable: true
+    requires:
+      - example-gathering-supplies
+    objectives:
+      - type: kill
+        target: ZOMBIE
+        amount: 3
+        label: "Defeat 3 zombies"
+    rewards:
+      description: "4 iron ingots"
+      items:
+        - material: IRON_INGOT
+          amount: 4
+
+  example-the-old-trail:
+    title: "The Old Trail"
+    author: "The Cartographer"
+    description: "My oldest map marks a survey stone that no one has seen in years. Find it for me, and let the trail teach you how to travel safely."
+    enabled: false
+    repeatable: false
+    objectives:
+      - type: location
+        amount: 1
+        label: "Visit the old survey marker"
+        world: survival
+        x: 0.0
+        y: 64.0
+        z: 0.0
+        radius: 8.0
+    rewards:
+      description: "A compass"
+      items:
+        - material: COMPASS
+          amount: 1
+
+  example-message-for-the-scholar:
+    title: "A Message for the Scholar"
+    author: "The Librarian"
+    description: "There is something the scholar must hear, but I dare not put the message into writing. Find them and say that the library remembers."
+    enabled: false
+    repeatable: false
+    objectives:
+      - type: npc
+        target: "00000000-0000-0000-0000-000000000000"
+        amount: 1
+        label: "Speak to the scholar"
+    rewards:
+      description: "3 bottles o' enchanting"
+      items:
+        - material: EXPERIENCE_BOTTLE
+          amount: 3
+
+  example-expedition:
+    title: "A Short Expedition"
+    author: "The Quartermaster"
+    description: "I am sending a party to an old camp, but the road has grown dangerous. Pack enough bread, clear the skeletons from the trail, and reach the camp safely."
+    enabled: false
+    repeatable: false
+    objectives:
+      - type: collect
+        target: BREAD
+        amount: 4
+        consume: true
+        label: "Pack 4 loaves of bread"
+      - type: kill
+        target: SKELETON
+        amount: 2
+        label: "Defeat 2 skeletons"
+      - type: location
+        amount: 1
+        label: "Reach the expedition camp"
+        world: survival
+        x: 100.0
+        y: 64.0
+        z: 100.0
+        radius: 10.0
+    rewards:
+      description: "1 diamond"
+      items:
+        - material: DIAMOND
+          amount: 1
+
+  example-fish-for-tailor:
+    title: "A Fish for {end-npc}"
+    author: "The Harbourmaster"
+    description: "{end-npc} has been waiting all morning for a fresh catch. Take a cod over while it is still fit for the table, and tell {end-npc} I sent you."
+    end-npc-name: "Tailor"
+    enabled: false
+    repeatable: true
+    dialogue:
+      offer:
+        - "Could you take this request to {end-npc}?"
+        - "I need someone reliable to visit {end-npc}."
+      idle:
+        - "The tide is quiet today."
+        - "Have you seen any good fishing spots?"
+        - "I am waiting on a delivery."
+      incomplete:
+        - "You were meant to bring me a fresh cod."
+        - "No fish, no trade. Those are the rules."
+      objective:
+        - "So, you are the one I was told about."
+      complete:
+        - "Perfect. This fish will do nicely."
+        - "Exactly what I needed. Here is your reward."
+    objectives:
+      - type: collect
+        target: COD
+        amount: 1
+        consume: true
+        label: "Bring a fresh cod to {end-npc}"
+    rewards:
+      description: "2 emeralds from {end-npc}"
+      items:
+        - material: EMERALD
+          amount: 2
+
+  tutorial-tim-oak:
+    title: "Tim's Timber Trouble"
+    author: "Tim"
+    description: "Every safe home begins with a tree and a well-used axe. Show me your axe skills by bringing me 8 oak logs, and I will help you take the next step."
+    start-npc-profile: tim
+    end-npc-profile: tim
+    start-npc-name: Tim
+    end-npc-name: Tim
+    enabled: true
+    dialogue:
+      offer: ["Start with the basics: bring me 8 oak logs."]
+      idle: ["Enjoying the morning?", "Keep an eye on your tools.", "A good shelter begins with good timber."]
+      incomplete: ["I still need 8 oak logs. Try a nearby oak forest."]
+      complete: ["Good work. Wood is where almost every survival story begins."]
+    objectives:
+      - {type: collect, target: OAK_LOG, amount: 8, consume: true, label: "Bring 8 oak logs to Tim"}
+    rewards:
+      description: "A stone pickaxe and 1 emerald"
+      items:
+        - {material: STONE_PICKAXE, amount: 1}
+        - {material: EMERALD, amount: 1}
+
+  tutorial-tim-leather:
+    title: "Working with Leather"
+    author: "Tim"
+    description: "You have learned to work with timber; now let me show you why a careful survivor saves leather. Bring me 8 pieces and we will put them to good use."
+    start-npc-profile: tim
+    end-npc-profile: tim
+    start-npc-name: Tim
+    end-npc-name: Tim
+    enabled: true
+    requires: [tutorial-tim-oak]
+    dialogue:
+      offer: ["I have another favour, if you are willing. Bring me 8 leather."]
+      incomplete: ["You need 8 leather. Remember that young animals should be left to grow."]
+      complete: ["Excellent. Leather opens the way to books and enchanting."]
+    objectives:
+      - {type: collect, target: LEATHER, amount: 8, consume: true, label: "Bring 8 leather to Tim"}
+    rewards:
+      description: "4 emeralds"
+      items:
+        - {material: EMERALD, amount: 4}
+
+  tutorial-find-john:
+    title: "Find John by the Water"
+    author: "Tim"
+    description: "My friend John reads the sea better than anyone I know. Find him near the coast, tell him Tim sent you, and listen closely to what he has learned."
+    start-npc-profile: tim
+    end-npc-profile: john
+    start-npc-name: Tim
+    end-npc-name: John
+    enabled: true
+    requires: [tutorial-tim-leather]
+    dialogue:
+      offer: ["Find John near the ocean. Tell him I sent you."]
+      objective: ["Tim sent you? Then you must be ready to learn about fishing."]
+      complete: ["You found me. Come back when you are ready to help with the catch."]
+    objectives:
+      - {type: npc, target: "profile:john", amount: 1, label: "Find and speak to John near the ocean"}
+    rewards:
+      description: "A fishing rod"
+      items:
+        - {material: FISHING_ROD, amount: 1}
+
+  tutorial-john-fish:
+    title: "John's Fresh Catch"
+    author: "John"
+    description: "The sea can feed us without stripping the land bare, if we learn patience. Catch 3 cod for me and I will show you the value of a good day's fishing."
+    start-npc-profile: john
+    end-npc-profile: john
+    start-npc-name: John
+    end-npc-name: John
+    enabled: true
+    repeatable: true
+    requires: [tutorial-find-john]
+    dialogue:
+      offer: ["Let us see what you learned. Bring me 3 fresh cod."]
+      idle: ["The fish are biting today.", "Watch the bubbles before you reel in.", "A camp by the coast needs a safe path home."]
+      incomplete: ["I need 3 cod. Keep watching the float."]
+      complete: ["A fine catch. You are learning to live with the world, not just take from it."]
+    objectives:
+      - {type: collect, target: COD, amount: 3, consume: true, label: "Bring 3 cod to John"}
+    rewards:
+      description: "3 emeralds and 4 cooked cod"
+      items:
+        - {material: EMERALD, amount: 3}
+        - {material: COOKED_COD, amount: 4}

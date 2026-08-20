@@ -52,6 +52,7 @@ import org.bukkit.event.world.WorldLoadEvent;
 import org.bukkit.event.world.WorldUnloadEvent;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.util.RayTraceResult;
+import org.bukkit.util.Transformation;
 import org.jetbrains.annotations.NotNull;
 import org.jspecify.annotations.NonNull;
 
@@ -71,6 +72,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
     private static final String STEMCRAFT_HOLOGRAM_TAG = "stemcraft:hologram";
     private static final String STEMCRAFT_DYNAMIC_HOLOGRAM_TAG = "stemcraft:dynamic-hologram";
     private static final String VISIBILITY_TASK_ID = "service:hologram-visibility";
+    private static final String DYNAMIC_FOLLOW_TASK_ID = "service:hologram-dynamic-follow";
     private static final long DEFAULT_VISIBILITY_UPDATE_TICKS = 10L;
     private static final double DEFAULT_MAX_VISIBLE_DISTANCE = 32.0D;
     private static final DecimalFormat STAT_VALUE_FORMAT = new DecimalFormat("0.##");
@@ -1223,6 +1225,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
 
     private void startVisibilityController() {
         stopVisibilityController();
+        api.tasks().repeating(DYNAMIC_FOLLOW_TASK_ID, 1L, 1L, this::tickDynamicHolograms);
         if (!visibilityEnabled) {
             restoreManagedVisibility();
             return;
@@ -1274,7 +1277,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
             if (content == null || content.equals(Component.empty())) {
                 return;
             }
-            entity = spawnDynamicEntity(anchor, content, bedrock);
+            entity = spawnDynamicEntity(anchor, content, bedrock, "quest".equals(hologram.key.type));
             hologram.instances.put(player.getUniqueId(),
                 new DynamicInstance(entity.getUniqueId(), bedrock, content));
         } else {
@@ -1310,7 +1313,8 @@ public class HologramServiceImpl extends BaseService implements HologramService 
 
     private @NotNull Entity spawnDynamicEntity(@NotNull Location anchor,
                                                 @NotNull Component content,
-                                                boolean bedrock) {
+                                                boolean bedrock,
+                                                boolean large) {
         World world = Objects.requireNonNull(anchor.getWorld());
         if (bedrock) {
             Location standLocation = anchor.clone().subtract(0.0D, 0.7D, 0.0D);
@@ -1319,7 +1323,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
                 entity.setCustomNameVisible(true);
                 entity.setVisible(false);
                 entity.setMarker(true);
-                entity.setSmall(true);
+                entity.setSmall(!large);
                 entity.setBasePlate(false);
                 entity.setArms(false);
                 configureDynamicEntity(entity);
@@ -1332,6 +1336,12 @@ public class HologramServiceImpl extends BaseService implements HologramService 
             entity.setSeeThrough(true);
             entity.setShadowed(true);
             entity.setViewRange((float) Math.sqrt(maxVisibleDistanceSquared));
+            entity.setTeleportDuration(2);
+            if (large) {
+                Transformation transformation = entity.getTransformation();
+                transformation.getScale().set(2.0F, 2.0F, 2.0F);
+                entity.setTransformation(transformation);
+            }
             configureDynamicEntity(entity);
         });
     }
@@ -1386,10 +1396,10 @@ public class HologramServiceImpl extends BaseService implements HologramService 
 
     private void stopVisibilityController() {
         api.tasks().cancel(VISIBILITY_TASK_ID);
+        api.tasks().cancel(DYNAMIC_FOLLOW_TASK_ID);
     }
 
     private void tickVisibility() {
-        tickDynamicHolograms();
         Set<UUID> activeExternalEntities = new HashSet<>();
 
         for (World world : Bukkit.getWorlds()) {

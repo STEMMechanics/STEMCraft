@@ -1,0 +1,43 @@
+npcs:
+  tim:
+    name: Tim
+    npc-type: PLAYER
+    despawn-radius: 150
+    spawn:
+      world: survival
+      min-distance: 30
+      max-distance: 100
+      uniqueness-radius: 1200
+      minimum-level: 3
+      time-from: 0
+      time-until: 9000
+      daily-chance: 0.25
+    dialogue:
+      idle:
+        - "Fine day for gathering timber."
+        - "The roads are quiet this morning."
+        - "There is always something useful to learn out here."
+
+  john:
+    name: John
+    npc-type: PLAYER
+    despawn-radius: 150
+    spawn:
+      world: survival
+      min-distance: 30
+      max-distance: 100
+      uniqueness-radius: 1200
+      minimum-level: 3
+      time-from: 0
+      time-until: 12000
+      daily-chance: 1.0
+      biomes:
+        - OCEAN
+        - DEEP_OCEAN
+        - BEACH
+        - STONY_SHORE
+    dialogue:
+      idle:
+        - "The fish are biting today."
+        - "Watch your footing near the water."
+        - "Tim sends all kinds of travellers my way."
