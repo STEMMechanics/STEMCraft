@@ -66,7 +66,7 @@ public final class SurvivalQolFeature extends BaseFeature {
     }
 
     private void onCropHarvest(PlayerInteractEvent event) {
-        if (!getConfigSection().getBoolean("hoe-harvest.enabled", true)
+        if (!enabled("hoe-harvest", true) || !allowed("hoe-harvest", event.getPlayer())
             || !event.getPlayer().isSneaking() || event.getClickedBlock() == null
             || event.getAction() != org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK
             || event.getHand() != EquipmentSlot.HAND || !isHoe(event.getItem())) return;
@@ -95,12 +95,16 @@ public final class SurvivalQolFeature extends BaseFeature {
     }
 
     private void onCropTrample(EntityChangeBlockEvent event) {
-        if (getConfigSection().getBoolean("disable-crop-trampling", true)
+        if (enabled("disable-crop-trampling", true)
+            && (!(event.getEntity() instanceof Player player) || allowed("disable-crop-trampling", player))
             && event.getBlock().getType() == Material.FARMLAND && event.getTo() == Material.DIRT) event.setCancelled(true);
     }
 
     private void onEntityUnleash(EntityUnleashEvent event) {
-        if (getConfigSection().getBoolean("stronger-leads", true)
+        Entity leashHolder = event.getEntity() instanceof LivingEntity living && living.isLeashed()
+            ? living.getLeashHolder() : null;
+        if (enabled("stronger-leads", true)
+            && (!(leashHolder instanceof Player player) || allowed("stronger-leads", player))
             && event.getReason() == EntityUnleashEvent.UnleashReason.DISTANCE) event.setCancelled(true);
     }
 
@@ -114,7 +118,7 @@ public final class SurvivalQolFeature extends BaseFeature {
             });
             return;
         }
-        if (!getConfigSection().getBoolean("named-mob-info.enabled", true)
+        if (!enabled("named-mob-info", true) || !allowed("named-mob-info", event.getPlayer())
             || entity.customName() == null || !(entity instanceof LivingEntity living)) return;
         String owner = "Unknown";
         if (entity instanceof Tameable tameable && tameable.getOwner() != null) owner = tameable.getOwner().getName();
@@ -136,9 +140,10 @@ public final class SurvivalQolFeature extends BaseFeature {
     }
 
     private void onPrepareAnvil(PrepareAnvilEvent event) {
-        if (!getConfigSection().getBoolean("anvil-warning.enabled", true)) return;
+        if (!enabled("anvil-warning", true)) return;
         int threshold = getConfigSection().getInt("anvil-warning.level", 35);
-        if (event.getView().getRepairCost() < threshold || !(event.getView().getPlayer() instanceof Player player)) return;
+        if (event.getView().getRepairCost() < threshold || !(event.getView().getPlayer() instanceof Player player)
+            || !allowed("anvil-warning", player)) return;
         long now = System.currentTimeMillis();
         if (now - anvilWarnings.getOrDefault(player.getUniqueId(), 0L) < 2000L) return;
         anvilWarnings.put(player.getUniqueId(), now);
@@ -148,7 +153,9 @@ public final class SurvivalQolFeature extends BaseFeature {
     }
 
     private void onItemDamage(PlayerItemDamageEvent event) {
-        if (!getConfigSection().getBoolean("durability-warning.enabled", true)
+        scheduleToolRefillIfBreaking(event);
+        if (!enabled("durability-warning", true)
+            || !allowed("durability-warning", event.getPlayer())
             || !(event.getItem().getItemMeta() instanceof Damageable damageable)) return;
         int maximum = event.getItem().getType().getMaxDurability();
         if (maximum <= 0) return;
@@ -165,8 +172,61 @@ public final class SurvivalQolFeature extends BaseFeature {
                 : "/warn/⚠ Your {item} is getting badly damaged!"), "item", friendly(event.getItem().getType().name()));
     }
 
+    private void scheduleToolRefillIfBreaking(PlayerItemDamageEvent event) {
+        if (!enabled("auto-refill-tools", true)
+            || !allowed("auto-refill-tools", event.getPlayer())
+            || !(event.getItem().getItemMeta() instanceof Damageable damageable)) return;
+        int maximum = event.getItem().getType().getMaxDurability();
+        if (maximum <= 0 || damageable.getDamage() + event.getDamage() < maximum) return;
+        PlayerInventory inventory = event.getPlayer().getInventory();
+        EquipmentSlot hand;
+        if (event.getItem().equals(inventory.getItemInMainHand())) hand = EquipmentSlot.HAND;
+        else if (event.getItem().equals(inventory.getItemInOffHand())) hand = EquipmentSlot.OFF_HAND;
+        else return;
+        scheduleToolRefill(event.getPlayer(), hand, event.getItem().getType());
+    }
+
+    private void scheduleToolRefill(Player player, EquipmentSlot hand, Material material) {
+        UUID uuid = player.getUniqueId();
+        api.tasks().runLater(1L, () -> {
+            Player online = org.bukkit.Bukkit.getPlayer(uuid);
+            if (online == null) return;
+            PlayerInventory inventory = online.getInventory();
+            ItemStack current = inventory.getItem(hand);
+            if (current != null && !current.getType().isAir()) return;
+            for (int slot = 0; slot < inventory.getStorageContents().length; slot++) {
+                ItemStack candidate = inventory.getItem(slot);
+                if (candidate != null && sameToolMaterial(material, candidate.getType())) {
+                    inventory.setItem(hand, candidate);
+                    inventory.setItem(slot, null);
+                    break;
+                }
+            }
+        });
+    }
+
+    static boolean sameToolMaterial(Material broken, Material candidate) {
+        return broken == candidate;
+    }
+
+    private boolean allowed(String feature, Player player) {
+        return permissionAllows(getConfigSection().getString(feature + ".permission", ""), player);
+    }
+
+    private boolean enabled(String feature, boolean defaultValue) {
+        Object legacyValue = getConfigSection().get(feature);
+        return legacyValue instanceof Boolean legacy ? legacy
+            : getConfigSection().getBoolean(feature + ".enabled", defaultValue);
+    }
+
+    static boolean permissionAllows(String configuredPermission, Player player) {
+        String permission = configuredPermission == null ? "" : configuredPermission.trim();
+        return permission.isEmpty() || player.hasPermission(permission);
+    }
+
     private void scheduleRefill(Player player, EquipmentSlot hand, ItemStack used) {
-        if (!getConfigSection().getBoolean("auto-refill", true) || used == null || used.getType().isAir()) return;
+        if (!enabled("auto-refill", true) || !allowed("auto-refill", player)
+            || used == null || used.getType().isAir()) return;
         ItemStack match = used.clone();
         UUID uuid = player.getUniqueId();
         api.tasks().runLater(1L, () -> {
@@ -187,10 +247,13 @@ public final class SurvivalQolFeature extends BaseFeature {
     }
 
     private void accelerateMinecarts() {
-        if (!getConfigSection().getBoolean("powered-minecarts.enabled", true)) return;
+        if (!enabled("powered-minecarts", true)) return;
         double maximum = getConfigSection().getDouble("powered-minecarts.max-speed", 0.8D);
         double multiplier = getConfigSection().getDouble("powered-minecarts.multiplier", 1.08D);
         for (org.bukkit.World world : org.bukkit.Bukkit.getWorlds()) for (Minecart cart : world.getEntitiesByClass(Minecart.class)) {
+            String permission = getConfigSection().getString("powered-minecarts.permission", "").trim();
+            if (!permission.isEmpty() && cart.getPassengers().stream().filter(Player.class::isInstance)
+                .map(Player.class::cast).noneMatch(player -> permissionAllows(permission, player))) continue;
             Block rail = cart.getLocation().getBlock();
             if (!Tag.RAILS.isTagged(rail.getType())) rail = rail.getRelative(0, -1, 0);
             if (!Tag.RAILS.isTagged(rail.getType()) || !(rail.getBlockData() instanceof Powerable powerable) || !powerable.isPowered()) continue;

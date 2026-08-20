@@ -12,6 +12,7 @@ import dev.stemcraft.feature.quest.QuestRewardItem;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
+import org.bukkit.inventory.EquipmentSlot;
 import org.junit.jupiter.api.Test;
 import org.mockbukkit.mockbukkit.MockBukkit;
 import org.mockito.MockedStatic;
@@ -20,12 +21,26 @@ import java.util.Map;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 class QuestFeatureTest {
+    @Test
+    void enablesAutomaticTrackingWhenNoPreferenceHasBeenSaved() {
+        assertTrue(QuestFeature.autoTrackingEnabled(false, false));
+        assertTrue(QuestFeature.autoTrackingEnabled(true, true));
+        assertFalse(QuestFeature.autoTrackingEnabled(true, false));
+    }
+
+    @Test
+    void handlesQuestNpcInteractionsOnceFromThePrimaryHand() {
+        assertTrue(QuestFeature.isPrimaryNpcInteraction(EquipmentSlot.HAND));
+        assertFalse(QuestFeature.isPrimaryNpcInteraction(EquipmentSlot.OFF_HAND));
+    }
+
     @Test
     void normalizesAdministratorQuestIds() {
         assertEquals("the-lost-book", QuestFeature.normalizeId(" The Lost Book! "));

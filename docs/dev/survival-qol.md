@@ -2,11 +2,14 @@
 
 The survival QOL feature provides small configurable improvements without changing the core survival progression.
 
+Each player-facing behaviour has an optional `permission` beside its `enabled` setting. A blank or missing value means no permission is required. Setting `survival-qol.auto-refill.permission`, for example, restricts that behaviour to players granted that exact permission. For crop protection and stronger leads, entities without a relevant player remain protected. When powered-minecart permission is configured, a cart accelerates only while an authorized player is riding it.
+
 ## Farming and inventory
 
 - Sneak-right-click a mature crop with any hoe to harvest and replant a 3×3 area of the same crop.
 - Players and mobs cannot trample farmland into dirt.
 - When the held stack is consumed or placed, an identical stack from the main inventory automatically moves into that hand. Item metadata must match, preventing named or custom items from being mixed.
+- When a hand-held tool breaks, another tool of exactly the same material automatically moves from storage into that hand. A stone pickaxe can only select another stone pickaxe; tools of other tiers are never substituted. The replacement keeps its own durability, enchantments, name, and other metadata.
 - Disconnected, non-persistent leaves are queued for accelerated random ticks. `leaf_decay_random_tick.default_tick_speed` controls how many candidates are processed per server tick; a world `leaf-decay-tickspeed` setting overrides it.
 - Naturally grown trees harvested by players schedule one matching sapling within the configured random offset. Planting waits until nearby players leave and is cancelled when constructed blocks indicate that the land is being repurposed. Pending replacements survive restarts. Breaking a sapling never schedules another replacement, including saplings planted by this feature.
 
