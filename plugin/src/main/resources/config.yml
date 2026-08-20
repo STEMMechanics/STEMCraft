@@ -590,25 +590,38 @@ leaf_decay_random_tick:
     repurpose-radius: 8
     candidate-lifetime-seconds: 600
 survival-qol:
-  enabled: true
   hoe-harvest:
     enabled: true
-  stronger-leads: true
-  disable-crop-trampling: true
-  auto-refill: true
+    permission: ""
+  stronger-leads:
+    enabled: true
+    permission: ""
+  disable-crop-trampling:
+    enabled: true
+    permission: ""
+  auto-refill:
+    enabled: true
+    permission: ""
+  auto-refill-tools:
+    enabled: true
+    permission: ""
   named-mob-info:
     enabled: false
+    permission: ""
     message: "/info/{name} • {type} • {health}/{max_health} health • Owner: {owner}"
   anvil-warning:
     enabled: true
+    permission: ""
     level: 35
     message: "/warn/This anvil operation costs {levels} levels and is close to becoming Too Expensive!"
   powered-minecarts:
     enabled: true
+    permission: ""
     multiplier: 1.08
     max-speed: 0.8
   durability-warning:
     enabled: true
+    permission: ""
     warning-percent: 10
     critical-percent: 2
     warning-message: "/warn/⚠ Your {item} is getting badly damaged!"

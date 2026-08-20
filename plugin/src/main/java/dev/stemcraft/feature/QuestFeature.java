@@ -107,6 +107,8 @@ public final class QuestFeature extends BaseFeature {
     private static final String TIMEOUT_TASK = "quest:timeouts";
     private static final String BIOME_TASK = "quest:biome-stays";
     private static final String TRACKING_TASK = "quest:tracking";
+    private static final int NPC_OVERHEAD_CLEARANCE_BLOCKS = 3;
+    private static final int NPC_OPEN_AREA_RADIUS = 5;
     private static final String EDITOR_PATH = "/quests/editor/";
     private static final long EDITOR_TOKEN_LIFETIME_MS = TimeUnit.HOURS.toMillis(24);
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
@@ -123,6 +125,7 @@ public final class QuestFeature extends BaseFeature {
     private final Map<UUID, UUID> questMenuSessions = new HashMap<>();
     private final Map<UUID, String> trackedQuests = new HashMap<>();
     private final Set<UUID> autoTrackPlayers = new HashSet<>();
+    private final Set<UUID> trackingPreferencePlayers = new HashSet<>();
     private final Map<UUID, BossBar> trackingBossBars = new HashMap<>();
     private final Map<String, Long> editorTokens = new ConcurrentHashMap<>();
     private List<String> npcNames = List.of("Rokar", "Tailor", "Mira", "Bram", "Elowen", "Tobin", "Nessa", "Orin");
@@ -278,7 +281,7 @@ public final class QuestFeature extends BaseFeature {
             int x = (int) Math.floor(centre.getX() + Math.cos(angle) * distance);
             int z = (int) Math.floor(centre.getZ() + Math.sin(angle) * distance);
             Integer y = findSafeNpcY(world, x, z, centre.getBlockY());
-            if (y != null) return new Location(world, x + .5D, y, z + .5D);
+            if (y != null) return preferOpenNpcSpawn(profile, new Location(world, x + .5D, y, z + .5D), false);
         }
         return null;
     }
@@ -439,9 +442,46 @@ public final class QuestFeature extends BaseFeature {
             Location candidate = new Location(world, x + .5D, y, z + .5D);
             String biome = world.getBiome(x, y, z).getKey().getKey();
             if (!profile.biomes().isEmpty() && profile.biomes().stream().noneMatch(value -> value.equalsIgnoreCase(biome))) continue;
-            return candidate;
+            return preferOpenNpcSpawn(profile, candidate, true);
         }
         return null;
+    }
+
+    /** Prefer nearby headroom for the NPC marker, while retaining the original safe spawn as a fallback. */
+    private Location preferOpenNpcSpawn(QuestNpcProfile profile, Location fallback, boolean enforceBiome) {
+        World world = fallback.getWorld();
+        int fallbackX = fallback.getBlockX();
+        int fallbackY = fallback.getBlockY();
+        int fallbackZ = fallback.getBlockZ();
+        if (hasNpcClearance(world, fallbackX, fallbackY, fallbackZ)) return fallback;
+
+        for (int radius = 1; radius <= NPC_OPEN_AREA_RADIUS; radius++) {
+            for (int xOffset = -radius; xOffset <= radius; xOffset++) {
+                for (int zOffset = -radius; zOffset <= radius; zOffset++) {
+                    if (Math.max(Math.abs(xOffset), Math.abs(zOffset)) != radius) continue;
+                    int x = fallbackX + xOffset;
+                    int z = fallbackZ + zOffset;
+                    Integer y = findSafeNpcY(world, x, z, fallbackY);
+                    if (y == null || !hasNpcClearance(world, x, y, z)) continue;
+                    if (enforceBiome && !profileAllowsBiome(profile, world, x, y, z)) continue;
+                    return new Location(world, x + .5D, y, z + .5D, fallback.getYaw(), fallback.getPitch());
+                }
+            }
+        }
+        return fallback;
+    }
+
+    private boolean profileAllowsBiome(QuestNpcProfile profile, World world, int x, int y, int z) {
+        if (profile.biomes().isEmpty()) return true;
+        String biome = world.getBiome(x, y, z).getKey().getKey();
+        return profile.biomes().stream().anyMatch(value -> value.equalsIgnoreCase(biome));
+    }
+
+    static boolean hasNpcClearance(World world, int x, int y, int z) {
+        for (int offset = 0; offset <= NPC_OVERHEAD_CLEARANCE_BLOCKS; offset++) {
+            if (!world.getBlockAt(x, y + offset, z).isPassable()) return false;
+        }
+        return true;
     }
 
     private @Nullable Integer findSafeNpcY(World world, int x, int z, int preferredY) {
@@ -586,10 +626,14 @@ public final class QuestFeature extends BaseFeature {
         attemptStarted.clear();
         trackedQuests.clear();
         autoTrackPlayers.clear();
+        trackingPreferencePlayers.clear();
         api.database().queryEach("SELECT player_uuid, quest_id FROM quest_tracking", null, rs ->
             trackedQuests.put(UUID.fromString(rs.getString("player_uuid")), rs.getString("quest_id")));
-        api.database().queryEach("SELECT player_uuid FROM quest_tracking_preferences WHERE auto_enabled != 0", null, rs ->
-            autoTrackPlayers.add(UUID.fromString(rs.getString("player_uuid"))));
+        api.database().queryEach("SELECT player_uuid, auto_enabled FROM quest_tracking_preferences", null, rs -> {
+            UUID player = UUID.fromString(rs.getString("player_uuid"));
+            trackingPreferencePlayers.add(player);
+            if (rs.getInt("auto_enabled") != 0) autoTrackPlayers.add(player);
+        });
         api.database().queryEach("SELECT player_uuid, quest_id, started_at FROM quest_attempt_timing", null, rs ->
             attemptStarted.computeIfAbsent(UUID.fromString(rs.getString("player_uuid")), ignored -> new HashMap<>())
                 .put(rs.getString("quest_id"), rs.getLong("started_at")));
@@ -1061,7 +1105,7 @@ public final class QuestFeature extends BaseFeature {
         String requested = ctx.getArg(1);
         if (requested == null) {
             String tracked = trackedQuests.get(player.getUniqueId());
-            if (autoTrackPlayers.contains(player.getUniqueId())) {
+            if (isAutoTracking(player.getUniqueId())) {
                 if (tracked == null) player.sendMessage(Component.text("Quest tracking mode: automatic. No quest is currently active.", NamedTextColor.YELLOW));
                 else {
                     QuestDefinition quest = quests.get(tracked);
@@ -1096,11 +1140,20 @@ public final class QuestFeature extends BaseFeature {
     }
 
     private void setAutoTracking(UUID playerId, boolean enabled) {
+        trackingPreferencePlayers.add(playerId);
         if (enabled) autoTrackPlayers.add(playerId);
         else autoTrackPlayers.remove(playerId);
         api.database().update("INSERT OR REPLACE INTO quest_tracking_preferences(player_uuid,auto_enabled) VALUES(?,?)", statement -> {
             statement.setString(1, playerId.toString()); statement.setInt(2, enabled ? 1 : 0);
         });
+    }
+
+    private boolean isAutoTracking(UUID playerId) {
+        return autoTrackingEnabled(trackingPreferencePlayers.contains(playerId), autoTrackPlayers.contains(playerId));
+    }
+
+    static boolean autoTrackingEnabled(boolean preferenceExists, boolean preferenceEnabled) {
+        return !preferenceExists || preferenceEnabled;
     }
 
     private void trackQuest(Player player, String questId) {
@@ -1803,6 +1856,7 @@ public final class QuestFeature extends BaseFeature {
     }
 
     private void onNpcClick(PlayerInteractEntityEvent event) {
+        if (!isPrimaryNpcInteraction(event.getHand())) return;
         Player player = event.getPlayer();
         for (QuestProgress progress : activeFor(player).values()) {
             QuestDefinition quest = quests.get(progress.questId());
@@ -1881,6 +1935,10 @@ public final class QuestFeature extends BaseFeature {
             event.setCancelled(true);
             speakNpcProfileIdle(player, event.getRightClicked());
         }
+    }
+
+    static boolean isPrimaryNpcInteraction(EquipmentSlot hand) {
+        return hand == EquipmentSlot.HAND;
     }
 
     private void openQuestNpcInventory(Player player, Entity npc, List<QuestDefinition> available) {
@@ -2282,7 +2340,7 @@ public final class QuestFeature extends BaseFeature {
         });
         saveRevision(player.getUniqueId(), quest.id(), revision);
         saveProgress(progress);
-        if (autoTrackPlayers.contains(player.getUniqueId()) && !trackedQuests.containsKey(player.getUniqueId()))
+        if (isAutoTracking(player.getUniqueId()) && !trackedQuests.containsKey(player.getUniqueId()))
             trackQuest(player, quest.id());
         if (announce) {
             api.messages().success(player, "Quest started: {quest}", "quest", quest.title());
@@ -2761,7 +2819,7 @@ public final class QuestFeature extends BaseFeature {
         api.database().update("DELETE FROM quest_attempt_timing WHERE player_uuid=? AND quest_id=?", statement -> {
             statement.setString(1, player.toString()); statement.setString(2, questId);
         });
-        if (wasTracked && autoTrackPlayers.contains(player)) trackMostRecentQuest(player);
+        if (wasTracked && isAutoTracking(player)) trackMostRecentQuest(player);
         return true;
     }
 
