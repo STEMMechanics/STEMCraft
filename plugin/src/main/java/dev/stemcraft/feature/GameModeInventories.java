@@ -82,7 +82,7 @@ public class GameModeInventories extends BaseFeature {
 
     @Override
     public void onSave() {
-        saveAll();
+        saveOnlineProfiles();
     }
 
     /**
