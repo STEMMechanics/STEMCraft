@@ -8,6 +8,7 @@ The survival QOL feature provides small configurable improvements without changi
 - Players and mobs cannot trample farmland into dirt.
 - When the held stack is consumed or placed, an identical stack from the main inventory automatically moves into that hand. Item metadata must match, preventing named or custom items from being mixed.
 - Disconnected, non-persistent leaves are queued for accelerated random ticks. `leaf_decay_random_tick.default_tick_speed` controls how many candidates are processed per server tick; a world `leaf-decay-tickspeed` setting overrides it.
+- Naturally grown trees harvested by players schedule one matching sapling within the configured random offset. Planting waits until nearby players leave and is cancelled when constructed blocks indicate that the land is being repurposed. Pending replacements survive restarts. Breaking a sapling never schedules another replacement, including saplings planted by this feature.
 
 ## Transport and animals
 

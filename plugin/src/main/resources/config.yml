@@ -579,6 +579,16 @@ leaf_decay_random_tick:
   # Leaf candidates processed per tick when no world override is configured.
   default_tick_speed: 8
   candidate_retention_ticks: 1200
+  replant:
+    enabled: true
+    # Wait until the tree has been gone this long and every player has moved away.
+    delay-seconds: 90
+    player-clear-radius: 24
+    minimum-offset: 3
+    maximum-offset: 7
+    # Placing a constructed block near the old trunk treats the land as repurposed.
+    repurpose-radius: 8
+    candidate-lifetime-seconds: 600
 survival-qol:
   enabled: true
   hoe-harvest:
