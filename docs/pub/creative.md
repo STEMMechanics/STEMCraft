@@ -42,7 +42,7 @@ Once you've claimed a plot, you're free to build!
 
 Use the blocks and items available in Creative mode to experiment, practise building or create something huge.
 
-Remember that the [Community Expectations](app://-/safety-and-community/README.md) still apply in the Creative world.
+Remember that the [Community Expectations](safety-and-community/README.md) still apply in the Creative world.
 
 ### Useful Plot Commands
 
@@ -52,4 +52,4 @@ Remember that the [Community Expectations](app://-/safety-and-community/README.m
 | `/plot claim` | Claim the plot you're standing in |
 | `/plot home`  | Return to your plot               |
 
-More plot commands can be found on the [Commands](app://-/commands.md) page.
+More commands can be found in the [Commands guide](commands/README.md).

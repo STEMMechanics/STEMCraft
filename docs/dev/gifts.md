@@ -6,21 +6,12 @@ The `stemcraft:gift` custom item is defined in `data-packs/stemcraft-gifts/confi
 
 ## API
 
-```java
-ItemStack gift = api.gifts().createGift(List.of(
-    new ItemStack(Material.EMERALD, 3),
-    new ItemStack(Material.COOKED_BEEF, 5)
-));
-
-ItemStack randomized = api.gifts().createGiftFromSpecs(List.of(
-    "emerald,1-3",
-    "stemcraft:animal_barrel[animal=chicken]"
-));
-```
-
 Specifications use `<item>[,<quantity-or-range>]`. The quantity defaults to `1`. The item may be a vanilla material, namespaced custom item, or parameterized custom item.
 
 Use `api.gifts().isGift(item)` and `api.gifts().contents(item)` to inspect gifts. Returned contents are cloned.
+
+<!-- javadoc:all api/src/main/java/dev/stemcraft/api/service/gift/GiftService.java -->
+<!-- /javadoc -->
 
 ## Admin command
 

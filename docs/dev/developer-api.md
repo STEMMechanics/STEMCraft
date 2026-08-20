@@ -83,7 +83,7 @@ MailSendResult result = api.mailboxes().send(new MailSendRequest(
 ));
 ```
 
-Use `result.queued()` and `result.message()` to inspect the outcome. See [Mailboxes](./mailboxes.md) for the complete feature guide.
+Use `result.queued()` and `result.message()` to inspect the outcome. See [Mailboxes](https://github.com/STEMMechanics/stemcraft/wiki/mailboxes) for the complete feature guide.
 
 Mail uses the configured delivery delay by default (`-1`). Pass a tick delay as the final constructor argument to override it: `0` delivers on the next queue pass, while a positive value applies that delay. This example delays delivery by 15 seconds:
 
@@ -99,7 +99,7 @@ api.mailboxes().send(new MailSendRequest(
 
 ## Gift API
 
-`GiftService` creates a single custom Gift containing multiple stacks. Gifts can be built from `ItemStack` values or compact item specifications and sent through the Mailbox API. See [Gifts](./gifts.md).
+`GiftService` creates a single custom Gift containing multiple stacks. Gifts can be built from `ItemStack` values or compact item specifications and sent through the Mailbox API. See [Gifts](https://github.com/STEMMechanics/stemcraft/wiki/gifts).
 
 ## Comet API
 
@@ -114,7 +114,7 @@ api.comets().launch(
 );
 ```
 
-See [Comets](./comets.md) for behavior, overloads, validation, and configuration.
+See [Comets](https://github.com/STEMMechanics/stemcraft/wiki/comets) for behavior, overloads, validation, and configuration.
 
 ## Dynamic Hologram API
 

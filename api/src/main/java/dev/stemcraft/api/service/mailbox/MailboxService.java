@@ -26,9 +26,35 @@ public interface MailboxService {
     /**
      * Queues mail for delivery. A written letter is generated automatically and
      * included with any supplied items; an empty item list sends a letter only.
+     *
+     * @param request sender, recipient, message, items, and optional delivery delay
+     * @return whether the delivery was queued and an explanatory failure message
+     * @example Sending system mail
+     * {@code
+     * MailSendResult result = api.mailboxes().send(new MailSendRequest(
+     *     "STEMCraft",
+     *     recipientUuid,
+     *     "Your weekly reward",
+     *     rewardItems
+     * ));
+     * }
+     * @example Sending player mail
+     * {@code
+     * MailSendResult result = api.mailboxes().send(new MailSendRequest(
+     *     senderUuid,
+     *     recipientUuid,
+     *     "Thanks for helping!",
+     *     List.of(new ItemStack(Material.DIAMOND, 3))
+     * ));
+     * }
      */
     @NotNull MailSendResult send(@NotNull MailSendRequest request);
 
-    /** Returns whether the player's delivered inbox currently contains mail. */
+    /**
+     * Returns whether the player's delivered inbox currently contains mail.
+     *
+     * @param playerUuid player whose delivered inbox should be checked
+     * @return {@code true} when delivered mail is waiting
+     */
     boolean hasMail(@NotNull UUID playerUuid);
 }

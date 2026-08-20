@@ -4,17 +4,7 @@
 
 ## Launching a comet
 
-Use a random compass direction:
-
-```java
-api.comets().launch(impactLocation);
-```
-
-Supply the direction travelled into the impact and along the crash scar:
-
-```java
-api.comets().launch(impactLocation, new Vector(1, 0, -1));
-```
+Use a random compass direction or supply the direction travelled into the impact and along the crash scar.
 
 The direction's Y component is ignored. The vertical approach is derived from the generated crash path so the incoming flight and ground scar align.
 
@@ -22,28 +12,19 @@ The direction's Y component is ignored. The vertical approach is derived from th
 
 `CometLoot` specifies a placeable block material and an inclusive quantity range. Each launch randomizes the amount independently for every entry and embeds the blocks into exposed solid terrain around the terminal geode.
 
-```java
-api.comets().launch(
-    impactLocation,
-    new CometLoot(Material.GOLD_BLOCK, 2, 15),
-    new CometLoot(Material.EMERALD_BLOCK, 1, 4)
-);
-```
-
-Direction and loot can be supplied together:
-
-```java
-api.comets().launch(
-    impactLocation,
-    new Vector(1, 0, -1),
-    new CometLoot(Material.GOLD_BLOCK, 2, 15),
-    new CometLoot(Material.DIAMOND_BLOCK, 0, 2)
-);
-```
+Direction and loot can also be supplied together.
 
 Only placeable, non-air block materials are accepted. Quantity ranges must satisfy `0 <= minimum <= maximum <= 4096`. Loot is never placed on leaves, logs, planks, liquids, or unsupported blocks.
 
 API calls made away from the primary server thread are transferred to it before chunks, entities, or blocks are accessed.
+
+## API reference
+
+<!-- javadoc:all api/src/main/java/dev/stemcraft/api/service/comet/CometService.java -->
+<!-- /javadoc -->
+
+<!-- javadoc:all api/src/main/java/dev/stemcraft/api/service/comet/CometLoot.java -->
+<!-- /javadoc -->
 
 ## Configuration
 

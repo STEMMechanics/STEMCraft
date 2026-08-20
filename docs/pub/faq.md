@@ -14,7 +14,7 @@ The server is free to play. Separate STEMMechanics workshops may have their own 
 
 ## Can Java and Bedrock players join?
 
-Yes. See [Connecting](/broken/pages/Y5WUZAwdljMfwT1pIrf2) and [Java & Bedrock](/broken/pages/f89oRaD6iJg4LzDHK6W8).
+Yes. See [Getting Started](getting-started.md), including the Java and Bedrock connection instructions.
 
 ## Why did the server ask me a maths question?
 
@@ -22,7 +22,7 @@ The current plugin can hold a first-time player in a restricted session until th
 
 ## Why does a custom item look ordinary?
 
-Accept or resend the [Resource Pack](/broken/pages/gEBfbQIuBp8F6L9SpNSg).
+Accept or resend the [Resource Pack](getting-started.md#accept-the-resource-pack).
 
 ## Are Waystones, Traders, and Survival Cities available?
 

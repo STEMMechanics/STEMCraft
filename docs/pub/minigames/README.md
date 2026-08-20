@@ -18,5 +18,4 @@ Which games and arenas are open depends on the live server. Use the lobby's menu
 {% hint style="info" %}
 Look at the countdown, scoreboard, boss bars, and messages during a game. They tell you when a round starts, your progress, and who won.
 {% endhint %}
-
 > **Image placeholder — minigame lobby map:** Add one bright, wide screenshot of the minigame lobby with numbered arrows pointing to each game's portal or sign. Under it, add a matching numbered key with the game names. Keep labels large enough to read on a tablet.

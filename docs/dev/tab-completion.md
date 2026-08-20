@@ -1,5 +1,13 @@
 # Tab Completion Guide
 
+## API reference
+
+<!-- javadoc:all api/src/main/java/dev/stemcraft/api/service/tabcomplete/TabCompleteService.java -->
+<!-- /javadoc -->
+
+<!-- javadoc:all api/src/main/java/dev/stemcraft/api/service/tabcomplete/TabCompletionProvider.java -->
+<!-- /javadoc -->
+
 This guide covers the STEMCraft command tab-completion system:
 
 - writing completion providers with `api.tabComplete().register(...)`

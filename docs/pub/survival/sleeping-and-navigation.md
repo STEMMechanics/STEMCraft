@@ -26,5 +26,4 @@ Use coordinates to write down a build, find your way home, or tell a friend wher
 Press the player-list key to see which world each player is in. World names are made easier to read: for example, `survival_nether` becomes **Survival Nether** and `bedwars_amazon` becomes **Bedwars: Amazon**. Some worlds have a special display name chosen by the server.
 
 The name is only a label. It does not teleport you or change the world.
-
 > **Image placeholder — player list:** Add a cropped player-list screenshot containing friends in at least three worlds. Highlight the friendly world labels, including one normal world, one Nether world, and one minigame world. Do not expose private server addresses.

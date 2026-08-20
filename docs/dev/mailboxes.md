@@ -41,31 +41,14 @@ Dialog labels and messages are configurable under `mailboxes.dialog` and `mailbo
 
 Recipients are identified only by UUID. Their current known name is resolved internally.
 
-Send as a player:
-
-```java
-MailSendResult result = api.mailboxes().send(new MailSendRequest(
-    senderUuid,
-    recipientUuid,
-    "Thanks for helping!",
-    List.of(new ItemStack(Material.DIAMOND, 3))
-));
-```
-
-Send as the server or another named system:
-
-```java
-MailSendResult result = api.mailboxes().send(new MailSendRequest(
-    "STEMCraft",
-    recipientUuid,
-    "Your weekly reward",
-    rewardItems
-));
-```
+Mail may be sent as a player UUID or as a named server/plugin system.
 
 Check `result.queued()` before treating the send as successful. `result.message()` describes failures, including unknown UUIDs or payloads that cannot fit in a mailbox.
 
 `MailboxService#hasMail(UUID)` reports whether the player has delivered mail waiting.
+
+<!-- javadoc:all api/src/main/java/dev/stemcraft/api/service/mailbox/MailboxService.java -->
+<!-- /javadoc -->
 
 ## Dynamic holograms
 

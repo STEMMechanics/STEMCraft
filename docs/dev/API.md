@@ -4,11 +4,8 @@ The public integration surface is `dev.stemcraft.api.STEMCraftAPI`.
 
 ## Getting the API
 
-```java
-import dev.stemcraft.api.STEMCraftAPI;
-
-STEMCraftAPI api = STEMCraftAPI.api();
-```
+<!-- javadoc:method api/src/main/java/dev/stemcraft/api/STEMCraftAPI.java#api -->
+<!-- /javadoc -->
 
 ## Service Accessors
 
@@ -48,23 +45,22 @@ STEMCraftAPI api = STEMCraftAPI.api();
 
 Extensions with pending in-memory state can join `/stemcraft save` and normal STEMCraft shutdown checkpoints:
 
-```java
-api.saves().register(myPlugin, "player-data", () -> playerDataStore.flush());
-```
-
 Registering the same plugin and ID replaces the previous callback. Disabled plugins are discarded automatically. A callback must return only after its state is durable and may throw an exception; one failing participant is reported without preventing the remaining participants from saving. Call `api.saves().unregister(myPlugin, "player-data")` when an integration no longer owns that state.
 
 `api.saves().saveAll()` invokes the same complete STEMCraft checkpoint as `/stemcraft save`. It covers active STEMCraft features and services, dirty STEMCraft configuration files, and enabled registered extensions. It deliberately does not save Bukkit worlds or vanilla player data.
+
+<!-- javadoc:all api/src/main/java/dev/stemcraft/api/service/save/SaveService.java -->
+<!-- /javadoc -->
 
 ## Main Extension Areas
 
 ### Comets
 
-`CometService` launches destructive comet events at an impact location. Calls may use a random direction or supply a horizontal direction, with optional `CometLoot` block ranges scattered around the terminal geode. See [comets.md](comets.md).
+`CometService` launches destructive comet events at an impact location. Calls may use a random direction or supply a horizontal direction, with optional `CometLoot` block ranges scattered around the terminal geode. See [Comets](https://github.com/STEMMechanics/stemcraft/wiki/comets).
 
 ### Mailboxes
 
-`MailboxService` queues letters and item stacks to a recipient UUID. `MailSendRequest` accepts either a player UUID or system string as its sender; player names are resolved internally. See [mailboxes.md](mailboxes.md) for examples.
+`MailboxService` queues letters and item stacks to a recipient UUID. `MailSendRequest` accepts either a player UUID or system string as its sender; player names are resolved internally. See [Mailboxes](https://github.com/STEMMechanics/stemcraft/wiki/mailboxes) for examples.
 
 ### Dynamic Holograms
 
@@ -271,7 +267,6 @@ This is the preferred scheduling surface when work needs naming, delayed executi
 Useful supporting API types include:
 
 - `SCRegion`
-- `JsonFile`
 - `TokenProcessor`
 - player stats records and definitions
 - punishment records
@@ -284,10 +279,7 @@ Useful supporting API types include:
 - keep persistent runtime data in SQLite through `database()`
 - keep operator-authored configuration in YAML through `config()`
 
-## Existing In-Repo API Docs
+## More API documentation
 
-The repository already contains longer-form API notes in:
-
-- `docs/dev/developer-api.md`
-- `docs/STEMCRAFT_API.md`
-- `docs/dev/tab-completion.md`
+- [Developer API examples](https://github.com/STEMMechanics/stemcraft/wiki/developer-api)
+- [Tab completion](https://github.com/STEMMechanics/stemcraft/wiki/tab-completion)
