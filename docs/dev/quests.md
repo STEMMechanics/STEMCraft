@@ -1,0 +1,137 @@
+# Quests
+
+The quest feature provides private, book-driven quests attached to living NPC entities. Definitions are stored in `plugins/STEMCraft/quests/quests.yml`; active and completed player state is stored in SQLite.
+
+Players start a quest by right-clicking its start NPC when the yellow question-mark font glyph is visible. The written quest book is tagged to that player and updates as objectives advance. The yellow exclamation-mark font glyph identifies the current NPC objective or a ready turn-in NPC. Both markers use the existing `:question_yellow:` and `:exclamation_yellow:` resource-pack tokens, with plain-character fallbacks when the tokens are unavailable.
+
+Quest books may safely be stored, dropped, moved, or picked up without changing quest progress. A non-owner sees temporarily obfuscated pages when opening one; the physical book remains unchanged. Each acceptance has a persistent attempt revision. Abandoned and completed attempts become invalid, and stale books are removed when encountered in an opened inventory, moved, picked up, opened, or presented for turn-in. A completed quest can only be turned in while its owner is carrying the current tagged book.
+
+The final page prints `/quest abandon <quest-id>`. Java players can click the command to run it; Bedrock players can read and enter the same command manually when their client does not preserve interactive book events.
+
+Definitions may provide a concise `short-description` for the inventory tooltip while keeping `description` as the full story printed inside the book. If omitted, the full description is also used in the tooltip.
+
+Supported ordered objectives are:
+
+- `collect`: own a material and optionally consume it at turn-in
+- `kill`: kill a number of an entity type
+- `location`: enter a radius around a world coordinate
+- `npc`: right-click a bound living entity
+- `biome`: enter a configured biome
+- `altitude_above` / `altitude_below`: cross a configured Y level
+- `underwater`: descend below a configured Y level while in water
+- `night`: venture out between 13000 and 23000 world ticks
+- `sleep`: be sleeping when the world successfully skips the night
+- `structure`: enter the generated bounding box of a shipwreck, outpost, ocean ruin, ruined portal, mineshaft, or buried treasure
+- `interact`: interact with a configured living entity type, such as a captive iron golem
+
+Collect objectives are rechecked while the player moves or interacts with a quest NPC. All collect requirements are checked again at turn-in so required items cannot be discarded after an objective advances.
+
+Quests may define `time-limit-seconds`, `restart-cooldown-seconds`, and `global-max-completions`. A timed attempt fails when its real-time deadline passes. Completed repeatable quests and failed attempts may be restarted after the configured cooldown. Global limits are checked atomically on the server thread at turn-in; players who accepted a competitive quest but arrive after its final reward was claimed fail at hand-in. NPC profiles may define `lifetime-seconds`; an expired limited appearance is consumed for that Minecraft day.
+
+NPC profiles use `npc-type`. `PLAYER` creates a Citizens NPC when Citizens is installed and falls back to a villager otherwise; native types such as `WOLF` always remain that type. NPCs wander by default with an 8-block horizontal radius, 3-block vertical radius, 5-second delay, and nearby-player looking enabled. Override only the required values under `behaviour` (`type: STATIONARY`, `wander-radius`, `wander-vertical-radius`, `wander-delay-seconds`, or `look-at-players`). Player profiles may also specify `skin.url`; Citizens resolves and caches the skin.
+
+## Player commands
+
+- `/quest` — clickable quest list and state
+- `/quest abandon <id>` — immediately abandon an active quest and remove carried copies; completion suggests only active quest IDs
+- `/quest track` — show whether tracking is off, automatic, or following a specific quest
+- `/quest track auto` — automatically select a quest when none is tracked and move to another active quest when one ends
+- `/quest track <id>` — track that active quest and disable automatic selection
+- `/quest track off` — turn off both specific and automatic quest tracking
+
+## Chat administration
+
+Administrators with `stemcraft.quest.admin` use `/quest admin`. It displays clickable create, edit, test, delete, and reload actions. Text entry commands shown by the editor cover every persisted quest field.
+
+`/quest admin npc-spawned [radius] [player]` lists currently spawned quest NPCs. With no radius it lists every spawned profile; with a radius it measures from the command caller or the named online player. Each result provides clickable teleport and linked-quest actions. `/quest admin player <online-player>` groups that player's quests into active, ready, available, cooldown, completed, locked, and disabled states.
+
+`/quest admin editor` creates a private web-editor URL valid for 24 hours or until the server restarts. Requests without a currently issued code receive `403 Not permitted`. The structured editor provides searchable quest and NPC lists; story, dialogue and spawn forms; NPC/material/entity dropdowns; repeatable objective and reward rows; prerequisite selection; enable/repeat switches; create, duplicate, delete, reorder, save and discard controls. Its quest list is displayed as a progression forest: starting quests are roots and chained quests are nested beneath their first prerequisite. Quests with multiple prerequisites appear once beneath their primary path and retain clickable join links to every prerequisite; forks, continuations and endings are also annotated. Siblings are ordered by the starting NPC's minimum player level and then title. The original YAML editor remains under **Advanced YAML**. Saves are validated, keep `.bak` copies, and reload immediately. Treat the URL as a password and do not share it.
+
+Conditional quest NPCs may be killed, but drop no items or experience. A killed profile is recorded for the current Minecraft day and cannot respawn until the following day, when its normal relevance, timing, spacing, biome, level, and daily-chance rules apply again.
+
+Interacting with a quest giver first completes a ready quest or advances an NPC objective. Otherwise it opens a private, per-player inventory containing the quests currently available from that NPC. Moving offer books into the player inventory and closing the menu accepts them; confirmation is sent only after closure. Returning an active quest book to the NPC menu abandons that quest. Any other items placed into the menu are dropped beside the NPC when it closes. Separate players can use the same NPC concurrently because each interaction has its own inventory and temporary-book session.
+
+Biome objectives require the player to remain continuously in the target biome. Their `amount` is the required number of seconds; omitted or legacy values of `1` use the 10-second default. Leaving the biome resets that objective's timer.
+
+Quest tracking is opt-in and persists across reconnects. Auto-tracking is off by default. When enabled, accepting a quest selects it only if no quest is already tracked. Accepting additional quests does not replace the current selection. Ending the tracked quest selects the most recently started remaining quest, and having no active quests hides the bar. Selecting a specific quest switches from automatic to specific tracking; `off` clears both modes. Its yellow quest glyph and title are followed by the live objective in a white, zero-progress boss bar. Collect, kill, and biome objectives show progress. NPCs, fixed locations, and the nearest matching loaded kill target within 64 blocks add an arrow relative to the direction the player is facing; no distance is shown. Tracked NPC objectives and turn-ins lease the NPC from the lifecycle: normal expiry and distance despawning are suspended, and a missing NPC is force-spawned in its configured world even when its ordinary time, chance, or death-day restrictions would prevent spawning. The quest bar is independent of other bars, so it stacks with `/coordbar`, Wither health, and other plugin boss bars.
+
+```text
+/quest admin create <id> <title...>
+/quest admin edit <id> <title|author|description> <text...>
+/quest admin edit <id> <enabled|repeatable> <true|false>
+/quest admin edit <id> <startnpc|endnpc>
+/quest admin edit <id> require <add|remove> <quest-id>
+/quest admin edit <id> reward add <command...>
+/quest admin edit <id> reward remove <number>
+/quest admin edit <id> rewarditem add <material> <amount>
+/quest admin edit <id> rewarditem remove <number>
+/quest admin edit <id> objective add collect <material> <amount> [consume] [label...]
+/quest admin edit <id> objective add kill <entity> <amount> [label...]
+/quest admin edit <id> objective add location <radius> [label...]
+/quest admin edit <id> objective add npc [label...]
+/quest admin edit <id> objective add biome <biome> [label...]
+/quest admin edit <id> objective add <above|below|underwater> <y> [label...]
+/quest admin edit <id> objective add structure <structure> [label...]
+/quest admin edit <id> objective add <sleep|night> [label...]
+/quest admin edit <id> objective add interact <entity> [label...]
+/quest admin edit <id> objective remove <number>
+/quest admin edit <id> spawnnpc <start|end> [radius]
+/quest admin delete <id> confirm
+/quest admin reload
+/quest admin editor
+```
+
+`startnpc`, `endnpc`, and NPC objectives bind the living entity the administrator is looking at within eight blocks. `spawnnpc` creates a persistent, invulnerable, stationary villager at the administrator when the radius is zero; a positive radius chooses a random surface position around the administrator. Existing or externally managed NPC entities may be bound instead.
+
+Reward commands run as the console after turn-in and support `{player}` and `{uuid}`.
+
+Item rewards should use `rewarditem`, not a `give` command. Structured items are inserted into the player's inventory and any overflow is sent through the mailbox system. If overflow cannot be queued, the inventory and consumed quest items are restored and the quest remains ready for another turn-in attempt. Command rewards remain available for experience, permissions, economy, and other non-item effects.
+
+## Test commands
+
+The following admin-only commands exercise quests without satisfying their normal availability or objectives:
+
+```text
+/quest admin test start <id>
+/quest admin test advance <id>
+/quest admin test complete <id>
+/quest admin test reset <id>
+/quest admin test examples
+```
+
+`start` still requires inventory space for the quest book. `complete` marks the quest ready but the normal NPC and book turn-in path remains in effect.
+
+The `/quest admin` and `/quest admin edit <id>` screens are clickable chat menus. Text fields and additions place an editable command into chat; toggles, removals, navigation, NPC actions, and test actions run immediately. The player-facing reward description is edited separately from the console commands and is displayed on the final page of the quest book.
+
+## Named NPCs and dialogue
+
+Spawned quest villagers receive a random name from `quest.npc-names`. Binding an existing named entity preserves its name; binding an unnamed entity assigns a random name. The editor can change start and end NPC names later and updates a loaded bound entity immediately.
+
+Quest titles, descriptions, objectives, reward descriptions, and dialogue support `{start-npc}` and `{end-npc}`. Dialogue also supports `{npc}` for the character currently speaking. This allows text such as `Take a fresh cod to {end-npc}` to become `Take a fresh cod to Tailor` in that quest's book.
+
+Each quest has random dialogue pools editable from chat:
+
+- `offer` — said when an eligible player accepts the quest
+- `idle` — said when the NPC has no quest available for that player
+- `incomplete` — said when the player has the quest but has not met its requirements
+- `objective` — said when visiting an NPC objective
+- `complete` — said after a successful book turn-in
+
+Multiple lines may be added to each pool; one is selected randomly per interaction.
+
+## Bundled examples
+
+The bundled survival campaign is a collection of storylines rather than a numbered tutorial. Early shelter quests branch into homesteading, livestock, rivers, crops, night defence and mining. Later branches cover cartography, distant biomes, enchanting, deep mining and Nether preparation, alongside shorter independent encounters and rare timed offers. Several long homestead and defence branches remain available in plains biomes so exploration is encouraged but never required merely to keep receiving quests.
+
+On a new installation, six disabled example definitions are copied into `quests/quests.yml`:
+
+- `example-gathering-supplies` — collected and consumed items
+- `example-pest-control` — mob kills and a prerequisite
+- `example-the-old-trail` — location visit
+- `example-message-for-the-scholar` — NPC visit
+- `example-expedition` — several ordered objective types
+- `example-fish-for-tailor` — named-NPC placeholders, item delivery, and state-specific random dialogue
+
+They are disabled because NPC UUIDs and meaningful world coordinates are server-specific. Bind or spawn their start/end NPCs, replace the scholar placeholder NPC objective, adjust example locations, and then enable them through the chat editor.
+
+`/quest admin test examples` restores only missing bundled examples. Existing examples and administrator edits are never overwritten.

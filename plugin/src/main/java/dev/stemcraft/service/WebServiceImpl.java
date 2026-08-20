@@ -303,7 +303,7 @@ public class WebServiceImpl extends BaseService implements WebService {
 
             api.messages().info("WEB_SERVER_REQUEST",
                     "method", request.method(),
-                    "path", request.path(),
+                    "path", redactSensitivePath(request.path()),
                     "ip", exchange.getRemoteAddress().toString()
             );
 
@@ -345,6 +345,13 @@ public class WebServiceImpl extends BaseService implements WebService {
             try (OutputStream os = exchange.getResponseBody()) {
                 Files.copy(requested, os);
             }
+        }
+
+        private static String redactSensitivePath(String path) {
+            if (!path.startsWith("/quests/editor/")) return path;
+            String remainder = path.substring("/quests/editor/".length());
+            int slash = remainder.indexOf('/');
+            return "/quests/editor/[redacted]" + (slash < 0 ? "" : remainder.substring(slash));
         }
 
         private void writeEndpointResponse(HttpExchange exchange, Object result) throws IOException {

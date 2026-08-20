@@ -44,7 +44,10 @@ import java.util.*;
  */
 @SuppressWarnings("unused")
 public class GameModeInventories extends BaseFeature {
+    private static final String AUTOSAVE_TASK = "feature:gamemode-inventories-autosave";
+    private static final long AUTOSAVE_TICKS = 1200L;
     private final Map<UUID, PlayerProfiles> profiles = new HashMap<>();
+    private final Map<UUID, ActiveProfile> activeProfiles = new HashMap<>();
 
     /**
      * Constructor for GameModeInventories feature.
@@ -65,6 +68,7 @@ public class GameModeInventories extends BaseFeature {
         api.events().register(PlayerQuitEvent.class, this::onQuit);
         api.events().register(PlayerChangedWorldEvent.class, this::onWorldChange);
         api.events().register(PlayerGameModeChangeEvent.class, this::onGameModeChange);
+        api.tasks().repeating(AUTOSAVE_TASK, AUTOSAVE_TICKS, AUTOSAVE_TICKS, this::saveOnlineProfiles);
     }
 
     /**
@@ -72,7 +76,8 @@ public class GameModeInventories extends BaseFeature {
      */
     @Override
     public void onDisable() {
-        saveAll();
+        api.tasks().cancel(AUTOSAVE_TASK);
+        saveOnlineProfiles();
     }
 
     @Override
@@ -93,6 +98,7 @@ public class GameModeInventories extends BaseFeature {
         String baseName = WorldUtil.baseName(player.getWorld());
         GameMode gm = player.getGameMode();
         applyOrCreateProfile(player, baseName, gm);
+        activeProfiles.put(player.getUniqueId(), new ActiveProfile(baseName, gm));
     }
 
     /**
@@ -105,10 +111,8 @@ public class GameModeInventories extends BaseFeature {
         if (isInMinigame(player)) {
             return;
         }
-        String baseName = WorldUtil.baseName(player.getWorld());
-        GameMode gm = player.getGameMode();
-        saveCurrentProfile(player, baseName, gm);
-        saveAll();
+        saveActiveProfile(player);
+        activeProfiles.remove(player.getUniqueId());
     }
 
     /**
@@ -121,19 +125,10 @@ public class GameModeInventories extends BaseFeature {
         if (isInMinigame(player)) {
             return;
         }
-        World from = event.getFrom();
         World to = player.getWorld();
         GameMode gm = player.getGameMode();
-
-        String fromBase = WorldUtil.baseName(from);
         String toBase = WorldUtil.baseName(to);
-
-        if (fromBase.equals(toBase)) {
-            return;
-        }
-
-        saveCurrentProfile(player, fromBase, gm);
-        applyOrCreateProfile(player, toBase, gm);
+        switchProfile(player, toBase, gm);
     }
 
     /**
@@ -150,12 +145,9 @@ public class GameModeInventories extends BaseFeature {
         if (isInMinigame(player)) {
             return;
         }
-        GameMode oldGm = player.getGameMode();
         GameMode newGm = event.getNewGameMode();
         String baseName = WorldUtil.baseName(player.getWorld());
-
-        saveCurrentProfile(player, baseName, oldGm);
-        applyOrCreateProfile(player, baseName, newGm);
+        switchProfile(player, baseName, newGm);
     }
 
     /**
@@ -189,7 +181,28 @@ public class GameModeInventories extends BaseFeature {
     private void saveCurrentProfile(Player player, String group, GameMode gm) {
         PlayerProfiles p = getPlayerProfiles(player.getUniqueId());
         String key = profileKey(group, gm);
-        p.states.put(key, PlayerState.fromPlayer(player));
+        PlayerState state = PlayerState.fromPlayer(player);
+        p.states.put(key, state);
+        persistProfile(player.getUniqueId(), key, state);
+    }
+
+    /**
+     * Saves the profile that was actually applied to the player. This must not be inferred from
+     * the player's current world and game mode because world settings can fire a nested game-mode
+     * change while a world-change event is still being dispatched.
+     */
+    private void saveActiveProfile(Player player) {
+        ActiveProfile active = activeProfiles.get(player.getUniqueId());
+        if (active != null) saveCurrentProfile(player, active.group(), active.gameMode());
+    }
+
+    private void switchProfile(Player player, String group, GameMode gameMode) {
+        ActiveProfile target = new ActiveProfile(group, gameMode);
+        ActiveProfile active = activeProfiles.get(player.getUniqueId());
+        if (target.equals(active)) return;
+        if (active != null) saveCurrentProfile(player, active.group(), active.gameMode());
+        applyOrCreateProfile(player, group, gameMode);
+        activeProfiles.put(player.getUniqueId(), target);
     }
 
     /**
@@ -248,27 +261,23 @@ public class GameModeInventories extends BaseFeature {
     /**
      * Saves all player profiles to storage.
      */
-    private void saveAll() {
-        api.database().update("DELETE FROM gamemode_inventories", null);
-
-        for (Map.Entry<UUID, PlayerProfiles> playerEntry : profiles.entrySet()) {
-            String uuid = playerEntry.getKey().toString();
-            PlayerProfiles p = playerEntry.getValue();
-
-            for (Map.Entry<String, PlayerState> profileEntry : p.states.entrySet()) {
-                String key = profileEntry.getKey();
-                String yaml = profileEntry.getValue().toYaml();
-                api.database().update(
-                    "INSERT INTO gamemode_inventories (player_uuid, profile_key, state_yaml, updated_at) VALUES (?, ?, ?, ?)",
-                    ps -> {
-                        ps.setString(1, uuid);
-                        ps.setString(2, key);
-                        ps.setString(3, yaml);
-                        ps.setLong(4, System.currentTimeMillis());
-                    }
-                );
-            }
+    private void saveOnlineProfiles() {
+        for (Player player : org.bukkit.Bukkit.getOnlinePlayers()) {
+            if (!isInMinigame(player)) saveActiveProfile(player);
         }
+    }
+
+    private void persistProfile(UUID uuid, String key, PlayerState state) {
+        String yaml = state.toYaml();
+        api.database().update(
+            "INSERT OR REPLACE INTO gamemode_inventories (player_uuid, profile_key, state_yaml, updated_at) VALUES (?, ?, ?, ?)",
+            ps -> {
+                ps.setString(1, uuid.toString());
+                ps.setString(2, key);
+                ps.setString(3, yaml);
+                ps.setLong(4, System.currentTimeMillis());
+            }
+        );
     }
 
     private void ensureStorage() {
@@ -287,6 +296,8 @@ public class GameModeInventories extends BaseFeature {
     private static class PlayerProfiles {
         final Map<String, PlayerState> states = new HashMap<>();
     }
+
+    private record ActiveProfile(String group, GameMode gameMode) { }
 
     private static void clearPotionEffects(Player player) {
         for (PotionEffect effect : player.getActivePotionEffects()) {

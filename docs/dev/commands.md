@@ -20,6 +20,7 @@ The list below reflects the active built-in command roots in source.
 | `/resourcepack` | `ResourcePackCommand` | Pack delivery and pack build operations |
 | `/hologram` | `HologramServiceImpl` | Hologram creation and editing |
 | `/mailbox` | `Mailboxes` | Send mail and administer the delivery queue |
+| `/quest` | `QuestFeature` | Player quest journal and administration |
 | `/audit` | `AuditServiceImpl` | Audit review |
 | `/moderation` | `ChatServiceImpl` | Moderation incident review |
 | `/reports` | `ChatServiceImpl` | Player report review |
@@ -52,6 +53,7 @@ The list below reflects the active built-in command roots in source.
 | Command | Owner | Notes |
 | --- | --- | --- |
 | `/book` | `CustomBooks` | Create, list, show, and distribute configured books; saved book keys are title-derived and preserve existing hyphens |
+| `/quest` | `QuestFeature` | View quests, track active objectives, or abandon active quests |
 | `/imenu` | `InteractiveMenus` | Interactive menu runtime and editor |
 | dynamic configured aliases | `CustomCommands` | Commands loaded from config at startup; default player sender with optional `player:` / `server:` prefixes |
 | `gms`, `gmc`, `gma`, `gmsp` | `GameModeAliases` | Short aliases that dispatch to `/gamemode` |

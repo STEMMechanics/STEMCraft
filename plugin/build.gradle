@@ -11,6 +11,7 @@ repositories {
     maven { url = uri("https://repo.opencollab.dev/main/") }
     maven { url = uri("https://repo.extendedclip.com/content/repositories/placeholderapi/") }
     maven { url = uri("https://maven.enginehub.org/repo/") }
+    maven { url = uri("https://maven.citizensnpcs.co/repo/") }
 }
 
 dependencies {
@@ -20,6 +21,10 @@ dependencies {
     compileOnly('org.geysermc.floodgate:api:2.2.4-SNAPSHOT')
     compileOnly('org.geysermc.geyser:api:2.9.0-SNAPSHOT')
     compileOnly('me.clip:placeholderapi:2.11.6')
+    compileOnly('net.citizensnpcs:citizens-main:2.0.43-SNAPSHOT') {
+        exclude group: 'net.byteflux', module: 'libby-bukkit'
+    }
+    compileOnly('com.googlecode.json-simple:json-simple:1.1.1')
 
     // Lombok
     compileOnly("org.projectlombok:lombok:1.18.42")

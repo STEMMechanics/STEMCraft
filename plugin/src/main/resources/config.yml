@@ -147,6 +147,7 @@ web_server:
     enabled: true
     port: 8950
     path: www
+    public-url: ""
 
 first-join:
   enabled: true
@@ -586,7 +587,7 @@ survival-qol:
   disable-crop-trampling: true
   auto-refill: true
   named-mob-info:
-    enabled: true
+    enabled: false
     message: "/info/{name} • {type} • {health}/{max_health} health • Owner: {owner}"
   anvil-warning:
     enabled: true
@@ -620,6 +621,17 @@ skip_night:
   random_tick_speed: 300
   worlds:
     - "survival"
+quest:
+  enabled: true
+  npc-names:
+    - "Rokar"
+    - "Tailor"
+    - "Mira"
+    - "Bram"
+    - "Elowen"
+    - "Tobin"
+    - "Nessa"
+    - "Orin"
 player_game_messages:
   join:
     enabled: true
