@@ -38,10 +38,23 @@ STEMCraftAPI api = STEMCraftAPI.api();
 - `recipes()`
 - `regions()`
 - `selections()`
+- `saves()`
 - `tabComplete()`
 - `tasks()`
 - `web()`
 - `worlds()`
+
+## Save checkpoints
+
+Extensions with pending in-memory state can join `/stemcraft save` and normal STEMCraft shutdown checkpoints:
+
+```java
+api.saves().register(myPlugin, "player-data", () -> playerDataStore.flush());
+```
+
+Registering the same plugin and ID replaces the previous callback. Disabled plugins are discarded automatically. A callback must return only after its state is durable and may throw an exception; one failing participant is reported without preventing the remaining participants from saving. Call `api.saves().unregister(myPlugin, "player-data")` when an integration no longer owns that state.
+
+`api.saves().saveAll()` invokes the same complete STEMCraft checkpoint as `/stemcraft save`. It covers active STEMCraft features and services, dirty STEMCraft configuration files, and enabled registered extensions. It deliberately does not save Bukkit worlds or vanilla player data.
 
 ## Main Extension Areas
 

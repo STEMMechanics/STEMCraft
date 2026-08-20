@@ -47,6 +47,7 @@ import dev.stemcraft.api.service.message.MessageService;
 import dev.stemcraft.api.service.region.RegionService;
 import dev.stemcraft.api.service.resourcepack.ResourcePackService;
 import dev.stemcraft.api.service.selection.SelectionService;
+import dev.stemcraft.api.service.save.SaveService;
 import dev.stemcraft.api.service.task.TaskService;
 import dev.stemcraft.api.service.punishment.PunishmentService;
 import dev.stemcraft.api.service.tabcomplete.TabCompleteService;
@@ -242,6 +243,9 @@ public class STEMCraftAPIImpl extends HasMessagesImpl implements STEMCraftAPI {
      */
     @Override
     public SelectionService selections() { return plugin.selections(); }
+
+    @Override
+    public SaveService saves() { return plugin.saves(); }
 
     /**
      * Get the region service.

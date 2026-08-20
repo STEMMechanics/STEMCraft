@@ -75,6 +75,11 @@ public class GameModeInventories extends BaseFeature {
         saveAll();
     }
 
+    @Override
+    public void onSave() {
+        saveAll();
+    }
+
     /**
      * Handles player join events, applying or creating the appropriate profile.
      *

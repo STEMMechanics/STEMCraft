@@ -312,8 +312,11 @@ public class WorldChangeRecorder implements WorldBaseSetting {
      * Called when the recorder is disabled.
      */
     public void onDisable() {
-        sessions.forEach((world, session) -> session.save());
+        onSave();
     }
+
+    /** Persist all active rollback sessions without stopping the recorder. */
+    public void onSave() { sessions.forEach((world, session) -> session.save()); }
 
     /**
      * Returns a list of tab completions for this setting.

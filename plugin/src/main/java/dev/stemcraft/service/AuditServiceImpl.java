@@ -340,6 +340,11 @@ public class AuditServiceImpl extends BaseService implements AuditService {
         flushAll();
     }
 
+    @Override
+    public void onSave() {
+        flushAll();
+    }
+
     public void recordCommunication(String category,
                                     @Nullable Player player,
                                     @Nullable String content,

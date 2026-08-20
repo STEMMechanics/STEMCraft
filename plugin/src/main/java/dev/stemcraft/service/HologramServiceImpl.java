@@ -255,6 +255,11 @@ public class HologramServiceImpl extends BaseService implements HologramService 
     }
 
     @Override
+    public void onSave() {
+        saveAll();
+    }
+
+    @Override
     public void onReload() {
         super.onReload();
         reloadVisibilitySettings();

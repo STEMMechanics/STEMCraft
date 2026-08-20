@@ -77,6 +77,9 @@ public abstract class BaseService {
      */
     public void onDisable() {}
 
+    /** Called when all pending service state should be persisted without disabling it. */
+    public void onSave() {}
+
     /**
      * Called when the service should refresh configuration-backed runtime state.
      */

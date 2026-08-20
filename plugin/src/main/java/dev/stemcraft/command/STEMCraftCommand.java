@@ -25,6 +25,7 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.Command;
 import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.feature.PlayerWelcomeCommand;
+import dev.stemcraft.api.service.save.SaveReport;
 import dev.stemcraft.service.firstjoin.FirstJoinCommand;
 
 import java.util.Locale;
@@ -52,6 +53,7 @@ public class STEMCraftCommand extends BaseCommand {
         addTabCompletion("status");
         addTabCompletion("version");
         addTabCompletion("reload");
+        addTabCompletion("save");
         addTabCompletion("reload", "locale");
         addTabCompletion("reload", "locales");
         firstJoinCommand.addTabCompletions(this);
@@ -74,8 +76,23 @@ public class STEMCraftCommand extends BaseCommand {
             case "status", "info" -> sendStatus(ctx);
             case "version" -> sendVersion(ctx);
             case "reload" -> handleReload(ctx);
+            case "save" -> handleSave(ctx);
             default -> ctx.returnUsage();
         }
+    }
+
+    private void handleSave(CommandContext ctx) {
+        if (!ctx.getSender().hasPermission("stemcraft.command.stemcraft.save")) {
+            ctx.returnError("STEMCRAFT_COMMAND_SAVE_NO_PERMISSION");
+        }
+        SaveReport report = api.saves().saveAll();
+        if (report.successful()) {
+            ctx.returnSuccess("STEMCRAFT_COMMAND_SAVE_SUCCESS", "count", report.succeeded());
+        }
+        ctx.warn("STEMCRAFT_COMMAND_SAVE_FAILURE", "succeeded", report.succeeded(),
+            "attempted", report.attempted(), "count", report.failures().size());
+        report.failures().forEach((id, reason) ->
+            ctx.warn("STEMCRAFT_COMMAND_SAVE_FAILURE_ENTRY", "id", id, "reason", reason));
     }
 
     private void sendVersion(CommandContext ctx) {

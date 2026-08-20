@@ -187,6 +187,11 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
     }
 
     @Override
+    public void onSave() {
+        captureOnlinePlayers();
+    }
+
+    @Override
     public void register(@NotNull PlayerStatDefinition definition) {
         String key = normalizeKey(definition.key());
         if (key == null) {
