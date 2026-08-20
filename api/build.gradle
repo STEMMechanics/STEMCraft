@@ -35,11 +35,6 @@ dependencies {
     compileOnly "org.projectlombok:lombok:1.18.42"
     annotationProcessor "org.projectlombok:lombok:1.18.42"
 
-    // Jackson for JSON handling
-    compileOnly("com.fasterxml.jackson.core:jackson-databind:2.21.1")
-    implementation("com.fasterxml.jackson.core:jackson-core:2.21.1")
-    implementation("com.fasterxml.jackson.core:jackson-annotations:2.21")
-
     testImplementation "org.junit.jupiter:junit-jupiter:5.11.0"
     testImplementation "org.mockito:mockito-core:5.12.0"
     //noinspection VulnerableLibrariesLocal
@@ -50,7 +45,6 @@ dependencies {
         exclude group: "org.junit.jupiter"
         exclude group: "org.junit.platform"
     }
-    testImplementation("com.fasterxml.jackson.core:jackson-databind:2.21.1")
     testImplementation("com.google.code.gson:gson:2.11.0")
     testImplementation("com.google.code.findbugs:jsr305:3.0.2")
     testImplementation("org.geysermc.geyser:api:2.9.0-SNAPSHOT")
