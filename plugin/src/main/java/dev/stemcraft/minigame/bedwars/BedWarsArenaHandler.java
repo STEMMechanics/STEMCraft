@@ -476,7 +476,6 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
         }
     }
 
-    @Override
     public void clearPlayerInventory(Player player) {
         player.getInventory().clear();
         player.getInventory().setArmorContents(new ItemStack[0]);

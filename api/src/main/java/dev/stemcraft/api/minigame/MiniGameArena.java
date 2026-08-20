@@ -288,13 +288,7 @@ public interface MiniGameArena extends MessageService, HasMeta<MiniGameArena> {
      *
      * @return The updated countdown time.
      */
-    default int decrementCountdown() {
-        int current = getCountdown();
-        if (current > 0) {
-            setCountdown(current - 1);
-        }
-        return getCountdown();
-    }
+    int decrementCountdown();
 
     /**
      * Number of players currently in the arena related to the minigame.
@@ -757,28 +751,14 @@ public interface MiniGameArena extends MessageService, HasMeta<MiniGameArena> {
      * @param secondsRemaining The number of seconds remaining before the round starts.
      * @param subtitle The subtitle text to show beneath the countdown.
      */
-    default void showStartingCountdownTitle(int secondsRemaining, String subtitle) {
-        if (secondsRemaining <= 0) {
-            return;
-        }
-
-        showTitle(
-            "<gradient:#fde047:#f97316><bold>" + secondsRemaining + "</bold></gradient>",
-            subtitle,
-            0,
-            1000,
-            200
-        );
-    }
+    void showStartingCountdownTitle(int secondsRemaining, String subtitle);
 
     /**
      * Show a standard start countdown title to the arena players.
      *
      * @param secondsRemaining The number of seconds remaining before the round starts.
      */
-    default void showStartingCountdownTitle(int secondsRemaining) {
-        showStartingCountdownTitle(secondsRemaining, "<gold>Game starts in</gold>");
-    }
+    void showStartingCountdownTitle(int secondsRemaining);
 
     /**
      * Pull one arena occupant toward a target location at a fixed movement speed.

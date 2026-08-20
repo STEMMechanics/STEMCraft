@@ -24,8 +24,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -33,7 +33,11 @@ import static org.mockito.Mockito.when;
 class MiniGameArenaSharedTest {
     @Test
     void startingCountdownTitleUsesSharedArenaFormatting() {
-        MiniGameArena arena = mock(MiniGameArena.class, CALLS_REAL_METHODS);
+        MiniGameServiceImpl service = mock(MiniGameServiceImpl.class);
+        STEMCraftAPI api = mock(STEMCraftAPI.class);
+        World world = mock(World.class);
+        when(world.getSpawnLocation()).thenReturn(new Location(world, 0, 64, 0));
+        MiniGameArena arena = spy(new MiniGameArenaImpl(service, api, "test", "countdown", world));
 
         arena.showStartingCountdownTitle(4, "<gold>Race starts in</gold>");
 

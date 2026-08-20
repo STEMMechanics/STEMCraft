@@ -22,8 +22,6 @@ package dev.stemcraft.api.service.punishment;
 
 import lombok.Getter;
 import lombok.experimental.Accessors;
-import org.bukkit.Bukkit;
-import org.bukkit.entity.Player;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -116,17 +114,4 @@ public final class PunishmentRecord {
         return createdAt.plusSeconds(durationSeconds);
     }
 
-    /**
-     * Gets the Player object of the target if they are online.
-     *
-     * @return The Player object if online, null otherwise.
-     */
-    public Player getPlayerIfOnline() {
-        Player player = Bukkit.getPlayer(targetUuid);
-        if(player != null && player.isOnline()) {
-            return player;
-        }
-
-        return null;
-    }
 }
