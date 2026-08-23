@@ -9,6 +9,7 @@
   * [Items & Crafting](survival/items-and-crafting/README.md)
     * [Custom Items](survival/items-and-crafting/custom-items.md)
     * [Recipes](survival/items-and-crafting/recipes.md)
+    * [Chisel](survival/items-and-crafting/chisel.md)
     * [Useful Rotten Flesh](survival/items-and-crafting/rotten-flesh-uses.md)
     * [Fried Eggs](survival/items-and-crafting/fried-eggs.md)
     * [Gifts](survival/items-and-crafting/gifts.md)
