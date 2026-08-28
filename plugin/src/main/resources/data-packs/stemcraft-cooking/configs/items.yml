@@ -1,0 +1,72 @@
+custom-items:
+  rice-shoots: {material: WHEAT_SEEDS, name: "<green>Rice Shoots", texture: "item/rice_shoots", placement: DENY}
+  rice: {material: WHEAT, name: "Rice", texture: "item/rice", placement: DENY}
+  cooked-rice: {material: BREAD, name: "Cooked Rice", texture: "item/cooked_rice", placement: DENY, food: {nutrition: 3, saturation: 2.0}}
+  edible-seaweed: {material: DRIED_KELP, name: "Edible Seaweed", texture: "item/edible_seaweed", placement: DENY, food: {nutrition: 1, saturation: 0.5}}
+  coconut: {material: APPLE, name: "Coconut", texture: "item/coconut", food: {nutrition: 2, saturation: 1.2}}
+  coconut-milk: {material: MILK_BUCKET, name: "Coconut Milk", texture: "item/coconut_milk", max-stack-size: 16}
+  pineapple: {material: APPLE, name: "Pineapple", texture: "item/pineapple", food: {nutrition: 4, saturation: 2.4}}
+  banana: {material: APPLE, name: "Banana", texture: "item/banana", food: {nutrition: 3, saturation: 1.8}}
+  mango: {material: APPLE, name: "Mango", texture: "item/mango", food: {nutrition: 4, saturation: 2.2}}
+  lime: {material: APPLE, name: "Lime", texture: "item/lime", food: {nutrition: 2, saturation: 0.8}}
+  ginger: {material: POTATO, name: "Ginger", texture: "item/ginger", food: {nutrition: 1, saturation: 0.3}}
+  chilli-pepper: {material: CARROT, name: "Chilli Pepper", texture: "item/chilli_pepper", food: {nutrition: 1, saturation: 0.3, damage: 1.0}}
+  tomato: {material: APPLE, name: "Tomato", texture: "item/tomato", food: {nutrition: 2, saturation: 1.0}}
+  onion: {material: POTATO, name: "Onion", texture: "item/onion", food: {nutrition: 1, saturation: 0.5}}
+  garlic: {material: POTATO, name: "Garlic", texture: "item/garlic", food: {nutrition: 1, saturation: 0.4}}
+  fresh-herbs: {material: WHEAT_SEEDS, name: "Fresh Herbs", texture: "item/fresh_herbs", placement: DENY}
+  rice-flour: {material: SUGAR, name: "Rice Flour", texture: "item/rice_flour", placement: DENY}
+  rice-noodles: {material: STRING, name: "Rice Noodles", texture: "item/rice_noodles", placement: DENY}
+  coconut-cream: {material: SNOWBALL, name: "Coconut Cream", texture: "item/coconut_cream", placement: DENY}
+  fruit-slices: {material: MELON_SLICE, name: "Fruit Slices", texture: "item/fruit_slices", food: {nutrition: 2, saturation: 0.8}}
+  dried-fruit: {material: DRIED_KELP, name: "Dried Fruit", texture: "item/dried_fruit", food: {nutrition: 3, saturation: 1.5}}
+  chopped-vegetables: {material: BEETROOT, name: "Chopped Vegetables", texture: "item/chopped_vegetables", placement: DENY}
+  vegetable-stock: {material: HONEY_BOTTLE, name: "Vegetable Stock", texture: "item/vegetable_stock", max-stack-size: 16}
+  mushroom-stock: {material: HONEY_BOTTLE, name: "Mushroom Stock", texture: "item/mushroom_stock", max-stack-size: 16}
+  seafood-stock: {material: HONEY_BOTTLE, name: "Seafood Stock", texture: "item/seafood_stock", max-stack-size: 16}
+  cooking-oil: {material: HONEY_BOTTLE, name: "Cooking Oil", texture: "item/cooking_oil", max-stack-size: 16}
+  sea-salt: {material: SUGAR, name: "Sea Salt", texture: "item/sea_salt", placement: DENY}
+  roasted-seeds: {material: MELON_SEEDS, name: "Roasted Seeds", texture: "item/roasted_seeds", food: {nutrition: 2, saturation: 1.2}}
+
+  miners-breakfast:
+    material: COOKED_PORKCHOP
+    name: "<gold>Miner's Breakfast"
+    lore: ["<gray>A hearty start underground", "<yellow>Haste I (75s)"]
+    texture: "item/miners_breakfast"
+    food: {nutrition: 10, saturation: 12.0, effects: [{type: HASTE, duration-seconds: 75}]}
+  mushroom-risotto: {material: RABBIT_STEW, name: "Mushroom Risotto", texture: "item/mushroom_risotto", food: {nutrition: 9, saturation: 11.0, returns: BOWL}}
+  seafood-risotto: {material: RABBIT_STEW, name: "Seafood Risotto", texture: "item/seafood_risotto", food: {nutrition: 10, saturation: 12.0, returns: BOWL, effects: [{type: WATER_BREATHING, duration-seconds: 30}]}}
+  pumpkin-risotto: {material: RABBIT_STEW, name: "Pumpkin Risotto", texture: "item/pumpkin_risotto", food: {nutrition: 9, saturation: 10.5, returns: BOWL}}
+  cooked-rice-bowl: {material: RABBIT_STEW, name: "Cooked Rice Bowl", texture: "item/cooked_rice_bowl", food: {nutrition: 6, saturation: 6.0, returns: BOWL}}
+  rice-ball: {material: BREAD, name: "Rice Ball", texture: "item/rice_ball", food: {nutrition: 4, saturation: 3.5}}
+  salmon-sushi: {material: COOKED_SALMON, name: "Salmon Sushi", texture: "item/salmon_sushi", food: {nutrition: 6, saturation: 5.5, effects: [{type: DOLPHINS_GRACE, duration-seconds: 20}]}}
+  cod-sushi: {material: COOKED_COD, name: "Cod Sushi", texture: "item/cod_sushi", food: {nutrition: 6, saturation: 5.0, effects: [{type: WATER_BREATHING, duration-seconds: 20}]}}
+  tropical-fish-sushi: {material: COOKED_COD, name: "Tropical Fish Sushi", texture: "item/tropical_fish_sushi", food: {nutrition: 6, saturation: 5.0, effects: [{type: LUCK, duration-seconds: 30}]}}
+  pufferfish-sushi: {material: PUFFERFISH, name: "<yellow>Pufferfish Sushi", lore: ["<red>Prepared at your own risk"], texture: "item/pufferfish_sushi", food: {nutrition: 5, saturation: 4.0, effects: [{type: WATER_BREATHING, duration-seconds: 45}, {type: POISON, duration-seconds: 8}, {type: NAUSEA, duration-seconds: 12}]}}
+  vegetable-sushi: {material: BREAD, name: "Vegetable Sushi", texture: "item/vegetable_sushi", food: {nutrition: 5, saturation: 4.5}}
+  seaweed-salad: {material: RABBIT_STEW, name: "Seaweed Salad", texture: "item/seaweed_salad", food: {nutrition: 5, saturation: 5.0, returns: BOWL, effects: [{type: WATER_BREATHING, duration-seconds: 15}]}}
+  tropical-salad: {material: RABBIT_STEW, name: "Tropical Salad", texture: "item/tropical_salad", food: {nutrition: 7, saturation: 6.0, returns: BOWL, heal: 2.0}}
+  fish-and-chips: {material: COOKED_COD, name: "Fish and Chips", texture: "item/fish_and_chips", food: {nutrition: 10, saturation: 11.0}}
+  tropical-fish-curry: {material: RABBIT_STEW, name: "Tropical Fish Curry", texture: "item/tropical_fish_curry", food: {nutrition: 9, saturation: 10.0, returns: BOWL, effects: [{type: LUCK, duration-seconds: 30}]}}
+  coconut-chicken-curry: {material: RABBIT_STEW, name: "Coconut Chicken Curry", texture: "item/coconut_chicken_curry", food: {nutrition: 10, saturation: 12.0, returns: BOWL, effects: [{type: RESISTANCE, duration-seconds: 20}]}}
+  vegetable-curry: {material: RABBIT_STEW, name: "Vegetable Curry", texture: "item/vegetable_curry", food: {nutrition: 8, saturation: 9.0, returns: BOWL}}
+  mushroom-noodles: {material: RABBIT_STEW, name: "Mushroom Noodles", texture: "item/mushroom_noodles", food: {nutrition: 8, saturation: 8.5, returns: BOWL}}
+  seafood-noodles: {material: RABBIT_STEW, name: "Seafood Noodles", texture: "item/seafood_noodles", food: {nutrition: 9, saturation: 9.5, returns: BOWL, effects: [{type: DOLPHINS_GRACE, duration-seconds: 15}]}}
+  vegetable-noodles: {material: RABBIT_STEW, name: "Vegetable Noodles", texture: "item/vegetable_noodles", food: {nutrition: 8, saturation: 8.0, returns: BOWL}}
+  fried-rice: {material: RABBIT_STEW, name: "Fried Rice", texture: "item/fried_rice", food: {nutrition: 9, saturation: 10.0, returns: BOWL}}
+  seafood-fried-rice: {material: RABBIT_STEW, name: "Seafood Fried Rice", texture: "item/seafood_fried_rice", food: {nutrition: 10, saturation: 11.0, returns: BOWL, effects: [{type: WATER_BREATHING, duration-seconds: 20}]}}
+  stuffed-mushroom: {material: BAKED_POTATO, name: "Stuffed Mushroom", texture: "item/stuffed_mushroom", food: {nutrition: 6, saturation: 6.0}}
+  mushroom-skewer: {material: BAKED_POTATO, name: "Mushroom Skewer", texture: "item/mushroom_skewer", food: {nutrition: 5, saturation: 4.0}}
+  honey-glazed-pork: {material: COOKED_PORKCHOP, name: "Honey-Glazed Pork", texture: "item/honey_glazed_pork", food: {nutrition: 10, saturation: 13.0, effects: [{type: ABSORPTION, duration-seconds: 30}]}}
+  nether-chilli: {material: RABBIT_STEW, name: "<red>Nether Chilli", texture: "item/nether_chilli", food: {nutrition: 9, saturation: 9.0, returns: BOWL, damage: 2.0, effects: [{type: STRENGTH, duration-seconds: 25}, {type: FIRE_RESISTANCE, duration-seconds: 45}]}}
+  apple-pie: {material: PUMPKIN_PIE, name: "Apple Pie", texture: "item/apple_pie", food: {nutrition: 9, saturation: 8.0, heal: 2.0}}
+  sweet-berry-tart: {material: PUMPKIN_PIE, name: "Sweet Berry Tart", texture: "item/sweet_berry_tart", food: {nutrition: 7, saturation: 6.0, effects: [{type: SPEED, duration-seconds: 20}]}}
+
+  hot-chocolate: {material: HONEY_BOTTLE, name: "Hot Chocolate", texture: "item/hot_chocolate", max-stack-size: 16, food: {nutrition: 4, saturation: 3.0, returns: GLASS_BOTTLE}}
+  coconut-water: {material: HONEY_BOTTLE, name: "Coconut Water", texture: "item/coconut_water", max-stack-size: 16, food: {nutrition: 3, saturation: 2.0, returns: GLASS_BOTTLE, effects: [{type: REGENERATION, duration-seconds: 5}]}}
+  tropical-smoothie: {material: HONEY_BOTTLE, name: "Tropical Smoothie", texture: "item/tropical_smoothie", max-stack-size: 16, food: {nutrition: 6, saturation: 5.0, returns: GLASS_BOTTLE, effects: [{type: SPEED, duration-seconds: 15}]}}
+  mango-juice: {material: HONEY_BOTTLE, name: "Mango Juice", texture: "item/mango_juice", max-stack-size: 16, food: {nutrition: 4, saturation: 3.0, returns: GLASS_BOTTLE, heal: 1.0}}
+  limeade: {material: HONEY_BOTTLE, name: "Limeade", texture: "item/limeade", max-stack-size: 16, food: {nutrition: 3, saturation: 2.0, returns: GLASS_BOTTLE, effects: [{type: SPEED, duration-seconds: 10}]}}
+  phantom-jerky: {material: DRIED_KELP, name: "Phantom Jerky", texture: "item/phantom_jerky", food: {nutrition: 5, saturation: 4.0, effects: [{type: SLOW_FALLING, duration-seconds: 45}, {type: HUNGER, duration-seconds: 15}]}}
+  chorus-parfait: {material: CHORUS_FRUIT, name: "Chorus Parfait", texture: "item/chorus_parfait", food: {nutrition: 7, saturation: 5.0, effects: [{type: SLOW_FALLING, duration-seconds: 30}, {type: NAUSEA, duration-seconds: 8}]}}
+  rotten-sandwich: {material: BREAD, name: "<dark_green>Rotten Sandwich", texture: "item/rotten_sandwich", food: {nutrition: 7, saturation: 4.0, effects: [{type: HUNGER, duration-seconds: 20, probability: 0.8}, {type: POISON, duration-seconds: 6, probability: 0.35}]}}

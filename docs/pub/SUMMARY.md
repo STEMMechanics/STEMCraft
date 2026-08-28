@@ -11,6 +11,7 @@
     * [Recipes](survival/items-and-crafting/recipes.md)
     * [Useful Rotten Flesh](survival/items-and-crafting/rotten-flesh-uses.md)
     * [Fried Eggs](survival/items-and-crafting/fried-eggs.md)
+    * [Farming, Foraging & Cooking](survival/items-and-crafting/farming-and-cooking.md)
     * [Gifts](survival/items-and-crafting/gifts.md)
     * [Slime and Magma Buckets](survival/items-and-crafting/slime-and-magma-buckets.md)
   * [Changes from Vanilla](survival/changes-from-vanilla.md)
