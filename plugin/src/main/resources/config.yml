@@ -649,6 +649,9 @@ skip_night:
     - "survival"
 quest:
   enabled: true
+  # Only show the tracked quest boss bar in these worlds. Supports * wildcards.
+  tracking-worlds:
+    - "survival*"
   npc-names:
     - "Rokar"
     - "Tailor"

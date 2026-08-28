@@ -10,6 +10,7 @@ import dev.stemcraft.api.service.mailbox.MailSendResult;
 import dev.stemcraft.api.service.web.WebServiceRequest;
 import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
 import dev.stemcraft.api.util.TextUtil;
+import dev.stemcraft.api.util.PatternUtil;
 import dev.stemcraft.feature.quest.QuestDefinition;
 import dev.stemcraft.feature.quest.QuestDefinitionStore;
 import dev.stemcraft.feature.quest.QuestObjective;
@@ -129,6 +130,7 @@ public final class QuestFeature extends BaseFeature {
     private final Map<UUID, BossBar> trackingBossBars = new HashMap<>();
     private final Map<String, Long> editorTokens = new ConcurrentHashMap<>();
     private List<String> npcNames = List.of("Rokar", "Tailor", "Mira", "Bram", "Elowen", "Tobin", "Nessa", "Orin");
+    private List<Pattern> trackingWorlds = List.of(PatternUtil.globToRegex("survival*"));
     private File questFile;
     private File npcFile;
     private NamespacedKey questIdKey;
@@ -182,6 +184,11 @@ public final class QuestFeature extends BaseFeature {
         List<String> configured = getConfigSection().getStringList("npc-names").stream()
             .map(String::trim).filter(value -> !value.isEmpty()).toList();
         if (!configured.isEmpty()) npcNames = configured;
+        List<Pattern> configuredWorlds = getConfigSection().getStringList("tracking-worlds").stream()
+            .map(String::trim).filter(value -> !value.isEmpty())
+            .map(value -> PatternUtil.globToRegex(value.toLowerCase(Locale.ROOT))).toList();
+        trackingWorlds = configuredWorlds.isEmpty()
+            ? List.of(PatternUtil.globToRegex("survival*")) : configuredWorlds;
     }
 
     @Override
@@ -2147,13 +2154,17 @@ public final class QuestFeature extends BaseFeature {
             stopTracking(player.getUniqueId());
             return;
         }
+        if (!matchesTrackingWorld(trackingWorlds, player.getWorld().getName())) {
+            BossBar hidden = trackingBossBars.remove(player.getUniqueId());
+            if (hidden != null) player.hideBossBar(hidden);
+            return;
+        }
 
         Location target = trackingTarget(player, quest, progress);
         String arrow = target == null ? "" : trackingArrow(player.getLocation(), target);
         String objective = trackingObjectiveText(player, quest, progress);
         Component title = glyph("question_yellow", "!").color(NamedTextColor.YELLOW)
-            .append(Component.text(" " + renderQuestText(quest, quest.title()), NamedTextColor.YELLOW))
-            .append(Component.text(" — " + (arrow.isEmpty() ? "" : arrow + " ") + objective, NamedTextColor.WHITE));
+            .append(Component.text(" " + (arrow.isEmpty() ? "" : arrow + " ") + objective, NamedTextColor.WHITE));
         BossBar bar = trackingBossBars.computeIfAbsent(player.getUniqueId(), ignored -> {
             BossBar created = BossBar.bossBar(Component.empty(), 0F, BossBar.Color.WHITE, BossBar.Overlay.PROGRESS);
             player.showBossBar(created);
@@ -2161,6 +2172,11 @@ public final class QuestFeature extends BaseFeature {
         });
         bar.name(title);
         bar.progress(0F);
+    }
+
+    static boolean matchesTrackingWorld(List<Pattern> patterns, String worldName) {
+        String normalized = worldName.toLowerCase(Locale.ROOT);
+        return patterns.stream().anyMatch(pattern -> pattern.matcher(normalized).matches());
     }
 
     private String trackingObjectiveText(Player player, QuestDefinition quest, QuestProgress progress) {
@@ -2178,6 +2194,7 @@ public final class QuestFeature extends BaseFeature {
     }
 
     static String formatTrackedObjective(String label, int progress, int amount) {
+        label = label.replaceFirst("(?i)\\s+for\\s+.+$", "");
         String count = progress + "/" + amount;
         Matcher amountMatcher = Pattern.compile("(?<!\\d)" + amount + "(?!\\d)").matcher(label);
         String formatted;

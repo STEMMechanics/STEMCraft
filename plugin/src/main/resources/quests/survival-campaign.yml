@@ -6077,6 +6077,7 @@ quests:
         - {material: EMERALD, amount: 6}
 
   nether-highway-a-new-route:
+    requires: [nether-highway-promise-kept]
     title: "Nether Highway: A New Route"
     author: "Kael"
     short-description: "Kael would like you to gather 32 nether brick for the eastbound lane."
@@ -6196,6 +6197,7 @@ quests:
         - {material: EMERALD, amount: 6}
 
   nether-highway-an-unexpected-need:
+    requires: [nether-highway-road-made-safe]
     title: "Nether Highway: An Unexpected Need"
     author: "Kael"
     short-description: "Kael would like you to bring 16 iron bars for a ghast shield."
@@ -6315,6 +6317,7 @@ quests:
         - {material: EMERALD, amount: 6}
 
   nether-highway-the-farther-reach:
+    requires: [nether-highway-one-last-load]
     title: "Nether Highway: The Farther Reach"
     author: "Kael"
     short-description: "Kael would like you to supply 16 firework rockets for route scouts."
@@ -6553,6 +6556,7 @@ quests:
         - {material: EMERALD, amount: 6}
 
   stations-of-the-red-road-a-new-route:
+    requires: [stations-of-the-red-road-promise-kept]
     title: "Stations of the Red Road: A New Route"
     author: "Bruna"
     short-description: "Bruna would like you to gather 16 glowstone for the main concourse."
@@ -6672,6 +6676,7 @@ quests:
         - {material: EMERALD, amount: 6}
 
   stations-of-the-red-road-an-unexpected-need:
+    requires: [stations-of-the-red-road-road-made-safe]
     title: "Stations of the Red Road: An Unexpected Need"
     author: "Bruna"
     short-description: "Bruna would like you to defeat 5 wither skeletons blocking the fortress junction."
@@ -6791,6 +6796,7 @@ quests:
         - {material: EMERALD, amount: 6}
 
   stations-of-the-red-road-the-farther-reach:
+    requires: [stations-of-the-red-road-one-last-load]
     title: "Stations of the Red Road: The Farther Reach"
     author: "Bruna"
     short-description: "Bruna would like you to deliver 4 minecarts for public use."
@@ -7029,6 +7035,7 @@ quests:
         - {material: EMERALD, amount: 6}
 
   the-lantern-map-a-new-route:
+    requires: [the-lantern-map-promise-kept]
     title: "The Lantern Map: A New Route"
     author: "Selene"
     short-description: "Selene would like you to bring 24 coal for the survey lamps."
@@ -7148,6 +7155,7 @@ quests:
         - {material: EMERALD, amount: 6}
 
   the-lantern-map-an-unexpected-need:
+    requires: [the-lantern-map-road-made-safe]
     title: "The Lantern Map: An Unexpected Need"
     author: "Selene"
     short-description: "Selene would like you to bring 16 calcite for pale direction markers."
@@ -7267,6 +7275,7 @@ quests:
         - {material: EMERALD, amount: 6}
 
   the-lantern-map-the-farther-reach:
+    requires: [the-lantern-map-one-last-load]
     title: "The Lantern Map: The Farther Reach"
     author: "Selene"
     short-description: "Selene would like you to craft 3 compasses for apprentice explorers."
@@ -7505,6 +7514,7 @@ quests:
         - {material: EMERALD, amount: 6}
 
   songs-beneath-the-tide-a-new-route:
+    requires: [songs-beneath-the-tide-promise-kept]
     title: "Songs Beneath the Tide: A New Route"
     author: "Mira"
     short-description: "Mira would like you to bring 12 cod for the rehabilitation pools."
@@ -7624,6 +7634,7 @@ quests:
         - {material: EMERALD, amount: 6}
 
   songs-beneath-the-tide-an-unexpected-need:
+    requires: [songs-beneath-the-tide-road-made-safe]
     title: "Songs Beneath the Tide: An Unexpected Need"
     author: "Mira"
     short-description: "Mira would like you to bring 4 sea lanterns for the night buoy."
@@ -7743,6 +7754,7 @@ quests:
         - {material: EMERALD, amount: 6}
 
   songs-beneath-the-tide-the-farther-reach:
+    requires: [songs-beneath-the-tide-one-last-load]
     title: "Songs Beneath the Tide: The Farther Reach"
     author: "Mira"
     short-description: "Mira would like you to recover 1 a Heart of the Sea for the sanctuary."
@@ -7981,6 +7993,7 @@ quests:
         - {material: EMERALD, amount: 6}
 
   the-travelling-table-a-new-route:
+    requires: [the-travelling-table-promise-kept]
     title: "The Travelling Table: A New Route"
     author: "Rowan"
     short-description: "Rowan would like you to bring 10 cooked chicken for the scouts."
@@ -8100,6 +8113,7 @@ quests:
         - {material: EMERALD, amount: 6}
 
   the-travelling-table-an-unexpected-need:
+    requires: [the-travelling-table-road-made-safe]
     title: "The Travelling Table: An Unexpected Need"
     author: "Rowan"
     short-description: "Rowan would like you to bring 8 honey bottles for sore throats."
@@ -8219,6 +8233,7 @@ quests:
         - {material: EMERALD, amount: 6}
 
   the-travelling-table-the-farther-reach:
+    requires: [the-travelling-table-one-last-load]
     title: "The Travelling Table: The Farther Reach"
     author: "Rowan"
     short-description: "Rowan would like you to bring 8 golden carrots for the longest journey."
@@ -8457,6 +8472,7 @@ quests:
         - {material: EMERALD, amount: 6}
 
   walls-for-everyone-a-new-route:
+    requires: [walls-for-everyone-promise-kept]
     title: "Walls for Everyone: A New Route"
     author: "Bea"
     short-description: "Bea would like you to bring 24 bricks for safe chimneys."
@@ -8576,6 +8592,7 @@ quests:
         - {material: EMERALD, amount: 6}
 
   walls-for-everyone-an-unexpected-need:
+    requires: [walls-for-everyone-road-made-safe]
     title: "Walls for Everyone: An Unexpected Need"
     author: "Bea"
     short-description: "Bea would like you to forge 4 iron doors for the storehouse."
@@ -8695,6 +8712,7 @@ quests:
         - {material: EMERALD, amount: 6}
 
   walls-for-everyone-the-farther-reach:
+    requires: [walls-for-everyone-one-last-load]
     title: "Walls for Everyone: The Farther Reach"
     author: "Bea"
     short-description: "Bea would like you to craft 12 flower pots for cottage windows."
@@ -8933,6 +8951,7 @@ quests:
         - {material: EMERALD, amount: 6}
 
   a-year-in-the-fields-a-new-route:
+    requires: [a-year-in-the-fields-promise-kept]
     title: "A Year in the Fields: A New Route"
     author: "Eamon"
     short-description: "Eamon would like you to harvest 24 beetroot for winter stores."
@@ -9052,6 +9071,7 @@ quests:
         - {material: EMERALD, amount: 6}
 
   a-year-in-the-fields-an-unexpected-need:
+    requires: [a-year-in-the-fields-road-made-safe]
     title: "A Year in the Fields: An Unexpected Need"
     author: "Eamon"
     short-description: "Eamon would like you to prepare 32 bone meal for tired soil."
@@ -9171,6 +9191,7 @@ quests:
         - {material: EMERALD, amount: 6}
 
   a-year-in-the-fields-the-farther-reach:
+    requires: [a-year-in-the-fields-one-last-load]
     title: "A Year in the Fields: The Farther Reach"
     author: "Eamon"
     short-description: "Eamon would like you to gather 16 apples for the harvest store."
@@ -9409,6 +9430,7 @@ quests:
         - {material: EMERALD, amount: 6}
 
   beyond-the-harbour-a-new-route:
+    requires: [beyond-the-harbour-promise-kept]
     title: "Beyond the Harbour: A New Route"
     author: "Hana"
     short-description: "Hana would like you to bring 16 white wool for signal flags."
@@ -9528,6 +9550,7 @@ quests:
         - {material: EMERALD, amount: 6}
 
   beyond-the-harbour-an-unexpected-need:
+    requires: [beyond-the-harbour-road-made-safe]
     title: "Beyond the Harbour: An Unexpected Need"
     author: "Hana"
     short-description: "Hana would like you to craft 4 clocks for long watches."
@@ -9647,6 +9670,7 @@ quests:
         - {material: EMERALD, amount: 6}
 
   beyond-the-harbour-the-farther-reach:
+    requires: [beyond-the-harbour-one-last-load]
     title: "Beyond the Harbour: The Farther Reach"
     author: "Hana"
     short-description: "Hana would like you to clear 8 drowned from the anchorage."
@@ -9885,6 +9909,7 @@ quests:
         - {material: EMERALD, amount: 6}
 
   curios-for-the-archive-a-new-route:
+    requires: [curios-for-the-archive-promise-kept]
     title: "Curios for the Archive: A New Route"
     author: "Ember"
     short-description: "Ember would like you to find 12 bottles o' enchanting for my research."
@@ -10004,6 +10029,7 @@ quests:
         - {material: EMERALD, amount: 6}
 
   curios-for-the-archive-an-unexpected-need:
+    requires: [curios-for-the-archive-road-made-safe]
     title: "Curios for the Archive: An Unexpected Need"
     author: "Ember"
     short-description: "Ember would like you to bring 2 rabbit feet for a luck exhibit."
@@ -10123,6 +10149,7 @@ quests:
         - {material: EMERALD, amount: 6}
 
   curios-for-the-archive-the-farther-reach:
+    requires: [curios-for-the-archive-one-last-load]
     title: "Curios for the Archive: The Farther Reach"
     author: "Ember"
     short-description: "Ember would like you to gather 9 disc fragments for restoration."
@@ -10361,6 +10388,7 @@ quests:
         - {material: EMERALD, amount: 6}
 
   the-river-keeps-moving-a-new-route:
+    requires: [the-river-keeps-moving-promise-kept]
     title: "The River Keeps Moving: A New Route"
     author: "Marlow"
     short-description: "Marlow would like you to bring 16 glass bottles for water samples."
@@ -10480,6 +10508,7 @@ quests:
         - {material: EMERALD, amount: 6}
 
   the-river-keeps-moving-an-unexpected-need:
+    requires: [the-river-keeps-moving-road-made-safe]
     title: "The River Keeps Moving: An Unexpected Need"
     author: "Marlow"
     short-description: "Marlow would like you to catch 6 pufferfish for the alchemist."
@@ -10599,6 +10628,7 @@ quests:
         - {material: EMERALD, amount: 6}
 
   the-river-keeps-moving-the-farther-reach:
+    requires: [the-river-keeps-moving-one-last-load]
     title: "The River Keeps Moving: The Farther Reach"
     author: "Marlow"
     short-description: "Marlow would like you to bring 6 chests for keeping tackle dry."
