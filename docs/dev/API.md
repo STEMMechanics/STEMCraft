@@ -60,6 +60,7 @@ Registering the same plugin and ID replaces the previous callback. Disabled plug
 `CoordinateBarService` lets extensions register ordered, player-specific `Component` providers for `/coordbar`. Providers return `null` when inactive. Registrations are keyed by owning plugin and ID, replace cleanly during reloads, and are discarded when their owning plugin is disabled.
 
 <!-- javadoc:all api/src/main/java/dev/stemcraft/api/service/coordinatebar/CoordinateBarService.java -->
+<!-- /javadoc -->
 
 ### Comets
 
