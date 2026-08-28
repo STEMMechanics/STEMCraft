@@ -1,4 +1,14 @@
 custom-items:
+  chisel:
+    material: FLINT
+    name: "<gray>Chisel"
+    texture: "stemcraft_survival:item/chisel"
+    lore:
+      - "<dark_gray>Right-click a supported block to rotate it"
+    placement: DENY
+    max-stack-size: 1
+    max-damage: 256
+
   fried-egg:
     material: DRIED_KELP
     name: "Fried Egg"
@@ -10,6 +20,16 @@ custom-items:
       always-edible: false
 
 recipes:
+  shaped:
+    chisel:
+      result: "stemcraft:chisel"
+      amount: 1
+      shape:
+        - " I "
+        - " S "
+      ingredients:
+        I: IRON_INGOT
+        S: STICK
   furnace:
     fried_egg:
       input: EGG

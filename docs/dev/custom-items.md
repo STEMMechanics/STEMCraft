@@ -15,6 +15,7 @@ custom-items:
       - "<gray>Warm and crispy"
     placement: DENY       # DENY or VANILLA
     max-stack-size: 64    # optional
+    max-damage: 256       # optional durability for a tool; use max-stack-size: 1
     glint: false          # optional
     food:                 # optional
       nutrition: 3
@@ -31,6 +32,7 @@ custom-items:
 ```
 
 The `material` controls the server-side behaviour. For food, choose an edible base material and override its food values. `placement: DENY` prevents a block-based item from being placed. Names and lore support MiniMessage formatting.
+`max-damage` gives an item a durability bar and lets code damage it with `ItemStack#damage`; durable items should have a maximum stack size of one.
 
 The pack directory name supplies the namespace (`stemcraft-survival` becomes `stemcraft_survival`). The item ID and single `texture` value derive the Java item/model definitions, Bedrock identifier and icon, and a stable auto-assigned custom-model-data value. `name` is reused as Bedrock's plain display name. The texture above resolves to `contents/stemcraft_survival/textures/item/fried_egg.png`, is included in the generated Java pack, and is copied into the generated Bedrock pack.
 

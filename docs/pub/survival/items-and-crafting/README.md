@@ -7,3 +7,5 @@ The exact item and recipe selection comes from the live server's data packs and 
 The bundled [Farming, Foraging & Cooking](farming-and-cooking.md) collection adds rice farming, tropical ingredients, sushi, risotto, buff foods and Haste potions.
 
 Start with [Useful Rotten Flesh](rotten-flesh-uses.md) to learn how zombie drops can become farming supplies, Dog Treats, Zombie Bait, and a strange stew.
+
+Builders can craft a [Chisel](chisel.md) to rotate stairs, glazed terracotta, logs and decorative blocks without breaking them.

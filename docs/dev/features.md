@@ -53,6 +53,7 @@ worlds:
 | `LeafDecayTickSpeedSetting` | World setting companion used by the leaf decay system |
 | `SurvivalQolFeature` | Farming, transport, inventory, mob information, and equipment warnings |
 | `AgricultureFeature` | Data-pack-driven persistent crops and biome-aware forage drops |
+| `ChiselFeature` | Rotates safe building-block states with the cross-platform Chisel item |
 | `AnimalBarrels` | Craftable barrels for carrying supported small animals |
 | `FriedEggs` | Cooked eggs with configurable food values and cooking methods |
 | `CometFeature` | API-launched destructive sky events with heat, crash scars, geodes, and optional loot |
