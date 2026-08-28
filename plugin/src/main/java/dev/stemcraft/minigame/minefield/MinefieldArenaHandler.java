@@ -6,6 +6,7 @@ import dev.stemcraft.api.minigame.MiniGameArena;
 import dev.stemcraft.api.minigame.MiniGameArenaHandler;
 import dev.stemcraft.api.minigame.MiniGamePlayer;
 import dev.stemcraft.api.model.SCRegion;
+import dev.stemcraft.service.region.RegionLocationSupport;
 import dev.stemcraft.api.service.region.RegionListener;
 import dev.stemcraft.api.util.NamespaceId;
 import dev.stemcraft.api.util.PlayerUtil;
@@ -828,11 +829,11 @@ public class MinefieldArenaHandler implements MiniGameArenaHandler {
         if (region.contains(center)) {
             return center;
         }
-        Location ground = region.getRandomGroundLocation();
+        Location ground = RegionLocationSupport.randomGroundLocation(region);
         if (ground != null) {
             return ground;
         }
-        Location fallback = region.getRandomLocation();
+        Location fallback = RegionLocationSupport.randomLocation(region);
         return fallback != null ? fallback : center;
     }
 

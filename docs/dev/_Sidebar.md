@@ -4,6 +4,8 @@
 - [Architecture](https://github.com/STEMMechanics/stemcraft/wiki/Architecture)
 - [Services](https://github.com/STEMMechanics/stemcraft/wiki/Services)
 - [Features](https://github.com/STEMMechanics/stemcraft/wiki/Features)
+- [Build a Custom Tool](https://github.com/STEMMechanics/stemcraft/wiki/build-a-custom-tool)
+- [Agriculture and Cooking](https://github.com/STEMMechanics/stemcraft/wiki/agriculture-and-cooking)
 - [Survival quality of life](https://github.com/STEMMechanics/stemcraft/wiki/survival-qol)
 - [Custom items](https://github.com/STEMMechanics/stemcraft/wiki/custom-items)
 - [Slime and Magma Buckets](https://github.com/STEMMechanics/stemcraft/wiki/slime-and-magma-buckets)

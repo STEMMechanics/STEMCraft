@@ -1,5 +1,7 @@
 # Farming, Foraging & Cooking
 
+![Rice farming and tropical cooking on an island](../images/rice-farming-and-cooking.png)
+
 The Cooking collection adds 64 ingredients, prepared components, meals and drinks. Accept the server resource pack so each item has the correct appearance. All crafting-table recipes below are shapeless: the ingredients can go in any slots.
 
 ## Farming and foraging
@@ -56,6 +58,8 @@ Rice grows while its chunk is loaded. Break a mature plant to harvest it.
 | Tropical Salad | 1 Bowl + 1 Fruit Slices + 1 Lime + 1 Coconut | 1 | Restores 1 heart; returns the bowl |
 
 ## Main meals
+
+![The complete Cooking collection](../images/cooking-collection.png)
 
 | Result | Ingredients | Makes | Special effect |
 | --- | --- | ---: | --- |

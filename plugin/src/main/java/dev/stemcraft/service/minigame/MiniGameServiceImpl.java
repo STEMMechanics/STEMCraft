@@ -811,7 +811,7 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
         for (Map<String, MiniGameArenaImpl> arenas : arenasByNamespace.values()) {
             for (MiniGameArenaImpl arena : arenas.values()) {
                 MiniGameArenaHandler handler = handlers.get(arena.namespace());
-                if (handler == null || !handler.isActive(arena) || !arena.world().equals(world)) {
+                if (handler == null || !isArenaActiveForEvents(arena) || !arena.world().equals(world)) {
                     continue;
                 }
 
@@ -826,6 +826,13 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
             }
         }
         return matches;
+    }
+
+    private boolean isArenaActiveForEvents(MiniGameArena arena) {
+        MiniGameArena.ArenaStatus status = arena.getStatus();
+        return status != MiniGameArena.ArenaStatus.DISABLED
+            && status != MiniGameArena.ArenaStatus.SETUP
+            && status != MiniGameArena.ArenaStatus.SHUTDOWN;
     }
 
     private boolean explosionTouchesRegion(@NotNull SCRegion region, @NotNull List<org.bukkit.block.Block> blocks) {

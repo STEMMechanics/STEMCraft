@@ -15,14 +15,24 @@ custom-items:
       - "<gray>Warm and crispy"
     placement: DENY       # DENY or VANILLA
     max-stack-size: 64    # optional
+    max-damage: 256       # optional durability for a tool; use max-stack-size: 1
     glint: false          # optional
     food:                 # optional
       nutrition: 3
       saturation: 2.4
       always-edible: false
+      heal: 0.0           # health points restored after consumption
+      damage: 0.0         # damage applied after consumption
+      returns: BOWL       # optional vanilla/custom item returned afterward
+      effects:            # optional status effects
+        - type: HASTE
+          duration-seconds: 75
+          amplifier: 0
+          probability: 1.0
 ```
 
 The `material` controls the server-side behaviour. For food, choose an edible base material and override its food values. `placement: DENY` prevents a block-based item from being placed. Names and lore support MiniMessage formatting.
+`max-damage` gives an item a durability bar and lets code damage it with `ItemStack#damage`; durable items should have a maximum stack size of one.
 
 The pack directory name supplies the namespace (`stemcraft-survival` becomes `stemcraft_survival`). The item ID and single `texture` value derive the Java item/model definitions, Bedrock identifier and icon, and a stable auto-assigned custom-model-data value. `name` is reused as Bedrock's plain display name. The texture above resolves to `contents/stemcraft_survival/textures/item/fried_egg.png`, is included in the generated Java pack, and is copied into the generated Bedrock pack.
 
@@ -68,6 +78,8 @@ recipes:
 ```
 
 Material results such as `result: COOKED_COD` continue to work unchanged.
+
+Recipe ingredients may also use custom item identifiers. They are registered as exact choices, so the backing vanilla material cannot substitute for the configured ingredient. Brewing recipes and persistent crops/forage tables are documented in [agriculture-and-cooking.md](agriculture-and-cooking.md).
 
 ## Giving configured items
 

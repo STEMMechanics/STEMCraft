@@ -54,7 +54,6 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -74,6 +73,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.withSettings;
 
@@ -283,43 +283,13 @@ class ApiDefaultMethodContractTest {
     }
 
     @Test
-    void miniGameArenaHandlerDefaultsTransitionArenaStateAndChooseSpawn() {
+    void miniGameArenaHandlerDefaultsDoNotImposePluginLifecycleBehaviour() {
         MiniGameArenaHandler handler = new MiniGameArenaHandler() { };
-        Location lobby = new Location(world, 10, 70, 10);
-        Location spectator = new Location(world, 20, 70, 20);
+        MiniGameArena arena = mock(MiniGameArena.class);
 
-        MiniGameArena idleArena = mock(MiniGameArena.class);
-        when(idleArena.getStatus()).thenReturn(MiniGameArena.ArenaStatus.IDLE);
-        when(idleArena.getLobbySpawn()).thenReturn(lobby);
-        assertSame(lobby, handler.onPlayerJoinArena(idleArena, player));
-        verify(idleArena).setStatus(MiniGameArena.ArenaStatus.WAITING);
-
-        MiniGameArena waitingArena = mock(MiniGameArena.class);
-        when(waitingArena.getStatus()).thenReturn(MiniGameArena.ArenaStatus.WAITING);
-        when(waitingArena.numPlayers()).thenReturn(2);
-        when(waitingArena.getMinPlayers()).thenReturn(2);
-        when(waitingArena.getLobbySpawn()).thenReturn(lobby);
-        assertSame(lobby, handler.onPlayerJoinArena(waitingArena, player));
-        verify(waitingArena).setStatus(MiniGameArena.ArenaStatus.STARTING, 30);
-
-        MiniGameArena spectatorArena = mock(MiniGameArena.class);
-        when(spectatorArena.getSpectatorSpawn()).thenReturn(spectator);
-        when(spectatorArena.getLobbySpawn()).thenReturn(lobby);
-        assertSame(spectator, handler.onPlayerJoinSpectator(spectatorArena, player));
-
-        MiniGameArena fallbackArena = mock(MiniGameArena.class);
-        when(fallbackArena.getSpectatorSpawn()).thenReturn(null);
-        when(fallbackArena.getLobbySpawn()).thenReturn(lobby);
-        assertSame(lobby, handler.onPlayerJoinSpectator(fallbackArena, player));
-
-        when(waitingArena.getStatus()).thenReturn(MiniGameArena.ArenaStatus.WAITING);
-        assertTrue(handler.isActive(waitingArena));
-        assertTrue(handler.isJoinable(waitingArena));
-
-        MiniGameArena setupArena = mock(MiniGameArena.class);
-        when(setupArena.getStatus()).thenReturn(MiniGameArena.ArenaStatus.SETUP);
-        assertFalse(handler.isActive(setupArena));
-        assertFalse(handler.isJoinable(setupArena));
+        assertNull(handler.onPlayerJoinArena(arena, player));
+        assertNull(handler.onPlayerJoinSpectator(arena, player));
+        verifyNoInteractions(arena);
     }
 
     @Test
@@ -340,12 +310,6 @@ class ApiDefaultMethodContractTest {
     @Test
     void miniGameArenaDefaultHelpersDelegateAndComputeStatuses() {
         MiniGameArena arena = mock(MiniGameArena.class, withSettings().defaultAnswer(CALLS_REAL_METHODS));
-        AtomicInteger countdown = new AtomicInteger(3);
-        when(arena.getCountdown()).thenAnswer(invocation -> countdown.get());
-        doAnswer(invocation -> {
-            countdown.set(invocation.getArgument(0));
-            return arena;
-        }).when(arena).setCountdown(anyInt());
         doAnswer(invocation -> arena).when(arena).setStatus(any(MiniGameArena.ArenaStatus.class), anyInt());
 
         Player spectator = server.addPlayer("Spectator");
@@ -353,9 +317,6 @@ class ApiDefaultMethodContractTest {
 
         assertSame(arena, arena.setStatus(MiniGameArena.ArenaStatus.RUNNING));
         verify(arena).setStatus(MiniGameArena.ArenaStatus.RUNNING, 0);
-
-        assertEquals(2, arena.decrementCountdown());
-        assertEquals(2, countdown.get());
 
         when(arena.getPlayers()).thenReturn(List.of(player));
         when(arena.getSpectators()).thenReturn(List.of(spectator));

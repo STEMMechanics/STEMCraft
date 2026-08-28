@@ -38,6 +38,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.EventPriority;
 import org.bukkit.block.Campfire;
@@ -48,6 +49,8 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.components.CustomModelDataComponent;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
@@ -61,6 +64,7 @@ import java.io.File;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.Locale;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Implementation of the ItemService for managing item attributes and custom items.
@@ -71,6 +75,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
     private final Map<String, CustomItemDefinition> itemDefinitions = new LinkedHashMap<>();
     private final Map<String, CustomItemPropertyHandler> propertyHandlers = new HashMap<>();
     private final Set<Integer> configuredModelData = new HashSet<>();
+    private final Map<String, FoodBehavior> foodBehaviors = new HashMap<>();
     private dev.stemcraft.api.command.Command giveCommand;
     private org.bukkit.command.Command originalGiveCommand;
 
@@ -92,6 +97,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
         loadConfiguredItems();
         registerGiveCommand();
         api.events().register(PlayerInteractEvent.class, this::handleCampfireInput, EventPriority.HIGHEST, false);
+        api.events().register(PlayerItemConsumeEvent.class, this::handleConfiguredFood, EventPriority.MONITOR, true);
         api.events().register(PlayerDropItemEvent.class, (event) -> {
             ItemStack item = event.getItemDrop().getItemStack();
             ItemMeta meta = item.getItemMeta();
@@ -174,6 +180,13 @@ public class ItemServiceImpl extends BaseService implements ItemService {
                 if (!lore.isEmpty()) meta.lore(lore);
                 int maxStackSize = section.getInt("max-stack-size", 0);
                 if (maxStackSize > 0) meta.setMaxStackSize(Math.min(99, maxStackSize));
+                int maxDamage = section.getInt("max-damage", 0);
+                if (maxDamage > 0) {
+                    if (!(meta instanceof org.bukkit.inventory.meta.Damageable damageable)) {
+                        throw new IllegalArgumentException("material does not support durability");
+                    }
+                    damageable.setMaxDamage(maxDamage);
+                }
                 if (section.contains("glint")) meta.setEnchantmentGlintOverride(section.getBoolean("glint", false));
                 ConfigSection food = section.getSection("food", false);
                 if (food != null) {
@@ -182,6 +195,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
                     component.setSaturation((float) Math.max(0D, food.getDouble("saturation", 0D)));
                     component.setCanAlwaysEat(food.getBoolean("always-edible", false));
                     meta.setFood(component);
+                    foodBehaviors.put(normaliseCustomItemId(id), parseFoodBehavior(food));
                 }
                 template.setItemMeta(meta);
                 CustomItemPlacementMode placement = CustomItemPlacementMode.valueOf(
@@ -202,6 +216,69 @@ public class ItemServiceImpl extends BaseService implements ItemService {
             }
         }
     }
+
+    private FoodBehavior parseFoodBehavior(ConfigSection food) {
+        List<ConfiguredEffect> effects = new java.util.ArrayList<>();
+        for (Object raw : food.getList("effects")) {
+            if (!(raw instanceof Map<?, ?> values)) continue;
+            Object configuredType = values.get("type");
+            String type = configuredType == null ? "" : configuredType.toString().trim();
+            if (type.isEmpty()) continue;
+            effects.add(new ConfiguredEffect(type,
+                number(values.get("duration-seconds"), 0D),
+                (int) number(values.get("amplifier"), 0D),
+                clamp(number(values.get("probability"), 1D), 0D, 1D)));
+        }
+        return new FoodBehavior(food.getDouble("heal", 0D), food.getDouble("damage", 0D),
+            food.getString("returns", ""), List.copyOf(effects));
+    }
+
+    private void handleConfiguredFood(PlayerItemConsumeEvent event) {
+        String id = getCustomItemId(event.getItem());
+        if (id == null) return;
+        FoodBehavior behavior = foodBehaviors.get(normaliseCustomItemId(id));
+        if (behavior == null) return;
+        var player = event.getPlayer();
+        if (behavior.heal() > 0D) player.heal(behavior.heal());
+        if (behavior.damage() > 0D) player.damage(behavior.damage());
+        for (ConfiguredEffect effect : behavior.effects()) {
+            if (ThreadLocalRandom.current().nextDouble() > effect.probability()) continue;
+            NamespacedKey effectKey = NamespacedKey.minecraft(effect.type().toLowerCase(Locale.ROOT));
+            PotionEffectType type = org.bukkit.Registry.MOB_EFFECT.get(effectKey);
+            if (type != null) player.addPotionEffect(new PotionEffect(type,
+                Math.max(1, (int) Math.round(effect.durationSeconds() * 20D)), Math.max(0, effect.amplifier())));
+        }
+        if (!behavior.returns().isBlank() && !hasVanillaContainerReturn(event.getItem().getType())) api.tasks().runLater(1L, () -> {
+            ItemStack returned = createRecipeResult(behavior.returns(), 1);
+            if (returned == null) return;
+            Map<Integer, ItemStack> excess = player.getInventory().addItem(returned);
+            excess.values().forEach(item -> player.getWorld().dropItemNaturally(player.getLocation(), item));
+        });
+    }
+
+    private static boolean hasVanillaContainerReturn(Material material) {
+        return material == Material.RABBIT_STEW || material == Material.MUSHROOM_STEW
+            || material == Material.BEETROOT_SOUP || material == Material.SUSPICIOUS_STEW
+            || material == Material.HONEY_BOTTLE || material == Material.MILK_BUCKET;
+    }
+
+    private ItemStack createRecipeResult(String configured, int amount) {
+        ItemStack custom = createCustomItem(configured, amount);
+        if (custom != null) return custom;
+        Material material = Material.matchMaterial(configured.toUpperCase(Locale.ROOT));
+        return material == null ? null : new ItemStack(material, amount);
+    }
+
+    private static double number(Object value, double fallback) {
+        return value instanceof Number number ? number.doubleValue() : fallback;
+    }
+
+    private static double clamp(double value, double minimum, double maximum) {
+        return Math.max(minimum, Math.min(maximum, value));
+    }
+
+    private record ConfiguredEffect(String type, double durationSeconds, int amplifier, double probability) { }
+    private record FoodBehavior(double heal, double damage, String returns, List<ConfiguredEffect> effects) { }
 
     private void registerGiveCommand() {
         api.tabComplete().register("give-target", (player, args) -> {

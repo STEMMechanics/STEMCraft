@@ -3,7 +3,7 @@ package dev.stemcraft.service;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigSection;
-import dev.stemcraft.api.integration.worldedit.WorldEditRegionUtil;
+import dev.stemcraft.integration.worldedit.WorldEditRegionSupport;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.service.selection.SelectionService;
 import org.bukkit.Bukkit;
@@ -83,32 +83,32 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
 
     @Override
     public @Nullable SCRegion getWorldEditSelection(@NotNull Player player) {
-        return WorldEditRegionUtil.getWESelection(player);
+        return WorldEditRegionSupport.getWESelection(player);
     }
 
     @Override
     public @Nullable SCRegion getWorldEditPreviewSelection(@NotNull Player player) {
-        return WorldEditRegionUtil.getWEPreviewSelection(player);
+        return WorldEditRegionSupport.getWEPreviewSelection(player);
     }
 
     @Override
     public @Nullable Location getWorldEditPrimaryPosition(@NotNull Player player) {
-        return WorldEditRegionUtil.getWEPrimaryPosition(player);
+        return WorldEditRegionSupport.getWEPrimaryPosition(player);
     }
 
     @Override
     public void setWorldEditSelection(@NotNull Player player, @NotNull SCRegion region) {
-        WorldEditRegionUtil.setWESelection(player, region);
+        WorldEditRegionSupport.setWESelection(player, region);
     }
 
     @Override
     public void setWorldEditSelection(@NotNull Player player, @NotNull Location location) {
-        WorldEditRegionUtil.setWESelection(player, location);
+        WorldEditRegionSupport.setWESelection(player, location);
     }
 
     @Override
     public void clearWorldEditSelection(@NotNull Player player) {
-        WorldEditRegionUtil.clearWESelection(player);
+        WorldEditRegionSupport.clearWESelection(player);
     }
 
     @Override

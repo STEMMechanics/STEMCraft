@@ -25,6 +25,7 @@ dependencies {
         exclude group: 'net.byteflux', module: 'libby-bukkit'
     }
     compileOnly('com.googlecode.json-simple:json-simple:1.1.1')
+    compileOnly('com.sk89q.worldedit:worldedit-bukkit:7.4.4')
 
     // Lombok
     compileOnly("org.projectlombok:lombok:1.18.42")

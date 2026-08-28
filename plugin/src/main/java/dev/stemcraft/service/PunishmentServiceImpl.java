@@ -548,7 +548,7 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
      * @param record The punishment record to alert about.
      */
     private void alert(PunishmentRecord record) {
-        Player player = record.getPlayerIfOnline();
+        Player player = Bukkit.getPlayer(record.targetUuid());
         if(player != null) {
             boolean result = alerts.get(record.type()).run(record.type(), player, record);
             if(result) {

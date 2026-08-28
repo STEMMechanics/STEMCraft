@@ -7,6 +7,7 @@ import dev.stemcraft.api.minigame.ArenaValidationResult;
 import dev.stemcraft.api.minigame.MiniGame;
 import dev.stemcraft.api.minigame.MiniGameArena;
 import dev.stemcraft.api.model.SCRegion;
+import dev.stemcraft.service.region.RegionLocationSupport;
 import dev.stemcraft.api.util.StringUtil;
 import dev.stemcraft.exception.MiniGameInvalidArenaConfigException;
 import dev.stemcraft.minigame.BaseMiniGame;
@@ -391,12 +392,12 @@ public class MinefieldMiniGame extends BaseMiniGame {
             return center;
         }
 
-        Location ground = region.getRandomGroundLocation();
+        Location ground = RegionLocationSupport.randomGroundLocation(region);
         if (ground != null) {
             return ground;
         }
 
-        Location fallback = region.getRandomLocation();
+        Location fallback = RegionLocationSupport.randomLocation(region);
         return fallback == null ? center : fallback;
     }
 }

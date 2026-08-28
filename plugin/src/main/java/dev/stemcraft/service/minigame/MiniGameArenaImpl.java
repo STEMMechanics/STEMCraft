@@ -479,6 +479,11 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         }
 
         MiniGameArenaHandler handler = service.getHandler(namespace);
+        if (getStatus() == ArenaStatus.IDLE) {
+            setStatus(ArenaStatus.WAITING);
+        } else if (getStatus() == ArenaStatus.WAITING && numPlayers() >= getMinPlayers()) {
+            setStatus(ArenaStatus.STARTING, 30);
+        }
         Location location = handler.onPlayerJoinArena(this, player);
         if (location == null) {
             location = (getStatus() == ArenaStatus.PREPARATION || getStatus() == ArenaStatus.RUNNING)
@@ -1610,6 +1615,18 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
             TextUtil.colourise(subtitle),
             Title.Times.times(fadeIn, stay, fadeOut)
         )));
+    }
+
+    @Override
+    public void showStartingCountdownTitle(int secondsRemaining, String subtitle) {
+        if (secondsRemaining <= 0) return;
+        showTitle("<gradient:#fde047:#f97316><bold>" + secondsRemaining + "</bold></gradient>",
+            subtitle, 0, 1000, 200);
+    }
+
+    @Override
+    public void showStartingCountdownTitle(int secondsRemaining) {
+        showStartingCountdownTitle(secondsRemaining, "<gold>Game starts in</gold>");
     }
 
     @Override

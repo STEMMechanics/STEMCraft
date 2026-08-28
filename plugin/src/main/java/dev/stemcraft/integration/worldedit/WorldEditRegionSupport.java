@@ -18,7 +18,7 @@
  * @link https://github.com/STEMMechanics/STEMCraft
  */
 
-package dev.stemcraft.api.integration.worldedit;
+package dev.stemcraft.integration.worldedit;
 
 import com.sk89q.worldedit.IncompleteRegionException;
 import com.sk89q.worldedit.LocalSession;
@@ -43,7 +43,9 @@ import java.util.List;
 /**
  * Utility class for working with WorldEdit selections.
  */
-public class WorldEditRegionUtil {
+public final class WorldEditRegionSupport {
+
+    private WorldEditRegionSupport() { }
 
     /**
      * Gets the WorldEdit selection for the specified player.
