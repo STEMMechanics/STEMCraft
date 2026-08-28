@@ -13,3 +13,4 @@
 - [API](./API.md)
 - [Minigames](./Minigames.md)
 - [Configuration](./Configuration.md)
+- [Agriculture and Cooking](./agriculture-and-cooking.md)

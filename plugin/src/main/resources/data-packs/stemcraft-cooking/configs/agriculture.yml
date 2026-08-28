@@ -1,0 +1,101 @@
+agriculture:
+  crops:
+    rice:
+      seed: "stemcraft:rice_shoots"
+      soil: MUD
+      water-above: true
+      light-min: 9
+      # A waterlogged propagule provides four visible, cross-edition-safe age states.
+      stages: [MANGROVE_PROPAGULE, MANGROVE_PROPAGULE, MANGROVE_PROPAGULE, MANGROVE_PROPAGULE]
+      seconds-per-stage: 180
+      mature-drop: "stemcraft:rice"
+      mature-min: 2
+      mature-max: 4
+      seed-drop: "stemcraft:rice_shoots"
+      seed-min: 1
+      seed-max: 2
+      fortune: true
+
+  foraging:
+    rice-shoots:
+      blocks: [SEAGRASS, TALL_SEAGRASS]
+      biomes: [SWAMP, MANGROVE_SWAMP, WARM_OCEAN, LUKEWARM_OCEAN]
+      chance: 0.08
+      item: "stemcraft:rice_shoots"
+      natural-only: true
+      tools: [SHEARS]
+    edible-seaweed:
+      blocks: [SEAGRASS, TALL_SEAGRASS, KELP, KELP_PLANT]
+      biomes: [WARM_OCEAN, LUKEWARM_OCEAN, OCEAN]
+      chance: 0.30
+      item: "stemcraft:edible_seaweed"
+      natural-only: true
+      tools: [SHEARS]
+      fortune: true
+    coconut:
+      blocks: [JUNGLE_LEAVES]
+      biomes: [BEACH, JUNGLE, SPARSE_JUNGLE]
+      chance: 0.06
+      item: "stemcraft:coconut"
+      natural-only: true
+      fortune: true
+    banana:
+      blocks: [JUNGLE_LEAVES]
+      biomes: [JUNGLE, BAMBOO_JUNGLE, SPARSE_JUNGLE]
+      chance: 0.045
+      item: "stemcraft:banana"
+      natural-only: true
+      fortune: true
+    mango:
+      blocks: [JUNGLE_LEAVES]
+      biomes: [JUNGLE, SPARSE_JUNGLE]
+      chance: 0.035
+      item: "stemcraft:mango"
+      natural-only: true
+      fortune: true
+    pineapple:
+      blocks: [SHORT_GRASS, FERN]
+      biomes: [JUNGLE, BAMBOO_JUNGLE, BEACH]
+      chance: 0.018
+      item: "stemcraft:pineapple"
+      natural-only: true
+    ginger:
+      blocks: [SHORT_GRASS, FERN]
+      biomes: [JUNGLE, SWAMP, MANGROVE_SWAMP]
+      chance: 0.025
+      item: "stemcraft:ginger"
+      natural-only: true
+    chilli:
+      blocks: [SHORT_GRASS, FERN]
+      biomes: [SAVANNA, SAVANNA_PLATEAU, JUNGLE]
+      chance: 0.022
+      item: "stemcraft:chilli_pepper"
+      natural-only: true
+    lime:
+      blocks: [JUNGLE_LEAVES]
+      biomes: [JUNGLE, SPARSE_JUNGLE]
+      chance: 0.03
+      item: "stemcraft:lime"
+      natural-only: true
+      fortune: true
+    garden-vegetables:
+      blocks: [SHORT_GRASS, FERN]
+      biomes: [PLAINS, SUNFLOWER_PLAINS, FOREST, TAIGA]
+      chance: 0.02
+      item: "stemcraft:tomato"
+      natural-only: true
+    onion:
+      blocks: [SHORT_GRASS, FERN]
+      chance: 0.018
+      item: "stemcraft:onion"
+      natural-only: true
+    garlic:
+      blocks: [SHORT_GRASS, FERN]
+      chance: 0.014
+      item: "stemcraft:garlic"
+      natural-only: true
+    herbs:
+      blocks: [SHORT_GRASS, FERN]
+      chance: 0.035
+      item: "stemcraft:fresh_herbs"
+      natural-only: true
