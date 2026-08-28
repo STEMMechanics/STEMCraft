@@ -2164,7 +2164,8 @@ public final class QuestFeature extends BaseFeature {
         String arrow = target == null ? "" : trackingArrow(player.getLocation(), target);
         String objective = trackingObjectiveText(player, quest, progress);
         Component title = glyph("question_yellow", "!").color(NamedTextColor.YELLOW)
-            .append(Component.text(" " + (arrow.isEmpty() ? "" : arrow + " ") + objective, NamedTextColor.WHITE));
+            .append(Component.text(" " + trackingQuestTitle(quest.title()), NamedTextColor.YELLOW))
+            .append(Component.text(" - " + (arrow.isEmpty() ? "" : arrow + " ") + objective, NamedTextColor.WHITE));
         BossBar bar = trackingBossBars.computeIfAbsent(player.getUniqueId(), ignored -> {
             BossBar created = BossBar.bossBar(Component.empty(), 0F, BossBar.Color.WHITE, BossBar.Overlay.PROGRESS);
             player.showBossBar(created);
@@ -2177,6 +2178,11 @@ public final class QuestFeature extends BaseFeature {
     static boolean matchesTrackingWorld(List<Pattern> patterns, String worldName) {
         String normalized = worldName.toLowerCase(Locale.ROOT);
         return patterns.stream().anyMatch(pattern -> pattern.matcher(normalized).matches());
+    }
+
+    static String trackingQuestTitle(String title) {
+        int separator = title.lastIndexOf(": ");
+        return separator < 0 ? title : title.substring(separator + 2).trim();
     }
 
     private String trackingObjectiveText(Player player, QuestDefinition quest, QuestProgress progress) {
