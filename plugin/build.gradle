@@ -12,6 +12,10 @@ repositories {
     maven { url = uri("https://repo.extendedclip.com/content/repositories/placeholderapi/") }
     maven { url = uri("https://maven.enginehub.org/repo/") }
     maven { url = uri("https://maven.citizensnpcs.co/repo/") }
+    exclusiveContent {
+        forRepository { maven { url = uri("https://api.modrinth.com/maven/") } }
+        filter { includeGroup("maven.modrinth") }
+    }
 }
 
 dependencies {
@@ -26,6 +30,7 @@ dependencies {
     }
     compileOnly('com.googlecode.json-simple:json-simple:1.1.1')
     compileOnly('com.sk89q.worldedit:worldedit-bukkit:7.4.4')
+    compileOnly('maven.modrinth:pl3xmap:26.2-554')
 
     // Lombok
     compileOnly("org.projectlombok:lombok:1.18.42")

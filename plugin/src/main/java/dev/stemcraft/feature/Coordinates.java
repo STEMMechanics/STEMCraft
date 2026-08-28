@@ -26,11 +26,8 @@ import dev.stemcraft.api.util.DirectionUtil;
 import dev.stemcraft.api.util.WorldTimeUtil;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import org.bukkit.Bukkit;
+import net.kyori.adventure.bossbar.BossBar;
 import org.bukkit.Location;
-import org.bukkit.boss.BarColor;
-import org.bukkit.boss.BarStyle;
-import org.bukkit.boss.BossBar;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerQuitEvent;
 
@@ -110,7 +107,7 @@ public class Coordinates extends BaseFeature {
 
                 CoordData coordData = entry.getValue();
                 if (coordData.bossBar == null && coordData.actionBar == false) {
-                    return;
+                    continue;
                 }
 
                 String world = api.worlds().getDisplayName(player.getWorld());
@@ -118,11 +115,14 @@ public class Coordinates extends BaseFeature {
                 String direction = DirectionUtil.getCompassDirection(player.getLocation().getYaw());
 
                 if (coordData.bossBar != null) {
-                    String title = api.messages().tokens().apply(
+                    String base = api.messages().tokens().apply(
                         api.locales().resolve(":world: " + world + " :mc_clock_00: " + time + " :mc_compass_00: " + direction)
                     );
-                    coordData.bossBar.setTitle(
-                            title);
+                    Component title = Component.text(base);
+                    for (Component addition : api.coordinateBar().render(player)) {
+                        title = title.append(Component.text("  ", NamedTextColor.DARK_GRAY)).append(addition);
+                    }
+                    coordData.bossBar.name(title);
                 }
 
                 if (coordData.actionBar == true) {
@@ -157,14 +157,8 @@ public class Coordinates extends BaseFeature {
         }
 
         if (coordBars.get(player).bossBar == null) {
-            BossBar bossBar = Bukkit.createBossBar(
-                    "",
-                    BarColor.WHITE,
-                    BarStyle.SOLID
-            );
-            bossBar.setProgress(0.0);
-            bossBar.addPlayer(player);
-            bossBar.setVisible(true);
+            BossBar bossBar = BossBar.bossBar(Component.empty(), 0F, BossBar.Color.WHITE, BossBar.Overlay.PROGRESS);
+            player.showBossBar(bossBar);
             coordBars.get(player).bossBar = bossBar;
         }
     }
@@ -192,7 +186,7 @@ public class Coordinates extends BaseFeature {
             CoordData bars = coordBars.get(player);
 
             if (bars.bossBar != null) {
-                bars.bossBar.removeAll();
+                player.hideBossBar(bars.bossBar);
                 bars.bossBar = null;
             }
         }
@@ -251,7 +245,7 @@ public class Coordinates extends BaseFeature {
             CoordData bars = coordBars.get(player);
 
             if (bars.bossBar != null) {
-                bars.bossBar.removeAll();
+                player.hideBossBar(bars.bossBar);
                 bars.bossBar = null;
             }
 

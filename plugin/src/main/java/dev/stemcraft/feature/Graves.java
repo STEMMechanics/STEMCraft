@@ -20,23 +20,38 @@
 
 package dev.stemcraft.feature;
 
+import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.integration.pl3xmap.GraveMapMarker;
+import dev.stemcraft.integration.pl3xmap.Pl3xMapGraveMarkers;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.Chest;
+import org.bukkit.block.DoubleChest;
 import org.bukkit.block.Sign;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.inventory.InventoryOpenEvent;
+import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.plugin.Plugin;
+import org.jetbrains.annotations.Nullable;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 /**
  * Grave rules:
@@ -54,6 +69,11 @@ public class Graves extends BaseFeature {
     private static final int LIQUID_SURFACE_SEARCH_DOWN = 24;
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+    private static final String COORDINATE_PROVIDER_ID = "active-grave";
+    private final Map<UUID, GraveRecord> activeGraves = new HashMap<>();
+    private final Map<BlockKey, UUID> graveBlocks = new HashMap<>();
+    private final Map<UUID, PendingRespawn> pendingRespawns = new HashMap<>();
+    private @Nullable Pl3xMapGraveMarkers mapMarkers;
 
     /**
      * Constructor.
@@ -69,6 +89,12 @@ public class Graves extends BaseFeature {
      */
     @Override
     public void onEnable() {
+        createStorage();
+        loadActiveGraves();
+        Plugin plugin = STEMCraft.getPlugin();
+        api.coordinateBar().register(plugin, COORDINATE_PROVIDER_ID, 100, this::renderGraveWaypoint);
+        enableMapMarkers();
+
         api.events().register(PlayerDeathEvent.class, event -> {
             Player player = event.getEntity();
             if (player.getGameMode() != org.bukkit.GameMode.SURVIVAL) return;
@@ -80,20 +106,48 @@ public class Graves extends BaseFeature {
             World world = death.getWorld();
             if (world == null) return;
 
-            boolean created;
+            GravePlacement placement;
 
             // If they died in liquid, force the "liquid grave" behaviour
             Material atDeath = death.getBlock().getType();
             if (GraveStorageSupport.isLiquid(atDeath)) {
-                created = createLiquidGrave(api, death, player, drops);
+                placement = createLiquidGrave(api, death, player, drops);
             } else {
                 Location surfaceLoc = findSafeSurfaceLocation(death);
-                created = surfaceLoc != null && createBuriedGrave(api, surfaceLoc, player, drops);
+                placement = surfaceLoc == null ? null : createBuriedGrave(api, surfaceLoc, player, drops);
             }
 
-            if (!created) return; // leave vanilla drops
+            if (placement == null) return; // leave vanilla drops
             event.getDrops().clear();
+            GraveRecord grave = registerGrave(player, placement);
+            pendingRespawns.put(player.getUniqueId(), new PendingRespawn(death.clone(), grave));
         });
+        api.events().register(PlayerRespawnEvent.class, event -> api.tasks().nextTick(() -> {
+            PendingRespawn pending = pendingRespawns.remove(event.getPlayer().getUniqueId());
+            if (pending != null) sendDeathLocation(event.getPlayer(), pending);
+        }));
+        api.events().register(InventoryOpenEvent.class, event -> {
+            Object holder = event.getInventory().getHolder(false);
+            if (holder instanceof Chest chest) resolveGraveAt(chest.getLocation());
+            else if (holder instanceof DoubleChest doubleChest) {
+                if (doubleChest.getLeftSide() instanceof Chest left) resolveGraveAt(left.getLocation());
+                if (doubleChest.getRightSide() instanceof Chest right) resolveGraveAt(right.getLocation());
+            } else {
+                Location location = event.getInventory().getLocation();
+                if (location != null) resolveGraveAt(location);
+            }
+        });
+        api.events().register(BlockBreakEvent.class, event -> resolveGraveAt(event.getBlock().getLocation()));
+    }
+
+    @Override
+    public void onDisable() {
+        api.coordinateBar().unregister(STEMCraft.getPlugin(), COORDINATE_PROVIDER_ID);
+        if (mapMarkers != null) mapMarkers.disable();
+        mapMarkers = null;
+        activeGraves.clear();
+        graveBlocks.clear();
+        pendingRespawns.clear();
     }
 
     /**
@@ -171,7 +225,7 @@ public class Graves extends BaseFeature {
      * @param drops List of item drops to store in the grave.
      * @return True if grave created, false otherwise.
      */
-    private boolean createBuriedGrave(STEMCraftAPI api, Location surfaceLoc, Player player, List<ItemStack> drops) {
+    private @Nullable GravePlacement createBuriedGrave(STEMCraftAPI api, Location surfaceLoc, Player player, List<ItemStack> drops) {
         Block surface = surfaceLoc.getBlock();
         Block chestBlock = surface.getRelative(BlockFace.DOWN);
         Block signBlock = surface.getRelative(BlockFace.UP);
@@ -180,7 +234,7 @@ public class Graves extends BaseFeature {
 
         Chest chest = GraveStorageSupport.placeStorageChest(chestBlock, secondChestBlock);
         if (chest == null) {
-            return false;
+            return null;
         }
 
         List<ItemStack> overflow = GraveStorageSupport.fillStorage(chest, secondChestBlock, drops);
@@ -191,7 +245,8 @@ public class Graves extends BaseFeature {
         }
 
         dropOverflow(surfaceLoc, overflow);
-        return true;
+        return new GravePlacement(signBlock.getLocation(), chestBlock.getLocation(),
+            secondChestBlock == null ? null : secondChestBlock.getLocation());
     }
 
     /**
@@ -210,9 +265,9 @@ public class Graves extends BaseFeature {
      * @param drops List of item drops to store in the grave.
      * @return True if grave created, false otherwise.
      */
-    private boolean createLiquidGrave(STEMCraftAPI api, Location death, Player player, List<ItemStack> drops) {
+    private @Nullable GravePlacement createLiquidGrave(STEMCraftAPI api, Location death, Player player, List<ItemStack> drops) {
         World world = death.getWorld();
-        if (world == null) return false;
+        if (world == null) return null;
 
         int x = death.getBlockX();
         int z = death.getBlockZ();
@@ -221,7 +276,7 @@ public class Graves extends BaseFeature {
         Integer liquidTopY = findLiquidSurfaceTopY(world, x, baseY, z);
         if (liquidTopY == null) {
             api.messages().warn(player, "Could not find liquid surface for grave, leaving vanilla drops.");
-            return false;
+            return null;
         }
 
         Block cap = world.getBlockAt(x, liquidTopY, z);      // will become dirt cap
@@ -231,21 +286,21 @@ public class Graves extends BaseFeature {
         Block secondChestBlock = needsDoubleChest ? GraveStorageSupport.findDoubleChestPartner(chestBlock, true) : null;
 
         // We only replace "safe" blocks for this style to avoid griefing builds.
-        if (!GraveStorageSupport.isLiquid(cap.getType())) return false;
-        if (!GraveStorageSupport.canReplaceWithDirt(cap.getType())) return false;
+        if (!GraveStorageSupport.isLiquid(cap.getType())) return null;
+        if (!GraveStorageSupport.canReplaceWithDirt(cap.getType())) return null;
         if (!GraveStorageSupport.isReplaceableForGrave(chestBlock.getType()) && chestBlock.getType() != Material.WATER && chestBlock.getType() != Material.LAVA)
-            return false;
-        if (!GraveStorageSupport.isReplaceableForGrave(signBlock.getType())) return false;
-        if (secondChestBlock != null && !GraveStorageSupport.canReplaceForChest(secondChestBlock.getType())) return false;
+            return null;
+        if (!GraveStorageSupport.isReplaceableForGrave(signBlock.getType())) return null;
+        if (secondChestBlock != null && !GraveStorageSupport.canReplaceForChest(secondChestBlock.getType())) return null;
 
         // Make the dirt cap at surface (replaces liquid)
         cap.setType(Material.DIRT, false);
 
         // Chest below the cap
-        if (!GraveStorageSupport.canReplaceForChest(chestBlock.getType())) return false;
+        if (!GraveStorageSupport.canReplaceForChest(chestBlock.getType())) return null;
         Chest chest = GraveStorageSupport.placeStorageChest(chestBlock, secondChestBlock);
         if (chest == null) {
-            return false;
+            return null;
         }
 
         // Dirt around the chest if not solid
@@ -263,8 +318,175 @@ public class Graves extends BaseFeature {
         List<ItemStack> overflow = GraveStorageSupport.fillStorage(chest, secondChestBlock, drops);
         dropOverflow(new Location(world, x, liquidTopY, z), overflow);
 
-        return true;
+        return new GravePlacement(signBlock.getLocation(), chestBlock.getLocation(),
+            secondChestBlock == null ? null : secondChestBlock.getLocation());
     }
+
+    private void createStorage() {
+        api.database().execute("""
+            CREATE TABLE IF NOT EXISTS active_graves (
+              grave_id TEXT PRIMARY KEY,
+              owner_uuid TEXT NOT NULL,
+              owner_name TEXT NOT NULL,
+              world TEXT NOT NULL,
+              marker_x INTEGER NOT NULL,
+              marker_y INTEGER NOT NULL,
+              marker_z INTEGER NOT NULL,
+              chest_x INTEGER NOT NULL,
+              chest_y INTEGER NOT NULL,
+              chest_z INTEGER NOT NULL,
+              second_chest_x INTEGER,
+              second_chest_y INTEGER,
+              second_chest_z INTEGER,
+              created_at INTEGER NOT NULL
+            )
+            """);
+    }
+
+    private void loadActiveGraves() {
+        activeGraves.clear();
+        graveBlocks.clear();
+        api.database().queryEach("SELECT * FROM active_graves", null, result -> {
+            GraveRecord grave = new GraveRecord(
+                UUID.fromString(result.getString("grave_id")),
+                UUID.fromString(result.getString("owner_uuid")),
+                result.getString("owner_name"), result.getString("world"),
+                result.getInt("marker_x"), result.getInt("marker_y"), result.getInt("marker_z"),
+                result.getInt("chest_x"), result.getInt("chest_y"), result.getInt("chest_z"),
+                (Integer) result.getObject("second_chest_x"), (Integer) result.getObject("second_chest_y"),
+                (Integer) result.getObject("second_chest_z"), result.getLong("created_at"));
+            indexGrave(grave);
+        });
+    }
+
+    private GraveRecord registerGrave(Player player, GravePlacement placement) {
+        Location marker = placement.marker();
+        Location chest = placement.chest();
+        Location second = placement.secondChest();
+        GraveRecord grave = new GraveRecord(UUID.randomUUID(), player.getUniqueId(), player.getName(),
+            marker.getWorld().getName(), marker.getBlockX(), marker.getBlockY(), marker.getBlockZ(),
+            chest.getBlockX(), chest.getBlockY(), chest.getBlockZ(),
+            second == null ? null : second.getBlockX(), second == null ? null : second.getBlockY(),
+            second == null ? null : second.getBlockZ(), System.currentTimeMillis());
+        indexGrave(grave);
+        api.database().update("""
+            INSERT INTO active_graves(grave_id,owner_uuid,owner_name,world,marker_x,marker_y,marker_z,
+              chest_x,chest_y,chest_z,second_chest_x,second_chest_y,second_chest_z,created_at)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """, statement -> {
+            statement.setString(1, grave.id().toString());
+            statement.setString(2, grave.owner().toString());
+            statement.setString(3, grave.ownerName());
+            statement.setString(4, grave.world());
+            statement.setInt(5, grave.markerX()); statement.setInt(6, grave.markerY()); statement.setInt(7, grave.markerZ());
+            statement.setInt(8, grave.chestX()); statement.setInt(9, grave.chestY()); statement.setInt(10, grave.chestZ());
+            if (grave.secondChestX() == null) {
+                statement.setNull(11, java.sql.Types.INTEGER); statement.setNull(12, java.sql.Types.INTEGER);
+                statement.setNull(13, java.sql.Types.INTEGER);
+            } else {
+                statement.setInt(11, grave.secondChestX()); statement.setInt(12, grave.secondChestY());
+                statement.setInt(13, grave.secondChestZ());
+            }
+            statement.setLong(14, grave.createdAt());
+        });
+        return grave;
+    }
+
+    private void indexGrave(GraveRecord grave) {
+        activeGraves.put(grave.id(), grave);
+        graveBlocks.put(new BlockKey(grave.world(), grave.markerX(), grave.markerY(), grave.markerZ()), grave.id());
+        graveBlocks.put(new BlockKey(grave.world(), grave.chestX(), grave.chestY(), grave.chestZ()), grave.id());
+        if (grave.secondChestX() != null) {
+            graveBlocks.put(new BlockKey(grave.world(), grave.secondChestX(), grave.secondChestY(), grave.secondChestZ()), grave.id());
+        }
+    }
+
+    private void resolveGraveAt(Location location) {
+        World world = location.getWorld();
+        if (world == null) return;
+        UUID graveId = graveBlocks.get(new BlockKey(world.getName(), location.getBlockX(), location.getBlockY(), location.getBlockZ()));
+        if (graveId == null) return;
+        GraveRecord grave = activeGraves.remove(graveId);
+        if (grave == null) return;
+        graveBlocks.entrySet().removeIf(entry -> entry.getValue().equals(graveId));
+        api.database().update("DELETE FROM active_graves WHERE grave_id=?",
+            statement -> statement.setString(1, graveId.toString()));
+    }
+
+    private @Nullable Component renderGraveWaypoint(Player player) {
+        GraveRecord grave = activeGraves.values().stream()
+            .filter(candidate -> candidate.owner().equals(player.getUniqueId()))
+            .max(java.util.Comparator.comparingLong(GraveRecord::createdAt)).orElse(null);
+        if (grave == null) return null;
+        String icon = api.messages().tokens().apply(api.locales().resolve(":gravestone:"));
+        if (!player.getWorld().getName().equals(grave.world())) {
+            World world = Bukkit.getWorld(grave.world());
+            String worldName = world == null ? friendlyWorldName(grave.world()) : api.worlds().getDisplayName(world);
+            return Component.text(icon + " " + worldName, NamedTextColor.WHITE);
+        }
+        double dx = grave.markerX() + 0.5D - player.getLocation().getX();
+        double dz = grave.markerZ() + 0.5D - player.getLocation().getZ();
+        return Component.text(icon + " " + compassDirection(dx, dz) + " " + Math.round(Math.hypot(dx, dz)),
+            NamedTextColor.WHITE);
+    }
+
+    private void sendDeathLocation(Player player, PendingRespawn pending) {
+        Location death = pending.death();
+        GraveRecord grave = pending.grave();
+        String worldName = api.worlds().getDisplayName(death.getWorld());
+        player.sendMessage(Component.text("You died at " + death.getBlockX() + ", " + death.getBlockY() + ", "
+            + death.getBlockZ() + " in " + worldName + ".", NamedTextColor.YELLOW));
+        if (death.getBlockX() != grave.markerX() || death.getBlockY() != grave.markerY() || death.getBlockZ() != grave.markerZ()) {
+            player.sendMessage(Component.text("Your grave is nearby at " + grave.markerX() + ", " + grave.markerY()
+                + ", " + grave.markerZ() + ".", NamedTextColor.YELLOW));
+        }
+    }
+
+    private void enableMapMarkers() {
+        Plugin pl3xMap = Bukkit.getPluginManager().getPlugin("Pl3xMap");
+        if (pl3xMap == null || !pl3xMap.isEnabled()) return;
+        try {
+            mapMarkers = new Pl3xMapGraveMarkers(STEMCraft.getPlugin(), this::mapGraves);
+            mapMarkers.enable();
+        } catch (RuntimeException | LinkageError exception) {
+            mapMarkers = null;
+            STEMCraft.getPlugin().getLogger().warning("Could not enable Pl3xMap grave markers: " + exception.getMessage());
+        }
+    }
+
+    private Collection<GraveMapMarker> mapGraves() {
+        return activeGraves.values().stream().map(grave -> new GraveMapMarker(grave.id(), grave.owner(),
+            grave.ownerName(), grave.world(), grave.markerX(), grave.markerY(), grave.markerZ())).toList();
+    }
+
+    static String compassDirection(double dx, double dz) {
+        if (dx == 0D && dz == 0D) return "Here";
+        String[] directions = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
+        double degrees = Math.toDegrees(Math.atan2(dx, -dz));
+        if (degrees < 0D) degrees += 360D;
+        return directions[(int) Math.round(degrees / 45D) % directions.length];
+    }
+
+    private static String friendlyWorldName(String world) {
+        String name = world.replace('_', ' ').replace('-', ' ').trim();
+        if (name.toLowerCase(java.util.Locale.ROOT).endsWith(" nether")) return "Nether";
+        if (name.toLowerCase(java.util.Locale.ROOT).endsWith(" the end")) return "The End";
+        StringBuilder result = new StringBuilder();
+        for (String word : name.split("\\s+")) {
+            if (!result.isEmpty()) result.append(' ');
+            result.append(Character.toUpperCase(word.charAt(0))).append(word.substring(1));
+        }
+        return result.toString();
+    }
+
+    private record GravePlacement(Location marker, Location chest, @Nullable Location secondChest) { }
+    private record PendingRespawn(Location death, GraveRecord grave) { }
+    private record BlockKey(String world, int x, int y, int z) { }
+    private record GraveRecord(UUID id, UUID owner, String ownerName, String world,
+                               int markerX, int markerY, int markerZ,
+                               int chestX, int chestY, int chestZ,
+                               @Nullable Integer secondChestX, @Nullable Integer secondChestY,
+                               @Nullable Integer secondChestZ, long createdAt) { }
 
     /**
      * Finds the topmost liquid block (surface) in the column at (x,z) near baseY.
