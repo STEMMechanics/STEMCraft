@@ -13,7 +13,8 @@ This is the core STEMCraft plugin that provides the core functionality and helpe
 
 ## Usage
 
-Start with the local docs in [docs/README.md](docs/README.md) for commands, features, and integration notes.
+- Players: read the [STEMCraft Player Handbook](docs/pub/README.md).
+- Developers and administrators: read the [STEMCraft Wiki](https://github.com/STEMMechanics/stemcraft/wiki).
 
 ## Builds & API
 

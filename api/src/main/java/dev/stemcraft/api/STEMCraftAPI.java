@@ -227,6 +227,15 @@ public interface STEMCraftAPI {
 
     /**
      * Static access to the STEMCraft API instance.
+     *
+     * <p>The instance becomes available after STEMCraft has enabled. Plugins should
+     * declare STEMCraft as a dependency or soft dependency before accessing it.</p>
+     *
+     * @return the active API instance, or {@code null} before STEMCraft enables
+     * @example Getting the API
+     * {@code
+     * STEMCraftAPI api = STEMCraftAPI.api();
+     * }
      */
     static STEMCraftAPI api() {
         return InstanceHolder.api();

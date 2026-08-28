@@ -7,5 +7,4 @@ Each player can have one active notice created through a board. Clicking again l
 Trades and arrangements advertised on a board still happen directly between players.
 
 Keep headings short and messages friendly. Never post private information. Read the [community rules](../safety-and-community/rules.md) before publishing a notice.
-
 > **Image placeholder — notice board:** Add a three-panel image of a player clicking the physical board, completing the notice form, and viewing the finished notice. Use a safe example such as “Sapling Swap” and cover any real player names.

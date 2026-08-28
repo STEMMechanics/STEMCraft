@@ -11,18 +11,18 @@ This wiki mirrors the current source tree and is intended to give server operato
 
 ## Start Here
 
-- [Architecture](./Architecture.md)
-- [Services](./Services.md)
-- [Features](./Features.md)
-- [Commands](./Commands.md)
-- [API](./API.md)
-- [Minigames](./Minigames.md)
-- [Configuration](./Configuration.md)
+- [Architecture](https://github.com/STEMMechanics/stemcraft/wiki/Architecture)
+- [Services](https://github.com/STEMMechanics/stemcraft/wiki/Services)
+- [Features](https://github.com/STEMMechanics/stemcraft/wiki/Features)
+- [Commands](https://github.com/STEMMechanics/stemcraft/wiki/commands)
+- [API](https://github.com/STEMMechanics/stemcraft/wiki/API)
+- [Minigames](https://github.com/STEMMechanics/stemcraft/wiki/Minigames)
+- [Configuration](https://github.com/STEMMechanics/stemcraft/wiki/Configuration)
 
 ## Audience
 
-- Server owners: start with [Features](./Features.md), [Commands](./Commands.md), and [Configuration](./Configuration.md)
-- Plugin developers: start with [API](./API.md), [Services](./Services.md), and [Architecture](./Architecture.md)
+- Server owners: start with [Features](https://github.com/STEMMechanics/stemcraft/wiki/Features), [Commands](https://github.com/STEMMechanics/stemcraft/wiki/commands), and [Configuration](https://github.com/STEMMechanics/stemcraft/wiki/Configuration)
+- Plugin developers: start with [API](https://github.com/STEMMechanics/stemcraft/wiki/API), [Services](https://github.com/STEMMechanics/stemcraft/wiki/Services), and [Architecture](https://github.com/STEMMechanics/stemcraft/wiki/Architecture)
 - Contributors: use this wiki as the high-level index, then follow the package paths back into source
 
 ## Source of Truth

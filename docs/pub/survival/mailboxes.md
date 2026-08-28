@@ -9,5 +9,4 @@ Delivery timing and mailbox availability are controlled by the live server.
 {% hint style="warning" %}
 Double-check the recipient's name before sending valuable items. Ask staff for help if a delivery appears to be missing.
 {% endhint %}
-
 > **Image placeholder — sending mail:** Add four numbered screenshots: place the custom Mailbox, put items inside, choose a recipient and write a short kind message, then show the recipient opening the delivery and letter. Include both Java and Bedrock forms if their screens differ.

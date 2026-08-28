@@ -25,6 +25,11 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
+      - name: Include API JavaDocs
+        uses: STEMMechanics/javadoc-include-action@v1
+        with:
+          docs: 'docs/dev/**/*.md'
+
       - name: Sync wiki repository
         env:
           GH_TOKEN: ${{ github.token }}

@@ -20,7 +20,7 @@ Commands are short instructions typed into Minecraft chat. Start with `/`, then 
 | `/resourcepack`     | Ask the server to resend its Java resource pack. |
 | `/report <message>` | Send a player report to staff.                   |
 
-Read [Sleeping, Coordinates & Worlds](../survival/sleeping-and-navigation.md) for pictures of the displays. If a texture looks wrong, see the [Resource Pack guide](/broken/pages/gEBfbQIuBp8F6L9SpNSg). If somebody is breaking the rules, read [Reporting Players](../safety-and-community/reporting.md).
+Read [Sleeping, Coordinates & Worlds](../survival/sleeping-and-navigation.md) for pictures of the displays. If a texture looks wrong, see the [Resource Pack guide](../getting-started.md#accept-the-resource-pack). If somebody is breaking the rules, read [Reporting Players](../safety-and-community/reporting.md).
 
 ## Minigames
 
@@ -31,5 +31,4 @@ Never type a command that another player gives you unless you understand what it
 {% endhint %}
 
 Administrator, moderation, world-management, and developer commands are intentionally omitted from this player handbook.
-
 > **Image placeholder — using command suggestions:** Add a Java-and-Bedrock split screenshot showing a child typing `/coord` and selecting it from Minecraft's command suggestions. Add an arrow to the leading `/` and the caption “Commands start with a slash”. Blur player chat and private information.
