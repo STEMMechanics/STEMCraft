@@ -27,7 +27,9 @@ import dev.stemcraft.api.service.playerstats.PlayerStatDefinition;
 import dev.stemcraft.api.service.playerstats.PlayerStatValue;
 import dev.stemcraft.api.service.playerstats.PlayerStatsRecord;
 import dev.stemcraft.api.service.playerstats.PlayerStatsService;
+import dev.stemcraft.api.util.PatternUtil;
 import dev.stemcraft.api.util.PlayerUtil;
+import dev.stemcraft.feature.ProfessionsFeature;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Material;
@@ -65,6 +67,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.regex.Pattern;
 
 public final class PlayerStatsServiceImpl extends BaseService implements PlayerStatsService {
     private static final int MAX_BUCKET_DAYS = 370;
@@ -160,6 +163,8 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
     private final ConcurrentMap<String, TimeInDefinition> timeInDefinitions = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, Instant> lastObservedAt = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, String> lastObservedWorld = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, StatMilestone> milestones = new ConcurrentHashMap<>();
+    private volatile List<StatGroup> statGroups = List.of();
     private List<String> enabledBuiltInKeys = List.of();
 
     public PlayerStatsServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
@@ -173,8 +178,11 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
         ensureStorage();
         loadPersistedData();
         loadBuiltInDefinitions();
+        loadStatGroups();
+        loadMilestones();
         loadTimeInDefinitions();
         registerEventCollectors();
+        registerStatsCommand();
 
         long autosaveTicks = Math.max(20L, getConfigSection().getLong("autosave_ticks", 1200L));
         api.tasks().repeating(autosaveTicks, this::captureOnlinePlayers);
@@ -251,10 +259,12 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
         state.updatedAt = now;
 
         StatValueState value = state.stats.computeIfAbsent(normalizedKey, ignored -> new StatValueState());
+        double previousTotal = value.total;
         value.total += amount;
         value.updatedAt = now;
         value.dailyBuckets.merge(bucketDate, amount, Double::sum);
         pruneBuckets(value.dailyBuckets, bucketDate.minusDays(MAX_BUCKET_DAYS));
+        announceCrossedMilestone(username, normalizedKey, previousTotal, value.total);
     }
 
     @Override
@@ -345,6 +355,25 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
             section.createSection("descriptors");
             changed = true;
         }
+        if (!section.isSection("groups")) {
+            section.set("groups.creative.title", "Creative");
+            section.set("groups.creative.gamemode", "creative");
+            section.set("groups.mini-games.title", "Mini-games");
+            section.set("groups.mini-games.worlds", List.of("bedwars*", "bridge*", "nightfall*"));
+            section.set("groups.mini-games.gamemode", "survival");
+            section.set("groups.survival.title", "Survival");
+            section.set("groups.survival.worlds", List.of("survival*"));
+            section.set("groups.survival.gamemode", "survival");
+            changed = true;
+        }
+        if (!section.isSection("milestones")) {
+            List<Long> defaults = List.of(10000L, 25000L, 50000L, 100000L);
+            section.set("milestones.blocks_placed.values", defaults);
+            section.set("milestones.blocks_placed.message", "&e{player} has placed {value} blocks in {group}");
+            section.set("milestones.blocks_broken.values", defaults);
+            section.set("milestones.blocks_broken.message", "&e{player} has broken {value} blocks in {group}");
+            changed = true;
+        }
         if (section.contains("built_in")) {
             section.remove("built_in");
             changed = true;
@@ -421,6 +450,7 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
             } else if (player.getGameMode() == GameMode.SURVIVAL && isEnabled("blocks_placed_survival")) {
                 increment(player.getUniqueId(), player.getName(), "blocks_placed_survival", 1.0d);
             }
+            incrementMatchingGroups(player, "blocks_placed");
 
             if (isEnabled("seeds_planted") && SEED_PLANT_BLOCKS.contains(event.getBlockPlaced().getType())) {
                 increment(player.getUniqueId(), player.getName(), "seeds_planted", 1.0d);
@@ -436,6 +466,7 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
             } else if (player.getGameMode() == GameMode.SURVIVAL && isEnabled("blocks_broken_survival")) {
                 increment(player.getUniqueId(), player.getName(), "blocks_broken_survival", 1.0d);
             }
+            incrementMatchingGroups(player, "blocks_broken");
         });
         api.events().register(ProjectileLaunchEvent.class, event -> {
             if (!isEnabled("spears_thrown")) {
@@ -725,6 +756,137 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
         }
     }
 
+    private void loadMilestones() {
+        milestones.clear();
+        ConfigSection root = getConfigSection().getSection("milestones", false);
+        if (root == null) return;
+        for (String configuredKey : root.getKeys(false)) {
+            String key = normalizeKey(configuredKey);
+            ConfigSection section = root.getSection(configuredKey, false);
+            if (key == null || section == null) continue;
+            List<Long> values = section.getList("values").stream()
+                .filter(Number.class::isInstance).map(Number.class::cast).map(Number::longValue)
+                .filter(value -> value > 0).distinct().sorted().toList();
+            String message = section.getString("message", "&e{player} has reached {value} " + key);
+            if (values.isEmpty()) continue;
+            if ("blocks_placed".equals(key) || "blocks_broken".equals(key)) {
+                for (StatGroup group : statGroups) {
+                    milestones.put(groupStatKey(key, group.key()), new StatMilestone(values, message, group.title()));
+                }
+            } else {
+                milestones.put(key, new StatMilestone(values, message, null));
+            }
+        }
+    }
+
+    private void announceCrossedMilestone(@Nullable String username, @NotNull String key, double before, double after) {
+        if (after <= before || username == null || username.isBlank()) return;
+        StatMilestone milestone = milestones.get(key);
+        if (milestone == null) return;
+        for (long value : milestone.values()) {
+            if (before < value && after >= value) {
+                api.messages().broadcast(milestone.message(), "player", username, "value", value, "stat", key,
+                    "group", milestone.groupTitle() == null ? "" : milestone.groupTitle());
+            }
+        }
+    }
+
+    private void loadStatGroups() {
+        ConfigSection root = getConfigSection().getSection("groups", false);
+        if (root == null) {
+            statGroups = List.of();
+            return;
+        }
+        List<StatGroup> loaded = new ArrayList<>();
+        for (String configuredKey : root.getKeys(false)) {
+            String key = normalizeKey(configuredKey);
+            ConfigSection section = root.getSection(configuredKey, false);
+            if (key == null || section == null) continue;
+            String title = section.getString("title", configuredKey);
+            GameMode gameMode = null;
+            String configuredMode = section.getString("gamemode", "");
+            if (!configuredMode.isBlank()) {
+                try {
+                    gameMode = GameMode.valueOf(configuredMode.trim().toUpperCase(Locale.ROOT));
+                } catch (IllegalArgumentException exception) {
+                    plugin.getLogger().warning("Ignoring invalid player_stats.groups." + configuredKey + ".gamemode: " + configuredMode);
+                    continue;
+                }
+            }
+            List<Pattern> worlds = section.getStringList("worlds").stream()
+                .filter(value -> value != null && !value.isBlank())
+                .map(value -> PatternUtil.globToRegex(value.toLowerCase(Locale.ROOT))).toList();
+            StatGroup group = new StatGroup(key, title, gameMode, worlds);
+            loaded.add(group);
+            register(new PlayerStatDefinition(groupStatKey("blocks_placed", key), title + " Blocks Placed",
+                "Blocks placed while matching the " + title + " stat group.", "stemcraft", "group", key));
+            register(new PlayerStatDefinition(groupStatKey("blocks_broken", key), title + " Blocks Broken",
+                "Blocks broken while matching the " + title + " stat group.", "stemcraft", "group", key));
+        }
+        statGroups = List.copyOf(loaded);
+    }
+
+    private void incrementMatchingGroups(@NotNull Player player, @NotNull String baseKey) {
+        for (StatGroup group : statGroups) {
+            if (group.matches(player)) {
+                increment(player.getUniqueId(), player.getName(), groupStatKey(baseKey, group.key()), 1.0d);
+            }
+        }
+    }
+
+    private static String groupStatKey(String baseKey, String groupKey) {
+        return baseKey + "_group_" + groupKey;
+    }
+
+    private void registerStatsCommand() {
+        api.commands().create("stats")
+            .description("View your own or another player's statistics.")
+            .usage("/stats [player]")
+            .tabCompletion("{player}")
+            .executor((unused, command, context) -> {
+                String username;
+                if (context.args().isEmpty()) {
+                    context.checkNotConsole();
+                    username = context.asPlayer().getName();
+                } else {
+                    username = context.getArg(0);
+                }
+                List<PlayerStatsRecord> records = list(null, username, null, "all");
+                if (records.isEmpty()) {
+                    command.error(context.getSender(), "No statistics found for {player}.", "player", username);
+                    return;
+                }
+                PlayerStatsRecord record = records.getFirst();
+                api.messages().send(context.getSender(), "&6Stats for &e{player}", "player",
+                    record.username() == null ? username : record.username());
+                boolean any = false;
+                for (PlayerStatValue stat : record.stats()) {
+                    if (stat.value() <= 0 || (!statGroups.isEmpty() && isLegacyGroupedBlockStat(stat.key()))) continue;
+                    any = true;
+                    String value = formatStatForCommand(stat);
+                    api.messages().send(context.getSender(), "&e{stat}: &f{value}", "stat", stat.title(), "value", value);
+                }
+                if (!any) api.messages().send(context.getSender(), "&7No activity recorded yet.");
+            }).register(plugin);
+    }
+
+    private static boolean isLegacyGroupedBlockStat(String key) {
+        return key.equals("blocks_placed_survival") || key.equals("blocks_placed_creative")
+            || key.equals("blocks_broken_survival") || key.equals("blocks_broken_creative");
+    }
+
+    private static String formatStatForCommand(PlayerStatValue stat) {
+        if (stat.key().startsWith("skill_") && stat.key().endsWith("_xp")) {
+            return "Level " + ProfessionsFeature.levelForXp(stat.value()) + " (" + formatNumber(stat.value()) + " XP)";
+        }
+        return formatNumber(stat.value());
+    }
+
+    private static String formatNumber(double value) {
+        if (value == Math.rint(value)) return String.format(Locale.ROOT, "%,.0f", value);
+        return String.format(Locale.ROOT, "%,.2f", value);
+    }
+
     private void recordTimeInWorld(@NotNull UUID uuid, @Nullable String username, @NotNull String worldName, double hours) {
         if (hours <= 0.0d || timeInDefinitions.isEmpty()) {
             return;
@@ -967,4 +1129,15 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
         }
 
     private record TimeInDefinition(String statKey, Set<String> worlds) {}
+
+    private record StatMilestone(List<Long> values, String message, @Nullable String groupTitle) {}
+
+    private record StatGroup(String key, String title, @Nullable GameMode gameMode, List<Pattern> worlds) {
+        private boolean matches(Player player) {
+            if (gameMode != null && player.getGameMode() != gameMode) return false;
+            if (worlds.isEmpty()) return true;
+            String worldName = player.getWorld().getName().toLowerCase(Locale.ROOT);
+            return worlds.stream().anyMatch(pattern -> pattern.matcher(worldName).matches());
+        }
+    }
 }

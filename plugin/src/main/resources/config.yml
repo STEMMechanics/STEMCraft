@@ -285,6 +285,35 @@ player-welcome:
 
 player_stats:
   autosave_ticks: 1200
+  groups:
+    creative:
+      title: Creative
+      gamemode: creative
+    mini-games:
+      title: Mini-games
+      worlds:
+        - "bedwars*"
+        - "bridge*"
+        - "nightfall*"
+      gamemode: survival
+    survival:
+      title: Survival
+      worlds:
+        - "survival*"
+      gamemode: survival
+  milestones:
+    blocks_broken:
+      values: [10000, 25000, 50000, 100000]
+      message: "&e{player} has broken {value} blocks in {group}"
+    blocks_placed:
+      values: [10000, 25000, 50000, 100000]
+      message: "&e{player} has placed {value} blocks in {group}"
+
+professions:
+  enabled: true
+  worlds:
+    - "survival*"
+  level-up-message: "&eYou have reached {skill} Level {level}"
 
 holograms:
   visibility:
