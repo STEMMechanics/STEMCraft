@@ -99,6 +99,13 @@ class QuestFeatureTest {
     }
 
     @Test
+    void removesStorylinePrefixFromTrackedQuestTitle() {
+        assertEquals("The Farther Reach",
+            QuestFeature.trackingQuestTitle("Walls for Everyone: The Farther Reach"));
+        assertEquals("Under the Canopy", QuestFeature.trackingQuestTitle("Under the Canopy"));
+    }
+
+    @Test
     void trackedQuestBarIsLimitedToConfiguredSurvivalWorlds() {
         List<Pattern> worlds = List.of(PatternUtil.globToRegex("survival*"));
 
