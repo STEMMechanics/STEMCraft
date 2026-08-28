@@ -174,6 +174,13 @@ public class ItemServiceImpl extends BaseService implements ItemService {
                 if (!lore.isEmpty()) meta.lore(lore);
                 int maxStackSize = section.getInt("max-stack-size", 0);
                 if (maxStackSize > 0) meta.setMaxStackSize(Math.min(99, maxStackSize));
+                int maxDamage = section.getInt("max-damage", 0);
+                if (maxDamage > 0) {
+                    if (!(meta instanceof org.bukkit.inventory.meta.Damageable damageable)) {
+                        throw new IllegalArgumentException("material does not support durability");
+                    }
+                    damageable.setMaxDamage(maxDamage);
+                }
                 if (section.contains("glint")) meta.setEnchantmentGlintOverride(section.getBoolean("glint", false));
                 ConfigSection food = section.getSection("food", false);
                 if (food != null) {

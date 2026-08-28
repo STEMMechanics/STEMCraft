@@ -418,6 +418,9 @@ iron-golem-poppy:
   switch-advantage: 2.0
   update-ticks: 10
 
+chisel:
+  enabled: true
+
 recipes:
   # Remove some annoying / useless recipes
   remove:

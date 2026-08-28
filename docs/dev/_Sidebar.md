@@ -4,6 +4,7 @@
 - [Architecture](./Architecture.md)
 - [Services](./Services.md)
 - [Features](./Features.md)
+- [Build a Custom Tool](./build-a-custom-tool.md)
 - [Slime and Magma Buckets](./slime-and-magma-buckets.md)
 - [Comets](./comets.md)
 - [Rotten Flesh Uses](./rotten-flesh-uses.md)
