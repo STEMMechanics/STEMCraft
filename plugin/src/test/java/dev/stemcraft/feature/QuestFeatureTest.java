@@ -19,6 +19,9 @@ import org.mockito.MockedStatic;
 
 import java.util.Map;
 import java.util.List;
+import java.util.regex.Pattern;
+
+import dev.stemcraft.api.util.PatternUtil;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -91,6 +94,19 @@ class QuestFeatureTest {
         assertEquals("Kill 0/3 Iron Golems", QuestFeature.formatTrackedObjective("Kill 3 iron golems", 0, 3));
         assertEquals("Bring 0/1 Compass", QuestFeature.formatTrackedObjective("Bring a compass", 0, 1));
         assertEquals("Find 0/1 Music Disc 13", QuestFeature.formatTrackedObjective("Find music disc 13", 0, 1));
+        assertEquals("Craft 0/12 Flower Pots",
+            QuestFeature.formatTrackedObjective("Craft 12 flower pots for cottage windows", 0, 12));
+    }
+
+    @Test
+    void trackedQuestBarIsLimitedToConfiguredSurvivalWorlds() {
+        List<Pattern> worlds = List.of(PatternUtil.globToRegex("survival*"));
+
+        assertTrue(QuestFeature.matchesTrackingWorld(worlds, "survival"));
+        assertTrue(QuestFeature.matchesTrackingWorld(worlds, "survival_nether"));
+        assertTrue(QuestFeature.matchesTrackingWorld(worlds, "Survival_The_End"));
+        assertFalse(QuestFeature.matchesTrackingWorld(worlds, "world"));
+        assertFalse(QuestFeature.matchesTrackingWorld(worlds, "bw_castle"));
     }
 
     @Test

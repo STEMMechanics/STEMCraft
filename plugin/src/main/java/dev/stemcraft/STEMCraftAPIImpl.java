@@ -22,6 +22,7 @@ package dev.stemcraft;
 
 import dev.stemcraft.api.service.command.CommandService;
 import dev.stemcraft.api.service.comet.CometService;
+import dev.stemcraft.api.service.coordinatebar.CoordinateBarService;
 import dev.stemcraft.api.service.audit.AuditService;
 import dev.stemcraft.api.service.config.ConfigService;
 import dev.stemcraft.api.service.database.DatabaseService;
@@ -94,6 +95,9 @@ public class STEMCraftAPIImpl extends HasMessagesImpl implements STEMCraftAPI {
     public CommandService commands() {
         return plugin.commands();
     }
+
+    @Override
+    public CoordinateBarService coordinateBar() { return plugin.coordinateBar(); }
 
     /** Get the comet event service. */
     @Override

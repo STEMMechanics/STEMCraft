@@ -17,6 +17,7 @@ final class ExamplePluginBootstrap {
 From `STEMCraftAPI`, you can access:
 
 - `commands()` - command registration
+- `coordinateBar()` - player-specific coordinate boss-bar additions
 - `comets()` - destructive comet events with optional direction and loot
 - `config()` - YAML config files/sections
 - `database()` - SQL execution/query helpers
@@ -69,6 +70,20 @@ final class ExampleEvents {
     }
 }
 ```
+
+## Coordinate Bar API
+
+Companion plugins can append live, player-specific information to `/coordbar`. Return `null` when an entry is not currently relevant. Lower priorities render first, and registering the same plugin and ID replaces the previous provider.
+
+```java
+api.coordinateBar().register(yourPlugin, "home-distance", 200, player -> {
+    Location home = homes.get(player.getUniqueId());
+    if (home == null) return null;
+    return Component.text("Home " + Math.round(player.getLocation().distance(home)) + "m");
+});
+```
+
+Call `api.coordinateBar().unregister(yourPlugin, "home-distance")` when removing the integration. Registrations owned by disabled plugins are discarded automatically.
 
 ## Mailbox API
 

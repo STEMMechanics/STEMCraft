@@ -84,6 +84,19 @@ class GraveStorageSupportTest {
         assertEquals(primary.getRelative(BlockFace.NORTH).getLocation(), partner.getLocation());
     }
 
+    @Test
+    void graveWaypointUsesEightWayWorldDirections() {
+        assertEquals("N", Graves.compassDirection(0, -10));
+        assertEquals("NE", Graves.compassDirection(10, -10));
+        assertEquals("E", Graves.compassDirection(10, 0));
+        assertEquals("SE", Graves.compassDirection(10, 10));
+        assertEquals("S", Graves.compassDirection(0, 10));
+        assertEquals("SW", Graves.compassDirection(-10, 10));
+        assertEquals("W", Graves.compassDirection(-10, 0));
+        assertEquals("NW", Graves.compassDirection(-10, -10));
+        assertEquals("Here", Graves.compassDirection(0, 0));
+    }
+
     private Block supportedBlock(int x) {
         world.getBlockAt(x, 65 - 1, 0).setType(Material.STONE);
         return world.getBlockAt(x, 65, 0);

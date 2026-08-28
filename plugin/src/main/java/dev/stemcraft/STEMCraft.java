@@ -99,6 +99,7 @@ public final class STEMCraft extends JavaPlugin {
 
     private ChatServiceImpl chat;
     private CommandServiceImpl commands;
+    private CoordinateBarServiceImpl coordinateBar;
     private ConfigServiceImpl config;
     private AuditServiceImpl audit;
     private DatabaseServiceImpl database;
@@ -205,6 +206,7 @@ public final class STEMCraft extends JavaPlugin {
         audit = new AuditServiceImpl(this, api);
         chat = new ChatServiceImpl(this, api);
         commands = new CommandServiceImpl(this, api);
+        coordinateBar = new CoordinateBarServiceImpl(this, api);
         database = new DatabaseServiceImpl(this, api);
         dialogs = new DialogServiceImpl(this, api);
         events = new EventServiceImpl(this, api);
@@ -236,6 +238,7 @@ public final class STEMCraft extends JavaPlugin {
         audit.onEnable();
         chat.onEnable();
         commands.onEnable();
+        coordinateBar.onEnable();
         events.onEnable();
         holograms.onEnable();
         imageMaps.onEnable();
@@ -354,6 +357,16 @@ public final class STEMCraft extends JavaPlugin {
                     + String.join(", ", report.failures().keySet()));
             }
         }
+        List<BaseFeature> featuresToDisable = new ArrayList<>(loadedFeatures);
+        Collections.reverse(featuresToDisable);
+        for (BaseFeature feature : featuresToDisable) {
+            try {
+                feature.onDisable();
+            } catch (RuntimeException exception) {
+                getLogger().log(java.util.logging.Level.SEVERE, "Could not disable feature " + feature.id(), exception);
+            }
+        }
+        loadedFeatures.clear();
         disableService(minigames);
         disableService(worlds);
         disableService(web);
@@ -379,6 +392,7 @@ public final class STEMCraft extends JavaPlugin {
         disableService(database);
         disableService(dialogs);
         disableService(commands);
+        disableService(coordinateBar);
         disableService(chat);
 
         disableService(tasks);

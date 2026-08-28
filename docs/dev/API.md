@@ -12,6 +12,7 @@ The public integration surface is `dev.stemcraft.api.STEMCraftAPI`.
 `STEMCraftAPI` exposes the following runtime service families:
 
 - `commands()`
+- `coordinateBar()`
 - `comets()`
 - `config()`
 - `audit()`
@@ -53,6 +54,12 @@ Registering the same plugin and ID replaces the previous callback. Disabled plug
 <!-- /javadoc -->
 
 ## Main Extension Areas
+
+### Coordinate bar
+
+`CoordinateBarService` lets extensions register ordered, player-specific `Component` providers for `/coordbar`. Providers return `null` when inactive. Registrations are keyed by owning plugin and ID, replace cleanly during reloads, and are discarded when their owning plugin is disabled.
+
+<!-- javadoc:all api/src/main/java/dev/stemcraft/api/service/coordinatebar/CoordinateBarService.java -->
 
 ### Comets
 

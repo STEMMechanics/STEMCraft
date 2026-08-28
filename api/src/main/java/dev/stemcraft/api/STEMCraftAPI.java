@@ -22,6 +22,7 @@ package dev.stemcraft.api;
 
 import dev.stemcraft.api.service.command.CommandService;
 import dev.stemcraft.api.service.comet.CometService;
+import dev.stemcraft.api.service.coordinatebar.CoordinateBarService;
 import dev.stemcraft.api.service.audit.AuditService;
 import dev.stemcraft.api.internal.InstanceHolder;
 import dev.stemcraft.api.service.database.DatabaseService;
@@ -77,6 +78,9 @@ public interface STEMCraftAPI {
      * Register a new command.
      */
     CommandService commands();
+
+    /** Get the coordinate boss-bar extension service. */
+    CoordinateBarService coordinateBar();
 
     /** Get the comet event service. */
     CometService comets();
