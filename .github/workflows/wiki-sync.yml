@@ -1,25 +1,46 @@
 name: Sync Wiki
 
 on:
+  pull_request:
+    paths:
+      - 'api/**'
+      - 'docs/dev/**'
+      - '.github/workflows/wiki-sync.yml'
   push:
     branches: [ '**' ]
     paths:
+      - 'api/**'
       - 'docs/dev/**'
       - '.github/workflows/wiki-sync.yml'
   workflow_dispatch:
 
-permissions:
-  contents: write
+permissions: read-all
 
 concurrency:
   group: wiki-sync-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  validate:
+    name: Validate docs/dev JavaDoc includes
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Validate API JavaDoc includes
+        uses: STEMMechanics/javadoc-include-action@v1
+        with:
+          docs: 'docs/dev/**/*.md'
+
   sync:
     name: Publish docs/dev to GitHub Wiki
-    if: ${{ github.event_name != 'push' || github.ref_name == github.event.repository.default_branch }}
+    if: ${{ github.event_name != 'pull_request' && (github.event_name != 'push' || github.ref_name == github.event.repository.default_branch) }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Check out repository
