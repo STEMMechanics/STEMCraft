@@ -12,6 +12,7 @@ import org.bukkit.entity.Minecart;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Tameable;
 import org.bukkit.event.EventPriority;
+import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityUnleashEvent;
@@ -63,7 +64,7 @@ public final class SurvivalQolFeature extends BaseFeature {
 
     private void onAutoSelectTool(PlayerInteractEvent event) {
         if (!enabled("auto-select-tool", true) || !allowed("auto-select-tool", event.getPlayer())
-            || event.getAction() != org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK
+            || !triggersAutoSelect(event.getAction())
             || event.getHand() != EquipmentSlot.HAND || event.getClickedBlock() == null) return;
         PlayerInventory inventory = event.getPlayer().getInventory();
         int heldSlot = inventory.getHeldItemSlot();
@@ -72,6 +73,10 @@ public final class SurvivalQolFeature extends BaseFeature {
         ItemStack held = inventory.getItem(heldSlot);
         inventory.setItem(heldSlot, inventory.getItem(bestSlot));
         inventory.setItem(bestSlot, held);
+    }
+
+    static boolean triggersAutoSelect(Action action) {
+        return action == Action.LEFT_CLICK_BLOCK;
     }
 
     static int preferredToolSlot(Block block, PlayerInventory inventory, int heldSlot) {
