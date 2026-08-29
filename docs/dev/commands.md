@@ -53,7 +53,7 @@ The list below reflects the active built-in command roots in source.
 | Command | Owner | Notes |
 | --- | --- | --- |
 | `/book` | `CustomBooks` | Create, list, show, and distribute configured books; saved book keys are title-derived and preserve existing hyphens |
-| `/quest` | `QuestFeature` | View quests, track active objectives, or abandon active quests |
+| `/quest` | `QuestFeature` | View active quests and carried books, track objectives, or abandon quests |
 | `/imenu` | `InteractiveMenus` | Interactive menu runtime and editor |
 | dynamic configured aliases | `CustomCommands` | Commands loaded from config at startup; default player sender with optional `player:` / `server:` prefixes |
 | `gms`, `gmc`, `gma`, `gmsp` | `GameModeAliases` | Short aliases that dispatch to `/gamemode` |

@@ -460,12 +460,8 @@ public class Graves extends BaseFeature {
         Location death = pending.death();
         GraveRecord grave = pending.grave();
         String worldName = api.worlds().getDisplayName(death.getWorld());
-        player.sendMessage(Component.text("You died at " + death.getBlockX() + ", " + death.getBlockY() + ", "
-            + death.getBlockZ() + " in " + worldName + ".", NamedTextColor.YELLOW));
-        if (death.getBlockX() != grave.markerX() || death.getBlockY() != grave.markerY() || death.getBlockZ() != grave.markerZ()) {
-            player.sendMessage(Component.text("Your grave is nearby at " + grave.markerX() + ", " + grave.markerY()
-                + ", " + grave.markerZ() + ".", NamedTextColor.YELLOW));
-        }
+        player.sendMessage(Component.text("Your grave is at " + grave.markerX() + ", " + grave.markerY()
+            + ", " + grave.markerZ() + " in " + worldName + ".", NamedTextColor.YELLOW));
     }
 
     private void enableMapMarkers() {
