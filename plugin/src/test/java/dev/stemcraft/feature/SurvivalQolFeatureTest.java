@@ -2,6 +2,7 @@ package dev.stemcraft.feature;
 
 import org.bukkit.Material;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.event.block.Action;
 import org.junit.jupiter.api.Test;
 import org.bukkit.entity.Player;
 
@@ -21,6 +22,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class SurvivalQolFeatureTest {
+    @Test
+    void autoSelectOnlyRunsWhenStartingToBreakABlock() {
+        assertTrue(SurvivalQolFeature.triggersAutoSelect(Action.LEFT_CLICK_BLOCK));
+        assertFalse(SurvivalQolFeature.triggersAutoSelect(Action.RIGHT_CLICK_BLOCK));
+        assertFalse(SurvivalQolFeature.triggersAutoSelect(Action.RIGHT_CLICK_AIR));
+    }
+
     @Test
     void onlyRefillsToolsWithTheIdenticalMaterial() {
         assertTrue(SurvivalQolFeature.sameToolMaterial(Material.STONE_PICKAXE, Material.STONE_PICKAXE));
