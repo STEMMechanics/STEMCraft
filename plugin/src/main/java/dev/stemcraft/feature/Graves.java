@@ -20,6 +20,8 @@
 
 package dev.stemcraft.feature;
 
+import dev.stemcraft.api.service.playerreset.*;
+
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.integration.pl3xmap.GraveMapMarker;
@@ -43,6 +45,7 @@ import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.NotNull;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -51,6 +54,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -94,6 +98,28 @@ public class Graves extends BaseFeature {
         Plugin plugin = STEMCraft.getPlugin();
         api.coordinateBar().register(plugin, COORDINATE_PROVIDER_ID, 100, this::renderGraveWaypoint);
         enableMapMarkers();
+        api.playerResets().register(new PlayerResetHandler() {
+            public @NotNull String id() { return "active-graves"; }
+            public @NotNull Set<PlayerResetScope> scopes() { return Set.of(PlayerResetScope.GAMEPLAY, PlayerResetScope.COMPLETE); }
+            public int priority() { return 180; }
+            public @NotNull PlayerResetPreview preview(@NotNull PlayerResetContext context) {
+                return new PlayerResetPreview("Active graves and their stored items", (int) activeGraves.values().stream().filter(g -> g.owner().equals(context.playerUuid())).count());
+            }
+            public void reset(@NotNull PlayerResetContext context) {
+                List<GraveRecord> owned = activeGraves.values().stream().filter(g -> g.owner().equals(context.playerUuid())).toList();
+                for (GraveRecord grave : owned) {
+                    World world = Bukkit.getWorld(grave.world());
+                    if (world != null) {
+                        world.getBlockAt(grave.markerX(), grave.markerY(), grave.markerZ()).setType(Material.AIR, false);
+                        world.getBlockAt(grave.chestX(), grave.chestY(), grave.chestZ()).setType(Material.AIR, false);
+                        if (grave.secondChestX() != null) world.getBlockAt(grave.secondChestX(), grave.secondChestY(), grave.secondChestZ()).setType(Material.AIR, false);
+                    }
+                    activeGraves.remove(grave.id());
+                    graveBlocks.entrySet().removeIf(entry -> entry.getValue().equals(grave.id()));
+                }
+                pendingRespawns.remove(context.playerUuid());
+            }
+        });
 
         api.events().register(PlayerDeathEvent.class, event -> {
             Player player = event.getEntity();
