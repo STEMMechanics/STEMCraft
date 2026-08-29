@@ -48,7 +48,7 @@ public final class EntitlementService extends BaseService {
     private final Map<UUID, Set<String>> revokedEntitlements = new ConcurrentHashMap<>();
     private final Map<UUID, Set<String>> revokedBadges = new ConcurrentHashMap<>();
     private String badgePrefix = " ";
-    private String badgeSeparator = " ";
+    private String badgeSeparator = "";
     private String badgeSuffix = "";
 
     public EntitlementService(STEMCraft plugin, STEMCraftAPI api) {
@@ -327,7 +327,7 @@ public final class EntitlementService extends BaseService {
         entitlements.clear(); badges.clear();
         ConfigSection root = getConfigSection();
         badgePrefix = root.getString("badge-display.prefix", " ");
-        badgeSeparator = root.getString("badge-display.separator", " ");
+        badgeSeparator = root.getString("badge-display.separator", "");
         badgeSuffix = root.getString("badge-display.suffix", "");
         ConfigSectionView badgeRoot = root.getSection("badges");
         if (badgeRoot != null) for (String id : badgeRoot.getKeys(false)) {
