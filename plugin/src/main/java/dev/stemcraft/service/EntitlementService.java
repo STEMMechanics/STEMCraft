@@ -17,9 +17,8 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.luckperms.api.LuckPerms;
 import net.luckperms.api.LuckPermsProvider;
-import net.luckperms.api.model.group.Group;
-import net.luckperms.api.model.user.User;
 import net.luckperms.api.node.Node;
+import net.luckperms.api.node.NodeType;
 import net.luckperms.api.node.types.InheritanceNode;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
@@ -123,7 +122,7 @@ public final class EntitlementService extends BaseService {
             if (definition.manual()) continue;
             if (revokedEntitlements.getOrDefault(uuid, Set.of()).contains(definition.id())) continue;
             if (current.contains(definition.id()) && !definition.rolling()) {
-                syncLuckPerms(uuid, definition, true);
+                syncEntitlementPermissions(uuid, definition);
                 continue;
             }
             boolean qualified = qualifies(uuid, definition);
@@ -131,16 +130,16 @@ public final class EntitlementService extends BaseService {
             Set<String> permissionsBefore = ownedPermissions(uuid);
             if (qualified && current.add(definition.id())) {
                 persistEntitlement(uuid, definition.id(), "calculated");
-                syncLuckPerms(uuid, definition, true);
+                syncEntitlementPermissions(uuid, definition);
                 notifyEntitlementChange(uuid, definition, true, badgesBefore, permissionsBefore);
             } else if (!qualified && definition.rolling()
                 && !manualEntitlements.getOrDefault(uuid, Set.of()).contains(definition.id())
                 && current.remove(definition.id())) {
                 deleteEntitlement(uuid, definition.id());
-                syncLuckPerms(uuid, definition, false);
+                syncEntitlementPermissions(uuid, definition);
                 notifyEntitlementChange(uuid, definition, false, badgesBefore, permissionsBefore);
             } else if (current.contains(definition.id())) {
-                syncLuckPerms(uuid, definition, true);
+                syncEntitlementPermissions(uuid, definition);
             }
         }
     }
@@ -196,7 +195,7 @@ public final class EntitlementService extends BaseService {
             manualEntitlements.computeIfAbsent(uuid, ignored -> ConcurrentHashMap.newKeySet()).add(definition.id());
             persistEntitlement(uuid, definition.id(), "manual");
         }
-        syncLuckPerms(uuid, definition, true);
+        syncEntitlementPermissions(uuid, definition);
         if (added) notifyEntitlementChange(uuid, definition, true, badgesBefore, permissionsBefore);
         return true;
     }
@@ -213,7 +212,7 @@ public final class EntitlementService extends BaseService {
             ps.setString(1, uuid.toString()); ps.setString(2, definition.id()); ps.setLong(3, System.currentTimeMillis());
         });
         deleteEntitlement(uuid, definition.id());
-        syncLuckPerms(uuid, definition, false);
+        syncEntitlementPermissions(uuid, definition);
         if (removed) notifyEntitlementChange(uuid, definition, false, badgesBefore, permissionsBefore);
         return true;
     }
@@ -315,19 +314,13 @@ public final class EntitlementService extends BaseService {
     }
 
     private void resetAll(UUID uuid) {
-        for (String id : new HashSet<>(applied.getOrDefault(uuid, Set.of()))) {
-            EntitlementDefinition definition = entitlements.get(id);
-            if (definition != null) syncLuckPerms(uuid, definition, false);
-        }
-        for (String id : new HashSet<>(directBadges.getOrDefault(uuid, Set.of()))) {
-            BadgeDefinition badge = badges.get(id);
-            if (badge != null) syncBadgePermission(uuid, badge, false);
-        }
+        Set<String> affectedPermissions = desiredPermissions(uuid);
         applied.remove(uuid); directBadges.remove(uuid); manualEntitlements.remove(uuid);
         revokedEntitlements.remove(uuid); revokedBadges.remove(uuid);
         for (String table : List.of("player_entitlements", "player_badges", "player_entitlement_revocations", "player_badge_revocations")) {
             api.database().update("DELETE FROM " + table + " WHERE player_uuid=?", ps -> ps.setString(1, uuid.toString()));
         }
+        syncPermissions(uuid, affectedPermissions);
     }
 
     private boolean qualifies(UUID uuid, EntitlementDefinition definition) {
@@ -389,6 +382,7 @@ public final class EntitlementService extends BaseService {
         api.database().execute("CREATE TABLE IF NOT EXISTS player_badges (player_uuid TEXT NOT NULL, badge_id TEXT NOT NULL, granted_at INTEGER NOT NULL, PRIMARY KEY(player_uuid,badge_id))");
         api.database().execute("CREATE TABLE IF NOT EXISTS player_entitlement_revocations (player_uuid TEXT NOT NULL, entitlement_id TEXT NOT NULL, revoked_at INTEGER NOT NULL, PRIMARY KEY(player_uuid,entitlement_id))");
         api.database().execute("CREATE TABLE IF NOT EXISTS player_badge_revocations (player_uuid TEXT NOT NULL, badge_id TEXT NOT NULL, revoked_at INTEGER NOT NULL, PRIMARY KEY(player_uuid,badge_id))");
+        api.database().execute("CREATE TABLE IF NOT EXISTS player_managed_permissions (player_uuid TEXT NOT NULL, permission TEXT NOT NULL, granted_at INTEGER NOT NULL, PRIMARY KEY(player_uuid,permission))");
     }
 
     private void loadApplied() {
@@ -909,8 +903,11 @@ public final class EntitlementService extends BaseService {
             root.set("badges." + id + ".permission", "stemcraft.badge." + id); root.set("badges." + id + ".priority", 0);
         } else if ("delete".equals(sub)) {
             BadgeDefinition existing = badges.get(id);
-            if (existing != null) knownPlayers().forEach(uuid -> syncBadgePermission(uuid, existing, false));
             root.remove("badges." + id);
+            root.save(); onReload();
+            if (existing != null && !existing.permission().isBlank())
+                knownPlayers().forEach(uuid -> syncPermissions(uuid, Set.of(existing.permission())));
+            ctx.returnSuccess("Badge configuration updated.");
         } else if ("set".equals(sub)) {
             requireArgs(ctx, 5); String field = ctx.getArgLower(3); String value = join(ctx.rawArgs(), 4);
             if ("-".equals(value)) root.remove("badges." + id + "." + field);
@@ -929,10 +926,10 @@ public final class EntitlementService extends BaseService {
         } else if ("delete".equals(action)) {
             EntitlementDefinition existing = entitlements.get(id);
             if (existing != null) knownPlayers().forEach(uuid -> {
-                syncLuckPerms(uuid, existing, false);
-                deleteEntitlement(uuid, id);
                 Set<String> values = applied.get(uuid);
                 if (values != null) values.remove(id);
+                deleteEntitlement(uuid, id);
+                syncEntitlementPermissions(uuid, existing);
             });
             root.remove("definitions." + id);
         }
@@ -986,33 +983,91 @@ public final class EntitlementService extends BaseService {
         };
     }
 
-    private void syncLuckPerms(UUID uuid, EntitlementDefinition definition, boolean add) {
+    private void syncEntitlementPermissions(UUID uuid, EntitlementDefinition definition) {
+        syncPermissions(uuid, permissionsFor(uuid, definition));
+    }
+
+    private Set<String> permissionsFor(UUID uuid, EntitlementDefinition definition) {
+        LinkedHashSet<String> result = new LinkedHashSet<>(definition.permissions());
+        Set<String> suppressed = revokedBadges.getOrDefault(uuid, Set.of());
+        for (String badgeId : definition.badges()) {
+            BadgeDefinition badge = badges.get(badgeId);
+            if (badge != null && !badge.permission().isBlank() && !suppressed.contains(badgeId)) result.add(badge.permission());
+        }
+        return result;
+    }
+
+    private Set<String> desiredPermissions(UUID uuid) {
+        LinkedHashSet<String> result = new LinkedHashSet<>();
+        for (String id : applied.getOrDefault(uuid, Set.of())) {
+            EntitlementDefinition definition = entitlements.get(id);
+            if (definition != null) result.addAll(permissionsFor(uuid, definition));
+        }
+        Set<String> suppressed = revokedBadges.getOrDefault(uuid, Set.of());
+        for (String id : directBadges.getOrDefault(uuid, Set.of())) {
+            BadgeDefinition badge = badges.get(id);
+            if (badge != null && !badge.permission().isBlank() && !suppressed.contains(id)) result.add(badge.permission());
+        }
+        return result;
+    }
+
+    private void syncPermissions(UUID uuid, Collection<String> affectedPermissions) {
         if (Bukkit.getPluginManager().getPlugin("LuckPerms") == null) return;
         try {
             LuckPerms luckPerms = LuckPermsProvider.get();
-            String groupName = "stemcraft-entitlement-" + definition.id().replace('.', '-').replace('_', '-');
-            luckPerms.getGroupManager().createAndLoadGroup(groupName).thenAccept(group -> {
-                for (String permission : definition.permissions()) group.data().add(Node.builder(permission).build());
-                for (String badgeId : definition.badges()) {
-                    BadgeDefinition badge = badges.get(badgeId);
-                    if (badge != null && !badge.permission().isBlank()) group.data().add(Node.builder(badge.permission()).build());
+            Set<String> desired = desiredPermissions(uuid);
+            luckPerms.getUserManager().loadUser(uuid).thenAccept(user -> {
+                boolean changed = false;
+                for (InheritanceNode inheritance : user.getNodes(NodeType.INHERITANCE)) {
+                    if (inheritance.getGroupName().startsWith("stemcraft-entitlement-"))
+                        changed |= user.data().remove(inheritance).wasSuccessful();
                 }
-                luckPerms.getGroupManager().saveGroup(group);
-                luckPerms.getUserManager().loadUser(uuid).thenAccept(user -> {
-                    InheritanceNode node = InheritanceNode.builder(group).build();
-                    if (add) user.data().add(node); else user.data().remove(node);
-                    luckPerms.getUserManager().saveUser(user);
-                });
+                for (String permission : affectedPermissions) {
+                    if (permission == null || permission.isBlank()) continue;
+                    Node node = Node.builder(permission).build();
+                    if (desired.contains(permission)) {
+                        if (user.data().add(node).wasSuccessful()) {
+                            changed = true;
+                            recordManagedPermission(uuid, permission);
+                        }
+                    } else if (isManagedPermission(uuid, permission)) {
+                        changed |= user.data().remove(node).wasSuccessful();
+                        forgetManagedPermission(uuid, permission);
+                    }
+                }
+                if (changed) luckPerms.getUserManager().saveUser(user);
+            }).exceptionally(error -> {
+                plugin.getLogger().warning("Could not synchronize direct LuckPerms permissions for " + uuid + ": " + error.getMessage());
+                return null;
             });
-        } catch (IllegalStateException exception) {
-            plugin.getLogger().warning("Could not synchronize LuckPerms entitlement '" + definition.id() + "': " + exception.getMessage());
+        } catch (RuntimeException exception) {
+            plugin.getLogger().warning("Could not synchronize direct LuckPerms permissions for " + uuid + ": " + exception.getMessage());
         }
+    }
+
+    private boolean isManagedPermission(UUID uuid, String permission) {
+        Integer found = api.database().querySingleMapped(
+            "SELECT 1 FROM player_managed_permissions WHERE player_uuid=? AND permission=?", ps -> {
+                ps.setString(1, uuid.toString()); ps.setString(2, permission);
+            }, rs -> rs.getInt(1));
+        return found != null;
+    }
+
+    private void recordManagedPermission(UUID uuid, String permission) {
+        api.database().update("INSERT OR IGNORE INTO player_managed_permissions(player_uuid,permission,granted_at) VALUES(?,?,?)", ps -> {
+            ps.setString(1, uuid.toString()); ps.setString(2, permission); ps.setLong(3, System.currentTimeMillis());
+        });
+    }
+
+    private void forgetManagedPermission(UUID uuid, String permission) {
+        api.database().update("DELETE FROM player_managed_permissions WHERE player_uuid=? AND permission=?", ps -> {
+            ps.setString(1, uuid.toString()); ps.setString(2, permission);
+        });
     }
 
     private void syncBadgePermission(UUID uuid, BadgeDefinition badge, boolean add) {
         if (badge.permission().isBlank()) return;
-        syncLuckPerms(uuid, new EntitlementDefinition("badge-" + badge.id(), badge.description(), badge.description(),
-            List.of(), List.of(), null, List.of(), List.of(), List.of(badge.id()), null, true, false), add);
+        syncPermissions(uuid, Set.of(badge.permission()));
     }
 
     public record BadgeDefinition(String id, String display, String description, String permission, int priority) {}
