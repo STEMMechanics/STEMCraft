@@ -714,7 +714,11 @@ public final class QuestFeature extends BaseFeature {
                 event.getItem().remove();
                 return;
             }
-            api.tasks().nextTick(() -> { validateInventory(player.getInventory()); syncCollectObjectives(player); });
+            api.tasks().nextTick(() -> {
+                validateInventory(player.getInventory());
+                syncCollectObjectives(player);
+                reconcileAutomaticTracking(player);
+            });
         }, EventPriority.HIGHEST, true);
         api.events().register(InventoryClickEvent.class, event -> {
             if (!(event.getWhoClicked() instanceof Player player)) return;
@@ -722,6 +726,7 @@ public final class QuestFeature extends BaseFeature {
                 validateInventory(event.getView().getTopInventory());
                 validateInventory(player.getInventory());
                 refreshOwnedBooks(player);
+                reconcileAutomaticTracking(player);
             });
         }, EventPriority.HIGHEST, true);
         api.events().register(InventoryOpenEvent.class, event -> {
@@ -833,8 +838,12 @@ public final class QuestFeature extends BaseFeature {
         if (!ctx.isPlayer()) { ctx.error("This command can only be used by a player."); return; }
         Player player = ctx.asPlayer();
         if (PlayerUtil.isBedrock(player)) { ctx.error("Open the quest book in your inventory to read it."); return; }
-        String questId = normalizeId(ctx.getArg(1, ""));
-        if (questId.isBlank() || progress(player, questId) == null) {
+        String requested = ctx.getArg(1, "");
+        if (requested.isBlank()) {
+            ctx.error("You haven't selected a quest to view. Use /quest view <id>."); return;
+        }
+        String questId = normalizeId(requested);
+        if (progress(player, questId) == null) {
             ctx.error("You don't currently have that quest book in your inventory."); return;
         }
         refreshOwnedBooks(player);
@@ -2235,7 +2244,16 @@ public final class QuestFeature extends BaseFeature {
     private void tickQuestTracking() {
         for (Player player : Bukkit.getOnlinePlayers()) {
             if (trackedQuests.containsKey(player.getUniqueId())) updateQuestTracking(player);
+            else reconcileAutomaticTracking(player);
         }
+    }
+
+    private void reconcileAutomaticTracking(Player player) {
+        UUID playerId = player.getUniqueId();
+        if (!isAutoTracking(playerId) || trackedQuests.containsKey(playerId)) return;
+        boolean hasTrackableQuest = active.getOrDefault(playerId, Map.of()).keySet().stream()
+            .anyMatch(id -> hasOwnedQuestBook(player, id));
+        if (hasTrackableQuest) trackMostRecentQuest(playerId);
     }
 
     private void updateQuestTracking(Player player) {
