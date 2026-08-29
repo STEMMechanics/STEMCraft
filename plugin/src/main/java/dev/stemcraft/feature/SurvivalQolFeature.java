@@ -36,6 +36,7 @@ import java.util.UUID;
 public final class SurvivalQolFeature extends BaseFeature {
     private static final String REFILL_TASK_PREFIX = "feature:survival-qol-refill:";
     private final NamespacedKey mobOwnerKey = new NamespacedKey("stemcraft", "named-mob-owner");
+    private final NamespacedKey questNpcProfileKey = new NamespacedKey("stemcraft", "quest-npc-profile");
     private final Map<UUID, Long> anvilWarnings = new HashMap<>();
 
     public SurvivalQolFeature(STEMCraftAPI api) {
@@ -44,6 +45,7 @@ public final class SurvivalQolFeature extends BaseFeature {
 
     @Override
     public void onEnable() {
+        api.events().register(PlayerInteractEvent.class, this::onAutoSelectTool, EventPriority.NORMAL, true);
         api.events().register(PlayerInteractEvent.class, this::onCropHarvest, EventPriority.HIGHEST, true);
         api.events().register(EntityChangeBlockEvent.class, this::onCropTrample, EventPriority.HIGHEST, true);
         api.events().register(EntityUnleashEvent.class, this::onEntityUnleash, EventPriority.HIGHEST, true);
@@ -57,6 +59,35 @@ public final class SurvivalQolFeature extends BaseFeature {
             if (hand != null) scheduleRefill(event.getPlayer(), hand, event.getItem());
         }, EventPriority.MONITOR, false);
         api.tasks().repeating("feature:survival-qol-minecarts", 1L, this::accelerateMinecarts);
+    }
+
+    private void onAutoSelectTool(PlayerInteractEvent event) {
+        if (!enabled("auto-select-tool", true) || !allowed("auto-select-tool", event.getPlayer())
+            || event.getAction() != org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK
+            || event.getHand() != EquipmentSlot.HAND || event.getClickedBlock() == null) return;
+        PlayerInventory inventory = event.getPlayer().getInventory();
+        int heldSlot = inventory.getHeldItemSlot();
+        int bestSlot = preferredToolSlot(event.getClickedBlock(), inventory, heldSlot);
+        if (bestSlot < 0 || bestSlot == heldSlot) return;
+        ItemStack held = inventory.getItem(heldSlot);
+        inventory.setItem(heldSlot, inventory.getItem(bestSlot));
+        inventory.setItem(bestSlot, held);
+    }
+
+    static int preferredToolSlot(Block block, PlayerInventory inventory, int heldSlot) {
+        int bestSlot = -1;
+        float bestSpeed = -1.0f;
+        ItemStack[] contents = inventory.getStorageContents();
+        for (int slot = 0; slot < contents.length; slot++) {
+            ItemStack candidate = contents[slot];
+            if (candidate == null || candidate.getType().isAir() || !block.isPreferredTool(candidate)) continue;
+            float speed = block.getDestroySpeed(candidate);
+            if (speed > bestSpeed || speed == bestSpeed && slot == heldSlot) {
+                bestSpeed = speed;
+                bestSlot = slot;
+            }
+        }
+        return bestSlot;
     }
 
     @Override
@@ -110,6 +141,7 @@ public final class SurvivalQolFeature extends BaseFeature {
 
     private void onEntityInteract(PlayerInteractEntityEvent event) {
         Entity entity = event.getRightClicked();
+        if (isManagedNpc(entity)) return;
         ItemStack held = event.getPlayer().getInventory().getItem(event.getHand());
         if (held.getType() == Material.NAME_TAG) {
             api.tasks().runLater(1L, () -> {
@@ -137,6 +169,11 @@ public final class SurvivalQolFeature extends BaseFeature {
             "name", net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(entity.customName()),
             "type", friendly(entity.getType().name()), "health", Math.ceil(living.getHealth()),
             "max_health", Math.ceil(maxHealth == null ? living.getHealth() : maxHealth.getValue()), "owner", owner);
+    }
+
+    private boolean isManagedNpc(Entity entity) {
+        return entity.hasMetadata("NPC")
+            || entity.getPersistentDataContainer().has(questNpcProfileKey, PersistentDataType.STRING);
     }
 
     private void onPrepareAnvil(PrepareAnvilEvent event) {

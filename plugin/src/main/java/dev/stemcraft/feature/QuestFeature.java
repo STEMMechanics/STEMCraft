@@ -2528,21 +2528,46 @@ public final class QuestFeature extends BaseFeature {
             }
             api.messages().info(player, "Your inventory was full, so some quest rewards were sent to your mailbox.");
         }
-        removeQuestBooks(player, quest.id());
-        cancelQuest(player.getUniqueId(), quest.id());
         boolean firstCompletion = completed.computeIfAbsent(player.getUniqueId(), ignored -> new java.util.HashSet<>()).add(quest.id());
-        api.database().update("INSERT OR REPLACE INTO quest_completed(player_uuid,quest_id,completed_at) VALUES(?,?,?)", statement -> {
-            statement.setString(1, player.getUniqueId().toString()); statement.setString(2, quest.id()); statement.setLong(3, System.currentTimeMillis());
-        });
-        api.playerStats().increment(player.getUniqueId(), player.getName(), "quests_completed_total", 1);
-        if (firstCompletion) api.playerStats().increment(player.getUniqueId(), player.getName(), "quests_completed_unique", 1);
-        STEMCraft.getPlugin().entitlements().onFactsChanged(player.getUniqueId());
-        for (String command : quest.rewardCommands()) Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command
-            .replace("{player}", player.getName()).replace("{uuid}", player.getUniqueId().toString()));
+        try {
+            api.database().update("INSERT OR REPLACE INTO quest_completed(player_uuid,quest_id,completed_at) VALUES(?,?,?)", statement -> {
+                statement.setString(1, player.getUniqueId().toString()); statement.setString(2, quest.id()); statement.setLong(3, System.currentTimeMillis());
+            });
+            cancelQuest(player.getUniqueId(), quest.id());
+            removeQuestBooks(player, quest.id());
+        } catch (RuntimeException exception) {
+            completed.getOrDefault(player.getUniqueId(), Set.of()).remove(quest.id());
+            player.getInventory().setContents(inventorySnapshot);
+            STEMCraft.getPlugin().getLogger().log(java.util.logging.Level.SEVERE,
+                "Could not complete quest '" + quest.id() + "' for " + player.getName(), exception);
+            api.messages().error(player, "The quest could not be saved. Your items were restored; please try again.");
+            return false;
+        }
         player.sendMessage(Component.text("Quest " + renderQuestText(quest, quest.title()) + " completed.", NamedTextColor.YELLOW));
         playQuestCompletedSound(player);
         refreshMarkers(player);
+        runCompletionSideEffects(player, quest, firstCompletion);
         return true;
+    }
+
+    private void runCompletionSideEffects(Player player, QuestDefinition quest, boolean firstCompletion) {
+        try {
+            api.playerStats().increment(player.getUniqueId(), player.getName(), "quests_completed_total", 1);
+            if (firstCompletion) api.playerStats().increment(player.getUniqueId(), player.getName(), "quests_completed_unique", 1);
+            STEMCraft.getPlugin().entitlements().onFactsChanged(player.getUniqueId());
+        } catch (RuntimeException exception) {
+            STEMCraft.getPlugin().getLogger().log(java.util.logging.Level.SEVERE,
+                "Quest completion progression failed for '" + quest.id() + "' and " + player.getName(), exception);
+        }
+        for (String command : quest.rewardCommands()) {
+            try {
+                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command
+                    .replace("{player}", player.getName()).replace("{uuid}", player.getUniqueId().toString()));
+            } catch (RuntimeException exception) {
+                STEMCraft.getPlugin().getLogger().log(java.util.logging.Level.SEVERE,
+                    "Quest reward command failed for '" + quest.id() + "': " + command, exception);
+            }
+        }
     }
 
     private void playQuestStartedSound(Player player) {
