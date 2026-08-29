@@ -27,6 +27,7 @@ import dev.stemcraft.api.service.playerstats.PlayerStatDefinition;
 import dev.stemcraft.api.service.playerstats.PlayerStatValue;
 import dev.stemcraft.api.service.playerstats.PlayerStatsRecord;
 import dev.stemcraft.api.service.playerstats.PlayerStatsService;
+import dev.stemcraft.api.service.playerreset.*;
 import dev.stemcraft.api.util.PatternUtil;
 import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.feature.ProfessionsFeature;
@@ -183,6 +184,19 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
         loadTimeInDefinitions();
         registerEventCollectors();
         registerStatsCommand();
+        api.playerResets().register(new PlayerResetHandler() {
+            public @NotNull String id() { return "player-stats"; }
+            public @NotNull Set<PlayerResetScope> scopes() { return Set.of(PlayerResetScope.PROGRESSION, PlayerResetScope.GAMEPLAY, PlayerResetScope.COMPLETE); }
+            public int priority() { return 100; }
+            public @NotNull PlayerResetPreview preview(@NotNull PlayerResetContext context) {
+                return new PlayerResetPreview("Player statistics and profession progress", players.containsKey(context.playerUuid()) ? 1 : 0);
+            }
+            public void reset(@NotNull PlayerResetContext context) {
+                UUID uuid = context.playerUuid();
+                players.remove(uuid); rawBaselines.remove(uuid); lastObservedAt.remove(uuid); lastObservedWorld.remove(uuid);
+                api.database().update("DELETE FROM player_stats_state WHERE player_uuid=?", ps -> ps.setString(1, uuid.toString()));
+            }
+        });
 
         long autosaveTicks = Math.max(20L, getConfigSection().getLong("autosave_ticks", 1200L));
         api.tasks().repeating(autosaveTicks, this::captureOnlinePlayers);

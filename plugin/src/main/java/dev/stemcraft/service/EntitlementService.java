@@ -7,6 +7,7 @@ import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.config.ConfigSectionView;
 import dev.stemcraft.api.service.player.PlayerService.ResolvedPlayer;
 import dev.stemcraft.api.service.playerstats.PlayerStatDefinition;
+import dev.stemcraft.api.service.playerreset.*;
 import dev.stemcraft.api.util.PermissionUtil;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -64,6 +65,18 @@ public final class EntitlementService extends BaseService {
         api.tasks().repeating("entitlements:rolling-recalculation", HOURLY_TICKS, HOURLY_TICKS,
             () -> knownPlayers().forEach(this::recalculate));
         Bukkit.getOnlinePlayers().forEach(player -> recalculate(player.getUniqueId()));
+        api.playerResets().register(new PlayerResetHandler() {
+            public @NotNull String id() { return "entitlements-and-badges"; }
+            public @NotNull Set<PlayerResetScope> scopes() { return Set.of(PlayerResetScope.PROGRESSION, PlayerResetScope.GAMEPLAY, PlayerResetScope.COMPLETE); }
+            public int priority() { return 110; }
+            public @NotNull PlayerResetPreview preview(@NotNull PlayerResetContext context) {
+                int count = applied.getOrDefault(context.playerUuid(), Set.of()).size() + directBadges.getOrDefault(context.playerUuid(), Set.of()).size();
+                return new PlayerResetPreview("Entitlements, badges and reset suppressions", count);
+            }
+            public void reset(@NotNull PlayerResetContext context) {
+                resetAll(context.playerUuid());
+            }
+        });
     }
 
     @Override
@@ -219,6 +232,22 @@ public final class EntitlementService extends BaseService {
         });
         if (appliedBadges(uuid).stream().noneMatch(value -> value.id().equals(badge.id()))) syncBadgePermission(uuid, badge, false);
         return true;
+    }
+
+    private void resetAll(UUID uuid) {
+        for (String id : new HashSet<>(applied.getOrDefault(uuid, Set.of()))) {
+            EntitlementDefinition definition = entitlements.get(id);
+            if (definition != null) syncLuckPerms(uuid, definition, false);
+        }
+        for (String id : new HashSet<>(directBadges.getOrDefault(uuid, Set.of()))) {
+            BadgeDefinition badge = badges.get(id);
+            if (badge != null) syncBadgePermission(uuid, badge, false);
+        }
+        applied.remove(uuid); directBadges.remove(uuid); manualEntitlements.remove(uuid);
+        revokedEntitlements.remove(uuid); revokedBadges.remove(uuid);
+        for (String table : List.of("player_entitlements", "player_badges", "player_entitlement_revocations", "player_badge_revocations")) {
+            api.database().update("DELETE FROM " + table + " WHERE player_uuid=?", ps -> ps.setString(1, uuid.toString()));
+        }
     }
 
     private boolean qualifies(UUID uuid, EntitlementDefinition definition) {

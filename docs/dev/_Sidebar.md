@@ -23,3 +23,4 @@
 - [Tab completion](https://github.com/STEMMechanics/stemcraft/wiki/tab-completion)
 - [Configuration](https://github.com/STEMMechanics/stemcraft/wiki/Configuration)
 - [Entitlements and badges](https://github.com/STEMMechanics/stemcraft/wiki/entitlements-and-badges)
+- [Player reset service](https://github.com/STEMMechanics/stemcraft/wiki/player-reset)
