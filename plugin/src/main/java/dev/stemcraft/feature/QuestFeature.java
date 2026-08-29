@@ -11,6 +11,7 @@ import dev.stemcraft.api.service.playerreset.*;
 import dev.stemcraft.api.service.mailbox.MailSendResult;
 import dev.stemcraft.api.service.web.WebServiceRequest;
 import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
+import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.api.util.TextUtil;
 import dev.stemcraft.api.util.PatternUtil;
 import dev.stemcraft.feature.quest.QuestDefinition;
@@ -287,7 +288,7 @@ public final class QuestFeature extends BaseFeature {
             String questId = trackedQuests.get(player.getUniqueId());
             QuestDefinition quest = questId == null ? null : quests.get(questId);
             QuestProgress progress = quest == null ? null : progress(player, questId);
-            if (quest == null || progress == null) continue;
+            if (quest == null || progress == null || !hasOwnedQuestBook(player, questId)) continue;
             if (progress.state() == QuestProgress.State.READY && profileId.equals(quest.endNpcProfile())) return player;
             QuestObjective objective = currentObjective(quest, progress);
             if (objective != null && objective.type() == QuestObjective.Type.NPC
@@ -337,6 +338,9 @@ public final class QuestFeature extends BaseFeature {
             : profile.spawnedEntity() == null ? null : Bukkit.getEntity(profile.spawnedEntity());
         if (preferred == null || !tagged.contains(preferred)) preferred = tagged.isEmpty() ? null : tagged.getFirst();
         for (Entity duplicate : tagged) if (!duplicate.equals(preferred)) duplicate.remove();
+        if (preferred != null) {
+            preferred.getPersistentDataContainer().set(npcProfileKey, PersistentDataType.STRING, profile.id());
+        }
         UUID resolved = preferred == null ? null : preferred.getUniqueId();
         if (!Objects.equals(profile.spawnedEntity(), resolved)) {
             profile.spawnedEntity(resolved);
@@ -737,9 +741,10 @@ public final class QuestFeature extends BaseFeature {
             new ArrayList<>(active.getOrDefault(player.getUniqueId(), Map.of()).keySet()));
         api.commands().create("quest")
             .description("Manage and play book quests.")
-            .usage("/quest [track|abandon|admin]")
+            .usage("/quest [view|track|abandon|admin]")
             .tabCompletion("abandon", "{active-quest}")
             .tabCompletion("track", "{active-quest}")
+            .tabCompletion("view", "{active-quest}")
             .tabCompletion("track", "off")
             .tabCompletion("track", "auto")
             .tabCompletion("admin")
@@ -772,30 +777,68 @@ public final class QuestFeature extends BaseFeature {
         switch (ctx.getArgLower(0)) {
             case "abandon" -> cancelCommand(ctx);
             case "track" -> trackCommand(ctx);
+            case "view" -> viewQuestBook(ctx);
             case "admin" -> adminCommand(ctx);
             default -> {
                 if (ctx.getArg(0).matches("\\d+")) showPlayerMenu(ctx);
-                else ctx.error("Use /quest, /quest track <id|off|auto>, /quest abandon <id>, or /quest admin.");
+                else ctx.error("Use /quest, /quest view <id>, /quest track <id|off|auto>, /quest abandon <id>, or /quest admin.");
             }
         }
     }
 
     private void showPlayerMenu(CommandContext ctx) {
-        List<QuestDefinition> visible = quests.values().stream().filter(QuestDefinition::enabled).toList();
+        Player player = ctx.asPlayer();
+        List<QuestDefinition> visible = activeFor(player).values().stream()
+            .map(progress -> quests.get(progress.questId())).filter(Objects::nonNull)
+            .sorted(Comparator.comparing(QuestDefinition::title, String.CASE_INSENSITIVE_ORDER)).toList();
         int page = ChatMenuUtil.getPageFromArgs(ctx.args(), 0, 1);
-        ChatMenuUtil.render(ctx.getSender(), "Quests", "quest", page, visible.size(), (start, count, interactive) -> {
+        ChatMenuUtil.render(ctx.getSender(), "Active quests", "quest", page, visible.size(), (start, count, interactive) -> {
             List<Component> lines = new ArrayList<>();
             for (QuestDefinition quest : visible.subList(start, start + count)) {
-                String state = questState(ctx.asPlayer(), quest);
+                String state = questState(player, quest);
                 Component line = Component.text("[" + state + "] ", state.equals("READY") ? NamedTextColor.GOLD : NamedTextColor.GRAY)
-                    .append(Component.text(quest.title(), NamedTextColor.AQUA));
-                if (progress(ctx.asPlayer(), quest.id()) != null) line = line.append(Component.space())
-                    .append(button("[Track]", "/quest track " + quest.id(), "Track this quest"))
+                    .append(Component.text(quest.title(), NamedTextColor.AQUA))
+                    .append(Component.text(" — given by " + questGiverName(quest), NamedTextColor.GRAY));
+                if (!PlayerUtil.isBedrock(player)) {
+                    line = line.append(Component.space()).append(hasOwnedQuestBook(player, quest.id())
+                        ? button("[View]", "/quest view " + quest.id(), "Open your quest book")
+                        : disabledButton("[View]", "Carry your current quest book to view it"));
+                }
+                line = line.append(Component.space())
+                    .append(hasOwnedQuestBook(player, quest.id())
+                        ? button("[Track]", "/quest track " + quest.id(), "Track this quest")
+                        : disabledButton("[Track]", "Carry your current quest book to track it"))
                     .append(Component.space()).append(button("[Abandon]", "/quest abandon " + quest.id(), "Abandon this quest"));
                 lines.add(line);
             }
             return lines;
-        }, "No quests are configured.");
+        }, "You have no active quests.");
+    }
+
+    private String questGiverName(QuestDefinition quest) {
+        QuestNpcProfile profile = quest.startNpcProfile() == null ? null : npcProfiles.get(quest.startNpcProfile());
+        if (profile != null && profile.name() != null && !profile.name().isBlank()) return profile.name();
+        if (quest.startNpcName() != null && !quest.startNpcName().isBlank()) return quest.startNpcName();
+        return quest.author();
+    }
+
+    private Component disabledButton(String text, String hover) {
+        return Component.text(text, NamedTextColor.DARK_GRAY)
+            .hoverEvent(HoverEvent.showText(Component.text(hover, NamedTextColor.GRAY)));
+    }
+
+    private void viewQuestBook(CommandContext ctx) {
+        if (!ctx.isPlayer()) { ctx.error("This command can only be used by a player."); return; }
+        Player player = ctx.asPlayer();
+        if (PlayerUtil.isBedrock(player)) { ctx.error("Open the quest book in your inventory to read it."); return; }
+        String questId = normalizeId(ctx.getArg(1, ""));
+        if (questId.isBlank() || progress(player, questId) == null) {
+            ctx.error("You don't currently have that quest book in your inventory."); return;
+        }
+        refreshOwnedBooks(player);
+        ItemStack book = ownedQuestBook(player, questId);
+        if (book == null) { ctx.error("You don't currently have that quest book in your inventory."); return; }
+        player.openBook(book);
     }
 
     private void showQuest(CommandContext ctx, String id) {
@@ -1163,6 +1206,7 @@ public final class QuestFeature extends BaseFeature {
         QuestDefinition quest = quest(requested, ctx);
         if (quest == null) return;
         if (progress(player, quest.id()) == null) { ctx.error("That quest is not active."); return; }
+        if (!hasOwnedQuestBook(player, quest.id())) { ctx.error("Carry that quest book in your inventory to track it."); return; }
         setAutoTracking(player.getUniqueId(), false);
         trackQuest(player, quest.id());
         player.sendMessage(Component.text("Tracking quest " + renderQuestText(quest, quest.title()) + ".", NamedTextColor.YELLOW));
@@ -1194,11 +1238,13 @@ public final class QuestFeature extends BaseFeature {
     }
 
     private void trackMostRecentQuest(UUID playerId) {
+        Player player = Bukkit.getPlayer(playerId);
+        if (player == null) { stopTracking(playerId); return; }
         String questId = active.getOrDefault(playerId, Map.of()).keySet().stream()
+            .filter(id -> hasOwnedQuestBook(player, id))
             .max(Comparator.comparingLong(id -> attemptStarted.getOrDefault(playerId, Map.of()).getOrDefault(id, 0L)))
             .orElse(null);
-        Player player = Bukkit.getPlayer(playerId);
-        if (questId == null || player == null) {
+        if (questId == null) {
             stopTracking(playerId);
             return;
         }
@@ -2176,6 +2222,15 @@ public final class QuestFeature extends BaseFeature {
             stopTracking(player.getUniqueId());
             return;
         }
+        if (!hasOwnedQuestBook(player, questId)) {
+            if (isAutoTracking(player.getUniqueId())) {
+                trackMostRecentQuest(player.getUniqueId());
+                return;
+            }
+            BossBar hidden = trackingBossBars.remove(player.getUniqueId());
+            if (hidden != null) player.hideBossBar(hidden);
+            return;
+        }
         if (!matchesTrackingWorld(trackingWorlds, player.getWorld().getName())) {
             BossBar hidden = trackingBossBars.remove(player.getUniqueId());
             if (hidden != null) player.hideBossBar(hidden);
@@ -2532,6 +2587,11 @@ public final class QuestFeature extends BaseFeature {
     private boolean speakNpcProfileIdle(Player player, Entity entity) {
         String profileId = entity.getPersistentDataContainer().get(npcProfileKey, PersistentDataType.STRING);
         QuestNpcProfile profile = profileId == null ? null : npcProfiles.get(profileId);
+        if (profile == null) {
+            profile = npcProfiles.values().stream()
+                .filter(candidate -> entity.getUniqueId().equals(candidate.spawnedEntity()))
+                .findFirst().orElse(null);
+        }
         if (profile == null || profile.idleDialogue().isEmpty()) return false;
         String line = profile.idleDialogue().get(ThreadLocalRandom.current().nextInt(profile.idleDialogue().size()));
         player.sendMessage(Component.text(profile.name() + ": ", NamedTextColor.GOLD)
@@ -2976,9 +3036,13 @@ public final class QuestFeature extends BaseFeature {
     }
 
     private boolean hasOwnedQuestBook(Player player, String questId) {
+        return ownedQuestBook(player, questId) != null;
+    }
+
+    private @Nullable ItemStack ownedQuestBook(Player player, String questId) {
         for (ItemStack item : player.getInventory().getContents())
-            if (questId.equals(bookQuestId(item)) && player.getUniqueId().equals(bookOwner(item)) && isCurrentQuestBook(item)) return true;
-        return false;
+            if (questId.equals(bookQuestId(item)) && player.getUniqueId().equals(bookOwner(item)) && isCurrentQuestBook(item)) return item;
+        return null;
     }
 
     private void removeQuestBooks(Player player, String questId) {
