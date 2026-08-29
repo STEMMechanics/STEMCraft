@@ -21,4 +21,11 @@ class ProfessionsFeatureTest {
         assertEquals(400, ProfessionsFeature.xpForLevel(3));
         assertEquals(980100, ProfessionsFeature.xpForLevel(100));
     }
+
+    @Test
+    void progressBarClampsAndUsesTenSegments() {
+        assertEquals("&a&8■■■■■■■■■■", ProfessionsFeature.progressBar(-1));
+        assertEquals("&a■■■■■&8■■■■■", ProfessionsFeature.progressBar(55));
+        assertEquals("&a■■■■■■■■■■&8", ProfessionsFeature.progressBar(101));
+    }
 }

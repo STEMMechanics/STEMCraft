@@ -878,17 +878,77 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
                     return;
                 }
                 PlayerStatsRecord record = records.getFirst();
-                api.messages().send(context.getSender(), "&6Stats for &e{player}", "player",
+                api.messages().send(context.getSender(), "&6:star: Stats for &e{player}", "player",
                     record.username() == null ? username : record.username());
-                boolean any = false;
+                Map<StatSection, List<PlayerStatValue>> sections = new LinkedHashMap<>();
                 for (PlayerStatValue stat : record.stats()) {
                     if (stat.value() <= 0 || (!statGroups.isEmpty() && isLegacyGroupedBlockStat(stat.key()))) continue;
-                    any = true;
-                    String value = formatStatForCommand(stat);
-                    api.messages().send(context.getSender(), "&e{stat}: &f{value}", "stat", stat.title(), "value", value);
+                    sections.computeIfAbsent(sectionFor(stat.key()), ignored -> new ArrayList<>()).add(stat);
                 }
-                if (!any) api.messages().send(context.getSender(), "&7No activity recorded yet.");
+                if (sections.isEmpty()) {
+                    api.messages().send(context.getSender(), "&7No activity recorded yet.");
+                    return;
+                }
+                for (StatSection section : StatSection.values()) {
+                    List<PlayerStatValue> values = sections.get(section);
+                    if (values == null || values.isEmpty()) continue;
+                    api.messages().send(context.getSender(), "&6:" + section.icon + ": {section}",
+                        "section", section.title);
+                    for (PlayerStatValue stat : values) {
+                        api.messages().send(context.getSender(), "&8  &f:" + statIcon(stat.key()) + ": &e{stat}: &f{value}",
+                            "stat", stat.title(), "value", formatStatForCommand(stat));
+                    }
+                }
             }).register(plugin);
+    }
+
+    private static StatSection sectionFor(String key) {
+        if (key.startsWith("skill_")) return StatSection.PROFESSIONS;
+        if (key.equals("play_time") || key.startsWith("time_in_")) return StatSection.TIME;
+        if (key.contains("kills") || key.startsWith("damage_") || key.equals("deaths") || key.equals("spears_thrown"))
+            return StatSection.COMBAT;
+        if (key.startsWith("distance_") || key.equals("jumps")) return StatSection.TRAVEL;
+        if (key.startsWith("blocks_")) return StatSection.BUILDING;
+        if (key.startsWith("quest")) return StatSection.QUESTS;
+        if (key.contains("bedwars") || key.contains("bridge") || key.contains("minigame")) return StatSection.MINIGAMES;
+        return StatSection.ACTIVITIES;
+    }
+
+    private static String statIcon(String key) {
+        if (key.startsWith("skill_") && key.endsWith("_xp")) {
+            String skill = key.substring("skill_".length(), key.length() - "_xp".length());
+            return switch (skill) {
+                case "mining" -> "profession_mining";
+                case "herbalism" -> "profession_herbalism";
+                case "farming" -> "profession_farming";
+                case "fishing" -> "profession_fishing";
+                case "cooking" -> "profession_cooking";
+                case "engineering" -> "profession_engineering";
+                case "melee_combat" -> "profession_melee";
+                case "ranged_combat" -> "profession_ranged";
+                default -> "star";
+            };
+        }
+        return sectionFor(key).icon;
+    }
+
+    private enum StatSection {
+        PROFESSIONS("Skills", "star"),
+        TIME("Time Played", "clock"),
+        COMBAT("Combat", "swords"),
+        TRAVEL("Travel", "compass"),
+        BUILDING("Building", "crafting_table"),
+        QUESTS("Quests", "question_yellow"),
+        MINIGAMES("Mini-games", "trophy"),
+        ACTIVITIES("Activities", "info_blue");
+
+        private final String title;
+        private final String icon;
+
+        StatSection(String title, String icon) {
+            this.title = title;
+            this.icon = icon;
+        }
     }
 
     private static boolean isLegacyGroupedBlockStat(String key) {

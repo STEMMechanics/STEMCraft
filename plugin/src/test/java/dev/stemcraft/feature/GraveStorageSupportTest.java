@@ -65,6 +65,7 @@ class GraveStorageSupportTest {
         Block primary = supportedBlock(0);
         primary.getRelative(BlockFace.NORTH).setType(Material.WATER);
         primary.getRelative(BlockFace.SOUTH).setType(Material.AIR);
+        primary.getRelative(BlockFace.SOUTH).getRelative(BlockFace.DOWN).setType(Material.STONE);
 
         Block partner = GraveStorageSupport.findDoubleChestPartner(primary, false);
 
@@ -82,6 +83,28 @@ class GraveStorageSupportTest {
 
         assertNotNull(partner);
         assertEquals(primary.getRelative(BlockFace.NORTH).getLocation(), partner.getLocation());
+    }
+
+    @Test
+    void leavesAndLogsAreNotStableLandGraveSupports() {
+        assertFalse(GraveStorageSupport.isStableLandSupport(Material.OAK_LEAVES));
+        assertFalse(GraveStorageSupport.isStableLandSupport(Material.OAK_LOG));
+        assertTrue(GraveStorageSupport.isStableLandSupport(Material.GRASS_BLOCK));
+        assertTrue(GraveStorageSupport.isStableLandSupport(Material.STONE));
+    }
+
+    @Test
+    void landGraveSpotUsesGroundWithTwoAccessibleBlocksAbove() {
+        Block ground = world.getBlockAt(4, 64, 4);
+        ground.setType(Material.GRASS_BLOCK);
+        assertTrue(Graves.isValidLandGraveSpot(ground.getLocation()));
+
+        ground.setType(Material.OAK_LEAVES);
+        assertFalse(Graves.isValidLandGraveSpot(ground.getLocation()));
+
+        ground.setType(Material.GRASS_BLOCK);
+        ground.getRelative(BlockFace.UP).setType(Material.OAK_LOG);
+        assertFalse(Graves.isValidLandGraveSpot(ground.getLocation()));
     }
 
     @Test

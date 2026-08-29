@@ -326,47 +326,47 @@ entitlements:
     suffix: ""
   badges:
     explorer:
-      display: "<green>✦</green>"
+      display: ":compass:"
       description: "Completed 10 different quests"
       permission: stemcraft.badge.explorer
       priority: 20
     quest-master:
-      display: "<light_purple>✪</light_purple>"
+      display: ":question_yellow:"
       description: "Completed 50 different quests"
       permission: stemcraft.badge.quest-master
       priority: 60
     veteran:
-      display: "<gold>★</gold>"
+      display: ":clock:"
       description: "Played on STEMCraft for 100 hours"
       permission: stemcraft.badge.veteran
       priority: 50
     survival-veteran:
-      display: "<dark_green>♜</dark_green>"
+      display: ":survival:"
       description: "Played Survival for 100 hours"
       permission: stemcraft.badge.survival-veteran
       priority: 55
     bedwars-player:
-      display: "<red>⚔</red>"
+      display: ":swords:"
       description: "Completed 50 BedWars games"
       permission: stemcraft.badge.bedwars-player
       priority: 30
     bedwars-champion:
-      display: "<gold>♛</gold>"
+      display: ":crown:"
       description: "Won 25 BedWars games"
       permission: stemcraft.badge.bedwars-champion
       priority: 70
     bridge-hot-streak:
-      display: "<aqua>⚡</aqua>"
+      display: ":star:"
       description: "Won 10 Bridge games in 28 days"
       permission: stemcraft.badge.bridge-hot-streak
       priority: 80
     builder:
-      display: "<yellow>⌂</yellow>"
+      display: ":crafting_table:"
       description: "Placed 10,000 Survival blocks"
       permission: stemcraft.badge.builder
       priority: 35
     event-winner:
-      display: "<gradient:#ffd700:#ff8c00>🏆</gradient>"
+      display: ":trophy:"
       description: "Winner of a STEMCraft community event"
       permission: stemcraft.badge.event-winner
       priority: 100

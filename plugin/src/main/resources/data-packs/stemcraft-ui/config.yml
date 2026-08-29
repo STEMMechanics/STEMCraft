@@ -202,6 +202,38 @@ font_images:
     file: font/skull.png
     ascent: 8
     height: 8
+  profession_mining:
+    file: font/profession_mining.png
+    ascent: 8
+    height: 8
+  profession_herbalism:
+    file: font/profession_herbalism.png
+    ascent: 8
+    height: 8
+  profession_farming:
+    file: font/profession_farming.png
+    ascent: 8
+    height: 8
+  profession_fishing:
+    file: font/profession_fishing.png
+    ascent: 8
+    height: 8
+  profession_cooking:
+    file: font/profession_cooking.png
+    ascent: 8
+    height: 8
+  profession_engineering:
+    file: font/profession_engineering.png
+    ascent: 8
+    height: 8
+  profession_melee:
+    file: font/profession_melee.png
+    ascent: 8
+    height: 8
+  profession_ranged:
+    file: font/profession_ranged.png
+    ascent: 8
+    height: 8
   ladder:
     char:  # U+E000
     file: font/ladder.png

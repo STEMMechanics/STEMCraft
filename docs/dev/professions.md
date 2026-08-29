@@ -25,8 +25,9 @@ only when a player's lifetime total crosses the configured value.
 
 ## Player stats
 
-Players can use `/stats` or `/stats <player>` to view recorded non-zero statistics. Profession XP is displayed as
-both its derived level and lifetime XP.
+Players can use `/skills` (also `/professions`) to view all profession levels, including skills with no XP yet.
+`/skills <skill>` shows progress toward the next level. `/stats` or `/stats <player>` remains the broader,
+sectioned activity report; profession XP there is displayed as both its derived level and lifetime XP.
 
 Block placement and break totals are also recorded against every matching `player_stats.groups` entry. A group may
 filter by game mode, world-name globs, or both. Omitting `worlds` matches every world. Groups are independent: when

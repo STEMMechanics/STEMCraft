@@ -157,7 +157,7 @@ public final class EntitlementService extends BaseService {
         List<BadgeDefinition> values = appliedBadges(uuid);
         if (limit > 0 && values.size() > limit) values = values.subList(0, limit);
         if (values.isEmpty()) return "";
-        return badgePrefix + String.join(badgeSeparator, values.stream().map(BadgeDefinition::display).toList()) + badgeSuffix;
+        return badgePrefix + String.join(badgeSeparator, values.stream().map(this::renderBadgeDisplay).toList()) + badgeSuffix;
     }
 
     public @NotNull String applyBadgePlaceholders(@NotNull UUID uuid, @Nullable String input) {
@@ -333,7 +333,8 @@ public final class EntitlementService extends BaseService {
         if (badgeRoot != null) for (String id : badgeRoot.getKeys(false)) {
             ConfigSectionView section = badgeRoot.getSection(id);
             if (section == null || !valid(id)) continue;
-            badges.put(id, new BadgeDefinition(id, section.getString("display", "<gray>◆</gray>"),
+            String display = migrateDefaultBadgeDisplay(id, section.getString("display", "<gray>:star:</gray>"));
+            badges.put(id, new BadgeDefinition(id, display,
                 section.getString("description", id), section.getString("permission", "stemcraft.badge." + id),
                 section.getInt("priority", 0)));
         }
@@ -407,9 +408,41 @@ public final class EntitlementService extends BaseService {
             return;
         }
         for (BadgeDefinition badge : visible) {
-            ctx.getSender().sendMessage(Component.text("  ").append(miniMessage.deserialize(badge.display()))
+            ctx.getSender().sendMessage(Component.text("  ").append(miniMessage.deserialize(renderBadgeDisplay(badge)))
                 .append(Component.text(" " + badge.description(), NamedTextColor.GRAY)));
         }
+    }
+
+    private String renderBadgeDisplay(BadgeDefinition badge) {
+        return api.messages().tokens().apply(badge.display());
+    }
+
+    static String migrateDefaultBadgeDisplay(String id, String display) {
+        String legacy = switch (id) {
+            case "explorer" -> "<green>✦</green>";
+            case "quest-master" -> "<light_purple>✪</light_purple>";
+            case "veteran" -> "<gold>★</gold>";
+            case "survival-veteran" -> "<dark_green>♜</dark_green>";
+            case "bedwars-player" -> "<red>⚔</red>";
+            case "bedwars-champion" -> "<gold>♛</gold>";
+            case "bridge-hot-streak" -> "<aqua>⚡</aqua>";
+            case "builder" -> "<yellow>⌂</yellow>";
+            case "event-winner" -> "<gradient:#ffd700:#ff8c00>🏆</gradient>";
+            default -> null;
+        };
+        if (!display.equals(legacy)) return display;
+        return switch (id) {
+            case "explorer" -> ":compass:";
+            case "quest-master" -> ":question_yellow:";
+            case "veteran" -> ":clock:";
+            case "survival-veteran" -> ":survival:";
+            case "bedwars-player" -> ":swords:";
+            case "bedwars-champion" -> ":crown:";
+            case "bridge-hot-streak" -> ":star:";
+            case "builder" -> ":crafting_table:";
+            case "event-winner" -> ":trophy:";
+            default -> display;
+        };
     }
 
     private void manage(CommandContext ctx) {
@@ -447,7 +480,7 @@ public final class EntitlementService extends BaseService {
         ConfigSection root = getConfigSection();
         if ("create".equals(sub)) {
             if (badges.containsKey(id)) ctx.returnError("Badge already exists.");
-            root.set("badges." + id + ".display", "<gray>◆</gray>"); root.set("badges." + id + ".description", id);
+            root.set("badges." + id + ".display", "<gray>:star:</gray>"); root.set("badges." + id + ".description", id);
             root.set("badges." + id + ".permission", "stemcraft.badge." + id); root.set("badges." + id + ".priority", 0);
         } else if ("delete".equals(sub)) {
             BadgeDefinition existing = badges.get(id);
