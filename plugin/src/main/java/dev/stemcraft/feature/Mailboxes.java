@@ -1,5 +1,7 @@
 package dev.stemcraft.feature;
 
+import dev.stemcraft.api.service.playerreset.*;
+
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.service.item.BedrockItemVisualDefinition;
@@ -72,6 +74,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 public class Mailboxes extends BaseFeature implements MailboxService {
@@ -136,6 +139,18 @@ public class Mailboxes extends BaseFeature implements MailboxService {
         registerMailboxRecipe();
         registerEvents();
         registerCommands();
+        api.playerResets().register(new PlayerResetHandler() {
+            public @NotNull String id() { return "mailbox-runtime"; }
+            public @NotNull Set<PlayerResetScope> scopes() { return Set.of(PlayerResetScope.GAMEPLAY, PlayerResetScope.COMPLETE); }
+            public int priority() { return 290; }
+            public @NotNull PlayerResetPreview preview(@NotNull PlayerResetContext context) {
+                return new PlayerResetPreview("Mailbox contents, notifications and incoming queued mail", hasMail(context.playerUuid()) ? 1 : 0);
+            }
+            public void reset(@NotNull PlayerResetContext context) {
+                pendingMailDrafts.remove(context.playerUuid()); mailboxFullNoticeCooldowns.remove(context.playerUuid());
+                mailIndicatorVisibility.remove(context.playerUuid());
+            }
+        });
     }
 
     @Override

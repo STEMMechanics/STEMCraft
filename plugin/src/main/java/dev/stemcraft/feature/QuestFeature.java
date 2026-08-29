@@ -7,6 +7,7 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.service.mailbox.MailSendRequest;
 import dev.stemcraft.api.service.playerstats.PlayerStatDefinition;
+import dev.stemcraft.api.service.playerreset.*;
 import dev.stemcraft.api.service.mailbox.MailSendResult;
 import dev.stemcraft.api.service.web.WebServiceRequest;
 import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
@@ -68,6 +69,7 @@ import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.BookMeta;
 import org.bukkit.persistence.PersistentDataType;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
 import java.io.IOException;
@@ -173,6 +175,21 @@ public final class QuestFeature extends BaseFeature {
         api.tasks().repeating(TIMEOUT_TASK, 20L, 20L, this::expireTimedQuests);
         api.tasks().repeating(BIOME_TASK, 20L, 20L, this::tickBiomeObjectives);
         api.tasks().repeating(TRACKING_TASK, 20L, 10L, this::tickQuestTracking);
+        api.playerResets().register(new PlayerResetHandler() {
+            public @NotNull String id() { return "quests"; }
+            public @NotNull Set<PlayerResetScope> scopes() { return Set.of(PlayerResetScope.PROGRESSION, PlayerResetScope.GAMEPLAY, PlayerResetScope.COMPLETE); }
+            public int priority() { return 120; }
+            public @NotNull PlayerResetPreview preview(@NotNull PlayerResetContext context) {
+                return new PlayerResetPreview("Quest progress, completions and tracking", active.getOrDefault(context.playerUuid(), Map.of()).size() + completed.getOrDefault(context.playerUuid(), Set.of()).size());
+            }
+            public void reset(@NotNull PlayerResetContext context) {
+                UUID uuid = context.playerUuid();
+                active.remove(uuid); completed.remove(uuid); revisions.remove(uuid); attemptStarted.remove(uuid);
+                trackedQuests.remove(uuid); autoTrackPlayers.remove(uuid); trackingPreferencePlayers.remove(uuid);
+                BossBar bar = trackingBossBars.remove(uuid); if (bar != null) Bukkit.getOnlinePlayers().forEach(bar::removeViewer);
+                questMenuSessions.remove(uuid);
+            }
+        });
     }
 
     @Override

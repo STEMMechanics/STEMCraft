@@ -20,6 +20,8 @@
 
 package dev.stemcraft.feature;
 
+import dev.stemcraft.api.service.playerreset.*;
+
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.api.util.WorldUtil;
@@ -36,6 +38,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.potion.PotionEffect;
 
 import java.util.*;
+import org.jetbrains.annotations.NotNull;
 
 /**
  * Feature that manages separate inventories for players based on their game mode
@@ -69,6 +72,19 @@ public class GameModeInventories extends BaseFeature {
         api.events().register(PlayerChangedWorldEvent.class, this::onWorldChange);
         api.events().register(PlayerGameModeChangeEvent.class, this::onGameModeChange);
         api.tasks().repeating(AUTOSAVE_TASK, AUTOSAVE_TICKS, AUTOSAVE_TICKS, this::saveOnlineProfiles);
+        api.playerResets().register(new PlayerResetHandler() {
+            public @NotNull String id() { return "game-mode-inventories"; }
+            public @NotNull Set<PlayerResetScope> scopes() { return Set.of(PlayerResetScope.GAMEPLAY, PlayerResetScope.COMPLETE); }
+            public int priority() { return 180; }
+            public @NotNull PlayerResetPreview preview(@NotNull PlayerResetContext context) {
+                Integer count = api.database().querySingleMapped("SELECT COUNT(*) FROM gamemode_inventories WHERE player_uuid=?", ps -> ps.setString(1, context.playerUuid().toString()), rs -> rs.getInt(1), 0);
+                return new PlayerResetPreview("Game-mode inventory profiles", count);
+            }
+            public void reset(@NotNull PlayerResetContext context) {
+                activeProfiles.remove(context.playerUuid());
+                api.database().update("DELETE FROM gamemode_inventories WHERE player_uuid=?", ps -> ps.setString(1, context.playerUuid().toString()));
+            }
+        });
     }
 
     /**

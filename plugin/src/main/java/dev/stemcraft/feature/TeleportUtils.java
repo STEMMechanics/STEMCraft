@@ -20,6 +20,8 @@
 
 package dev.stemcraft.feature;
 
+import dev.stemcraft.api.service.playerreset.*;
+
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.Command;
@@ -49,8 +51,10 @@ import java.util.List;
 
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import org.jetbrains.annotations.NotNull;
 
 /**
  * Feature that provides various teleportation utilities such as /tpall, /tphere, /back, /warp, /setwarp, /delwarp, /spawn, /tpworld, /top, /jump, and /thru.
@@ -90,6 +94,19 @@ public class TeleportUtils extends BaseFeature {
         ensureBackLocationStorage();
         loadBackLocationsFromStorage();
         loadWorldLastLocationsFromStorage();
+        api.playerResets().register(new PlayerResetHandler() {
+            public @NotNull String id() { return "player-locations"; }
+            public @NotNull Set<PlayerResetScope> scopes() { return Set.of(PlayerResetScope.GAMEPLAY, PlayerResetScope.COMPLETE); }
+            public int priority() { return 180; }
+            public @NotNull PlayerResetPreview preview(@NotNull PlayerResetContext context) {
+                int count = backLocations.containsKey(context.playerUuid()) ? 1 : 0;
+                count += worldLastLocations.getOrDefault(context.playerUuid(), Map.of()).size();
+                return new PlayerResetPreview("Back and per-world last locations", count);
+            }
+            public void reset(@NotNull PlayerResetContext context) {
+                UUID uuid = context.playerUuid(); backLocations.remove(uuid); worldLastLocations.remove(uuid);
+            }
+        });
 
         // Track previous locations for /back
         api.events().register(PlayerTeleportEvent.class, event -> {
