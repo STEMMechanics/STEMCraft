@@ -320,6 +320,12 @@ player_stats:
       message: "&e{player} has placed {value} blocks in {group}"
 
 entitlements:
+  notifications:
+    enabled: true
+    ability-gained: "/success/New ability: <yellow>{name}</yellow> — {description}"
+    ability-lost: "/warn/Ability lost: <yellow>{name}</yellow> — {description}"
+    badge-gained: "/success/Badge earned: {badge} <yellow>{description}</yellow>"
+    badge-lost: "/warn/Badge lost: {badge} <yellow>{description}</yellow>"
   badge-display:
     prefix: " "
     separator: ""
@@ -371,6 +377,17 @@ entitlements:
       permission: stemcraft.badge.event-winner
       priority: 100
   definitions:
+    # Conditions may use nested `all` (AND), `any` (OR), and `not` groups.
+    # Leaf conditions support `stat`, `permission`, `quest-completed`, and `quests-completed`.
+    # Existing singular `stat`, `stats`, `permissions`, and quest conditions remain supported.
+    # Example skill-tree branch:
+    # when:
+    #   all:
+    #     - stat: {key: skill_mining_xp, at-least: 400}
+    #     - stat: {key: skill_farming_xp, at-least: 800}
+    #     - permission: stemcraft.skilltree.foundation
+    #     - not:
+    #         permission: stemcraft.skilltree.conflicting-branch
     explorer:
       when:
         quests-completed:
@@ -426,14 +443,21 @@ entitlements:
           at-least: 10000
       grants:
         badges: [builder]
-    qol-mining-tool-refill:
+    qol-tool-refill:
+      name: "Backup tools"
+      description: "A matching tool or weapon is automatically equipped when yours breaks."
       when:
-        stat:
-          key: skill_mining_xp
-          at-least: 400
+        any:
+          - stat: {key: skill_mining_xp, at-least: 400}
+          - stat: {key: skill_herbalism_xp, at-least: 400}
+          - stat: {key: skill_farming_xp, at-least: 400}
+          - stat: {key: skill_melee_combat_xp, at-least: 400}
+          - stat: {key: skill_ranged_combat_xp, at-least: 400}
       grants:
         permissions: [stemcraft.qol.auto-refill-tools]
     qol-farming-hoe-harvest:
+      name: "Quick crop harvest"
+      description: "Sneak and right-click a ripe crop with a hoe to harvest and replant a 3×3 area."
       when:
         stat:
           key: skill_farming_xp
@@ -441,13 +465,26 @@ entitlements:
       grants:
         permissions: [stemcraft.qol.hoe-harvest]
     qol-engineering-auto-refill:
+      name: "Automatic item refill"
+      description: "Used blocks and items are automatically replaced from your inventory."
       when:
         stat:
           key: skill_engineering_xp
           at-least: 400
       grants:
         permissions: [stemcraft.qol.auto-refill]
+    qol-auto-select-tool:
+      name: "Automatic tool selection"
+      description: "Right-click a block to equip the best tool for it from your inventory."
+      when:
+        all:
+          - stat: {key: skill_mining_xp, at-least: 900}
+          - stat: {key: skill_engineering_xp, at-least: 900}
+      grants:
+        permissions: [stemcraft.qol.auto-select-tool]
     qol-farming-stronger-leads:
+      name: "Stronger leads"
+      description: "Leads no longer snap when an animal falls too far behind."
       when:
         stat:
           key: skill_farming_xp
@@ -455,6 +492,8 @@ entitlements:
       grants:
         permissions: [stemcraft.qol.stronger-leads]
     qol-engineering-powered-minecarts:
+      name: "Faster minecarts"
+      description: "Powered minecarts travel faster."
       when:
         stat:
           key: skill_engineering_xp
@@ -462,6 +501,8 @@ entitlements:
       grants:
         permissions: [stemcraft.qol.powered-minecarts]
     qol-farming-named-mob-info:
+      name: "Animal information"
+      description: "Right-click a named animal to see its health and owner."
       when:
         stat:
           key: skill_farming_xp
@@ -800,6 +841,9 @@ survival-qol:
   auto-refill-tools:
     enabled: true
     permission: stemcraft.qol.auto-refill-tools
+  auto-select-tool:
+    enabled: true
+    permission: stemcraft.qol.auto-select-tool
   named-mob-info:
     enabled: false
     permission: stemcraft.qol.named-mob-info
