@@ -59,7 +59,7 @@ import java.util.UUID;
 
 /**
  * Grave rules:
- * - Normal land: buried chest at y-1, sign at y+1.
+ * - Normal land: chest on stable ground, sign immediately above it.
  * - Water/Lava: build a small dirt "cap" at the surface, chest beneath, and dirt around chest where blocks aren't solid.
  * - If we can't safely place without wrecking blocks, fall back to vanilla drops.
  */
@@ -178,8 +178,8 @@ public class Graves extends BaseFeature {
 
     /**
      * LAND: Finds a "surface block" (solid) where:
-     * - chest goes at y-1
-     * - sign goes at y+1
+     * - chest goes at y+1
+     * - sign goes at y+2
      * <p>
      * Searches in an expanding square around the death location, checking from
      * y+SEARCH_Y_UP down to y-SEARCH_Y_DOWN for each x,z position.
@@ -207,7 +207,7 @@ public class Graves extends BaseFeature {
                         int y = baseY + dy;
 
                         Location surfaceLoc = new Location(world, x, y, z);
-                        if (isValidLandBuriedSpot(surfaceLoc)) {
+                        if (isValidLandGraveSpot(surfaceLoc)) {
                             return surfaceLoc;
                         }
                     }
@@ -224,14 +224,13 @@ public class Graves extends BaseFeature {
      * @param surfaceLoc Location of the surface block.
      * @return True if valid, false otherwise.
      */
-    private boolean isValidLandBuriedSpot(Location surfaceLoc) {
+    static boolean isValidLandGraveSpot(Location surfaceLoc) {
         Block surface = surfaceLoc.getBlock();                  // y
-        Block chestBlock = surface.getRelative(BlockFace.DOWN); // y-1
-        Block signBlock = surface.getRelative(BlockFace.UP);    // y+1
+        Block chestBlock = surface.getRelative(BlockFace.UP); // y+1
+        Block signBlock = chestBlock.getRelative(BlockFace.UP); // y+2
 
         Material surfaceType = surface.getType();
-        if (!surfaceType.isSolid()) return false;
-        if (GraveStorageSupport.isLiquid(surfaceType) || GraveStorageSupport.isHazard(surfaceType)) return false;
+        if (!GraveStorageSupport.isStableLandSupport(surfaceType)) return false;
 
         Material chestType = chestBlock.getType();
         if (!GraveStorageSupport.isReplaceableForGrave(chestType)) return false;
@@ -243,7 +242,7 @@ public class Graves extends BaseFeature {
     }
 
     /**
-     * LAND: Create a buried grave at the given surface location.
+     * LAND: Create an accessible grave on top of the given stable surface.
      *
      * @param api STEMCraft API instance.
      * @param surfaceLoc Location of the surface block.
@@ -253,8 +252,8 @@ public class Graves extends BaseFeature {
      */
     private @Nullable GravePlacement createBuriedGrave(STEMCraftAPI api, Location surfaceLoc, Player player, List<ItemStack> drops) {
         Block surface = surfaceLoc.getBlock();
-        Block chestBlock = surface.getRelative(BlockFace.DOWN);
-        Block signBlock = surface.getRelative(BlockFace.UP);
+        Block chestBlock = surface.getRelative(BlockFace.UP);
+        Block signBlock = chestBlock.getRelative(BlockFace.UP);
         boolean needsDoubleChest = GraveStorageSupport.requiresDoubleChest(drops);
         Block secondChestBlock = needsDoubleChest ? GraveStorageSupport.findDoubleChestPartner(chestBlock, false) : null;
 

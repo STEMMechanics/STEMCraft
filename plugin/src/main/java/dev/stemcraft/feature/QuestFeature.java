@@ -741,8 +741,9 @@ public final class QuestFeature extends BaseFeature {
             new ArrayList<>(active.getOrDefault(player.getUniqueId(), Map.of()).keySet()));
         api.commands().create("quest")
             .description("Manage and play book quests.")
-            .usage("/quest [view|track|abandon|admin]")
+            .usage("/quest [view|track|abandon|abandon-all|admin]")
             .tabCompletion("abandon", "{active-quest}")
+            .tabCompletion("abandon-all", "confirm")
             .tabCompletion("track", "{active-quest}")
             .tabCompletion("view", "{active-quest}")
             .tabCompletion("track", "off")
@@ -776,12 +777,13 @@ public final class QuestFeature extends BaseFeature {
         }
         switch (ctx.getArgLower(0)) {
             case "abandon" -> cancelCommand(ctx);
+            case "abandon-all" -> cancelAllCommand(ctx);
             case "track" -> trackCommand(ctx);
             case "view" -> viewQuestBook(ctx);
             case "admin" -> adminCommand(ctx);
             default -> {
                 if (ctx.getArg(0).matches("\\d+")) showPlayerMenu(ctx);
-                else ctx.error("Use /quest, /quest view <id>, /quest track <id|off|auto>, /quest abandon <id>, or /quest admin.");
+                else ctx.error("Use /quest, /quest view <id>, /quest track <id|off|auto>, /quest abandon <id>, /quest abandon-all, or /quest admin.");
             }
         }
     }
@@ -1169,6 +1171,28 @@ public final class QuestFeature extends BaseFeature {
             ctx.asPlayer().sendMessage(Component.text("Quest " + renderQuestText(quest, quest.title()) + " abandoned.", NamedTextColor.YELLOW));
             refreshMarkers(ctx.asPlayer());
         } else ctx.error("That quest is not active.");
+    }
+
+    private void cancelAllCommand(CommandContext ctx) {
+        if (!ctx.isPlayer()) { ctx.error("This command is player-only."); return; }
+        Player player = ctx.asPlayer();
+        List<String> questIds = new ArrayList<>(activeFor(player).keySet());
+        if (questIds.isEmpty()) { ctx.error("You do not have any active quests to abandon."); return; }
+        if (!"confirm".equalsIgnoreCase(ctx.getArg(1, ""))) {
+            player.sendMessage(Component.text("This will abandon all " + questIds.size() + " active quests.", NamedTextColor.YELLOW));
+            player.sendMessage(Component.text("Quest progress will be lost. Confirm with /quest abandon-all confirm ", NamedTextColor.RED)
+                .append(button("[Abandon all quests]", "/quest abandon-all confirm", "Confirm abandoning every active quest")));
+            return;
+        }
+        int abandoned = 0;
+        for (String questId : questIds) {
+            if (!cancelQuest(player.getUniqueId(), questId)) continue;
+            removeQuestBooks(player, questId);
+            abandoned++;
+        }
+        refreshMarkers(player);
+        player.sendMessage(Component.text("Abandoned " + abandoned + " active quest"
+            + (abandoned == 1 ? "." : "s."), NamedTextColor.YELLOW));
     }
 
     private void trackCommand(CommandContext ctx) {

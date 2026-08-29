@@ -143,6 +143,7 @@ class QuestFeatureTest {
         }
 
         verify(builder).register(plugin);
+        verify(builder).tabCompletion("abandon-all", "confirm");
     }
 
     @Test

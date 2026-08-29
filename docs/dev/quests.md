@@ -35,6 +35,7 @@ NPC profiles use `npc-type`. `PLAYER` creates a Citizens NPC when Citizens is in
 - `/quest` — clickable list of the player's active quests, including the quest giver; Java players can open a carried current quest book from the list, while the View action is disabled when the book is missing
 - `/quest view <id>` — open the carried current book for an active quest on Java Edition
 - `/quest abandon <id>` — immediately abandon an active quest and remove carried copies; completion suggests only active quest IDs
+- `/quest abandon-all` — show a confirmation button for abandoning every active quest; `/quest abandon-all confirm` performs it
 - `/quest track` — show whether tracking is off, automatic, or following a specific quest
 - `/quest track auto` — automatically select a carried active quest book when none is tracked and move to another carried active quest when one ends
 - `/quest track <id>` — track that active quest while its current book is in the player's inventory and disable automatic selection
