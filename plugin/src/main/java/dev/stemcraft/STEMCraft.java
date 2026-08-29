@@ -119,6 +119,7 @@ public final class STEMCraft extends JavaPlugin {
     private PlacedObjectServiceImpl placedObjects;
     private PlayerServiceImpl players;
     private PlayerStatsServiceImpl playerStats;
+    private EntitlementService entitlements;
     private ProtectionServiceImpl protections;
     private ProfanityFilterServiceImpl profanityFilter;
     private PunishmentServiceImpl punishments;
@@ -220,6 +221,7 @@ public final class STEMCraft extends JavaPlugin {
         placedObjects = new PlacedObjectServiceImpl(this, api);
         players = new PlayerServiceImpl(this, api);
         playerStats = new PlayerStatsServiceImpl(this, api);
+        entitlements = new EntitlementService(this, api);
         protections = new ProtectionServiceImpl(this, api);
         profanityFilter = new ProfanityFilterServiceImpl(this, api);
         punishments = new PunishmentServiceImpl(this, api);
@@ -250,6 +252,7 @@ public final class STEMCraft extends JavaPlugin {
         placedObjects.onEnable();
         players.onEnable();
         playerStats.onEnable();
+        entitlements.onEnable();
         protections.onEnable();
         profanityFilter.onEnable();
         punishments.onEnable();
@@ -377,6 +380,7 @@ public final class STEMCraft extends JavaPlugin {
         disableService(recipes);
         disableService(punishments);
         disableService(profanityFilter);
+        disableService(entitlements);
         disableService(playerStats);
         disableService(placeholders);
         disableService(placedObjects);
@@ -762,6 +766,7 @@ public final class STEMCraft extends JavaPlugin {
             }
             if (placeholders != null) {
                 placeholders.onReload();
+                entitlements.onReload();
             }
             for (BaseFeature feature : loadedFeatures) {
                 try {

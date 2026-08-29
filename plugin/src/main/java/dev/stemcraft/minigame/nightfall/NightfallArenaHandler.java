@@ -415,6 +415,10 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         }
 
         if (newStatus == MiniGameArena.ArenaStatus.COOLDOWN || newStatus == MiniGameArena.ArenaStatus.ENDING) {
+            if (newStatus == MiniGameArena.ArenaStatus.ENDING) {
+                STEMCraft.getPlugin().entitlements().recordMinigameResult("nightfall", arena.getOccupants(),
+                    arena.getPlayers().stream().map(Player::getUniqueId).toList());
+            }
             endRound(arena);
             return;
         }

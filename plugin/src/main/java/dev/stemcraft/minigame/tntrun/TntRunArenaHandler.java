@@ -1,5 +1,7 @@
 package dev.stemcraft.minigame.tntrun;
 
+import dev.stemcraft.STEMCraft;
+
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.minigame.ArenaValidationResult;
 import dev.stemcraft.api.minigame.MiniGameArena;
@@ -190,6 +192,8 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
         if (newStatus == MiniGameArena.ArenaStatus.ENDING) {
             cancelDecayTracker(arena);
             Player winner = resolveWinnerPlayer(arena);
+            STEMCraft.getPlugin().entitlements().recordMinigameResult("tntrun", arena.getOccupants(),
+                winner == null ? List.of() : List.of(winner.getUniqueId()));
             tntRun.setWinner(arena, winner);
             if (winner != null) {
                 tntRun.minigame().rewardWinners(arena, List.of(winner.getUniqueId()));

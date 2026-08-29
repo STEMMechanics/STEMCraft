@@ -21,6 +21,7 @@
 package dev.stemcraft.feature;
 
 import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.config.ConfigSection;
 import org.bukkit.Bukkit;
 import net.kyori.adventure.text.Component;
@@ -38,7 +39,7 @@ import java.util.List;
  */
 public class PlayerTabList extends BaseFeature {
     private static final long DEFAULT_UPDATE_TICKS = 40L;
-    private static final String DEFAULT_NAME_FORMAT = "{prefix}{player}";
+    private static final String DEFAULT_NAME_FORMAT = "{prefix}{player}{badge-3}";
     private static final int DEFAULT_MAX_NAME_LEN = 48;
     private static final int DEFAULT_GOOD_PING_MAX = 80;
     private static final int DEFAULT_WARN_PING_MAX = 160;
@@ -218,6 +219,8 @@ public class PlayerTabList extends BaseFeature {
                 .replace("{max}", String.valueOf(max))
                 .replace("{prefix}", legacyToMiniMessage(prefix))
                 .replace("{suffix}", legacyToMiniMessage(suffix));
+
+        out = STEMCraft.getPlugin().entitlements().applyBadgePlaceholders(p.getUniqueId(), out);
 
         // glyph bindings (turn :roles/stemcraft: into the char)
         out = api.messages().tokens().apply(out);

@@ -43,6 +43,9 @@ public interface PlayerStatsService {
 
     double total(@NotNull UUID playerUuid, @NotNull String key);
 
+    /** Returns a stat total within a rolling period such as {@code 28d}, or all time when blank. */
+    double total(@NotNull UUID playerUuid, @NotNull String key, @Nullable String period);
+
     void captureOnlinePlayers();
 
     @NotNull List<PlayerStatsRecord> list(@Nullable String uuidText, @Nullable String username, @Nullable String statKey, @Nullable String period);

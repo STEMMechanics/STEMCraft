@@ -265,6 +265,7 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
         value.dailyBuckets.merge(bucketDate, amount, Double::sum);
         pruneBuckets(value.dailyBuckets, bucketDate.minusDays(MAX_BUCKET_DAYS));
         announceCrossedMilestone(username, normalizedKey, previousTotal, value.total);
+        if (plugin.entitlements() != null) plugin.entitlements().onFactsChanged(playerUuid);
     }
 
     @Override
@@ -283,17 +284,23 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
         if (value != 0.0d) {
             statValue.dailyBuckets.put(bucketDate, value);
         }
+        if (plugin.entitlements() != null) plugin.entitlements().onFactsChanged(playerUuid);
     }
 
     @Override
     public double total(@NotNull UUID playerUuid, @NotNull String key) {
+        return total(playerUuid, key, null);
+    }
+
+    @Override
+    public double total(@NotNull UUID playerUuid, @NotNull String key, @Nullable String period) {
         String normalizedKey = normalizeTrackedKey(key);
         PlayerStatsState state = players.get(playerUuid);
         if (state == null) {
             return 0.0d;
         }
         StatValueState statValue = state.stats.get(normalizedKey);
-        return statValue == null ? 0.0d : statValue.total;
+        return statValue == null ? 0.0d : valueForWindow(statValue, QueryWindow.parse(period));
     }
 
     @Override
@@ -1118,7 +1125,15 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
                     return new QueryWindow("all", null);
                 }
 
-                return switch (raw.trim().toLowerCase(Locale.ROOT)) {
+                String normalized = raw.trim().toLowerCase(Locale.ROOT);
+                if (normalized.matches("[1-9][0-9]*d")) {
+                    try {
+                        return new QueryWindow(normalized, Integer.parseInt(normalized.substring(0, normalized.length() - 1)));
+                    } catch (NumberFormatException ignored) {
+                        return new QueryWindow("all", null);
+                    }
+                }
+                return switch (normalized) {
                     case "day", "today", "1d" -> new QueryWindow("day", 1);
                     case "week", "last_week", "7d" -> new QueryWindow("week", 7);
                     case "month", "last_month", "30d" -> new QueryWindow("month", 30);

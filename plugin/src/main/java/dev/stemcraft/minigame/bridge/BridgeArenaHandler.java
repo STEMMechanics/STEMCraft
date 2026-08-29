@@ -20,6 +20,8 @@
 
 package dev.stemcraft.minigame.bridge;
 
+import dev.stemcraft.STEMCraft;
+
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.minigame.ArenaValidationResult;
 import dev.stemcraft.api.minigame.MiniGameArena;
@@ -324,6 +326,8 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
 
         if (newStatus == MiniGameArena.ArenaStatus.ENDING) {
             MiniGameTeam winner = winningTeam(arena);
+            List<UUID> winnerIds = winner == null ? List.of() : arena.getTeamPlayers(winner.getName()).stream().map(Player::getUniqueId).toList();
+            STEMCraft.getPlugin().entitlements().recordMinigameResult("bridge", arena.getOccupants(), winnerIds);
             if (winner != null) {
                 updateWinStreakStats(arena, winner);
                 bridge.minigame().rewardWinners(arena, arena.getTeamPlayers(winner.getName()).stream()

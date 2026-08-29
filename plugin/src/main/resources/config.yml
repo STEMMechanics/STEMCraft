@@ -285,6 +285,16 @@ player-welcome:
 
 player_stats:
   autosave_ticks: 1200
+  time_in:
+    survival:
+      title: Survival Time
+      worlds: ["survival", "survival_nether", "survival_the_end"]
+    creative:
+      title: Creative Time
+      worlds: ["creative"]
+    mini_games:
+      title: Minigame Time
+      worlds: ["bedwars", "bridge", "boatrace", "tntrun", "nightfall"]
   groups:
     creative:
       title: Creative
@@ -308,6 +318,117 @@ player_stats:
     blocks_placed:
       values: [10000, 25000, 50000, 100000]
       message: "&e{player} has placed {value} blocks in {group}"
+
+entitlements:
+  badge-display:
+    prefix: " "
+    separator: " "
+    suffix: ""
+  badges:
+    explorer:
+      display: "<green>✦</green>"
+      description: "Completed 10 different quests"
+      permission: stemcraft.badge.explorer
+      priority: 20
+    quest-master:
+      display: "<light_purple>✪</light_purple>"
+      description: "Completed 50 different quests"
+      permission: stemcraft.badge.quest-master
+      priority: 60
+    veteran:
+      display: "<gold>★</gold>"
+      description: "Played on STEMCraft for 100 hours"
+      permission: stemcraft.badge.veteran
+      priority: 50
+    survival-veteran:
+      display: "<dark_green>♜</dark_green>"
+      description: "Played Survival for 100 hours"
+      permission: stemcraft.badge.survival-veteran
+      priority: 55
+    bedwars-player:
+      display: "<red>⚔</red>"
+      description: "Completed 50 BedWars games"
+      permission: stemcraft.badge.bedwars-player
+      priority: 30
+    bedwars-champion:
+      display: "<gold>♛</gold>"
+      description: "Won 25 BedWars games"
+      permission: stemcraft.badge.bedwars-champion
+      priority: 70
+    bridge-hot-streak:
+      display: "<aqua>⚡</aqua>"
+      description: "Won 10 Bridge games in 28 days"
+      permission: stemcraft.badge.bridge-hot-streak
+      priority: 80
+    builder:
+      display: "<yellow>⌂</yellow>"
+      description: "Placed 10,000 Survival blocks"
+      permission: stemcraft.badge.builder
+      priority: 35
+    event-winner:
+      display: "<gradient:#ffd700:#ff8c00>🏆</gradient>"
+      description: "Winner of a STEMCraft community event"
+      permission: stemcraft.badge.event-winner
+      priority: 100
+  definitions:
+    explorer:
+      when:
+        quests-completed:
+          at-least: 10
+      grants:
+        badges: [explorer]
+    quest-master:
+      when:
+        quests-completed:
+          at-least: 50
+      grants:
+        badges: [quest-master]
+    veteran:
+      when:
+        stat:
+          key: play_time
+          at-least: 100
+      grants:
+        badges: [veteran]
+    survival-veteran:
+      when:
+        stat:
+          key: time_in_survival
+          at-least: 100
+      grants:
+        badges: [survival-veteran]
+    bedwars-player:
+      when:
+        stat:
+          key: minigame_bedwars_games_played
+          at-least: 50
+      grants:
+        badges: [bedwars-player]
+    bedwars-champion:
+      when:
+        stat:
+          key: minigame_bedwars_wins
+          at-least: 25
+      grants:
+        badges: [bedwars-champion]
+    bridge-hot-streak:
+      when:
+        stat:
+          key: minigame_bridge_wins
+          at-least: 10
+          duration: 28d
+      grants:
+        badges: [bridge-hot-streak]
+    builder:
+      when:
+        stat:
+          key: blocks_placed_group_survival
+          at-least: 10000
+      grants:
+        badges: [builder]
+    event-winner:
+      grants:
+        badges: [event-winner]
 
 professions:
   enabled: true
@@ -758,7 +879,7 @@ tab:
     - "<gray>Ping</gray> {ping-colour}{ping}ms{/ping-colour} <dark_gray>•</dark_gray> <gray>Online</gray> <green>{online}</green>/<green>{max}</green>"
     - "<gray>Tab Name</gray> <white>{player}</white>"
 
-  name_format: "{prefix}{player}"
+  name_format: "{prefix}{player}{badge-3}"
   # optional: enforce max length (tab list name has limits)
   max_name_len: 48
 selection_preview:
