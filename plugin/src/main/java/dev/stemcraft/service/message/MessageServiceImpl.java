@@ -53,6 +53,7 @@ import java.util.regex.Pattern;
  */
 public class MessageServiceImpl extends BaseService implements MessageService {
     private static final Pattern LEADING_DIRECTIVE = Pattern.compile("^\\s*/?([a-zA-Z][a-zA-Z0-9_.-]*)/\\s*");
+    private static final Pattern LOCALIZED_PLACEHOLDER_VALUE = Pattern.compile("^\\{([^{}]+)}$");
     private TokenProcessorImpl tokens;
     private MessagePrefixes prefixes;
     private Map<String, MessageContext> contexts = Map.of();
@@ -462,7 +463,7 @@ public class MessageServiceImpl extends BaseService implements MessageService {
      * @param placeholders The placeholders to apply.
      * @return The string with placeholders applied.
      */
-    private String applyPlaceholders(CommandSender sender, String str, Object... placeholders) {
+    String applyPlaceholders(CommandSender sender, String str, Object... placeholders) {
         if (str == null) {
             return null;
         }
@@ -476,15 +477,14 @@ public class MessageServiceImpl extends BaseService implements MessageService {
         }
 
         String[] processed = StringUtil.toStrings(placeholders);
-
-        // Preserve existing behaviour: placeholder values that are locale keys get translated.
         for (int i = 1; i < processed.length; i += 2) {
             String value = processed[i];
-            if (value != null) {
-                processed[i] = api.locales().resolve(sender, value);
+            if (value == null) continue;
+            Matcher localized = LOCALIZED_PLACEHOLDER_VALUE.matcher(value);
+            if (localized.matches()) {
+                processed[i] = api.locales().resolve(sender, localized.group(1));
             }
         }
-
         return PlaceholderUtil.apply(str, processed);
     }
 }

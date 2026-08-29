@@ -125,7 +125,7 @@ public final class PlayerResetServiceImpl extends BaseService implements PlayerR
         api.commands().create("playerreset").description("Preview and execute a complete player-data reset.")
             .usage("/playerreset <preview <player> <progression|gameplay|complete>|confirm <token>>")
             .permission(PERMISSION).tabCompletion("preview", "{player}").tabCompletion("confirm")
-            .executor((unused, command, ctx) -> command(ctx));
+            .executor((unused, command, ctx) -> command(ctx)).register(plugin);
     }
 
     private void command(CommandContext ctx) {
