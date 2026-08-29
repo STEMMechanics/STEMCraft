@@ -378,14 +378,14 @@ public final class EntitlementService extends BaseService {
 
     private void registerCommands() {
         api.commands().create("badges").description("View applied player badges.").usage("/badges [player]")
-            .tabCompletion("{player}").executor((unused, command, ctx) -> showBadges(ctx));
+            .tabCompletion("{player}").executor((unused, command, ctx) -> showBadges(ctx)).register(plugin);
         api.commands().create("entitlements").description("Manage entitlements and badges.")
             .usage("/entitlements <list|reload|recalculate|grant|revoke|badge|create|delete|set>")
             .permission(ADMIN_PERMISSION).tabCompletion("list").tabCompletion("reload").tabCompletion("recalculate", "{player}")
             .tabCompletion("grant", "{player}").tabCompletion("revoke", "{player}")
             .tabCompletion("badge", "grant", "{player}").tabCompletion("badge", "revoke", "{player}")
             .tabCompletion("create").tabCompletion("delete").tabCompletion("set")
-            .executor((unused, command, ctx) -> manage(ctx));
+            .executor((unused, command, ctx) -> manage(ctx)).register(plugin);
     }
 
     private void showBadges(CommandContext ctx) {

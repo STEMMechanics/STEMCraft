@@ -1,13 +1,20 @@
 package dev.stemcraft.service.message;
 
+import dev.stemcraft.STEMCraft;
+import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.api.service.locale.LocaleService;
 import dev.stemcraft.api.service.message.MessageType;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
+import org.bukkit.command.CommandSender;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class MessageServiceImplTest {
     @Test
@@ -110,5 +117,38 @@ class MessageServiceImplTest {
         );
 
         assertEquals("[ ! ] The player nomadjimbob is no longer banned.", rendered);
+    }
+
+    @Test
+    void placeholderValuesRemainRawMessageData() {
+        STEMCraftAPI api = mock(STEMCraftAPI.class);
+        LocaleService locales = mock(LocaleService.class);
+        when(api.locales()).thenReturn(locales);
+        MessageServiceImpl service = new MessageServiceImpl(mock(STEMCraft.class), api);
+
+        assertEquals(
+            "Cooking recipe loaded: furnace.dried_fruit",
+            service.applyPlaceholders(null, "Cooking recipe loaded: {type}.{id}",
+                "type", "furnace", "id", "dried_fruit")
+        );
+        org.mockito.Mockito.verifyNoInteractions(locales);
+    }
+
+    @Test
+    void bracedPlaceholderValuesAreLocalizedExplicitly() {
+        STEMCraftAPI api = mock(STEMCraftAPI.class);
+        LocaleService locales = mock(LocaleService.class);
+        when(api.locales()).thenReturn(locales);
+        when(locales.resolve((CommandSender) null, "furnace")).thenReturn("Furnace");
+        when(locales.resolve((CommandSender) null, "dried_fruit")).thenReturn("Dried Fruit");
+        MessageServiceImpl service = new MessageServiceImpl(mock(STEMCraft.class), api);
+
+        assertEquals(
+            "Cooking recipe loaded: Furnace.Dried Fruit",
+            service.applyPlaceholders(null, "Cooking recipe loaded: {type}.{id}",
+                "type", "{furnace}", "id", "{dried_fruit}")
+        );
+        verify(locales).resolve((CommandSender) null, "furnace");
+        verify(locales).resolve((CommandSender) null, "dried_fruit");
     }
 }
