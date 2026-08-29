@@ -197,6 +197,11 @@ font_images:
     file: font/world.png
     ascent: 8
     height: 8
+  gravestone:
+    char: 
+    file: font/skull.png
+    ascent: 8
+    height: 8
   ladder:
     char:  # U+E000
     file: font/ladder.png
