@@ -1,5 +1,7 @@
 package dev.stemcraft.minigame.boatrace;
 
+import dev.stemcraft.STEMCraft;
+
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.minigame.ArenaValidationResult;
 import dev.stemcraft.api.minigame.MiniGameArena;
@@ -229,6 +231,8 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
             String winnerName = boatRace.winnerName(arena);
             clearSnowballSupply(arena);
             Player winner = resolveWinnerPlayer(arena);
+            STEMCraft.getPlugin().entitlements().recordMinigameResult("boatrace", arena.getOccupants(),
+                winner == null ? List.of() : List.of(winner.getUniqueId()));
             if (winner != null) {
                 boatRace.minigame().rewardWinners(arena, List.of(winner.getUniqueId()));
                 startWinnerCelebration(arena, winner);

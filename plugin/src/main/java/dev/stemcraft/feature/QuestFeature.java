@@ -6,6 +6,7 @@ import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.service.mailbox.MailSendRequest;
+import dev.stemcraft.api.service.playerstats.PlayerStatDefinition;
 import dev.stemcraft.api.service.mailbox.MailSendResult;
 import dev.stemcraft.api.service.web.WebServiceRequest;
 import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
@@ -145,6 +146,10 @@ public final class QuestFeature extends BaseFeature {
 
     @Override
     public void onEnable() {
+        api.playerStats().register(new PlayerStatDefinition("quests_completed_total", "Quests Completed",
+            "Total quest turn-ins, including repeatable quests.", "stemcraft", "quest", "all"));
+        api.playerStats().register(new PlayerStatDefinition("quests_completed_unique", "Unique Quests Completed",
+            "Different quests completed at least once.", "stemcraft", "quest", "unique"));
         questFile = new File(STEMCraft.getPlugin().getDataFolder(), "quests/quests.yml");
         npcFile = new File(STEMCraft.getPlugin().getDataFolder(), "quests/npcs.yml");
         questIdKey = new NamespacedKey(STEMCraft.getPlugin(), "quest-id");
@@ -2429,10 +2434,13 @@ public final class QuestFeature extends BaseFeature {
         }
         removeQuestBooks(player, quest.id());
         cancelQuest(player.getUniqueId(), quest.id());
-        completed.computeIfAbsent(player.getUniqueId(), ignored -> new java.util.HashSet<>()).add(quest.id());
+        boolean firstCompletion = completed.computeIfAbsent(player.getUniqueId(), ignored -> new java.util.HashSet<>()).add(quest.id());
         api.database().update("INSERT OR REPLACE INTO quest_completed(player_uuid,quest_id,completed_at) VALUES(?,?,?)", statement -> {
             statement.setString(1, player.getUniqueId().toString()); statement.setString(2, quest.id()); statement.setLong(3, System.currentTimeMillis());
         });
+        api.playerStats().increment(player.getUniqueId(), player.getName(), "quests_completed_total", 1);
+        if (firstCompletion) api.playerStats().increment(player.getUniqueId(), player.getName(), "quests_completed_unique", 1);
+        STEMCraft.getPlugin().entitlements().onFactsChanged(player.getUniqueId());
         for (String command : quest.rewardCommands()) Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command
             .replace("{player}", player.getName()).replace("{uuid}", player.getUniqueId().toString()));
         player.sendMessage(Component.text("Quest " + renderQuestText(quest, quest.title()) + " completed.", NamedTextColor.YELLOW));

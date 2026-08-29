@@ -6,6 +6,7 @@ load: STARTUP
 softdepend:
   - WorldEdit
   - Vault
+  - LuckPerms
   - Geyser-Spigot
   - Floodgate
   - PlaceholderAPI

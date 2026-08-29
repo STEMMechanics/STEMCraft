@@ -1,5 +1,7 @@
 package dev.stemcraft.minigame.bedwars;
 
+import dev.stemcraft.STEMCraft;
+
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.minigame.ArenaValidationResult;
 import dev.stemcraft.api.minigame.MiniGameArena;
@@ -239,6 +241,8 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
 
         if (newStatus == MiniGameArena.ArenaStatus.ENDING) {
             MiniGameTeam winner = determineWinner(arena);
+            List<UUID> winnerIds = winner == null ? List.of() : arena.getTeamPlayers(winner.getName()).stream().map(Player::getUniqueId).toList();
+            STEMCraft.getPlugin().entitlements().recordMinigameResult("bedwars", arena.getOccupants(), winnerIds);
             arena.set("winnerTeam", winner == null ? "" : winner.getName());
             if (winner != null) {
                 bedWars.minigame().rewardWinners(arena, arena.getTeamPlayers(winner.getName()).stream()

@@ -22,3 +22,4 @@
 - [Minigame placeholders](https://github.com/STEMMechanics/stemcraft/wiki/minigame-placeholders)
 - [Tab completion](https://github.com/STEMMechanics/stemcraft/wiki/tab-completion)
 - [Configuration](https://github.com/STEMMechanics/stemcraft/wiki/Configuration)
+- [Entitlements and badges](https://github.com/STEMMechanics/stemcraft/wiki/entitlements-and-badges)
