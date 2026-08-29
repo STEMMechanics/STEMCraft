@@ -322,7 +322,7 @@ player_stats:
 entitlements:
   badge-display:
     prefix: " "
-    separator: " "
+    separator: ""
     suffix: ""
   badges:
     explorer:
@@ -426,6 +426,48 @@ entitlements:
           at-least: 10000
       grants:
         badges: [builder]
+    qol-mining-tool-refill:
+      when:
+        stat:
+          key: skill_mining_xp
+          at-least: 400
+      grants:
+        permissions: [stemcraft.qol.auto-refill-tools]
+    qol-farming-hoe-harvest:
+      when:
+        stat:
+          key: skill_farming_xp
+          at-least: 400
+      grants:
+        permissions: [stemcraft.qol.hoe-harvest]
+    qol-engineering-auto-refill:
+      when:
+        stat:
+          key: skill_engineering_xp
+          at-least: 400
+      grants:
+        permissions: [stemcraft.qol.auto-refill]
+    qol-farming-stronger-leads:
+      when:
+        stat:
+          key: skill_farming_xp
+          at-least: 900
+      grants:
+        permissions: [stemcraft.qol.stronger-leads]
+    qol-engineering-powered-minecarts:
+      when:
+        stat:
+          key: skill_engineering_xp
+          at-least: 1600
+      grants:
+        permissions: [stemcraft.qol.powered-minecarts]
+    qol-farming-named-mob-info:
+      when:
+        stat:
+          key: skill_farming_xp
+          at-least: 1600
+      grants:
+        permissions: [stemcraft.qol.named-mob-info]
     event-winner:
       grants:
         badges: [event-winner]
@@ -745,22 +787,22 @@ leaf_decay_random_tick:
 survival-qol:
   hoe-harvest:
     enabled: true
-    permission: ""
+    permission: stemcraft.qol.hoe-harvest
   stronger-leads:
     enabled: true
-    permission: ""
+    permission: stemcraft.qol.stronger-leads
   disable-crop-trampling:
     enabled: true
     permission: ""
   auto-refill:
     enabled: true
-    permission: ""
+    permission: stemcraft.qol.auto-refill
   auto-refill-tools:
     enabled: true
-    permission: ""
+    permission: stemcraft.qol.auto-refill-tools
   named-mob-info:
     enabled: false
-    permission: ""
+    permission: stemcraft.qol.named-mob-info
     message: "/info/{name} • {type} • {health}/{max_health} health • Owner: {owner}"
   anvil-warning:
     enabled: true
@@ -769,7 +811,7 @@ survival-qol:
     message: "/warn/This anvil operation costs {levels} levels and is close to becoming Too Expensive!"
   powered-minecarts:
     enabled: true
-    permission: ""
+    permission: stemcraft.qol.powered-minecarts
     multiplier: 1.08
     max-speed: 0.8
   durability-warning:

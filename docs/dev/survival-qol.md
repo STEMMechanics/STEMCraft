@@ -2,7 +2,18 @@
 
 The survival QOL feature provides small configurable improvements without changing the core survival progression.
 
-Each player-facing behaviour has an optional `permission` beside its `enabled` setting. A blank or missing value means no permission is required. Setting `survival-qol.auto-refill.permission`, for example, restricts that behaviour to players granted that exact permission. For crop protection and stronger leads, entities without a relevant player remain protected. When powered-minecart permission is configured, a cart accelerates only while an authorized player is riding it.
+Each player-facing behaviour has an optional `permission` beside its `enabled` setting. A blank or missing value means no permission is required. The bundled defaults use profession-backed entitlements for convenience features while leaving accident prevention and warnings available immediately. For crop protection and stronger leads, entities without a relevant player remain protected. When powered-minecart permission is configured, a cart accelerates only while an authorized player is riding it.
+
+| Convenience unlock | Default requirement | Permission |
+| --- | --- | --- |
+| Automatic replacement for broken tools | Mining Level 3 (400 XP) | `stemcraft.qol.auto-refill-tools` |
+| 3×3 hoe harvesting | Farming Level 3 (400 XP) | `stemcraft.qol.hoe-harvest` |
+| Automatic stack refill | Engineering Level 3 (400 XP) | `stemcraft.qol.auto-refill` |
+| Stronger leads | Farming Level 4 (900 XP) | `stemcraft.qol.stronger-leads` |
+| Faster powered minecarts | Engineering Level 5 (1,600 XP) | `stemcraft.qol.powered-minecarts` |
+| Named-mob information, when enabled | Farming Level 5 (1,600 XP) | `stemcraft.qol.named-mob-info` |
+
+Crop-trampling protection, durability warnings, and anvil warnings remain ungated.
 
 ## Farming and inventory
 

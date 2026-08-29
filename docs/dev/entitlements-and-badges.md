@@ -28,7 +28,7 @@ entitlements:
 
 ## Badge display
 
-`{badge}` displays every applied badge in descending priority order. `{badge-3}` displays at most the three highest-priority badges. Badge placeholders work in the STEMCraft TAB name format. PlaceholderAPI exposes `%stemcraft_badge%` and `%stemcraft_badge:3%`.
+`{badge}` displays every applied badge in descending priority order. `{badge-3}` displays at most the three highest-priority badges. Badge placeholders work in the STEMCraft TAB name format. PlaceholderAPI exposes `%stemcraft_badge%` and `%stemcraft_badge:3%`. Bundled badges render directly beside one another; `entitlements.badge-display.separator` can add a custom separator.
 
 `/badges [player]` displays only badges currently applied to that player and their descriptions. It does not reveal locked or potentially earnable badges.
 Bundled badge displays use resource-pack glyph tokens such as `:trophy:` rather than Unicode emoji. Custom badge

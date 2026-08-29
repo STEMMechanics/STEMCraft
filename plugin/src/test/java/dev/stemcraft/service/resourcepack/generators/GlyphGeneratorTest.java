@@ -38,13 +38,19 @@ class GlyphGeneratorTest {
             assertNotNull(input, configPath);
             config = new String(input.readAllBytes(), StandardCharsets.UTF_8);
         }
+        assertTrue(config.contains("generate_font_images:"));
+        assertTrue(config.contains("textures_path: font"));
+        assertTrue(config.contains("starting_char: \"\\uE100\""));
         for (String name : names) {
             String token = "profession_" + name;
-            assertTrue(config.contains("  " + token + ":"), "Missing glyph definition for " + token);
             String texture = "/data-packs/stemcraft-ui/contents/stemcraft/textures/font/" + token + ".png";
             try (InputStream input = getClass().getResourceAsStream(texture)) {
                 assertNotNull(input, texture);
             }
+        }
+        String gravestone = "/data-packs/stemcraft-ui/contents/stemcraft/textures/font/gravestone.png";
+        try (InputStream input = getClass().getResourceAsStream(gravestone)) {
+            assertNotNull(input, gravestone);
         }
     }
 }
