@@ -28,7 +28,9 @@ Collect objectives are rechecked while the player moves or interacts with a ques
 
 Quests may define `time-limit-seconds`, `restart-cooldown-seconds`, and `global-max-completions`. A timed attempt fails when its real-time deadline passes. Completed repeatable quests and failed attempts may be restarted after the configured cooldown. Global limits are checked atomically on the server thread at turn-in; players who accepted a competitive quest but arrive after its final reward was claimed fail at hand-in. NPC profiles may define `lifetime-seconds`; an expired limited appearance is consumed for that Minecraft day.
 
-NPC profiles use `npc-type`. `PLAYER` creates a Citizens NPC when Citizens is installed and falls back to a villager otherwise; native types such as `WOLF` always remain that type. NPCs wander by default with an 8-block horizontal radius, 3-block vertical radius, 5-second delay, and nearby-player looking enabled. Override only the required values under `behaviour` (`type: STATIONARY`, `wander-radius`, `wander-vertical-radius`, `wander-delay-seconds`, or `look-at-players`). Player profiles may also specify `skin.url`; Citizens resolves and caches the skin.
+NPC profiles use `npc-type`. `PLAYER` creates a Citizens NPC when Citizens is installed and falls back to a villager otherwise; native types such as `WOLF` always remain that type. NPCs wander by default with an 8-block horizontal radius, 3-block vertical radius, and 5-second delay, while keeping destinations inside their configured spawn biomes. They pause and face players within six blocks or when clicked, then resume wandering after the player leaves. Override only the required values under `behaviour` (`type: STATIONARY`, `wander-radius`, `wander-vertical-radius`, `wander-delay-seconds`, or `look-at-players`). Player profiles may also specify `skin.url`; Citizens resolves and caches the skin.
+
+When an NPC's availability window or limited lifetime ends, departure is staggered by up to `quest.npc-leaving.random-delay-ticks`. An open quest menu or recent interaction postpones the transition to `LEAVING`. Leaving NPCs no longer stop for interactions; they use a random `dialogue.leaving` line (or a generic fallback) and walk away without normal biome or wander-radius restrictions. They despawn after reaching `player-distance` from every player, or after `timeout-ticks` as a pathfinding/following failsafe.
 
 ## Player commands
 
@@ -89,21 +91,7 @@ Reward commands run as the console after turn-in and support `{player}` and `{uu
 
 Item rewards should use `rewarditem`, not a `give` command. Structured items are inserted into the player's inventory and any overflow is sent through the mailbox system. If overflow cannot be queued, the inventory and consumed quest items are restored and the quest remains ready for another turn-in attempt. Command rewards remain available for experience, permissions, economy, and other non-item effects.
 
-## Test commands
-
-The following admin-only commands exercise quests without satisfying their normal availability or objectives:
-
-```text
-/quest admin test start <id>
-/quest admin test advance <id>
-/quest admin test complete <id>
-/quest admin test reset <id>
-/quest admin test examples
-```
-
-`start` still requires inventory space for the quest book. `complete` marks the quest ready but the normal NPC and book turn-in path remains in effect.
-
-The `/quest admin` and `/quest admin edit <id>` screens are clickable chat menus. Text fields and additions place an editable command into chat; toggles, removals, navigation, NPC actions, and test actions run immediately. The player-facing reward description is edited separately from the console commands and is displayed on the final page of the quest book.
+The `/quest admin` and `/quest admin edit <id>` screens are clickable chat menus. Text fields and additions place an editable command into chat; toggles, removals, navigation, and NPC actions run immediately. The player-facing reward description is edited separately from the console commands and is displayed on the final page of the quest book.
 
 ## Named NPCs and dialogue
 
@@ -125,7 +113,7 @@ Multiple lines may be added to each pool; one is selected randomly per interacti
 
 The bundled survival campaign is a collection of storylines rather than a numbered tutorial. Early shelter quests branch into homesteading, livestock, rivers, crops, night defence and mining. Later branches cover cartography, distant biomes, enchanting, deep mining and Nether preparation, alongside shorter independent encounters and rare timed offers. Several long homestead and defence branches remain available in plains biomes so exploration is encouraged but never required merely to keep receiving quests.
 
-On a new installation, six disabled example definitions are copied into `quests/quests.yml`:
+On a new installation, the survival campaign and its NPC profiles are copied into `quests/quests.yml` and `quests/npcs.yml`. Six disabled example definitions are included as editing references:
 
 - `example-gathering-supplies` — collected and consumed items
 - `example-pest-control` — mob kills and a prerequisite
@@ -136,4 +124,4 @@ On a new installation, six disabled example definitions are copied into `quests/
 
 They are disabled because NPC UUIDs and meaningful world coordinates are server-specific. Bind or spawn their start/end NPCs, replace the scholar placeholder NPC objective, adjust example locations, and then enable them through the chat editor.
 
-`/quest admin test examples` restores only missing bundled examples. Existing examples and administrator edits are never overwritten.
+After initialization, the generated files are authoritative and administrator edits are not overwritten on later starts.

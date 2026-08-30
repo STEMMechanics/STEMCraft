@@ -5,7 +5,6 @@ import net.citizensnpcs.api.CitizensAPI;
 import net.citizensnpcs.api.npc.NPC;
 import net.citizensnpcs.trait.LookClose;
 import net.citizensnpcs.trait.SkinTrait;
-import net.citizensnpcs.trait.waypoint.WanderWaypointProvider;
 import net.citizensnpcs.trait.waypoint.Waypoints;
 import net.citizensnpcs.util.MojangSkinGenerator;
 import org.bukkit.Bukkit;
@@ -75,17 +74,31 @@ public final class CitizensQuestNpcSupport {
         }
     }
 
+    public static void setPaused(QuestNpcProfile profile, boolean paused) {
+        if (profile.citizensNpcId() == null) return;
+        NPC npc = CitizensAPI.getNPCRegistry().getById(profile.citizensNpcId());
+        if (npc == null || !npc.isSpawned()) return;
+        npc.getNavigator().setPaused(paused);
+    }
+
+    public static boolean isNavigating(QuestNpcProfile profile) {
+        if (profile.citizensNpcId() == null) return false;
+        NPC npc = CitizensAPI.getNPCRegistry().getById(profile.citizensNpcId());
+        return npc != null && npc.isSpawned() && npc.getNavigator().isNavigating();
+    }
+
+    public static void moveTo(QuestNpcProfile profile, Location destination, double speed) {
+        if (profile.citizensNpcId() == null) return;
+        NPC npc = CitizensAPI.getNPCRegistry().getById(profile.citizensNpcId());
+        if (npc == null || !npc.isSpawned()) return;
+        npc.getNavigator().getDefaultParameters().speedModifier((float) speed);
+        npc.getNavigator().setTarget(destination);
+    }
+
     private static void configureBehaviour(NPC npc, QuestNpcProfile profile) {
         Waypoints waypoints = npc.getOrAddTrait(Waypoints.class);
-        if (profile.behaviour() == QuestNpcProfile.Behaviour.WANDER) {
-            waypoints.setWaypointProvider("wander");
-            WanderWaypointProvider wander = (WanderWaypointProvider) waypoints.getCurrentProvider();
-            wander.setXYRange(profile.wanderRadius(), profile.wanderVerticalRadius());
-            wander.setDelay(profile.wanderDelaySeconds() * 20);
-        } else {
-            waypoints.setWaypointProvider(null);
-            npc.getNavigator().cancelNavigation();
-        }
+        waypoints.setWaypointProvider(null);
+        npc.getNavigator().cancelNavigation();
         LookClose look = npc.getOrAddTrait(LookClose.class);
         if (look.isEnabled() != profile.lookAtPlayers()) look.toggle();
         look.setRange(Math.max(4, profile.wanderRadius() * 2D));

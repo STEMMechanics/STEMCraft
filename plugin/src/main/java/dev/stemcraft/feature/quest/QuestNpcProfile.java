@@ -40,6 +40,7 @@ public final class QuestNpcProfile {
     private UUID spawnedEntity;
     private final List<String> biomes = new ArrayList<>();
     private final List<String> idleDialogue = new ArrayList<>();
+    private final List<String> leavingDialogue = new ArrayList<>();
 
     public QuestNpcProfile(String id, String name) { this.id = id; this.name = name; }
     public String id() { return id; }
@@ -105,4 +106,5 @@ public final class QuestNpcProfile {
     public void spawnedEntity(UUID value) { spawnedEntity = value; }
     public List<String> biomes() { return biomes; }
     public List<String> idleDialogue() { return idleDialogue; }
+    public List<String> leavingDialogue() { return leavingDialogue; }
 }

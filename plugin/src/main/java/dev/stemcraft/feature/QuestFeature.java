@@ -127,6 +127,12 @@ public final class QuestFeature extends BaseFeature {
     private final Map<String, QuestNpcProfile> npcProfiles = new LinkedHashMap<>();
     private final Map<String, Location> npcWanderOrigins = new HashMap<>();
     private final Map<String, Long> npcNextMovement = new HashMap<>();
+    private final Map<String, UUID> npcAttentionPlayers = new HashMap<>();
+    private final Map<String, Long> npcAttentionUntil = new HashMap<>();
+    private final Map<String, Long> npcInteractionUntil = new HashMap<>();
+    private final Map<String, Long> npcDepartureDue = new HashMap<>();
+    private final Map<String, Long> npcLeavingSince = new HashMap<>();
+    private final Map<UUID, String> npcMenuEngagements = new HashMap<>();
     private final Map<UUID, UUID> questMenuSessions = new HashMap<>();
     private final Map<UUID, String> trackedQuests = new HashMap<>();
     private final Set<UUID> autoTrackPlayers = new HashSet<>();
@@ -135,6 +141,9 @@ public final class QuestFeature extends BaseFeature {
     private final Map<String, Long> editorTokens = new ConcurrentHashMap<>();
     private List<String> npcNames = List.of("Rokar", "Tailor", "Mira", "Bram", "Elowen", "Tobin", "Nessa", "Orin");
     private List<Pattern> trackingWorlds = List.of(PatternUtil.globToRegex("survival*"));
+    private int npcLeavingRandomDelayTicks = 500;
+    private int npcLeavingPlayerDistance = 150;
+    private int npcLeavingTimeoutTicks = 3600;
     private File questFile;
     private File npcFile;
     private NamespacedKey questIdKey;
@@ -160,12 +169,13 @@ public final class QuestFeature extends BaseFeature {
         questRevisionKey = new NamespacedKey(STEMCraft.getPlugin(), "quest-revision");
         questMenuSessionKey = new NamespacedKey(STEMCraft.getPlugin(), "quest-menu-session");
         npcProfileKey = new NamespacedKey(STEMCraft.getPlugin(), "quest-npc-profile");
+        boolean initializeDefinitions = !questFile.exists();
         reloadSettings();
         ensureStorage();
         reloadDefinitions();
         npcProfiles.clear();
         npcProfiles.putAll(QuestNpcProfileStore.load(npcFile));
-        if (!questFile.exists()) importExamples();
+        if (initializeDefinitions) initializeBundledDefinitions();
         loadPlayerState();
         registerEvents();
         registerCommands();
@@ -189,6 +199,7 @@ public final class QuestFeature extends BaseFeature {
                 trackedQuests.remove(uuid); autoTrackPlayers.remove(uuid); trackingPreferencePlayers.remove(uuid);
                 BossBar bar = trackingBossBars.remove(uuid); if (bar != null) Bukkit.getOnlinePlayers().forEach(bar::removeViewer);
                 questMenuSessions.remove(uuid);
+                npcMenuEngagements.remove(uuid);
             }
         });
     }
@@ -212,6 +223,9 @@ public final class QuestFeature extends BaseFeature {
             .map(value -> PatternUtil.globToRegex(value.toLowerCase(Locale.ROOT))).toList();
         trackingWorlds = configuredWorlds.isEmpty()
             ? List.of(PatternUtil.globToRegex("survival*")) : configuredWorlds;
+        npcLeavingRandomDelayTicks = Math.max(0, getConfigSection().getInt("npc-leaving.random-delay-ticks", 500));
+        npcLeavingPlayerDistance = Math.max(16, getConfigSection().getInt("npc-leaving.player-distance", 150));
+        npcLeavingTimeoutTicks = Math.max(20, getConfigSection().getInt("npc-leaving.timeout-ticks", 3600));
     }
 
     @Override
@@ -244,8 +258,7 @@ public final class QuestFeature extends BaseFeature {
             if (existing != null && existing.isValid()) {
                 if (trackingPlayer == null && profile.lifetimeSeconds() > 0 && profile.spawnedAt() > 0
                     && System.currentTimeMillis() - profile.spawnedAt() >= profile.lifetimeSeconds() * 1000L) {
-                    recordNpcDeath(profile, existing.getWorld()); despawnProfileEntity(profile, existing, false); profile.spawnedEntity(null); profile.spawnedAt(0);
-                    saveNpcProfiles(); registerMarkers(); continue;
+                    queueNpcDeparture(profile, System.currentTimeMillis());
                 }
                 boolean nearby = existing.getWorld().getPlayers().stream().anyMatch(player ->
                     player.getLocation().distanceSquared(existing.getLocation()) <= (double) profile.despawnRadius() * profile.despawnRadius());
@@ -400,6 +413,11 @@ public final class QuestFeature extends BaseFeature {
         else entity.remove();
         npcWanderOrigins.remove(profile.id());
         npcNextMovement.remove(profile.id());
+        npcAttentionPlayers.remove(profile.id());
+        npcAttentionUntil.remove(profile.id());
+        npcInteractionUntil.remove(profile.id());
+        npcDepartureDue.remove(profile.id());
+        npcLeavingSince.remove(profile.id());
     }
 
     private boolean profileRelevant(String profileId, Player player) {
@@ -418,14 +436,55 @@ public final class QuestFeature extends BaseFeature {
     private void tickNativeNpcBehaviour() {
         long now = System.currentTimeMillis();
         for (QuestNpcProfile profile : npcProfiles.values()) {
-            if (profile.npcType() == EntityType.PLAYER && citizensAvailable()) continue;
-            Entity entity = profile.spawnedEntity() == null ? null : Bukkit.getEntity(profile.spawnedEntity());
-            if (!(entity instanceof Mob mob) || !mob.isValid()) continue;
+            Entity entity = reconcileProfileEntity(profile);
+            if (entity == null || !entity.isValid()) continue;
+            if (trackingPlayerForProfile(profile.id()) == null
+                && availabilityEnded(profile, entity.getWorld().getTime())
+                && !npcDepartureDue.containsKey(profile.id()) && !npcLeavingSince.containsKey(profile.id())) {
+                long delay = isNpcEngaged(profile.id()) ? 0L
+                    : ThreadLocalRandom.current().nextLong(npcLeavingRandomDelayTicks + 1L) * 50L;
+                npcDepartureDue.put(profile.id(), now + delay);
+            }
+            Long departureDue = npcDepartureDue.get(profile.id());
+            if (!npcLeavingSince.containsKey(profile.id()) && departureDue != null && departureDue <= now
+                && !isNpcEngaged(profile.id())) npcLeavingSince.put(profile.id(), now);
+            if (npcLeavingSince.containsKey(profile.id())) {
+                tickLeavingNpc(profile, entity, now);
+                continue;
+            }
+            Player attention = attentionPlayer(profile, entity, now);
+            if (profile.npcType() == EntityType.PLAYER && citizensAvailable()) {
+                CitizensQuestNpcSupport.setPaused(profile, attention != null);
+                if (attention != null || profile.behaviour() == QuestNpcProfile.Behaviour.STATIONARY) continue;
+                Location origin = npcWanderOrigins.computeIfAbsent(profile.id(), ignored -> entity.getLocation().clone());
+                if (!origin.getWorld().equals(entity.getWorld())) {
+                    origin = entity.getLocation().clone();
+                    npcWanderOrigins.put(profile.id(), origin);
+                }
+                if (entity.getLocation().distanceSquared(origin) > (double) profile.wanderRadius() * profile.wanderRadius()) {
+                    CitizensQuestNpcSupport.moveTo(profile, origin, 1D);
+                    continue;
+                }
+                if (CitizensQuestNpcSupport.isNavigating(profile)
+                    || npcNextMovement.getOrDefault(profile.id(), 0L) > now) continue;
+                Location destination = findWanderDestination(origin, profile);
+                if (destination != null) CitizensQuestNpcSupport.moveTo(profile, destination, 0.8D);
+                npcNextMovement.put(profile.id(), now + profile.wanderDelaySeconds() * 1000L);
+                continue;
+            }
+            if (!(entity instanceof Mob mob)) continue;
             if (profile.behaviour() == QuestNpcProfile.Behaviour.STATIONARY) {
                 mob.setAI(false);
+                if (attention != null) mob.lookAt(attention);
                 continue;
             }
             mob.setAI(true);
+            if (attention != null) {
+                mob.getPathfinder().stopPathfinding();
+                mob.lookAt(attention);
+                npcNextMovement.put(profile.id(), now + 2000L);
+                continue;
+            }
             Location origin = npcWanderOrigins.computeIfAbsent(profile.id(), ignored -> mob.getLocation().clone());
             if (!origin.getWorld().equals(mob.getWorld())) {
                 origin = mob.getLocation().clone();
@@ -448,6 +507,114 @@ public final class QuestFeature extends BaseFeature {
         }
     }
 
+    private boolean availabilityEnded(QuestNpcProfile profile, long worldTime) {
+        if (profile.timeUntil() == 24000) return false;
+        long tick = Math.floorMod(worldTime, 24000);
+        return profile.timeFrom() <= profile.timeUntil()
+            ? tick >= profile.timeUntil()
+            : tick >= profile.timeUntil() && tick < profile.timeFrom();
+    }
+
+    private boolean isNpcEngaged(String profileId) {
+        return npcMenuEngagements.containsValue(profileId)
+            || npcInteractionUntil.getOrDefault(profileId, 0L) > System.currentTimeMillis();
+    }
+
+    private void queueNpcDeparture(QuestNpcProfile profile, long now) {
+        if (npcLeavingSince.containsKey(profile.id()) || npcDepartureDue.containsKey(profile.id())) return;
+        long delay = isNpcEngaged(profile.id()) ? 0L
+            : ThreadLocalRandom.current().nextLong(npcLeavingRandomDelayTicks + 1L) * 50L;
+        npcDepartureDue.put(profile.id(), now + delay);
+    }
+
+    private void tickLeavingNpc(QuestNpcProfile profile, Entity entity, long now) {
+        long timeoutMillis = npcLeavingTimeoutTicks * 50L;
+        boolean farEnough = entity.getWorld().getPlayers().stream().allMatch(player ->
+            player.getLocation().distanceSquared(entity.getLocation()) >= (double) npcLeavingPlayerDistance * npcLeavingPlayerDistance);
+        if (farEnough || now - npcLeavingSince.get(profile.id()) >= timeoutMillis) {
+            if (profile.lifetimeSeconds() > 0) recordNpcDeath(profile, entity.getWorld());
+            despawnProfileEntity(profile, entity, false);
+            profile.spawnedEntity(null);
+            profile.spawnedAt(0);
+            saveNpcProfiles();
+            registerMarkers();
+            return;
+        }
+        Location destination = leavingDestination(entity);
+        if (destination == null) return;
+        if (profile.npcType() == EntityType.PLAYER && citizensAvailable()) {
+            CitizensQuestNpcSupport.setPaused(profile, false);
+            CitizensQuestNpcSupport.moveTo(profile, destination, 1D);
+        } else if (entity instanceof Mob mob) {
+            mob.setAI(true);
+            mob.getPathfinder().moveTo(destination, 1D);
+        }
+    }
+
+    private @Nullable Location leavingDestination(Entity entity) {
+        List<Player> players = entity.getWorld().getPlayers();
+        if (players.isEmpty()) return null;
+        double awayX = 0D, awayZ = 0D;
+        for (Player player : players) {
+            double dx = entity.getLocation().getX() - player.getLocation().getX();
+            double dz = entity.getLocation().getZ() - player.getLocation().getZ();
+            double length = Math.max(0.001D, Math.hypot(dx, dz));
+            awayX += dx / length;
+            awayZ += dz / length;
+        }
+        double length = Math.hypot(awayX, awayZ);
+        if (length < 0.001D) {
+            double angle = ThreadLocalRandom.current().nextDouble(Math.PI * 2D);
+            awayX = Math.cos(angle); awayZ = Math.sin(angle); length = 1D;
+        }
+        Location current = entity.getLocation();
+        int x = (int) Math.floor(current.getX() + awayX / length * 24D);
+        int z = (int) Math.floor(current.getZ() + awayZ / length * 24D);
+        Integer y = findSafeNpcY(entity.getWorld(), x, z, current.getBlockY());
+        return y == null ? null : new Location(entity.getWorld(), x + .5D, y, z + .5D);
+    }
+
+    private @Nullable Entity reconcileProfileEntity(QuestNpcProfile profile) {
+        if (profile.npcType() == EntityType.PLAYER && citizensAvailable())
+            return CitizensQuestNpcSupport.spawnedEntity(profile);
+        return profile.spawnedEntity() == null ? null : Bukkit.getEntity(profile.spawnedEntity());
+    }
+
+    private @Nullable Player attentionPlayer(QuestNpcProfile profile, Entity entity, long now) {
+        if (!profile.lookAtPlayers()) return null;
+        Player nearby = entity.getWorld().getPlayers().stream()
+            .filter(player -> player.getLocation().distanceSquared(entity.getLocation()) <= 36D)
+            .min(java.util.Comparator.comparingDouble(player -> player.getLocation().distanceSquared(entity.getLocation())))
+            .orElse(null);
+        if (nearby != null) {
+            npcAttentionPlayers.put(profile.id(), nearby.getUniqueId());
+            npcAttentionUntil.put(profile.id(), now + 2000L);
+            return nearby;
+        }
+        if (npcAttentionUntil.getOrDefault(profile.id(), 0L) <= now) {
+            npcAttentionPlayers.remove(profile.id());
+            npcAttentionUntil.remove(profile.id());
+            return null;
+        }
+        Player player = Bukkit.getPlayer(npcAttentionPlayers.get(profile.id()));
+        return player != null && player.getWorld().equals(entity.getWorld()) ? player : null;
+    }
+
+    private void focusNpcOnPlayer(Entity entity, Player player) {
+        String profileId = entity.getPersistentDataContainer().get(npcProfileKey, PersistentDataType.STRING);
+        QuestNpcProfile profile = profileId == null ? null : npcProfiles.get(profileId);
+        if (profile == null || !profile.lookAtPlayers()) return;
+        npcAttentionPlayers.put(profileId, player.getUniqueId());
+        npcAttentionUntil.put(profileId, System.currentTimeMillis() + 8000L);
+        npcInteractionUntil.put(profileId, System.currentTimeMillis() + 8000L);
+        if (profile.npcType() == EntityType.PLAYER && citizensAvailable()) {
+            CitizensQuestNpcSupport.setPaused(profile, true);
+        } else if (entity instanceof Mob mob) {
+            mob.getPathfinder().stopPathfinding();
+            mob.lookAt(player);
+        }
+    }
+
     private @Nullable Location findWanderDestination(Location origin, QuestNpcProfile profile) {
         World world = origin.getWorld();
         for (int attempt = 0; attempt < 12; attempt++) {
@@ -458,6 +625,7 @@ public final class QuestFeature extends BaseFeature {
             Integer y = findSafeNpcY(world, x, z, origin.getBlockY());
             if (y == null) continue;
             if (Math.abs(y - origin.getBlockY()) > profile.wanderVerticalRadius()) continue;
+            if (!profileAllowsBiome(profile, world, x, y, z)) continue;
             return new Location(world, x + .5D, y, z + .5D);
         }
         return null;
@@ -706,6 +874,7 @@ public final class QuestFeature extends BaseFeature {
         api.events().register(PlayerQuitEvent.class, event -> {
             BossBar bar = trackingBossBars.remove(event.getPlayer().getUniqueId());
             if (bar != null) event.getPlayer().hideBossBar(bar);
+            npcMenuEngagements.remove(event.getPlayer().getUniqueId());
         }, EventPriority.MONITOR, true);
         api.events().register(EntityPickupItemEvent.class, event -> {
             if (!(event.getEntity() instanceof Player player)) return;
@@ -761,12 +930,6 @@ public final class QuestFeature extends BaseFeature {
             .tabCompletion("admin", "player")
             .tabCompletion("admin", "reload")
             .tabCompletion("admin", "editor")
-            .tabCompletion("admin", "test", "start", "{quest}")
-            .tabCompletion("admin", "test", "advance", "{quest}")
-            .tabCompletion("admin", "test", "complete", "{quest}")
-            .tabCompletion("admin", "test", "reset", "{quest}")
-            .tabCompletion("admin", "test", "examples")
-            .tabCompletion("admin", "test", "campaign")
             .executor((unused, command, context) -> execute(context))
             .register(STEMCraft.getPlugin());
     }
@@ -868,8 +1031,6 @@ public final class QuestFeature extends BaseFeature {
 
     private Component adminActions(QuestDefinition quest) {
         return button("[Edit]", "/quest admin edit " + quest.id(), "Edit this quest")
-            .append(Component.space())
-            .append(button("[Test]", "/quest admin test start " + quest.id(), "Start this quest for yourself"))
             .append(Component.space())
             .append(button("[Delete]", "/quest admin delete " + quest.id() + " confirm", "Delete this quest"));
     }
@@ -1304,7 +1465,6 @@ public final class QuestFeature extends BaseFeature {
             case "npc" -> adminNpc(ctx);
             case "npc-spawned" -> showSpawnedNpcs(ctx);
             case "player" -> showPlayerQuestState(ctx);
-            case "test" -> testCommand(ctx);
             case "editor" -> openWebEditor(ctx);
             case "reload" -> { reloadDefinitions(); registerMarkers(); ctx.success("Quest definitions reloaded."); }
             default -> showAdminMenu(ctx);
@@ -1331,7 +1491,6 @@ public final class QuestFeature extends BaseFeature {
             .append(Component.space()).append(button("[NPC profiles]", "/quest admin npcs", "Manage conditional NPCs"))
             .append(Component.space()).append(button("[Spawned NPCs]", "/quest admin npc-spawned", "Inspect spawned quest NPCs"))
             .append(Component.space()).append(button("[Web editor]", "/quest admin editor", "Create a private editor link"))
-            .append(Component.space()).append(button("[↻ Examples]", "/quest admin test examples", "Restore missing examples"))
             .append(Component.space()).append(button("[↻ Reload]", "/quest admin reload", "Reload quests.yml")));
     }
 
@@ -1457,7 +1616,6 @@ public final class QuestFeature extends BaseFeature {
             }
         }
         ctx.getSender().sendMessage(button("[← All quests]", "/quest admin", "Back to quest list")
-            .append(Component.space()).append(button("[Test start]", "/quest admin test start " + quest.id(), "Start for yourself"))
             .append(Component.space()).append(button("[Delete]", "/quest admin delete " + quest.id() + " confirm", "Delete permanently")));
     }
 
@@ -1921,51 +2079,21 @@ public final class QuestFeature extends BaseFeature {
         ctx.success("Deleted quest {quest}.", "quest", quest.id());
     }
 
-    private void testCommand(CommandContext ctx) {
-        if (!ctx.hasPermission(PERMISSION_ADMIN) || !ctx.isPlayer()) { ctx.error("COMMAND_NO_PERMISSION"); return; }
-        String action = ctx.getArgLower(2);
-        if ("examples".equals(action)) {
-            int added = importExamples();
-            registerMarkers();
-            ctx.success("Restored {count} missing example quest(s).", "count", String.valueOf(added));
-            return;
-        }
-        if ("campaign".equals(action)) {
-            int added = importCampaign();
-            registerMarkers();
-            ctx.success("Restored {count} missing survival campaign quest(s).", "count", String.valueOf(added));
-            return;
-        }
-        QuestDefinition quest = quest(ctx.getArg(3), ctx);
-        if (quest == null || action == null) return;
-        switch (action) {
-            case "start" -> startQuest(ctx.asPlayer(), quest, true);
-            case "advance" -> {
-                QuestProgress progress = progress(ctx.asPlayer(), quest.id());
-                if (progress == null) { ctx.error("Quest is not active."); return; }
-                advance(ctx.asPlayer(), quest, progress);
-            }
-            case "complete" -> {
-                QuestProgress progress = progress(ctx.asPlayer(), quest.id());
-                if (progress == null) { ctx.error("Quest is not active."); return; }
-                progress.state(QuestProgress.State.READY); saveProgress(progress); updateQuestBook(ctx.asPlayer(), quest, progress);
-                ctx.success("Quest forced ready for turn-in.");
-            }
-            case "reset" -> {
-                cancelQuest(ctx.asPlayer().getUniqueId(), quest.id());
-                completed.computeIfAbsent(ctx.asPlayer().getUniqueId(), ignored -> new java.util.HashSet<>()).remove(quest.id());
-                api.database().update("DELETE FROM quest_completed WHERE player_uuid=? AND quest_id=?", statement -> {
-                    statement.setString(1, ctx.asPlayer().getUniqueId().toString()); statement.setString(2, quest.id());
-                });
-                removeQuestBooks(ctx.asPlayer(), quest.id()); refreshMarkers(ctx.asPlayer()); ctx.success("Quest reset.");
-            }
-            default -> ctx.error("Usage: /quest admin test <start|advance|complete|reset> <quest> or /quest admin test examples");
-        }
-    }
-
     private void onNpcClick(PlayerInteractEntityEvent event) {
         if (!isPrimaryNpcInteraction(event.getHand())) return;
         Player player = event.getPlayer();
+        String clickedProfileId = event.getRightClicked().getPersistentDataContainer().get(npcProfileKey, PersistentDataType.STRING);
+        if (clickedProfileId != null && npcLeavingSince.containsKey(clickedProfileId)) {
+            event.setCancelled(true);
+            QuestNpcProfile profile = npcProfiles.get(clickedProfileId);
+            String message = profile == null || profile.leavingDialogue().isEmpty()
+                ? "I'm heading home for now. I will see you next time."
+                : profile.leavingDialogue().get(ThreadLocalRandom.current().nextInt(profile.leavingDialogue().size()));
+            player.sendMessage(Component.text((profile == null ? npcName(event.getRightClicked(), "Quest Giver") : profile.name()) + ": ", NamedTextColor.GOLD)
+                .append(Component.text(message, NamedTextColor.WHITE)));
+            return;
+        }
+        focusNpcOnPlayer(event.getRightClicked(), player);
         for (QuestProgress progress : activeFor(player).values()) {
             QuestDefinition quest = quests.get(progress.questId());
             QuestObjective objective = currentObjective(quest, progress);
@@ -2051,7 +2179,8 @@ public final class QuestFeature extends BaseFeature {
 
     private void openQuestNpcInventory(Player player, Entity npc, List<QuestDefinition> available) {
         int size = Math.min(54, Math.max(9, ((available.size() + 8) / 9) * 9));
-        QuestNpcInventoryHolder holder = new QuestNpcInventoryHolder(player.getUniqueId(), UUID.randomUUID(), npc.getLocation().clone());
+        String profileId = npc.getPersistentDataContainer().get(npcProfileKey, PersistentDataType.STRING);
+        QuestNpcInventoryHolder holder = new QuestNpcInventoryHolder(player.getUniqueId(), UUID.randomUUID(), profileId, npc.getLocation().clone());
         Inventory inventory = Bukkit.createInventory(holder, size, Component.text(npcName(npc, "Quest Giver") + "'s Quests"));
         holder.inventory(inventory);
         for (int slot = 0; slot < Math.min(size, available.size()); slot++) {
@@ -2065,6 +2194,7 @@ public final class QuestFeature extends BaseFeature {
             inventory.setItem(slot, book);
         }
         questMenuSessions.put(player.getUniqueId(), holder.sessionId());
+        if (profileId != null) npcMenuEngagements.put(player.getUniqueId(), profileId);
         player.openInventory(inventory);
     }
 
@@ -2094,6 +2224,7 @@ public final class QuestFeature extends BaseFeature {
         api.tasks().nextTick(() -> {
             acceptTakenQuestOffers(player, holder.sessionId());
             questMenuSessions.remove(player.getUniqueId(), holder.sessionId());
+            npcMenuEngagements.remove(player.getUniqueId(), holder.npcProfileId());
             validateInventory(player.getInventory());
         });
     }
@@ -2143,17 +2274,20 @@ public final class QuestFeature extends BaseFeature {
     private static final class QuestNpcInventoryHolder implements InventoryHolder {
         private final UUID playerId;
         private final UUID sessionId;
+        private final String npcProfileId;
         private final Location dropLocation;
         private Inventory inventory;
 
-        private QuestNpcInventoryHolder(UUID playerId, UUID sessionId, Location dropLocation) {
+        private QuestNpcInventoryHolder(UUID playerId, UUID sessionId, String npcProfileId, Location dropLocation) {
             this.playerId = playerId;
             this.sessionId = sessionId;
+            this.npcProfileId = npcProfileId;
             this.dropLocation = dropLocation;
         }
 
         private UUID playerId() { return playerId; }
         private UUID sessionId() { return sessionId; }
+        private String npcProfileId() { return npcProfileId; }
         private Location dropLocation() { return dropLocation; }
         private void inventory(Inventory value) { inventory = value; }
         @Override public Inventory getInventory() { return inventory; }
@@ -2745,46 +2879,31 @@ public final class QuestFeature extends BaseFeature {
         return Component.text(marker.equals(resolved) ? fallback : resolved);
     }
 
-    private int importExamples() {
-        try (InputStream stream = STEMCraft.getPlugin().getResource(EXAMPLE_RESOURCE)) {
-            if (stream == null) {
-                api.messages().error("Bundled quest examples are missing.");
-                return 0;
-            }
-            Map<String, QuestDefinition> examples = QuestDefinitionStore.load(
-                new InputStreamReader(stream, StandardCharsets.UTF_8));
-            int before = quests.size();
-            examples.forEach(quests::putIfAbsent);
-            int added = quests.size() - before;
-            if (added > 0) saveDefinitions();
-            try (InputStream npcStream = STEMCraft.getPlugin().getResource(NPC_EXAMPLE_RESOURCE)) {
-                if (npcStream != null) {
-                    Map<String, QuestNpcProfile> examplesNpcs = QuestNpcProfileStore.load(new InputStreamReader(npcStream, StandardCharsets.UTF_8));
-                    int npcBefore = npcProfiles.size();
-                    examplesNpcs.forEach(npcProfiles::putIfAbsent);
-                    if (npcProfiles.size() > npcBefore) saveNpcProfiles();
-                }
-            }
-            return added;
+    private void initializeBundledDefinitions() {
+        try {
+            loadBundledDefinitions(EXAMPLE_RESOURCE);
+            loadBundledNpcProfiles(NPC_EXAMPLE_RESOURCE);
+            loadBundledDefinitions(CAMPAIGN_RESOURCE);
+            loadBundledNpcProfiles(CAMPAIGN_RESOURCE);
+            saveDefinitions();
+            saveNpcProfiles();
         } catch (IOException ex) {
-            api.messages().error("Could not load bundled quest examples: {error}", "error", ex.getMessage());
-            return 0;
+            api.messages().error("Could not initialize bundled quests: {error}", "error", ex.getMessage());
         }
     }
 
-    private int importCampaign() {
-        try (InputStream stream = STEMCraft.getPlugin().getResource(CAMPAIGN_RESOURCE)) {
-            if (stream == null) return 0;
-            byte[] data = stream.readAllBytes();
-            int before = quests.size();
-            QuestDefinitionStore.load(new InputStreamReader(new java.io.ByteArrayInputStream(data), StandardCharsets.UTF_8))
-                .forEach(quests::putIfAbsent);
-            QuestNpcProfileStore.load(new InputStreamReader(new java.io.ByteArrayInputStream(data), StandardCharsets.UTF_8))
-                .forEach(npcProfiles::putIfAbsent);
-            int added = quests.size() - before;
-            if (added > 0) { saveDefinitions(); saveNpcProfiles(); }
-            return added;
-        } catch (IOException ex) { api.messages().error("Could not import survival campaign."); return 0; }
+    private void loadBundledDefinitions(String resource) throws IOException {
+        try (InputStream stream = STEMCraft.getPlugin().getResource(resource)) {
+            if (stream == null) throw new IOException("Missing resource " + resource);
+            QuestDefinitionStore.load(new InputStreamReader(stream, StandardCharsets.UTF_8)).forEach(quests::putIfAbsent);
+        }
+    }
+
+    private void loadBundledNpcProfiles(String resource) throws IOException {
+        try (InputStream stream = STEMCraft.getPlugin().getResource(resource)) {
+            if (stream == null) throw new IOException("Missing resource " + resource);
+            QuestNpcProfileStore.load(new InputStreamReader(stream, StandardCharsets.UTF_8)).forEach(npcProfiles::putIfAbsent);
+        }
     }
 
     private ItemStack createBook(Player owner, QuestDefinition quest, QuestProgress progress, int revision) {

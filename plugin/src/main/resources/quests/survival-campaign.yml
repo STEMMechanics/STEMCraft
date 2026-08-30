@@ -738,6 +738,7 @@ npcs:
       biomes: [DESERT]
     dialogue:
       idle: ["I cannot wait here forever.", "The desert has everything except what I need.", "Fortune favours a quick traveller."]
+      leaving: ["The sand has run out, and so has my time. Farewell, traveller."]
   common-fisher:
     name: Marlow
     npc-type: PLAYER
@@ -758,13 +759,12 @@ npcs:
       biomes: [RIVER, BEACH, STONY_SHORE]
     dialogue:
       idle: ["There is always work by the water.", "A patient fisher never wastes a good catch.", "String makes fine bait when the hooks run bare."]
+      leaving: ["The water can wait until tomorrow. I'm heading home."]
   common-orchard-keeper:
     name: Pippin
     skin:
       url: "https://www.minecraftskins.com/uploads/skins/2026/08/05/--orchard---remake-v2-24251139.png?v971"
     npc-type: PLAYER
-    behaviour:
-      type: STATIONARY
     despawn-radius: 180
     spawn:
       world: survival
@@ -773,11 +773,12 @@ npcs:
       uniqueness-radius: 700
       minimum-level: 0
       time-from: 0
-      time-until: 24000
+      time-until: 12000
       daily-chance: 1.0
       biomes: [FOREST, FLOWER_FOREST, BIRCH_FOREST, OLD_GROWTH_BIRCH_FOREST, DARK_FOREST]
     dialogue:
       idle: ["The forest gives plenty if we gather carefully.", "I am always looking for sound apples.", "Leave enough on the trees for tomorrow."]
+      leaving: ["The light is fading, and the orchard can wait until morning. I'll see you tomorrow."]
 
   expansion-kael:
     name: "Kael"
