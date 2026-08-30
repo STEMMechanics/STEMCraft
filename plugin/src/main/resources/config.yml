@@ -36,6 +36,12 @@ worlds:
   world:
     display-name: "World"
 
+coordinates:
+  defaults:
+    # Initial state for players who have not used /coordbar or /coord yet.
+    boss-bar: false
+    action-bar: false
+
 custom-commands:
   survival:
     permission: stemcraft.command.survival
