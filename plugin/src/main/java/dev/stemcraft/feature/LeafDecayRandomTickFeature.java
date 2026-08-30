@@ -154,16 +154,23 @@ public final class LeafDecayRandomTickFeature extends BaseFeature {
         tickCounter++;
         if (tickCounter % 20L == 0L) processPendingReplants();
 
-        for (World world : Bukkit.getWorlds()) {
+        if (decayCandidates.isEmpty()) return;
+        for (UUID worldId : new ArrayList<>(decayCandidates.keySet())) {
+            World world = Bukkit.getWorld(worldId);
+            if (world == null) {
+                decayCandidates.remove(worldId);
+                allowedDecayTicks.remove(worldId);
+                continue;
+            }
             String configured = api.worlds().getSetting(world, LeafDecayTickSpeedSetting.KEY);
-            if (!isOverrideActive(world)) {
-                decayCandidates.remove(world.getUID());
-                allowedDecayTicks.remove(world.getUID());
+            if (!isOverrideActive(world, configured)) {
+                decayCandidates.remove(worldId);
+                allowedDecayTicks.remove(worldId);
                 continue;
             }
 
             int tickSpeed = configured == null || configured.equals("unset") ? defaultTickSpeed : Integer.parseInt(configured);
-            Map<Long, Long> candidates = decayCandidates.get(world.getUID());
+            Map<Long, Long> candidates = decayCandidates.get(worldId);
             if (candidates == null || candidates.isEmpty()) {
                 continue;
             }
@@ -171,8 +178,8 @@ public final class LeafDecayRandomTickFeature extends BaseFeature {
             if (tickCounter % 20L == 0L) {
                 purgeExpiredCandidates(world, candidates);
                 if (candidates.isEmpty()) {
-                    decayCandidates.remove(world.getUID());
-                    allowedDecayTicks.remove(world.getUID());
+                    decayCandidates.remove(worldId);
+                    allowedDecayTicks.remove(worldId);
                     continue;
                 }
             }
@@ -187,11 +194,11 @@ public final class LeafDecayRandomTickFeature extends BaseFeature {
                     continue;
                 }
 
-                markAllowedDecay(world.getUID(), key);
+                markAllowedDecay(worldId, key);
                 try {
                     block.randomTick();
                 } finally {
-                    unmarkAllowedDecay(world.getUID(), key);
+                    unmarkAllowedDecay(worldId, key);
                 }
 
                 if (!isTrackedLeaf(block)) {
@@ -200,8 +207,8 @@ public final class LeafDecayRandomTickFeature extends BaseFeature {
             }
 
             if (candidates.isEmpty()) {
-                decayCandidates.remove(world.getUID());
-                allowedDecayTicks.remove(world.getUID());
+                decayCandidates.remove(worldId);
+                allowedDecayTicks.remove(worldId);
             }
         }
     }
@@ -423,6 +430,10 @@ public final class LeafDecayRandomTickFeature extends BaseFeature {
 
     private boolean isOverrideActive(World world) {
         String configured = api.worlds().getSetting(world, LeafDecayTickSpeedSetting.KEY);
+        return isOverrideActive(world, configured);
+    }
+
+    private boolean isOverrideActive(World world, String configured) {
         return (configured != null && !configured.equals("unset") || defaultTickSpeed > 0)
             && !"deny".equals(api.worlds().getSetting(world, "leaf-decay"));
     }

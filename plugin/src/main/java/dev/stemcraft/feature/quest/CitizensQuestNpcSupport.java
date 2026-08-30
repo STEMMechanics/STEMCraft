@@ -10,6 +10,8 @@ import org.bukkit.persistence.PersistentDataType;
 import org.json.simple.JSONObject;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /** Optional Citizens bridge. This class is only loaded when Citizens is enabled. */
@@ -17,6 +19,8 @@ public final class CitizensQuestNpcSupport {
     private static final String SKIN_URL_METADATA = "stemcraft.quest.skin-url";
 
     private CitizensQuestNpcSupport() { }
+
+    public record ProximityNpc(int id, boolean spawned, Location location, Entity entity) { }
 
     public static boolean available() {
         if (!Bukkit.getPluginManager().isPluginEnabled("Citizens")) return false;
@@ -55,6 +59,29 @@ public final class CitizensQuestNpcSupport {
 
     public static boolean isCitizensNpc(Entity entity) {
         return invoke(registry(), "getNPC", entity) != null;
+    }
+
+    public static List<ProximityNpc> allNpcs() {
+        List<ProximityNpc> result = new ArrayList<>();
+        Object registry = registry();
+        if (!(registry instanceof Iterable<?> iterable)) return result;
+        for (Object npc : iterable) {
+            boolean spawned = (boolean) invoke(npc, "isSpawned");
+            Entity entity = spawned ? (Entity) invoke(npc, "getEntity") : null;
+            Location location = (Location) invoke(npc, "getStoredLocation");
+            result.add(new ProximityNpc((int) invoke(npc, "getId"), spawned, location, entity));
+        }
+        return result;
+    }
+
+    public static boolean spawnNpc(int id, Location location) {
+        Object npc = invoke(registry(), "getById", id);
+        return npc != null && ((boolean) invoke(npc, "isSpawned") || (boolean) invoke(npc, "spawn", location));
+    }
+
+    public static void despawnNpc(int id) {
+        Object npc = invoke(registry(), "getById", id);
+        if (npc != null && (boolean) invoke(npc, "isSpawned")) invoke(npc, "despawn");
     }
 
     public static Location storedLocation(QuestNpcProfile profile) {

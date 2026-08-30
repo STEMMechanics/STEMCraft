@@ -124,6 +124,7 @@ public final class QuestFeature extends BaseFeature {
     private final Map<UUID, Set<String>> completed = new HashMap<>();
     private final Map<UUID, Map<String, Integer>> revisions = new HashMap<>();
     private final Map<UUID, Map<String, Long>> attemptStarted = new HashMap<>();
+    private final Map<UUID, Map<String, Long>> timedQuestRemaining = new HashMap<>();
     private final Map<String, QuestNpcProfile> npcProfiles = new LinkedHashMap<>();
     private final Map<String, Location> npcWanderOrigins = new HashMap<>();
     private final Map<String, Long> npcNextMovement = new HashMap<>();
@@ -195,7 +196,7 @@ public final class QuestFeature extends BaseFeature {
             }
             public void reset(@NotNull PlayerResetContext context) {
                 UUID uuid = context.playerUuid();
-                active.remove(uuid); completed.remove(uuid); revisions.remove(uuid); attemptStarted.remove(uuid);
+                active.remove(uuid); completed.remove(uuid); revisions.remove(uuid); attemptStarted.remove(uuid); timedQuestRemaining.remove(uuid);
                 trackedQuests.remove(uuid); autoTrackPlayers.remove(uuid); trackingPreferencePlayers.remove(uuid);
                 BossBar bar = trackingBossBars.remove(uuid); if (bar != null) Bukkit.getOnlinePlayers().forEach(bar::removeViewer);
                 questMenuSessions.remove(uuid);
@@ -240,6 +241,7 @@ public final class QuestFeature extends BaseFeature {
             if (player != null) player.hideBossBar(entry.getValue());
         }
         trackingBossBars.clear();
+        timedQuestRemaining.clear();
         questMenuSessions.clear();
         for (QuestDefinition quest : quests.values()) deleteMarkers(quest);
     }
@@ -874,6 +876,7 @@ public final class QuestFeature extends BaseFeature {
         api.events().register(PlayerQuitEvent.class, event -> {
             BossBar bar = trackingBossBars.remove(event.getPlayer().getUniqueId());
             if (bar != null) event.getPlayer().hideBossBar(bar);
+            timedQuestRemaining.remove(event.getPlayer().getUniqueId());
             npcMenuEngagements.remove(event.getPlayer().getUniqueId());
         }, EventPriority.MONITOR, true);
         api.events().register(EntityPickupItemEvent.class, event -> {
@@ -2230,26 +2233,27 @@ public final class QuestFeature extends BaseFeature {
     }
 
     private void acceptTakenQuestOffers(Player player, UUID sessionId) {
-        List<String> selected = new ArrayList<>();
+        Map<String,Integer> selected = new LinkedHashMap<>();
         PlayerInventory inventory = player.getInventory();
         for (int slot = 0; slot < inventory.getSize(); slot++) {
             ItemStack item = inventory.getItem(slot);
             if (!isQuestMenuOffer(item, sessionId)) continue;
             String questId = bookQuestId(item);
             inventory.setItem(slot, null);
-            if (questId != null && !selected.contains(questId)) selected.add(questId);
+            if (questId != null) selected.putIfAbsent(questId,slot);
         }
         ItemStack cursor = player.getItemOnCursor();
         if (isQuestMenuOffer(cursor, sessionId)) {
             String questId = bookQuestId(cursor);
             player.setItemOnCursor(null);
-            if (questId != null && !selected.contains(questId)) selected.add(questId);
+            if (questId != null) selected.putIfAbsent(questId,-1);
         }
 
         int accepted = 0;
-        for (String questId : selected) {
+        for (Map.Entry<String,Integer> selection : selected.entrySet()) {
+            String questId=selection.getKey();
             QuestDefinition quest = quests.get(questId);
-            if (quest == null || !startQuest(player, quest, false, false)) continue;
+            if (quest == null || !startQuest(player, quest, false, false,selection.getValue())) continue;
             player.sendMessage(Component.text("Quest " + renderQuestText(quest, quest.title()) + " accepted.", NamedTextColor.YELLOW));
             if (quest.timeLimitSeconds() > 0)
                 player.sendMessage(Component.text("Time limit: " + formatDuration(quest.timeLimitSeconds()) + ".", NamedTextColor.YELLOW));
@@ -2444,12 +2448,15 @@ public final class QuestFeature extends BaseFeature {
         QuestObjective objective = currentObjective(quest, progress);
         if (objective == null) return "Ready";
         String label = renderQuestText(quest, objective.label());
-        return switch (objective.type()) {
+        String text = switch (objective.type()) {
             case COLLECT, KILL -> formatTrackedObjective(label, progress.objectiveProgress(), objective.amount());
             case BIOME -> label + ": " + progress.objectiveProgress() + "/" + objective.amount() + " seconds";
             case ALTITUDE_ABOVE, ALTITUDE_BELOW -> label + " (Y " + player.getLocation().getBlockY() + ")";
             default -> label;
         };
+        long remaining=timedQuestSecondsRemaining(player.getUniqueId(),quest,System.currentTimeMillis());
+        if(remaining<0)return text;
+        return text.replaceFirst("(?i)\\s+within\\s+.+$", "")+" within "+formatCountdownDisplay(remaining);
     }
 
     static String formatTrackedObjective(String label, int progress, int amount) {
@@ -2590,6 +2597,10 @@ public final class QuestFeature extends BaseFeature {
     }
 
     private boolean startQuest(Player player, QuestDefinition quest, boolean force, boolean announce) {
+        return startQuest(player,quest,force,announce,-1);
+    }
+
+    private boolean startQuest(Player player, QuestDefinition quest, boolean force, boolean announce,int preferredSlot) {
         if (!force && !isAvailable(player, quest)) {
             if (announce) api.messages().error(player, "That quest is not available.");
             return false;
@@ -2601,7 +2612,11 @@ public final class QuestFeature extends BaseFeature {
         int revision = currentRevision(player.getUniqueId(), quest.id()) + 1;
         ItemStack book = createBook(player, quest, new QuestProgress(player.getUniqueId(), quest.id(), 0, 0,
             quest.objectives().isEmpty() ? QuestProgress.State.READY : QuestProgress.State.ACTIVE), revision);
-        Map<Integer, ItemStack> overflow = player.getInventory().addItem(book);
+        PlayerInventory inventory=player.getInventory();
+        Map<Integer,ItemStack> overflow;
+        if(preferredSlot>=0&&preferredSlot<inventory.getSize()&&inventory.getItem(preferredSlot)==null){
+            inventory.setItem(preferredSlot,book);overflow=Map.of();
+        }else overflow=inventory.addItem(book);
         if (!overflow.isEmpty()) {
             if (announce) api.messages().error(player, "Make room in your inventory for the quest book.");
             return false;
@@ -3110,6 +3125,8 @@ public final class QuestFeature extends BaseFeature {
         });
         Map<String, Long> timings = attemptStarted.get(player);
         if (timings != null) timings.remove(questId);
+        Map<String, Long> countdowns = timedQuestRemaining.get(player);
+        if (countdowns != null) countdowns.remove(questId);
         api.database().update("DELETE FROM quest_attempt_timing WHERE player_uuid=? AND quest_id=?", statement -> {
             statement.setString(1, player.toString()); statement.setString(2, questId);
         });
@@ -3130,10 +3147,56 @@ public final class QuestFeature extends BaseFeature {
             for (QuestProgress progress : activeFor(player).values()) {
                 QuestDefinition quest = quests.get(progress.questId());
                 long started = attemptStarted.getOrDefault(player.getUniqueId(), Map.of()).getOrDefault(progress.questId(), now);
-                if (quest != null && quest.timeLimitSeconds() > 0 && now - started >= quest.timeLimitSeconds() * 1000L) expired.add(quest);
+                if (quest != null && quest.timeLimitSeconds() > 0) {
+                    long remaining=Math.max(0L,(started+quest.timeLimitSeconds()*1000L-now+999L)/1000L);
+                    announceTimedQuestCountdown(player,quest,remaining);
+                    if(remaining==0)expired.add(quest);
+                }
             }
             for (QuestDefinition quest : expired) failQuest(player, quest, "Time ran out.");
         }
+    }
+
+    private void announceTimedQuestCountdown(Player player,QuestDefinition quest,long remaining){
+        Map<String,Long> values=timedQuestRemaining.computeIfAbsent(player.getUniqueId(),ignored->new HashMap<>());
+        Long previous=values.put(quest.id(),remaining);if(previous==null)return;
+        long threshold=countdownThresholdCrossed(quest.timeLimitSeconds(),previous,remaining);
+        if(threshold<=0)return;
+        NamedTextColor colour=threshold<=15?NamedTextColor.RED:NamedTextColor.YELLOW;
+        player.sendMessage(Component.text(quest.title()+": "+formatCountdownExact(threshold)+" remaining.",colour));
+    }
+
+    static long countdownThresholdCrossed(long total,long previous,long remaining){
+        long crossed=-1;
+        long highestQuarterHour=(total/900)*900;
+        for(long threshold=highestQuarterHour;threshold>=900;threshold-=900)
+            if(threshold<total&&previous>threshold&&remaining<=threshold)crossed=threshold;
+        for(long threshold:new long[]{600,300,120,60,45,30,15,10,5})
+            if(threshold<total&&previous>threshold&&remaining<=threshold)crossed=threshold;
+        return crossed;
+    }
+
+    private long timedQuestSecondsRemaining(UUID playerId,QuestDefinition quest,long now){
+        if(quest.timeLimitSeconds()<=0)return -1;
+        Long started=attemptStarted.getOrDefault(playerId,Map.of()).get(quest.id());
+        return started==null?-1:Math.max(0L,(started+quest.timeLimitSeconds()*1000L-now+999L)/1000L);
+    }
+
+    static String formatCountdownDisplay(long remaining){
+        if(remaining>60)return ((remaining+59)/60)+" minutes";
+        if(remaining==60)return "1 minute";
+        if(remaining>45)return "1 minute";
+        if(remaining>30)return "45 seconds";
+        if(remaining>15)return "30 seconds";
+        if(remaining>10)return "15 seconds";
+        if(remaining>5)return "10 seconds";
+        if(remaining>0)return "5 seconds";
+        return "0 seconds";
+    }
+
+    private static String formatCountdownExact(long seconds){
+        if(seconds>=60&&seconds%60==0)return (seconds/60)+" minute"+(seconds==60?"":"s");
+        return seconds+" seconds";
     }
 
     private void failQuest(Player player, QuestDefinition quest, String reason) {
@@ -3144,8 +3207,7 @@ public final class QuestFeature extends BaseFeature {
             statement.setString(1, player.getUniqueId().toString()); statement.setString(2, quest.id());
             statement.setLong(3, failedAt); statement.setString(4, reason);
         });
-        String retry = quest.restartCooldownSeconds() > 0 ? " You may try again in " + formatDuration(quest.restartCooldownSeconds()) + "." : " You may try again immediately.";
-        player.sendMessage(Component.text(quest.title() + " failed. " + reason + retry, NamedTextColor.RED));
+        player.sendMessage(Component.text(quest.title() + " failed. " + reason, NamedTextColor.RED));
         refreshMarkers(player);
     }
 

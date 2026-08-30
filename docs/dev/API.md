@@ -57,7 +57,7 @@ Registering the same plugin and ID replaces the previous callback. Disabled plug
 
 ### Coordinate bar
 
-`CoordinateBarService` lets extensions register ordered, player-specific `Component` providers for `/coordbar`. Providers return `null` when inactive. Registrations are keyed by owning plugin and ID, replace cleanly during reloads, and are discarded when their owning plugin is disabled.
+`CoordinateBarService` lets extensions register ordered, player-specific `Component` providers for `/coordbar`. Providers return `null` when inactive. Registrations are keyed by owning plugin and ID, replace cleanly during reloads, and are discarded when their owning plugin is disabled. Extensions can also register amendments appended directly to the built-in world, time, or direction section. Amendments must supply their own spacing and are rendered without an automatic separator.
 
 <!-- javadoc:all api/src/main/java/dev/stemcraft/api/service/coordinatebar/CoordinateBarService.java -->
 <!-- /javadoc -->

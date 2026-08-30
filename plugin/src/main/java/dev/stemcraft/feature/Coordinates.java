@@ -22,6 +22,7 @@ package dev.stemcraft.feature;
 
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.api.service.coordinatebar.CoordinateBarSection;
 import dev.stemcraft.api.util.DirectionUtil;
 import dev.stemcraft.api.util.WorldTimeUtil;
 import net.kyori.adventure.text.Component;
@@ -133,10 +134,11 @@ public class Coordinates extends BaseFeature {
                 String direction = DirectionUtil.getCompassDirection(player.getLocation().getYaw());
 
                 if (coordData.bossBar != null) {
-                    String base = api.messages().tokens().apply(
-                        api.locales().resolve(":world: " + world + " :mc_clock_00: " + time + " :mc_compass_00: " + direction)
-                    );
-                    Component title = Component.text(base);
+                    Component title = amendedSection(player, CoordinateBarSection.WORLD, ":world: " + world)
+                        .append(Component.space())
+                        .append(amendedSection(player, CoordinateBarSection.TIME, ":mc_clock_00: " + time))
+                        .append(Component.space())
+                        .append(amendedSection(player, CoordinateBarSection.DIRECTION, ":mc_compass_00: " + direction));
                     for (Component addition : api.coordinateBar().render(player)) {
                         title = title.append(Component.text("  ", NamedTextColor.DARK_GRAY)).append(addition);
                     }
@@ -162,6 +164,12 @@ public class Coordinates extends BaseFeature {
                 }
             }
         });
+    }
+
+    private Component amendedSection(Player player, CoordinateBarSection section, String content) {
+        Component result = Component.text(api.messages().tokens().apply(api.locales().resolve(content)));
+        for (Component amendment : api.coordinateBar().renderAmendments(section, player)) result = result.append(amendment);
+        return result;
     }
 
     /**

@@ -110,7 +110,7 @@ public class TeleportUtils extends BaseFeature {
 
         // Track previous locations for /back
         api.events().register(PlayerTeleportEvent.class, event -> {
-            if (isNoOpTeleport(event.getFrom(), event.getTo())) {
+            if (isMovementAdjustment(event) || isNoOpTeleport(event.getFrom(), event.getTo())) {
                 return;
             }
             Player player = event.getPlayer();
@@ -141,7 +141,7 @@ public class TeleportUtils extends BaseFeature {
             if (to == null) {
                 return;
             }
-            if (isNoOpTeleport(event.getFrom(), to)) {
+            if (isMovementAdjustment(event) || isNoOpTeleport(event.getFrom(), to)) {
                 return;
             }
             if (!TeleportContext.current(event.getPlayer().getUniqueId()).logToConsole()) {
@@ -174,7 +174,7 @@ public class TeleportUtils extends BaseFeature {
         api.events().register(PlayerTeleportEvent.class, event -> {
             Location from = event.getFrom();
             Location to = event.getTo();
-            if (isNoOpTeleport(from, to)) return;
+            if (isMovementAdjustment(event) || isNoOpTeleport(from, to)) return;
             if (from.getWorld() == null || to.getWorld() == null) return;
             if (from.getWorld().equals(to.getWorld())) return;
 
@@ -662,6 +662,10 @@ public class TeleportUtils extends BaseFeature {
 
     private boolean isNoOpTeleport(Location from, Location to) {
         return from != null && to != null && from.equals(to);
+    }
+
+    private boolean isMovementAdjustment(PlayerTeleportEvent event) {
+        return event.getCause() == PlayerTeleportEvent.TeleportCause.DISMOUNT;
     }
     /**
      * Load warps from configuration.
