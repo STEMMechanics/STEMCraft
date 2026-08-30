@@ -76,7 +76,7 @@ public final class NamedRegions extends BaseFeature {
         stayMillis = Math.max(0, getConfigSection().getLong("display.stay", 5000));
         fadeOutMillis = Math.max(0, getConfigSection().getLong("display.fade-out", 1000));
         retirementMillis = Math.max(0, getConfigSection().getLong("names.retirement-days", 30)) * 86_400_000L;
-        migrateDevelopmentSchema(); createTable(); migrateDiscoverySchema(); loadAreas();
+        migrateDevelopmentSchema(); createTable(); migrateDiscoverySchema(); loadAreas(); migrateLongGeneratedNames();
         if(getConfigSection().getBoolean("coordbar.enabled",true))
             api.coordinateBar().registerAmendment(STEMCraft.getPlugin(),COORDINATE_PROVIDER_ID,
                 CoordinateBarSection.WORLD,50,this::renderCoordinateBar);
@@ -139,6 +139,30 @@ public final class NamedRegions extends BaseFeature {
     }
     private Area read(ResultSet r) throws SQLException { return new Area(r.getString(1), r.getString(2), r.getString(3), r.getString(4),
         r.getString(5), r.getInt(6), r.getInt(7), r.getInt(8), r.getInt(9), r.getInt(10), r.getInt(11), r.getInt(12)!=0, r.getLong(13),r.getInt(14)!=0); }
+
+    private void migrateLongGeneratedNames() {
+        if (api.database().migrationVersion("named-regions") >= 4) return;
+        int renamed = 0;
+        for (Area old : new ArrayList<>(areas.values())) {
+            if (old.locked || wordCount(old.name) <= 2) continue;
+            activeNames.remove(normaliseName(old.name));
+            String replacement = availableName(shortNameCandidates(old.name), old.type, old.id);
+            retire(old, "shortened by two-word name migration");
+            Area updated = new Area(old.id, old.world, old.kind, old.type, replacement, old.minX, old.minY, old.minZ,
+                old.maxX, old.maxY, old.maxZ, false, old.createdAt, old.discovered);
+            areas.put(updated.id, updated);
+            activeNames.add(normaliseName(updated.name));
+            api.database().update("UPDATE named_areas SET name=? WHERE id=?", ps -> {
+                ps.setString(1, updated.name); ps.setString(2, updated.id);
+            });
+            renamed++;
+        }
+        api.database().setMigrationVersion("named-regions", 4);
+        if (renamed > 0) {
+            STEMCraft.getPlugin().getLogger().info("Shortened " + renamed + " generated region name(s) to two words.");
+            invalidateMapSnapshot();
+        }
+    }
 
     private void discover(Chunk chunk) {
         if (!enabled(chunk.getWorld())) return;
@@ -277,22 +301,53 @@ public final class NamedRegions extends BaseFeature {
             .replace("{name}",area.name).replace("{type}",friendly(area.type)));}
     private String render(String template, Area area) { return template == null ? "" : template.replace("{name}", area.name).replace("{type}", friendly(area.type)); }
     private String name(String type, String id) { List<String> configured = getConfigSection().getStringList("names.pools." + type);
-        List<String> values = configured.isEmpty() ? defaultNames(type) : configured;long now=System.currentTimeMillis();
+        List<String> values = configured.isEmpty() ? defaultNames(type) : compactNames(configured);long now=System.currentTimeMillis();
         int start = Math.floorMod(id.hashCode(), values.size()); for(int i=0;i<values.size();i++) { String candidate=values.get((start+i)%values.size());
             String normalised=normaliseName(candidate);Long retiredUntil=retiredNames.get(normalised);
             if(retiredUntil!=null&&retiredUntil<=now)retiredNames.remove(normalised,retiredUntil);
             if(!activeNames.contains(normalised)&&!retiredNames.containsKey(normalised))return candidate;
-        } return values.get(start)+" "+(areas.size()+1); }
+        } return availableName(List.of(), type, id); }
+    private String availableName(List<String> preferred, String type, String id) {
+        List<String> candidates = new ArrayList<>(preferred);
+        int preferredCount = candidates.size(); candidates.addAll(defaultNames(type));
+        long now = System.currentTimeMillis();
+        for (int i=0;i<candidates.size();i++) {
+            int index = i < preferredCount ? Math.floorMod(id.hashCode()+i, preferredCount) : i;
+            String candidate=candidates.get(index),normalised=normaliseName(candidate);
+            Long retiredUntil=retiredNames.get(normalised);
+            if(retiredUntil!=null&&retiredUntil<=now)retiredNames.remove(normalised,retiredUntil);
+            if(!activeNames.contains(normalised)&&!retiredNames.containsKey(normalised))return candidate;
+        }
+        return friendly(type).replace(" ", "") + " " + Integer.toUnsignedString(id.hashCode(), 36);
+    }
     private static String normaliseName(String name){return name.toLowerCase(Locale.ROOT);}
 
-    /** Generates 1,760 fallback names per category: 160 base names plus 1,600 qualified variants. */
+    /** Generates a large, unique pool containing only one- and two-word names. */
     static List<String> defaultNames(String type) { return DEFAULT_NAME_CACHE.computeIfAbsent(type, NamedRegions::generateDefaultNames); }
     private static List<String> generateDefaultNames(String type) { List<String> base = new ArrayList<>(160);
         for (String root : roots(type)) for (String form : forms(type)) base.add(form.replace("{root}", root));
-        List<String> out = new ArrayList<>(1760); out.addAll(base);
+        List<String> out = new ArrayList<>(1800); out.addAll(base); out.addAll(warcraftNames(type));
         for (String qualifier : split("Northern,Southern,Eastern,Western,Upper,Lower,Inner,Outer,High,Far"))
             for (String name : base) out.add(qualify(name, qualifier));
-        return List.copyOf(out); }
+        return compactNames(out); }
+    private static List<String> compactNames(Collection<String> names) {
+        LinkedHashMap<String,String> unique = new LinkedHashMap<>();
+        for (String name : names) for (String candidate : shortNameCandidates(name))
+            unique.putIfAbsent(normaliseName(candidate), candidate);
+        if (unique.isEmpty()) throw new IllegalArgumentException("A named-region pool must contain at least one word");
+        return List.copyOf(unique.values());
+    }
+    static List<String> shortNameCandidates(String name) {
+        List<String> original = Arrays.stream(name.trim().split("\\s+")).filter(word -> !word.isBlank()).toList();
+        if (original.size() <= 2) return original.isEmpty() ? List.of() : List.of(String.join(" ", original));
+        List<String> words = original.stream()
+            .filter(word -> !Set.of("the", "of").contains(word.toLowerCase(Locale.ROOT))).toList();
+        LinkedHashSet<String> candidates = new LinkedHashSet<>();
+        for (int gap=1;gap<words.size();gap++) for(int first=0;first+gap<words.size();first++)
+            candidates.add(words.get(first)+" "+words.get(first+gap));
+        return List.copyOf(candidates);
+    }
+    private static int wordCount(String name) { return (int)Arrays.stream(name.trim().split("\\s+")).filter(word -> !word.isBlank()).count(); }
     private static String qualify(String name, String qualifier) {
         return name.startsWith("The ") ? "The " + qualifier + " " + name.substring(4) : qualifier + " " + name;
     }
@@ -314,6 +369,25 @@ public final class NamedRegions extends BaseFeature {
         case "shipwreck" -> split("Maribel,Stormcrow,Sea Wraith,Golden Gull,North Star,Wayfarer,Tide Runner,Blue Finch,Argent Dawn,Red Sail,Albatross,Black Pearl,Corsair,Fair Wind,Flying Fish,Grey Petrel,Ocean Rose,Sea Drake,Silver Spray,Wanderer");
         case "ruined-portal" -> split("Fallen,Shattered,Ashen,Silent,Lost,Crimson,Broken,Forgotten,Ancient,Withered,Blighted,Charred,Ember,Fractured,Hollow,Obsidian,Riven,Scorched,Smouldering,Sundered");
         default -> split("Ratta,Ancient,Hidden,Forgotten,Silent,Ember,Stone,Shadow,Golden,Lost,Broken,Cinder,Deep,Echo,Fallen,Hollow,Iron,Moon,Old,Veiled"); }; }
+    /** World of Warcraft zone names grouped by the closest Minecraft biome or structure family. */
+    static List<String> warcraftNames(String type) { return List.of(switch(type) {
+        case "desert" -> split("Durotar,Tanaris,Silithus,Uldum,Vol'dun,Netherstorm,Hellfire Peninsula,Blasted Lands");
+        case "forest" -> split("Elwynn Forest,Eversong Woods,Silverpine Forest,Tirisfal Glades,Ashenvale,Darkshore,Felwood,Duskwood,Feralas,Teldrassil,Moonglade,Ghostlands,Val'sharah,Drustvar,Ardenweald,Jade Forest,Emerald Dream,Azuremyst Isle,Bloodmyst Isle");
+        case "jungle" -> split("Stranglethorn Vale,Sholazar Basin,Tanaan Jungle,Un'Goro Crater,Zuldazar,Nazmir,Gorgrond,Krasarang Wilds");
+        case "ocean" -> split("Vashj'ir,Nazjatar,Tiragarde Sound,Stormsong Valley,Azshara,Darkmoon Island,Timeless Isle,Forbidden Reach");
+        case "mountains" -> split("Dun Morogh,Redridge Mountains,Stonetalon Mountains,Alterac Mountains,Arathi Highlands,Twilight Highlands,Highmountain,Kun-Lai Summit,Storm Peaks,Searing Gorge,Burning Steppes,Deepholm");
+        case "snow" -> split("Winterspring,Dragonblight,Icecrown,Frostfire Ridge,Azure Span,Borean Tundra,Howling Fjord,Crystalsong Forest,Wintergrasp,Storm Peaks");
+        case "swamp" -> split("Dustwallow Marsh,Zangarmarsh,Wetlands,Nazmir");
+        case "badlands" -> split("Badlands,Desolace,Blasted Lands,Searing Gorge,Burning Steppes,Thousand Needles,Deadwind Pass,Antoran Wastes");
+        case "savanna", "plains" -> split("Mulgore,Westfall,Nagrand,The Barrens,Arathi Highlands,Hillsbrad Foothills,Ohn'ahran Plains,Talador,Shadowmoon Valley");
+        case "taiga" -> split("Grizzly Hills,Howling Fjord,Stormheim,Highmountain,Azure Span,Drustvar");
+        case "mushroom-fields" -> split("Zangarmarsh,Deepholm,Korthia,Maldraxxus");
+        case "mineshaft" -> split("Deadmines,Deepwind Gorge,Silvershard Mines,Stonevault,Darkflame Cleft");
+        case "village" -> split("Goldshire,Darkshire,Lakeshire,Astranaar,Everlook,Southshore,Crossroads,Ratchet,Brill,Sentinel Hill,Halfhill,Dornogal");
+        case "shipwreck" -> split("Lost Fleet,Shipwreck Shore,Faldir's Cove,Steamwheedle Port,Menethil Harbor,Stormwind Harbor");
+        case "ruined-portal" -> split("Dark Portal,Emerald Dream,Darkmoon Faire");
+        default -> split("Hallowfall,Azj-Kahet,Shadowlands,Dragon Isles,Broken Isles,Argus,Outland,Northrend,Pandaria,Draenor,Kalimdor,Khaz Algar,Undermine,Revendreth,Bastion,The Maw,Forbidden Reach,Emerald Dream");
+    }); }
     private static String[] forms(String type) { return switch(type) {
         case "desert" -> split("{root} Desert,{root} Sands,{root} Expanse,Dunes of {root},{root} Wastes,{root} Dunes,{root} Barrens,The {root}");
         case "forest","jungle","taiga" -> split("{root} Forest,{root} Wood,{root} Wilds,The {root},{root} Grove,{root} Thicket,{root} Timberlands,The Woods of {root}");
