@@ -75,17 +75,33 @@ public final class CitizensQuestNpcSupport {
         }
     }
 
+    public static void setPaused(QuestNpcProfile profile, boolean paused) {
+        if (profile.citizensNpcId() == null) return;
+        Object npc = invoke(registry(), "getById", profile.citizensNpcId());
+        if (npc == null || !(boolean) invoke(npc, "isSpawned")) return;
+        invoke(invoke(npc, "getNavigator"), "setPaused", paused);
+    }
+
+    public static boolean isNavigating(QuestNpcProfile profile) {
+        if (profile.citizensNpcId() == null) return false;
+        Object npc = invoke(registry(), "getById", profile.citizensNpcId());
+        return npc != null && (boolean) invoke(npc, "isSpawned")
+            && (boolean) invoke(invoke(npc, "getNavigator"), "isNavigating");
+    }
+
+    public static void moveTo(QuestNpcProfile profile, Location destination, double speed) {
+        if (profile.citizensNpcId() == null) return;
+        Object npc = invoke(registry(), "getById", profile.citizensNpcId());
+        if (npc == null || !(boolean) invoke(npc, "isSpawned")) return;
+        Object navigator = invoke(npc, "getNavigator");
+        invoke(invoke(navigator, "getDefaultParameters"), "speedModifier", (float) speed);
+        invoke(navigator, "setTarget", destination);
+    }
+
     private static void configureBehaviour(Object npc, QuestNpcProfile profile) {
         Object waypoints = invoke(npc, "getOrAddTrait", type("net.citizensnpcs.trait.waypoint.Waypoints"));
-        if (profile.behaviour() == QuestNpcProfile.Behaviour.WANDER) {
-            invoke(waypoints, "setWaypointProvider", "wander");
-            Object wander = invoke(waypoints, "getCurrentProvider");
-            invoke(wander, "setXYRange", profile.wanderRadius(), profile.wanderVerticalRadius());
-            invoke(wander, "setDelay", profile.wanderDelaySeconds() * 20);
-        } else {
-            invoke(waypoints, "setWaypointProvider", new Object[] { null });
-            invoke(invoke(npc, "getNavigator"), "cancelNavigation");
-        }
+        invoke(waypoints, "setWaypointProvider", new Object[] { null });
+        invoke(invoke(npc, "getNavigator"), "cancelNavigation");
         Object look = invoke(npc, "getOrAddTrait", type("net.citizensnpcs.trait.LookClose"));
         if ((boolean) invoke(look, "isEnabled") != profile.lookAtPlayers()) invoke(look, "toggle");
         invoke(look, "setRange", Math.max(4, profile.wanderRadius() * 2D));

@@ -57,6 +57,7 @@ public final class QuestNpcProfileStore {
             profile.spawnedAt(section.getLong("spawned-at", 0));
             profile.biomes().addAll(section.getStringList("spawn.biomes"));
             profile.idleDialogue().addAll(section.getStringList("dialogue.idle"));
+            profile.leavingDialogue().addAll(section.getStringList("dialogue.leaving"));
             try { profile.spawnedEntity(UUID.fromString(section.getString("spawned-entity", ""))); } catch (IllegalArgumentException ignored) { }
             result.put(id, profile);
         }
@@ -95,6 +96,7 @@ public final class QuestNpcProfileStore {
             yaml.set(path + ".spawn.daily-chance", profile.dailyChance());
             yaml.set(path + ".spawn.biomes", profile.biomes());
             yaml.set(path + ".dialogue.idle", profile.idleDialogue());
+            if (!profile.leavingDialogue().isEmpty()) yaml.set(path + ".dialogue.leaving", profile.leavingDialogue());
             yaml.set(path + ".spawned-entity", profile.spawnedEntity() == null ? null : profile.spawnedEntity().toString());
         }
         if (file.getParentFile() != null && !file.getParentFile().exists() && !file.getParentFile().mkdirs()) throw new IOException("Could not create profile directory");
