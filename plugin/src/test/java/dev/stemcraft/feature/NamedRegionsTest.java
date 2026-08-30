@@ -47,4 +47,15 @@ class NamedRegionsTest {
         assertEquals(1, loops.size());
         assertTrue(loops.getFirst().size() >= 4);
     }
+
+    @Test void throttlesDirtyMapSnapshotsUntilConfiguredInterval() {
+        long builtAt = 1_000L;
+        long fiveMinutes = 300_000L;
+
+        assertFalse(NamedRegions.shouldRefreshMapSnapshot(false, builtAt, builtAt + fiveMinutes, fiveMinutes));
+        assertFalse(NamedRegions.shouldRefreshMapSnapshot(true, builtAt, builtAt + fiveMinutes - 1, fiveMinutes));
+        assertTrue(NamedRegions.shouldRefreshMapSnapshot(true, builtAt, builtAt + fiveMinutes, fiveMinutes));
+        assertTrue(NamedRegions.shouldRefreshMapSnapshot(true, 0, builtAt, fiveMinutes));
+        assertFalse(NamedRegions.shouldRefreshMapSnapshot(true, builtAt, builtAt - 1, fiveMinutes));
+    }
 }

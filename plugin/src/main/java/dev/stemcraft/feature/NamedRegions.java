@@ -53,6 +53,8 @@ public final class NamedRegions extends BaseFeature {
     private final Object mapSnapshotLock = new Object();
     private volatile Collection<NamedMapArea> mapSnapshot = List.of();
     private volatile boolean mapSnapshotDirty = true;
+    private volatile long mapSnapshotBuiltAt;
+    private long mapRefreshMillis = 300_000L;
     private Pl3xMapNamedRegions mapLayer;
     private BukkitTask backfillTask;
     private String titleTemplate, subtitleTemplate;
@@ -95,7 +97,7 @@ public final class NamedRegions extends BaseFeature {
     @Override public void onDisable() { api.coordinateBar().unregisterAmendment(STEMCraft.getPlugin(),COORDINATE_PROVIDER_ID,CoordinateBarSection.WORLD);
         if (mapLayer != null) mapLayer.disable(); if(backfillTask!=null)backfillTask.cancel();
         backfillTask=null;areas.clear(); cellRegions.clear(); mergedRegions.clear(); activeNames.clear(); retiredNames.clear(); playerArea.clear();
-        mapSnapshot=List.of();mapSnapshotDirty=true; }
+        mapSnapshot=List.of();mapSnapshotDirty=true;mapSnapshotBuiltAt=0; }
     private void migrateDevelopmentSchema() {
         if (api.database().migrationVersion("named-regions") >= 2) return;
         api.database().execute("DROP TABLE IF EXISTS named_region_chunks");
@@ -404,6 +406,7 @@ public final class NamedRegions extends BaseFeature {
             String biomeLayer=getConfigSection().getString("map.layers.biomes","Biome Regions");
             String structureLayer=getConfigSection().getString("map.layers.structures","Discovered Structures");
             int updateSeconds=Math.max(60,getConfigSection().getInt("map.update-minutes",5)*60);
+            mapRefreshMillis=updateSeconds*1000L;
             mapLayer=new Pl3xMapNamedRegions(this::mapAreas,biomeStyle,structureStyle,getConfigSection().getBoolean("map.permanent-labels",false),
                 biomeLayer,structureLayer,updateSeconds);mapLayer.enable(); }
         catch(RuntimeException e){STEMCraft.getPlugin().getLogger().warning("Could not enable named-region map layer: "+e.getMessage());} }
@@ -411,11 +414,16 @@ public final class NamedRegions extends BaseFeature {
         if(raw.length()==6)raw="FF"+raw;if(raw.length()!=8)return(int)Long.parseLong(fallback.substring(1),16);
         try{return(int)Long.parseLong(raw,16);}catch(NumberFormatException ignored){return(int)Long.parseLong(fallback.substring(1),16);}}
     private Collection<NamedMapArea> mapAreas() {
-        if(!mapSnapshotDirty)return mapSnapshot;
+        long now=System.currentTimeMillis();
+        if(!shouldRefreshMapSnapshot(mapSnapshotDirty,mapSnapshotBuiltAt,now,mapRefreshMillis))return mapSnapshot;
         synchronized(mapSnapshotLock){
-            if(!mapSnapshotDirty)return mapSnapshot;
-            mapSnapshotDirty=false;mapSnapshot=buildMapAreas();return mapSnapshot;
+            now=System.currentTimeMillis();
+            if(!shouldRefreshMapSnapshot(mapSnapshotDirty,mapSnapshotBuiltAt,now,mapRefreshMillis))return mapSnapshot;
+            mapSnapshot=buildMapAreas();mapSnapshotBuiltAt=now;mapSnapshotDirty=false;return mapSnapshot;
         }
+    }
+    static boolean shouldRefreshMapSnapshot(boolean dirty,long builtAt,long now,long intervalMillis){
+        return dirty&&(builtAt==0||now>=builtAt&&now-builtAt>=intervalMillis);
     }
     private Collection<NamedMapArea> buildMapAreas() {
         List<NamedMapArea> result=new ArrayList<>();
