@@ -30,6 +30,7 @@ class QuestNpcProfileStoreTest {
         tim.skinUrl("https://example.test/tim.png");
         tim.biomes().add("PLAINS");
         tim.idleDialogue().add("Fine day for gathering timber.");
+        tim.leavingDialogue().add("Time I was heading home.");
 
         var file = tempDir.resolve("npcs.yml").toFile();
         QuestNpcProfileStore.save(file, Map.of("tim", tim));
@@ -50,5 +51,6 @@ class QuestNpcProfileStoreTest {
         assertEquals(8, loaded.wanderDelaySeconds());
         assertEquals("https://example.test/tim.png", loaded.skinUrl());
         assertEquals("Fine day for gathering timber.", loaded.idleDialogue().getFirst());
+        assertEquals("Time I was heading home.", loaded.leavingDialogue().getFirst());
     }
 }

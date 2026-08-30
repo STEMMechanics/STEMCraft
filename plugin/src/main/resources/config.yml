@@ -885,6 +885,13 @@ skip_night:
     - "survival"
 quest:
   enabled: true
+  npc-leaving:
+    # Random delay after an NPC's availability window closes, preventing simultaneous departures.
+    random-delay-ticks: 500
+    # Despawn after reaching this distance from every player.
+    player-distance: 150
+    # Failsafe for NPCs that cannot path away or are followed continuously.
+    timeout-ticks: 3600
   # Only show the tracked quest boss bar in these worlds. Supports * wildcards.
   tracking-worlds:
     - "survival*"
