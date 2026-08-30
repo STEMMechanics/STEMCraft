@@ -27,9 +27,14 @@ import dev.stemcraft.api.util.WorldTimeUtil;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.bossbar.BossBar;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.persistence.PersistentDataContainer;
+import org.bukkit.persistence.PersistentDataType;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -63,6 +68,11 @@ public class Coordinates extends BaseFeature {
      */
     private static final Map<Player, CoordData> coordBars = new HashMap<>();
 
+    private NamespacedKey bossBarEnabledKey;
+    private NamespacedKey actionBarEnabledKey;
+    private boolean defaultBossBarEnabled;
+    private boolean defaultActionBarEnabled;
+
     /**
      * Constructor for Coordinates feature.
      *
@@ -77,7 +87,15 @@ public class Coordinates extends BaseFeature {
      */
     @Override
     public void onEnable() {
+        bossBarEnabledKey = new NamespacedKey(STEMCraft.getPlugin(), "coordinate-boss-bar-enabled");
+        actionBarEnabledKey = new NamespacedKey(STEMCraft.getPlugin(), "coordinate-action-bar-enabled");
+        defaultBossBarEnabled = getConfigSection().getBoolean("defaults.boss-bar", false);
+        defaultActionBarEnabled = getConfigSection().getBoolean("defaults.action-bar", false);
+
+        api.events().register(PlayerJoinEvent.class, event -> restoreCoordBars(event.getPlayer()));
         api.events().register(PlayerQuitEvent.class, event -> removeCoordBars(event.getPlayer()));
+
+        Bukkit.getOnlinePlayers().forEach(this::restoreCoordBars);
 
         api.commands().create("coord")
             .usage("/coord")
@@ -151,7 +169,7 @@ public class Coordinates extends BaseFeature {
      *
      * @param player The player to add the bar.
      */
-    private static void addBossBar(Player player) {
+    private void addBossBar(Player player) {
         if (!coordBars.containsKey(player)) {
             coordBars.put(player, new CoordData(null, false));
         }
@@ -168,7 +186,7 @@ public class Coordinates extends BaseFeature {
      *
      * @param player The player to add the bar.
      */
-    private static void addActionBar(Player player) {
+    private void addActionBar(Player player) {
         if (!coordBars.containsKey(player)) {
             coordBars.put(player, new CoordData(null, true));
         } else {
@@ -181,7 +199,7 @@ public class Coordinates extends BaseFeature {
      *
      * @param player The player to remove the bar.
      */
-    private static void removeBossBar(Player player) {
+    private void removeBossBar(Player player) {
         if (coordBars.containsKey(player)) {
             CoordData bars = coordBars.get(player);
 
@@ -197,7 +215,7 @@ public class Coordinates extends BaseFeature {
      *
      * @param player The player to remove the bar.
      */
-    private static void removeActionBar(Player player) {
+    private void removeActionBar(Player player) {
         if (coordBars.containsKey(player)) {
             coordBars.get(player).actionBar = false;
         }
@@ -208,15 +226,17 @@ public class Coordinates extends BaseFeature {
      *
      * @param player The player to toggle the bar.
      */
-    private static void toggleBossBar(Player player) {
+    private void toggleBossBar(Player player) {
         if (coordBars.containsKey(player)) {
             if (coordBars.get(player).bossBar != null) {
                 removeBossBar(player);
+                setPreference(player, bossBarEnabledKey, false);
                 return;
             }
         }
 
         addBossBar(player);
+        setPreference(player, bossBarEnabledKey, true);
     }
 
     /**
@@ -224,15 +244,37 @@ public class Coordinates extends BaseFeature {
      *
      * @param player The player to toggle the bar.
      */
-    private static void toggleActionBar(Player player) {
+    private void toggleActionBar(Player player) {
         if (coordBars.containsKey(player)) {
             if (coordBars.get(player).actionBar == true) {
                 removeActionBar(player);
+                setPreference(player, actionBarEnabledKey, false);
                 return;
             }
         }
 
         addActionBar(player);
+        setPreference(player, actionBarEnabledKey, true);
+    }
+
+    /** Restore the player's saved coordinate display preferences. */
+    private void restoreCoordBars(Player player) {
+        if (getPreference(player, bossBarEnabledKey, defaultBossBarEnabled)) {
+            addBossBar(player);
+        }
+        if (getPreference(player, actionBarEnabledKey, defaultActionBarEnabled)) {
+            addActionBar(player);
+        }
+    }
+
+    private boolean getPreference(Player player, NamespacedKey key, boolean defaultValue) {
+        Byte value = player.getPersistentDataContainer().get(key, PersistentDataType.BYTE);
+        return value == null ? defaultValue : value != 0;
+    }
+
+    private void setPreference(Player player, NamespacedKey key, boolean enabled) {
+        PersistentDataContainer data = player.getPersistentDataContainer();
+        data.set(key, PersistentDataType.BYTE, enabled ? (byte) 1 : (byte) 0);
     }
 
     /**
