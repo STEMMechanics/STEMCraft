@@ -322,8 +322,8 @@ player_stats:
 entitlements:
   notifications:
     enabled: true
-    ability-gained: "/success/New ability: <yellow>{name}</yellow> — {description}"
-    ability-lost: "/warn/Ability lost: <yellow>{name}</yellow> — {description}"
+    ability-gained: "/survival//success/New ability: <yellow>{name}</yellow> — {description}"
+    ability-lost: "/survival//warn/Ability lost: <yellow>{name}</yellow> — {description}"
     badge-gained: "/success/Badge earned: {badge} <yellow>{description}</yellow>"
     badge-lost: "/warn/Badge lost: {badge} <yellow>{description}</yellow>"
   badge-display:
