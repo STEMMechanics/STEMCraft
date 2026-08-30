@@ -42,6 +42,70 @@ coordinates:
     boss-bar: false
     action-bar: false
 
+tps-bar:
+  enabled: true
+  default-enabled: false
+  title: "<gray>TPS<yellow>:</yellow> <tps> MSPT<yellow>:</yellow> <mspt> Ping<yellow>:</yellow> <ping>ms"
+  overlay: NOTCHED_20
+  fill-mode: MSPT
+  progress-color:
+    good: GREEN
+    medium: YELLOW
+    low: RED
+  text-color:
+    good: "<gradient:#55ff55:#00aa00><text></gradient>"
+    medium: "<gradient:#ffff55:#ffaa00><text></gradient>"
+    low: "<gradient:#ff5555:#aa0000><text></gradient>"
+  tick-interval: 20
+
+named-regions:
+  enabled: true
+  worlds:
+    - survival
+  display:
+    # Title and subtitle are independently optional. Missing or blank values are not displayed.
+    title: ""
+    subtitle: "<gold>{name}</gold>"
+    fade-in: 500
+    stay: 5000
+    fade-out: 1000
+  coordbar:
+    enabled: true
+    # Amendments include their own spacing. No separator is added by the coordbar API.
+    format: " ({name})"
+  map:
+    enabled: true
+    # Publish accumulated region changes to Pl3xMap at most once every few minutes.
+    update-minutes: 5
+    # Region names appear when the polygon is hovered. Set true to keep every label visible.
+    permanent-labels: false
+    layers:
+      biomes: "Regions"
+      structures: "Structures"
+    biomes:
+      stroke-colour: "#FFFF9800"
+      fill-colour: "#40FF9800"
+      line-thickness: 2
+    structures:
+      stroke-colour: "#FFFFC107"
+      fill-colour: "#40FFC107"
+      line-thickness: 2
+    # Existing generated terrain is loaded asynchronously and processed gradually.
+    backfill-existing-chunks: true
+    # Historical gaps can wait; chunks visited by players are still discovered normally.
+    backfill-only-when-empty: true
+    backfill-period-ticks: 10
+    backfill-max-in-flight: 1
+  structures:
+    # Small, easily triggered structures are disabled by default.
+    buried-treasure:
+      enabled: false
+    nether-fossil:
+      enabled: false
+  names:
+    retirement-days: 30
+    pools: {}
+
 custom-commands:
   survival:
     permission: stemcraft.command.survival
@@ -910,6 +974,12 @@ quest:
     - "Tobin"
     - "Nessa"
     - "Orin"
+citizens-npc-proximity:
+  enabled: true
+  # Hysteresis prevents NPCs repeatedly spawning and despawning at one boundary.
+  spawn-radius: 96
+  despawn-radius: 128
+  check-ticks: 100
 player_game_messages:
   join:
     enabled: true

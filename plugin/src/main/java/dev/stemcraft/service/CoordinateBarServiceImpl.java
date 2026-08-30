@@ -8,6 +8,7 @@ import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.service.coordinatebar.CoordinateBarProvider;
 import dev.stemcraft.api.service.coordinatebar.CoordinateBarService;
+import dev.stemcraft.api.service.coordinatebar.CoordinateBarSection;
 import net.kyori.adventure.text.Component;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
@@ -24,6 +25,7 @@ import java.util.Objects;
 /** Default coordinate-bar provider registry. */
 public final class CoordinateBarServiceImpl extends BaseService implements CoordinateBarService {
     private final Map<Key, Registration> providers = new LinkedHashMap<>();
+    private final Map<AmendmentKey, Registration> amendments = new LinkedHashMap<>();
 
     public CoordinateBarServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
@@ -44,6 +46,36 @@ public final class CoordinateBarServiceImpl extends BaseService implements Coord
     }
 
     @Override
+    public synchronized void registerAmendment(@NotNull Plugin owner, @NotNull String id,
+                                               @NotNull CoordinateBarSection section, int priority,
+                                               @NotNull CoordinateBarProvider provider) {
+        Objects.requireNonNull(owner, "owner"); Objects.requireNonNull(section, "section");
+        String normalized = normalizeId(id);
+        amendments.put(new AmendmentKey(owner, normalized, section),
+            new Registration(owner, normalized, priority, Objects.requireNonNull(provider, "provider")));
+    }
+
+    @Override
+    public synchronized void unregisterAmendment(@NotNull Plugin owner, @NotNull String id,
+                                                 @NotNull CoordinateBarSection section) {
+        amendments.remove(new AmendmentKey(Objects.requireNonNull(owner, "owner"), normalizeId(id),
+            Objects.requireNonNull(section, "section")));
+    }
+
+    @Override
+    public @NotNull List<Component> renderAmendments(@NotNull CoordinateBarSection section,
+                                                      @NotNull Player player) {
+        Objects.requireNonNull(section, "section"); Objects.requireNonNull(player, "player");
+        List<Registration> snapshot;
+        synchronized (this) {
+            amendments.entrySet().removeIf(entry -> !entry.getValue().owner().isEnabled());
+            snapshot = amendments.entrySet().stream().filter(entry -> entry.getKey().section() == section)
+                .map(Map.Entry::getValue).toList();
+        }
+        return render(snapshot, player);
+    }
+
+    @Override
     public @NotNull List<Component> render(@NotNull Player player) {
         Objects.requireNonNull(player, "player");
         List<Registration> snapshot;
@@ -51,6 +83,11 @@ public final class CoordinateBarServiceImpl extends BaseService implements Coord
             providers.entrySet().removeIf(entry -> !entry.getValue().owner().isEnabled());
             snapshot = new ArrayList<>(providers.values());
         }
+        return render(snapshot, player);
+    }
+
+    private List<Component> render(List<Registration> registrations, Player player) {
+        List<Registration> snapshot = new ArrayList<>(registrations);
         snapshot.sort(Comparator.comparingInt(Registration::priority)
             .thenComparing(registration -> registration.owner().getName())
             .thenComparing(Registration::id));
@@ -77,5 +114,6 @@ public final class CoordinateBarServiceImpl extends BaseService implements Coord
     }
 
     private record Key(Plugin owner, String id) { }
+    private record AmendmentKey(Plugin owner, String id, CoordinateBarSection section) { }
     private record Registration(Plugin owner, String id, int priority, CoordinateBarProvider provider) { }
 }

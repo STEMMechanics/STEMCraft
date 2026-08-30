@@ -2,6 +2,7 @@ package dev.stemcraft.service;
 
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.api.service.coordinatebar.CoordinateBarSection;
 import net.kyori.adventure.text.Component;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
@@ -41,6 +42,26 @@ class CoordinateBarServiceImplTest {
 
         service.unregister(owner, "waypoint");
         assertEquals(List.of(), service.render(player));
+    }
+
+    @Test
+    void rendersOnlyAmendmentsForRequestedSectionWithoutAddingSpacing() {
+        CoordinateBarServiceImpl service = new CoordinateBarServiceImpl(mock(STEMCraft.class), mock(STEMCraftAPI.class));
+        Plugin owner = enabledPlugin("Owner");
+        Player player = mock(Player.class);
+
+        service.registerAmendment(owner, "region", CoordinateBarSection.WORLD, 20,
+            ignored -> Component.text(" (Ratta Desert)"));
+        service.registerAmendment(owner, "season", CoordinateBarSection.TIME, 10,
+            ignored -> Component.text(" summer"));
+
+        assertEquals(List.of(Component.text(" (Ratta Desert)")),
+            service.renderAmendments(CoordinateBarSection.WORLD, player));
+        assertEquals(List.of(Component.text(" summer")),
+            service.renderAmendments(CoordinateBarSection.TIME, player));
+
+        service.unregisterAmendment(owner, "region", CoordinateBarSection.WORLD);
+        assertEquals(List.of(), service.renderAmendments(CoordinateBarSection.WORLD, player));
     }
 
     private Plugin enabledPlugin(String name) {

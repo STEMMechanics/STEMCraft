@@ -106,6 +106,29 @@ class QuestFeatureTest {
     }
 
     @Test
+    void timedQuestDisplayChangesAtMinuteAndUrgentThresholds() {
+        assertEquals("5 minutes", QuestFeature.formatCountdownDisplay(300));
+        assertEquals("4 minutes", QuestFeature.formatCountdownDisplay(240));
+        assertEquals("1 minute", QuestFeature.formatCountdownDisplay(59));
+        assertEquals("45 seconds", QuestFeature.formatCountdownDisplay(45));
+        assertEquals("30 seconds", QuestFeature.formatCountdownDisplay(29));
+        assertEquals("15 seconds", QuestFeature.formatCountdownDisplay(15));
+        assertEquals("10 seconds", QuestFeature.formatCountdownDisplay(9));
+        assertEquals("5 seconds", QuestFeature.formatCountdownDisplay(4));
+    }
+
+    @Test
+    void timedQuestAnnouncementsDetectCrossedThresholds() {
+        assertEquals(-1, QuestFeature.countdownThresholdCrossed(300, 241, 240));
+        assertEquals(120, QuestFeature.countdownThresholdCrossed(300, 121, 120));
+        assertEquals(900, QuestFeature.countdownThresholdCrossed(3600, 901, 900));
+        assertEquals(600, QuestFeature.countdownThresholdCrossed(3600, 601, 600));
+        assertEquals(45, QuestFeature.countdownThresholdCrossed(300, 46, 45));
+        assertEquals(30, QuestFeature.countdownThresholdCrossed(300, 46, 29));
+        assertEquals(-1, QuestFeature.countdownThresholdCrossed(300, 44, 31));
+    }
+
+    @Test
     void trackedQuestBarIsLimitedToConfiguredSurvivalWorlds() {
         List<Pattern> worlds = List.of(PatternUtil.globToRegex("survival*"));
 
