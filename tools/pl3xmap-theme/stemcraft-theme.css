@@ -104,6 +104,44 @@ body::after {
 #sidebar #sidebar__content h2 {
   color: var(--stemcraft-amber);
   letter-spacing: 0.025em;
+  font-size: 2rem;
+}
+
+.stemcraft-world-group__heading {
+  margin-top: 0;
+  font-size: 1.5rem;
+}
+
+.stemcraft-world-group {
+  margin-bottom: 2rem;
+}
+
+/* Pl3xMap renders a world name as a legend followed by its renderer icon label. */
+#sidebar .menu fieldset:has(> input.renderer:only-of-type) {
+  position: relative;
+  min-height: 18px;
+  margin-bottom: 0.5rem;
+}
+
+#sidebar .menu fieldset:has(> input.renderer:only-of-type) > legend {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 18px;
+  padding-left: 24px;
+  line-height: 1.2;
+  border-radius: 0.1rem !important;
+}
+
+#sidebar .menu fieldset:has(> input.renderer:only-of-type) > input.renderer + label {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  margin: 0;
+  transform: translateY(-100%);
+  width: 18px;
+  height: 18px;
 }
 
 button,
