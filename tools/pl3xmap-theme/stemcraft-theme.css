@@ -1,0 +1,171 @@
+:root {
+  --stemcraft-amber: #f59e0b;
+  --stemcraft-orange: #f97316;
+  --stemcraft-red: #ef4444;
+  --stemcraft-ink: #17120f;
+  --stemcraft-panel: rgba(28, 22, 18, 0.94);
+  --stemcraft-panel-hover: rgba(61, 43, 28, 0.97);
+  --stemcraft-border: rgba(245, 158, 11, 0.48);
+  --stemcraft-text: #fff7ed;
+  --stemcraft-muted: #fed7aa;
+
+  --ui-font: Inter, ui-rounded, "Segoe UI", system-ui, sans-serif;
+  --ui-border-radius: 0.75rem;
+  --ui-border: 1px solid var(--stemcraft-border);
+  --ui-outline: solid rgba(245, 158, 11, 0.75) 0.25rem;
+  --ui-box-shadow: 0 0.45rem 1.4rem rgba(0, 0, 0, 0.38);
+  --ui-background: var(--stemcraft-panel);
+  --ui-background-disabled: #4b4039;
+  --ui-background-hover: var(--stemcraft-panel-hover);
+  --ui-background-active: #713f12;
+  --ui-background-selected: linear-gradient(135deg, var(--stemcraft-amber), var(--stemcraft-red));
+  --ui-text: var(--stemcraft-text);
+  --ui-text-hover: #ffffff;
+  --ui-text-active: #ffffff;
+  --ui-text-selected: #ffffff;
+  --ui-text-disabled: #a89b93;
+  --ui-sidebar-width: min(28rem, calc(100vw - 7rem));
+  --ui-button-size: 4rem;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 900;
+  box-shadow: inset 0 0 9rem rgba(65, 32, 10, 0.18);
+}
+
+.stemcraft-map-brand {
+  position: fixed;
+  top: 1rem;
+  left: 50%;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  min-height: 3.5rem;
+  padding: 0.35rem 0.9rem 0.35rem 0.45rem;
+  transform: translateX(-50%);
+  color: var(--stemcraft-text);
+  background: linear-gradient(135deg, rgba(28, 22, 18, 0.96), rgba(50, 29, 19, 0.96));
+  border: 1px solid var(--stemcraft-border);
+  border-radius: 1rem;
+  box-shadow: 0 0.65rem 2rem rgba(0, 0, 0, 0.4);
+  text-decoration: none;
+  backdrop-filter: blur(10px);
+}
+
+.stemcraft-map-brand:hover {
+  border-color: var(--stemcraft-amber);
+  transform: translateX(-50%) translateY(-1px);
+}
+
+.stemcraft-map-brand img {
+  display: block;
+  width: 7.5rem;
+  max-width: 32vw;
+  height: 2.8rem;
+  border-radius: 0.65rem;
+  object-fit: contain;
+}
+
+.stemcraft-map-brand__copy {
+  display: grid;
+  line-height: 1.05;
+}
+
+.stemcraft-map-brand__title {
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.025em;
+}
+
+.stemcraft-map-brand__subtitle {
+  margin-top: 0.3rem;
+  color: var(--stemcraft-muted);
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+#sidebar #sidebar__content,
+.leaflet-control-panel,
+.leaflet-control-layers-list {
+  backdrop-filter: blur(12px);
+}
+
+#sidebar #sidebar__content {
+  border-top: 0.25rem solid var(--stemcraft-orange);
+}
+
+#sidebar #sidebar__content h2 {
+  color: var(--stemcraft-amber);
+  letter-spacing: 0.025em;
+}
+
+button,
+.leaflet-control-button,
+.leaflet-bar a,
+#sidebar #sidebar__buttons button,
+.leaflet-control-layers-toggle {
+  overflow: hidden;
+}
+
+button[aria-pressed="true"],
+button[aria-expanded="true"],
+.menu input:checked + label {
+  background: linear-gradient(135deg, var(--stemcraft-amber), var(--stemcraft-red));
+}
+
+.leaflet-tooltip,
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  color: var(--stemcraft-text);
+  background: var(--stemcraft-panel);
+  border-color: var(--stemcraft-border);
+}
+
+.leaflet-tooltip {
+  border: 1px solid var(--stemcraft-border);
+  border-radius: 0.6rem;
+  box-shadow: 0 0.45rem 1.2rem rgba(0, 0, 0, 0.35);
+}
+
+.leaflet-control-attribution {
+  color: #4a2b13;
+  background: rgba(255, 247, 237, 0.86) !important;
+}
+
+.leaflet-control-container {
+  font-size: 1.2rem;
+}
+
+.leaflet-control-coordinates {
+  font-size: 1.2rem;
+}
+
+@media (max-width: 680px) {
+  .stemcraft-map-brand {
+    top: 0.65rem;
+    padding-right: 0.55rem;
+  }
+
+  .stemcraft-map-brand img {
+    width: 7rem;
+    height: 2.25rem;
+  }
+
+  .stemcraft-map-brand__subtitle {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
