@@ -38,6 +38,12 @@ public final class QuestNpcProfile {
     private long lifetimeSeconds;
     private long spawnedAt;
     private UUID spawnedEntity;
+    private String anchorWorld;
+    private double anchorX;
+    private double anchorY;
+    private double anchorZ;
+    private long anchorPeriod = Long.MIN_VALUE;
+    private boolean anchorInteracted;
     private final List<String> biomes = new ArrayList<>();
     private final List<String> idleDialogue = new ArrayList<>();
     private final List<String> leavingDialogue = new ArrayList<>();
@@ -104,6 +110,18 @@ public final class QuestNpcProfile {
     public void spawnedAt(long value) { spawnedAt = Math.max(0, value); }
     public UUID spawnedEntity() { return spawnedEntity; }
     public void spawnedEntity(UUID value) { spawnedEntity = value; }
+    public boolean hasAnchor() { return anchorWorld != null && anchorPeriod != Long.MIN_VALUE; }
+    public String anchorWorld() { return anchorWorld; }
+    public double anchorX() { return anchorX; }
+    public double anchorY() { return anchorY; }
+    public double anchorZ() { return anchorZ; }
+    public long anchorPeriod() { return anchorPeriod; }
+    public boolean anchorInteracted() { return anchorInteracted; }
+    public void anchor(String world, double x, double y, double z, long period) {
+        anchorWorld = world; anchorX = x; anchorY = y; anchorZ = z; anchorPeriod = period; anchorInteracted = false;
+    }
+    public void anchorInteracted(boolean value) { anchorInteracted = value; }
+    public void clearAnchor() { anchorWorld = null; anchorPeriod = Long.MIN_VALUE; anchorInteracted = false; }
     public List<String> biomes() { return biomes; }
     public List<String> idleDialogue() { return idleDialogue; }
     public List<String> leavingDialogue() { return leavingDialogue; }

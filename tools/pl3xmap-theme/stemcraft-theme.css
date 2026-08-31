@@ -132,6 +132,12 @@ body::after {
   padding-left: 24px;
   line-height: 1.2;
   border-radius: 0.1rem !important;
+  cursor: pointer;
+}
+
+#sidebar .menu fieldset:has(> input.renderer:only-of-type) > legend:focus-visible {
+  outline: 2px solid var(--stemcraft-amber);
+  outline-offset: 2px;
 }
 
 #sidebar .menu fieldset:has(> input.renderer:only-of-type) > input.renderer + label {

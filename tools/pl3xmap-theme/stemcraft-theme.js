@@ -30,6 +30,19 @@
       if (!originalName) return;
       world.dataset.stemcraftWorldName = originalName;
 
+      const renderer = world.querySelector(":scope > input.renderer:only-of-type");
+      if (renderer && legend.dataset.stemcraftClickable !== "true") {
+        legend.dataset.stemcraftClickable = "true";
+        legend.setAttribute("role", "button");
+        legend.setAttribute("tabindex", "0");
+        legend.addEventListener("click", () => renderer.click());
+        legend.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          renderer.click();
+        });
+      }
+
       const [groupName, ...remainingWords] = originalName.split(/\s+/);
       const groupKey = groupName.toLocaleLowerCase();
       const itemName = remainingWords.join(" ").replace(/^[-–—:|/]+\s*/, "").trim();

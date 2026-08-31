@@ -55,6 +55,11 @@ public final class QuestNpcProfileStore {
             if (section.contains("citizens-npc-id")) profile.citizensNpcId(section.getInt("citizens-npc-id"));
             profile.lifetimeSeconds(section.getLong("lifetime-seconds", 0));
             profile.spawnedAt(section.getLong("spawned-at", 0));
+            if (section.contains("anchor.world") && section.contains("anchor.period")) {
+                profile.anchor(section.getString("anchor.world"), section.getDouble("anchor.x"), section.getDouble("anchor.y"),
+                    section.getDouble("anchor.z"), section.getLong("anchor.period"));
+                profile.anchorInteracted(section.getBoolean("anchor.interacted", false));
+            }
             profile.biomes().addAll(section.getStringList("spawn.biomes"));
             profile.idleDialogue().addAll(section.getStringList("dialogue.idle"));
             profile.leavingDialogue().addAll(section.getStringList("dialogue.leaving"));
@@ -84,6 +89,14 @@ public final class QuestNpcProfileStore {
             if (profile.citizensNpcId() != null) yaml.set(path + ".citizens-npc-id", profile.citizensNpcId());
             yaml.set(path + ".lifetime-seconds", profile.lifetimeSeconds());
             yaml.set(path + ".spawned-at", profile.spawnedAt());
+            if (profile.hasAnchor()) {
+                yaml.set(path + ".anchor.world", profile.anchorWorld());
+                yaml.set(path + ".anchor.x", profile.anchorX());
+                yaml.set(path + ".anchor.y", profile.anchorY());
+                yaml.set(path + ".anchor.z", profile.anchorZ());
+                yaml.set(path + ".anchor.period", profile.anchorPeriod());
+                yaml.set(path + ".anchor.interacted", profile.anchorInteracted());
+            }
             yaml.set(path + ".despawn-radius", profile.despawnRadius());
             if (profile.worlds().size() > 1) yaml.set(path + ".spawn.worlds", profile.worlds());
             else yaml.set(path + ".spawn.world", profile.world());

@@ -114,6 +114,7 @@ public final class QuestFeature extends BaseFeature {
     private static final String TRACKING_TASK = "quest:tracking";
     private static final int NPC_OVERHEAD_CLEARANCE_BLOCKS = 3;
     private static final int NPC_OPEN_AREA_RADIUS = 5;
+    private static final int NPC_INTERACTED_RELOCATION_RADIUS = 250;
     private static final String EDITOR_PATH = "/quests/editor/";
     private static final long EDITOR_TOKEN_LIFETIME_MS = TimeUnit.HOURS.toMillis(24);
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
@@ -268,29 +269,28 @@ public final class QuestFeature extends BaseFeature {
                 continue;
             }
             profile.spawnedEntity(null);
-            if (trackingPlayer != null) {
-                Location location = forcedTrackedNpcSpawn(profile, trackingPlayer);
-                LivingEntity living = location == null ? null : spawnProfileEntity(profile, location);
-                if (living != null) {
-                    profile.spawnedEntity(living.getUniqueId());
-                    profile.spawnedAt(System.currentTimeMillis());
-                    saveNpcProfiles();
-                    registerMarkers();
-                }
-                continue;
-            }
             if (npcDiedToday(profile)) continue;
             for (Player player : Bukkit.getOnlinePlayers()) {
                 if (!profileRelevant(profile.id(), player)) continue;
+                long period = npcSpawnPeriod(profile, player.getWorld().getFullTime());
+                Location anchor = profile.anchorPeriod() == period ? npcAnchor(profile) : null;
+                String eligibilityBiome = anchor != null && anchor.getWorld().equals(player.getWorld())
+                    ? anchor.getBlock().getBiome().getKey().getKey()
+                    : player.getLocation().getBlock().getBiome().getKey().getKey();
                 if (!QuestNpcSpawnRules.eligible(profile, player.getWorld().getName(), player.getLevel(),
-                    player.getWorld().getTime(), player.getLocation().getBlock().getBiome().getKey().getKey())) continue;
-                if (!dailySpawnAllowed(player, profile)) continue;
-                Location location = findNpcSpawn(profile, player);
+                    player.getWorld().getTime(), eligibilityBiome)) continue;
+                if (anchor != null) {
+                    if (!anchor.getWorld().equals(player.getWorld())
+                        || player.getLocation().distanceSquared(anchor) > (double) profile.despawnRadius() * profile.despawnRadius()) continue;
+                } else if (!dailySpawnAllowed(player, profile)) continue;
+                Location location = anchor != null ? anchor : findNpcSpawn(profile, player,
+                    profile.hasAnchor() && profile.anchorInteracted() ? NPC_INTERACTED_RELOCATION_RADIUS : 0);
                 if (location == null) continue;
                 LivingEntity living = spawnProfileEntity(profile, location);
                 if (living == null) continue;
                 profile.spawnedEntity(living.getUniqueId());
                 profile.spawnedAt(System.currentTimeMillis());
+                if (anchor == null) profile.anchor(location.getWorld().getName(), location.getX(), location.getY(), location.getZ(), period);
                 saveNpcProfiles();
                 registerMarkers();
                 break;
@@ -308,25 +308,6 @@ public final class QuestFeature extends BaseFeature {
             QuestObjective objective = currentObjective(quest, progress);
             if (objective != null && objective.type() == QuestObjective.Type.NPC
                 && objective.target().equals("profile:" + profileId)) return player;
-        }
-        return null;
-    }
-
-    private @Nullable Location forcedTrackedNpcSpawn(QuestNpcProfile profile, Player tracker) {
-        if (profile.supportsWorld(tracker.getWorld().getName())) {
-            Location normal = findNpcSpawn(profile, tracker);
-            if (normal != null) return normal;
-        }
-        World world = Bukkit.getWorld(profile.world());
-        if (world == null) return null;
-        Location centre = world.getSpawnLocation();
-        for (int attempt = 0; attempt < 32; attempt++) {
-            double angle = ThreadLocalRandom.current().nextDouble(Math.PI * 2D);
-            double distance = ThreadLocalRandom.current().nextDouble(8D, 40D);
-            int x = (int) Math.floor(centre.getX() + Math.cos(angle) * distance);
-            int z = (int) Math.floor(centre.getZ() + Math.sin(angle) * distance);
-            Integer y = findSafeNpcY(world, x, z, centre.getBlockY());
-            if (y != null) return preferOpenNpcSpawn(profile, new Location(world, x + .5D, y, z + .5D), false);
         }
         return null;
     }
@@ -605,7 +586,12 @@ public final class QuestFeature extends BaseFeature {
     private void focusNpcOnPlayer(Entity entity, Player player) {
         String profileId = entity.getPersistentDataContainer().get(npcProfileKey, PersistentDataType.STRING);
         QuestNpcProfile profile = profileId == null ? null : npcProfiles.get(profileId);
-        if (profile == null || !profile.lookAtPlayers()) return;
+        if (profile == null) return;
+        if (!profile.anchorInteracted()) {
+            profile.anchorInteracted(true);
+            saveNpcProfiles();
+        }
+        if (!profile.lookAtPlayers()) return;
         npcAttentionPlayers.put(profileId, player.getUniqueId());
         npcAttentionUntil.put(profileId, System.currentTimeMillis() + 8000L);
         npcInteractionUntil.put(profileId, System.currentTimeMillis() + 8000L);
@@ -634,6 +620,10 @@ public final class QuestFeature extends BaseFeature {
     }
 
     private @Nullable Location findNpcSpawn(QuestNpcProfile profile, Player player) {
+        return findNpcSpawn(profile, player, 0);
+    }
+
+    private @Nullable Location findNpcSpawn(QuestNpcProfile profile, Player player, int maximumAnchorDistance) {
         World world = player.getWorld();
         for (int attempt = 0; attempt < 32; attempt++) {
             double angle = ThreadLocalRandom.current().nextDouble(Math.PI * 2D);
@@ -643,11 +633,27 @@ public final class QuestFeature extends BaseFeature {
             Integer y = findSafeNpcY(world, x, z, player.getLocation().getBlockY());
             if (y == null) continue;
             Location candidate = new Location(world, x + .5D, y, z + .5D);
+            Location previousAnchor = maximumAnchorDistance > 0 ? npcAnchor(profile) : null;
+            if (previousAnchor != null && (!previousAnchor.getWorld().equals(world)
+                || previousAnchor.distanceSquared(candidate) > (double) maximumAnchorDistance * maximumAnchorDistance)) continue;
             String biome = world.getBiome(x, y, z).getKey().getKey();
             if (!profile.biomes().isEmpty() && profile.biomes().stream().noneMatch(value -> value.equalsIgnoreCase(biome))) continue;
             return preferOpenNpcSpawn(profile, candidate, true);
         }
         return null;
+    }
+
+    static long npcSpawnPeriod(QuestNpcProfile profile, long fullTime) {
+        return Math.floorDiv(fullTime - profile.timeFrom(), 24000L);
+    }
+
+    private @Nullable Location npcAnchor(QuestNpcProfile profile) {
+        if (!profile.hasAnchor()) return null;
+        World world = Bukkit.getWorld(profile.anchorWorld());
+        if (world == null) return null;
+        int x = (int) Math.floor(profile.anchorX()), z = (int) Math.floor(profile.anchorZ());
+        Integer y = findSafeNpcY(world, x, z, (int) Math.floor(profile.anchorY()));
+        return y == null ? null : new Location(world, profile.anchorX(), y, profile.anchorZ());
     }
 
     /** Prefer nearby headroom for the NPC marker, while retaining the original safe spawn as a fallback. */
@@ -1146,7 +1152,14 @@ public final class QuestFeature extends BaseFeature {
             if (value.biomes() != null) profile.biomes().addAll(value.biomes().stream().filter(Objects::nonNull).map(String::trim).filter(entry -> !entry.isEmpty()).toList());
             if (value.idleDialogue() != null) profile.idleDialogue().addAll(value.idleDialogue().stream().filter(Objects::nonNull).map(String::trim).filter(entry -> !entry.isEmpty()).toList());
             QuestNpcProfile existing = npcProfiles.get(id);
-            if (existing != null) profile.spawnedEntity(existing.spawnedEntity());
+            if (existing != null) {
+                profile.spawnedEntity(existing.spawnedEntity());
+                profile.spawnedAt(existing.spawnedAt());
+                if (existing.hasAnchor()) {
+                    profile.anchor(existing.anchorWorld(), existing.anchorX(), existing.anchorY(), existing.anchorZ(), existing.anchorPeriod());
+                    profile.anchorInteracted(existing.anchorInteracted());
+                }
+            }
             newProfiles.put(id, profile);
         }
 
