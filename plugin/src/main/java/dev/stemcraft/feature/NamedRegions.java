@@ -144,10 +144,11 @@ public final class NamedRegions extends BaseFeature {
         if (api.database().migrationVersion("named-regions") >= 4) return;
         int renamed = 0;
         for (Area old : new ArrayList<>(areas.values())) {
-            if (old.locked || wordCount(old.name) <= 2) continue;
+            boolean numberedFallback=isNumberedFallback(old.name);
+            if (old.locked || wordCount(old.name) <= 2&&!numberedFallback) continue;
             activeNames.remove(normaliseName(old.name));
-            String replacement = availableName(shortNameCandidates(old.name), old.type, old.id);
-            retire(old, "shortened by two-word name migration");
+            String replacement = availableName(numberedFallback?List.of():shortNameCandidates(old.name), old.type, old.id);
+            retire(old, numberedFallback?"replaced numbered fallback":"shortened by two-word name migration");
             Area updated = new Area(old.id, old.world, old.kind, old.type, replacement, old.minX, old.minY, old.minZ,
                 old.maxX, old.maxY, old.maxZ, false, old.createdAt, old.discovered);
             areas.put(updated.id, updated);
@@ -159,7 +160,7 @@ public final class NamedRegions extends BaseFeature {
         }
         api.database().setMigrationVersion("named-regions", 4);
         if (renamed > 0) {
-            STEMCraft.getPlugin().getLogger().info("Shortened " + renamed + " generated region name(s) to two words.");
+            STEMCraft.getPlugin().getLogger().info("Normalised " + renamed + " generated region name(s).");
             invalidateMapSnapshot();
         }
     }
@@ -308,27 +309,35 @@ public final class NamedRegions extends BaseFeature {
             if(!activeNames.contains(normalised)&&!retiredNames.containsKey(normalised))return candidate;
         } return availableName(List.of(), type, id); }
     private String availableName(List<String> preferred, String type, String id) {
-        List<String> candidates = new ArrayList<>(preferred);
-        int preferredCount = candidates.size(); candidates.addAll(defaultNames(type));
-        long now = System.currentTimeMillis();
+        String candidate=findAvailableName(preferred,id.hashCode());
+        if(candidate!=null)return candidate;
+        candidate=findAvailableName(defaultNames(type),id.hashCode());
+        if(candidate!=null)return candidate;
+        return friendly(type).replace(" ", "") + " " + letterCode(id.hashCode());
+    }
+    private @Nullable String findAvailableName(List<String> candidates,int seed) {
+        if(candidates.isEmpty())return null;long now=System.currentTimeMillis();
+        int start=Math.floorMod(seed,candidates.size());
         for (int i=0;i<candidates.size();i++) {
-            int index = i < preferredCount ? Math.floorMod(id.hashCode()+i, preferredCount) : i;
-            String candidate=candidates.get(index),normalised=normaliseName(candidate);
+            String candidate=candidates.get((start+i)%candidates.size()),normalised=normaliseName(candidate);
             Long retiredUntil=retiredNames.get(normalised);
             if(retiredUntil!=null&&retiredUntil<=now)retiredNames.remove(normalised,retiredUntil);
             if(!activeNames.contains(normalised)&&!retiredNames.containsKey(normalised))return candidate;
         }
-        return friendly(type).replace(" ", "") + " " + Integer.toUnsignedString(id.hashCode(), 36);
+        return null;
     }
+    private static String letterCode(int value){long remaining=Integer.toUnsignedLong(value);StringBuilder out=new StringBuilder();
+        do{out.append((char)('a'+remaining%26));remaining/=26;}while(remaining>0);return out.reverse().toString();}
     private static String normaliseName(String name){return name.toLowerCase(Locale.ROOT);}
 
     /** Generates a large, unique pool containing only one- and two-word names. */
     static List<String> defaultNames(String type) { return DEFAULT_NAME_CACHE.computeIfAbsent(type, NamedRegions::generateDefaultNames); }
     private static List<String> generateDefaultNames(String type) { List<String> base = new ArrayList<>(160);
         for (String root : roots(type)) for (String form : forms(type)) base.add(form.replace("{root}", root));
-        List<String> out = new ArrayList<>(1800); out.addAll(base); out.addAll(warcraftNames(type));
+        List<String> out = new ArrayList<>(4000); out.addAll(base); out.addAll(warcraftNames(type));
         for (String qualifier : split("Northern,Southern,Eastern,Western,Upper,Lower,Inner,Outer,High,Far"))
             for (String name : base) out.add(qualify(name, qualifier));
+        for(String prefix:expansionPrefixes())for(String root:roots(type))if(!prefix.equalsIgnoreCase(root))out.add(prefix+" "+root);
         return compactNames(out); }
     private static List<String> compactNames(Collection<String> names) {
         LinkedHashMap<String,String> unique = new LinkedHashMap<>();
@@ -348,6 +357,7 @@ public final class NamedRegions extends BaseFeature {
         return List.copyOf(candidates);
     }
     private static int wordCount(String name) { return (int)Arrays.stream(name.trim().split("\\s+")).filter(word -> !word.isBlank()).count(); }
+    static boolean isNumberedFallback(String name){return name.trim().matches(".*\\s\\d+$");}
     private static String qualify(String name, String qualifier) {
         return name.startsWith("The ") ? "The " + qualifier + " " + name.substring(4) : qualifier + " " + name;
     }
@@ -369,6 +379,7 @@ public final class NamedRegions extends BaseFeature {
         case "shipwreck" -> split("Maribel,Stormcrow,Sea Wraith,Golden Gull,North Star,Wayfarer,Tide Runner,Blue Finch,Argent Dawn,Red Sail,Albatross,Black Pearl,Corsair,Fair Wind,Flying Fish,Grey Petrel,Ocean Rose,Sea Drake,Silver Spray,Wanderer");
         case "ruined-portal" -> split("Fallen,Shattered,Ashen,Silent,Lost,Crimson,Broken,Forgotten,Ancient,Withered,Blighted,Charred,Ember,Fractured,Hollow,Obsidian,Riven,Scorched,Smouldering,Sundered");
         default -> split("Ratta,Ancient,Hidden,Forgotten,Silent,Ember,Stone,Shadow,Golden,Lost,Broken,Cinder,Deep,Echo,Fallen,Hollow,Iron,Moon,Old,Veiled"); }; }
+    private static String[] expansionPrefixes(){return split("Amber,Ancient,Autumn,Azure,Birch,Black,Blooming,Blue,Bold,Bright,Bronze,Cedar,Cinder,Clouded,Clover,Copper,Coral,Crimson,Crystal,Dappled,Dawn,Deep,Distant,Dragon,Dusky,Eagle,Eastern,Elder,Emerald,Evening,Falcon,Fallen,Far,Fern,First,Flint,Forgotten,Fox,Frosted,Gilded,Golden,Green,Harbour,Hazel,Hidden,High,Hollow,Inner,Iron,Ivory,Jade,Last,Leafy,Little,Lone,Lost,Lower,Lunar,Maple,Misty,Moonlit,Mossy,New,Northern,Oak,Ochre,Old,Open,Outer,Painted,Pale,Pearl,Pine,Quiet,Raven,Red,Remote,River,Riven,Robin,Royal,Ruby,Sacred,Sapphire,Scarlet,Secret,Shadow,Shattered,Silent,Silver,Southern,Starry,Still,Stone,Stormy,Sunlit,Swift,Thorn,Thunder,Twilight,Upper,Violet,Wandering,Western,Whispering,White,Wild,Willow,Windy,Winter,Wolf,Wren,Ashen,Barley,Briar,Brook,Cascade,Daisy,Deer,Elm,Evergreen,Feather,Fire,Foxglove,Granite,Harvest,Hawthorn,Heather,Juniper,Lark,Marsh,Meadow,Orchid,Primrose,Reed,Rowan,Rust,Sage,Skylark,Slate,Solstice,Sparrow,Tempest,Timber,Valiant,Whalefall");}
     /** World of Warcraft zone names grouped by the closest Minecraft biome or structure family. */
     static List<String> warcraftNames(String type) { return List.of(switch(type) {
         case "desert" -> split("Durotar,Tanaris,Silithus,Uldum,Vol'dun,Netherstorm,Hellfire Peninsula,Blasted Lands");
