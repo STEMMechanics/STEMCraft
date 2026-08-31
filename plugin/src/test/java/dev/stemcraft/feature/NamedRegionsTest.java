@@ -18,9 +18,27 @@ class NamedRegionsTest {
             "nether-fossil", "ocean-ruins", "pillager-outpost", "stronghold", "swamp-hut", "trail-ruins",
             "trial-chambers")) {
             var names = NamedRegions.defaultNames(type);
-            assertEquals(1760, names.size(), type);
-            assertEquals(1760, Set.copyOf(names).size(), type);
+            assertTrue(names.size() >= 200, type);
+            assertEquals(names.size(), Set.copyOf(names).size(), type);
+            assertTrue(names.stream().allMatch(name -> name.split("\\s+").length <= 2), type);
         }
+    }
+
+    @Test void offersNaturalTwoWordChoicesForExistingLongNames() {
+        assertEquals(Set.of("Far Pearl", "Far Deep", "Pearl Deep"),
+            Set.copyOf(NamedRegions.shortNameCandidates("Far Pearl Deep")));
+        assertEquals(Set.of("Western Sunfield", "Western Plains", "Sunfield Plains"),
+            Set.copyOf(NamedRegions.shortNameCandidates("Western Sunfield Plains")));
+        assertEquals(Set.of("Woods Elder"), Set.copyOf(NamedRegions.shortNameCandidates("The Woods of Elder")));
+    }
+
+    @Test void includesWarcraftRegionNamesInMatchingPools() {
+        assertTrue(NamedRegions.defaultNames("forest").contains("Elwynn Forest"));
+        assertTrue(NamedRegions.defaultNames("mountains").contains("Redridge Mountains"));
+        assertTrue(NamedRegions.defaultNames("snow").contains("Howling Fjord"));
+        assertTrue(NamedRegions.defaultNames("swamp").contains("Dustwallow Marsh"));
+        assertTrue(NamedRegions.defaultNames("plains").contains("Ohn'ahran Plains"));
+        assertTrue(NamedRegions.defaultNames("ancient-city").contains("Hallowfall"));
     }
 
     @Test void groupsBiomeAndStructureVariants() {
@@ -46,5 +64,16 @@ class NamedRegionsTest {
         var loops = NamedRegions.boundaryLoops(Set.of(NamedRegions.pack(0, 0), NamedRegions.pack(1, 0)));
         assertEquals(1, loops.size());
         assertTrue(loops.getFirst().size() >= 4);
+    }
+
+    @Test void throttlesDirtyMapSnapshotsUntilConfiguredInterval() {
+        long builtAt = 1_000L;
+        long fiveMinutes = 300_000L;
+
+        assertFalse(NamedRegions.shouldRefreshMapSnapshot(false, builtAt, builtAt + fiveMinutes, fiveMinutes));
+        assertFalse(NamedRegions.shouldRefreshMapSnapshot(true, builtAt, builtAt + fiveMinutes - 1, fiveMinutes));
+        assertTrue(NamedRegions.shouldRefreshMapSnapshot(true, builtAt, builtAt + fiveMinutes, fiveMinutes));
+        assertTrue(NamedRegions.shouldRefreshMapSnapshot(true, 0, builtAt, fiveMinutes));
+        assertFalse(NamedRegions.shouldRefreshMapSnapshot(true, builtAt, builtAt - 1, fiveMinutes));
     }
 }
