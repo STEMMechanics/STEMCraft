@@ -18,7 +18,7 @@ class NamedRegionsTest {
             "nether-fossil", "ocean-ruins", "pillager-outpost", "stronghold", "swamp-hut", "trail-ruins",
             "trial-chambers")) {
             var names = NamedRegions.defaultNames(type);
-            assertTrue(names.size() >= 200, type);
+            assertTrue(names.size() >= 2500, type);
             assertEquals(names.size(), Set.copyOf(names).size(), type);
             assertTrue(names.stream().allMatch(name -> name.split("\\s+").length <= 2), type);
         }
@@ -30,6 +30,13 @@ class NamedRegionsTest {
         assertEquals(Set.of("Western Sunfield", "Western Plains", "Sunfield Plains"),
             Set.copyOf(NamedRegions.shortNameCandidates("Western Sunfield Plains")));
         assertEquals(Set.of("Woods Elder"), Set.copyOf(NamedRegions.shortNameCandidates("The Woods of Elder")));
+    }
+
+    @Test void recognisesProductionNumberedFallbackNamesForMigration() {
+        assertTrue(NamedRegions.isNumberedFallback("Foxglove 1150"));
+        assertTrue(NamedRegions.isNumberedFallback("Mosslight 1701"));
+        assertFalse(NamedRegions.isNumberedFallback("Pearl Deep"));
+        assertFalse(NamedRegions.isNumberedFallback("Area 52 East"));
     }
 
     @Test void includesWarcraftRegionNamesInMatchingPools() {
