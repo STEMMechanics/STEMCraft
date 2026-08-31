@@ -16,6 +16,8 @@ import org.bukkit.inventory.EquipmentSlot;
 import org.junit.jupiter.api.Test;
 import org.mockbukkit.mockbukkit.MockBukkit;
 import org.mockito.MockedStatic;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 
 import java.util.Map;
 import java.util.List;
@@ -126,6 +128,28 @@ class QuestFeatureTest {
         assertEquals(45, QuestFeature.countdownThresholdCrossed(300, 46, 45));
         assertEquals(30, QuestFeature.countdownThresholdCrossed(300, 46, 29));
         assertEquals(-1, QuestFeature.countdownThresholdCrossed(300, 44, 31));
+    }
+
+    @Test
+    void automaticTrackingPrioritizesUrgencyThenActivityAndDirections() {
+        assertEquals(500, QuestFeature.automaticTrackingPriority(true, true, true, true, true));
+        assertEquals(400, QuestFeature.automaticTrackingPriority(false, true, true, true, true));
+        assertEquals(300, QuestFeature.automaticTrackingPriority(false, false, true, true, true));
+        assertEquals(250, QuestFeature.automaticTrackingPriority(false, false, false, true, true));
+        assertEquals(200, QuestFeature.automaticTrackingPriority(false, false, false, false, true));
+        assertEquals(100, QuestFeature.automaticTrackingPriority(false, false, false, false, false));
+    }
+
+    @Test
+    void questBookActionsAreClickableForJavaAndCommandsForBedrock() {
+        var javaActions = QuestFeature.bookActions("apple-run", "Apple Run", false);
+        assertEquals("Quest actions\n\n[Track]  [Abandon]",
+            PlainTextComponentSerializer.plainText().serialize(javaActions));
+        assertEquals(ClickEvent.runCommand("/quest track apple-run"), javaActions.children().get(0).clickEvent());
+        assertEquals(ClickEvent.runCommand("/quest abandon apple-run"), javaActions.children().get(2).clickEvent());
+
+        assertEquals("Quest actions\n\n/quest track apple-run\n\n/quest abandon apple-run",
+            PlainTextComponentSerializer.plainText().serialize(QuestFeature.bookActions("apple-run", "Apple Run", true)));
     }
 
     @Test
