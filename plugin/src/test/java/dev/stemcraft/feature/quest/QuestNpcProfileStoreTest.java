@@ -31,6 +31,8 @@ class QuestNpcProfileStoreTest {
         tim.biomes().add("PLAINS");
         tim.idleDialogue().add("Fine day for gathering timber.");
         tim.leavingDialogue().add("Time I was heading home.");
+        tim.anchor("survival", 12.5, 70, -24.5, 42);
+        tim.anchorInteracted(true);
 
         var file = tempDir.resolve("npcs.yml").toFile();
         QuestNpcProfileStore.save(file, Map.of("tim", tim));
@@ -52,5 +54,10 @@ class QuestNpcProfileStoreTest {
         assertEquals("https://example.test/tim.png", loaded.skinUrl());
         assertEquals("Fine day for gathering timber.", loaded.idleDialogue().getFirst());
         assertEquals("Time I was heading home.", loaded.leavingDialogue().getFirst());
+        assertTrue(loaded.hasAnchor());
+        assertEquals("survival", loaded.anchorWorld());
+        assertEquals(12.5, loaded.anchorX());
+        assertEquals(42, loaded.anchorPeriod());
+        assertTrue(loaded.anchorInteracted());
     }
 }
