@@ -34,6 +34,8 @@ import java.util.regex.Pattern;
 
 /** Permanently names procedurally discovered biome territories and generated structures. */
 public final class NamedRegions extends BaseFeature {
+    private static final List<String> DEFAULT_MAP_PALETTE=List.of("#4054A0FF","#405BCB8A","#40F2C14E","#40E87979",
+        "#40B983E3","#404CC9C0","#40ED8F4A","#4088B04B");
     private record Area(String id, String world, String kind, String type, String name,
                         int minX, int minY, int minZ, int maxX, int maxY, int maxZ, boolean locked, long createdAt,
                         boolean discovered) {
@@ -513,18 +515,30 @@ public final class NamedRegions extends BaseFeature {
     private boolean enabled(World world) { return worlds.contains(world.getName().toLowerCase(Locale.ROOT)); }
     private void enableMap() { if(!getConfigSection().getBoolean("map.enabled",true))return; Plugin p=Bukkit.getPluginManager().getPlugin("Pl3xMap");
         if(p==null||!p.isEnabled())return; try {
-            var biomeStyle=new Pl3xMapNamedRegions.Style(mapColour("map.biomes.stroke-colour","#FFFF9800"),
-                mapColour("map.biomes.fill-colour","#40FF9800"),Math.max(1,getConfigSection().getInt("map.biomes.line-thickness",2)));
-            var structureStyle=new Pl3xMapNamedRegions.Style(mapColour("map.structures.stroke-colour","#FFFFC107"),
-                mapColour("map.structures.fill-colour","#40FFC107"),Math.max(1,getConfigSection().getInt("map.structures.line-thickness",2)));
+            var biomeStyles=mapBiomeStyles();
             String biomeLayer=getConfigSection().getString("map.layers.biomes","Biome Regions");
             String structureLayer=getConfigSection().getString("map.layers.structures","Discovered Structures");
             int updateSeconds=Math.max(60,getConfigSection().getInt("map.update-minutes",5)*60);
             mapRefreshMillis=updateSeconds*1000L;
-            mapLayer=new Pl3xMapNamedRegions(this::mapAreas,biomeStyle,structureStyle,getConfigSection().getBoolean("map.permanent-labels",false),
-                biomeLayer,structureLayer,updateSeconds);mapLayer.enable(); }
+            int structureIconSize=Math.max(12,getConfigSection().getInt("map.structures.icon-size",24));
+            mapLayer=new Pl3xMapNamedRegions(STEMCraft.getPlugin(),this::mapAreas,biomeStyles,
+                getConfigSection().getBoolean("map.permanent-labels",false),biomeLayer,structureLayer,
+                updateSeconds,structureIconSize);mapLayer.enable(); }
         catch(RuntimeException e){STEMCraft.getPlugin().getLogger().warning("Could not enable named-region map layer: "+e.getMessage());} }
+    private List<Pl3xMapNamedRegions.Style> mapBiomeStyles(){
+        int thickness=Math.max(1,getConfigSection().getInt("map.biomes.line-thickness",2));
+        List<String> palette=getConfigSection().contains("map.biomes.palette")
+            ?getConfigSection().getStringList("map.biomes.palette"):DEFAULT_MAP_PALETTE;
+        if(palette.isEmpty())return List.of(new Pl3xMapNamedRegions.Style(mapColour("map.biomes.stroke-colour","#FFFF9800"),
+            mapColour("map.biomes.fill-colour","#40FF9800"),thickness));
+        List<Pl3xMapNamedRegions.Style> styles=new ArrayList<>();
+        for(String configured:palette){int fill=mapColourValue(configured,"#40FF9800");
+            styles.add(new Pl3xMapNamedRegions.Style(0xFF000000|(fill&0xFFFFFF),fill,thickness));}
+        return List.copyOf(styles);
+    }
     private int mapColour(String path,String fallback){String raw=getConfigSection().getString(path,fallback).trim().replace("#","").replaceFirst("(?i)^0x","");
+        return mapColourValue(raw,fallback);}
+    static int mapColourValue(String configured,String fallback){String raw=configured.trim().replace("#","").replaceFirst("(?i)^0x","");
         if(raw.length()==6)raw="FF"+raw;if(raw.length()!=8)return(int)Long.parseLong(fallback.substring(1),16);
         try{return(int)Long.parseLong(raw,16);}catch(NumberFormatException ignored){return(int)Long.parseLong(fallback.substring(1),16);}}
     private Collection<NamedMapArea> mapAreas() {
