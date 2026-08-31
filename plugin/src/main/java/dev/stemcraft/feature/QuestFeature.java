@@ -56,6 +56,7 @@ import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.world.TimeSkipEvent;
@@ -117,6 +118,8 @@ public final class QuestFeature extends BaseFeature {
     private static final int NPC_INTERACTED_RELOCATION_RADIUS = 250;
     private static final String EDITOR_PATH = "/quests/editor/";
     private static final long EDITOR_TOKEN_LIFETIME_MS = TimeUnit.HOURS.toMillis(24);
+    private static final long AUTO_TRACK_ACTIVITY_MS = TimeUnit.SECONDS.toMillis(5);
+    private static final long URGENT_TIMED_QUEST_SECONDS = TimeUnit.MINUTES.toSeconds(5);
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final Pattern EXPERIENCE_REWARD = Pattern.compile("(?i)^(?:experience|xp)\\s+add\\s+\\{player}\\s+(\\d+)\\s+points$");
     private static final Gson EDITOR_GSON = new GsonBuilder().serializeNulls().create();
@@ -137,6 +140,8 @@ public final class QuestFeature extends BaseFeature {
     private final Map<UUID, String> npcMenuEngagements = new HashMap<>();
     private final Map<UUID, UUID> questMenuSessions = new HashMap<>();
     private final Map<UUID, String> trackedQuests = new HashMap<>();
+    private final Map<UUID, String> autoTrackActivityQuests = new HashMap<>();
+    private final Map<UUID, Long> autoTrackActivityUntil = new HashMap<>();
     private final Set<UUID> autoTrackPlayers = new HashSet<>();
     private final Set<UUID> trackingPreferencePlayers = new HashSet<>();
     private final Map<UUID, BossBar> trackingBossBars = new HashMap<>();
@@ -199,6 +204,7 @@ public final class QuestFeature extends BaseFeature {
                 UUID uuid = context.playerUuid();
                 active.remove(uuid); completed.remove(uuid); revisions.remove(uuid); attemptStarted.remove(uuid); timedQuestRemaining.remove(uuid);
                 trackedQuests.remove(uuid); autoTrackPlayers.remove(uuid); trackingPreferencePlayers.remove(uuid);
+                autoTrackActivityQuests.remove(uuid); autoTrackActivityUntil.remove(uuid);
                 BossBar bar = trackingBossBars.remove(uuid); if (bar != null) Bukkit.getOnlinePlayers().forEach(bar::removeViewer);
                 questMenuSessions.remove(uuid);
                 npcMenuEngagements.remove(uuid);
@@ -304,7 +310,6 @@ public final class QuestFeature extends BaseFeature {
             QuestDefinition quest = questId == null ? null : quests.get(questId);
             QuestProgress progress = quest == null ? null : progress(player, questId);
             if (quest == null || progress == null || !hasOwnedQuestBook(player, questId)) continue;
-            if (progress.state() == QuestProgress.State.READY && profileId.equals(quest.endNpcProfile())) return player;
             QuestObjective objective = currentObjective(quest, progress);
             if (objective != null && objective.type() == QuestObjective.Type.NPC
                 && objective.target().equals("profile:" + profileId)) return player;
@@ -883,6 +888,8 @@ public final class QuestFeature extends BaseFeature {
             BossBar bar = trackingBossBars.remove(event.getPlayer().getUniqueId());
             if (bar != null) event.getPlayer().hideBossBar(bar);
             timedQuestRemaining.remove(event.getPlayer().getUniqueId());
+            autoTrackActivityQuests.remove(event.getPlayer().getUniqueId());
+            autoTrackActivityUntil.remove(event.getPlayer().getUniqueId());
             npcMenuEngagements.remove(event.getPlayer().getUniqueId());
         }, EventPriority.MONITOR, true);
         api.events().register(EntityPickupItemEvent.class, event -> {
@@ -898,6 +905,12 @@ public final class QuestFeature extends BaseFeature {
                 reconcileAutomaticTracking(player);
             });
         }, EventPriority.HIGHEST, true);
+        api.events().register(PlayerItemConsumeEvent.class, event -> api.tasks().nextTick(() -> {
+            Player player = event.getPlayer();
+            refreshOwnedBooks(player);
+            refreshMarkers(player);
+            if (isAutoTracking(player.getUniqueId())) updateAutomaticTracking(player);
+        }), EventPriority.MONITOR, true);
         api.events().register(InventoryClickEvent.class, event -> {
             if (!(event.getWhoClicked() instanceof Player player)) return;
             api.tasks().nextTick(() -> {
@@ -1403,7 +1416,7 @@ public final class QuestFeature extends BaseFeature {
         }
         if ("auto".equalsIgnoreCase(requested)) {
             setAutoTracking(player.getUniqueId(), true);
-            trackMostRecentQuest(player.getUniqueId());
+            updateAutomaticTracking(player);
             player.sendMessage(Component.text("Quest automatic tracking enabled.", NamedTextColor.YELLOW));
             return;
         }
@@ -1425,7 +1438,11 @@ public final class QuestFeature extends BaseFeature {
     private void setAutoTracking(UUID playerId, boolean enabled) {
         trackingPreferencePlayers.add(playerId);
         if (enabled) autoTrackPlayers.add(playerId);
-        else autoTrackPlayers.remove(playerId);
+        else {
+            autoTrackPlayers.remove(playerId);
+            autoTrackActivityQuests.remove(playerId);
+            autoTrackActivityUntil.remove(playerId);
+        }
         api.database().update("INSERT OR REPLACE INTO quest_tracking_preferences(player_uuid,auto_enabled) VALUES(?,?)", statement -> {
             statement.setString(1, playerId.toString()); statement.setInt(2, enabled ? 1 : 0);
         });
@@ -1440,6 +1457,10 @@ public final class QuestFeature extends BaseFeature {
     }
 
     private void trackQuest(Player player, String questId) {
+        if (questId.equals(trackedQuests.get(player.getUniqueId()))) {
+            updateQuestTracking(player);
+            return;
+        }
         trackedQuests.put(player.getUniqueId(), questId);
         api.database().update("INSERT OR REPLACE INTO quest_tracking(player_uuid,quest_id) VALUES(?,?)", statement -> {
             statement.setString(1, player.getUniqueId().toString()); statement.setString(2, questId);
@@ -2394,9 +2415,71 @@ public final class QuestFeature extends BaseFeature {
 
     private void tickQuestTracking() {
         for (Player player : Bukkit.getOnlinePlayers()) {
-            if (trackedQuests.containsKey(player.getUniqueId())) updateQuestTracking(player);
-            else reconcileAutomaticTracking(player);
+            if (isAutoTracking(player.getUniqueId())) updateAutomaticTracking(player);
+            else if (trackedQuests.containsKey(player.getUniqueId())) updateQuestTracking(player);
         }
+    }
+
+    private void updateAutomaticTracking(Player player) {
+        String selected = selectAutomaticQuest(player, System.currentTimeMillis());
+        if (selected == null) {
+            if (trackedQuests.containsKey(player.getUniqueId())) stopTracking(player.getUniqueId());
+        } else trackQuest(player, selected);
+    }
+
+    private @Nullable String selectAutomaticQuest(Player player, long now) {
+        UUID playerId = player.getUniqueId();
+        String activityQuest = autoTrackActivityUntil.getOrDefault(playerId, 0L) > now
+            ? autoTrackActivityQuests.get(playerId) : null;
+        if (activityQuest == null) {
+            autoTrackActivityQuests.remove(playerId);
+            autoTrackActivityUntil.remove(playerId);
+        }
+        return active.getOrDefault(playerId, Map.of()).entrySet().stream()
+            .filter(entry -> hasOwnedQuestBook(player, entry.getKey()))
+            .map(entry -> automaticTrackingCandidate(playerId, entry.getKey(), entry.getValue(), activityQuest, now))
+            .filter(Objects::nonNull)
+            .max(Comparator.comparingInt(AutoTrackingCandidate::priority)
+                .thenComparingLong(AutoTrackingCandidate::tieBreaker))
+            .map(AutoTrackingCandidate::questId).orElse(null);
+    }
+
+    private @Nullable AutoTrackingCandidate automaticTrackingCandidate(UUID playerId, String questId,
+                                                                         QuestProgress progress,
+                                                                         @Nullable String activityQuest,
+                                                                         long now) {
+        QuestDefinition quest = quests.get(questId);
+        if (quest == null) return null;
+        QuestObjective objective = currentObjective(quest, progress);
+        long remaining = timedQuestSecondsRemaining(playerId, quest, now);
+        boolean timed = remaining >= 0;
+        boolean urgent = timed && remaining < URGENT_TIMED_QUEST_SECONDS;
+        boolean activity = questId.equals(activityQuest);
+        boolean ready = isReadyToTurnIn(Bukkit.getPlayer(playerId), quest, progress);
+        boolean npc = objective != null && objective.type() == QuestObjective.Type.NPC;
+        int priority = automaticTrackingPriority(urgent, activity, ready, npc, timed);
+        long tieBreaker = timed && (urgent || priority == 200) ? -remaining
+            : attemptStarted.getOrDefault(playerId, Map.of()).getOrDefault(questId, 0L);
+        return new AutoTrackingCandidate(questId, priority, tieBreaker);
+    }
+
+    static int automaticTrackingPriority(boolean urgentTimed, boolean recentActivity, boolean ready,
+                                         boolean npc, boolean timed) {
+        if (urgentTimed) return 500;
+        if (recentActivity) return 400;
+        if (ready) return 300;
+        if (npc) return 250;
+        if (timed) return 200;
+        return 100;
+    }
+
+    private record AutoTrackingCandidate(String questId, int priority, long tieBreaker) {}
+
+    private void noteAutomaticTrackingActivity(Player player, QuestDefinition quest) {
+        if (!isAutoTracking(player.getUniqueId()) || !hasOwnedQuestBook(player, quest.id())) return;
+        autoTrackActivityQuests.put(player.getUniqueId(), quest.id());
+        autoTrackActivityUntil.put(player.getUniqueId(), System.currentTimeMillis() + AUTO_TRACK_ACTIVITY_MS);
+        updateAutomaticTracking(player);
     }
 
     private void reconcileAutomaticTracking(Player player) {
@@ -2404,7 +2487,7 @@ public final class QuestFeature extends BaseFeature {
         if (!isAutoTracking(playerId) || trackedQuests.containsKey(playerId)) return;
         boolean hasTrackableQuest = active.getOrDefault(playerId, Map.of()).keySet().stream()
             .anyMatch(id -> hasOwnedQuestBook(player, id));
-        if (hasTrackableQuest) trackMostRecentQuest(playerId);
+        if (hasTrackableQuest) updateAutomaticTracking(player);
     }
 
     private void updateQuestTracking(Player player) {
@@ -2431,11 +2514,12 @@ public final class QuestFeature extends BaseFeature {
         }
 
         Location target = trackingTarget(player, quest, progress);
-        String arrow = target == null ? "" : trackingArrow(player.getLocation(), target);
+        boolean npcDestination = trackingNpcDestination(player, quest, progress);
+        String indicator = trackingIndicator(player.getLocation(), target, npcDestination, System.currentTimeMillis());
         String objective = trackingObjectiveText(player, quest, progress);
         Component title = glyph("question_yellow", "!").color(NamedTextColor.YELLOW)
             .append(Component.text(" " + trackingQuestTitle(quest.title()), NamedTextColor.YELLOW))
-            .append(Component.text(" - " + (arrow.isEmpty() ? "" : arrow + " ") + objective, NamedTextColor.WHITE));
+            .append(Component.text(" - " + (indicator.isEmpty() ? "" : indicator + " ") + objective, NamedTextColor.WHITE));
         BossBar bar = trackingBossBars.computeIfAbsent(player.getUniqueId(), ignored -> {
             BossBar created = BossBar.bossBar(Component.empty(), 0F, BossBar.Color.WHITE, BossBar.Overlay.PROGRESS);
             player.showBossBar(created);
@@ -2455,14 +2539,30 @@ public final class QuestFeature extends BaseFeature {
         return separator < 0 ? title : title.substring(separator + 2).trim();
     }
 
-    private String trackingObjectiveText(Player player, QuestDefinition quest, QuestProgress progress) {
-        if (progress.state() == QuestProgress.State.READY)
-            return "Return to " + renderQuestText(quest, quest.endNpcName());
+    static String trackingIndicator(Location player, @Nullable Location target, boolean npcDestination, long now) {
+        if (target != null && player.getWorld() != null && player.getWorld().equals(target.getWorld()))
+            return trackingArrow(player, target);
+        return npcDestination && Math.floorDiv(now, 500L) % 2L == 0L ? "·" : "";
+    }
+
+    private boolean trackingNpcDestination(Player player, QuestDefinition quest, QuestProgress progress) {
+        if (isReadyToTurnIn(player, quest, progress)) return true;
         QuestObjective objective = currentObjective(quest, progress);
+        return objective != null && objective.type() == QuestObjective.Type.NPC;
+    }
+
+    private String trackingObjectiveText(Player player, QuestDefinition quest, QuestProgress progress) {
+        if (isReadyToTurnIn(player, quest, progress))
+            return "Return to " + renderQuestText(quest, quest.endNpcName());
+        QuestObjective objective = progress.state() == QuestProgress.State.READY
+            ? firstMissingCollectObjective(player, quest) : currentObjective(quest, progress);
         if (objective == null) return "Ready";
         String label = renderQuestText(quest, objective.label());
+        int objectiveProgress = progress.state() == QuestProgress.State.READY
+            ? Math.min(objective.amount(), countMaterial(player.getInventory(), Material.valueOf(objective.target())))
+            : progress.objectiveProgress();
         String text = switch (objective.type()) {
-            case COLLECT, KILL -> formatTrackedObjective(label, progress.objectiveProgress(), objective.amount());
+            case COLLECT, KILL -> formatTrackedObjective(label, objectiveProgress, objective.amount());
             case BIOME -> label + ": " + progress.objectiveProgress() + "/" + objective.amount() + " seconds";
             case ALTITUDE_ABOVE, ALTITUDE_BELOW -> label + " (Y " + player.getLocation().getBlockY() + ")";
             default -> label;
@@ -2499,8 +2599,9 @@ public final class QuestFeature extends BaseFeature {
     }
 
     private @Nullable Location trackingTarget(Player player, QuestDefinition quest, QuestProgress progress) {
-        if (progress.state() == QuestProgress.State.READY)
+        if (isReadyToTurnIn(player, quest, progress))
             return npcProfileLocation(quest.endNpcProfile(), quest.endNpc());
+        if (progress.state() == QuestProgress.State.READY) return null;
         QuestObjective objective = currentObjective(quest, progress);
         if (objective == null) return null;
         return switch (objective.type()) {
@@ -2524,8 +2625,6 @@ public final class QuestFeature extends BaseFeature {
             if (profile == null) return null;
             Entity entity = profile.spawnedEntity() == null ? null : Bukkit.getEntity(profile.spawnedEntity());
             if (entity != null && entity.isValid()) return entity.getLocation();
-            if (profile.npcType() == EntityType.PLAYER && citizensAvailable())
-                return CitizensQuestNpcSupport.storedLocation(profile);
             return null;
         }
         Entity entity = fixedNpc == null ? null : Bukkit.getEntity(fixedNpc);
@@ -2590,6 +2689,7 @@ public final class QuestFeature extends BaseFeature {
     private void syncCollectObjective(Player player, @Nullable QuestDefinition quest, QuestProgress progress) {
         QuestObjective objective = currentObjective(quest, progress);
         if (objective == null || objective.type() != QuestObjective.Type.COLLECT) return;
+        int previous = progress.objectiveProgress();
         int count = Math.min(objective.amount(), countMaterial(player.getInventory(), Material.valueOf(objective.target())));
         if (count >= objective.amount()) advance(player, quest, progress);
         else if (count != progress.objectiveProgress()) {
@@ -2597,6 +2697,7 @@ public final class QuestFeature extends BaseFeature {
             saveProgress(progress);
             updateQuestBook(player, quest, progress);
         }
+        if (quest != null && count > previous) noteAutomaticTrackingActivity(player, quest);
     }
 
     private void syncCollectObjectives(Player player) {
@@ -2661,6 +2762,7 @@ public final class QuestFeature extends BaseFeature {
         progress.objectiveProgress(Math.min(objective.amount(), progress.objectiveProgress() + amount));
         if (progress.objectiveProgress() >= objective.amount()) advance(player, quest, progress);
         else { saveProgress(progress); updateQuestBook(player, quest, progress); }
+        noteAutomaticTrackingActivity(player, quest);
     }
 
     private void advance(Player player, QuestDefinition quest, QuestProgress progress) {
@@ -2837,12 +2939,21 @@ public final class QuestFeature extends BaseFeature {
         return text.replace("{start-npc}", quest.startNpcName()).replace("{end-npc}", quest.endNpcName());
     }
 
-    private boolean collectObjectivesSatisfied(Player player, QuestDefinition quest) {
+    private static boolean collectObjectivesSatisfied(Player player, QuestDefinition quest) {
+        return firstMissingCollectObjective(player, quest) == null;
+    }
+
+    static boolean isReadyToTurnIn(@Nullable Player player, QuestDefinition quest, QuestProgress progress) {
+        return player != null && progress.state() == QuestProgress.State.READY
+            && collectObjectivesSatisfied(player, quest);
+    }
+
+    static @Nullable QuestObjective firstMissingCollectObjective(Player player, QuestDefinition quest) {
         for (QuestObjective objective : quest.objectives()) {
             if (objective.type() == QuestObjective.Type.COLLECT
-                && countMaterial(player.getInventory(), Material.valueOf(objective.target())) < objective.amount()) return false;
+                && countMaterial(player.getInventory(), Material.valueOf(objective.target())) < objective.amount()) return objective;
         }
-        return true;
+        return null;
     }
 
     private boolean isAvailable(Player player, QuestDefinition quest) {
@@ -2870,7 +2981,7 @@ public final class QuestFeature extends BaseFeature {
             if (startNpc != null) api.holograms().createDynamic(HOLOGRAM_TYPE, markerKey(quest, "start"), startNpc, 3.0D,
                 player -> isAvailable(player, quest), player -> glyph("question_yellow", "?"));
             if (endNpc != null) api.holograms().createDynamic(HOLOGRAM_TYPE, markerKey(quest, "end"), endNpc, 3.0D,
-                player -> { QuestProgress progress = progress(player, quest.id()); return progress != null && progress.state() == QuestProgress.State.READY; },
+                player -> { QuestProgress progress = progress(player, quest.id()); return progress != null && isReadyToTurnIn(player, quest, progress); },
                 player -> glyph("exclamation_yellow", "!"));
             for (int i = 0; i < quest.objectives().size(); i++) {
                 QuestObjective objective = quest.objectives().get(i);
@@ -2941,8 +3052,8 @@ public final class QuestFeature extends BaseFeature {
         meta.author(Component.text(quest.author()));
         meta.displayName(nonItalic(renderQuestText(quest, quest.title()), NamedTextColor.GOLD));
         meta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
-        meta.lore(bookLore(quest, progress));
-        meta.addPages(bookPages(quest, progress).toArray(Component[]::new));
+        meta.lore(bookLore(owner, quest, progress));
+        meta.addPages(bookPages(quest, progress, PlayerUtil.isBedrock(owner)).toArray(Component[]::new));
         meta.getPersistentDataContainer().set(questIdKey, PersistentDataType.STRING, quest.id());
         meta.getPersistentDataContainer().set(questOwnerKey, PersistentDataType.STRING, owner.getUniqueId().toString());
         meta.getPersistentDataContainer().set(questRevisionKey, PersistentDataType.INTEGER, revision);
@@ -2950,7 +3061,7 @@ public final class QuestFeature extends BaseFeature {
         return item;
     }
 
-    private List<Component> bookLore(QuestDefinition quest, QuestProgress progress) {
+    private List<Component> bookLore(Player player, QuestDefinition quest, QuestProgress progress) {
         List<Component> lore = new ArrayList<>();
         lore.add(nonItalic("Quest Book", NamedTextColor.YELLOW));
         lore.add(nonItalic("By " + quest.author(), NamedTextColor.GRAY));
@@ -2958,9 +3069,13 @@ public final class QuestFeature extends BaseFeature {
         appendWrappedLore(lore, renderQuestText(quest, quest.shortDescription()), NamedTextColor.WHITE);
         lore.add(Component.empty());
         if (!quest.objectives().isEmpty()) {
+            QuestObjective missing = progress.state() == QuestProgress.State.READY
+                ? firstMissingCollectObjective(player, quest) : null;
             int index = Math.min(progress.objectiveIndex(), quest.objectives().size() - 1);
-            QuestObjective objective = quest.objectives().get(index);
-            int amount = progress.state() == QuestProgress.State.READY ? objective.amount() : progress.objectiveProgress();
+            QuestObjective objective = missing == null ? quest.objectives().get(index) : missing;
+            int amount = missing != null
+                ? Math.min(objective.amount(), countMaterial(player.getInventory(), Material.valueOf(objective.target())))
+                : progress.state() == QuestProgress.State.READY ? objective.amount() : progress.objectiveProgress();
             lore.add(nonItalic(objectiveProgressName(quest, objective) + ": " + amount + "/" + objective.amount(), NamedTextColor.GRAY));
         }
         lore.add(Component.empty());
@@ -2995,7 +3110,7 @@ public final class QuestFeature extends BaseFeature {
         return Component.text(text, color).decoration(TextDecoration.ITALIC, false);
     }
 
-    private List<Component> bookPages(QuestDefinition quest, QuestProgress progress) {
+    private List<Component> bookPages(QuestDefinition quest, QuestProgress progress, boolean bedrock) {
         List<Component> pages = new ArrayList<>();
         pages.add(Component.text(renderQuestText(quest, quest.title()) + "\n\n", NamedTextColor.BLACK, TextDecoration.BOLD)
             .append(Component.text(renderQuestText(quest, quest.description()), NamedTextColor.BLACK).decoration(TextDecoration.BOLD, false))
@@ -3016,13 +3131,29 @@ public final class QuestFeature extends BaseFeature {
         if (experience > 0) rewards = rewards.append(Component.text("- " + experience + " XP\n", NamedTextColor.BLACK)
             .decoration(TextDecoration.BOLD, false));
         pages.add(objectives.append(rewards));
-        String abandonCommand = "/quest abandon " + quest.id();
-        pages.add(Component.text("Abandon quest\n\n", NamedTextColor.BLACK, TextDecoration.BOLD)
-            .append(Component.text("To abandon this quest, use:\n\n", NamedTextColor.BLACK).decoration(TextDecoration.BOLD, false))
-            .append(Component.text(abandonCommand, NamedTextColor.DARK_RED).decoration(TextDecoration.BOLD, false)
-                .clickEvent(ClickEvent.runCommand(abandonCommand))
-                .hoverEvent(HoverEvent.showText(Component.text("Abandon " + renderQuestText(quest, quest.title()))))));
+        pages.add(bookActions(quest.id(), renderQuestText(quest, quest.title()), bedrock));
         return pages;
+    }
+
+    static Component bookActions(String questId, String questTitle, boolean bedrock) {
+        String trackCommand = "/quest track " + questId;
+        String abandonCommand = "/quest abandon " + questId;
+        Component actions = Component.text("Quest actions\n\n", NamedTextColor.BLACK, TextDecoration.BOLD);
+        if (bedrock) {
+            actions = actions.append(Component.text(trackCommand + "\n\n" + abandonCommand, NamedTextColor.DARK_RED)
+                .decoration(TextDecoration.BOLD, false));
+        } else {
+            actions = actions.append(Component.text("[Track]", NamedTextColor.DARK_GREEN)
+                    .decoration(TextDecoration.BOLD, false)
+                    .clickEvent(ClickEvent.runCommand(trackCommand))
+                    .hoverEvent(HoverEvent.showText(Component.text("Track " + questTitle))))
+                .append(Component.text("  "))
+                .append(Component.text("[Abandon]", NamedTextColor.DARK_RED)
+                    .decoration(TextDecoration.BOLD, false)
+                    .clickEvent(ClickEvent.runCommand(abandonCommand))
+                    .hoverEvent(HoverEvent.showText(Component.text("Abandon " + questTitle))));
+        }
+        return actions;
     }
 
     private String objectiveProgressName(QuestDefinition quest, QuestObjective objective) {

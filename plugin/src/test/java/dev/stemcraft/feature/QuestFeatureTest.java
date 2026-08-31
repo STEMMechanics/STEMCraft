@@ -9,6 +9,7 @@ import dev.stemcraft.api.service.web.WebServiceRequest;
 import dev.stemcraft.feature.quest.QuestObjective;
 import dev.stemcraft.feature.quest.QuestDefinition;
 import dev.stemcraft.feature.quest.QuestRewardItem;
+import dev.stemcraft.feature.quest.QuestProgress;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -16,6 +17,8 @@ import org.bukkit.inventory.EquipmentSlot;
 import org.junit.jupiter.api.Test;
 import org.mockbukkit.mockbukkit.MockBukkit;
 import org.mockito.MockedStatic;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 
 import java.util.Map;
 import java.util.List;
@@ -89,6 +92,19 @@ class QuestFeatureTest {
     }
 
     @Test
+    void flashesMiddotWhenNpcLocationCannotBeTracked() {
+        World survival = mock(World.class);
+        World nether = mock(World.class);
+        Location player = new Location(survival, 0, 64, 0);
+
+        assertEquals("·", QuestFeature.trackingIndicator(player, null, true, 0L));
+        assertEquals("", QuestFeature.trackingIndicator(player, null, true, 500L));
+        assertEquals("·", QuestFeature.trackingIndicator(player, new Location(nether, 0, 64, 0), true, 0L));
+        assertEquals("", QuestFeature.trackingIndicator(player, null, false, 0L));
+        assertEquals("↑", QuestFeature.trackingIndicator(player, new Location(survival, 0, 64, 10), true, 0L));
+    }
+
+    @Test
     void placesTrackedProgressInsideCollectAndKillDescriptions() {
         assertEquals("Gather 0/6 Oak Logs", QuestFeature.formatTrackedObjective("Gather 6 oak logs", 0, 6));
         assertEquals("Kill 0/3 Iron Golems", QuestFeature.formatTrackedObjective("Kill 3 iron golems", 0, 3));
@@ -126,6 +142,49 @@ class QuestFeatureTest {
         assertEquals(45, QuestFeature.countdownThresholdCrossed(300, 46, 45));
         assertEquals(30, QuestFeature.countdownThresholdCrossed(300, 46, 29));
         assertEquals(-1, QuestFeature.countdownThresholdCrossed(300, 44, 31));
+    }
+
+    @Test
+    void automaticTrackingPrioritizesUrgencyThenActivityAndDirections() {
+        assertEquals(500, QuestFeature.automaticTrackingPriority(true, true, true, true, true));
+        assertEquals(400, QuestFeature.automaticTrackingPriority(false, true, true, true, true));
+        assertEquals(300, QuestFeature.automaticTrackingPriority(false, false, true, true, true));
+        assertEquals(250, QuestFeature.automaticTrackingPriority(false, false, false, true, true));
+        assertEquals(200, QuestFeature.automaticTrackingPriority(false, false, false, false, true));
+        assertEquals(100, QuestFeature.automaticTrackingPriority(false, false, false, false, false));
+    }
+
+    @Test
+    void questBookActionsAreClickableForJavaAndCommandsForBedrock() {
+        var javaActions = QuestFeature.bookActions("apple-run", "Apple Run", false);
+        assertEquals("Quest actions\n\n[Track]  [Abandon]",
+            PlainTextComponentSerializer.plainText().serialize(javaActions));
+        assertEquals(ClickEvent.runCommand("/quest track apple-run"), javaActions.children().get(0).clickEvent());
+        assertEquals(ClickEvent.runCommand("/quest abandon apple-run"), javaActions.children().get(2).clickEvent());
+
+        assertEquals("Quest actions\n\n/quest track apple-run\n\n/quest abandon apple-run",
+            PlainTextComponentSerializer.plainText().serialize(QuestFeature.bookActions("apple-run", "Apple Run", true)));
+    }
+
+    @Test
+    void readyCollectQuestRequiresItemsToRemainAvailableForTurnIn() {
+        MockBukkit.mock();
+        try {
+            var player = MockBukkit.getMock().addPlayer("OrchardTester");
+            QuestDefinition quest = new QuestDefinition("apple-run", "Apple Run");
+            quest.objectives().add(QuestObjective.collect(Material.APPLE, 6, true, "Bring 6 apples"));
+            QuestProgress progress = new QuestProgress(player.getUniqueId(), quest.id(), 1, 0,
+                QuestProgress.State.READY);
+
+            player.getInventory().addItem(new org.bukkit.inventory.ItemStack(Material.APPLE, 6));
+            assertTrue(QuestFeature.isReadyToTurnIn(player, quest, progress));
+
+            player.getInventory().removeItem(new org.bukkit.inventory.ItemStack(Material.APPLE, 4));
+            assertFalse(QuestFeature.isReadyToTurnIn(player, quest, progress));
+            QuestObjective missing = QuestFeature.firstMissingCollectObjective(player, quest);
+            assertNotNull(missing);
+            assertEquals("APPLE", missing.target());
+        } finally { MockBukkit.unmock(); }
     }
 
     @Test

@@ -869,7 +869,7 @@ npcs:
       uniqueness-radius: 750
       minimum-level: 1
       time-from: 0
-      time-until: 24000
+      time-until: 12000
       daily-chance: 1.0
       biomes: [PLAINS, FOREST, MEADOW]
     dialogue:

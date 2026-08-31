@@ -97,14 +97,15 @@ class SurvivalCampaignIntegrityTest {
         assertTrue(profiles.get("common-orchard-keeper").ai(), "Pippin should forage around the forest");
         assertEquals(12000, profiles.get("common-orchard-keeper").timeUntil(), "Pippin should forage during daylight");
         Set<String> anytimeProfiles = Set.of("common-fisher", "expansion-kael", "expansion-bruna",
-            "expansion-selene", "expansion-mira", "expansion-rowan", "tribute-technoblade");
+            "expansion-selene", "expansion-mira", "tribute-technoblade");
         for (QuestNpcProfile profile : profiles.values()) {
             assertEquals(0, profile.timeFrom(), profile.id() + " should begin its schedule at dawn");
             assertEquals(anytimeProfiles.contains(profile.id()) ? 24000 : 12000, profile.timeUntil(),
                 profile.id() + " has an unexpected availability schedule");
         }
         assertEquals(profiles.keySet(), java.util.stream.Stream.concat(
-            profiles.keySet().stream().filter(id -> id.startsWith("campaign-") || id.equals("common-orchard-keeper")),
+            profiles.keySet().stream().filter(id -> id.startsWith("campaign-")
+                || id.equals("common-orchard-keeper") || id.equals("expansion-rowan")),
             anytimeProfiles.stream()).collect(java.util.stream.Collectors.toSet()),
             "Every bundled NPC should have an explicitly reviewed availability category");
         } finally { MockBukkit.unmock(); }
