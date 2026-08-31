@@ -9,6 +9,7 @@ import dev.stemcraft.api.service.web.WebServiceRequest;
 import dev.stemcraft.feature.quest.QuestObjective;
 import dev.stemcraft.feature.quest.QuestDefinition;
 import dev.stemcraft.feature.quest.QuestRewardItem;
+import dev.stemcraft.feature.quest.QuestProgress;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -150,6 +151,27 @@ class QuestFeatureTest {
 
         assertEquals("Quest actions\n\n/quest track apple-run\n\n/quest abandon apple-run",
             PlainTextComponentSerializer.plainText().serialize(QuestFeature.bookActions("apple-run", "Apple Run", true)));
+    }
+
+    @Test
+    void readyCollectQuestRequiresItemsToRemainAvailableForTurnIn() {
+        MockBukkit.mock();
+        try {
+            var player = MockBukkit.getMock().addPlayer("OrchardTester");
+            QuestDefinition quest = new QuestDefinition("apple-run", "Apple Run");
+            quest.objectives().add(QuestObjective.collect(Material.APPLE, 6, true, "Bring 6 apples"));
+            QuestProgress progress = new QuestProgress(player.getUniqueId(), quest.id(), 1, 0,
+                QuestProgress.State.READY);
+
+            player.getInventory().addItem(new org.bukkit.inventory.ItemStack(Material.APPLE, 6));
+            assertTrue(QuestFeature.isReadyToTurnIn(player, quest, progress));
+
+            player.getInventory().removeItem(new org.bukkit.inventory.ItemStack(Material.APPLE, 4));
+            assertFalse(QuestFeature.isReadyToTurnIn(player, quest, progress));
+            QuestObjective missing = QuestFeature.firstMissingCollectObjective(player, quest);
+            assertNotNull(missing);
+            assertEquals("APPLE", missing.target());
+        } finally { MockBukkit.unmock(); }
     }
 
     @Test
