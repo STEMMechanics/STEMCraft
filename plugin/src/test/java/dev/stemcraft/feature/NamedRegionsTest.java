@@ -83,4 +83,10 @@ class NamedRegionsTest {
         assertTrue(NamedRegions.shouldRefreshMapSnapshot(true, 0, builtAt, fiveMinutes));
         assertFalse(NamedRegions.shouldRefreshMapSnapshot(true, builtAt, builtAt - 1, fiveMinutes));
     }
+
+    @Test void parsesOpaqueAndTranslucentMapPaletteColours() {
+        assertEquals(0xFF54A0FF, NamedRegions.mapColourValue("#54A0FF", "#FFFF9800"));
+        assertEquals(0x4054A0FF, NamedRegions.mapColourValue("0x4054A0FF", "#FFFF9800"));
+        assertEquals(0xFFFF9800, NamedRegions.mapColourValue("not-a-colour", "#FFFF9800"));
+    }
 }

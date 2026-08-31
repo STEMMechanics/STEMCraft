@@ -83,13 +83,24 @@ named-regions:
       biomes: "Regions"
       structures: "Structures"
     biomes:
+      # Each region consistently selects one translucent ARGB colour from this palette.
+      # The same RGB value is used at full opacity for its border.
+      palette:
+        - "#4054A0FF"
+        - "#405BCB8A"
+        - "#40F2C14E"
+        - "#40E87979"
+        - "#40B983E3"
+        - "#404CC9C0"
+        - "#40ED8F4A"
+        - "#4088B04B"
+      # Used when palette is empty, preserving compatibility with older configurations.
       stroke-colour: "#FFFF9800"
       fill-colour: "#40FF9800"
       line-thickness: 2
     structures:
-      stroke-colour: "#FFFFC107"
-      fill-colour: "#40FFC107"
-      line-thickness: 2
+      # Discovered structures use type-appropriate icons instead of boundary polygons.
+      icon-size: 24
     # Existing generated terrain is loaded asynchronously and processed gradually.
     backfill-existing-chunks: true
     # Historical gaps can wait; chunks visited by players are still discovered normally.
