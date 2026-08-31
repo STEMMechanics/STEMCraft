@@ -76,7 +76,8 @@ public final class NamedRegions extends BaseFeature {
         stayMillis = Math.max(0, getConfigSection().getLong("display.stay", 5000));
         fadeOutMillis = Math.max(0, getConfigSection().getLong("display.fade-out", 1000));
         retirementMillis = Math.max(0, getConfigSection().getLong("names.retirement-days", 30)) * 86_400_000L;
-        migrateDevelopmentSchema(); createTable(); migrateDiscoverySchema(); loadAreas(); migrateLongGeneratedNames();
+        migrateDevelopmentSchema(); createTable(); migrateDiscoverySchema(); loadAreas();
+        migrateLongGeneratedNames(); migrateNumberedGeneratedNames();
         if(getConfigSection().getBoolean("coordbar.enabled",true))
             api.coordinateBar().registerAmendment(STEMCraft.getPlugin(),COORDINATE_PROVIDER_ID,
                 CoordinateBarSection.WORLD,50,this::renderCoordinateBar);
@@ -161,6 +162,34 @@ public final class NamedRegions extends BaseFeature {
         api.database().setMigrationVersion("named-regions", 4);
         if (renamed > 0) {
             STEMCraft.getPlugin().getLogger().info("Normalised " + renamed + " generated region name(s).");
+            invalidateMapSnapshot();
+        }
+    }
+
+    /**
+     * Version 4 originally only shortened names containing more than two words. Numbered fallback names were added to
+     * that migration later, after production databases had already recorded version 4, so they need their own version.
+     */
+    private void migrateNumberedGeneratedNames() {
+        if (api.database().migrationVersion("named-regions") >= 5) return;
+        int renamed = 0;
+        for (Area old : new ArrayList<>(areas.values())) {
+            if (old.locked || !isNumberedFallback(old.name)) continue;
+            activeNames.remove(normaliseName(old.name));
+            String replacement = availableName(List.of(), old.type, old.id);
+            retire(old, "replaced numbered fallback");
+            Area updated = new Area(old.id, old.world, old.kind, old.type, replacement, old.minX, old.minY, old.minZ,
+                old.maxX, old.maxY, old.maxZ, false, old.createdAt, old.discovered);
+            areas.put(updated.id, updated);
+            activeNames.add(normaliseName(updated.name));
+            api.database().update("UPDATE named_areas SET name=? WHERE id=?", ps -> {
+                ps.setString(1, updated.name); ps.setString(2, updated.id);
+            });
+            renamed++;
+        }
+        api.database().setMigrationVersion("named-regions", 5);
+        if (renamed > 0) {
+            STEMCraft.getPlugin().getLogger().info("Replaced " + renamed + " numbered generated region name(s).");
             invalidateMapSnapshot();
         }
     }
