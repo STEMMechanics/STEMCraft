@@ -92,6 +92,19 @@ class QuestFeatureTest {
     }
 
     @Test
+    void flashesMiddotWhenNpcLocationCannotBeTracked() {
+        World survival = mock(World.class);
+        World nether = mock(World.class);
+        Location player = new Location(survival, 0, 64, 0);
+
+        assertEquals("·", QuestFeature.trackingIndicator(player, null, true, 0L));
+        assertEquals("", QuestFeature.trackingIndicator(player, null, true, 500L));
+        assertEquals("·", QuestFeature.trackingIndicator(player, new Location(nether, 0, 64, 0), true, 0L));
+        assertEquals("", QuestFeature.trackingIndicator(player, null, false, 0L));
+        assertEquals("↑", QuestFeature.trackingIndicator(player, new Location(survival, 0, 64, 10), true, 0L));
+    }
+
+    @Test
     void placesTrackedProgressInsideCollectAndKillDescriptions() {
         assertEquals("Gather 0/6 Oak Logs", QuestFeature.formatTrackedObjective("Gather 6 oak logs", 0, 6));
         assertEquals("Kill 0/3 Iron Golems", QuestFeature.formatTrackedObjective("Kill 3 iron golems", 0, 3));

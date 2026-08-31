@@ -310,7 +310,6 @@ public final class QuestFeature extends BaseFeature {
             QuestDefinition quest = questId == null ? null : quests.get(questId);
             QuestProgress progress = quest == null ? null : progress(player, questId);
             if (quest == null || progress == null || !hasOwnedQuestBook(player, questId)) continue;
-            if (isReadyToTurnIn(player, quest, progress) && profileId.equals(quest.endNpcProfile())) return player;
             QuestObjective objective = currentObjective(quest, progress);
             if (objective != null && objective.type() == QuestObjective.Type.NPC
                 && objective.target().equals("profile:" + profileId)) return player;
@@ -2515,11 +2514,12 @@ public final class QuestFeature extends BaseFeature {
         }
 
         Location target = trackingTarget(player, quest, progress);
-        String arrow = target == null ? "" : trackingArrow(player.getLocation(), target);
+        boolean npcDestination = trackingNpcDestination(player, quest, progress);
+        String indicator = trackingIndicator(player.getLocation(), target, npcDestination, System.currentTimeMillis());
         String objective = trackingObjectiveText(player, quest, progress);
         Component title = glyph("question_yellow", "!").color(NamedTextColor.YELLOW)
             .append(Component.text(" " + trackingQuestTitle(quest.title()), NamedTextColor.YELLOW))
-            .append(Component.text(" - " + (arrow.isEmpty() ? "" : arrow + " ") + objective, NamedTextColor.WHITE));
+            .append(Component.text(" - " + (indicator.isEmpty() ? "" : indicator + " ") + objective, NamedTextColor.WHITE));
         BossBar bar = trackingBossBars.computeIfAbsent(player.getUniqueId(), ignored -> {
             BossBar created = BossBar.bossBar(Component.empty(), 0F, BossBar.Color.WHITE, BossBar.Overlay.PROGRESS);
             player.showBossBar(created);
@@ -2537,6 +2537,18 @@ public final class QuestFeature extends BaseFeature {
     static String trackingQuestTitle(String title) {
         int separator = title.lastIndexOf(": ");
         return separator < 0 ? title : title.substring(separator + 2).trim();
+    }
+
+    static String trackingIndicator(Location player, @Nullable Location target, boolean npcDestination, long now) {
+        if (target != null && player.getWorld() != null && player.getWorld().equals(target.getWorld()))
+            return trackingArrow(player, target);
+        return npcDestination && Math.floorDiv(now, 500L) % 2L == 0L ? "·" : "";
+    }
+
+    private boolean trackingNpcDestination(Player player, QuestDefinition quest, QuestProgress progress) {
+        if (isReadyToTurnIn(player, quest, progress)) return true;
+        QuestObjective objective = currentObjective(quest, progress);
+        return objective != null && objective.type() == QuestObjective.Type.NPC;
     }
 
     private String trackingObjectiveText(Player player, QuestDefinition quest, QuestProgress progress) {
@@ -2613,8 +2625,6 @@ public final class QuestFeature extends BaseFeature {
             if (profile == null) return null;
             Entity entity = profile.spawnedEntity() == null ? null : Bukkit.getEntity(profile.spawnedEntity());
             if (entity != null && entity.isValid()) return entity.getLocation();
-            if (profile.npcType() == EntityType.PLAYER && citizensAvailable())
-                return CitizensQuestNpcSupport.storedLocation(profile);
             return null;
         }
         Entity entity = fixedNpc == null ? null : Bukkit.getEntity(fixedNpc);
