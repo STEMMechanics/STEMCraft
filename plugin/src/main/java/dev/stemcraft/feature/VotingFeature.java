@@ -38,6 +38,7 @@ public final class VotingFeature extends BaseFeature {
     private final Map<String, LinkedHashMap<String, VoteTower>> towers = new HashMap<>();
     private final Map<String, Map<UUID, Set<String>>> votes = new HashMap<>();
     private final Map<UUID, PendingPlacement> placements = new HashMap<>();
+    private final Map<UUID, String> removals = new HashMap<>();
     private final Map<UUID, String> lastChunks = new HashMap<>();
     private List<TowerElement> towerElements = List.of();
 
@@ -58,7 +59,7 @@ public final class VotingFeature extends BaseFeature {
 
     @Override public void onDisable() {
         api.tasks().cancel("feature:voting-displays"); api.tasks().cancel("feature:voting-plot-sync");
-        placements.clear(); lastChunks.clear();
+        placements.clear(); removals.clear(); lastChunks.clear();
     }
 
     @Override public void onReload() { super.onReload(); loadTowerSchema(); refreshAllDisplays(); }
@@ -130,6 +131,7 @@ public final class VotingFeature extends BaseFeature {
             .tabCompletion("admin", "source", "plots", "{vote-group}", "{world}")
             .tabCompletion("admin", "schedule", "{vote-group}", "now", "")
             .tabCompletion("admin", "tower", "place", "{vote-group}", "{vote-option:$3}")
+            .tabCompletion("admin", "tower", "remove", "{vote-group}", "{vote-option:$3}")
             .tabCompletion("admin", "pause", "{vote-group}")
             .tabCompletion("admin", "resume", "{vote-group}")
             .tabCompletion("admin", "reset", "{vote-group}")
@@ -209,10 +211,20 @@ public final class VotingFeature extends BaseFeature {
     }
 
     private void towerCommand(CommandContext ctx) {
-        if (ctx.args().size() < 5 || !ctx.getArgLower(2).equals("place")) {
-            ctx.returnError("Usage: /vote admin tower place <group> <option>"); return;
+        if (ctx.args().size() < 4 || !Set.of("place", "remove").contains(ctx.getArgLower(2))) {
+            ctx.returnError("Usage: /vote admin tower <place <group> <option>|remove <group> [option]>"); return;
         }
         ctx.checkNotConsole(); VoteGroup group = requireGroup(ctx, 3); if (group == null) return;
+        if (ctx.getArgLower(2).equals("remove")) {
+            if (ctx.args().size() == 4) {
+                placements.remove(ctx.asPlayer().getUniqueId()); removals.put(ctx.asPlayer().getUniqueId(), group.id);
+                ctx.returnSuccess("Right-click any block in the tower to remove it. Sneak-right-click to cancel."); return;
+            }
+            String optionId = resolveOption(group.id, ctx.getArg(4));
+            if (optionId == null || !removeTower(group.id, optionId)) { ctx.returnError("That option does not have a placed tower."); return; }
+            ctx.returnSuccess("Voting tower removed. Its slot remains available for placement."); return;
+        }
+        if (ctx.args().size() < 5) { ctx.returnError("Usage: /vote admin tower place <group> <option>"); return; }
         String optionId = resolveOption(group.id, ctx.getArg(4));
         if (optionId == null && ctx.getArg(4).equalsIgnoreCase("next") && isPlotSource(group)) {
             VoteOption slot = createPlotSlot(group.id);
@@ -221,6 +233,7 @@ public final class VotingFeature extends BaseFeature {
         }
         if (optionId == null) { ctx.returnError("Unknown vote option. Use its ID, name, or 'next'."); return; }
         boolean continuous = ctx.getArg(4).equalsIgnoreCase("next");
+        removals.remove(ctx.asPlayer().getUniqueId());
         placements.put(ctx.asPlayer().getUniqueId(), new PendingPlacement(group.id, optionId, continuous));
         ctx.returnSuccess("Right-click the block where the tower lectern belongs."
             + (continuous ? " Placement will continue until you sneak-right-click." : " Sneak-right-click to cancel."));
@@ -340,7 +353,16 @@ public final class VotingFeature extends BaseFeature {
 
     private void onInteract(PlayerInteractEvent event) {
         if (event.getAction() != Action.RIGHT_CLICK_BLOCK || event.getClickedBlock() == null) return;
-        Player player = event.getPlayer(); PendingPlacement pending = placements.get(player.getUniqueId());
+        Player player = event.getPlayer(); String removalGroup = removals.get(player.getUniqueId());
+        if (removalGroup != null) {
+            event.setCancelled(true);
+            if (player.isSneaking()) { removals.remove(player.getUniqueId()); api.messages().send(player, "/info/Tower removal cancelled."); return; }
+            VoteTower selected = towerPartAt(event.getClickedBlock().getLocation(), removalGroup);
+            if (selected == null) { api.messages().send(player, "/warn/That block is not part of a tower in this voting group."); return; }
+            removeTower(selected.groupId, selected.optionId); removals.remove(player.getUniqueId());
+            api.messages().send(player, "/success/Voting tower removed. Its slot remains available for placement."); return;
+        }
+        PendingPlacement pending = placements.get(player.getUniqueId());
         if (pending != null) {
             event.setCancelled(true);
             if (player.isSneaking()) { placements.remove(player.getUniqueId()); api.messages().send(player, "/info/Tower placement cancelled."); return; }
@@ -494,6 +516,14 @@ public final class VotingFeature extends BaseFeature {
         }
         for (TowerElement element : towerTemplate()) if (!element.placeIfNonSolid) for (Location location : elementLocations(tower, element))
             clearIfTowerMaterial(location.getBlock());
+    }
+
+    private boolean removeTower(String groupId, String optionId) {
+        VoteTower tower = towers.getOrDefault(groupId, new LinkedHashMap<>()).remove(optionId);
+        if (tower == null) return false;
+        clearExistingTower(tower);
+        api.database().update("DELETE FROM voting_towers WHERE group_id=? AND option_id=?", ps -> { ps.setString(1, groupId); ps.setString(2, optionId); });
+        refreshGroup(groupId); return true;
     }
     private void clearLegacyTower(VoteTower tower) {
         clearIfTowerMaterial(local(tower, 0, 0, 0).getBlock());
@@ -709,6 +739,12 @@ public final class VotingFeature extends BaseFeature {
     private List<Location> lampLocations(VoteTower tower) { return roleLocations(tower, "lamp"); }
     private void setFacing(Block block, BlockFace face) { if (block.getBlockData() instanceof Directional data && data.getFaces().contains(face)) { data.setFacing(face); block.setBlockData(data, false); } }
     private VoteTower towerAt(Location location) { for (var map:towers.values()) for(VoteTower tower:map.values()) if(same(leverBlock(tower).getLocation(),location)) return tower; return null; }
+    private VoteTower towerPartAt(Location location, String groupId) {
+        for (VoteTower tower : towers.getOrDefault(groupId, new LinkedHashMap<>()).values())
+            for (TowerElement element : towerTemplate())
+                if (elementLocations(tower, element).stream().anyMatch(part -> same(part, location))) return tower;
+        return null;
+    }
     private boolean isTowerPart(Location location) { for(var map:towers.values())for(VoteTower tower:map.values())for(TowerElement element:towerTemplate())if(elementLocations(tower,element).stream().anyMatch(l->same(l,location)))return true;return false; }
     private boolean same(Location a, Location b) { return a.getWorld()!=null&&b.getWorld()!=null&&a.getWorld().equals(b.getWorld())&&a.getBlockX()==b.getBlockX()&&a.getBlockY()==b.getBlockY()&&a.getBlockZ()==b.getBlockZ(); }
 
