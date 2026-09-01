@@ -380,7 +380,7 @@ class ApiDefaultMethodContractTest {
         when(ctx.getArgAsInt(2, 0, null, null)).thenReturn(7);
         when(ctx.getArgAsFloat(3, 0.0f, null, null)).thenReturn(1.5f);
         when(ctx.getArgAsDouble(4, 0.0d, null, null)).thenReturn(2.5d);
-        when(ctx.getArgsAsString(1, "")).thenReturn("joined");
+        when(ctx.getArgsAsString(0, "")).thenReturn("joined");
         when(ctx.getPlayer(5, null)).thenReturn(player);
         when(ctx.getPlayer(6, null)).thenReturn(null);
         when(ctx.isPlayer()).thenReturn(true);

@@ -83,9 +83,13 @@ class CommandContextImplTest {
         assertEquals("fallback", ctx.getOption("missing", "fallback"));
         assertEquals("Target", ctx.getArg(0));
         assertEquals("5m", ctx.getArg(-1, null));
-        assertEquals("yes 5 1.5 2.5 command-tests 5m", ctx.getArgsAsString(2, ""));
+        assertEquals("fallback", ctx.getArg(-20, "fallback"));
+        assertEquals("Target yes 5 1.5 2.5 command-tests 5m", ctx.getArgsAsString(0, ""));
+        assertEquals("yes 5 1.5 2.5 command-tests 5m", ctx.getArgsAsString(1, ""));
         assertEquals("Target yes 5 1.5 2.5 command-tests 5m", ctx.getArgsAsString());
-        assertEquals("5 1.5 2.5 command-tests 5m", ctx.getArgsAsString(3, ""));
+        assertEquals("5 1.5 2.5 command-tests 5m", ctx.getArgsAsString(2, ""));
+        assertEquals("fallback", ctx.getArgsAsString(-1, "fallback"));
+        assertEquals("fallback", ctx.getArgsAsString(ctx.numArgs(), "fallback"));
         assertTrue(ctx.getArgAsBoolean(1));
         assertEquals(5, ctx.getArgAsInt(2, 0, 1, 10));
         assertEquals(2.0f, ctx.getArgAsFloat(3, 0.0f, 2.0f, 3.0f));
@@ -152,6 +156,14 @@ class CommandContextImplTest {
 
         CommandContextImpl invalidDuration = new CommandContextImpl(command, sender, "root", List.of("oops"));
         assertNull(invalidDuration.getArgAsDuration(0, null));
+        assertEquals(Duration.ofMinutes(2), invalidDuration.getArgAsDuration(0, Duration.ofMinutes(2)));
+
+        CommandContextImpl invalidBoolean = new CommandContextImpl(command, sender, "root", List.of("maybe"));
+        assertTrue(invalidBoolean.getArgAsBoolean(0, true));
+        assertEquals(0.0d, invalidBoolean.getArgAsDouble(0, -1.0d, 0.0d, 10.0d));
+
+        CommandContextImpl falseBoolean = new CommandContextImpl(command, sender, "root", List.of("no"));
+        assertFalse(falseBoolean.getArgAsBoolean(0, true));
 
         doAnswer(invocation -> null).when(command).info(sender, "INFO_KEY", "name", "Alex");
         CommandException returned = assertThrows(CommandException.class, () -> empty.returnInfo("INFO_KEY", "name", "Alex"));

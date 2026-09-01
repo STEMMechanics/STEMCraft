@@ -367,8 +367,8 @@ public class Mailboxes extends BaseFeature implements MailboxService {
 
         Player sender = ctx.asPlayer();
         MailSendRequest request = sender == null
-            ? new MailSendRequest("STEMCraft", recipient.uuid(), ctx.getArgsAsString(3), List.of())
-            : new MailSendRequest(sender.getUniqueId(), recipient.uuid(), ctx.getArgsAsString(3),
+            ? new MailSendRequest("STEMCraft", recipient.uuid(), ctx.getArgsAsString(2), List.of())
+            : new MailSendRequest(sender.getUniqueId(), recipient.uuid(), ctx.getArgsAsString(2),
                 List.of(), sender.getLocation());
         MailSendResult result = send(request);
         if (!result.queued()) {

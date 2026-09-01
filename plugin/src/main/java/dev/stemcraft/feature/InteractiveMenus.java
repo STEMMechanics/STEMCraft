@@ -299,7 +299,7 @@ public class InteractiveMenus extends BaseFeature {
             ctx.returnError("Interactive menu already exists: " + menuId);
         }
 
-        String title = ctx.numArgs() > 2 ? ctx.getArgsAsString(3) : menuId;
+        String title = ctx.numArgs() > 2 ? ctx.getArgsAsString(2) : menuId;
         ConfigSection menu = getMenuConfig().getSection("menus").createSection(menuId);
         menu.set("title", title);
         menu.set("body", "");
@@ -334,7 +334,7 @@ public class InteractiveMenus extends BaseFeature {
             ctx.returnError("Unknown menu field: " + ctx.getArg(2));
         }
 
-        getMenuConfig().set("menus." + menuId + "." + field, ctx.getArgsAsString(4));
+        getMenuConfig().set("menus." + menuId + "." + field, ctx.getArgsAsString(3));
         getMenuConfig().save();
         reloadMenus();
         ctx.returnSuccess("Updated " + field + " for menu '" + menuId + "'.");
@@ -365,7 +365,7 @@ public class InteractiveMenus extends BaseFeature {
         }
 
         ConfigSection item = getMenuConfig().getSection("menus." + menuId + ".items").createSection(itemId);
-        item.set("title", ctx.getArgsAsString(5));
+        item.set("title", ctx.getArgsAsString(4));
         item.set("description", "");
         item.set("commands", List.of());
         item.save();
@@ -399,7 +399,7 @@ public class InteractiveMenus extends BaseFeature {
             ctx.returnError("Unknown item field: " + ctx.getArg(4));
         }
 
-        getMenuConfig().set("menus." + menuId + ".items." + itemId + "." + field, ctx.getArgsAsString(6));
+        getMenuConfig().set("menus." + menuId + ".items." + itemId + "." + field, ctx.getArgsAsString(5));
         getMenuConfig().save();
         reloadMenus();
         ctx.returnSuccess("Updated " + field + " for item '" + itemId + "'.");

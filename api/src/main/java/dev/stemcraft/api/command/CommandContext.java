@@ -80,6 +80,7 @@ public interface CommandContext {
 
     /**
      * Get the command arguments.
+     * Positional argument indexes used throughout this context are zero-based.
      *
      * @return The command arguments.
      */
@@ -306,13 +307,13 @@ public interface CommandContext {
     /**
      * Get all arguments starting from the given index as a single string, or the default value if none present.
      *
-     * @param startingIndex The starting argument index.
+     * @param startingIndex The zero-based starting argument index.
      * @param def The default value if none present.
      * @return All arguments starting from the given index as a single string, or the default value.
      */
     String getArgsAsString(int startingIndex, String def);
     default String getArgsAsString(int startingIndex) { return getArgsAsString(startingIndex, ""); }
-    default String getArgsAsString() { return getArgsAsString(1, ""); }
+    default String getArgsAsString() { return getArgsAsString(0, ""); }
 
     /**
      * Get the argument at the given index as a Player, or the default value if not present.

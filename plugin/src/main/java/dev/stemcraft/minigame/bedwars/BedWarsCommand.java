@@ -564,13 +564,13 @@ public class BedWarsCommand {
             }
             case "name" -> {
                 ctx.checkArgsSizeAtLeast(4);
-                arena.setName(ctx.getArgsAsString(4));
+                arena.setName(ctx.getArgsAsString(3));
                 ctx.success("Display name updated for arena '" + arena.id() + "'.");
             }
             case "teamname" -> {
                 ctx.checkArgsSizeAtLeast(5);
                 MiniGameTeam team = requireTeam(ctx, arena, 3);
-                team.set("displayName", ctx.getArgsAsString(5));
+                team.set("displayName", ctx.getArgsAsString(4));
                 bedWars.refreshArenaKits(arena);
                 ctx.success("Display name updated for team '" + team.getName() + "' in arena '" + arena.id() + "'.");
             }

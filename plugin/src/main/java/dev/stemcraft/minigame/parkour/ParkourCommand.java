@@ -375,7 +375,7 @@ public class ParkourCommand {
             }
             case "name" -> {
                 ctx.checkArgsSizeAtLeast(4);
-                arena.setName(ctx.getArgsAsString(4));
+                arena.setName(ctx.getArgsAsString(3));
                 arena.remove("loadError");
                 ctx.success("Display name updated for arena '" + arena.id() + "'.");
             }

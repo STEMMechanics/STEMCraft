@@ -480,7 +480,7 @@ public final class NamedRegions extends BaseFeature {
                 ctx.asPlayer().teleport(new Location(world,x,y,z)); ctx.returnSuccess("Teleported to " + area.name + ".");
             }
             case "rename" -> {
-                String id=ctx.getArg(1,""), newName=ctx.getArgsAsString(3,"").trim(); Area old=areas.get(id);
+                String id=ctx.getArg(1,""), newName=ctx.getArgsAsString(2,"").trim(); Area old=areas.get(id);
                 if(old==null){ctx.returnError("Use /namedregion rename <id> [name].");return;}
                 boolean generated=newName.isEmpty();
                 retire(old,generated?"automatically renamed by admin":"renamed by admin");

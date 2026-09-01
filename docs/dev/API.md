@@ -99,6 +99,8 @@ The command API centers on:
 - `CommandExecutor`
 
 This is the preferred way to register new command surfaces inside STEMCraft and companion plugins.
+All `CommandContext` positional argument accessors use zero-based indexes. `getArgsAsString(index)` joins arguments
+starting at that same zero-based index, while `getArgsAsString()` joins the complete positional argument list.
 
 ### Events
 
