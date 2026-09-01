@@ -939,6 +939,8 @@ voting:
         - 'VL.S'
 
 survival-qol:
+  supported-worlds: ["survival*"]
+  supported-game-modes: [SURVIVAL]
   hoe-harvest:
     enabled: true
     permission: stemcraft.qol.hoe-harvest
