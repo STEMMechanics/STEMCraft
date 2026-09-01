@@ -6,7 +6,6 @@ import org.junit.jupiter.api.Test;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -24,15 +23,18 @@ class VotingFeatureTest {
         assertEquals(1, VotingFeature.lampCount(1, 25, 10));
     }
 
-    @Test void bundledTowerTemplateUsesSemanticPlaceholdersAndVerticalLamps() {
+    @Test void bundledTowerSchemaUsesReadableVerticalLayout() {
         var stream = getClass().getResourceAsStream("/config.yml"); assertNotNull(stream);
         YamlConfiguration config = YamlConfiguration.loadConfiguration(new InputStreamReader(stream, StandardCharsets.UTF_8));
-        List<Map<?, ?>> template = config.getMapList("voting.tower.template");
-
-        assertEquals(List.of("{lectern}", "{lever}", "{sign}", "{lamp}"),
-            template.stream().map(entry -> entry.get("block")).toList());
-        Map<?, ?> lampRepeat = (Map<?, ?>) template.get(3).get("repeat");
-        assertEquals(10, lampRepeat.get("count"));
-        assertEquals(List.of(0, 1, 0), lampRepeat.get("step"));
+        assertEquals("LECTERN", config.getString("voting.tower.schema.blocks.L"));
+        assertEquals("STONE", config.getString("voting.tower.schema.blocks.S"));
+        assertEquals(List.of(1, 0), config.getIntegerList("voting.tower.schema.click-point"));
+        assertEquals(List.of("S"), config.getStringList("voting.tower.schema.place-if-not-solid"));
+        List<String> layout = config.getStringList("voting.tower.schema.layout");
+        assertEquals(12, layout.size());
+        assertEquals("...9", layout.getFirst());
+        assertEquals("VL.S", layout.getLast());
+        assertEquals(List.of('0','1','2','3','4','5','6','7','8','9'),
+            layout.subList(0, 10).reversed().stream().map(row -> row.charAt(3)).toList());
     }
 }

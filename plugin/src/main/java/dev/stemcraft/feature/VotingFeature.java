@@ -3,6 +3,7 @@ package dev.stemcraft.feature;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.CommandContext;
+import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
@@ -38,11 +39,12 @@ public final class VotingFeature extends BaseFeature {
     private final Map<String, Map<UUID, Set<String>>> votes = new HashMap<>();
     private final Map<UUID, PendingPlacement> placements = new HashMap<>();
     private final Map<UUID, String> lastChunks = new HashMap<>();
+    private List<TowerElement> towerElements = List.of();
 
     public VotingFeature(STEMCraftAPI api) { super(api); }
 
     @Override public void onEnable() {
-        ensureStorage(); loadAll(); registerCommand();
+        loadTowerSchema(); ensureStorage(); loadAll(); registerCommand();
         api.events().register(PlayerInteractEvent.class, this::onInteract, EventPriority.HIGHEST, false);
         api.events().register(BlockBreakEvent.class, this::onBreak, EventPriority.HIGHEST, true);
         api.events().register(PlayerJoinEvent.class, event -> api.tasks().runLater(10L, () -> refreshLevers(event.getPlayer())));
@@ -53,6 +55,8 @@ public final class VotingFeature extends BaseFeature {
     }
 
     @Override public void onDisable() { api.tasks().cancel("feature:voting-displays"); placements.clear(); lastChunks.clear(); }
+
+    @Override public void onReload() { super.onReload(); loadTowerSchema(); refreshAllDisplays(); }
 
     private void ensureStorage() {
         api.database().execute("""
@@ -381,15 +385,9 @@ public final class VotingFeature extends BaseFeature {
             Block block = location.getBlock(); String role = placeholderRole(element.block);
             if (role == null) {
                 Material decoration = Material.matchMaterial(element.block);
-                if (decoration != null && (element.replaceAlways || block.getType().isAir())) block.setType(decoration, false);
+                if (decoration != null && (element.replaceAlways || element.placeIfNonSolid && !block.getType().isSolid()
+                    || !element.placeIfNonSolid && block.getType().isAir())) block.setType(decoration, false);
                 continue;
-            }
-            if (role.equals("sign") && element.supportOffset != null) {
-                Location supportLocation = local(tower, element.at[0] + element.supportOffset[0],
-                    element.at[1] + element.supportOffset[1], element.at[2] + element.supportOffset[2]);
-                Block support = supportLocation.getBlock();
-                if (!support.getType().isSolid() && support.getType().isAir()) support.setType(templateMaterial(element.supportFallback,
-                    material("tower.materials.support-fallback", Material.POLISHED_DEEPSLATE)), false);
             }
             block.setType(roleMaterial(role), false); setFacing(block, tower.facing);
             if (role.equals("lever") && block.getBlockData() instanceof Switch data) {
@@ -440,12 +438,16 @@ public final class VotingFeature extends BaseFeature {
 
     private void forceLeverOff(Block block) { if (block.getBlockData() instanceof Powerable data && data.isPowered()) { data.setPowered(false); block.setBlockData(data, false); } }
     private void clearExistingTower(VoteTower tower) {
-        Material signMaterial = roleMaterial("sign");
-        if (local(tower, 0, 1, -1).getBlock().getType() == signMaterial && signBlock(tower).getType() != signMaterial) {
+        if (local(tower, -2, 2, -1).getBlock().getType() == roleMaterial("lamp")) {
             clearLegacyTower(tower);
             return;
         }
-        for (TowerElement element : towerTemplate()) for (Location location : elementLocations(tower, element))
+        if (local(tower, 0, 1, 0).getBlock().getType() == roleMaterial("sign")
+            || local(tower, 0, 2, -1).getBlock().getType() == roleMaterial("lamp")) {
+            clearSparseTower(tower);
+            return;
+        }
+        for (TowerElement element : towerTemplate()) if (!element.placeIfNonSolid) for (Location location : elementLocations(tower, element))
             clearIfTowerMaterial(location.getBlock());
     }
     private void clearLegacyTower(VoteTower tower) {
@@ -455,9 +457,15 @@ public final class VotingFeature extends BaseFeature {
         for (int x = -2; x <= 2; x++) for (int y = 0; y <= 3; y++) clearIfTowerMaterial(local(tower, x, y, -2).getBlock());
         for (int x = -2; x <= 2; x++) for (int y = 2; y <= 3; y++) clearIfTowerMaterial(local(tower, x, y, -1).getBlock());
     }
+    private void clearSparseTower(VoteTower tower) {
+        clearIfTowerMaterial(local(tower, 0, 0, 0).getBlock());
+        clearIfTowerMaterial(local(tower, 0, 0, 1).getBlock());
+        clearIfTowerMaterial(local(tower, 0, 1, 0).getBlock());
+        for (int y = 2; y <= 11; y++) clearIfTowerMaterial(local(tower, 0, y, -1).getBlock());
+    }
     private void clearIfTowerMaterial(Block block) {
         Set<Material> materials = new HashSet<>(Set.of(roleMaterial("lectern"), roleMaterial("lever"), roleMaterial("sign"), roleMaterial("lamp"),
-            material("tower.materials.support-fallback", Material.POLISHED_DEEPSLATE)));
+            Material.POLISHED_DEEPSLATE));
         for (TowerElement element : towerTemplate()) { Material literal = Material.matchMaterial(element.block); if (literal != null) materials.add(literal); }
         if (materials.contains(block.getType())) block.setType(Material.AIR, false);
     }
@@ -509,60 +517,105 @@ public final class VotingFeature extends BaseFeature {
         case "lever" -> material("tower.materials.lever", Material.LEVER);
         case "sign" -> material("tower.materials.sign", Material.OAK_WALL_SIGN);
         case "lamp" -> material("tower.materials.lamp", Material.REDSTONE_LAMP);
-        default -> material("tower.materials.lectern", Material.LECTERN);
+        default -> Material.LECTERN;
     }; }
-    private Material templateMaterial(String value, Material fallback) {
-        if (value == null || value.isBlank()) return fallback;
-        Material direct = Material.matchMaterial(value); return direct != null ? direct : material("tower.materials." + value, fallback);
-    }
     private String placeholderRole(String value) {
         if (value == null || !value.startsWith("{") || !value.endsWith("}")) return null;
         String role = value.substring(1, value.length() - 1).toLowerCase(Locale.ROOT);
-        return Set.of("lectern", "lever", "sign", "lamp").contains(role) ? role : null;
+        return Set.of("lever", "sign", "lamp").contains(role) ? role : null;
     }
-    private List<TowerElement> towerTemplate() {
-        List<TowerElement> result = new ArrayList<>();
-        for (Object rawEntry : getConfigSection().getList("tower.template")) {
-            if (!(rawEntry instanceof Map<?, ?> entry)) continue;
-            String block = Objects.toString(entry.get("block"), "").trim(); if (block.isEmpty()) continue;
-            int[] at = coordinates(entry.get("at"), new int[]{0, 0, 0});
-            int count = 1; int[] step = new int[]{0, 0, 0};
-            if (entry.get("repeat") instanceof Map<?, ?> repeat) {
-                Object rawCount = repeat.get("count"); if (rawCount instanceof Number number) count = Math.max(1, number.intValue());
-                step = coordinates(repeat.get("step"), new int[]{0, 1, 0});
-            }
-            int[] supportOffset = null; String supportFallback = null;
-            if (entry.get("support") instanceof Map<?, ?> support) {
-                supportOffset = coordinates(support.get("offset"), new int[]{0, 0, -1});
-                supportFallback = Objects.toString(support.get("fallback"), "support-fallback");
-            }
-            result.add(new TowerElement(block, at, count, step, supportOffset, supportFallback,
-                "always".equalsIgnoreCase(Objects.toString(entry.get("replace"), "air"))));
+    private void loadTowerSchema() {
+        try {
+            towerElements = compileTowerSchema(getConfigSection().getSection("tower.schema", false));
+        } catch (IllegalArgumentException ex) {
+            STEMCraft.getPlugin().getLogger().severe("Invalid voting tower schema: " + ex.getMessage() + ". Using the built-in tower.");
+            towerElements = defaultTowerSchema();
         }
-        if (!result.isEmpty()) return result;
-        return List.of(new TowerElement("{lectern}", new int[]{0,0,0}, 1, new int[]{0,0,0}, null, null, true),
-            new TowerElement("{lever}", new int[]{0,0,1}, 1, new int[]{0,0,0}, null, null, true),
-            new TowerElement("{sign}", new int[]{0,1,0}, 1, new int[]{0,0,0}, new int[]{0,0,-1}, "support-fallback", true),
-            new TowerElement("{lamp}", new int[]{0,2,-1}, 10, new int[]{0,1,0}, null, null, true));
     }
-    private int[] coordinates(Object value, int[] fallback) {
-        if (!(value instanceof List<?> list) || list.size() != 3 || list.stream().anyMatch(item -> !(item instanceof Number))) return fallback;
-        return new int[]{((Number) list.get(0)).intValue(), ((Number) list.get(1)).intValue(), ((Number) list.get(2)).intValue()};
+    private List<TowerElement> compileTowerSchema(ConfigSection schema) {
+        if (schema == null) throw new IllegalArgumentException("tower.schema is missing");
+        Map<Character, Material> blocks = new HashMap<>();
+        for (Map.Entry<String, Object> entry : schema.getMap("blocks", false).entrySet()) {
+            if (entry.getKey().length() != 1) throw new IllegalArgumentException("block keys must be one character: " + entry.getKey());
+            char key = entry.getKey().charAt(0);
+            if (Character.isDigit(key) || key == 'G' || key == 'V' || key == '.' || key == ' ')
+                throw new IllegalArgumentException("reserved character cannot be configured: " + key);
+            Material material = Material.matchMaterial(String.valueOf(entry.getValue()));
+            if (material == null || !material.isBlock()) throw new IllegalArgumentException("unknown block for " + key + ": " + entry.getValue());
+            blocks.put(key, material);
+        }
+        Set<Character> conditional = new HashSet<>();
+        List<String> conditionalValues = schema.getStringList("place-if-not-solid");
+        if (conditionalValues.isEmpty()) conditionalValues = schema.getStringList("only-if-nonblock");
+        for (String value : conditionalValues) {
+            if (value.length() != 1 || !blocks.containsKey(value.charAt(0)))
+                throw new IllegalArgumentException("place-if-not-solid entries must name a configured character: " + value);
+            conditional.add(value.charAt(0));
+        }
+        List<Integer> point = schema.getIntegerList("click-point");
+        if (point.size() != 2) {
+            String value = schema.getString("click-point", "");
+            try { point = Arrays.stream(value.split(",")).map(String::trim).map(Integer::parseInt).toList(); }
+            catch (RuntimeException ignored) { point = List.of(); }
+        }
+        if (point.size() != 2 || point.get(0) < 0 || point.get(1) < 0)
+            throw new IllegalArgumentException("click-point must be [column, row-from-bottom]");
+        List<String> layout = schema.getStringList("layout");
+        if (layout.isEmpty() || point.get(1) >= layout.size()) throw new IllegalArgumentException("layout is empty or click-point is outside it");
+        int clickRow = layout.size() - 1 - point.get(1), clickColumn = point.get(0);
+        if (clickColumn >= layout.get(clickRow).length() || ". ".indexOf(layout.get(clickRow).charAt(clickColumn)) >= 0)
+            throw new IllegalArgumentException("click-point must select a placed block");
+
+        List<TowerElement> result = new ArrayList<>();
+        Set<Integer> lamps = new HashSet<>(); int levers = 0, signs = 0;
+        for (int row = 0; row < layout.size(); row++) for (int column = 0; column < layout.get(row).length(); column++) {
+            char symbol = layout.get(row).charAt(column);
+            if (symbol == '.') continue;
+            int[] at = {0, layout.size() - 1 - row - point.get(1), clickColumn - column};
+            if (symbol == ' ') result.add(new TowerElement(Material.AIR.name(), at, 0, true, false));
+            else if (symbol == 'V') { result.add(new TowerElement("{lever}", at, 0, true, false)); levers++; }
+            else if (symbol == 'G') { result.add(new TowerElement("{sign}", at, 0, true, false)); signs++; }
+            else if (Character.isDigit(symbol)) {
+                int order = Character.digit(symbol, 10);
+                if (!lamps.add(order)) throw new IllegalArgumentException("lamp " + symbol + " appears more than once");
+                result.add(new TowerElement("{lamp}", at, order, true, false));
+            } else {
+                Material material = blocks.get(symbol);
+                if (material == null) throw new IllegalArgumentException("layout uses undefined character: " + symbol);
+                boolean placeIfNonSolid = conditional.contains(symbol);
+                result.add(new TowerElement(material.name(), at, 0, !placeIfNonSolid, placeIfNonSolid));
+            }
+        }
+        if (levers != 1 || signs != 1) throw new IllegalArgumentException("layout must contain exactly one V and one G");
+        if (lamps.isEmpty() || lamps.size() > 10 || !lamps.equals(new HashSet<>(java.util.stream.IntStream.range(0, lamps.size()).boxed().toList())))
+            throw new IllegalArgumentException("lamps must be a contiguous sequence starting at 0");
+        return List.copyOf(result);
     }
+    private List<TowerElement> defaultTowerSchema() {
+        List<TowerElement> result = new ArrayList<>();
+        result.add(new TowerElement("{lever}", new int[]{0,0,1}, 0, true, false));
+        result.add(new TowerElement(Material.LECTERN.name(), new int[]{0,0,0}, 0, true, false));
+        result.add(new TowerElement(Material.STONE.name(), new int[]{0,0,-2}, 0, false, true));
+        result.add(new TowerElement("{sign}", new int[]{0,1,-1}, 0, true, false));
+        result.add(new TowerElement(Material.STONE.name(), new int[]{0,1,-2}, 0, false, true));
+        for (int lamp = 0; lamp < 10; lamp++) result.add(new TowerElement("{lamp}", new int[]{0,lamp + 2,-2}, lamp, true, false));
+        return List.copyOf(result);
+    }
+    private List<TowerElement> towerTemplate() { return towerElements; }
     private List<Location> elementLocations(VoteTower tower, TowerElement element) {
         List<Location> result = new ArrayList<>();
-        for (int i = 0; i < element.count; i++) result.add(local(tower, element.at[0] + element.step[0] * i,
-            element.at[1] + element.step[1] * i, element.at[2] + element.step[2] * i));
+        result.add(local(tower, element.at[0], element.at[1], element.at[2]));
         return result;
     }
     private List<Location> roleLocations(VoteTower tower, String role) {
         List<Location> result = new ArrayList<>();
-        for (TowerElement element : towerTemplate()) if (role.equals(placeholderRole(element.block))) result.addAll(elementLocations(tower, element));
+        towerTemplate().stream().filter(element -> role.equals(placeholderRole(element.block)))
+            .sorted(java.util.Comparator.comparingInt(TowerElement::order)).forEach(element -> result.addAll(elementLocations(tower, element)));
         if (!result.isEmpty()) return result;
         TowerElement fallback = switch (role) {
-            case "lever" -> new TowerElement("{lever}", new int[]{0,0,1}, 1, new int[]{0,0,0}, null, null, true);
-            case "sign" -> new TowerElement("{sign}", new int[]{0,1,0}, 1, new int[]{0,0,0}, null, null, true);
-            default -> new TowerElement("{lamp}", new int[]{0,2,-1}, 10, new int[]{0,1,0}, null, null, true);
+            case "lever" -> new TowerElement("{lever}", new int[]{0,0,1}, 0, true, false);
+            case "sign" -> new TowerElement("{sign}", new int[]{0,1,0}, 0, true, false);
+            default -> new TowerElement("{lamp}", new int[]{0,2,-1}, 0, true, false);
         };
         return elementLocations(tower, fallback);
     }
@@ -572,13 +625,12 @@ public final class VotingFeature extends BaseFeature {
     private List<Location> lampLocations(VoteTower tower) { return roleLocations(tower, "lamp"); }
     private void setFacing(Block block, BlockFace face) { if (block.getBlockData() instanceof Directional data && data.getFaces().contains(face)) { data.setFacing(face); block.setBlockData(data, false); } }
     private VoteTower towerAt(Location location) { for (var map:towers.values()) for(VoteTower tower:map.values()) if(same(leverBlock(tower).getLocation(),location)) return tower; return null; }
-    private boolean isTowerPart(Location location) { for(var map:towers.values())for(VoteTower tower:map.values()){ if(same(signBlock(tower).getLocation(),location)||same(local(tower,0,0,0),location)||lampLocations(tower).stream().anyMatch(l->same(l,location)))return true;}return false; }
+    private boolean isTowerPart(Location location) { for(var map:towers.values())for(VoteTower tower:map.values())for(TowerElement element:towerTemplate())if(elementLocations(tower,element).stream().anyMatch(l->same(l,location)))return true;return false; }
     private boolean same(Location a, Location b) { return a.getWorld()!=null&&b.getWorld()!=null&&a.getWorld().equals(b.getWorld())&&a.getBlockX()==b.getBlockX()&&a.getBlockY()==b.getBlockY()&&a.getBlockZ()==b.getBlockZ(); }
 
     private static final class VoteGroup { final String id,name; final int votesPerPlayer; long startsAt,endsAt; boolean paused; String sourceType,sourceValue; VoteGroup(String id,String name,int votes,long start,long end,boolean paused,String source,String value){this.id=id;this.name=name;this.votesPerPlayer=votes;this.startsAt=start;this.endsAt=end;this.paused=paused;this.sourceType=source;this.sourceValue=value;} }
     private record VoteOption(String id,String name,UUID owner) {}
     private record VoteTower(String groupId,String optionId,String world,int x,int y,int z,BlockFace facing) {}
     private record PendingPlacement(String groupId,String optionId) {}
-    private record TowerElement(String block, int[] at, int count, int[] step, int[] supportOffset,
-                                String supportFallback, boolean replaceAlways) {}
+    private record TowerElement(String block, int[] at, int order, boolean replaceAlways, boolean placeIfNonSolid) {}
 }

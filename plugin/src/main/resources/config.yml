@@ -912,24 +912,31 @@ voting:
   permission: ""
   tower:
     materials:
-      lectern: LECTERN
       lever: LEVER
       sign: OAK_WALL_SIGN
       lamp: REDSTONE_LAMP
-      support-fallback: POLISHED_DEEPSLATE
-    # Sparse local coordinates: [right, up, forward]. The clicked lectern is [0, 0, 0].
-    # Unlisted blocks are untouched. Placeholder blocks carry voting behaviour; literal materials are decoration.
-    template:
-      - {at: [0, 0, 0], block: "{lectern}"}
-      - {at: [0, 0, 1], block: "{lever}"}
-      - at: [0, 1, 0]
-        block: "{sign}"
-        support:
-          offset: [0, 0, -1]
-          fallback: support-fallback
-      - at: [0, 2, -1]
-        block: "{lamp}"
-        repeat: {count: 10, step: [0, 1, 0]}
+    schema:
+      # Reserved characters: 0-9 vote lamps, G managed sign, V personalized lever.
+      # Rows are top-to-bottom. Columns run front-to-back. Dot preserves a block; space forces air.
+      blocks:
+        L: LECTERN
+        S: STONE
+      place-if-not-solid: [S]
+      # [column, row from bottom]; this position becomes the clicked block at [0, 0, 0].
+      click-point: [1, 0]
+      layout:
+        - '...9'
+        - '...8'
+        - '...7'
+        - '...6'
+        - '...5'
+        - '...4'
+        - '...3'
+        - '...2'
+        - '...1'
+        - '...0'
+        - '..GS'
+        - 'VL.S'
 
 survival-qol:
   hoe-harvest:
