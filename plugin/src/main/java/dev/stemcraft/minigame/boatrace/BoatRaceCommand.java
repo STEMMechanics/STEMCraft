@@ -511,7 +511,7 @@ public class BoatRaceCommand {
             }
             case "name" -> {
                 ctx.checkArgsSizeAtLeast(4);
-                arena.setName(ctx.getArgsAsString(4));
+                arena.setName(ctx.getArgsAsString(3));
                 ctx.success("Display name updated for arena '" + arena.id() + "'.");
             }
             default -> ctx.returnError("Unknown Boat Race set target '" + target + "'.");

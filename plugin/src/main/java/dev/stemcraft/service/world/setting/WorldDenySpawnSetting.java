@@ -120,12 +120,12 @@ public class WorldDenySpawnSetting implements WorldBaseSetting {
         }
 
         if (!isValidType(type)) {
-            ctx.returnError("WORLD_SETTING_DENY_SPAWN_INVALID", "value", ctx.getArgsAsString(1));
+            ctx.returnError("WORLD_SETTING_DENY_SPAWN_INVALID", "value", ctx.getArgsAsString(0));
         }
 
         String scope = ctx.getArg(1, "").toLowerCase(Locale.ROOT);
         if (!scope.isEmpty() && !scope.equals("natural")) {
-            ctx.returnError("WORLD_SETTING_DENY_SPAWN_INVALID", "value", ctx.getArgsAsString(1));
+            ctx.returnError("WORLD_SETTING_DENY_SPAWN_INVALID", "value", ctx.getArgsAsString(0));
         }
 
         String value = scope.equals("natural") ? type + ":natural" : type;

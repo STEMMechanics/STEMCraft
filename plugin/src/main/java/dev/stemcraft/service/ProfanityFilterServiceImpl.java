@@ -247,7 +247,7 @@ public class ProfanityFilterServiceImpl extends BaseService implements Profanity
     }
 
     private void runCheck(dev.stemcraft.api.command.CommandContext ctx) {
-        String text = ctx.getArgsAsString(2, "").trim();
+        String text = ctx.getArgsAsString(1, "").trim();
         if (text.isBlank()) {
             ctx.returnError("Usage: /profanity check <text>");
         }
@@ -262,7 +262,7 @@ public class ProfanityFilterServiceImpl extends BaseService implements Profanity
     }
 
     private void runSearch(dev.stemcraft.api.command.CommandContext ctx) {
-        String query = normalizeWord(ctx.getArgsAsString(2, ""));
+        String query = normalizeWord(ctx.getArgsAsString(1, ""));
         if (query.isBlank()) {
             ctx.returnError("Usage: /profanity search <word>");
         }
@@ -488,7 +488,7 @@ public class ProfanityFilterServiceImpl extends BaseService implements Profanity
 
     private void runAdd(dev.stemcraft.api.command.CommandContext ctx) {
         String key = normalizeListKey(ctx.getArgLower(1));
-        String word = normalizeWord(ctx.getArgsAsString(3, ""));
+        String word = normalizeWord(ctx.getArgsAsString(2, ""));
         if (key == null || word.isBlank()) {
             ctx.returnError("Usage: /profanity add <allow|false-positives|mild|moderate|high|extreme> <word>");
             return;
@@ -503,7 +503,7 @@ public class ProfanityFilterServiceImpl extends BaseService implements Profanity
 
     private void runRemove(dev.stemcraft.api.command.CommandContext ctx) {
         String key = normalizeListKey(ctx.getArgLower(1));
-        String word = normalizeWord(ctx.getArgsAsString(3, ""));
+        String word = normalizeWord(ctx.getArgsAsString(2, ""));
         if (key == null || word.isBlank()) {
             ctx.returnError("Usage: /profanity remove <allow|false-positives|mild|moderate|high|extreme> <word>");
             return;

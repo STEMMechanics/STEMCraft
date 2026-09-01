@@ -388,12 +388,12 @@ public class CommandContextImpl implements CommandContext {
      */
     @Override
     public String getArg(int index, String def) {
-        if (args.isEmpty() || index >= args.size()) {
-            return def;
-        }
-
         if (index < 0) {
             index = args.size() + index; // -1 -> last, -2 -> second last
+        }
+
+        if (index < 0 || index >= args.size()) {
+            return def;
         }
 
         return args.get(index);
@@ -407,14 +407,11 @@ public class CommandContextImpl implements CommandContext {
      */
     @Override
     public String getArgsAsString(int index, String def) {
-        // convert 1-based → 0-based
-        int start = index - 1;
-
-        if (start < 0 || start >= args.size()) {
+        if (index < 0 || index >= args.size()) {
             return def;
         }
 
-        return String.join(" ", args.subList(start, args.size()));
+        return String.join(" ", args.subList(index, args.size()));
     }
 
     /**
@@ -463,7 +460,7 @@ public class CommandContextImpl implements CommandContext {
             String arg = getArg(index, null);
             result = (arg != null ? Double.parseDouble(arg) : def);
         } catch(NumberFormatException ex) {
-            return def;
+            result = def;
         }
 
         if(min != null && result < min) {
@@ -518,7 +515,13 @@ public class CommandContextImpl implements CommandContext {
             return def;
         }
 
-        return arg.equalsIgnoreCase("true") || arg.equalsIgnoreCase("yes") || arg.equalsIgnoreCase("1");
+        if(arg.equalsIgnoreCase("true") || arg.equalsIgnoreCase("yes") || arg.equals("1")) {
+            return true;
+        }
+        if(arg.equalsIgnoreCase("false") || arg.equalsIgnoreCase("no") || arg.equals("0")) {
+            return false;
+        }
+        return def;
     }
 
     /**
@@ -604,7 +607,7 @@ public class CommandContextImpl implements CommandContext {
             long secs = TimeUtil.parseDuration(durationStr);
             return Duration.ofSeconds(secs);
         }  catch(Exception ignored) {
-            return null;
+            return def;
         }
     }
 

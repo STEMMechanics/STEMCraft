@@ -23,7 +23,7 @@ class WorldCommandDisplayNameTest {
         when(worlds.worldExists("challenge_build")).thenReturn(true);
         when(worldService.getConfigSection("challenge_build")).thenReturn(config);
         when(ctx.getArg(1)).thenReturn("challenge_build");
-        when(ctx.getArgsAsString(3, "")).thenReturn("Amazing Builds");
+        when(ctx.getArgsAsString(2, "")).thenReturn("Amazing Builds");
 
         new WorldCommand(api, worldService).handleSubCommandDisplayName(ctx);
 
@@ -45,7 +45,7 @@ class WorldCommandDisplayNameTest {
         when(worlds.worldExists("bedwars_amazon")).thenReturn(true);
         when(worldService.getConfigSection("bedwars_amazon")).thenReturn(config);
         when(ctx.getArg(1)).thenReturn("bedwars_amazon");
-        when(ctx.getArgsAsString(3, "")).thenReturn("clear");
+        when(ctx.getArgsAsString(2, "")).thenReturn("clear");
 
         new WorldCommand(api, worldService).handleSubCommandDisplayName(ctx);
 

@@ -113,15 +113,15 @@ public class NaughtyMode extends BaseFeature {
                 // naughty <player> <duration> (reason) <- player naughty for this duration
                 // naughty <player> clear <- player naughty cleared
 
-                OfflinePlayer target = ctx.getArgAsOfflinePlayer(1);
+                OfflinePlayer target = ctx.getArgAsOfflinePlayer(0);
                 if (target == null) {
                     cmd.error("PLAYER_NOT_FOUND", "player", ctx.args().getFirst());
                     return;
                 }
 
                 if(ctx.args().size() >= 2) {
-                    // check if index 2 is clear
-                    if (ctx.getArg(2).equalsIgnoreCase("clear")) {
+                    // check if the second argument is clear
+                    if (ctx.getArg(1).equalsIgnoreCase("clear")) {
                         UUID uuid = target.getUniqueId();
                         if (isNaughty(uuid)) {
                             clearNaughty(uuid);
@@ -130,12 +130,12 @@ public class NaughtyMode extends BaseFeature {
                         }
 
                     } else {
-                        Duration duration = ctx.getArgAsDuration(2);
+                        Duration duration = ctx.getArgAsDuration(1);
                         if (duration == null) {
                             cmd.error(ctx.getSender(), "INVALID_DURATION");
                         }
 
-                        setNaughty(target.getUniqueId(), duration, ctx.asPlayer(), ctx.getArgsAsString(3));
+                        setNaughty(target.getUniqueId(), duration, ctx.asPlayer(), ctx.getArgsAsString(2));
                     }
                 } else {
                     long remaining = remainingNaughty(target.getUniqueId());
