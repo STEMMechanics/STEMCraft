@@ -480,13 +480,16 @@ public final class NamedRegions extends BaseFeature {
                 ctx.asPlayer().teleport(new Location(world,x,y,z)); ctx.returnSuccess("Teleported to " + area.name + ".");
             }
             case "rename" -> {
-                String id=ctx.getArg(1,""), newName=ctx.getArgsAsString(2,"").trim(); Area old=areas.get(id);
-                if(old==null||newName.isEmpty()){ctx.returnError("Use /namedregion rename <id> <name>.");return;}
-                Area renamed=new Area(old.id,old.world,old.kind,old.type,newName,old.minX,old.minY,old.minZ,old.maxX,old.maxY,old.maxZ,true,old.createdAt,old.discovered);
-                retire(old,"renamed by admin");activeNames.add(normaliseName(newName));areas.put(id,renamed);
-                api.database().update("UPDATE named_areas SET name=?,locked=1 WHERE id=?",ps->{ps.setString(1,newName);ps.setString(2,id);});
+                String id=ctx.getArg(1,""), newName=ctx.getArgsAsString(3,"").trim(); Area old=areas.get(id);
+                if(old==null){ctx.returnError("Use /namedregion rename <id> [name].");return;}
+                boolean generated=newName.isEmpty();
+                retire(old,generated?"automatically renamed by admin":"renamed by admin");
+                String chosenName=generated?name(old.type,old.id):newName;
+                Area renamed=new Area(old.id,old.world,old.kind,old.type,chosenName,old.minX,old.minY,old.minZ,old.maxX,old.maxY,old.maxZ,true,old.createdAt,old.discovered);
+                activeNames.add(normaliseName(chosenName));areas.put(id,renamed);
+                api.database().update("UPDATE named_areas SET name=?,locked=1 WHERE id=?",ps->{ps.setString(1,chosenName);ps.setString(2,id);});
                 invalidateMapSnapshot();
-                ctx.returnSuccess("Renamed "+id+" to "+newName+".");
+                ctx.returnSuccess("Renamed "+id+" to "+chosenName+".");
             }
             default -> ctx.returnError("Use /namedregion info, list, find, nearby, teleport, or rename.");
         }
