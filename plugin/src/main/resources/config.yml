@@ -906,6 +906,38 @@ leaf_decay_random_tick:
     # Placing a constructed block near the old trunk treats the land as repurposed.
     repurpose-radius: 8
     candidate-lifetime-seconds: 600
+voting:
+  enabled: true
+  # Leave blank to allow every player to vote.
+  permission: ""
+  tower:
+    materials:
+      lever: LEVER
+      sign: OAK_WALL_SIGN
+      lamp: REDSTONE_LAMP
+    schema:
+      # Reserved characters: 0-9 vote lamps, G managed sign, V personalized lever.
+      # Rows are top-to-bottom. Columns run front-to-back. Dot preserves a block; space forces air.
+      blocks:
+        L: LECTERN
+        S: STONE
+      place-if-not-solid: [S]
+      # [column, row from bottom]; this position becomes the clicked block at [0, 0, 0].
+      click-point: [1, 0]
+      layout:
+        - '...9'
+        - '...8'
+        - '...7'
+        - '...6'
+        - '...5'
+        - '...4'
+        - '...3'
+        - '...2'
+        - '...1'
+        - '...0'
+        - '..GS'
+        - 'VL.S'
+
 survival-qol:
   supported-worlds: ["survival*"]
   supported-game-modes: [SURVIVAL]
