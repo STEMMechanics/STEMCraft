@@ -30,6 +30,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
 
@@ -45,6 +46,7 @@ public final class ImageMapServiceImpl extends BaseService implements ImageMapSe
 
     @Override
     public void onEnable() {
+        removeOrphanedFrames();
         api.events().register(PlayerInteractEntityEvent.class, event -> {
             if (event.getHand() != EquipmentSlot.HAND) {
                 return;
@@ -179,12 +181,14 @@ public final class ImageMapServiceImpl extends BaseService implements ImageMapSe
     }
 
     private void ensureFrames(ManagedDisplay display) {
-        if (display.frameIds.size() != display.definition.columns() * display.definition.rows()
-            || display.frameIds.stream().anyMatch(id -> !(Bukkit.getEntity(id) instanceof GlowItemFrame))) {
-            removeFrames(display);
-            display.frameIds.clear();
-            spawnFrames(display);
+        removeUnexpectedFrames(display);
+        if (display.frameIds.size() == display.definition.columns() * display.definition.rows()
+            && display.frameIds.stream().allMatch(this::isActiveManagedFrame)) {
+            return;
         }
+        removeFrames(display);
+        display.frameIds.clear();
+        spawnFrames(display);
     }
 
     private void ensureFrameItems(ManagedDisplay display) {
@@ -228,7 +232,9 @@ public final class ImageMapServiceImpl extends BaseService implements ImageMapSe
                 GlowItemFrame frame = world.spawn(spawn, GlowItemFrame.class, entity -> {
                     entity.setFacingDirection(definition.facing(), true);
                     entity.setFixed(true);
-                    entity.setPersistent(true);
+                    // Displays are rebuilt from feature storage. Saving these runtime entities makes a crash or stale
+                    // UUID capable of leaving permanent duplicates in the entity chunk.
+                    entity.setPersistent(false);
                     entity.setInvulnerable(true);
                     entity.addScoreboardTag(ENTITY_TAG);
                     entity.addScoreboardTag("stemcraft:image-map:" + safeTag(definition.id()));
@@ -248,13 +254,53 @@ public final class ImageMapServiceImpl extends BaseService implements ImageMapSe
     }
 
     private void removeTaggedFramesNear(ImageMapDisplay definition) {
+        taggedFramesNear(definition).forEach(Entity::remove);
+    }
+
+    private void removeUnexpectedFrames(ManagedDisplay display) {
+        Set<UUID> expected = new HashSet<>(display.frameIds);
+        for (GlowItemFrame frame : taggedFramesNear(display.definition)) {
+            if (!expected.contains(frame.getUniqueId())) {
+                frame.remove();
+            }
+        }
+    }
+
+    private List<GlowItemFrame> taggedFramesNear(ImageMapDisplay definition) {
         int search = Math.max(definition.columns(), definition.rows()) + 2;
+        String displayTag = "stemcraft:image-map:" + safeTag(definition.id());
+        List<GlowItemFrame> found = new ArrayList<>();
         for (Entity entity : definition.backingBlock().getWorld().getNearbyEntities(
             definition.backingBlock().clone().add(0.5, definition.rows() / 2.0, 0.5), search, search, search)) {
-            if (entity.getScoreboardTags().contains(ENTITY_TAG)
-                && entity.getScoreboardTags().contains("stemcraft:image-map:" + safeTag(definition.id()))) {
-                entity.remove();
+            if (entity instanceof GlowItemFrame frame
+                && frame.getScoreboardTags().contains(ENTITY_TAG)
+                && frame.getScoreboardTags().contains(displayTag)) {
+                found.add(frame);
             }
+        }
+        return found;
+    }
+
+    private boolean isActiveManagedFrame(UUID id) {
+        Entity entity = Bukkit.getEntity(id);
+        return entity instanceof GlowItemFrame frame && frame.isValid()
+            && frame.getScoreboardTags().contains(ENTITY_TAG);
+    }
+
+    /** Remove saved frames left behind by an unclean shutdown before features restore their displays. */
+    private void removeOrphanedFrames() {
+        int removed = 0;
+        for (World world : Bukkit.getWorlds()) {
+            for (GlowItemFrame frame : world.getEntitiesByClass(GlowItemFrame.class)) {
+                if (!frame.getScoreboardTags().contains(ENTITY_TAG)) {
+                    continue;
+                }
+                frame.remove();
+                removed++;
+            }
+        }
+        if (removed > 0) {
+            plugin.getLogger().warning("Removed " + removed + " orphaned image-map frame(s).");
         }
     }
 
