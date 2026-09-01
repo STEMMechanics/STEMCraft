@@ -1386,7 +1386,8 @@ public final class QuestFeature extends BaseFeature {
         if (progress(ctx.asPlayer(), quest.id()) == null) { ctx.error("That quest is not active."); return; }
         if (cancelQuest(ctx.asPlayer().getUniqueId(), quest.id())) {
             removeQuestBooks(ctx.asPlayer(), quest.id());
-            ctx.asPlayer().sendMessage(Component.text("Quest " + renderQuestText(quest, quest.title()) + " abandoned.", NamedTextColor.YELLOW));
+            questMessage(ctx.asPlayer(), "abandoned", "<yellow>Quest {quest} abandoned.</yellow>",
+                "quest", renderQuestText(quest, quest.title()));
             refreshMarkers(ctx.asPlayer());
         } else ctx.error("That quest is not active.");
     }
@@ -1397,7 +1398,8 @@ public final class QuestFeature extends BaseFeature {
         List<String> questIds = new ArrayList<>(activeFor(player).keySet());
         if (questIds.isEmpty()) { ctx.error("You do not have any active quests to abandon."); return; }
         if (!"confirm".equalsIgnoreCase(ctx.getArg(1, ""))) {
-            player.sendMessage(Component.text("This will abandon all " + questIds.size() + " active quests.", NamedTextColor.YELLOW));
+            questMessage(player, "abandon-all-warning", "<yellow>This will abandon all {count} active quests.</yellow>",
+                "count", questIds.size());
             player.sendMessage(Component.text("Quest progress will be lost. Confirm with /quest abandon-all confirm ", NamedTextColor.RED)
                 .append(button("[Abandon all quests]", "/quest abandon-all confirm", "Confirm abandoning every active quest")));
             return;
@@ -1409,8 +1411,9 @@ public final class QuestFeature extends BaseFeature {
             abandoned++;
         }
         refreshMarkers(player);
-        player.sendMessage(Component.text("Abandoned " + abandoned + " active quest"
-            + (abandoned == 1 ? "." : "s."), NamedTextColor.YELLOW));
+        questMessage(player, abandoned == 1 ? "abandoned-all-one" : "abandoned-all-many",
+            abandoned == 1 ? "<yellow>Abandoned {count} active quest.</yellow>" : "<yellow>Abandoned {count} active quests.</yellow>",
+            "count", abandoned);
     }
 
     private void trackCommand(CommandContext ctx) {
@@ -1420,29 +1423,29 @@ public final class QuestFeature extends BaseFeature {
         if (requested == null) {
             String tracked = trackedQuests.get(player.getUniqueId());
             if (isAutoTracking(player.getUniqueId())) {
-                if (tracked == null) player.sendMessage(Component.text("Quest tracking mode: automatic. No quest is currently active.", NamedTextColor.YELLOW));
+                if (tracked == null) questMessage(player, "tracking-auto-empty", "<yellow>Quest tracking mode: automatic. No quest is currently active.</yellow>");
                 else {
                     QuestDefinition quest = quests.get(tracked);
-                    player.sendMessage(Component.text("Quest tracking mode: automatic. Tracking "
-                        + (quest == null ? tracked : renderQuestText(quest, quest.title())) + ".", NamedTextColor.YELLOW));
+                    questMessage(player, "tracking-auto", "<yellow>Quest tracking mode: automatic. Tracking {quest}.</yellow>",
+                        "quest", quest == null ? tracked : renderQuestText(quest, quest.title()));
                 }
             } else if (tracked != null) {
                 QuestDefinition quest = quests.get(tracked);
-                player.sendMessage(Component.text("Quest tracking mode: specific. Tracking "
-                    + (quest == null ? tracked : renderQuestText(quest, quest.title())) + ".", NamedTextColor.YELLOW));
-            } else player.sendMessage(Component.text("Quest tracking mode: off.", NamedTextColor.YELLOW));
+                questMessage(player, "tracking-specific", "<yellow>Quest tracking mode: specific. Tracking {quest}.</yellow>",
+                    "quest", quest == null ? tracked : renderQuestText(quest, quest.title()));
+            } else questMessage(player, "tracking-off-status", "<yellow>Quest tracking mode: off.</yellow>");
             return;
         }
         if ("auto".equalsIgnoreCase(requested)) {
             setAutoTracking(player.getUniqueId(), true);
             updateAutomaticTracking(player);
-            player.sendMessage(Component.text("Quest automatic tracking enabled.", NamedTextColor.YELLOW));
+            questMessage(player, "tracking-auto-enabled", "<yellow>Quest automatic tracking enabled.</yellow>");
             return;
         }
         if ("off".equalsIgnoreCase(requested)) {
             setAutoTracking(player.getUniqueId(), false);
             stopTracking(player.getUniqueId());
-            player.sendMessage(Component.text("Quest tracking turned off.", NamedTextColor.YELLOW));
+            questMessage(player, "tracking-off", "<yellow>Quest tracking turned off.</yellow>");
             return;
         }
         QuestDefinition quest = quest(requested, ctx);
@@ -1451,7 +1454,8 @@ public final class QuestFeature extends BaseFeature {
         if (!hasOwnedQuestBook(player, quest.id())) { ctx.error("Carry that quest book in your inventory to track it."); return; }
         setAutoTracking(player.getUniqueId(), false);
         trackQuest(player, quest.id());
-        player.sendMessage(Component.text("Tracking quest " + renderQuestText(quest, quest.title()) + ".", NamedTextColor.YELLOW));
+        questMessage(player, "tracking-quest", "<yellow>Tracking quest {quest}.</yellow>",
+            "quest", renderQuestText(quest, quest.title()));
     }
 
     private void setAutoTracking(UUID playerId, boolean enabled) {
@@ -2270,8 +2274,8 @@ public final class QuestFeature extends BaseFeature {
                 if (cancelQuest(player.getUniqueId(), questId)) {
                     removeQuestBooks(player, questId);
                     QuestDefinition quest = quests.get(questId);
-                    player.sendMessage(Component.text("Quest " + (quest == null ? questId : renderQuestText(quest, quest.title()))
-                        + " abandoned.", NamedTextColor.YELLOW));
+                    questMessage(player, "abandoned", "<yellow>Quest {quest} abandoned.</yellow>",
+                        "quest", quest == null ? questId : renderQuestText(quest, quest.title()));
                     cancelledAny = true;
                 }
             } else {
@@ -2310,9 +2314,11 @@ public final class QuestFeature extends BaseFeature {
             String questId=selection.getKey();
             QuestDefinition quest = quests.get(questId);
             if (quest == null || !startQuest(player, quest, false, false,selection.getValue())) continue;
-            player.sendMessage(Component.text("Quest " + renderQuestText(quest, quest.title()) + " accepted.", NamedTextColor.YELLOW));
+            questMessage(player, "accepted", "<yellow>Quest {quest} accepted.</yellow>",
+                "quest", renderQuestText(quest, quest.title()));
             if (quest.timeLimitSeconds() > 0)
-                player.sendMessage(Component.text("Time limit: " + formatDuration(quest.timeLimitSeconds()) + ".", NamedTextColor.YELLOW));
+                questMessage(player, "time-limit", "<yellow>Time limit: {duration}.</yellow>",
+                    "duration", formatDuration(quest.timeLimitSeconds()));
             accepted++;
         }
         if (accepted > 0) playQuestStartedSound(player);
@@ -2738,11 +2744,11 @@ public final class QuestFeature extends BaseFeature {
 
     private boolean startQuest(Player player, QuestDefinition quest, boolean force, boolean announce,int preferredSlot) {
         if (!force && !isAvailable(player, quest)) {
-            if (announce) api.messages().error(player, "That quest is not available.");
+            if (announce) questMessage(player, "unavailable", "/error/That quest is not available.");
             return false;
         }
         if (progress(player, quest.id()) != null) {
-            if (announce) api.messages().warn(player, "That quest is already active.");
+            if (announce) questMessage(player, "already-active", "/warn/That quest is already active.");
             return false;
         }
         int revision = currentRevision(player.getUniqueId(), quest.id()) + 1;
@@ -2754,7 +2760,7 @@ public final class QuestFeature extends BaseFeature {
             inventory.setItem(preferredSlot,book);overflow=Map.of();
         }else overflow=inventory.addItem(book);
         if (!overflow.isEmpty()) {
-            if (announce) api.messages().error(player, "Make room in your inventory for the quest book.");
+            if (announce) questMessage(player, "inventory-space-required", "/error/Make room in your inventory for the quest book.");
             return false;
         }
         QuestProgress progress = new QuestProgress(player.getUniqueId(), quest.id(), 0, 0,
@@ -2770,8 +2776,9 @@ public final class QuestFeature extends BaseFeature {
         if (isAutoTracking(player.getUniqueId()) && !trackedQuests.containsKey(player.getUniqueId()))
             trackQuest(player, quest.id());
         if (announce) {
-            api.messages().success(player, "Quest started: {quest}", "quest", quest.title());
-            if (quest.timeLimitSeconds() > 0) player.sendMessage(Component.text("Time limit: " + formatDuration(quest.timeLimitSeconds()) + ".", NamedTextColor.YELLOW));
+            questMessage(player, "started", "/success/Quest started: {quest}", "quest", quest.title());
+            if (quest.timeLimitSeconds() > 0) questMessage(player, "time-limit", "<yellow>Time limit: {duration}.</yellow>",
+                "duration", formatDuration(quest.timeLimitSeconds()));
             playQuestStartedSound(player);
         }
         refreshMarkers(player);
@@ -2793,8 +2800,9 @@ public final class QuestFeature extends BaseFeature {
         if (progress.objectiveIndex() >= quest.objectives().size()) {
             progress.state(QuestProgress.State.READY);
             player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BELL, 1.0F, 1.7F);
-            player.sendMessage(Component.text(renderQuestText(quest, quest.title()) + " is complete. Return to " + quest.endNpcName() + ".", NamedTextColor.YELLOW));
-        } else api.messages().success(player, "Quest objective complete.");
+            questMessage(player, "ready-to-return", "<yellow>{quest} is complete. Return to {npc}.</yellow>",
+                "quest", renderQuestText(quest, quest.title()), "npc", quest.endNpcName());
+        } else questMessage(player, "objective-complete", "/success/Quest objective complete.");
         saveProgress(progress);
         updateQuestBook(player, quest, progress);
         refreshMarkers(player);
@@ -2802,15 +2810,15 @@ public final class QuestFeature extends BaseFeature {
 
     private boolean turnIn(Player player, QuestDefinition quest, QuestProgress progress) {
         if (!hasOwnedQuestBook(player, quest.id())) {
-            api.messages().error(player, "You must be carrying your quest book to claim the reward.");
+            questMessage(player, "book-required", "/error/You must be carrying your quest book to claim the reward.");
             return false;
         }
         if (quest.globalMaxCompletions() > 0 && globalCompletionCount(quest.id()) >= quest.globalMaxCompletions()) {
-            failQuest(player, quest, "Another player completed this limited quest first.");
+            failQuest(player, quest, "limited-completed", "Another player completed this limited quest first.");
             return false;
         }
         if (!collectObjectivesSatisfied(player, quest)) {
-            api.messages().error(player, "You do not have all required quest items.");
+            questMessage(player, "required-items-missing", "/error/You do not have all required quest items.");
             return false;
         }
         ItemStack[] inventorySnapshot = cloneItems(player.getInventory().getContents());
@@ -2827,10 +2835,10 @@ public final class QuestFeature extends BaseFeature {
                     "Inventory overflow from quest: " + renderQuestText(quest, quest.title()), new ArrayList<>(overflow.values())));
             if (!mailed.queued()) {
                 player.getInventory().setContents(inventorySnapshot);
-                api.messages().error(player, "Your reward could not fit and could not be mailed. Make inventory space and try again.");
+                questMessage(player, "reward-delivery-failed", "/error/Your reward could not fit and could not be mailed. Make inventory space and try again.");
                 return false;
             }
-            api.messages().info(player, "Your inventory was full, so some quest rewards were sent to your mailbox.");
+            questMessage(player, "rewards-mailed", "/info/Your inventory was full, so some quest rewards were sent to your mailbox.");
         }
         boolean firstCompletion = completed.computeIfAbsent(player.getUniqueId(), ignored -> new java.util.HashSet<>()).add(quest.id());
         try {
@@ -2844,10 +2852,11 @@ public final class QuestFeature extends BaseFeature {
             player.getInventory().setContents(inventorySnapshot);
             STEMCraft.getPlugin().getLogger().log(java.util.logging.Level.SEVERE,
                 "Could not complete quest '" + quest.id() + "' for " + player.getName(), exception);
-            api.messages().error(player, "The quest could not be saved. Your items were restored; please try again.");
+            questMessage(player, "save-failed", "/error/The quest could not be saved. Your items were restored; please try again.");
             return false;
         }
-        player.sendMessage(Component.text("Quest " + renderQuestText(quest, quest.title()) + " completed.", NamedTextColor.YELLOW));
+        questMessage(player, "completed", "<yellow>Quest {quest} completed.</yellow>",
+            "quest", renderQuestText(quest, quest.title()));
         playQuestCompletedSound(player);
         refreshMarkers(player);
         runCompletionSideEffects(player, quest, firstCompletion);
@@ -3243,7 +3252,7 @@ public final class QuestFeature extends BaseFeature {
         if (!isCurrentQuestBook(book)) {
             event.setCancelled(true);
             event.getPlayer().getInventory().setItemInMainHand(null);
-            api.messages().warn(event.getPlayer(), "This old quest book fades away.");
+            questMessage(event.getPlayer(), "old-book-removed", "/warn/This old quest book fades away.");
             return;
         }
         if (owner.equals(event.getPlayer().getUniqueId())) {
@@ -3319,7 +3328,7 @@ public final class QuestFeature extends BaseFeature {
                     if(remaining==0)expired.add(quest);
                 }
             }
-            for (QuestDefinition quest : expired) failQuest(player, quest, "Time ran out.");
+            for (QuestDefinition quest : expired) failQuest(player, quest, "time-ran-out", "Time ran out.");
         }
     }
 
@@ -3328,8 +3337,10 @@ public final class QuestFeature extends BaseFeature {
         Long previous=values.put(quest.id(),remaining);if(previous==null)return;
         long threshold=countdownThresholdCrossed(quest.timeLimitSeconds(),previous,remaining);
         if(threshold<=0)return;
-        NamedTextColor colour=threshold<=15?NamedTextColor.RED:NamedTextColor.YELLOW;
-        player.sendMessage(Component.text(quest.title()+": "+formatCountdownExact(threshold)+" remaining.",colour));
+        boolean urgent = threshold <= 15;
+        questMessage(player, urgent ? "countdown-urgent" : "countdown",
+            urgent ? "<red>{quest}: {remaining} remaining.</red>" : "<yellow>{quest}: {remaining} remaining.</yellow>",
+            "quest", quest.title(), "remaining", formatCountdownExact(threshold));
     }
 
     static long countdownThresholdCrossed(long total,long previous,long remaining){
@@ -3365,16 +3376,26 @@ public final class QuestFeature extends BaseFeature {
         return seconds+" seconds";
     }
 
-    private void failQuest(Player player, QuestDefinition quest, String reason) {
+    private void failQuest(Player player, QuestDefinition quest, String reasonKey, String fallbackReason) {
         long failedAt = System.currentTimeMillis();
+        String reason = questMessageText("failure-reasons." + reasonKey, fallbackReason);
         cancelQuest(player.getUniqueId(), quest.id());
         removeQuestBooks(player, quest.id());
         api.database().update("INSERT OR REPLACE INTO quest_failure(player_uuid,quest_id,failed_at,reason) VALUES(?,?,?,?)", statement -> {
             statement.setString(1, player.getUniqueId().toString()); statement.setString(2, quest.id());
             statement.setLong(3, failedAt); statement.setString(4, reason);
         });
-        player.sendMessage(Component.text(quest.title() + " failed. " + reason, NamedTextColor.RED));
+        questMessage(player, "failed", "<red>{quest} failed. {reason}</red>",
+            "quest", quest.title(), "reason", reason);
         refreshMarkers(player);
+    }
+
+    private String questMessageText(String key, String fallback) {
+        return getConfigSection().getString("messages." + key, fallback);
+    }
+
+    private void questMessage(Player player, String key, String fallback, Object... placeholders) {
+        api.messages().send(player, questMessageText(key, fallback), placeholders);
     }
 
     private String formatDuration(long seconds) {
