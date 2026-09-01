@@ -3,7 +3,11 @@ package dev.stemcraft.feature;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.CommandContext;
+import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.event.HoverEvent;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.*;
 import org.bukkit.block.*;
 import org.bukkit.block.data.BlockData;
@@ -110,7 +114,7 @@ public final class VotingFeature extends BaseFeature {
         if (ctx.args().isEmpty() || ctx.getArgLower(0).equals("status")) { showStatus(ctx); return; }
         if (!ctx.getArgLower(0).equals("admin")) { ctx.returnError("Use /vote status or /vote admin."); return; }
         if (!ctx.hasPermission(ADMIN_PERMISSION)) { ctx.returnError("You cannot administer voting groups."); return; }
-        if (ctx.args().size() < 2) { adminHelp(ctx); return; }
+        if (ctx.args().size() < 2 || ctx.getArg(1).matches("\\d+")) { showAdminMenu(ctx); return; }
         switch (ctx.getArgLower(1)) {
             case "create" -> createGroup(ctx);
             case "option" -> optionCommand(ctx);
@@ -122,6 +126,7 @@ public final class VotingFeature extends BaseFeature {
             case "reset" -> resetGroup(ctx);
             case "reset-player" -> resetPlayer(ctx);
             case "list" -> listGroups(ctx);
+            case "view" -> showGroupMenu(ctx);
             default -> adminHelp(ctx);
         }
     }
@@ -210,18 +215,75 @@ public final class VotingFeature extends BaseFeature {
     }
 
     private void listGroups(CommandContext ctx) {
-        if (groups.isEmpty()) { ctx.returnInfo("No voting groups exist."); return; }
-        for (VoteGroup group : groups.values()) ctx.info(group.id + " — " + group.name + " — " + state(group));
+        showAdminMenu(ctx);
     }
 
     private void showStatus(CommandContext ctx) {
         if (groups.isEmpty()) { ctx.returnInfo("No voting groups exist."); return; }
         UUID uuid = ctx.getSender() instanceof Player player ? player.getUniqueId() : null;
-        for (VoteGroup group : groups.values()) {
-            int used = uuid == null ? 0 : votes.getOrDefault(group.id, Map.of()).getOrDefault(uuid, Set.of()).size();
-            ctx.info(group.name + ": " + state(group) + (uuid == null ? "" : " — " + used + "/" + group.votesPerPlayer + " votes used"));
-        }
+        List<VoteGroup> values = new ArrayList<>(groups.values());
+        int page = ChatMenuUtil.getPageFromArgs(ctx.args(), 1, 1);
+        ChatMenuUtil.render(ctx.getSender(), "Voting", "vote status", page, values.size(), (start, count, interactive) -> {
+            List<Component> lines = new ArrayList<>();
+            for (VoteGroup group : values.subList(start, start + count)) {
+                int used = uuid == null ? 0 : votes.getOrDefault(group.id, Map.of()).getOrDefault(uuid, Set.of()).size();
+                lines.add(Component.text("● ", stateColour(group)).append(Component.text(group.name, NamedTextColor.WHITE))
+                    .append(Component.text(" — " + state(group) + " — " + used + "/" + group.votesPerPlayer + " used", NamedTextColor.GRAY)));
+            }
+            return lines;
+        }, "No voting groups exist.");
     }
+
+    private void showAdminMenu(CommandContext ctx) {
+        List<VoteGroup> values = new ArrayList<>(groups.values());
+        int page = ChatMenuUtil.getPageFromArgs(ctx.args(), 1, 1);
+        ChatMenuUtil.render(ctx.getSender(), "Voting administration", "vote admin", page, values.size(), (start, count, interactive) -> {
+            List<Component> lines = new ArrayList<>();
+            for (VoteGroup group : values.subList(start, start + count)) {
+                Component line = Component.text("● ", stateColour(group)).append(Component.text(group.name, NamedTextColor.WHITE))
+                    .append(Component.text(" (" + group.id + ")", NamedTextColor.DARK_GRAY))
+                    .append(Component.text(" — " + totalVotes(group.id) + " votes", NamedTextColor.GRAY));
+                if (interactive) line = line.clickEvent(ClickEvent.runCommand("/vote admin view " + group.id))
+                    .hoverEvent(HoverEvent.showText(Component.text("Manage this voting group")));
+                lines.add(line);
+            }
+            return lines;
+        }, "No voting groups exist.");
+        ctx.getSender().sendMessage(suggestButton("[＋ Create]", "/vote admin create new-vote 1 New Vote", "Create a voting group"));
+    }
+
+    private void showGroupMenu(CommandContext ctx) {
+        VoteGroup group = requireGroup(ctx, 2); if (group == null) return;
+        List<VoteOption> values = new ArrayList<>(options.getOrDefault(group.id, new LinkedHashMap<>()).values());
+        int page = ChatMenuUtil.getPageFromArgs(ctx.args(), 3, 1);
+        ChatMenuUtil.render(ctx.getSender(), group.name + " — " + state(group), "vote admin view " + group.id,
+            page, values.size(), (start, count, interactive) -> {
+                List<Component> lines = new ArrayList<>();
+                for (VoteOption option : values.subList(start, start + count)) {
+                    boolean placed = towers.getOrDefault(group.id, new LinkedHashMap<>()).containsKey(option.id);
+                    Component line = Component.text(option.name, NamedTextColor.WHITE)
+                        .append(Component.text(" — " + optionVotes(group.id, option.id) + " votes", NamedTextColor.GRAY))
+                        .append(Component.space()).append(placed
+                            ? Component.text("[Placed]", NamedTextColor.GREEN)
+                            : button("[Place]", "/vote admin tower place " + group.id + " " + option.id, "Place this option's tower"));
+                    lines.add(line);
+                }
+                return lines;
+            }, "This group has no options.");
+        String toggleCommand = "/vote admin " + (group.paused ? "resume " : "pause ") + group.id;
+        ctx.getSender().sendMessage(button(group.paused ? "[Resume]" : "[Pause]", toggleCommand, group.paused ? "Resume voting" : "Pause voting")
+            .append(Component.space()).append(suggestButton("[Schedule]", "/vote admin schedule " + group.id + " now ", "Set start and finish"))
+            .append(Component.space()).append(suggestButton("[＋ Option]", "/vote admin option add " + group.id + " new-option ", "Add a static option"))
+            .append(Component.space()).append(suggestButton("[Plot source]", "/vote admin source plots " + group.id + " ", "Load plot creators")));
+        ctx.getSender().sendMessage(button("[Place next]", "/vote admin tower place " + group.id + " next", "Place the next unplaced tower")
+            .append(Component.space()).append(suggestButton("[Reset votes]", "/vote admin reset " + group.id, "Review before sending")));
+    }
+
+    private NamedTextColor stateColour(VoteGroup group) { return switch (state(group)) { case "open" -> NamedTextColor.GREEN; case "paused" -> NamedTextColor.YELLOW; default -> NamedTextColor.GRAY; }; }
+    private Component button(String text, String command, String hover) { return Component.text(text, NamedTextColor.GOLD)
+        .clickEvent(ClickEvent.runCommand(command)).hoverEvent(HoverEvent.showText(Component.text(hover))); }
+    private Component suggestButton(String text, String command, String hover) { return Component.text(text, NamedTextColor.GOLD)
+        .clickEvent(ClickEvent.suggestCommand(command)).hoverEvent(HoverEvent.showText(Component.text(hover))); }
 
     private void onInteract(PlayerInteractEvent event) {
         if (event.getAction() != Action.RIGHT_CLICK_BLOCK || event.getClickedBlock() == null) return;
