@@ -343,6 +343,8 @@ public final class VotingFeature extends BaseFeature {
         }
         VoteTower tower = towerAt(event.getClickedBlock().getLocation()); if (tower == null) return;
         event.setCancelled(true); forceLeverOff(event.getClickedBlock()); castOrRetract(player, tower);
+        // Apply the player's private lever state after the cancelled vanilla interaction has finished.
+        api.tasks().runLater(1L, () -> refreshLevers(player));
     }
 
     private void castOrRetract(Player player, VoteTower tower) {
@@ -356,9 +358,9 @@ public final class VotingFeature extends BaseFeature {
         if (selected.remove(option.id)) {
             api.database().update("DELETE FROM voting_votes WHERE group_id=? AND voter_uuid=? AND option_id=?", ps -> {
                 ps.setString(1, group.id); ps.setString(2, player.getUniqueId().toString()); ps.setString(3, option.id); });
-            api.messages().send(player, "/success/Vote retracted from " + option.name + ".");
+            api.messages().send(player, "/success/Vote removed from " + option.name + ".");
         } else {
-            if (selected.size() >= group.votesPerPlayer) { api.messages().send(player, "/warn/You have used all " + group.votesPerPlayer + " votes. Retract one first."); refreshLever(player, tower); return; }
+            if (selected.size() >= group.votesPerPlayer) { api.messages().send(player, "/warn/You have used all your votes. Turn off one of your votes first."); refreshLever(player, tower); return; }
             selected.add(option.id);
             api.database().update("INSERT OR REPLACE INTO voting_votes(group_id,voter_uuid,option_id,created_at) VALUES(?,?,?,?)", ps -> {
                 ps.setString(1, group.id); ps.setString(2, player.getUniqueId().toString()); ps.setString(3, option.id); ps.setLong(4, Instant.now().getEpochSecond()); });
