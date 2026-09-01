@@ -51,10 +51,15 @@ public final class VotingFeature extends BaseFeature {
         api.events().register(PlayerChangedWorldEvent.class, event -> api.tasks().runLater(1L, () -> refreshLevers(event.getPlayer())));
         api.events().register(PlayerMoveEvent.class, this::onMove, EventPriority.MONITOR, true);
         api.tasks().repeating("feature:voting-displays", 100L, this::refreshAllDisplays);
+        api.tasks().repeating("feature:voting-plot-sync", 200L, this::refreshPlotSources);
+        refreshPlotSources();
         refreshAllDisplays();
     }
 
-    @Override public void onDisable() { api.tasks().cancel("feature:voting-displays"); placements.clear(); lastChunks.clear(); }
+    @Override public void onDisable() {
+        api.tasks().cancel("feature:voting-displays"); api.tasks().cancel("feature:voting-plot-sync");
+        placements.clear(); lastChunks.clear();
+    }
 
     @Override public void onReload() { super.onReload(); loadTowerSchema(); refreshAllDisplays(); }
 
@@ -209,9 +214,16 @@ public final class VotingFeature extends BaseFeature {
         }
         ctx.checkNotConsole(); VoteGroup group = requireGroup(ctx, 3); if (group == null) return;
         String optionId = resolveOption(group.id, ctx.getArg(4));
+        if (optionId == null && ctx.getArg(4).equalsIgnoreCase("next") && isPlotSource(group)) {
+            VoteOption slot = createPlotSlot(group.id);
+            options.computeIfAbsent(group.id, key -> new LinkedHashMap<>()).put(slot.id, slot); saveOption(group.id, slot);
+            optionId = slot.id;
+        }
         if (optionId == null) { ctx.returnError("Unknown vote option. Use its ID, name, or 'next'."); return; }
-        placements.put(ctx.asPlayer().getUniqueId(), new PendingPlacement(group.id, optionId));
-        ctx.returnSuccess("Right-click the block where the tower lectern belongs. Sneak-right-click to cancel.");
+        boolean continuous = ctx.getArg(4).equalsIgnoreCase("next");
+        placements.put(ctx.asPlayer().getUniqueId(), new PendingPlacement(group.id, optionId, continuous));
+        ctx.returnSuccess("Right-click the block where the tower lectern belongs."
+            + (continuous ? " Placement will continue until you sneak-right-click." : " Sneak-right-click to cancel."));
     }
 
     private void setPaused(CommandContext ctx, boolean paused) {
@@ -338,8 +350,23 @@ public final class VotingFeature extends BaseFeature {
             VoteTower previous = towers.getOrDefault(pending.groupId, new LinkedHashMap<>()).get(pending.optionId);
             if (previous != null) clearExistingTower(previous);
             towers.computeIfAbsent(pending.groupId, key -> new LinkedHashMap<>()).put(pending.optionId, tower);
-            saveTower(tower); placements.remove(player.getUniqueId()); buildTower(tower); refreshGroup(tower.groupId);
-            api.messages().send(player, "/success/Voting tower placed."); return;
+            saveTower(tower); buildTower(tower); refreshGroup(tower.groupId);
+            if (pending.continuous) {
+                String next = resolveOption(pending.groupId, "next");
+                VoteGroup group = groups.get(pending.groupId);
+                if (next == null && group != null && isPlotSource(group)) {
+                    VoteOption slot = createPlotSlot(group.id);
+                    options.computeIfAbsent(group.id, key -> new LinkedHashMap<>()).put(slot.id, slot); saveOption(group.id, slot);
+                    next = slot.id;
+                }
+                if (next != null) {
+                    placements.put(player.getUniqueId(), new PendingPlacement(pending.groupId, next, true));
+                    api.messages().send(player, "/success/Voting tower placed. Right-click again to place the next tower, or sneak-right-click to finish.");
+                    return;
+                }
+            }
+            placements.remove(player.getUniqueId());
+            api.messages().send(player, "/success/Voting tower placed. All configured towers have been placed."); return;
         }
         VoteTower tower = towerAt(event.getClickedBlock().getLocation()); if (tower == null) return;
         event.setCancelled(true); forceLeverOff(event.getClickedBlock()); castOrRetract(player, tower);
@@ -350,6 +377,7 @@ public final class VotingFeature extends BaseFeature {
     private void castOrRetract(Player player, VoteTower tower) {
         VoteGroup group = groups.get(tower.groupId); VoteOption option = options.getOrDefault(tower.groupId, new LinkedHashMap<>()).get(tower.optionId);
         if (group == null || option == null) return;
+        if (isPlotSource(group) && option.owner == null) { api.messages().send(player, "/warn/This voting tower has not been claimed yet."); return; }
         String permission = getConfigSection().getString("permission", "").trim();
         if (!permission.isEmpty() && !player.hasPermission(permission)) { api.messages().send(player, "/error/You cannot vote."); return; }
         if (!state(group).equals("open")) { api.messages().send(player, "/warn/Voting is " + state(group) + "."); return; }
@@ -388,7 +416,10 @@ public final class VotingFeature extends BaseFeature {
             if (role == null) {
                 Material decoration = Material.matchMaterial(element.block);
                 if (decoration != null && (element.replaceAlways || element.placeIfNonSolid && !block.getType().isSolid()
-                    || !element.placeIfNonSolid && block.getType().isAir())) block.setType(decoration, false);
+                    || !element.placeIfNonSolid && block.getType().isAir())) {
+                    block.setType(decoration, false);
+                    setFacing(block, tower.facing);
+                }
                 continue;
             }
             block.setType(roleMaterial(role), false); setFacing(block, tower.facing);
@@ -405,21 +436,33 @@ public final class VotingFeature extends BaseFeature {
         int total = totalVotes(groupId), maximum = maximumVotes(groupId);
         for (VoteTower tower : towers.getOrDefault(groupId, new LinkedHashMap<>()).values()) {
             VoteOption option = options.getOrDefault(groupId, new LinkedHashMap<>()).get(tower.optionId); if (option == null) continue;
+            VoteGroup group = groups.get(groupId);
+            boolean vacant = group != null && isPlotSource(group) && option.owner == null;
             int count = optionVotes(groupId, option.id);
             Block signBlock = signBlock(tower);
             if (signBlock.getState() instanceof Sign sign) {
-                var side = sign.getSide(org.bukkit.block.sign.Side.FRONT); side.line(0, Component.text(option.name));
-                side.line(1, Component.text(count + (count == 1 ? " vote" : " votes")));
-                side.line(2, Component.text(total == 0 ? "0%" : Math.round(count * 100D / total) + "%"));
+                var side = sign.getSide(org.bukkit.block.sign.Side.FRONT); side.line(0, Component.text(vacant ? "" : option.name));
+                side.line(1, Component.text(vacant ? "" : count + (count == 1 ? " vote" : " votes")));
+                side.line(2, Component.text(vacant ? "" : total == 0 ? "0%" : Math.round(count * 100D / total) + "%"));
+                side.line(3, Component.empty());
                 side.setGlowingText(true); sign.setWaxed(true); sign.update(true, false);
             }
             List<Location> lamps = lampLocations(tower);
             int lit = lampCount(count, maximum, lamps.size());
             for (int i = 0; i < lamps.size(); i++) {
                 Block block = lamps.get(i).getBlock(); if (!(block.getBlockData() instanceof Lightable data)) continue;
-                data.setLit(i < lit); block.setBlockData(data, false);
+                data.setLit(!vacant && i < lit); block.setBlockData(data, false);
             }
-            forceLeverOff(leverBlock(tower));
+            Block lever = leverBlock(tower);
+            if (vacant) lever.setType(Material.AIR, false);
+            else {
+                if (lever.getType() != roleMaterial("lever")) lever.setType(roleMaterial("lever"), false);
+                setFacing(lever, tower.facing);
+                if (lever.getBlockData() instanceof Switch data) {
+                    data.setAttachedFace(org.bukkit.block.data.FaceAttachable.AttachedFace.FLOOR);
+                    data.setFacing(tower.facing); data.setPowered(false); lever.setBlockData(data, false);
+                }
+            }
         }
     }
 
@@ -496,6 +539,12 @@ public final class VotingFeature extends BaseFeature {
     private void saveOption(String group, VoteOption option) { api.database().update("INSERT OR REPLACE INTO voting_options(group_id,option_id,display_name,owner_uuid) VALUES(?,?,?,?)", ps -> { ps.setString(1, group); ps.setString(2, option.id); ps.setString(3, option.name); ps.setString(4, option.owner == null ? null : option.owner.toString()); }); }
     private void saveTower(VoteTower tower) { api.database().update("INSERT OR REPLACE INTO voting_towers(group_id,option_id,world_name,x,y,z,facing) VALUES(?,?,?,?,?,?,?)", ps -> { ps.setString(1, tower.groupId); ps.setString(2, tower.optionId); ps.setString(3, tower.world); ps.setInt(4, tower.x); ps.setInt(5, tower.y); ps.setInt(6, tower.z); ps.setString(7, tower.facing.name()); }); }
 
+    private void refreshPlotSources() {
+        for (VoteGroup group : groups.values()) if (isPlotSource(group)) refreshPlotCandidates(group);
+    }
+
+    private boolean isPlotSource(VoteGroup group) { return "PLOTSQUARED_PLAYERS".equals(group.sourceType); }
+
     private int refreshPlotCandidates(VoteGroup group) {
         if (Bukkit.getPluginManager().getPlugin("PlotSquared") == null) return -1;
         try {
@@ -509,9 +558,42 @@ public final class VotingFeature extends BaseFeature {
                     for (Object owner : plotOwners) if (owner instanceof UUID uuid) owners.putIfAbsent(uuid, Optional.ofNullable(Bukkit.getOfflinePlayer(uuid).getName()).orElse(uuid.toString().substring(0, 8)));
                 }
             }
-            for (Map.Entry<UUID, String> owner : owners.entrySet()) { VoteOption option = new VoteOption(owner.getKey().toString(), owner.getValue(), owner.getKey()); options.computeIfAbsent(group.id, key -> new LinkedHashMap<>()).put(option.id, option); saveOption(group.id, option); }
+            LinkedHashMap<String, VoteOption> slots = options.computeIfAbsent(group.id, key -> new LinkedHashMap<>());
+            Set<UUID> assigned = new HashSet<>();
+            for (Map.Entry<String, VoteOption> entry : new ArrayList<>(slots.entrySet())) {
+                VoteOption current = entry.getValue();
+                String currentName = current.owner == null ? null : owners.get(current.owner);
+                if (currentName != null && assigned.add(current.owner)) {
+                    if (!current.name.equals(currentName)) { VoteOption updated = new VoteOption(current.id, currentName, current.owner); slots.put(current.id, updated); saveOption(group.id, updated); }
+                } else if (current.owner != null) {
+                    VoteOption vacant = new VoteOption(current.id, "Unclaimed plot", null);
+                    slots.put(current.id, vacant); saveOption(group.id, vacant); clearOptionVotes(group.id, current.id);
+                }
+            }
+            for (Map.Entry<UUID, String> owner : owners.entrySet()) {
+                if (assigned.contains(owner.getKey())) continue;
+                VoteOption vacant = slots.values().stream().filter(option -> option.owner == null).findFirst().orElse(null);
+                if (vacant == null) { vacant = createPlotSlot(group.id); slots.put(vacant.id, vacant); }
+                VoteOption claimed = new VoteOption(vacant.id, owner.getValue(), owner.getKey());
+                slots.put(claimed.id, claimed); saveOption(group.id, claimed); assigned.add(owner.getKey());
+            }
             return owners.size();
         } catch (ReflectiveOperationException | LinkageError ex) { return -1; }
+    }
+
+    private VoteOption createPlotSlot(String groupId) {
+        Map<String, VoteOption> existing = options.getOrDefault(groupId, new LinkedHashMap<>());
+        int number = 1; String id;
+        do { id = String.format(Locale.ROOT, "plot-slot-%03d", number++); } while (existing.containsKey(id));
+        return new VoteOption(id, "Unclaimed plot", null);
+    }
+
+    private void clearOptionVotes(String groupId, String optionId) {
+        api.database().update("DELETE FROM voting_votes WHERE group_id=? AND option_id=?", ps -> { ps.setString(1, groupId); ps.setString(2, optionId); });
+        Map<UUID, Set<String>> groupVotes = votes.get(groupId);
+        if (groupVotes == null) return;
+        groupVotes.values().forEach(selected -> selected.remove(optionId));
+        groupVotes.entrySet().removeIf(entry -> entry.getValue().isEmpty());
     }
 
     private Material material(String path, Material fallback) { Material value = Material.matchMaterial(getConfigSection().getString(path, fallback.name())); return value == null ? fallback : value; }
@@ -633,6 +715,6 @@ public final class VotingFeature extends BaseFeature {
     private static final class VoteGroup { final String id,name; final int votesPerPlayer; long startsAt,endsAt; boolean paused; String sourceType,sourceValue; VoteGroup(String id,String name,int votes,long start,long end,boolean paused,String source,String value){this.id=id;this.name=name;this.votesPerPlayer=votes;this.startsAt=start;this.endsAt=end;this.paused=paused;this.sourceType=source;this.sourceValue=value;} }
     private record VoteOption(String id,String name,UUID owner) {}
     private record VoteTower(String groupId,String optionId,String world,int x,int y,int z,BlockFace facing) {}
-    private record PendingPlacement(String groupId,String optionId) {}
+    private record PendingPlacement(String groupId,String optionId,boolean continuous) {}
     private record TowerElement(String block, int[] at, int order, boolean replaceAlways, boolean placeIfNonSolid) {}
 }
