@@ -127,11 +127,14 @@ public final class VotingFeature extends BaseFeature {
             .tabCompletion("admin", "list")
             .tabCompletion("admin", "view", "{vote-group}")
             .tabCompletion("admin", "option", "add", "{vote-group}", "", "")
+            .tabCompletion("admin", "option", "remove", "{vote-group}", "{vote-option:$3}")
             .tabCompletion("admin", "option", "list", "{vote-group}")
             .tabCompletion("admin", "source", "plots", "{vote-group}", "{world}")
             .tabCompletion("admin", "schedule", "{vote-group}", "now", "")
             .tabCompletion("admin", "tower", "place", "{vote-group}", "{vote-option:$3}")
             .tabCompletion("admin", "tower", "remove", "{vote-group}", "{vote-option:$3}")
+            .tabCompletion("admin", "tower", "remove", "{vote-group}", "all")
+            .tabCompletion("admin", "remove", "{vote-group}")
             .tabCompletion("admin", "pause", "{vote-group}")
             .tabCompletion("admin", "resume", "{vote-group}")
             .tabCompletion("admin", "reset", "{vote-group}")
@@ -154,13 +157,14 @@ public final class VotingFeature extends BaseFeature {
             case "resume" -> setPaused(ctx, false);
             case "reset" -> resetGroup(ctx);
             case "reset-player" -> resetPlayer(ctx);
+            case "remove" -> removeGroup(ctx);
             case "list" -> listGroups(ctx);
             case "view" -> showGroupMenu(ctx);
             default -> adminHelp(ctx);
         }
     }
 
-    private void adminHelp(CommandContext ctx) { ctx.returnInfo("Use /vote admin <create|option|source|schedule|tower|pause|resume|reset|reset-player|list>."); }
+    private void adminHelp(CommandContext ctx) { ctx.returnInfo("Use /vote admin <create|remove|option|source|schedule|tower|pause|resume|reset|reset-player|list>."); }
 
     private void createGroup(CommandContext ctx) {
         if (ctx.args().size() < 3) { ctx.returnError("Usage: /vote admin create <id> [votes-per-player] [name]"); return; }
@@ -180,8 +184,15 @@ public final class VotingFeature extends BaseFeature {
                 ctx.info(option.id + " — " + option.name);
             return;
         }
+        if (ctx.args().size() >= 5 && ctx.getArgLower(2).equals("remove")) {
+            VoteGroup group = requireGroup(ctx, 3); if (group == null) return;
+            String optionId = resolveOption(group.id, ctx.getArg(4));
+            if (optionId == null) { ctx.returnError("Unknown vote option."); return; }
+            removeOption(group.id, optionId);
+            ctx.returnSuccess("Voting tower and option slot removed."); return;
+        }
         if (ctx.args().size() < 6 || !ctx.getArgLower(2).equals("add")) {
-            ctx.returnError("Usage: /vote admin option <add <group> <option-id> <name>|list <group>>"); return;
+            ctx.returnError("Usage: /vote admin option <add <group> <option-id> <name>|remove <group> <option>|list <group>>"); return;
         }
         VoteGroup group = requireGroup(ctx, 3); if (group == null) return;
         String id = cleanId(ctx.getArgLower(4)); String name = String.join(" ", ctx.args().subList(5, ctx.args().size()));
@@ -221,8 +232,12 @@ public final class VotingFeature extends BaseFeature {
                 ctx.returnSuccess("Right-click any block in the tower to remove it. Sneak-right-click to cancel."); return;
             }
             String optionId = resolveOption(group.id, ctx.getArg(4));
+            if (ctx.getArg(4).equalsIgnoreCase("all")) {
+                int removed = removeAllTowers(group.id);
+                ctx.returnSuccess("Removed " + removed + " voting tower(s). Option slots remain available for placement."); return;
+            }
             if (optionId == null || !removeTower(group.id, optionId)) { ctx.returnError("That option does not have a placed tower."); return; }
-            ctx.returnSuccess("Voting tower removed. Its slot remains available for placement."); return;
+            ctx.returnSuccess("Voting tower removed. To also delete its option slot, use /vote admin option remove " + group.id + " " + optionId + "."); return;
         }
         if (ctx.args().size() < 5) { ctx.returnError("Usage: /vote admin tower place <group> <option>"); return; }
         String optionId = resolveOption(group.id, ctx.getArg(4));
@@ -259,6 +274,18 @@ public final class VotingFeature extends BaseFeature {
         votes.getOrDefault(group.id, Map.of()).remove(uuid); refreshGroup(group.id);
         Player online = Bukkit.getPlayer(uuid); if (online != null) refreshLevers(online);
         ctx.returnSuccess("Reset votes cast by " + ctx.getArg(3) + ".");
+    }
+
+    private void removeGroup(CommandContext ctx) {
+        VoteGroup group = requireGroup(ctx, 2); if (group == null) return;
+        int removedTowers = removeAllTowers(group.id);
+        api.database().update("DELETE FROM voting_votes WHERE group_id=?", ps -> ps.setString(1, group.id));
+        api.database().update("DELETE FROM voting_options WHERE group_id=?", ps -> ps.setString(1, group.id));
+        api.database().update("DELETE FROM voting_groups WHERE id=?", ps -> ps.setString(1, group.id));
+        groups.remove(group.id); options.remove(group.id); votes.remove(group.id); towers.remove(group.id);
+        placements.entrySet().removeIf(entry -> entry.getValue().groupId.equals(group.id));
+        removals.entrySet().removeIf(entry -> entry.getValue().equals(group.id));
+        ctx.returnSuccess("Removed voting group " + group.id + " and " + removedTowers + " physical tower(s).");
     }
 
     private void listGroups(CommandContext ctx) {
@@ -317,7 +344,9 @@ public final class VotingFeature extends BaseFeature {
                         .append(Component.text(" — " + optionVotes(group.id, option.id) + " votes", NamedTextColor.GRAY))
                         .append(Component.space()).append(placed
                             ? Component.text("[Placed]", NamedTextColor.GREEN)
-                            : button("[Place]", "/vote admin tower place " + group.id + " " + option.id, "Place this option's tower"));
+                            : button("[Place]", "/vote admin tower place " + group.id + " " + option.id, "Place this option's tower"))
+                        .append(Component.space()).append(suggestButton("[Remove]", "/vote admin option remove " + group.id + " " + option.id,
+                            "Remove this option slot, its tower, and its votes"));
                     lines.add(line);
                 }
                 return lines;
@@ -340,7 +369,9 @@ public final class VotingFeature extends BaseFeature {
             .append(Component.space()).append(suggestButton("[＋ Static option]", "/vote admin option add " + group.id + " ", "Enter <option-id> <display name>; for example fishing Fishing Expansion"))
             .append(Component.space()).append(suggestButton("[Plot source]", "/vote admin source plots " + group.id + " ", "Load plot creators")));
         ctx.getSender().sendMessage(button("[Place next]", "/vote admin tower place " + group.id + " next", "Place the next unplaced tower")
-            .append(Component.space()).append(suggestButton("[Reset votes]", "/vote admin reset " + group.id, "Review before sending")));
+            .append(Component.space()).append(suggestButton("[Remove towers]", "/vote admin tower remove " + group.id + " all", "Remove every physical tower but keep option slots"))
+            .append(Component.space()).append(suggestButton("[Reset votes]", "/vote admin reset " + group.id, "Review before sending"))
+            .append(Component.space()).append(suggestButton("[Remove group]", "/vote admin remove " + group.id, "Remove this group, all options, votes, and physical towers")));
     }
 
     private NamedTextColor stateColour(VoteGroup group) { return switch (state(group)) { case "open" -> NamedTextColor.GREEN; case "paused" -> NamedTextColor.YELLOW; default -> NamedTextColor.GRAY; }; }
@@ -360,7 +391,7 @@ public final class VotingFeature extends BaseFeature {
             VoteTower selected = towerPartAt(event.getClickedBlock().getLocation(), removalGroup);
             if (selected == null) { api.messages().send(player, "/warn/That block is not part of a tower in this voting group."); return; }
             removeTower(selected.groupId, selected.optionId); removals.remove(player.getUniqueId());
-            api.messages().send(player, "/success/Voting tower removed. Its slot remains available for placement."); return;
+            api.messages().send(player, "/success/Voting tower removed. Use /vote admin option remove " + selected.groupId + " " + selected.optionId + " to also delete its option slot."); return;
         }
         PendingPlacement pending = placements.get(player.getUniqueId());
         if (pending != null) {
@@ -524,6 +555,23 @@ public final class VotingFeature extends BaseFeature {
         clearExistingTower(tower);
         api.database().update("DELETE FROM voting_towers WHERE group_id=? AND option_id=?", ps -> { ps.setString(1, groupId); ps.setString(2, optionId); });
         refreshGroup(groupId); return true;
+    }
+
+    private int removeAllTowers(String groupId) {
+        List<String> optionIds = new ArrayList<>(towers.getOrDefault(groupId, new LinkedHashMap<>()).keySet());
+        optionIds.forEach(optionId -> removeTower(groupId, optionId));
+        return optionIds.size();
+    }
+
+    private void removeOption(String groupId, String optionId) {
+        removeTower(groupId, optionId);
+        clearOptionVotes(groupId, optionId);
+        LinkedHashMap<String, VoteOption> groupOptions = options.get(groupId);
+        if (groupOptions != null) groupOptions.remove(optionId);
+        api.database().update("DELETE FROM voting_options WHERE group_id=? AND option_id=?", ps -> {
+            ps.setString(1, groupId); ps.setString(2, optionId);
+        });
+        refreshGroup(groupId);
     }
     private void clearLegacyTower(VoteTower tower) {
         clearIfTowerMaterial(local(tower, 0, 0, 0).getBlock());
