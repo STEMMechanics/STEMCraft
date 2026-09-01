@@ -657,7 +657,7 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
         int markerBudget = Math.max(64, maxPoints * 2);
         if (ordered.size() <= markerBudget) {
             for (Location location : ordered) {
-                spawnFlame(player, location);
+                spawnMajorMarker(player, location);
             }
             return;
         }
@@ -665,7 +665,7 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
         double stride = (double) ordered.size() / (double) markerBudget;
         for (int i = 0; i < markerBudget; i++) {
             int index = Math.min(ordered.size() - 1, (int) Math.floor(i * stride));
-            spawnFlame(player, ordered.get(index));
+            spawnMajorMarker(player, ordered.get(index));
         }
     }
 
@@ -699,6 +699,11 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
 
     private void spawnFlame(Player player, Location location) {
         player.spawnParticle(Particle.FLAME, location.getX(), location.getY(), location.getZ(), 1, 0.02D, 0.02D, 0.02D, 0.0D);
+    }
+
+    private void spawnMajorMarker(Player player, Location location) {
+        player.spawnParticle(Particle.FLAME, location.getX(), location.getY(), location.getZ(), 3, 0.08D, 0.08D, 0.08D, 0.0D);
+        spawnDust(player, location);
     }
 
     private Location point(World world, double x, double y, double z) {

@@ -551,13 +551,13 @@ public class WorldServiceImpl extends BaseService implements WorldService {
             if(commandMode == SettingCommandMode.FLAG) {
                 out = new String[completions.length + 3];
                 out[0] = "flags";
-                out[1] = "{world}";
+                out[1] = "{world-command-loaded}";
                 out[2] = setting.key();
                 System.arraycopy(completions, 0, out, 3, completions.length);
             } else {
                 out = new String[completions.length + 2];
                 out[0] = setting.key();
-                out[1] = "{world}";
+                out[1] = "{world-command-loaded}";
                 System.arraycopy(completions, 0, out, 2, completions.length);
             }
             worldCommand.getCommand().addTabCompletion(out);
