@@ -28,16 +28,34 @@ public final class NightVisionFeature extends BaseFeature {
         api.events().register(PlayerChangedWorldEvent.class, event -> disable(event.getPlayer()), EventPriority.MONITOR, true);
         api.events().register(PlayerGameModeChangeEvent.class, event -> disable(event.getPlayer()), EventPriority.MONITOR, true);
         api.events().register(PlayerQuitEvent.class, event -> disable(event.getPlayer()));
-        api.commands().create("nv")
+        api.commands().create("nightvision")
+            .aliases("nv")
             .description("Toggle hidden night vision until changing world or game mode.")
-            .usage("/nv")
+            .usage("/nightvision [on|off]")
+            .tabCompletion("on")
+            .tabCompletion("off")
             .permission("stemcraft.command.nightvision")
             .executor((unused, command, ctx) -> {
                 ctx.checkNotConsole();
                 Player player = ctx.asPlayer();
-                if (enabledPlayers.contains(player.getUniqueId())) {
+                if (ctx.args().size() > 1 || (!ctx.args().isEmpty()
+                    && !Set.of("on", "off").contains(ctx.getArgLower(0)))) {
+                    ctx.returnError("Use /nightvision [on|off].");
+                    return;
+                }
+                boolean currentlyEnabled = enabledPlayers.contains(player.getUniqueId());
+                boolean turnOn = ctx.args().isEmpty() ? !currentlyEnabled : ctx.getArgLower(0).equals("on");
+                if (!turnOn) {
+                    if (!currentlyEnabled) {
+                        ctx.returnInfo("Night vision is already off.");
+                        return;
+                    }
                     disable(player);
                     ctx.returnSuccess("Night vision turned off.");
+                    return;
+                }
+                if (currentlyEnabled) {
+                    ctx.returnInfo("Night vision is already on.");
                     return;
                 }
                 if (player.hasPotionEffect(PotionEffectType.NIGHT_VISION)) {
