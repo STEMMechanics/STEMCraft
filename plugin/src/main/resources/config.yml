@@ -166,7 +166,7 @@ mailboxes:
 image-maps:
   enabled: true
   # PNG files available to /imagemap, relative to the STEMCraft data folder.
-  directory: images
+  directory: imagemaps
 
 notice-boards:
   enabled: true

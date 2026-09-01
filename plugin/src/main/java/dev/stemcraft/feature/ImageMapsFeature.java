@@ -17,15 +17,16 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.util.LinkedHashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
-import java.util.regex.Pattern;
 
 /** Persistent, command-managed PNG displays backed by the image-map service. */
 public final class ImageMapsFeature extends BaseFeature {
     private static final String PERMISSION = "stemcraft.command.imagemap.admin";
-    private static final Pattern VALID_ID = Pattern.compile("[a-z0-9_.-]+");
     private final Map<String, StoredDisplay> displays = new LinkedHashMap<>();
     private final Map<UUID, PendingPlacement> placements = new LinkedHashMap<>();
     private File imageDirectory;
@@ -33,7 +34,7 @@ public final class ImageMapsFeature extends BaseFeature {
     public ImageMapsFeature(STEMCraftAPI api) { super(api); }
 
     @Override public void onEnable() {
-        imageDirectory = new File(api.getDataFolder(), getConfigSection().getString("directory", "images"));
+        imageDirectory = new File(api.getDataFolder(), getConfigSection().getString("directory", "imagemaps"));
         if (!imageDirectory.exists() && !imageDirectory.mkdirs())
             STEMCraft.getPlugin().getLogger().warning("Could not create image-map directory " + imageDirectory);
         ensureStorage(); loadDisplays(); registerCommand();
@@ -67,41 +68,42 @@ public final class ImageMapsFeature extends BaseFeature {
     }
 
     private void registerCommand() {
+        api.tabComplete().register("image-map-file", (player, args) -> availableImages());
+        api.tabComplete().register("image-map-id", (player, args) -> displays.keySet().stream().sorted().toList());
         api.commands().create("imagemap")
             .description("Create and manage PNG map displays")
-            .usage("/imagemap <create <id> <png-file>|delete <id>|list>")
+            .usage("/imagemap <create <png-file>|delete <id>|list>")
             .permission(PERMISSION)
-            .tabCompletion("create")
-            .tabCompletion("delete")
+            .tabCompletion("create", "{image-map-file}")
+            .tabCompletion("delete", "{image-map-id}")
             .tabCompletion("list")
             .executor((unused, command, ctx) -> execute(ctx))
             .register(STEMCraft.getPlugin());
     }
 
     private void execute(CommandContext ctx) {
-        if (ctx.args().isEmpty()) { ctx.returnInfo("Use /imagemap <create <id> <png-file>|delete <id>|list>."); return; }
+        if (ctx.args().isEmpty()) { ctx.returnInfo("Use /imagemap <create <png-file>|delete <id>|list>."); return; }
         switch (ctx.getArgLower(0)) {
             case "create" -> prepareCreate(ctx);
             case "delete" -> delete(ctx);
             case "list" -> list(ctx);
-            default -> ctx.returnError("Use /imagemap <create <id> <png-file>|delete <id>|list>.");
+            default -> ctx.returnError("Use /imagemap <create <png-file>|delete <id>|list>.");
         }
     }
 
     private void prepareCreate(CommandContext ctx) {
-        if (ctx.args().size() < 3) { ctx.returnError("Usage: /imagemap create <id> <png-file>"); return; }
+        if (ctx.args().size() < 2) { ctx.returnError("Usage: /imagemap create <png-file>"); return; }
         ctx.checkNotConsole();
-        String id = ctx.getArgLower(1);
-        if (!VALID_ID.matcher(id).matches()) { ctx.returnError("The ID may only contain letters, numbers, dots, dashes, and underscores."); return; }
-        String path = String.join(" ", ctx.args().subList(2, ctx.args().size()));
+        String path = String.join(" ", ctx.args().subList(1, ctx.args().size()));
         try {
             File file = resolveImage(path);
             BufferedImage image = ImageIO.read(file);
             if (image == null) { ctx.returnError("That file is not a readable PNG image."); return; }
+            String id = nextId(path);
             int columns = Math.max(1, (image.getWidth() + 127) / 128);
             int rows = Math.max(1, (image.getHeight() + 127) / 128);
             placements.put(ctx.asPlayer().getUniqueId(), new PendingPlacement(id, path, image, columns, rows));
-            ctx.returnSuccess("Image is " + image.getWidth() + "×" + image.getHeight() + " pixels (" + columns + "×" + rows
+            ctx.returnSuccess("Preparing " + id + ": " + image.getWidth() + "×" + image.getHeight() + " pixels (" + columns + "×" + rows
                 + " maps). Right-click its bottom-left backing block; sneak-right-click to cancel.");
         } catch (IOException ex) { ctx.returnError(ex.getMessage()); }
     }
@@ -164,6 +166,24 @@ public final class ImageMapsFeature extends BaseFeature {
         if (!file.toPath().startsWith(root.toPath())) throw new IOException("The PNG must be inside " + root + ".");
         if (!file.isFile()) throw new IOException("PNG not found: " + file + ".");
         return file;
+    }
+
+    private List<String> availableImages() {
+        File[] files = imageDirectory.listFiles(file -> file.isFile() && file.getName().toLowerCase(Locale.ROOT).endsWith(".png"));
+        if (files == null) return List.of();
+        return java.util.Arrays.stream(files).map(File::getName).sorted(String.CASE_INSENSITIVE_ORDER).toList();
+    }
+
+    private String nextId(String imagePath) {
+        String filename = new File(imagePath).getName();
+        int extension = filename.lastIndexOf('.'); if (extension > 0) filename = filename.substring(0, extension);
+        String base = filename.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-").replaceAll("^-+|-+$", "");
+        if (base.isEmpty()) base = "image";
+        Set<String> reserved = new HashSet<>(displays.keySet());
+        placements.values().forEach(pending -> reserved.add(pending.id));
+        if (!reserved.contains(base)) return base;
+        int suffix = 2; while (reserved.contains(base + "-" + suffix)) suffix++;
+        return base + "-" + suffix;
     }
 
     private String managedId(String id) { return "command:" + id; }
