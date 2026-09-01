@@ -916,12 +916,15 @@ voting:
     sign: OAK_WALL_SIGN
     wall: POLISHED_DEEPSLATE
     lamp: REDSTONE_LAMP
-    lever-offset: [0, 0, 1]
-    sign-offset: [0, 1, -1]
-    lamp-origin: [-2, 2, -1]
-    lamp-columns: 5
-    lamp-rows: 2
-    wall-depth: -2
+    # Local coordinates are [right, up, forward] relative to the tower front.
+    lever-position: [0, 0, 1]
+    sign-position: [0, 1, 0]
+    lamp-position: [0, 2, -1]
+    lamp-direction: [0, 1, 0]
+    lamp-count: 10
+    wall-position: [0, 0, -1]
+    wall-width: 1
+    wall-height: 2
 
 survival-qol:
   hoe-harvest:

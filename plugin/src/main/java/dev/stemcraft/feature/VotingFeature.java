@@ -329,8 +329,10 @@ public final class VotingFeature extends BaseFeature {
             event.setCancelled(true);
             if (player.isSneaking()) { placements.remove(player.getUniqueId()); api.messages().send(player, "/info/Tower placement cancelled."); return; }
             Block clicked = event.getClickedBlock(); Block anchor = clicked.getType() == Material.LECTERN ? clicked : clicked.getRelative(BlockFace.UP);
-            BlockFace facing = clicked.getBlockData() instanceof Directional directional ? horizontal(directional.getFacing()) : facing(player);
+            BlockFace facing = facing(player).getOppositeFace();
             VoteTower tower = new VoteTower(pending.groupId, pending.optionId, anchor.getWorld().getName(), anchor.getX(), anchor.getY(), anchor.getZ(), facing);
+            VoteTower previous = towers.getOrDefault(pending.groupId, new LinkedHashMap<>()).get(pending.optionId);
+            if (previous != null) clearExistingTower(previous);
             towers.computeIfAbsent(pending.groupId, key -> new LinkedHashMap<>()).put(pending.optionId, tower);
             saveTower(tower); placements.remove(player.getUniqueId()); buildTower(tower); refreshGroup(tower.groupId);
             api.messages().send(player, "/success/Voting tower placed."); return;
@@ -376,7 +378,12 @@ public final class VotingFeature extends BaseFeature {
     private void buildTower(VoteTower tower) {
         World world = Bukkit.getWorld(tower.world); if (world == null) return;
         Material wall = material("tower.wall", Material.POLISHED_DEEPSLATE), lectern = material("tower.lectern", Material.LECTERN);
-        for (int x = -2; x <= 2; x++) for (int y = 0; y <= 3; y++) local(tower, x, y, getConfigSection().getInt("tower.wall-depth", -2)).getBlock().setType(wall, false);
+        int[] wallPosition = offset("tower.wall-position", 0, 0, -1);
+        int wallWidth = Math.max(1, getConfigSection().getInt("tower.wall-width", 1));
+        int wallHeight = Math.max(1, getConfigSection().getInt("tower.wall-height", 2));
+        int wallStart = -Math.floorDiv(wallWidth, 2);
+        for (int x = 0; x < wallWidth; x++) for (int y = 0; y < wallHeight; y++)
+            local(tower, wallPosition[0] + wallStart + x, wallPosition[1] + y, wallPosition[2]).getBlock().setType(wall, false);
         Block anchor = world.getBlockAt(tower.x, tower.y, tower.z); anchor.setType(lectern, false); setFacing(anchor, tower.facing);
         Block lever = leverBlock(tower); lever.setType(material("tower.lever", Material.LEVER), false);
         if (lever.getBlockData() instanceof Switch data) { data.setAttachedFace(org.bukkit.block.data.FaceAttachable.AttachedFace.FLOOR); data.setFacing(tower.facing); data.setPowered(false); lever.setBlockData(data, false); }
@@ -390,7 +397,7 @@ public final class VotingFeature extends BaseFeature {
         int total = totalVotes(groupId), maximum = maximumVotes(groupId);
         for (VoteTower tower : towers.getOrDefault(groupId, new LinkedHashMap<>()).values()) {
             VoteOption option = options.getOrDefault(groupId, new LinkedHashMap<>()).get(tower.optionId); if (option == null) continue;
-            int count = optionVotes(groupId, option.id), lit = lampCount(count, maximum, 10);
+            int count = optionVotes(groupId, option.id);
             Block signBlock = signBlock(tower);
             if (signBlock.getState() instanceof Sign sign) {
                 var side = sign.getSide(org.bukkit.block.sign.Side.FRONT); side.line(0, Component.text(option.name));
@@ -399,6 +406,7 @@ public final class VotingFeature extends BaseFeature {
                 side.setGlowingText(true); sign.setWaxed(true); sign.update(true, false);
             }
             List<Location> lamps = lampLocations(tower);
+            int lit = lampCount(count, maximum, lamps.size());
             for (int i = 0; i < lamps.size(); i++) {
                 Block block = lamps.get(i).getBlock(); if (!(block.getBlockData() instanceof Lightable data)) continue;
                 data.setLit(i < lit); block.setBlockData(data, false);
@@ -423,6 +431,33 @@ public final class VotingFeature extends BaseFeature {
     }
 
     private void forceLeverOff(Block block) { if (block.getBlockData() instanceof Powerable data && data.isPowered()) { data.setPowered(false); block.setBlockData(data, false); } }
+    private void clearExistingTower(VoteTower tower) {
+        Material signMaterial = material("tower.sign", Material.OAK_WALL_SIGN);
+        if (local(tower, 0, 1, -1).getBlock().getType() == signMaterial && signBlock(tower).getType() != signMaterial) {
+            clearLegacyTower(tower);
+            return;
+        }
+        clearIfTowerMaterial(local(tower, 0, 0, 0).getBlock()); clearIfTowerMaterial(leverBlock(tower)); clearIfTowerMaterial(signBlock(tower));
+        lampLocations(tower).forEach(location -> clearIfTowerMaterial(location.getBlock()));
+        int[] wallPosition = offset("tower.wall-position", 0, 0, -1);
+        int width = Math.max(1, getConfigSection().getInt("tower.wall-width", 1));
+        int height = Math.max(1, getConfigSection().getInt("tower.wall-height", 2));
+        int start = -Math.floorDiv(width, 2);
+        for (int x = 0; x < width; x++) for (int y = 0; y < height; y++)
+            clearIfTowerMaterial(local(tower, wallPosition[0] + start + x, wallPosition[1] + y, wallPosition[2]).getBlock());
+    }
+    private void clearLegacyTower(VoteTower tower) {
+        clearIfTowerMaterial(local(tower, 0, 0, 0).getBlock());
+        clearIfTowerMaterial(local(tower, 0, 0, 1).getBlock());
+        clearIfTowerMaterial(local(tower, 0, 1, -1).getBlock());
+        for (int x = -2; x <= 2; x++) for (int y = 0; y <= 3; y++) clearIfTowerMaterial(local(tower, x, y, -2).getBlock());
+        for (int x = -2; x <= 2; x++) for (int y = 2; y <= 3; y++) clearIfTowerMaterial(local(tower, x, y, -1).getBlock());
+    }
+    private void clearIfTowerMaterial(Block block) {
+        if (Set.of(material("tower.wall", Material.POLISHED_DEEPSLATE), material("tower.lectern", Material.LECTERN),
+            material("tower.lever", Material.LEVER), material("tower.sign", Material.OAK_WALL_SIGN),
+            material("tower.lamp", Material.REDSTONE_LAMP)).contains(block.getType())) block.setType(Material.AIR, false);
+    }
     private int optionVotes(String group, String option) { return (int) votes.getOrDefault(group, Map.of()).values().stream().filter(set -> set.contains(option)).count(); }
     private int totalVotes(String group) { return votes.getOrDefault(group, Map.of()).values().stream().mapToInt(Set::size).sum(); }
     private int maximumVotes(String group) { return options.getOrDefault(group, new LinkedHashMap<>()).keySet().stream().mapToInt(id -> optionVotes(group, id)).max().orElse(0); }
@@ -469,9 +504,9 @@ public final class VotingFeature extends BaseFeature {
     private Material material(String path, Material fallback) { Material value = Material.matchMaterial(getConfigSection().getString(path, fallback.name())); return value == null ? fallback : value; }
     private int[] offset(String path, int x, int y, int z) { List<Integer> list = getConfigSection().getIntegerList(path); return list.size() == 3 ? new int[]{list.get(0), list.get(1), list.get(2)} : new int[]{x,y,z}; }
     private Location local(VoteTower tower, int right, int up, int forward) { World world = Bukkit.getWorld(tower.world); BlockFace r = switch (tower.facing) { case NORTH -> BlockFace.EAST; case EAST -> BlockFace.SOUTH; case SOUTH -> BlockFace.WEST; default -> BlockFace.NORTH; }; return new Location(world, tower.x + r.getModX()*right + tower.facing.getModX()*forward, tower.y + up, tower.z + r.getModZ()*right + tower.facing.getModZ()*forward); }
-    private Block leverBlock(VoteTower tower) { int[] o = offset("tower.lever-offset",0,0,1); return local(tower,o[0],o[1],o[2]).getBlock(); }
-    private Block signBlock(VoteTower tower) { int[] o = offset("tower.sign-offset",0,1,-1); return local(tower,o[0],o[1],o[2]).getBlock(); }
-    private List<Location> lampLocations(VoteTower tower) { int[] o=offset("tower.lamp-origin",-2,2,-1); int columns=Math.max(1,getConfigSection().getInt("tower.lamp-columns",5)), rows=Math.max(1,getConfigSection().getInt("tower.lamp-rows",2)); List<Location> result=new ArrayList<>(); for(int y=0;y<rows;y++)for(int x=0;x<columns;x++)result.add(local(tower,o[0]+x,o[1]+y,o[2])); return result; }
+    private Block leverBlock(VoteTower tower) { int[] o = offset("tower.lever-position",0,0,1); return local(tower,o[0],o[1],o[2]).getBlock(); }
+    private Block signBlock(VoteTower tower) { int[] o = offset("tower.sign-position",0,1,0); return local(tower,o[0],o[1],o[2]).getBlock(); }
+    private List<Location> lampLocations(VoteTower tower) { int[] origin=offset("tower.lamp-position",0,2,-1), step=offset("tower.lamp-direction",0,1,0); int count=Math.max(1,getConfigSection().getInt("tower.lamp-count",10)); List<Location> result=new ArrayList<>(); for(int i=0;i<count;i++)result.add(local(tower,origin[0]+step[0]*i,origin[1]+step[1]*i,origin[2]+step[2]*i)); return result; }
     private void setFacing(Block block, BlockFace face) { if (block.getBlockData() instanceof Directional data && data.getFaces().contains(face)) { data.setFacing(face); block.setBlockData(data, false); } }
     private VoteTower towerAt(Location location) { for (var map:towers.values()) for(VoteTower tower:map.values()) if(same(leverBlock(tower).getLocation(),location)) return tower; return null; }
     private boolean isTowerPart(Location location) { for(var map:towers.values())for(VoteTower tower:map.values()){ if(same(signBlock(tower).getLocation(),location)||same(local(tower,0,0,0),location)||lampLocations(tower).stream().anyMatch(l->same(l,location)))return true;}return false; }
