@@ -1000,6 +1000,40 @@ skip_night:
     - "survival"
 quest:
   enabled: true
+  messages:
+    # Prefix any message with routing directives such as /survival//error/ to set its context and style.
+    abandoned: "<yellow>Quest {quest} abandoned.</yellow>"
+    abandon-all-warning: "<yellow>This will abandon all {count} active quests.</yellow>"
+    abandoned-all-one: "<yellow>Abandoned {count} active quest.</yellow>"
+    abandoned-all-many: "<yellow>Abandoned {count} active quests.</yellow>"
+    tracking-auto-empty: "<yellow>Quest tracking mode: automatic. No quest is currently active.</yellow>"
+    tracking-auto: "<yellow>Quest tracking mode: automatic. Tracking {quest}.</yellow>"
+    tracking-specific: "<yellow>Quest tracking mode: specific. Tracking {quest}.</yellow>"
+    tracking-off-status: "<yellow>Quest tracking mode: off.</yellow>"
+    tracking-auto-enabled: "<yellow>Quest automatic tracking enabled.</yellow>"
+    tracking-off: "<yellow>Quest tracking turned off.</yellow>"
+    tracking-quest: "<yellow>Tracking quest {quest}.</yellow>"
+    accepted: "<yellow>Quest {quest} accepted.</yellow>"
+    unavailable: "/error/That quest is not available."
+    already-active: "/warn/That quest is already active."
+    inventory-space-required: "/error/Make room in your inventory for the quest book."
+    started: "/success/Quest started: {quest}"
+    time-limit: "<yellow>Time limit: {duration}.</yellow>"
+    ready-to-return: "<yellow>{quest} is complete. Return to {npc}.</yellow>"
+    objective-complete: "/success/Quest objective complete."
+    book-required: "/error/You must be carrying your quest book to claim the reward."
+    required-items-missing: "/error/You do not have all required quest items."
+    reward-delivery-failed: "/error/Your reward could not fit and could not be mailed. Make inventory space and try again."
+    rewards-mailed: "/info/Your inventory was full, so some quest rewards were sent to your mailbox."
+    save-failed: "/error/The quest could not be saved. Your items were restored; please try again."
+    completed: "<yellow>Quest {quest} completed.</yellow>"
+    old-book-removed: "/warn/This old quest book fades away."
+    countdown: "<yellow>{quest}: {remaining} remaining.</yellow>"
+    countdown-urgent: "<red>{quest}: {remaining} remaining.</red>"
+    failed: "<red>{quest} failed. {reason}</red>"
+    failure-reasons:
+      time-ran-out: "Time ran out."
+      limited-completed: "Another player completed this limited quest first."
   npc-leaving:
     # Random delay after an NPC's availability window closes, preventing simultaneous departures.
     random-delay-ticks: 500
