@@ -104,9 +104,27 @@ public final class VotingFeature extends BaseFeature {
     }
 
     private void registerCommand() {
+        api.tabComplete().register("vote-group", (player, args) -> new ArrayList<>(groups.keySet()));
+        api.tabComplete().register("vote-option", (player, args) -> {
+            if (args.length == 0) return List.of();
+            LinkedHashMap<String, VoteOption> groupOptions = options.get(args[0].toLowerCase(Locale.ROOT));
+            if (groupOptions == null) return List.of();
+            List<String> result = new ArrayList<>(groupOptions.keySet()); result.add("next"); return result;
+        });
         api.commands().create("vote").description("Physical voting groups.")
             .usage("/vote [status] | /vote admin ...")
-            .tabCompletion("status").tabCompletion("admin")
+            .tabCompletion("status").tabCompletion("admin", "create")
+            .tabCompletion("admin", "list")
+            .tabCompletion("admin", "view", "{vote-group}")
+            .tabCompletion("admin", "option", "add", "{vote-group}", "", "")
+            .tabCompletion("admin", "option", "list", "{vote-group}")
+            .tabCompletion("admin", "source", "plots", "{vote-group}", "{world}")
+            .tabCompletion("admin", "schedule", "{vote-group}", "now", "")
+            .tabCompletion("admin", "tower", "place", "{vote-group}", "{vote-option:$3}")
+            .tabCompletion("admin", "pause", "{vote-group}")
+            .tabCompletion("admin", "resume", "{vote-group}")
+            .tabCompletion("admin", "reset", "{vote-group}")
+            .tabCompletion("admin", "reset-player", "{vote-group}", "{player}")
             .executor((unused, command, ctx) -> execute(ctx)).register(STEMCraft.getPlugin());
     }
 
@@ -255,10 +273,15 @@ public final class VotingFeature extends BaseFeature {
     private void showGroupMenu(CommandContext ctx) {
         VoteGroup group = requireGroup(ctx, 2); if (group == null) return;
         List<VoteOption> values = new ArrayList<>(options.getOrDefault(group.id, new LinkedHashMap<>()).values());
-        int page = ChatMenuUtil.getPageFromArgs(ctx.args(), 3, 1);
-        ChatMenuUtil.render(ctx.getSender(), group.name + " — " + state(group), "vote admin view " + group.id,
-            page, values.size(), (start, count, interactive) -> {
+        int page = values.isEmpty() ? 1 : ChatMenuUtil.getPageFromArgs(ctx.args(), 3, 1);
+        int renderedCount = Math.max(1, values.size());
+        ChatMenuUtil.render(ctx.getSender(), group.name + " (" + group.id + ") — " + state(group), "vote admin view " + group.id,
+            page, renderedCount, (start, count, interactive) -> {
                 List<Component> lines = new ArrayList<>();
+                if (values.isEmpty()) {
+                    lines.add(Component.text("No options configured. Add a static option or load PlotSquared creators.", NamedTextColor.GRAY));
+                    return lines;
+                }
                 for (VoteOption option : values.subList(start, start + count)) {
                     boolean placed = towers.getOrDefault(group.id, new LinkedHashMap<>()).containsKey(option.id);
                     Component line = Component.text(option.name, NamedTextColor.WHITE)
@@ -270,16 +293,30 @@ public final class VotingFeature extends BaseFeature {
                 }
                 return lines;
             }, "This group has no options.");
+        int placed = towers.getOrDefault(group.id, new LinkedHashMap<>()).size();
+        ctx.getSender().sendMessage(Component.text("Allowance: ", NamedTextColor.GRAY)
+            .append(Component.text(group.votesPerPlayer + " per player", NamedTextColor.WHITE))
+            .append(Component.text(" • Schedule: ", NamedTextColor.GRAY))
+            .append(Component.text(formatTime(group.startsAt) + " → " + formatTime(group.endsAt), NamedTextColor.WHITE)));
+        ctx.getSender().sendMessage(Component.text("Source: ", NamedTextColor.GRAY)
+            .append(Component.text(group.sourceType + (group.sourceValue == null ? "" : " (" + group.sourceValue + ")"), NamedTextColor.WHITE))
+            .append(Component.text(" • Options: ", NamedTextColor.GRAY)).append(Component.text(values.size(), NamedTextColor.WHITE))
+            .append(Component.text(" • Towers: ", NamedTextColor.GRAY)).append(Component.text(placed + "/" + values.size(), NamedTextColor.WHITE))
+            .append(Component.text(" • Votes: ", NamedTextColor.GRAY)).append(Component.text(totalVotes(group.id), NamedTextColor.WHITE)));
+        ctx.getSender().sendMessage(Component.text("Static option syntax: ", NamedTextColor.DARK_GRAY)
+            .append(Component.text("<option-id> <display name>", NamedTextColor.GRAY)));
         String toggleCommand = "/vote admin " + (group.paused ? "resume " : "pause ") + group.id;
         ctx.getSender().sendMessage(button(group.paused ? "[Resume]" : "[Pause]", toggleCommand, group.paused ? "Resume voting" : "Pause voting")
             .append(Component.space()).append(suggestButton("[Schedule]", "/vote admin schedule " + group.id + " now ", "Set start and finish"))
-            .append(Component.space()).append(suggestButton("[＋ Option]", "/vote admin option add " + group.id + " new-option ", "Add a static option"))
+            .append(Component.space()).append(suggestButton("[＋ Static option]", "/vote admin option add " + group.id + " ", "Enter <option-id> <display name>; for example fishing Fishing Expansion"))
             .append(Component.space()).append(suggestButton("[Plot source]", "/vote admin source plots " + group.id + " ", "Load plot creators")));
         ctx.getSender().sendMessage(button("[Place next]", "/vote admin tower place " + group.id + " next", "Place the next unplaced tower")
             .append(Component.space()).append(suggestButton("[Reset votes]", "/vote admin reset " + group.id, "Review before sending")));
     }
 
     private NamedTextColor stateColour(VoteGroup group) { return switch (state(group)) { case "open" -> NamedTextColor.GREEN; case "paused" -> NamedTextColor.YELLOW; default -> NamedTextColor.GRAY; }; }
+    private String formatTime(long epochSecond) { return epochSecond == Long.MAX_VALUE ? "none" : Instant.ofEpochSecond(epochSecond)
+        .atZone(ZoneId.systemDefault()).toLocalDateTime().toString().replace('T', ' '); }
     private Component button(String text, String command, String hover) { return Component.text(text, NamedTextColor.GOLD)
         .clickEvent(ClickEvent.runCommand(command)).hoverEvent(HoverEvent.showText(Component.text(hover))); }
     private Component suggestButton(String text, String command, String hover) { return Component.text(text, NamedTextColor.GOLD)
