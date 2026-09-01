@@ -231,11 +231,11 @@ public final class VotingFeature extends BaseFeature {
                 placements.remove(ctx.asPlayer().getUniqueId()); removals.put(ctx.asPlayer().getUniqueId(), group.id);
                 ctx.returnSuccess("Right-click any block in the tower to remove it. Sneak-right-click to cancel."); return;
             }
-            String optionId = resolveOption(group.id, ctx.getArg(4));
             if (ctx.getArg(4).equalsIgnoreCase("all")) {
                 int removed = removeAllTowers(group.id);
                 ctx.returnSuccess("Removed " + removed + " voting tower(s). Option slots remain available for placement."); return;
             }
+            String optionId = resolvePlacedTowerOption(group.id, ctx.getArg(4));
             if (optionId == null || !removeTower(group.id, optionId)) { ctx.returnError("That option does not have a placed tower."); return; }
             ctx.returnSuccess("Voting tower removed. To also delete its option slot, use /vote admin option remove " + group.id + " " + optionId + "."); return;
         }
@@ -603,6 +603,13 @@ public final class VotingFeature extends BaseFeature {
             .filter(id -> !towers.getOrDefault(groupId, new LinkedHashMap<>()).containsKey(id)).findFirst().orElse(null);
         VoteOption exact = groupOptions.get(value.toLowerCase(Locale.ROOT)); if (exact != null) return exact.id;
         return groupOptions.values().stream().filter(option -> option.name.equalsIgnoreCase(value)).map(option -> option.id).findFirst().orElse(null);
+    }
+    private String resolvePlacedTowerOption(String groupId, String value) {
+        LinkedHashMap<String, VoteTower> groupTowers = towers.getOrDefault(groupId, new LinkedHashMap<>());
+        String exactId = groupTowers.keySet().stream().filter(id -> id.equalsIgnoreCase(value)).findFirst().orElse(null);
+        if (exactId != null) return exactId;
+        String optionId = resolveOption(groupId, value);
+        return optionId != null && groupTowers.containsKey(optionId) ? optionId : null;
     }
     private VoteGroup requireGroup(CommandContext ctx, int index) { if (ctx.args().size() <= index) { ctx.returnError("Missing voting group."); return null; } VoteGroup group = groups.get(ctx.getArgLower(index)); if (group == null) ctx.returnError("Unknown voting group."); return group; }
     private String cleanId(String value) { return Pattern.compile("[^a-z0-9_-]").matcher(value.toLowerCase(Locale.ROOT)).replaceAll(""); }
