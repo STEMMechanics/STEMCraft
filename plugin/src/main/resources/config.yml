@@ -163,6 +163,11 @@ mailboxes:
     mailbox-full: "/survival//warn/Your mailbox is full."
     received: "/survival//info/<gold>You received mail from {sender}."
 
+image-maps:
+  enabled: true
+  # PNG files available to /imagemap, relative to the STEMCraft data folder.
+  directory: images
+
 notice-boards:
   enabled: true
   retention-days: 14
