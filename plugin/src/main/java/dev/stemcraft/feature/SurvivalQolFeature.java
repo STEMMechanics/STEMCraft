@@ -1,6 +1,8 @@
 package dev.stemcraft.feature;
 
 import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.api.util.PatternUtil;
+import org.bukkit.GameMode;
 import org.bukkit.Material;
 import org.bukkit.Tag;
 import org.bukkit.block.Block;
@@ -30,15 +32,23 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.util.Vector;
 
 import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 /** Small, independently configurable survival quality-of-life mechanics. */
 public final class SurvivalQolFeature extends BaseFeature {
     private static final String REFILL_TASK_PREFIX = "feature:survival-qol-refill:";
+    private static final Set<String> PLAYER_TOGGLES = Set.of("hoe-harvest", "auto-refill", "auto-refill-tools",
+        "auto-select-tool", "named-mob-info", "anvil-warning", "durability-warning");
     private final NamespacedKey mobOwnerKey = new NamespacedKey("stemcraft", "named-mob-owner");
     private final NamespacedKey questNpcProfileKey = new NamespacedKey("stemcraft", "quest-npc-profile");
     private final Map<UUID, Long> anvilWarnings = new HashMap<>();
+    private List<Pattern> supportedWorlds = List.of(PatternUtil.globToRegex("survival*"));
+    private Set<GameMode> supportedGameModes = Set.of(GameMode.SURVIVAL);
 
     public SurvivalQolFeature(STEMCraftAPI api) {
         super(api);
@@ -46,6 +56,7 @@ public final class SurvivalQolFeature extends BaseFeature {
 
     @Override
     public void onEnable() {
+        loadSettings();
         api.events().register(PlayerInteractEvent.class, this::onAutoSelectTool, EventPriority.NORMAL, true);
         api.events().register(PlayerInteractEvent.class, this::onCropHarvest, EventPriority.HIGHEST, true);
         api.events().register(EntityChangeBlockEvent.class, this::onCropTrample, EventPriority.HIGHEST, true);
@@ -60,6 +71,13 @@ public final class SurvivalQolFeature extends BaseFeature {
             if (hand != null) scheduleRefill(event.getPlayer(), hand, event.getItem());
         }, EventPriority.MONITOR, false);
         api.tasks().repeating("feature:survival-qol-minecarts", 1L, this::accelerateMinecarts);
+        registerCommand();
+    }
+
+    @Override
+    public void onReload() {
+        super.onReload();
+        loadSettings();
     }
 
     private void onAutoSelectTool(PlayerInteractEvent event) {
@@ -132,7 +150,8 @@ public final class SurvivalQolFeature extends BaseFeature {
 
     private void onCropTrample(EntityChangeBlockEvent event) {
         if (enabled("disable-crop-trampling", true)
-            && (!(event.getEntity() instanceof Player player) || allowed("disable-crop-trampling", player))
+            && (event.getEntity() instanceof Player player ? allowed("disable-crop-trampling", player)
+                : supportsWorld(event.getBlock().getWorld().getName()))
             && event.getBlock().getType() == Material.FARMLAND && event.getTo() == Material.DIRT) event.setCancelled(true);
     }
 
@@ -140,7 +159,8 @@ public final class SurvivalQolFeature extends BaseFeature {
         Entity leashHolder = event.getEntity() instanceof LivingEntity living && living.isLeashed()
             ? living.getLeashHolder() : null;
         if (enabled("stronger-leads", true)
-            && (!(leashHolder instanceof Player player) || allowed("stronger-leads", player))
+            && (leashHolder instanceof Player player ? allowed("stronger-leads", player)
+                : supportsWorld(event.getEntity().getWorld().getName()))
             && event.getReason() == EntityUnleashEvent.UnleashReason.DISTANCE) event.setCancelled(true);
     }
 
@@ -232,7 +252,7 @@ public final class SurvivalQolFeature extends BaseFeature {
         UUID uuid = player.getUniqueId();
         api.tasks().runLater(1L, () -> {
             Player online = org.bukkit.Bukkit.getPlayer(uuid);
-            if (online == null) return;
+            if (online == null || !allowed("auto-refill-tools", online)) return;
             PlayerInventory inventory = online.getInventory();
             ItemStack current = inventory.getItem(hand);
             if (current != null && !current.getType().isAir()) return;
@@ -252,7 +272,13 @@ public final class SurvivalQolFeature extends BaseFeature {
     }
 
     private boolean allowed(String feature, Player player) {
-        return permissionAllows(getConfigSection().getString(feature + ".permission", ""), player);
+        return canActivate(feature, player)
+            && (!PLAYER_TOGGLES.contains(feature) || preferenceEnabled(player, feature));
+    }
+
+    private boolean canActivate(String feature, Player player) {
+        return enabled(feature, true) && contextAllows(player, supportedWorlds, supportedGameModes)
+            && permissionAllows(getConfigSection().getString(feature + ".permission", ""), player);
     }
 
     private boolean enabled(String feature, boolean defaultValue) {
@@ -266,6 +292,24 @@ public final class SurvivalQolFeature extends BaseFeature {
         return permission.isEmpty() || player.hasPermission(permission);
     }
 
+    static boolean contextAllows(Player player, List<Pattern> worlds, Set<GameMode> gameModes) {
+        return gameModes.contains(player.getGameMode())
+            && worlds.stream().anyMatch(pattern -> pattern.matcher(player.getWorld().getName().toLowerCase(Locale.ROOT)).matches());
+    }
+
+    private boolean supportsWorld(String world) {
+        return supportedWorlds.stream().anyMatch(pattern -> pattern.matcher(world.toLowerCase(Locale.ROOT)).matches());
+    }
+
+    private boolean preferenceEnabled(Player player, String feature) {
+        Byte value = player.getPersistentDataContainer().get(preferenceKey(feature), PersistentDataType.BYTE);
+        return value == null || value != 0;
+    }
+
+    private NamespacedKey preferenceKey(String feature) {
+        return new NamespacedKey("stemcraft", "qol-" + feature);
+    }
+
     private void scheduleRefill(Player player, EquipmentSlot hand, ItemStack used) {
         if (!enabled("auto-refill", true) || !allowed("auto-refill", player)
             || used == null || used.getType().isAir()) return;
@@ -273,7 +317,7 @@ public final class SurvivalQolFeature extends BaseFeature {
         UUID uuid = player.getUniqueId();
         api.tasks().runLater(1L, () -> {
             Player online = org.bukkit.Bukkit.getPlayer(uuid);
-            if (online == null) return;
+            if (online == null || !allowed("auto-refill", online)) return;
             PlayerInventory inventory = online.getInventory();
             ItemStack current = inventory.getItem(hand);
             if (current != null && !current.getType().isAir()) return;
@@ -293,9 +337,11 @@ public final class SurvivalQolFeature extends BaseFeature {
         double maximum = getConfigSection().getDouble("powered-minecarts.max-speed", 0.8D);
         double multiplier = getConfigSection().getDouble("powered-minecarts.multiplier", 1.08D);
         for (org.bukkit.World world : org.bukkit.Bukkit.getWorlds()) for (Minecart cart : world.getEntitiesByClass(Minecart.class)) {
+            if (!supportsWorld(world.getName())) continue;
             String permission = getConfigSection().getString("powered-minecarts.permission", "").trim();
-            if (!permission.isEmpty() && cart.getPassengers().stream().filter(Player.class::isInstance)
-                .map(Player.class::cast).noneMatch(player -> permissionAllows(permission, player))) continue;
+            List<Player> passengers = cart.getPassengers().stream().filter(Player.class::isInstance).map(Player.class::cast).toList();
+            if (!passengers.isEmpty() && passengers.stream().noneMatch(player -> contextAllows(player, supportedWorlds, supportedGameModes)
+                && permissionAllows(permission, player))) continue;
             Block rail = cart.getLocation().getBlock();
             if (!Tag.RAILS.isTagged(rail.getType())) rail = rail.getRelative(0, -1, 0);
             if (!Tag.RAILS.isTagged(rail.getType()) || !(rail.getBlockData() instanceof Powerable powerable) || !powerable.isPowered()) continue;
@@ -326,5 +372,56 @@ public final class SurvivalQolFeature extends BaseFeature {
         StringBuilder result = new StringBuilder();
         for (String word : words) result.append(result.isEmpty() ? "" : " ").append(Character.toUpperCase(word.charAt(0))).append(word.substring(1));
         return result.toString();
+    }
+
+    private void loadSettings() {
+        List<String> worlds = getConfigSection().getStringList("supported-worlds");
+        supportedWorlds = (worlds.isEmpty() ? List.of("survival*") : worlds).stream()
+            .map(value -> PatternUtil.globToRegex(value.toLowerCase(Locale.ROOT))).toList();
+        Set<GameMode> modes = new java.util.HashSet<>();
+        for (String value : getConfigSection().getStringList("supported-game-modes")) {
+            try { modes.add(GameMode.valueOf(value.toUpperCase(Locale.ROOT))); }
+            catch (IllegalArgumentException ignored) { }
+        }
+        supportedGameModes = modes.isEmpty() ? Set.of(GameMode.SURVIVAL) : Set.copyOf(modes);
+    }
+
+    private void registerCommand() {
+        api.commands().create("qol")
+            .description("View or change personal Survival QoL settings.")
+            .usage("/qol [feature] [on|off|toggle]")
+            .tabCompletion(PLAYER_TOGGLES.toArray(String[]::new))
+            .executor((unused, command, ctx) -> {
+                ctx.checkNotConsole();
+                Player player = ctx.asPlayer();
+                if (ctx.args().isEmpty()) {
+                    api.messages().send(player, "/info/Survival QoL settings:");
+                    PLAYER_TOGGLES.stream().sorted().forEach(feature -> api.messages().send(player,
+                        "/info/" + friendly(feature) + ": " + (!canActivate(feature, player) ? "unavailable here"
+                            : preferenceEnabled(player, feature) ? "on" : "off")));
+                    api.messages().send(player, "/info/Use /qol <feature> <on|off|toggle>.");
+                    return;
+                }
+                String feature = ctx.getArgLower(0);
+                if (!PLAYER_TOGGLES.contains(feature)) {
+                    ctx.returnError("Unknown personal QoL setting.");
+                    return;
+                }
+                String action = ctx.args().size() >= 2 ? ctx.getArgLower(1) : "toggle";
+                boolean turnOn = switch (action) {
+                    case "on" -> true;
+                    case "off" -> false;
+                    case "toggle" -> !preferenceEnabled(player, feature);
+                    default -> { ctx.returnError("Use on, off, or toggle."); yield false; }
+                };
+                if (!List.of("on", "off", "toggle").contains(action)) return;
+                if (turnOn && !canActivate(feature, player)) {
+                    ctx.returnError("You cannot enable that setting here or have not unlocked it yet.");
+                    return;
+                }
+                player.getPersistentDataContainer().set(preferenceKey(feature), PersistentDataType.BYTE, turnOn ? (byte) 1 : (byte) 0);
+                ctx.returnSuccess(friendly(feature) + " turned " + (turnOn ? "on" : "off") + ".");
+            })
+            .register(dev.stemcraft.STEMCraft.getPlugin());
     }
 }
