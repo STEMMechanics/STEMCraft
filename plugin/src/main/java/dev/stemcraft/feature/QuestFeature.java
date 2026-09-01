@@ -183,6 +183,7 @@ public final class QuestFeature extends BaseFeature {
         npcProfiles.clear();
         npcProfiles.putAll(QuestNpcProfileStore.load(npcFile));
         if (initializeDefinitions) initializeBundledDefinitions();
+        migrateBundledNpcProfiles();
         loadPlayerState();
         registerEvents();
         registerCommands();
@@ -731,6 +732,22 @@ public final class QuestFeature extends BaseFeature {
         catch (IOException ex) { api.messages().error("Could not save quest NPC profiles: {error}", "error", ex.getMessage()); }
     }
 
+    private void migrateBundledNpcProfiles() {
+        if (api.database().migrationVersion("quest-npc-profiles") >= 1) return;
+        if (migrateLegacySeleneProfile(npcProfiles.get("expansion-selene"))) saveNpcProfiles();
+        api.database().setMigrationVersion("quest-npc-profiles", 1);
+    }
+
+    static boolean migrateLegacySeleneProfile(QuestNpcProfile profile) {
+        if (profile == null || profile.timeFrom() != 0 || profile.timeUntil() != 24000) return false;
+        Set<String> biomes = profile.biomes().stream()
+            .map(value -> value.toUpperCase(Locale.ROOT)).collect(java.util.stream.Collectors.toSet());
+        if (!biomes.equals(Set.of("LUSH_CAVES", "DRIPSTONE_CAVES", "PLAINS"))) return false;
+        profile.timeUntil(12000);
+        profile.biomes().removeIf(value -> value.equalsIgnoreCase("PLAINS"));
+        return true;
+    }
+
     private void ensureStorage() {
         api.database().execute("""
             CREATE TABLE IF NOT EXISTS quest_progress (
@@ -880,7 +897,9 @@ public final class QuestFeature extends BaseFeature {
     }
 
     private void registerEvents() {
-        api.events().register(PlayerInteractEntityEvent.class, this::onNpcClick, EventPriority.NORMAL, true);
+        // Citizens may cancel its Bukkit interaction event before quest dialogue is handled. Receive cancelled events,
+        // then restrict them to managed quest NPCs in onNpcClick so protected unrelated entities remain ignored.
+        api.events().register(PlayerInteractEntityEvent.class, this::onNpcClick, EventPriority.NORMAL, false);
         api.events().register(EntityDeathEvent.class, this::onEntityDeath, EventPriority.HIGHEST, true);
         api.events().register(PlayerMoveEvent.class, this::onPlayerMove, EventPriority.MONITOR, true);
         api.events().register(TimeSkipEvent.class, this::onTimeSkip, EventPriority.MONITOR, true);
@@ -2120,6 +2139,9 @@ public final class QuestFeature extends BaseFeature {
         if (!isPrimaryNpcInteraction(event.getHand())) return;
         Player player = event.getPlayer();
         String clickedProfileId = event.getRightClicked().getPersistentDataContainer().get(npcProfileKey, PersistentDataType.STRING);
+        boolean managedQuestNpc = (clickedProfileId != null && npcProfiles.containsKey(clickedProfileId))
+            || npcProfiles.values().stream().anyMatch(profile -> event.getRightClicked().getUniqueId().equals(profile.spawnedEntity()));
+        if (event.isCancelled() && !managedQuestNpc) return;
         if (clickedProfileId != null && npcLeavingSince.containsKey(clickedProfileId)) {
             event.setCancelled(true);
             QuestNpcProfile profile = npcProfiles.get(clickedProfileId);
