@@ -231,6 +231,7 @@ public final class ImageMapServiceImpl extends BaseService implements ImageMapSe
                     .add(definition.facing().getDirection().multiply(0.501));
                 GlowItemFrame frame = world.spawn(spawn, GlowItemFrame.class, entity -> {
                     entity.setFacingDirection(definition.facing(), true);
+                    entity.setVisible(false);
                     entity.setFixed(true);
                     // Displays are rebuilt from feature storage. Saving these runtime entities makes a crash or stale
                     // UUID capable of leaving permanent duplicates in the entity chunk.
