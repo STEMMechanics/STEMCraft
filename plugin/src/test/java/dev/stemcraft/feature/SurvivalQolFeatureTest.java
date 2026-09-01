@@ -1,7 +1,10 @@
 package dev.stemcraft.feature;
 
 import org.bukkit.Material;
+import org.bukkit.GameMode;
+import org.bukkit.World;
 import org.bukkit.configuration.file.YamlConfiguration;
+import dev.stemcraft.api.util.PatternUtil;
 import org.bukkit.event.block.Action;
 import org.junit.jupiter.api.Test;
 import org.bukkit.entity.Player;
@@ -49,11 +52,35 @@ class SurvivalQolFeatureTest {
     }
 
     @Test
+    void survivalQolOnlyRunsInSupportedWorldsAndGameModes() {
+        Player player = mock(Player.class);
+        World world = mock(World.class);
+        when(player.getWorld()).thenReturn(world);
+        when(world.getName()).thenReturn("survival-2");
+        when(player.getGameMode()).thenReturn(GameMode.SURVIVAL);
+
+        assertTrue(SurvivalQolFeature.contextAllows(player,
+            List.of(PatternUtil.globToRegex("survival*")), java.util.Set.of(GameMode.SURVIVAL)));
+
+        when(world.getName()).thenReturn("world");
+        assertFalse(SurvivalQolFeature.contextAllows(player,
+            List.of(PatternUtil.globToRegex("survival*")), java.util.Set.of(GameMode.SURVIVAL)));
+
+        when(world.getName()).thenReturn("survival");
+        when(player.getGameMode()).thenReturn(GameMode.CREATIVE);
+        assertFalse(SurvivalQolFeature.contextAllows(player,
+            List.of(PatternUtil.globToRegex("survival*")), java.util.Set.of(GameMode.SURVIVAL)));
+    }
+
+    @Test
     void bundledQolPermissionsMatchProfessionEntitlements() {
         InputStream input = getClass().getResourceAsStream("/config.yml");
         assertNotNull(input);
         YamlConfiguration config = YamlConfiguration.loadConfiguration(
             new InputStreamReader(input, StandardCharsets.UTF_8));
+
+        assertEquals(List.of("survival*"), config.getStringList("survival-qol.supported-worlds"));
+        assertEquals(List.of("SURVIVAL"), config.getStringList("survival-qol.supported-game-modes"));
 
         List<Map<?, ?>> refillPaths = config.getMapList("entitlements.definitions.qol-tool-refill.when.any");
         assertEquals(5, refillPaths.size());
