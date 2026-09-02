@@ -44,7 +44,7 @@ rewards:
     1:
       - "cooked_beef,1-5"
       - "egg,1-3"
-      - "stemcraft:animal_barrel[animal=chicken]"
+      - "stemcraft:animal_crate[animal=chicken]"
 ```
 
 One numbered entry is chosen at random. All lines inside that entry are placed inside the resulting Gift. Omitting `rewards` or leaving `gifts` empty disables rewards.

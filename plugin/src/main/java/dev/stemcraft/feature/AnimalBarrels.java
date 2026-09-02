@@ -1,6 +1,8 @@
 package dev.stemcraft.feature;
 
 import dev.stemcraft.api.STEMCraftAPI;
+import io.papermc.paper.registry.RegistryAccess;
+import io.papermc.paper.registry.RegistryKey;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -20,6 +22,7 @@ import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
+import net.kyori.adventure.text.format.TextDecoration;
 
 import java.util.EnumSet;
 import java.util.Set;
@@ -27,7 +30,7 @@ import java.util.UUID;
 
 /** Craftable crates used to safely carry small passive animals. */
 public final class AnimalBarrels extends BaseFeature {
-    private static final String ITEM_ID = "animal-barrel";
+    private static final String ITEM_ID = "animal-crate";
     private static final String TYPE = "animal-barrel-type";
     private static final String NAME = "animal-barrel-name";
     private static final String BABY = "animal-barrel-baby";
@@ -47,7 +50,7 @@ public final class AnimalBarrels extends BaseFeature {
         api.events().register(PlayerInteractEntityEvent.class, this::capture, EventPriority.HIGHEST, true);
         api.events().register(PlayerInteractEvent.class, this::release, EventPriority.HIGHEST, true);
         api.events().register(org.bukkit.event.block.BlockPlaceEvent.class, event -> {
-            if (api.items().isCustomItemId(ITEM_ID, event.getItemInHand())) event.setCancelled(true);
+            if (isAnimalCrate(event.getItemInHand())) event.setCancelled(true);
         }, EventPriority.HIGHEST, true);
     }
 
@@ -60,7 +63,7 @@ public final class AnimalBarrels extends BaseFeature {
     private void registerItem() {
         ItemStack crate = new ItemStack(Material.BARREL);
         ItemMeta meta = crate.getItemMeta();
-        meta.displayName(net.kyori.adventure.text.Component.text(getConfigSection().getString("item-name", "Animal Barrel")));
+        meta.displayName(itemName("item-name", "Animal Crate", "Animal Barrel"));
         meta.setMaxStackSize(1);
         crate.setItemMeta(meta);
         api.items().registerCustomItem(ITEM_ID, crate);
@@ -70,27 +73,28 @@ public final class AnimalBarrels extends BaseFeature {
 
     private void applyProperties(ItemStack item, java.util.Map<String, String> properties) {
         if (properties.size() != 1 || !properties.containsKey("animal"))
-            throw new IllegalArgumentException("Animal Barrel supports only the 'animal' property.");
+            throw new IllegalArgumentException("Animal Crate supports only the 'animal' property.");
         EntityType type;
         try {
             type = EntityType.valueOf(properties.get("animal").trim().toUpperCase(java.util.Locale.ROOT));
         } catch (IllegalArgumentException exception) {
-            throw new IllegalArgumentException("Unknown Animal Barrel animal: " + properties.get("animal"));
+            throw new IllegalArgumentException("Unknown Animal Crate animal: " + properties.get("animal"));
         }
         if (!ALLOWED.contains(type))
-            throw new IllegalArgumentException("Animal Barrels support chicken, rabbit, frog, or cat.");
+            throw new IllegalArgumentException("Animal Crates support chicken, rabbit, frog, or cat.");
         api.items().addAttrib(item, TYPE, type.name());
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(net.kyori.adventure.text.Component.text(getConfigSection()
-            .getString("filled-name", "Animal Barrel ({animal})").replace("{animal}", friendly(type.name()))));
+        meta.displayName(filledName(type));
         item.setItemMeta(meta);
     }
 
     private void capture(PlayerInteractEntityEvent event) {
         Player player = event.getPlayer();
-        if (!player.isSneaking() || event.getHand() != EquipmentSlot.HAND || !ALLOWED.contains(event.getRightClicked().getType())) return;
+        if (event.getHand() != EquipmentSlot.HAND || !ALLOWED.contains(event.getRightClicked().getType())) return;
         ItemStack held = player.getInventory().getItemInMainHand();
-        if (held.getType() != Material.BARREL || api.items().getCustomItemId(held) != null) return;
+        boolean emptyCrate = isAnimalCrate(held) && !api.items().hasAttrib(held, TYPE);
+        boolean vanillaBarrel = held.getType() == Material.BARREL && api.items().getCustomItemId(held) == null;
+        if (!emptyCrate && (!vanillaBarrel || !player.isSneaking())) return;
         Entity animal = event.getRightClicked();
         if (animal instanceof Tameable tameable && tameable.isTamed() && tameable.getOwnerUniqueId() != null
             && !tameable.getOwnerUniqueId().equals(player.getUniqueId()) && !player.hasPermission("stemcraft.animalbarrel.others")) {
@@ -100,7 +104,7 @@ public final class AnimalBarrels extends BaseFeature {
         event.setCancelled(true);
         ItemStack filled = api.items().createCustomItem(ITEM_ID);
         if (filled == null) {
-            api.messages().send(player, getConfigSection().getString("messages.capture-failed", "/error/Could not prepare the animal barrel."));
+            api.messages().send(player, getConfigSection().getString("messages.capture-failed", "/error/Could not prepare the animal crate."));
             return;
         }
         api.items().addAttrib(filled, TYPE, animal.getType().name());
@@ -113,8 +117,7 @@ public final class AnimalBarrels extends BaseFeature {
         if (animal instanceof Cat cat) api.items().addAttrib(filled, VARIANT, cat.getCatType().getKey().toString());
         if (animal instanceof Frog frog) api.items().addAttrib(filled, VARIANT, frog.getVariant().getKey().toString());
         ItemMeta meta = filled.getItemMeta();
-        meta.displayName(net.kyori.adventure.text.Component.text(getConfigSection().getString("filled-name", "Animal Barrel ({animal})")
-            .replace("{animal}", friendly(animal.getType().name()))));
+        meta.displayName(filledName(animal.getType()));
         filled.setItemMeta(meta);
         if (held.getAmount() == 1) {
             player.getInventory().setItemInMainHand(filled);
@@ -131,7 +134,7 @@ public final class AnimalBarrels extends BaseFeature {
     private void release(PlayerInteractEvent event) {
         if (event.getAction() != Action.RIGHT_CLICK_BLOCK || event.getClickedBlock() == null || event.getHand() != EquipmentSlot.HAND) return;
         ItemStack held = event.getPlayer().getInventory().getItemInMainHand();
-        if (!api.items().isCustomItemId(ITEM_ID, held) || !api.items().hasAttrib(held, TYPE)) return;
+        if (!isAnimalCrate(held) || !api.items().hasAttrib(held, TYPE)) return;
         EntityType type;
         try { type = EntityType.valueOf(api.items().getAttrib(held, TYPE, String.class, "")); }
         catch (IllegalArgumentException exception) { return; }
@@ -143,7 +146,8 @@ public final class AnimalBarrels extends BaseFeature {
         event.setCancelled(true);
         Entity spawned = location.getWorld().spawnEntity(location, type);
         restore(spawned, held);
-        event.getPlayer().getInventory().setItemInMainHand(new ItemStack(Material.BARREL));
+        ItemStack emptyCrate = api.items().createCustomItem(ITEM_ID);
+        event.getPlayer().getInventory().setItemInMainHand(emptyCrate == null ? new ItemStack(Material.BARREL) : emptyCrate);
         api.messages().send(event.getPlayer(), getConfigSection().getString("messages.released", "/success/Released {animal}."),
             "animal", friendly(type.name()));
     }
@@ -164,10 +168,12 @@ public final class AnimalBarrels extends BaseFeature {
             if (entity instanceof Rabbit rabbit) rabbit.setRabbitType(Rabbit.Type.valueOf(variant));
             else if (entity instanceof Cat cat) {
                 var key = org.bukkit.NamespacedKey.fromString(variant);
-                if (key != null && org.bukkit.Registry.CAT_VARIANT.get(key) != null) cat.setCatType(org.bukkit.Registry.CAT_VARIANT.get(key));
+                var catType = key == null ? null : RegistryAccess.registryAccess().getRegistry(RegistryKey.CAT_VARIANT).get(key);
+                if (catType != null) cat.setCatType(catType);
             } else if (entity instanceof Frog frog) {
                 var key = org.bukkit.NamespacedKey.fromString(variant);
-                if (key != null && org.bukkit.Registry.FROG_VARIANT.get(key) != null) frog.setVariant(org.bukkit.Registry.FROG_VARIANT.get(key));
+                var frogVariant = key == null ? null : RegistryAccess.registryAccess().getRegistry(RegistryKey.FROG_VARIANT).get(key);
+                if (frogVariant != null) frog.setVariant(frogVariant);
             }
         } catch (IllegalArgumentException ignored) { }
     }
@@ -175,5 +181,22 @@ public final class AnimalBarrels extends BaseFeature {
     private static String friendly(String value) {
         String lower = value.toLowerCase(java.util.Locale.ROOT).replace('_', ' ');
         return Character.toUpperCase(lower.charAt(0)) + lower.substring(1);
+    }
+
+    private boolean isAnimalCrate(ItemStack item) {
+        return api.items().isCustomItemId(ITEM_ID, item);
+    }
+
+    private net.kyori.adventure.text.Component itemName(String path, String fallback, String legacyValue) {
+        String configured = getConfigSection().getString(path, fallback);
+        if (legacyValue.equals(configured)) configured = fallback;
+        return net.kyori.adventure.text.Component.text(configured).decoration(TextDecoration.ITALIC, false);
+    }
+
+    private net.kyori.adventure.text.Component filledName(EntityType type) {
+        String configured = getConfigSection().getString("filled-name", "Animal Crate ({animal})");
+        if ("Animal Barrel ({animal})".equals(configured)) configured = "Animal Crate ({animal})";
+        return net.kyori.adventure.text.Component.text(configured.replace("{animal}", friendly(type.name())))
+            .decoration(TextDecoration.ITALIC, false);
     }
 }

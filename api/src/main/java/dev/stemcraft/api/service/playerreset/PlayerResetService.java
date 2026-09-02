@@ -12,6 +12,6 @@ public interface PlayerResetService {
     @NotNull List<PlayerResetHandler> handlers();
     @NotNull PlayerResetPlan plan(@NotNull UUID uuid, @NotNull String playerName,
                                   @NotNull PlayerResetScope scope, @NotNull String actorName);
-    @Nullable PlayerResetPlan getPlan(@NotNull String token);
-    void confirm(@NotNull String token);
+    @Nullable PlayerResetPlan getPlan(@NotNull String actorName);
+    void confirm(@NotNull String actorName);
 }

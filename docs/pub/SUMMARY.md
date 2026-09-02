@@ -20,7 +20,7 @@
   * [Mailboxes](survival/mailboxes.md)
   * [Notice Boards](survival/notice-boards.md)
   * [Graves](survival/graves.md)
-  * [Animal Barrels](survival/animal-barrels.md)
+  * [Animal Crates](survival/animal-barrels.md)
   * [Waystones](survival/waystones.md)
   * [Traders](survival/traders.md)
   * [Survival Cities](survival/survival-cities.md)

@@ -648,8 +648,6 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
         }
 
         int configuredMinSupportedVersion = config.getInt("min_pack_format", minSupportedVersion);
-        int configuredMaxSupportedVersion = config.getInt("max_pack_format", maxSupportedVersion);
-
         if (configuredMinSupportedVersion < RESOURCE_PACK_FORMAT_VERSIONS.getFirst().formatVersion()) {
             if (warningCallback != null) {
                 warningCallback.accept(
@@ -674,18 +672,6 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
                 );
             }
             configuredMinSupportedVersion = maxSupportedVersion;
-        }
-
-        if (configuredMaxSupportedVersion != maxSupportedVersion && warningCallback != null) {
-            warningCallback.accept(
-                "[resource-pack] Configured max_pack_format "
-                    + configuredMaxSupportedVersion
-                    + " does not match the current Minecraft pack format "
-                    + maxSupportedVersion
-                    + ". The service must support the running server version, so max_pack_format is clamped to "
-                    + maxSupportedVersion
-                    + "."
-            );
         }
 
         return new int[] { configuredMinSupportedVersion, maxSupportedVersion };

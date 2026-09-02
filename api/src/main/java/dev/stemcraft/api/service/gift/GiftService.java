@@ -31,7 +31,7 @@ public interface GiftService {
      * {@code
      * ItemStack gift = api.gifts().createGiftFromSpecs(List.of(
      *     "emerald,1-3",
-     *     "stemcraft:animal_barrel[animal=chicken]"
+     *     "stemcraft:animal_crate[animal=chicken]"
      * ));
      * }
      */

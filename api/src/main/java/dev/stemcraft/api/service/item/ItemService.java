@@ -91,7 +91,7 @@ public interface ItemService {
 
     /**
      * Registers a handler for bracket properties on a custom item identifier.
-     * For example, {@code stemcraft:animal_barrel[animal=chicken]}.
+     * For example, {@code stemcraft:animal_crate[animal=chicken]}.
      *
      * @param id custom item identifier
      * @param handler property handler

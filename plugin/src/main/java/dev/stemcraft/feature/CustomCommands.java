@@ -687,6 +687,7 @@ public class CustomCommands extends BaseFeature {
         return String.join(" ", ctx.rawArgs().subList(start, ctx.rawArgs().size()));
     }
 
+    @SuppressWarnings("rawtypes") // Adventure is non-generic on supported proxy/runtime versions.
     private Component actionButton(String text, NamedTextColor color, ClickEvent clickEvent, String hoverText) {
         return Component.text(text, color)
                 .clickEvent(clickEvent)

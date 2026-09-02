@@ -27,6 +27,8 @@ import com.sk89q.worldedit.bukkit.BukkitAdapter;
 import com.sk89q.worldedit.math.BlockVector2;
 import com.sk89q.worldedit.math.BlockVector3;
 import com.sk89q.worldedit.regions.CuboidRegion;
+import com.sk89q.worldedit.regions.CylinderRegion;
+import com.sk89q.worldedit.regions.EllipsoidRegion;
 import com.sk89q.worldedit.regions.Polygonal2DRegion;
 import com.sk89q.worldedit.regions.Region;
 import com.sk89q.worldedit.regions.RegionSelector;
@@ -88,27 +90,31 @@ public final class WorldEditRegionSupport {
      * @return The preview region, or null if nothing useful can be rendered.
      */
     public static @Nullable SCRegion getWEPreviewSelection(Player player) {
-        SCRegion complete = getWESelection(player);
-        if (complete != null) {
-            return complete;
-        }
-
         com.sk89q.worldedit.entity.Player wePlayer = BukkitAdapter.adapt(player);
         LocalSession session = WorldEdit.getInstance()
                 .getSessionManager()
                 .get(wePlayer);
         com.sk89q.worldedit.world.World weWorld = wePlayer.getWorld();
+        try {
+            Region complete = session.getSelection(weWorld);
+            if (isPreviewSupported(complete)) return snapshot(complete, player.getWorld());
+        } catch (IncompleteRegionException ignored) { }
         RegionSelector selector = session.getRegionSelector(weWorld);
         if (selector == null) {
             return null;
         }
 
         Region incomplete = selector.getIncompleteRegion();
-        if (!(incomplete instanceof CuboidRegion) && !(incomplete instanceof Polygonal2DRegion)) {
+        if (!isPreviewSupported(incomplete)) {
             return null;
         }
 
         return snapshot(incomplete, player.getWorld());
+    }
+
+    private static boolean isPreviewSupported(Region region) {
+        return region instanceof CuboidRegion || region instanceof EllipsoidRegion
+            || region instanceof CylinderRegion || region instanceof Polygonal2DRegion;
     }
 
     /**

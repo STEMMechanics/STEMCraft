@@ -6,6 +6,11 @@ import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.integration.worldedit.WorldEditRegionSupport;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.service.selection.SelectionService;
+import com.sk89q.worldedit.math.Vector2;
+import com.sk89q.worldedit.math.Vector3;
+import com.sk89q.worldedit.regions.CylinderRegion;
+import com.sk89q.worldedit.regions.EllipsoidRegion;
+import com.sk89q.worldedit.regions.Region;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.Location;
@@ -32,6 +37,8 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
     private static final double DEFAULT_POINT_SPACING = 2.0D;
     private static final int DEFAULT_MAX_POINTS = 180;
     private static final int DEFAULT_MAJOR_MARKER_INTERVAL = 5;
+    private static final double DEFAULT_SURFACE_POINT_SPACING = 3.0D;
+    private static final int DEFAULT_MAX_SURFACE_POINTS = 8000;
     private static final double DEFAULT_MAX_VIEW_DISTANCE = 96.0D;
     private static final double REGION_EDGE_OFFSET = 0.03D;
     private static final Material DEFAULT_FLASH_MATERIAL = Material.GLOWSTONE;
@@ -44,8 +51,15 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
     private double pointSpacing;
     private int maxPoints;
     private int majorMarkerInterval;
+    private double surfacePointSpacing;
+    private int maxSurfacePoints;
     private double maxViewDistance;
     private Material flashMaterial;
+    private Particle selectionParticle = Particle.DUST;
+    private Particle cornerParticle = Particle.FLAME;
+    private boolean advancedGridEnabled;
+    private double gridPointSpacing;
+    private long maxSelectionSize;
 
     public SelectionServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
@@ -207,24 +221,44 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
         boolean changed = false;
 
         changed |= ensureDefault(section, "enabled", true);
-        changed |= ensureDefault(section, "update_ticks", DEFAULT_UPDATE_TICKS);
-        changed |= ensureDefault(section, "point_spacing", DEFAULT_POINT_SPACING);
-        changed |= ensureDefault(section, "max_points", DEFAULT_MAX_POINTS);
-        changed |= ensureDefault(section, "major_marker_interval", DEFAULT_MAJOR_MARKER_INTERVAL);
-        changed |= ensureDefault(section, "max_view_distance", DEFAULT_MAX_VIEW_DISTANCE);
         changed |= ensureDefault(section, "flash_material", DEFAULT_FLASH_MATERIAL.name());
+        changed |= ensureDefault(section, "particle", "DUST");
+        changed |= ensureDefault(section, "corner-particle", "FLAME");
+        changed |= ensureDefault(section, "particles-per-block", 2.0D);
+        changed |= ensureDefault(section, "major-marker-interval", DEFAULT_MAJOR_MARKER_INTERVAL);
+        changed |= ensureDefault(section, "particle-send-interval", 6L);
+        changed |= ensureDefault(section, "particle-viewdistance", 96.0D);
+        changed |= ensureDefault(section, "max-selection-size-to-display", 10_000_000L);
+        changed |= ensureDefault(section, "advanced-grid.enabled", true);
+        changed |= ensureDefault(section, "advanced-grid.spacing", 3.0D);
+        changed |= ensureDefault(section, "advanced-grid.max-points", DEFAULT_MAX_SURFACE_POINTS);
 
         if (changed) {
             section.save();
         }
 
         worldEditPreviewEnabled = section.getBoolean("enabled", true);
-        updateTicks = Math.max(1L, section.getLong("update_ticks", DEFAULT_UPDATE_TICKS));
-        pointSpacing = Math.max(1.0D, section.getDouble("point_spacing", DEFAULT_POINT_SPACING));
+        updateTicks = Math.max(1L, section.getLong("particle-send-interval", section.getLong("update_ticks", DEFAULT_UPDATE_TICKS)));
+        double particlesPerBlock = Math.clamp(section.getDouble("particles-per-block", 2.0D), 0.25D, 5.0D);
+        pointSpacing = 1.0D / particlesPerBlock;
         maxPoints = Math.max(16, section.getInt("max_points", DEFAULT_MAX_POINTS));
-        majorMarkerInterval = Math.max(2, section.getInt("major_marker_interval", DEFAULT_MAJOR_MARKER_INTERVAL));
-        maxViewDistance = Math.max(8.0D, section.getDouble("max_view_distance", DEFAULT_MAX_VIEW_DISTANCE));
+        majorMarkerInterval = Math.max(2, section.getInt("major-marker-interval",
+            section.getInt("major_marker_interval", DEFAULT_MAJOR_MARKER_INTERVAL)));
+        advancedGridEnabled = section.getBoolean("advanced-grid.enabled", true);
+        gridPointSpacing = Math.max(1.0D, section.getDouble("advanced-grid.spacing", DEFAULT_SURFACE_POINT_SPACING));
+        surfacePointSpacing = gridPointSpacing;
+        maxSurfacePoints = Math.max(128, section.getInt("advanced-grid.max-points", section.getInt("max_surface_points", DEFAULT_MAX_SURFACE_POINTS)));
+        maxViewDistance = Math.max(8.0D, section.getDouble("particle-viewdistance", section.getDouble("max_view_distance", DEFAULT_MAX_VIEW_DISTANCE)));
+        maxSelectionSize = Math.max(1L, section.getLong("max-selection-size-to-display", 10_000_000L));
+        selectionParticle = parseParticle(section.getString("particle", "DUST"), Particle.DUST);
+        cornerParticle = parseParticle(section.getString("corner-particle", "FLAME"), Particle.FLAME);
         flashMaterial = parseFlashMaterial(section.getString("flash_material", DEFAULT_FLASH_MATERIAL.name()));
+    }
+
+    private Particle parseParticle(String value, Particle fallback) {
+        if (value == null) return fallback;
+        try { return Particle.valueOf(value.trim().toUpperCase(java.util.Locale.ROOT).replace("REDSTONE", "DUST")); }
+        catch (IllegalArgumentException ignored) { return fallback; }
     }
 
     private void registerCommands() {
@@ -506,13 +540,21 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
             return;
         }
 
-        renderCorners(player, region);
-
+        Region worldEditRegion = region.getRegion();
+        if (worldEditRegion.getVolume() > maxSelectionSize) return;
         if (region.isCuboid()) {
+            renderCorners(player, region);
             renderCuboid(player, region);
             return;
         }
-
+        if (worldEditRegion instanceof EllipsoidRegion ellipsoid) {
+            renderEllipsoid(player, region.getWorld(), ellipsoid);
+            return;
+        }
+        if (worldEditRegion instanceof CylinderRegion cylinder) {
+            renderCylinder(player, region.getWorld(), cylinder);
+            return;
+        }
         if (region.isPolygon()) {
             renderPolygon(player, region);
         }
@@ -544,6 +586,174 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
         List<Line> lines = cuboidLines(bounds);
         renderLines(player, lines);
         renderMajorMarkers(player, lines);
+        if (advancedGridEnabled) renderCuboidExteriorGrid(player, bounds);
+    }
+
+    private void renderCuboidExteriorGrid(Player player, CuboidBounds bounds) {
+        Location min = bounds.min();
+        Location max = bounds.max();
+        World world = min.getWorld();
+        List<Double> xs = axisPoints(min.getX(), max.getX(), majorMarkerInterval);
+        List<Double> ys = axisPoints(min.getY(), max.getY(), majorMarkerInterval);
+        List<Double> zs = axisPoints(min.getZ(), max.getZ(), majorMarkerInterval);
+        List<Line> gridLines = new ArrayList<>();
+
+        for (double z : List.of(min.getZ(), max.getZ())) {
+            for (double x : xs) gridLines.add(line(point(world, x, min.getY(), z), point(world, x, max.getY(), z)));
+            for (double y : ys) gridLines.add(line(point(world, min.getX(), y, z), point(world, max.getX(), y, z)));
+        }
+        for (double y : List.of(min.getY(), max.getY())) {
+            for (double x : xs) gridLines.add(line(point(world, x, y, min.getZ()), point(world, x, y, max.getZ())));
+            for (double z : zs) gridLines.add(line(point(world, min.getX(), y, z), point(world, max.getX(), y, z)));
+        }
+        for (double x : List.of(min.getX(), max.getX())) {
+            for (double y : ys) gridLines.add(line(point(world, x, y, min.getZ()), point(world, x, y, max.getZ())));
+            for (double z : zs) gridLines.add(line(point(world, x, min.getY(), z), point(world, x, max.getY(), z)));
+        }
+
+        Map<String, Location> dust = new LinkedHashMap<>();
+        Map<String, Location> flames = new LinkedHashMap<>();
+        for (Line gridLine : gridLines) {
+            addLinePoints(dust, gridLine, pointSpacing);
+            for (Location marker : lineMarkers(gridLine, majorMarkerInterval)) {
+                flames.putIfAbsent(locationKey(marker), marker);
+            }
+        }
+        renderSurfacePoints(player, new ArrayList<>(dust.values()));
+        renderFlamePoints(player, new ArrayList<>(flames.values()));
+    }
+
+    private void addLinePoints(Map<String, Location> points, Line line, double spacing) {
+        int steps = Math.max(1, (int) Math.ceil(line.length() / spacing));
+        for (int index = 0; index <= steps; index++) {
+            if (isMajorMarkerStep(line, index, steps)) continue;
+            double factor = index / (double) steps;
+            Location location = point(line.start().getWorld(),
+                line.start().getX() + (line.end().getX() - line.start().getX()) * factor,
+                line.start().getY() + (line.end().getY() - line.start().getY()) * factor,
+                line.start().getZ() + (line.end().getZ() - line.start().getZ()) * factor);
+            points.putIfAbsent(locationKey(location), location);
+        }
+    }
+
+    private void renderFlamePoints(Player player, List<Location> points) {
+        if (points.size() <= maxSurfacePoints) {
+            points.forEach(location -> spawnFlame(player, location));
+            return;
+        }
+        double stride = (double) points.size() / maxSurfacePoints;
+        for (int index = 0; index < maxSurfacePoints; index++) {
+            spawnFlame(player, points.get(Math.min(points.size() - 1, (int) Math.floor(index * stride))));
+        }
+    }
+
+    private void renderEllipsoid(Player player, World world, EllipsoidRegion region) {
+        Vector3 center = region.getCenter();
+        Vector3 radius = region.getRadius();
+        List<Location> outline = new ArrayList<>();
+        addEllipse(outline, world, center.x(), center.y(), center.z(), radius.x() + 0.5D, radius.z() + 0.5D, 0);
+        addEllipse(outline, world, center.x(), center.y(), center.z(), radius.x() + 0.5D, radius.y() + 0.5D, 1);
+        addEllipse(outline, world, center.x(), center.y(), center.z(), radius.z() + 0.5D, radius.y() + 0.5D, 2);
+        List<Location> grid = new ArrayList<>();
+        if (advancedGridEnabled) {
+            int latitudeSteps = Math.max(4, (int) Math.ceil(Math.PI * Math.max(1.0D, radius.y()) / gridPointSpacing));
+            int longitudeSteps = Math.max(8, (int) Math.ceil(2 * Math.PI * Math.max(radius.x(), radius.z()) / gridPointSpacing));
+            for (int lat = 0; lat <= latitudeSteps; lat++) {
+                double phi = Math.PI * lat / latitudeSteps;
+                for (int lon = 0; lon < longitudeSteps; lon++) {
+                    double theta = 2 * Math.PI * lon / longitudeSteps;
+                    grid.add(point(world, center.x() + radius.x() * Math.sin(phi) * Math.cos(theta),
+                        center.y() + radius.y() * Math.cos(phi), center.z() + radius.z() * Math.sin(phi) * Math.sin(theta)));
+                }
+            }
+        }
+        renderIntervalOutline(player, outline);
+        if (advancedGridEnabled) renderSurfacePoints(player, grid);
+    }
+
+    private void renderCylinder(Player player, World world, CylinderRegion region) {
+        Vector2 center = region.getCenter().toVector2();
+        Vector2 radius = region.getRadius();
+        double bottom = region.getMinimumY() - REGION_EDGE_OFFSET;
+        double top = region.getMaximumY() + 1.0D + REGION_EDGE_OFFSET;
+        List<Location> ringPoints = new ArrayList<>();
+        List<Location> gridPoints = new ArrayList<>();
+        int ringSteps = Math.max(12, (int) Math.ceil(2 * Math.PI * Math.max(radius.x(), radius.z()) / pointSpacing));
+        for (int step = 0; step < ringSteps; step++) {
+            double angle = 2 * Math.PI * step / ringSteps;
+            double x = center.x() + (radius.x() + 0.5D) * Math.cos(angle);
+            double z = center.z() + (radius.z() + 0.5D) * Math.sin(angle);
+            ringPoints.add(point(world, x, bottom, z));
+            ringPoints.add(point(world, x, top, z));
+            if (advancedGridEnabled && step % Math.max(1, (int) Math.ceil(gridPointSpacing / pointSpacing)) == 0) {
+                for (double y : axisPoints(bottom, top, gridPointSpacing)) gridPoints.add(point(world, x, y, z));
+            }
+        }
+        renderCylinderOutline(player, ringPoints);
+        if (advancedGridEnabled) renderSurfacePoints(player, gridPoints);
+    }
+
+    private void addEllipse(List<Location> points, World world, double cx, double cy, double cz,
+                            double radiusA, double radiusB, int plane) {
+        int steps = Math.max(12, (int) Math.ceil(2 * Math.PI * Math.max(radiusA, radiusB) / pointSpacing));
+        for (int step = 0; step < steps; step++) {
+            double angle = 2 * Math.PI * step / steps;
+            double a = radiusA * Math.cos(angle);
+            double b = radiusB * Math.sin(angle);
+            points.add(switch (plane) {
+                case 0 -> point(world, cx + a, cy, cz + b);
+                case 1 -> point(world, cx + a, cy + b, cz);
+                default -> point(world, cx, cy + b, cz + a);
+            });
+        }
+    }
+
+    private void renderCuboidSurfaces(Player player, CuboidBounds bounds) {
+        Location min = bounds.min();
+        Location max = bounds.max();
+        World world = min.getWorld();
+        List<Double> xs = axisPoints(min.getX(), max.getX(), surfacePointSpacing);
+        List<Double> ys = axisPoints(min.getY(), max.getY(), surfacePointSpacing);
+        List<Double> zs = axisPoints(min.getZ(), max.getZ(), surfacePointSpacing);
+        Map<String, Location> points = new LinkedHashMap<>();
+
+        for (double x : xs) for (double y : ys) {
+            addSurfacePoint(points, point(world, x, y, min.getZ()));
+            addSurfacePoint(points, point(world, x, y, max.getZ()));
+        }
+        for (double x : xs) for (double z : zs) {
+            addSurfacePoint(points, point(world, x, min.getY(), z));
+            addSurfacePoint(points, point(world, x, max.getY(), z));
+        }
+        for (double y : ys) for (double z : zs) {
+            addSurfacePoint(points, point(world, min.getX(), y, z));
+            addSurfacePoint(points, point(world, max.getX(), y, z));
+        }
+
+        renderSurfacePoints(player, new ArrayList<>(points.values()));
+    }
+
+    private List<Double> axisPoints(double start, double end, double spacing) {
+        List<Double> points = new ArrayList<>();
+        points.add(start);
+        for (double value = start + spacing; value < end; value += spacing) points.add(value);
+        if (end > start) points.add(end);
+        return points;
+    }
+
+    private void addSurfacePoint(Map<String, Location> points, Location location) {
+        points.putIfAbsent(locationKey(location), location);
+    }
+
+    private void renderSurfacePoints(Player player, List<Location> points) {
+        if (points.size() <= maxSurfacePoints) {
+            points.forEach(location -> spawnDust(player, location));
+            return;
+        }
+        double stride = (double) points.size() / maxSurfacePoints;
+        for (int index = 0; index < maxSurfacePoints; index++) {
+            spawnDust(player, points.get(Math.min(points.size() - 1, (int) Math.floor(index * stride))));
+        }
     }
 
     private void renderPolygon(Player player, SCRegion region) {
@@ -606,16 +816,34 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
             return;
         }
 
-        double totalLength = lines.stream().mapToDouble(Line::length).sum();
-        if (totalLength <= 0.0D) {
-            return;
-        }
-
-        int totalBudget = Math.max(1, maxPoints);
         for (Line line : lines) {
-            int budget = Math.max(2, (int) Math.round((line.length() / totalLength) * totalBudget));
-            renderLine(player, line, budget);
+            renderLine(player, line, Integer.MAX_VALUE);
         }
+    }
+
+    private void renderIntervalOutline(Player player, List<Location> orderedPoints) {
+        if (orderedPoints.isEmpty()) return;
+        int interval = Math.max(1, (int) Math.round(majorMarkerInterval / pointSpacing));
+        List<Location> dust = new ArrayList<>();
+        List<Location> flames = new ArrayList<>();
+        for (int index = 0; index < orderedPoints.size(); index++) {
+            (index % interval == 0 ? flames : dust).add(orderedPoints.get(index));
+        }
+        renderSurfacePoints(player, dust);
+        renderFlamePoints(player, flames);
+    }
+
+    private void renderCylinderOutline(Player player, List<Location> ringPairs) {
+        int ringInterval = Math.max(1, (int) Math.round(majorMarkerInterval / pointSpacing));
+        List<Location> dust = new ArrayList<>();
+        List<Location> flames = new ArrayList<>();
+        for (int pair = 0; pair + 1 < ringPairs.size(); pair += 2) {
+            List<Location> target = (pair / 2) % ringInterval == 0 ? flames : dust;
+            target.add(ringPairs.get(pair));
+            target.add(ringPairs.get(pair + 1));
+        }
+        renderSurfacePoints(player, dust);
+        renderFlamePoints(player, flames);
     }
 
     private void renderLine(Player player, Line line, int lineMaxPoints) {
@@ -629,12 +857,23 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
         steps = Math.clamp(lineMaxPoints, 1, steps);
 
         for (int i = 0; i <= steps; i++) {
+            if (isMajorMarkerStep(line, i, steps)) continue;
             double t = (double) i / (double) steps;
             double x = line.start().getX() + ((line.end().getX() - line.start().getX()) * t);
             double y = line.start().getY() + ((line.end().getY() - line.start().getY()) * t);
             double z = line.start().getZ() + ((line.end().getZ() - line.start().getZ()) * t);
             spawnDust(player, point(line.start().getWorld(), x, y, z));
         }
+    }
+
+    private boolean isMajorMarkerStep(Line line, int step, int totalSteps) {
+        double length = line.length();
+        if (length <= 0.0D || totalSteps <= 0) return true;
+        int markerSteps = Math.max(1, (int) Math.floor(length / majorMarkerInterval));
+        double markerSpacing = length / markerSteps;
+        double distance = length * step / totalSteps;
+        double nearestMarker = Math.rint(distance / markerSpacing) * markerSpacing;
+        return Math.abs(distance - nearestMarker) <= Math.max(0.01D, pointSpacing * 0.3D);
     }
 
     private void renderMajorMarkers(Player player, List<Line> lines) {
@@ -694,15 +933,23 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
     }
 
     private void spawnDust(Player player, Location location) {
-        player.spawnParticle(Particle.DUST, location.getX(), location.getY(), location.getZ(), 1, 0.0D, 0.0D, 0.0D, 0.0D, RED_DUST);
+        if (selectionParticle == Particle.DUST) {
+            player.spawnParticle(Particle.DUST, location.getX(), location.getY(), location.getZ(),
+                1, 0.0D, 0.0D, 0.0D, 0.0D, RED_DUST, true);
+        } else {
+            player.spawnParticle(selectionParticle, location.getX(), location.getY(), location.getZ(),
+                1, 0.0D, 0.0D, 0.0D, 0.0D, null, true);
+        }
     }
 
     private void spawnFlame(Player player, Location location) {
-        player.spawnParticle(Particle.FLAME, location.getX(), location.getY(), location.getZ(), 1, 0.02D, 0.02D, 0.02D, 0.0D);
+        player.spawnParticle(cornerParticle, location.getX(), location.getY(), location.getZ(),
+            1, 0.02D, 0.02D, 0.02D, 0.0D, null, true);
     }
 
     private void spawnMajorMarker(Player player, Location location) {
-        player.spawnParticle(Particle.FLAME, location.getX(), location.getY(), location.getZ(), 3, 0.08D, 0.08D, 0.08D, 0.0D);
+        player.spawnParticle(Particle.FLAME, location.getX(), location.getY(), location.getZ(),
+            3, 0.08D, 0.08D, 0.08D, 0.0D, null, true);
         spawnDust(player, location);
     }
 

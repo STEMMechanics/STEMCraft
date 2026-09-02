@@ -39,11 +39,11 @@ Crop-trampling protection, durability warnings, and anvil warnings remain ungate
 
 Cook a vanilla egg in a furnace, smoker, or over a campfire to make a Fried Egg. The registered egg campfire recipe is detected automatically, making right-click insert the otherwise throwable egg into an empty campfire slot. It has its own Java and Bedrock model and behaves as food, restoring three hunger points and 2.4 saturation by default. The item and all three recipes are declared together in the survival data-pack config, using `result: stemcraft:fried_egg`. Administrators can obtain it with `/give @s stemcraft:fried_egg`.
 
-## Animal barrels
+## Animal crates
 
-Hold an ordinary vanilla barrel and sneak-right-click a chicken, rabbit, frog, or cat to capture it. One barrel is consumed and replaced by an unstackable `Animal Barrel (Chicken)`, for example. Right-click a block with the filled barrel to release it into the adjacent space; it then returns to an ordinary barrel. Filled Animal Barrels cannot be placed as storage blocks.
+Right-click a chicken, rabbit, frog, or cat with an empty Animal Crate to capture it. For compatibility, an ordinary vanilla barrel also works when sneak-right-clicking. The carrier becomes an unstackable `Animal Crate (Chicken)`, for example. Right-click a block with the filled crate to release it into the adjacent space; it then returns to an ordinary barrel. Filled Animal Crates cannot be placed as storage blocks.
 
-Animal Barrels preserve the animal's custom name, baby/adult state, tame owner, and species variant where applicable. Tamed animals can only be captured by their owner unless the player has `stemcraft.animalbarrel.others`. Animal Barrels are deliberately unstackable.
+Animal Crates preserve the animal's custom name, baby/adult state, tame owner, and species variant where applicable. Tamed animals can only be captured by their owner unless the player has `stemcraft.animalbarrel.others`. Animal Crates are deliberately unstackable.
 
 ## End dragon
 
@@ -51,5 +51,5 @@ After an Ender Dragon dies in an eligible End world, a persistent respawn task i
 
 All settings and player-facing messages are under `survival-qol`, `animal-barrels`, `custom-items`, `leaf_decay_random_tick`, and `dragon-respawn` in `config.yml`.
 
-Admins can create a populated animal barrel with `/give <player> stemcraft:animal_barrel[animal=chicken]`.
-Supported animals are `chicken`, `rabbit`, `frog`, and `cat`. Omitting the property gives an empty Animal Barrel.
+Admins can create a populated Animal Crate with `/give <player> stemcraft:animal_crate[animal=chicken]`.
+Supported animals are `chicken`, `rabbit`, `frog`, and `cat`. Omitting the property gives an empty Animal Crate.

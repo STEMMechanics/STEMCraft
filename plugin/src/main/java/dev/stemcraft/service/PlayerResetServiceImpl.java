@@ -6,10 +6,11 @@ import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.service.player.PlayerService.ResolvedPlayer;
 import dev.stemcraft.api.service.playerreset.*;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
-import org.bukkit.event.player.PlayerLoginEvent;
+import org.bukkit.event.player.AsyncPlayerPreLoginEvent;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -36,9 +37,9 @@ public final class PlayerResetServiceImpl extends BaseService implements PlayerR
         registerSqlHandlers();
         registerVanillaHandler();
         registerCommand();
-        api.events().register(PlayerLoginEvent.class, event -> {
-            if (resetting.contains(event.getPlayer().getUniqueId())) {
-                event.disallow(PlayerLoginEvent.Result.KICK_OTHER,
+        api.events().register(AsyncPlayerPreLoginEvent.class, event -> {
+            if (resetting.contains(event.getUniqueId())) {
+                event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
                     Component.text("Your player data reset is still running. Please try again shortly."));
             }
         });
@@ -61,19 +62,18 @@ public final class PlayerResetServiceImpl extends BaseService implements PlayerR
         PlayerResetContext context = new PlayerResetContext(uuid, playerName, scope, actorName);
         List<PlayerResetPlan.Entry> entries = handlers().stream().filter(handler -> handler.scopes().contains(scope))
             .map(handler -> new PlayerResetPlan.Entry(handler.id(), handler.preview(context))).toList();
-        String token = UUID.randomUUID().toString().substring(0, 8);
-        PlayerResetPlan plan = new PlayerResetPlan(token, uuid, playerName, scope, actorName,
+        PlayerResetPlan plan = new PlayerResetPlan(uuid, playerName, scope, actorName,
             Instant.now().plus(PLAN_LIFETIME), entries);
-        plans.put(token, plan);
+        plans.put(actorName.toLowerCase(Locale.ROOT), plan);
         return plan;
     }
 
-    @Override public @Nullable PlayerResetPlan getPlan(@NotNull String token) {
-        prunePlans(); return plans.get(token.toLowerCase(Locale.ROOT));
+    @Override public @Nullable PlayerResetPlan getPlan(@NotNull String actorName) {
+        prunePlans(); return plans.get(actorName.toLowerCase(Locale.ROOT));
     }
 
-    @Override public void confirm(@NotNull String token) {
-        PlayerResetPlan plan = plans.remove(token.toLowerCase(Locale.ROOT));
+    @Override public void confirm(@NotNull String actorName) {
+        PlayerResetPlan plan = plans.remove(actorName.toLowerCase(Locale.ROOT));
         if (plan == null || plan.expiresAt().isBefore(Instant.now())) throw new IllegalArgumentException("Reset plan is missing or expired.");
         Player player = Bukkit.getPlayer(plan.playerUuid());
         resetting.add(plan.playerUuid());
@@ -123,37 +123,44 @@ public final class PlayerResetServiceImpl extends BaseService implements PlayerR
 
     private void registerCommand() {
         api.commands().create("playerreset").description("Preview and execute a complete player-data reset.")
-            .usage("/playerreset <preview <player> <progression|gameplay|complete>|confirm <token>>")
-            .permission(PERMISSION).tabCompletion("preview", "{player}").tabCompletion("confirm")
+            .usage("/playerreset <player> [progression|gameplay|complete] | /playerreset confirm")
+            .permission(PERMISSION)
+            .tabCompletion("{player}")
+            .tabCompletion("{player}", "progression")
+            .tabCompletion("{player}", "gameplay")
+            .tabCompletion("{player}", "complete")
+            .tabCompletion("confirm")
             .executor((unused, command, ctx) -> command(ctx)).register(plugin);
     }
 
     private void command(CommandContext ctx) {
         if (ctx.args().isEmpty()) ctx.returnUsage();
-        if ("preview".equals(ctx.getArgLower(0))) {
-            if (ctx.args().size() < 3) ctx.returnUsage();
-            ResolvedPlayer player = api.players().resolveIdentity(ctx.getArg(1));
-            if (player == null) { ctx.returnError("Player not found."); return; }
-            PlayerResetScope scope;
-            try { scope = PlayerResetScope.valueOf(ctx.getArg(2).toUpperCase(Locale.ROOT)); }
-            catch (IllegalArgumentException exception) { ctx.returnError("Scope must be progression, gameplay, or complete."); return; }
-            PlayerResetPlan plan = plan(player.uuid(), player.name(), scope, ctx.getSenderName());
-            ctx.info("Reset preview for " + player.name() + " [" + scope.name().toLowerCase(Locale.ROOT) + "]:");
-            for (PlayerResetPlan.Entry entry : plan.entries()) {
-                ctx.info(" - " + entry.preview().description() + " (" + entry.preview().records() + ")");
-            }
-            ctx.warn("This is destructive. Confirm within 10 minutes with /playerreset confirm " + plan.token());
+        if ("confirm".equals(ctx.getArgLower(0))) {
+            if (ctx.args().size() != 1) ctx.returnUsage();
+            PlayerResetPlan plan = getPlan(ctx.getSenderName());
+            if (plan == null) { ctx.returnError("Reset plan is missing or expired."); return; }
+            confirm(ctx.getSenderName());
+            ctx.returnSuccess("Reset accepted. The player will be kicked before data is removed.");
             return;
         }
-        if ("confirm".equals(ctx.getArgLower(0))) {
-            if (ctx.args().size() < 2) ctx.returnUsage();
-            PlayerResetPlan plan = getPlan(ctx.getArgLower(1));
-            if (plan == null) { ctx.returnError("Reset plan is missing or expired."); return; }
-            if (!plan.actorName().equalsIgnoreCase(ctx.getSenderName())) ctx.returnError("Only the administrator who created this preview may confirm it.");
-            confirm(plan.token());
-            ctx.returnSuccess("Reset accepted. The player will be kicked before data is removed.");
+        if (ctx.args().size() > 2) ctx.returnUsage();
+        ResolvedPlayer player = api.players().resolveIdentity(ctx.getArg(0));
+        if (player == null) { ctx.returnError("Player not found."); return; }
+        PlayerResetScope scope = PlayerResetScope.COMPLETE;
+        if (ctx.args().size() == 2) {
+            try { scope = PlayerResetScope.valueOf(ctx.getArg(1).toUpperCase(Locale.ROOT)); }
+            catch (IllegalArgumentException exception) { ctx.returnError("Area must be progression, gameplay, or complete."); return; }
         }
-        ctx.returnUsage();
+        PlayerResetPlan plan = plan(player.uuid(), player.name(), scope, ctx.getSenderName());
+        sendResetWarning(ctx, "This command will reset the following for " + player.name() + ":");
+        for (PlayerResetPlan.Entry entry : plan.entries()) {
+            sendResetWarning(ctx, " - " + entry.preview().description() + " (" + entry.preview().records() + ")");
+        }
+        sendResetWarning(ctx, "This cannot be undone. To confirm within 10 minutes, run /playerreset confirm");
+    }
+
+    private void sendResetWarning(@NotNull CommandContext ctx, @NotNull String message) {
+        ctx.getSender().sendMessage(Component.text(message, NamedTextColor.RED));
     }
 
     private void registerSqlHandlers() {

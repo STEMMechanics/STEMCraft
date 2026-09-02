@@ -92,6 +92,8 @@ import java.util.regex.Pattern;
 @Getter
 @Accessors(fluent = true)
 public final class STEMCraft extends JavaPlugin {
+    public static final String MINIMUM_MINECRAFT_VERSION = "26.2";
+    private static final int[] MINIMUM_MINECRAFT_VERSION_COMPONENTS = {26, 2, 0};
     private static final Pattern VERSION_COMPONENT_PATTERN = Pattern.compile("\\d+");
     private static final String BOOTSTRAP_ERROR_LOAD_CONFIG = "Could not load config.yml.";
     private static STEMCraftAPI api;
@@ -156,6 +158,15 @@ public final class STEMCraft extends JavaPlugin {
         // Check we are running Paper
         if(!isPaper()) {
             getLogger().severe("STEMCraft requires Paper to run.");
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
+
+        if (!isMinecraftVersionSupported(getMinecraftVersion())) {
+            getLogger().severe(
+                "STEMCraft requires Minecraft " + MINIMUM_MINECRAFT_VERSION + " or newer; this server is running "
+                    + Bukkit.getMinecraftVersion() + ". STEMCraft will be disabled."
+            );
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
@@ -666,6 +677,16 @@ public final class STEMCraft extends JavaPlugin {
             components[index++] = Integer.parseInt(matcher.group());
         }
         return components;
+    }
+
+    static boolean isMinecraftVersionSupported(@Nullable int[] version) {
+        if (version == null) return false;
+        for (int index = 0; index < MINIMUM_MINECRAFT_VERSION_COMPONENTS.length; index++) {
+            int actual = index < version.length ? version[index] : 0;
+            int minimum = MINIMUM_MINECRAFT_VERSION_COMPONENTS[index];
+            if (actual != minimum) return actual > minimum;
+        }
+        return true;
     }
 
     /**

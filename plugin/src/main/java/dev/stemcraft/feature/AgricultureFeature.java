@@ -3,6 +3,8 @@ package dev.stemcraft.feature;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigSection;
+import io.papermc.paper.registry.RegistryAccess;
+import io.papermc.paper.registry.RegistryKey;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -122,7 +124,7 @@ public final class AgricultureFeature extends BaseFeature {
             Set<Biome> biomes = new HashSet<>();
             for (String raw : value.getStringList("biomes")) {
                 NamespacedKey key = NamespacedKey.fromString(raw.toLowerCase(Locale.ROOT));
-                Biome biome = key == null ? null : org.bukkit.Registry.BIOME.get(key);
+                Biome biome = key == null ? null : RegistryAccess.registryAccess().getRegistry(RegistryKey.BIOME).get(key);
                 if (biome != null) biomes.add(biome);
             }
             if (!blocks.isEmpty() && !value.getString("item").isBlank()) forage.add(new ForageDefinition(

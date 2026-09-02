@@ -3,7 +3,7 @@
 Simple custom items can be declared under `custom-items` in a data-pack `config.yml` or `configs/*.yml` without writing a feature class. Keeping the definition beside its texture makes the pack portable. Definitions in the plugin's main `config.yml` are also supported for items without pack assets. Each item is registered with the Item API and can be created by other plugins with `api.items().createCustomItem("fried-egg")`.
 
 Features and plugins can register a `CustomItemPropertyHandler` to support parameterised identifiers such as
-`stemcraft:animal_barrel[animal=chicken]`. The same identifier works through `ItemService#createCustomItem` and `/give`.
+`stemcraft:animal_crate[animal=chicken]`. The same identifier works through `ItemService#createCustomItem` and `/give`.
 
 ```yaml
 custom-items:

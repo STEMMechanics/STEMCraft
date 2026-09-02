@@ -98,10 +98,9 @@ class ResourcePackServiceImplTest {
     }
 
     @Test
-    void resolveSupportedVersionRangeUsesConfiguredMinButKeepsCurrentMinecraftAsMax() {
+    void resolveSupportedVersionRangeUsesConfiguredMinAndDerivesCurrentMinecraftAsMax() {
         ConfigSectionView config = mock(ConfigSectionView.class);
         when(config.getInt("min_pack_format", 32)).thenReturn(65);
-        when(config.getInt("max_pack_format", 88)).thenReturn(69);
 
         List<String> warnings = new ArrayList<>();
         int[] supportedRange = ResourcePackServiceImpl.resolveSupportedVersionRange(
@@ -112,14 +111,13 @@ class ResourcePackServiceImplTest {
 
         assertEquals(65, supportedRange[0]);
         assertEquals(88, supportedRange[1]);
-        assertEquals(1, warnings.size());
+        assertEquals(0, warnings.size());
     }
 
     @Test
     void resolveSupportedVersionRangeClampsConfiguredMinToCurrentMinecraftFormat() {
         ConfigSectionView config = mock(ConfigSectionView.class);
         when(config.getInt("min_pack_format", 32)).thenReturn(90);
-        when(config.getInt("max_pack_format", 88)).thenReturn(88);
 
         List<String> warnings = new ArrayList<>();
         int[] supportedRange = ResourcePackServiceImpl.resolveSupportedVersionRange(
@@ -134,7 +132,7 @@ class ResourcePackServiceImplTest {
     }
 
     @Test
-    void recalculateSupportedVersionRangeLogsRepeatedMaxFormatMismatchOnlyOncePerLifecycle() throws Exception {
+    void recalculateSupportedVersionRangeIgnoresObsoleteConfiguredMaxFormat() throws Exception {
         MockBukkit.mock();
         Logger logger = Logger.getLogger("resource-pack-warning-test");
         logger.setUseParentHandlers(false);
@@ -167,7 +165,7 @@ class ResourcePackServiceImplTest {
                 ))
                 .count();
 
-            assertEquals(1, mismatchWarnings);
+            assertEquals(0, mismatchWarnings);
         } finally {
             logger.removeHandler(handler);
         }

@@ -59,6 +59,14 @@ The world service stores per-world settings under the `worlds` config section. T
 - linked nether and end worlds
 - join and leave commands
 
+## WorldEdit Selection Previews
+
+`selection_preview` renders player-specific previews for cuboid, sphere/ellipsoid,
+cylinder, and 2D polygon selections. `particle`, `particles-per-block`,
+`particle-send-interval`, `particle-viewdistance`, and `max-selection-size-to-display`
+control the outline. `advanced-grid.enabled` adds geometry-appropriate surface grids;
+`spacing` and `max-points` bound their density and cost.
+
 ## Data Model Guidance
 
 STEMCraft generally uses:
