@@ -7,6 +7,13 @@ STEMCraft is a Paper plugin with four main layers:
 3. Command surfaces registered by commands, services, features, and minigames
 4. Built-in minigames discovered from `dev.stemcraft.minigame`
 
+## Requirements
+
+- Java 25
+- Paper for Minecraft 26.2 or newer
+
+The plugin declares Paper API version `26.2` and also checks the Minecraft version before initializing services. On an older server it logs the detected and required versions, disables itself, and performs no data or service initialization.
+
 This wiki mirrors the current source tree and is intended to give server operators and plugin developers a stable index over the runtime surface.
 
 ## Start Here

@@ -4,10 +4,11 @@
 
 STEMCraft starts in `STEMCraft.java` and builds the runtime in four passes:
 
-1. Bootstraps config and task infrastructure
-2. Instantiates core services and exposes them through `STEMCraftAPI`
-3. Scans and loads built-in features from `dev.stemcraft.feature`
-4. Scans and loads built-in commands and minigames
+1. Verifies Paper and the minimum supported Minecraft version (26.2)
+2. Bootstraps config and task infrastructure
+3. Instantiates core services and exposes them through `STEMCraftAPI`
+4. Scans and loads built-in features from `dev.stemcraft.feature`
+5. Scans and loads built-in commands and minigames
 
 The plugin relies heavily on runtime registration rather than a static registry file.
 

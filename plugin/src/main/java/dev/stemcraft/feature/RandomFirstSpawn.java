@@ -25,11 +25,12 @@ import dev.stemcraft.api.service.playerreset.*;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.util.PlayerUtil;
+import io.papermc.paper.registry.RegistryAccess;
+import io.papermc.paper.registry.RegistryKey;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
-import org.bukkit.Registry;
 import org.bukkit.Tag;
 import org.bukkit.World;
 import org.bukkit.WorldBorder;
@@ -387,9 +388,8 @@ public class RandomFirstSpawn extends BaseFeature {
         return out;
     }
 
-    @SuppressWarnings("deprecation")
     private Biome resolveBiome(String normalized) {
-        return Registry.BIOME.get(NamespacedKey.minecraft(normalized));
+        return RegistryAccess.registryAccess().getRegistry(RegistryKey.BIOME).get(NamespacedKey.minecraft(normalized));
     }
 
     private Set<Material> parseMaterials(List<String> raw, String worldName) {

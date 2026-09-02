@@ -47,7 +47,7 @@ class GiftServiceImplTest {
         ItemService items = mock(ItemService.class);
         when(api.items()).thenReturn(items);
         when(items.createCustomItem(anyString(), anyInt())).thenReturn(null);
-        when(items.createCustomItem(eq("stemcraft:animal_barrel[animal=chicken]"), eq(1)))
+        when(items.createCustomItem(eq("stemcraft:animal_crate[animal=chicken]"), eq(1)))
             .thenReturn(new ItemStack(Material.BARREL));
         GiftServiceImpl service = new GiftServiceImpl(mock(STEMCraft.class), api);
 
@@ -56,6 +56,6 @@ class GiftServiceImplTest {
         assertEquals(Material.EMERALD, emeralds.getType());
         assertTrue(emeralds.getAmount() >= 2 && emeralds.getAmount() <= 4);
         assertEquals(Material.BARREL,
-            service.createItem("stemcraft:animal_barrel[animal=chicken]").getType());
+            service.createItem("stemcraft:animal_crate[animal=chicken]").getType());
     }
 }

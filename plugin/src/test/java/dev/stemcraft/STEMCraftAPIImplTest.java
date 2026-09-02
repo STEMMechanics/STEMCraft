@@ -56,6 +56,7 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -247,6 +248,16 @@ class STEMCraftAPIImplTest {
         assertArrayEquals(new int[] {0, 0, 0}, STEMCraft.parseMinecraftVersion(null));
         assertArrayEquals(new int[] {0, 0, 0}, STEMCraft.parseMinecraftVersion(""));
         assertArrayEquals(new int[] {0, 0, 0}, STEMCraft.parseMinecraftVersion("release"));
+    }
+
+    @Test
+    void minecraftVersionSupportStartsAt26_2() {
+        assertFalse(STEMCraft.isMinecraftVersionSupported(new int[] {1, 21, 11}));
+        assertFalse(STEMCraft.isMinecraftVersionSupported(new int[] {26, 1, 9}));
+        assertTrue(STEMCraft.isMinecraftVersionSupported(new int[] {26, 2, 0}));
+        assertTrue(STEMCraft.isMinecraftVersionSupported(new int[] {26, 2, 1}));
+        assertTrue(STEMCraft.isMinecraftVersionSupported(new int[] {27, 0, 0}));
+        assertFalse(STEMCraft.isMinecraftVersionSupported(null));
     }
 
     @Test

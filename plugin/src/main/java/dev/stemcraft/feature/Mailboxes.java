@@ -78,7 +78,8 @@ import java.util.Set;
 import java.util.UUID;
 
 public class Mailboxes extends BaseFeature implements MailboxService {
-    public static final String MAILBOX_ITEM_ID = "stemcraft-mailbox";
+    public static final String MAILBOX_ITEM_ID = "mailbox";
+    private static final String LEGACY_MAILBOX_ITEM_ID = "stemcraft-mailbox";
     public static final String MAILBOX_OBJECT_TYPE = "mailbox";
     private static final String MAILBOX_RECIPE_ID = "mailbox";
     private static final String DEFAULT_MAIL_HOLOGRAM_TEXT = ":mail_large:";
@@ -260,11 +261,12 @@ public class Mailboxes extends BaseFeature implements MailboxService {
     private void registerCustomItems() {
         api.items().registerCustomItem(new CustomItemDefinition(
             MAILBOX_ITEM_ID,
-            namedItem(Material.BARREL, "<gold>Mailbox"),
+            namedItem(Material.BARREL, "Mailbox"),
             CustomItemPlacementMode.MANAGED,
             MAILBOX_OBJECT_TYPE,
             new CustomItemClientDefinition(
-                new JavaItemVisualDefinition(MAILBOX_MODEL_DATA, "stemcraft_mail:mailbox", "stemcraft_mail:item/mailbox", "stemcraft_mail:item/mailbox"),
+                new JavaItemVisualDefinition(MAILBOX_MODEL_DATA, "stemcraft_mail:mailbox", "stemcraft_mail:item/mailbox",
+                    "stemcraft_mail:item/mailbox", null, false, false, "stemcraft_mail:item/mailbox_gui"),
                 new BedrockItemVisualDefinition("stemcraft:mailbox", "mailbox", "stemcraft_mail:item/mailbox", "Mailbox")
             )
         ));
@@ -776,6 +778,7 @@ public class Mailboxes extends BaseFeature implements MailboxService {
         return queuedMail.deliverAfter() <= System.currentTimeMillis() ? NamedTextColor.GREEN : NamedTextColor.GRAY;
     }
 
+    @SuppressWarnings("rawtypes") // Adventure is non-generic on supported proxy/runtime versions.
     private @NotNull Component actionButton(@NotNull String label,
                                             @NotNull NamedTextColor color,
                                             @NotNull ClickEvent clickEvent,
@@ -828,7 +831,7 @@ public class Mailboxes extends BaseFeature implements MailboxService {
 
     private void onPlaceMailbox(@NotNull BlockPlaceEvent event) {
         ItemStack placedItem = event.getItemInHand();
-        if (!api.items().isCustomItemId(MAILBOX_ITEM_ID, placedItem)) {
+        if (!isMailboxItem(placedItem)) {
             return;
         }
 
@@ -850,6 +853,11 @@ public class Mailboxes extends BaseFeature implements MailboxService {
             event.setCancelled(true);
             sendConfiguredMessage(owner, "place-failed", DEFAULT_PLACE_FAILED_MESSAGE, "error", ex.getMessage());
         }
+    }
+
+    private boolean isMailboxItem(@NotNull ItemStack item) {
+        return api.items().isCustomItemId(MAILBOX_ITEM_ID, item)
+            || api.items().isCustomItemId(LEGACY_MAILBOX_ITEM_ID, item);
     }
 
     private void createMailboxAssembly(@NotNull UUID ownerId, @NotNull Block supportBlock) {
@@ -1584,7 +1592,7 @@ public class Mailboxes extends BaseFeature implements MailboxService {
         }
         ItemStack[] initialContents = loadPlayerInbox(player.getUniqueId());
         MailboxInventoryHolder holder = newMailboxInventoryHolder(UUID.randomUUID(), mailbox.id(), player.getUniqueId(), mailbox.primaryBlock().resolve(), initialContents);
-        Inventory inventory = Bukkit.createInventory(holder, InventoryType.BARREL, "Mailbox");
+        Inventory inventory = Bukkit.createInventory(holder, InventoryType.BARREL, Component.text("Mailbox"));
         holder.inventory(inventory);
         inventory.setContents(cloneInventoryContents(initialContents, inventory.getSize()));
         openMailboxInventories.put(holder.sessionId(), inventory);
@@ -1864,7 +1872,10 @@ public class Mailboxes extends BaseFeature implements MailboxService {
         ItemStack stack = new ItemStack(material);
         ItemMeta meta = stack.getItemMeta();
         if (meta != null) {
-            meta.displayName(Component.text(name.replace("<yellow>", "").replace("<gold>", ""), NamedTextColor.GOLD));
+            Component itemName = Component.text(name, NamedTextColor.WHITE)
+                .decoration(net.kyori.adventure.text.format.TextDecoration.ITALIC, false);
+            meta.itemName(itemName);
+            meta.displayName(itemName);
             stack.setItemMeta(meta);
         }
         return stack;

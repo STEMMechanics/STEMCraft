@@ -65,7 +65,6 @@ import org.bukkit.generator.structure.Structure;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
-import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.BookMeta;
@@ -3082,7 +3081,6 @@ public final class QuestFeature extends BaseFeature {
         meta.title(Component.text(renderQuestText(quest, quest.title())));
         meta.author(Component.text(quest.author()));
         meta.displayName(nonItalic(renderQuestText(quest, quest.title()), NamedTextColor.GOLD));
-        meta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
         meta.lore(bookLore(owner, quest, progress));
         meta.addPages(bookPages(quest, progress, PlayerUtil.isBedrock(owner)).toArray(Component[]::new));
         meta.getPersistentDataContainer().set(questIdKey, PersistentDataType.STRING, quest.id());

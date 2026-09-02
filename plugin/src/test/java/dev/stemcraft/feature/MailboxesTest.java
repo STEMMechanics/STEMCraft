@@ -15,6 +15,7 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
+import net.kyori.adventure.text.Component;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -155,7 +156,7 @@ class MailboxesTest {
             player.getUniqueId(),
             world.getSpawnLocation()
         );
-        Inventory inventory = server.createInventory(holder, org.bukkit.event.inventory.InventoryType.BARREL, "Mailbox");
+        Inventory inventory = server.createInventory(holder, org.bukkit.event.inventory.InventoryType.BARREL, Component.text("Mailbox"));
         player.openInventory(inventory);
         InventoryCloseEvent event = new InventoryCloseEvent(player.getOpenInventory());
 
@@ -193,7 +194,7 @@ class MailboxesTest {
             player.getUniqueId(),
             world.getSpawnLocation()
         );
-        Inventory inventory = server.createInventory(holder, org.bukkit.event.inventory.InventoryType.BARREL, "Mailbox");
+        Inventory inventory = server.createInventory(holder, org.bukkit.event.inventory.InventoryType.BARREL, Component.text("Mailbox"));
         inventory.setItem(0, new ItemStack(Material.DIAMOND, 3));
 
         Field field = Mailboxes.class.getDeclaredField("openMailboxInventories");
@@ -266,8 +267,8 @@ class MailboxesTest {
             other.getUniqueId(),
             world.getSpawnLocation()
         );
-        Inventory ownerInventory = server.createInventory(ownerHolder, org.bukkit.event.inventory.InventoryType.BARREL, "Mailbox");
-        Inventory otherInventory = server.createInventory(otherHolder, org.bukkit.event.inventory.InventoryType.BARREL, "Mailbox");
+        Inventory ownerInventory = server.createInventory(ownerHolder, org.bukkit.event.inventory.InventoryType.BARREL, Component.text("Mailbox"));
+        Inventory otherInventory = server.createInventory(otherHolder, org.bukkit.event.inventory.InventoryType.BARREL, Component.text("Mailbox"));
         ownerInventory.setItem(0, new ItemStack(Material.DIAMOND, 1));
         otherInventory.setItem(0, new ItemStack(Material.EMERALD, 1));
 

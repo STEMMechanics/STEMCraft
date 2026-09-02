@@ -13,7 +13,7 @@ STEMCraft Survival keeps the familiar Minecraft progression while adding practic
 * Find slime chunks with a [Slime in a Bucket](items-and-crafting/slime-and-magma-buckets.md).
 * Turn building blocks neatly with a [Chisel](items-and-crafting/chisel.md).
 
-Current plugin-backed features also include the 64-item [Cooking collection](items-and-crafting/farming-and-cooking.md), [mailboxes](mailboxes.md), [notice boards](notice-boards.md), [graves](graves.md), [animal barrels](animal-barrels.md), automatic End Dragon respawning, and destructive [Comet](comets.md) events.
+Current plugin-backed features also include the 64-item [Cooking collection](items-and-crafting/farming-and-cooking.md), [mailboxes](mailboxes.md), [notice boards](notice-boards.md), [graves](graves.md), [Animal Crates](animal-barrels.md), automatic End Dragon respawning, and destructive [Comet](comets.md) events.
 
 {% hint style="info" %}
 [Waystones](waystones.md), [traders](traders.md), and [survival cities](survival-cities.md) are ideas for the future. They are not normal live Survival features yet.

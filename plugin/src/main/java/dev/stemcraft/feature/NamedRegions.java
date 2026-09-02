@@ -8,6 +8,8 @@ import dev.stemcraft.api.service.coordinatebar.CoordinateBarSection;
 import dev.stemcraft.api.util.TextUtil;
 import dev.stemcraft.integration.pl3xmap.NamedMapArea;
 import dev.stemcraft.integration.pl3xmap.Pl3xMapNamedRegions;
+import io.papermc.paper.registry.RegistryAccess;
+import io.papermc.paper.registry.RegistryKey;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.title.Title;
 import org.bukkit.*;
@@ -292,7 +294,9 @@ public final class NamedRegions extends BaseFeature {
     private void updateBounds(Area a) { api.database().update("UPDATE named_areas SET min_x=?,min_z=?,max_x=?,max_z=? WHERE id=?", ps -> {
         ps.setInt(1,a.minX); ps.setInt(2,a.minZ); ps.setInt(3,a.maxX); ps.setInt(4,a.maxZ); ps.setString(5,a.id); }); }
     private void ensureStructure(World world, GeneratedStructure generated) {
-        BoundingBox b = generated.getBoundingBox(); String raw = generated.getStructure().key().value(), type = structureFamily(raw);
+        NamespacedKey structureKey = RegistryAccess.registryAccess().getRegistry(RegistryKey.STRUCTURE).getKey(generated.getStructure());
+        if (structureKey == null) return;
+        BoundingBox b = generated.getBoundingBox(); String raw = structureKey.getKey(), type = structureFamily(raw);
         if (!getConfigSection().getBoolean("structures." + type + ".enabled", !Set.of("buried-treasure", "nether-fossil").contains(type))) return;
         String signature = world.getName()+':'+raw+':'+(int)b.getMinX()+':'+(int)b.getMinY()+':'+(int)b.getMinZ()+':'+(int)b.getMaxX()+':'+(int)b.getMaxY()+':'+(int)b.getMaxZ();
         String id = "structure:" + UUID.nameUUIDFromBytes(signature.getBytes(StandardCharsets.UTF_8));

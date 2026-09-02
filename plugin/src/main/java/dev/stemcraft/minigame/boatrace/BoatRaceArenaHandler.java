@@ -55,16 +55,14 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
     private static final double SNOWBALL_PUSH_STRENGTH = 0.85d;
     private static final double SNOWBALL_PUSH_LIFT = 0.08d;
     private static final long TNT_BOUNCE_COOLDOWN_MILLIS = 750L;
-    private static final double TNT_BOUNCE_VERTICAL_VELOCITY = 1.35d;
-    private static final double TNT_BOUNCE_HORIZONTAL_MULTIPLIER = 1.35d;
-    private static final double TNT_BOUNCE_FALLBACK_SPEED = 0.75d;
-    private static final double TNT_BOUNCE_MIN_HORIZONTAL_SPEED = 0.95d;
-    private static final double TNT_BOUNCE_SUSTAIN_VERTICAL_VELOCITY = 0.45d;
-    private static final long[] TNT_BOUNCE_SUSTAIN_DELAYS = {1L, 2L};
+    private static final double TNT_BOUNCE_TARGET_HEIGHT = 3.5d;
+    private static final double TNT_BOUNCE_GRAVITY = 0.08d;
+    private static final double TNT_BOUNCE_HORIZONTAL_MULTIPLIER = 1.15d;
+    private static final double TNT_BOUNCE_FALLBACK_SPEED = 0.45d;
+    private static final long TNT_BOUNCE_SPEED_RESTORE_TICKS = 24L;
     private static final int BOAT_MOUNT_ATTEMPTS = 5;
     private static final int BOAT_RESPAWN_ATTEMPTS = 2;
     private static final long BOAT_MOUNT_RETRY_DELAY_TICKS = 2L;
-    private static final double STARTING_BOAT_MAX_SPEED = 0.0d;
     private static final double RUNNING_BOAT_MAX_SPEED = 0.4d;
     private static final double STARTING_GRID_LOCK_THRESHOLD_SQUARED = 1.0e-4d;
     private static final double STARTING_GRID_SNAP_THRESHOLD_SQUARED = 0.0625d;
@@ -469,6 +467,8 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
             boatRace.checkpointLocations(arena).put(player.getUniqueId(), slotLocation.clone());
             boatRace.lapProgress(arena).put(player.getUniqueId(), 1);
             boatRace.stageProgress(arena).put(player.getUniqueId(), 0);
+            startingWalkSpeeds(arena).putIfAbsent(player.getUniqueId(), player.getWalkSpeed());
+            player.setWalkSpeed(0.0f);
             positionPlayerOnStartingGrid(arena, player, slotLocation);
         }
 
@@ -485,6 +485,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
     private void prepareRunningState(@NotNull MiniGameArena arena) {
         boatRace.markRaceStarted(arena);
         for (Player player : arena.getPlayers()) {
+            restoreStartingWalkSpeed(arena, player);
             player.setGameMode(GameMode.ADVENTURE);
             player.setHealth(PlayerUtil.getMaxHealth(player));
             player.setFoodLevel(20);
@@ -504,6 +505,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
     }
 
     private void clearRaceState(@NotNull MiniGameArena arena) {
+        for (Player player : arena.getPlayers()) restoreStartingWalkSpeed(arena, player);
         cancelStartingGridLock(arena);
         removeCourseBoats(arena);
         boatRace.finishOrder(arena).clear();
@@ -518,6 +520,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
     }
 
     private void removePlayerState(@NotNull MiniGameArena arena, @NotNull Player player) {
+        restoreStartingWalkSpeed(arena, player);
         despawnBoat(arena, player.getUniqueId());
         boatRace.joinOrder(arena).remove(player.getUniqueId());
         boatRace.lapProgress(arena).remove(player.getUniqueId());
@@ -713,8 +716,13 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         }
 
         Vector velocity = tntBounceVelocity(boat, from, to);
+        setBoatMaxSpeed(boat, Math.max(RUNNING_BOAT_MAX_SPEED, horizontalSpeed(velocity)));
         boat.setVelocity(velocity);
-        sustainTntBounceMomentum(arena, rider, boat, velocity);
+        api.tasks().runLater(TNT_BOUNCE_SPEED_RESTORE_TICKS, () -> {
+            if (boat.isValid() && ownsBoat(arena, rider, boat.getUniqueId())) {
+                setBoatMaxSpeed(boat, RUNNING_BOAT_MAX_SPEED);
+            }
+        });
         rider.playSound(rider.getLocation(), Sound.ENTITY_FIREWORK_ROCKET_LAUNCH, 0.7f, 1.35f);
         tntBounceCooldowns(arena).put(rider.getUniqueId(), now + TNT_BOUNCE_COOLDOWN_MILLIS);
         tntBounceKeys(arena).put(rider.getUniqueId(), bounceKey);
@@ -795,8 +803,14 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         }
 
         double baseSpeed = Math.max(horizontal.length(), TNT_BOUNCE_FALLBACK_SPEED);
-        horizontal.normalize().multiply(Math.max(baseSpeed * TNT_BOUNCE_HORIZONTAL_MULTIPLIER, TNT_BOUNCE_MIN_HORIZONTAL_SPEED));
-        return new Vector(horizontal.getX(), TNT_BOUNCE_VERTICAL_VELOCITY, horizontal.getZ());
+        horizontal.normalize().multiply(baseSpeed * TNT_BOUNCE_HORIZONTAL_MULTIPLIER);
+        // v = sqrt(2gh): launch only hard enough to reach the configured apex.
+        double verticalVelocity = Math.sqrt(2.0d * TNT_BOUNCE_GRAVITY * TNT_BOUNCE_TARGET_HEIGHT);
+        return new Vector(horizontal.getX(), verticalVelocity, horizontal.getZ());
+    }
+
+    private double horizontalSpeed(@NotNull Vector velocity) {
+        return Math.sqrt((velocity.getX() * velocity.getX()) + (velocity.getZ() * velocity.getZ()));
     }
 
     private @NotNull Vector movementDirection(@Nullable Location from, @Nullable Location to) {
@@ -805,26 +819,6 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         }
 
         return new Vector(to.getX() - from.getX(), 0.0d, to.getZ() - from.getZ());
-    }
-
-    private void sustainTntBounceMomentum(@NotNull MiniGameArena arena,
-                                          @NotNull Player rider,
-                                          @NotNull Boat boat,
-                                          @NotNull Vector launchVelocity) {
-        for (long delay : TNT_BOUNCE_SUSTAIN_DELAYS) {
-            api.tasks().runLater(delay, () -> {
-                if (!rider.isOnline() || !arena.hasPlayer(rider) || !ownsBoat(arena, rider, boat.getUniqueId()) || !boat.isValid()) {
-                    return;
-                }
-
-                Vector currentVelocity = boat.getVelocity().clone();
-                boat.setVelocity(new Vector(
-                    launchVelocity.getX(),
-                    Math.max(currentVelocity.getY(), TNT_BOUNCE_SUSTAIN_VERTICAL_VELOCITY),
-                    launchVelocity.getZ()
-                ));
-            });
-        }
     }
 
     private void syncCheckpointProgressAtLocation(@NotNull MiniGameArena arena, @NotNull Player player, @NotNull Location location) {
@@ -932,6 +926,10 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
     }
 
     private void remountPlayerIfNeeded(@NotNull MiniGameArena arena, @NotNull Player player) {
+        if (pendingBoatSpawns(arena).containsKey(player.getUniqueId())) {
+            return;
+        }
+
         UUID boatId = boatRace.boatAssignments(arena).get(player.getUniqueId());
         Entity entity = boatId == null ? null : findEntity(boatId);
         if (entity instanceof Boat boat) {
@@ -1154,7 +1152,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         boat.setInvulnerable(true);
         boat.setPersistent(false);
         boat.setGravity(true);
-        boat.setMaxSpeed(arena.getStatus() == MiniGameArena.ArenaStatus.STARTING ? STARTING_BOAT_MAX_SPEED : RUNNING_BOAT_MAX_SPEED);
+        setBoatMaxSpeed(boat, RUNNING_BOAT_MAX_SPEED);
         boat.setSilent(true);
         boat.setVelocity(new Vector());
         boat.getPersistentDataContainer().set(BOAT_ARENA_KEY, PersistentDataType.STRING, arena.id());
@@ -1197,9 +1195,8 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         }
 
         boat.setGravity(true);
-        boat.setMaxSpeed(arena.getStatus() == MiniGameArena.ArenaStatus.STARTING ? STARTING_BOAT_MAX_SPEED : RUNNING_BOAT_MAX_SPEED);
+        setBoatMaxSpeed(boat, RUNNING_BOAT_MAX_SPEED);
         lockBoatToGrid(boat, boat.getLocation(), spawn);
-        teleportInternally(player, spawn.clone().add(0.0d, 0.25d, 0.0d));
         boolean mounted = boat.addPassenger(player);
         if (mounted && boat.getPassengers().contains(player) && player.getVehicle() == boat) {
             return;
@@ -1232,11 +1229,22 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
 
     private void freezeStartingGridBoat(@NotNull Boat boat, @NotNull Location gridLocation) {
         boat.setGravity(true);
-        boat.setMaxSpeed(STARTING_BOAT_MAX_SPEED);
+        // A max speed of zero also suppresses client steering/rotation. Keep steering
+        // enabled and enforce the grid lock with velocity and position only.
+        setBoatMaxSpeed(boat, RUNNING_BOAT_MAX_SPEED);
         if (hasMeaningfullyDriftedFromGrid(boat.getLocation(), gridLocation)) {
-            teleportBoatInternally(boat, gridLocation);
+            Location corrected = gridLocation.clone();
+            corrected.setYaw(boat.getYaw());
+            corrected.setPitch(boat.getPitch());
+            teleportBoatInternally(boat, corrected);
         }
-        boat.setRotation(gridLocation.getYaw(), gridLocation.getPitch());
+        // Minecraft clamps a passenger's view relative to the vehicle yaw. Following
+        // the rider's view removes that clamp while the boat remains position-locked.
+        boat.getPassengers().stream()
+            .filter(Player.class::isInstance)
+            .map(Player.class::cast)
+            .findFirst()
+            .ifPresent(rider -> boat.setRotation(rider.getYaw(), boat.getPitch()));
         boat.setVelocity(new Vector());
     }
 
@@ -1297,6 +1305,16 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
                     continue;
                 }
 
+                if (!(player.getVehicle() instanceof Boat)) {
+                    player.setVelocity(new Vector());
+                    if (hasMeaningfullyDriftedFromGrid(player.getLocation(), gridLocation)) {
+                        Location corrected = gridLocation.clone();
+                        corrected.setYaw(player.getYaw());
+                        corrected.setPitch(player.getPitch());
+                        teleportInternally(player, corrected);
+                    }
+                }
+
                 UUID boatId = boatRace.boatAssignments(arena).get(player.getUniqueId());
                 Entity entity = boatId == null ? null : findEntity(boatId);
                 if (entity instanceof Boat boat) {
@@ -1316,12 +1334,22 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
         });
     }
 
+    @SuppressWarnings("unchecked")
+    private @NotNull Map<UUID, Float> startingWalkSpeeds(@NotNull MiniGameArena arena) {
+        return arena.getOrCreate("startingWalkSpeeds", Map.class, LinkedHashMap::new);
+    }
+
+    private void restoreStartingWalkSpeed(@NotNull MiniGameArena arena, @NotNull Player player) {
+        Float speed = startingWalkSpeeds(arena).remove(player.getUniqueId());
+        if (speed != null) player.setWalkSpeed(speed);
+    }
+
     private void setAssignedBoatState(@NotNull MiniGameArena arena, @NotNull Player player, boolean running) {
         UUID boatId = boatRace.boatAssignments(arena).get(player.getUniqueId());
         Entity entity = boatId == null ? null : findEntity(boatId);
         if (entity instanceof Boat boat) {
             boat.setGravity(true);
-            boat.setMaxSpeed(running ? RUNNING_BOAT_MAX_SPEED : STARTING_BOAT_MAX_SPEED);
+            setBoatMaxSpeed(boat, RUNNING_BOAT_MAX_SPEED);
             if (!running) {
                 boat.setVelocity(new Vector());
             }
@@ -1444,5 +1472,11 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
 
     private String listenerPrefix(String arenaId) {
         return NamespaceId.of(BoatRaceMiniGame.namespace(), NamespaceId.sanitizePath(arenaId) + "_");
+    }
+
+    /** Paper has no modern replacement for its legacy boat speed control. */
+    @SuppressWarnings("deprecation")
+    private void setBoatMaxSpeed(Boat boat, double speed) {
+        boat.setMaxSpeed(speed);
     }
 }

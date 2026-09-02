@@ -45,7 +45,7 @@ coordinates:
 tps-bar:
   enabled: true
   default-enabled: false
-  title: "<gray>TPS<yellow>:</yellow> <tps> MSPT<yellow>:</yellow> <mspt> Ping<yellow>:</yellow> <ping>ms"
+  title: "<white>TPS: <tps>   MSPT: <mspt>   Ping: <ping>ms"
   overlay: NOTCHED_20
   fill-mode: MSPT
   progress-color:
@@ -987,10 +987,10 @@ survival-qol:
     critical-message: "/warn/⚠ Your {item} is about to break!"
 animal-barrels:
   enabled: true
-  item-name: "Animal Barrel"
-  filled-name: "Animal Barrel ({animal})"
+  item-name: "Animal Crate"
+  filled-name: "Animal Crate ({animal})"
   messages:
-    capture-failed: "/error/Could not prepare the animal barrel."
+    capture-failed: "/error/Could not prepare the animal crate."
     not-owner: "/error/That animal belongs to another player."
     no-space: "/error/There is not enough room to release that animal."
     captured: "/success/Picked up {animal}."
@@ -1137,11 +1137,17 @@ tab:
   max_name_len: 48
 selection_preview:
   enabled: true
-  update_ticks: 6
-  point_spacing: 2.0
-  max_points: 180
-  major_marker_interval: 5
-  max_view_distance: 96.0
+  particle: DUST
+  corner-particle: FLAME
+  particles-per-block: 1.0
+  major-marker-interval: 5
+  particle-send-interval: 6
+  particle-viewdistance: 96.0
+  max-selection-size-to-display: 10000000
+  advanced-grid:
+    enabled: true
+    spacing: 5.0
+    max-points: 60000
   flash_material: GLOWSTONE
 
 comet:

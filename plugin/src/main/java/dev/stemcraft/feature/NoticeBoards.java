@@ -513,6 +513,7 @@ public final class NoticeBoards extends BaseFeature {
         return TimeUtil.formatShortDuration(Math.max(0L, (expiresAt - System.currentTimeMillis() + 999L) / 1000L));
     }
 
+    @SuppressWarnings("rawtypes") // Adventure is non-generic on supported proxy/runtime versions.
     private Component actionButton(String text, NamedTextColor color, ClickEvent clickEvent, String hoverText) {
         return Component.text(text, color).clickEvent(clickEvent)
             .hoverEvent(HoverEvent.showText(Component.text(hoverText)));

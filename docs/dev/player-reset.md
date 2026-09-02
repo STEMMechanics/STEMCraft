@@ -6,16 +6,14 @@ Moderation records, punishments, reports, audit history, and login history are d
 
 ## Administration
 
-The command requires `stemcraft.player-reset.admin` and uses an expiring preview token:
+The command requires `stemcraft.player-reset.admin` and stores an expiring preview for each administrator:
 
 ```text
-/playerreset preview <player> progression
-/playerreset preview <player> gameplay
-/playerreset preview <player> complete
-/playerreset confirm <token>
+/playerreset <player> [progression|gameplay|complete]
+/playerreset confirm
 ```
 
-The preview identifies every participating handler and how many records or files it expects to remove. Only the administrator who created the preview can confirm it, and the token expires after ten minutes.
+The area is optional and defaults to `complete`. The preview identifies every participating handler and how many records or files it expects to remove. `/playerreset confirm` confirms only the preview created by that administrator, and the preview expires after ten minutes.
 
 When confirmed, an online target is kicked before any deletion begins. The coordinator waits for the disconnect save to finish and prevents the player from reconnecting while the reset is running.
 

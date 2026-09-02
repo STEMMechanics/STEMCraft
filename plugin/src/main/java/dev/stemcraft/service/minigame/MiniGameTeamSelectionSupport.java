@@ -1033,7 +1033,7 @@ public final class MiniGameTeamSelectionSupport {
         ItemStack item = new ItemStack(TeamNames.getMaterial(team.getName()));
         ItemMeta meta = item.getItemMeta();
         String prefix = selected ? "Selected: " : "Select: ";
-        meta.setDisplayName(prefix + beautifyTeamName(team.get("displayName", String.class, team.getName())));
+        meta.displayName(Component.text(prefix + beautifyTeamName(team.get("displayName", String.class, team.getName()))));
         item.setItemMeta(meta);
         return item;
     }
@@ -1041,7 +1041,7 @@ public final class MiniGameTeamSelectionSupport {
     private @NotNull ItemStack createAutoSelectorItem(boolean selected) {
         ItemStack item = new ItemStack(Material.NETHER_STAR);
         ItemMeta meta = item.getItemMeta();
-        meta.setDisplayName(selected ? "Selected: Auto" : "Select: Auto");
+        meta.displayName(Component.text(selected ? "Selected: Auto" : "Select: Auto"));
         item.setItemMeta(meta);
         return item;
     }
