@@ -2,27 +2,17 @@ package dev.stemcraft.feature;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.bukkit.configuration.file.YamlConfiguration;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Set;
 import static org.junit.jupiter.api.Assertions.*;
 
 class NamedRegionsTest {
     @TempDir Path tempDir;
-
-    @Test void generatesUniqueNamesForEverySupportedFamily() {
-        for (String type : Set.of("desert", "forest", "jungle", "ocean", "mountains", "snow", "swamp",
-            "badlands", "savanna", "taiga", "mushroom-fields", "plains", "mineshaft", "village",
-            "shipwreck", "ruined-portal", "ancient-city", "bastion-remnant", "buried-treasure",
-            "desert-pyramid", "end-city", "fortress", "igloo", "jungle-pyramid", "mansion", "monument",
-            "nether-fossil", "ocean-ruins", "pillager-outpost", "stronghold", "swamp-hut", "trail-ruins",
-            "trial-chambers")) {
-            var names = NamedRegions.defaultNames(type);
-            assertTrue(names.size() >= 2500, type);
-            assertEquals(names.size(), Set.copyOf(names).size(), type);
-            assertTrue(names.stream().allMatch(name -> name.split("\\s+").length <= 2), type);
-        }
-    }
 
     @Test void offersNaturalTwoWordChoicesForExistingLongNames() {
         assertEquals(Set.of("Far Pearl", "Far Deep", "Pearl Deep"),
@@ -39,13 +29,43 @@ class NamedRegionsTest {
         assertFalse(NamedRegions.isNumberedFallback("Area 52 East"));
     }
 
-    @Test void includesWarcraftRegionNamesInMatchingPools() {
-        assertTrue(NamedRegions.defaultNames("forest").contains("Elwynn Forest"));
-        assertTrue(NamedRegions.defaultNames("mountains").contains("Redridge Mountains"));
-        assertTrue(NamedRegions.defaultNames("snow").contains("Howling Fjord"));
-        assertTrue(NamedRegions.defaultNames("swamp").contains("Dustwallow Marsh"));
-        assertTrue(NamedRegions.defaultNames("plains").contains("Ohn'ahran Plains"));
-        assertTrue(NamedRegions.defaultNames("ancient-city").contains("Hallowfall"));
+    @Test void packagedConfigProvidesSourcesAndFormsForEveryBiomeFamily() {
+        var stream=getClass().getResourceAsStream("/config.yml");assertNotNull(stream);
+        var config=YamlConfiguration.loadConfiguration(new InputStreamReader(stream,StandardCharsets.UTF_8));
+        for(String type:Set.of("desert","forest","jungle","ocean","mountains","snow","swamp","badlands",
+            "savanna","taiga","mushroom-fields","plains")){
+            assertFalse(config.getStringList("named-regions.names.sources."+type).isEmpty(),type+" sources");
+            assertFalse(config.getStringList("named-regions.names.forms."+type).isEmpty(),type+" forms");
+        }
+    }
+
+    @Test void packagedConfigProvidesEditableSourcesForEveryBiomeFamily() {
+        var stream = getClass().getResourceAsStream("/config.yml");
+        assertNotNull(stream);
+        var config = YamlConfiguration.loadConfiguration(new InputStreamReader(stream, StandardCharsets.UTF_8));
+        for (String type : Set.of("desert", "forest", "jungle", "ocean", "mountains", "snow", "swamp",
+            "badlands", "savanna", "taiga", "mushroom-fields", "plains")) {
+            var sources = config.getStringList("named-regions.names.sources." + type);
+            assertFalse(sources.isEmpty(), type);
+            var generated = NamedRegions.generateNames(sources,
+                config.getStringList("named-regions.names.forms." + type), List.of());
+            assertTrue(generated.size() >= 100, type);
+            assertTrue(generated.stream().allMatch(name -> name.split("\\s+").length <= 2), type);
+        }
+    }
+
+    @Test void recognisesOnlyTheDeterministicFallbackForARegion() {
+        String id = "region:3a187fee-d2b3-31a8-aed6-e16c0c98b34f";
+        String expected = "Plains " + letterCode(id.hashCode());
+        assertTrue(NamedRegions.isFallbackName(expected, "plains", id));
+        assertFalse(NamedRegions.isFallbackName("Greenfield Plains", "plains", id));
+    }
+
+    private static String letterCode(int value) {
+        long remaining = Integer.toUnsignedLong(value);
+        StringBuilder out = new StringBuilder();
+        do { out.append((char) ('a' + remaining % 26)); remaining /= 26; } while (remaining > 0);
+        return out.reverse().toString();
     }
 
     @Test void groupsBiomeAndStructureVariants() {
