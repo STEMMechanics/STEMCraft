@@ -109,4 +109,11 @@ class NamedRegionsTest {
         assertEquals(0x4054A0FF, NamedRegions.mapColourValue("0x4054A0FF", "#FFFF9800"));
         assertEquals(0xFFFF9800, NamedRegions.mapColourValue("not-a-colour", "#FFFF9800"));
     }
+
+    @Test void formatsBulkRegenerationProgress() {
+        assertEquals("45 / 5005 processed; 41 regenerated; 4 remain fallbacks.",
+            NamedRegions.regenerationProgress(45, 5005, 41, 4));
+        assertEquals("1 / 1 processed; 0 regenerated; 1 remains fallback.",
+            NamedRegions.regenerationProgress(1, 1, 0, 1));
+    }
 }

@@ -66,9 +66,11 @@ The command root is `/namedregion` and requires `stemcraft.command.namedregion`.
 | `/namedregion retired [type]` | Show currently quarantined names, optionally filtered by family |
 | `/namedregion fallbacks [type]` | Find areas using generated fallback names |
 | `/namedregion release <name|*>` | Make one or all retired names immediately available |
-| `/namedregion regenerate <id|*>` | Regenerate one name, or replace every fallback name for which a pooled name is available |
+| `/namedregion regenerate <id|*>` | Regenerate one name, or start a batched job to replace every fallback name for which a pooled name is available |
 
 Use the stable ID printed by `info`, `list`, `find`, or `nearby` for commands that take `<id>`. Renaming always locks the area. Regenerating preserves its current lock state.
+
+Bulk regeneration processes a small number of regions per server tick to avoid blocking the watchdog. It reports progress every 250 regions, including the number processed, successfully regenerated, and still using fallbacks. Only one bulk regeneration job can run at a time.
 
 ## Persistence and lifecycle
 
@@ -81,4 +83,3 @@ Runtime state is stored in SQLite:
 The feature owns migrations for these tables through the database service. Do not edit the tables while the plugin is running: in-memory indexes are authoritative until shutdown, and map data is cached between refreshes.
 
 The feature is discovered through `BaseFeature`. Disabling it unregisters its coordinate-bar amendment and Pl3xMap layers, cancels backfill, and clears its runtime indexes; persisted area and history data remain available for the next enable.
-
