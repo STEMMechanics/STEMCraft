@@ -27,6 +27,7 @@ The main `config.yml` covers many areas, including:
 - web/resource-pack configuration
 - message type prefixes and conditional contexts under `logging`
 - mailbox delivery, hologram, dialog, and notification text under `mailboxes`
+- named biome and structure discovery, presentation, map layers, backfill, and name generation under `named-regions` (see [Named Regions](https://github.com/STEMMechanics/stemcraft/wiki/named-regions))
 
 ## Message Contexts
 
