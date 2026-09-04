@@ -15,6 +15,7 @@
 - [Gifts](https://github.com/STEMMechanics/stemcraft/wiki/gifts)
 - [Mailboxes](https://github.com/STEMMechanics/stemcraft/wiki/mailboxes)
 - [Notice boards](https://github.com/STEMMechanics/stemcraft/wiki/notice-boards)
+- [Named regions](https://github.com/STEMMechanics/stemcraft/wiki/named-regions)
 - [Quests](https://github.com/STEMMechanics/stemcraft/wiki/quests)
 - [Commands](https://github.com/STEMMechanics/stemcraft/wiki/commands)
 - [API](https://github.com/STEMMechanics/stemcraft/wiki/API)

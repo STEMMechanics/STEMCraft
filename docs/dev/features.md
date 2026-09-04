@@ -14,6 +14,7 @@ Features are discovered from `dev.stemcraft.feature` and loaded through `BaseFea
 | `TeleportUtils` | Registers warps, spawn, world teleport, `/back`, `/top`, `/jump`, and related travel commands |
 | `RandomFirstSpawn` | Applies per-world random first spawn rules and persistence |
 | `Coordinates` | Action bar and boss bar coordinate displays through `/coord` and `/coordbar` |
+| `NamedRegions` | Permanently names discovered biome territories and structures, with coordinate-bar and optional Pl3xMap presentation; see [Named Regions](https://github.com/STEMMechanics/stemcraft/wiki/named-regions) |
 | `GameModeAliases` | Registers short aliases such as `gms`, `gmc`, `gma`, and `gmsp` |
 | `GameModeInventories` | Keeps inventory state separate across gamemode profiles |
 

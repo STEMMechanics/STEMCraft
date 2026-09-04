@@ -18,6 +18,7 @@ The list below reflects the active built-in command roots in source.
 | `/webserver` | `WebServiceImpl` | Embedded web server control |
 | `/world` | `WorldCommand` | World lifecycle, inspection, settings, and join/leave command editing |
 | `/resourcepack` | `ResourcePackCommand` | Pack delivery and pack build operations |
+| `/namedregion` | `NamedRegions` | Inspect, find, teleport to, rename, retire, release, and regenerate named areas; see [Named Regions](https://github.com/STEMMechanics/stemcraft/wiki/named-regions) |
 | `/hologram` | `HologramServiceImpl` | Hologram creation and editing |
 | `/mailbox` | `Mailboxes` | Send mail and administer the delivery queue |
 | `/quest` | `QuestFeature` | Player quest journal and administration |
