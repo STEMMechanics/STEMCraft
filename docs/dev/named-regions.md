@@ -21,7 +21,7 @@ Configuration offers two naming approaches:
 - `names.pools.<type>` supplies a complete, explicit pool and takes precedence for that type.
 - `names.sources.<type>` and `names.forms.<type>` generate a larger pool. One-word sources are used directly and expanded through forms containing `{root}`; multi-word sources are treated as complete names.
 
-If a type has no source or form list, the corresponding `default` list is used. Generated candidates are compacted to at most two words. When every pooled candidate is unavailable, the feature creates a stable fallback from the friendly type and a letter code derived from the region ID.
+If a type has no source or form list, the corresponding `default` list is used. Generated candidates are compacted to at most two words for biome regions and three words for structures. Three-word structure names are also preserved when migrating older saved names. When every pooled candidate is unavailable, the feature creates a stable fallback from the friendly type and a letter code derived from the region ID.
 
 When a region is merged or renamed, its former name is retired for `names.retirement-days`. Retired names cannot be reassigned until that period expires or an administrator releases them. Changing naming configuration affects only new names; use the regeneration command to update existing areas.
 
@@ -83,3 +83,5 @@ Runtime state is stored in SQLite:
 The feature owns migrations for these tables through the database service. Do not edit the tables while the plugin is running: in-memory indexes are authoritative until shutdown, and map data is cached between refreshes.
 
 The feature is discovered through `BaseFeature`. Disabling it unregisters its coordinate-bar amendment and Pl3xMap layers, cancels backfill, and clears its runtime indexes; persisted area and history data remain available for the next enable.
+
+To make all retired names immediately reusable, run `/namedregion release *`. This clears the retirement cooldown while retaining name history; active names remain reserved. After updating the plugin, run `/namedregion regenerate *` to replace existing fallback names using the current pools. This applies to all region types and does not restore old names to their former regions.

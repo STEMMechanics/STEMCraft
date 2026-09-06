@@ -600,7 +600,7 @@ entitlements:
         permissions: [stemcraft.qol.auto-refill]
     qol-auto-select-tool:
       name: "Automatic tool selection"
-      description: "Right-click a block to equip the best tool for it from your inventory."
+      description: "Start breaking a block to equip the best available tool for it from your inventory."
       when:
         all:
           - stat: {key: skill_mining_xp, at-least: 900}
