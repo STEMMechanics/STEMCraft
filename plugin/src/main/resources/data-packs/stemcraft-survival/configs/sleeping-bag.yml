@@ -1,0 +1,22 @@
+custom-items:
+  sleeping-bag:
+    material: WHITE_BED
+    name: "<yellow>Sleeping Bag"
+    placement: VANILLA
+    max-stack-size: 1
+    lore:
+      - "<gray>Place and sleep to help skip the night."
+      - "<gray>Does not change your respawn point."
+      - "<gray>Break it to pack it up and reuse it."
+
+recipes:
+  shaped:
+    sleeping_bag:
+      result: "stemcraft:sleeping_bag"
+      amount: 1
+      shape:
+        - "WWW"
+        - "LLL"
+      ingredients:
+        W: WHITE_WOOL
+        L: LEATHER
