@@ -103,7 +103,7 @@ public final class SurvivalQolFeature extends BaseFeature {
         ItemStack[] contents = inventory.getStorageContents();
         for (int slot = 0; slot < contents.length; slot++) {
             ItemStack candidate = contents[slot];
-            if (candidate == null || candidate.getType().isAir() || !block.isPreferredTool(candidate)) continue;
+            if (candidate == null || !isMiningTool(candidate.getType()) || !block.isPreferredTool(candidate)) continue;
             float speed = block.getDestroySpeed(candidate);
             if (speed > bestSpeed || speed == bestSpeed && slot == heldSlot) {
                 bestSpeed = speed;
@@ -111,6 +111,12 @@ public final class SurvivalQolFeature extends BaseFeature {
             }
         }
         return bestSlot;
+    }
+
+    private static boolean isMiningTool(Material material) {
+        String name = material.name();
+        return name.endsWith("_PICKAXE") || name.endsWith("_AXE") || name.endsWith("_SHOVEL")
+            || name.endsWith("_HOE") || name.endsWith("_SWORD") || material == Material.SHEARS;
     }
 
     @Override

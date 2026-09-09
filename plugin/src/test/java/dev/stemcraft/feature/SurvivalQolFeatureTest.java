@@ -26,10 +26,46 @@ import static org.mockito.Mockito.when;
 
 class SurvivalQolFeatureTest {
     @Test
+    void autoSelectLeavesEmptyHandAloneWhenOnlyLogsAreAvailable() {
+        var block = mock(org.bukkit.block.Block.class);
+        var inventory = mock(org.bukkit.inventory.PlayerInventory.class);
+        var log = mock(org.bukkit.inventory.ItemStack.class);
+        when(log.getType()).thenReturn(Material.OAK_LOG);
+        when(block.isPreferredTool(log)).thenReturn(true);
+        when(block.getDestroySpeed(log)).thenReturn(1.0f);
+        when(inventory.getStorageContents()).thenReturn(new org.bukkit.inventory.ItemStack[]{null, log});
+        int selected = SurvivalQolFeature.preferredToolSlot(block, inventory, 0);
+        assertEquals(-1, selected);
+    }
+
+    @Test
     void autoSelectOnlyRunsWhenStartingToBreakABlock() {
         assertTrue(SurvivalQolFeature.triggersAutoSelect(Action.LEFT_CLICK_BLOCK));
         assertFalse(SurvivalQolFeature.triggersAutoSelect(Action.RIGHT_CLICK_BLOCK));
         assertFalse(SurvivalQolFeature.triggersAutoSelect(Action.RIGHT_CLICK_AIR));
+    }
+
+    @Test
+    void autoSelectChoosesFastestToolAndKeepsItWhenAlreadyHeld() {
+        var block = mock(org.bukkit.block.Block.class);
+        var inventory = mock(org.bukkit.inventory.PlayerInventory.class);
+        var log = mock(org.bukkit.inventory.ItemStack.class);
+        var woodenAxe = mock(org.bukkit.inventory.ItemStack.class);
+        var ironAxe = mock(org.bukkit.inventory.ItemStack.class);
+        when(log.getType()).thenReturn(Material.OAK_LOG);
+        when(woodenAxe.getType()).thenReturn(Material.WOODEN_AXE);
+        when(ironAxe.getType()).thenReturn(Material.IRON_AXE);
+        when(block.isPreferredTool(woodenAxe)).thenReturn(true);
+        when(block.isPreferredTool(ironAxe)).thenReturn(true);
+        when(block.getDestroySpeed(woodenAxe)).thenReturn(2.0f);
+        when(block.getDestroySpeed(ironAxe)).thenReturn(6.0f);
+        when(inventory.getStorageContents()).thenReturn(
+            new org.bukkit.inventory.ItemStack[]{null, log, woodenAxe, ironAxe});
+        assertEquals(3, SurvivalQolFeature.preferredToolSlot(block, inventory, 0));
+        assertEquals(3, SurvivalQolFeature.preferredToolSlot(block, inventory, 3));
+        when(block.isPreferredTool(woodenAxe)).thenReturn(false);
+        when(block.isPreferredTool(ironAxe)).thenReturn(false);
+        assertEquals(-1, SurvivalQolFeature.preferredToolSlot(block, inventory, 0));
     }
 
     @Test

@@ -882,7 +882,8 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
                     record.username() == null ? username : record.username());
                 Map<StatSection, List<PlayerStatValue>> sections = new LinkedHashMap<>();
                 for (PlayerStatValue stat : record.stats()) {
-                    if (stat.value() <= 0 || (!statGroups.isEmpty() && isLegacyGroupedBlockStat(stat.key()))) continue;
+                    if ((stat.value() <= 0 && !stat.key().startsWith("skill_"))
+                        || (!statGroups.isEmpty() && isLegacyGroupedBlockStat(stat.key()))) continue;
                     sections.computeIfAbsent(sectionFor(stat.key()), ignored -> new ArrayList<>()).add(stat);
                 }
                 if (sections.isEmpty()) {

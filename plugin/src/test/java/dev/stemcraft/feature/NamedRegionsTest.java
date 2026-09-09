@@ -29,6 +29,36 @@ class NamedRegionsTest {
         assertFalse(NamedRegions.isNumberedFallback("Area 52 East"));
     }
 
+    @Test void preservesThreeWordStructureNamesButStillShortensBiomeNames() {
+        int structureLimit = NamedRegions.nameWordLimit("mineshaft");
+        assertEquals(3, structureLimit);
+        assertEquals(List.of("The Coppervein Diggings"),
+            NamedRegions.shortNameCandidates("The Coppervein Diggings", structureLimit));
+        assertEquals(List.of("Deepwind Gorge Mine"),
+            NamedRegions.shortNameCandidates("Deepwind Gorge Mine", structureLimit));
+        assertEquals(2, NamedRegions.nameWordLimit("plains"));
+        assertFalse(NamedRegions.shortNameCandidates("Western Sunfield Plains",
+            NamedRegions.nameWordLimit("plains")).contains("Western Sunfield Plains"));
+        var shortened = NamedRegions.shortNameCandidates("The Northern Coppervein Diggings", structureLimit);
+        assertTrue(shortened.contains("Northern Coppervein Diggings"));
+        assertTrue(shortened.stream().allMatch(name -> name.split("\\s+").length <= 3));
+    }
+
+    @Test void generatesThreeWordNamesForStructuresIncludingDefaultSourceFamilies() {
+        var config = YamlConfiguration.loadConfiguration(new InputStreamReader(
+            getClass().getResourceAsStream("/config.yml"), StandardCharsets.UTF_8));
+        for (String type : List.of("mineshaft", "village", "shipwreck", "ruined-portal", "fortress")) {
+            var sources = config.getStringList("named-regions.names.sources." + type);
+            var forms = config.getStringList("named-regions.names.forms." + type);
+            if (sources.isEmpty()) sources = config.getStringList("named-regions.names.sources.default");
+            if (forms.isEmpty()) forms = config.getStringList("named-regions.names.forms.default");
+            var names = NamedRegions.generateNames(sources, forms, List.of(), NamedRegions.nameWordLimit(type));
+            assertTrue(names.stream().anyMatch(name -> name.split("\\s+").length == 3), type);
+            assertTrue(names.stream().allMatch(name -> name.split("\\s+").length <= 3), type);
+            if (type.equals("mineshaft")) assertTrue(names.contains("The Coppervein Diggings"));
+        }
+    }
+
     @Test void packagedConfigProvidesSourcesAndFormsForEveryBiomeFamily() {
         var stream=getClass().getResourceAsStream("/config.yml");assertNotNull(stream);
         var config=YamlConfiguration.loadConfiguration(new InputStreamReader(stream,StandardCharsets.UTF_8));

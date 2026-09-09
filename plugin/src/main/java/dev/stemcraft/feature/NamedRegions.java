@@ -159,10 +159,10 @@ public final class NamedRegions extends BaseFeature {
         int renamed = 0;
         for (Area old : new ArrayList<>(areas.values())) {
             boolean numberedFallback=isNumberedFallback(old.name);
-            if (old.locked || wordCount(old.name) <= 2&&!numberedFallback) continue;
+            if (old.locked || wordCount(old.name) <= nameWordLimit(old.type)&&!numberedFallback) continue;
             activeNames.remove(normaliseName(old.name));
-            String replacement = availableName(numberedFallback?List.of():shortNameCandidates(old.name), old.type, old.id);
-            retire(old, numberedFallback?"replaced numbered fallback":"shortened by two-word name migration");
+            String replacement = availableName(numberedFallback?List.of():shortNameCandidates(old.name, nameWordLimit(old.type)), old.type, old.id);
+            retire(old, numberedFallback?"replaced numbered fallback":"shortened by name word-limit migration");
             Area updated = new Area(old.id, old.world, old.kind, old.type, replacement, old.minX, old.minY, old.minZ,
                 old.maxX, old.maxY, old.maxZ, false, old.createdAt, old.discovered);
             areas.put(updated.id, updated);
@@ -346,18 +346,18 @@ public final class NamedRegions extends BaseFeature {
             .replace("{name}",area.name).replace("{type}",friendly(area.type)));}
     private String render(String template, Area area) { return template == null ? "" : template.replace("{name}", area.name).replace("{type}", friendly(area.type)); }
     private String name(String type, String id) { List<String> configured = getConfigSection().getStringList("names.pools." + type);
-        List<String> values = configured.isEmpty() ? generatedNames(type) : compactNames(configured);long now=System.currentTimeMillis();
+        List<String> values = configured.isEmpty() ? generatedNames(type) : compactNames(configured, nameWordLimit(type));long now=System.currentTimeMillis();
         int start = Math.floorMod(id.hashCode(), values.size()); for(int i=0;i<values.size();i++) { String candidate=values.get((start+i)%values.size());
             String normalised=normaliseName(candidate);Long retiredUntil=retiredNames.get(normalised);
             if(retiredUntil!=null&&retiredUntil<=now)retiredNames.remove(normalised,retiredUntil);
             if(!activeNames.contains(normalised)&&!retiredNames.containsKey(normalised))return candidate;
         } return availableName(List.of(), type, id); }
     private @Nullable String pooledName(String type,String id){List<String> configured=getConfigSection().getStringList("names.pools."+type);
-        String candidate=findAvailableName(configured.isEmpty()?List.of():compactNames(configured),id.hashCode());
+        String candidate=findAvailableName(configured.isEmpty()?List.of():compactNames(configured, nameWordLimit(type)),id.hashCode());
         return candidate!=null?candidate:findAvailableName(generatedNames(type),id.hashCode());}
     private record NamePools(List<String> configured,List<String> generated) { }
     private NamePools namePools(String type){List<String> configured=getConfigSection().getStringList("names.pools."+type);
-        return new NamePools(configured.isEmpty()?List.of():compactNames(configured),generatedNames(type));}
+        return new NamePools(configured.isEmpty()?List.of():compactNames(configured, nameWordLimit(type)),generatedNames(type));}
     private @Nullable String pooledName(String type,String id,Map<String,NamePools> cache){NamePools pools=cache.computeIfAbsent(type,this::namePools);
         String candidate=findAvailableName(pools.configured,id.hashCode());
         return candidate!=null?candidate:findAvailableName(pools.generated,id.hashCode());}
@@ -391,28 +391,47 @@ public final class NamedRegions extends BaseFeature {
         List<String> configuredForms=getConfigSection().getStringList("names.forms."+type);
         if(configuredForms.isEmpty())configuredForms=getConfigSection().getStringList("names.forms.default");
         if(configuredForms.isEmpty())throw new IllegalStateException("No named-region forms configured for "+type);
-        return generateNames(configured,configuredForms,List.of(expansionPrefixes()));}
+        return generateNames(configured,configuredForms,List.of(expansionPrefixes()),nameWordLimit(type));}
+    static int nameWordLimit(String type) {
+        return switch (type) {
+            case "desert", "forest", "jungle", "taiga", "ocean", "mountains", "snow", "swamp",
+                "badlands", "savanna", "plains", "mushroom-fields" -> 2;
+            default -> 3; // Structure families; biomeFamily always returns one of the values above.
+        };
+    }
     static List<String> generateNames(Collection<String> sources,Collection<String> forms,Collection<String> prefixes){
+        return generateNames(sources, forms, prefixes, 2);
+    }
+    static List<String> generateNames(Collection<String> sources,Collection<String> forms,Collection<String> prefixes,int maxWords){
         List<String> roots=new ArrayList<>(),out=new ArrayList<>();
         for(String source:sources){String value=source.trim();if(value.isEmpty())continue;if(wordCount(value)==1)roots.add(value);else out.add(value);}
         List<String> base=new ArrayList<>();for(String root:roots){out.add(root);for(String form:forms)base.add(form.replace("{root}",root));}
         out.addAll(base);for(String qualifier:split("Northern,Southern,Eastern,Western,Upper,Lower,Inner,Outer,High,Far"))
             for(String name:base)out.add(qualify(name,qualifier));
         for(String prefix:prefixes)for(String root:roots)if(!prefix.equalsIgnoreCase(root))out.add(prefix+" "+root);
-        return compactNames(out);}
-    private static List<String> compactNames(Collection<String> names) {
+        return compactNames(out, maxWords);}
+    private static List<String> compactNames(Collection<String> names, int maxWords) {
         LinkedHashMap<String,String> unique = new LinkedHashMap<>();
-        for (String name : names) for (String candidate : shortNameCandidates(name))
+        for (String name : names) for (String candidate : shortNameCandidates(name, maxWords))
             unique.putIfAbsent(normaliseName(candidate), candidate);
         if (unique.isEmpty()) throw new IllegalArgumentException("A named-region pool must contain at least one word");
         return List.copyOf(unique.values());
     }
     static List<String> shortNameCandidates(String name) {
+        return shortNameCandidates(name, 2);
+    }
+    static List<String> shortNameCandidates(String name, int maxWords) {
         List<String> original = Arrays.stream(name.trim().split("\\s+")).filter(word -> !word.isBlank()).toList();
-        if (original.size() <= 2) return original.isEmpty() ? List.of() : List.of(String.join(" ", original));
+        if (original.size() <= maxWords) return original.isEmpty() ? List.of() : List.of(String.join(" ", original));
         List<String> words = original.stream()
             .filter(word -> !Set.of("the", "of").contains(word.toLowerCase(Locale.ROOT))).toList();
         LinkedHashSet<String> candidates = new LinkedHashSet<>();
+        if (maxWords == 3) {
+            for (int first = 0; first < words.size(); first++)
+                for (int second = first + 1; second < words.size(); second++)
+                    for (int third = second + 1; third < words.size(); third++)
+                        candidates.add(words.get(first) + " " + words.get(second) + " " + words.get(third));
+        }
         for (int gap=1;gap<words.size();gap++) for(int first=0;first+gap<words.size();first++)
             candidates.add(words.get(first)+" "+words.get(first+gap));
         return List.copyOf(candidates);
