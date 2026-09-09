@@ -6,6 +6,8 @@ Each player-facing behaviour has an optional `permission` beside its `enabled` s
 
 | Convenience unlock | Default requirement | Permission |
 | --- | --- | --- |
+| Vein mining | Mining Level 10 (8,100 XP), diamond/netherite pickaxe | `stemcraft.qol.vein-mining` |
+| Tree felling | Herbalism Level 10 (8,100 XP), diamond/netherite axe | `stemcraft.qol.tree-felling` |
 | Automatic replacement for broken tools | Mining Level 3 (400 XP) | `stemcraft.qol.auto-refill-tools` |
 | 3×3 hoe harvesting | Farming Level 3 (400 XP) | `stemcraft.qol.hoe-harvest` |
 | Automatic stack refill | Engineering Level 3 (400 XP) | `stemcraft.qol.auto-refill` |
@@ -53,3 +55,19 @@ All settings and player-facing messages are under `survival-qol`, `animal-barrel
 
 Admins can create a populated Animal Crate with `/give <player> stemcraft:animal_crate[animal=chicken]`.
 Supported animals are `chicken`, `rabbit`, `frog`, and `cat`. Omitting the property gives an empty Animal Crate.
+
+## Tree felling and vein mining
+
+Sneak while breaking a log or ore to use these unlocks. `/qol tree-felling off` and `/qol vein-mining off` disable them individually. `require-sneaking`, `tools`, and `max-blocks` are configurable under each feature in `survival-qol`.
+
+Tree felling follows connected logs of the same species, including diagonal branches, at or above the height of the original cut. It requires nearby non-persistent leaves and excludes stripped logs and wood blocks. Connected trees of the same species can be included. The default limit is 128 logs, including the original block. Leaves use the existing decay behavior. Herbalism now awards 4 XP for breaking unplaced logs; placed logs are tracked to prevent repeated placement/breaking from awarding XP.
+
+Vein mining follows connected blocks of exactly the same ore material in all directions, including diagonals. Normal and deepslate variants are separate veins. The default limit is 64 blocks, including the original ore. Neither feature loads neighboring chunks. Additional breaks use the player's tool and normal break events, retaining enchantments, durability, XP collection and protection-plugin checks. Harvesting stops if a break is denied or the required tool is no longer held.
+
+On startup, missing sections for these two features and their entitlement rules are restored from bundled defaults. Existing settings are preserved. Blank permissions still bypass the progression gate.
+
+## Sleeping bags
+
+Craft a reusable Sleeping Bag with three white wool above three leather. Place it like a bed, sleep in it, and break it to pack it up again. It currently uses the vanilla white-bed appearance. Administrators can obtain one with `/give <player> stemcraft:sleeping_bag`.
+
+Sleeping bags use normal sleep checks and count toward `skip_night` in its configured worlds, but cancel bed-caused spawn changes so the player's previous respawn point remains intact. Both halves carry a persistent marker, preserving this behavior across chunk unloads and restarts. Other beds and spawn commands work normally. Sleeping bags cannot be used in the Nether or End. The feature is enabled under `sleeping-bags.enabled`; the item and recipe are in the survival data pack's `configs/sleeping-bag.yml`.

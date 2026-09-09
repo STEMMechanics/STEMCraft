@@ -43,9 +43,10 @@ import java.util.regex.Pattern;
 public final class SurvivalQolFeature extends BaseFeature {
     private static final String REFILL_TASK_PREFIX = "feature:survival-qol-refill:";
     private static final Set<String> PLAYER_TOGGLES = Set.of("hoe-harvest", "auto-refill", "auto-refill-tools",
-        "auto-select-tool", "named-mob-info", "anvil-warning", "durability-warning");
+        "auto-select-tool", "tree-felling", "vein-mining", "named-mob-info", "anvil-warning", "durability-warning");
     private final NamespacedKey mobOwnerKey = new NamespacedKey("stemcraft", "named-mob-owner");
     private final NamespacedKey questNpcProfileKey = new NamespacedKey("stemcraft", "quest-npc-profile");
+    private final Set<UUID> harvesting = new java.util.HashSet<>();
     private final Map<UUID, Long> anvilWarnings = new HashMap<>();
     private List<Pattern> supportedWorlds = List.of(PatternUtil.globToRegex("survival*"));
     private Set<GameMode> supportedGameModes = Set.of(GameMode.SURVIVAL);
@@ -57,6 +58,7 @@ public final class SurvivalQolFeature extends BaseFeature {
     @Override
     public void onEnable() {
         loadSettings();
+        api.events().register(org.bukkit.event.block.BlockBreakEvent.class, this::onHarvest, EventPriority.MONITOR, true);
         api.events().register(PlayerInteractEvent.class, this::onAutoSelectTool, EventPriority.NORMAL, true);
         api.events().register(PlayerInteractEvent.class, this::onCropHarvest, EventPriority.HIGHEST, true);
         api.events().register(EntityChangeBlockEvent.class, this::onCropTrample, EventPriority.HIGHEST, true);
@@ -78,6 +80,46 @@ public final class SurvivalQolFeature extends BaseFeature {
     public void onReload() {
         super.onReload();
         loadSettings();
+    }
+
+    private void onHarvest(org.bukkit.event.block.BlockBreakEvent event) {
+        Player player = event.getPlayer();
+        if (harvesting.contains(player.getUniqueId())) return;
+        Block origin = event.getBlock();
+        Material material = origin.getType();
+        boolean tree = HarvestSupport.isLog(material);
+        if (!tree && !HarvestSupport.isOre(material)) return;
+        String feature = tree ? "tree-felling" : "vein-mining";
+        if (!allowed(feature, player) || !harvestToolAllowed(feature, player, tree)
+            || (getConfigSection().getBoolean(feature + ".require-sneaking", true) && !player.isSneaking())) return;
+        int limit = Math.clamp(getConfigSection().getInt(feature + ".max-blocks", tree ? 128 : 64), 1, 256);
+        List<Block> blocks = HarvestSupport.connected(origin, tree, limit);
+        if (tree && !HarvestSupport.hasNaturalCanopy(blocks)) return;
+        int heldSlot = player.getInventory().getHeldItemSlot();
+        // Run after the original break, including its drops, durability cost and other listeners.
+        api.tasks().runLater(1, () -> {
+            if (event.isCancelled() || origin.getType() == material || !player.isOnline() || player.isDead()
+                || !player.getWorld().equals(origin.getWorld()) || !allowed(feature, player)
+                || player.getInventory().getHeldItemSlot() != heldSlot) return;
+            harvesting.add(player.getUniqueId());
+            try {
+                for (Block block : blocks) {
+                    if (!harvestToolAllowed(feature, player, tree)) break;
+                    if (!block.getWorld().isChunkLoaded(block.getX() >> 4, block.getZ() >> 4)) continue;
+                    if (block.getType() == material && !player.breakBlock(block)) break;
+                }
+            } finally {
+                harvesting.remove(player.getUniqueId());
+            }
+        });
+    }
+
+    private boolean harvestToolAllowed(String feature, Player player, boolean tree) {
+        Material tool = player.getInventory().getItemInMainHand().getType();
+        List<String> configured = getConfigSection().getStringList(feature + ".tools");
+        if (configured.isEmpty()) configured = tree ? List.of("DIAMOND_AXE", "NETHERITE_AXE")
+            : List.of("DIAMOND_PICKAXE", "NETHERITE_PICKAXE");
+        return HarvestSupport.isCorrectTool(tool, tree) && configured.contains(tool.name());
     }
 
     private void onAutoSelectTool(PlayerInteractEvent event) {
@@ -381,6 +423,12 @@ public final class SurvivalQolFeature extends BaseFeature {
     }
 
     private void loadSettings() {
+        getConfigSection();
+        for (String feature : List.of("tree-felling", "vein-mining")) {
+            String path = getResolvedConfigPath() + "." + feature;
+            if (!getRootConfigSection().contains(path)) dev.stemcraft.config.BundledConfigDefaults.restoreMissingSection(
+                dev.stemcraft.STEMCraft.getPlugin(), getRootConfigSection(), List.of(path));
+        }
         List<String> worlds = getConfigSection().getStringList("supported-worlds");
         supportedWorlds = (worlds.isEmpty() ? List.of("survival*") : worlds).stream()
             .map(value -> PatternUtil.globToRegex(value.toLowerCase(Locale.ROOT))).toList();
