@@ -425,6 +425,11 @@ public final class EntitlementService extends BaseService {
     private void loadConfig() {
         entitlements.clear(); badges.clear();
         ConfigSection root = getConfigSection();
+        for (String id : List.of("qol-tree-felling", "qol-vein-mining")) {
+            String path = getResolvedConfigPath() + ".definitions." + id;
+            if (!getRootConfigSection().contains(path)) dev.stemcraft.config.BundledConfigDefaults.restoreMissingSection(
+                plugin, getRootConfigSection(), List.of(path));
+        }
         badgePrefix = root.getString("badge-display.prefix", " ");
         badgeSeparator = root.getString("badge-display.separator", "");
         badgeSuffix = root.getString("badge-display.suffix", "");
