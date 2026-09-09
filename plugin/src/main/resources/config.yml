@@ -598,20 +598,6 @@ entitlements:
           at-least: 400
       grants:
         permissions: [stemcraft.qol.auto-refill]
-    qol-vein-mining:
-      name: "Vein mining"
-      description: "Sneak-mine ore with a diamond or netherite pickaxe to harvest connected ore of the same type."
-      when:
-        stat: {key: skill_mining_xp, at-least: 8100}
-      grants:
-        permissions: [stemcraft.qol.vein-mining]
-    qol-tree-felling:
-      name: "Tree felling"
-      description: "Sneak-chop a tree with a diamond or netherite axe to harvest connected logs from that height upwards."
-      when:
-        stat: {key: skill_herbalism_xp, at-least: 8100}
-      grants:
-        permissions: [stemcraft.qol.tree-felling]
     qol-auto-select-tool:
       name: "Automatic tool selection"
       description: "Start breaking a block to equip the best available tool for it from your inventory."
@@ -1014,18 +1000,6 @@ survival-qol:
   auto-refill-tools:
     enabled: true
     permission: stemcraft.qol.auto-refill-tools
-  tree-felling:
-    enabled: true
-    permission: stemcraft.qol.tree-felling
-    require-sneaking: true
-    tools: [DIAMOND_AXE, NETHERITE_AXE]
-    max-blocks: 128
-  vein-mining:
-    enabled: true
-    permission: stemcraft.qol.vein-mining
-    require-sneaking: true
-    tools: [DIAMOND_PICKAXE, NETHERITE_PICKAXE]
-    max-blocks: 64
   auto-select-tool:
     enabled: true
     permission: stemcraft.qol.auto-select-tool
@@ -1063,8 +1037,6 @@ animal-barrels:
 naughty:
   allowed_commands:
     - "hub"
-sleeping-bags:
-  enabled: true
 skip_night:
   required: 0.25
   random_tick_speed: 300

@@ -26,18 +26,6 @@ import static org.mockito.Mockito.when;
 
 class SurvivalQolFeatureTest {
     @Test
-    void massHarvestUnlocksRequireLevelTenAndHigherTierToolsByDefault() {
-        var config = YamlConfiguration.loadConfiguration(new InputStreamReader(
-            getClass().getResourceAsStream("/config.yml"), StandardCharsets.UTF_8));
-        assertUnlock(config, "tree-felling", "qol-tree-felling", "skill_herbalism_xp", 10);
-        assertUnlock(config, "vein-mining", "qol-vein-mining", "skill_mining_xp", 10);
-        assertTrue(config.getBoolean("survival-qol.tree-felling.require-sneaking"));
-        assertTrue(config.getBoolean("survival-qol.vein-mining.require-sneaking"));
-        assertEquals(List.of("DIAMOND_AXE", "NETHERITE_AXE"), config.getStringList("survival-qol.tree-felling.tools"));
-        assertEquals(List.of("DIAMOND_PICKAXE", "NETHERITE_PICKAXE"), config.getStringList("survival-qol.vein-mining.tools"));
-    }
-
-    @Test
     void autoSelectLeavesEmptyHandAloneWhenOnlyLogsAreAvailable() {
         var block = mock(org.bukkit.block.Block.class);
         var inventory = mock(org.bukkit.inventory.PlayerInventory.class);

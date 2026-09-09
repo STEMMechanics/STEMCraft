@@ -101,17 +101,16 @@ public final class ProfessionsFeature extends BaseFeature {
     private void onPlace(BlockPlaceEvent event) {
         if (!matchesWorld(event.getPlayer())) return;
         Material type = event.getBlockPlaced().getType();
-        if (MINING.contains(type) || HERBS.contains(type) || HarvestSupport.isLog(type)) markPlaced(event.getBlockPlaced());
+        if (MINING.contains(type) || HERBS.contains(type)) markPlaced(event.getBlockPlaced());
     }
 
     private void onBreak(BlockBreakEvent event) {
         Player player = event.getPlayer();
         Block block = event.getBlock();
         Material type = block.getType();
-        boolean placed = (MINING.contains(type) || HERBS.contains(type) || HarvestSupport.isLog(type)) && unmarkPlaced(block);
+        boolean placed = (MINING.contains(type) || HERBS.contains(type)) && unmarkPlaced(block);
         if (!eligible(player)) return;
         if (MINING.contains(type) && !placed) award(player, "mining", miningXp(type));
-        if (HarvestSupport.isLog(type) && !placed) award(player, "herbalism", 4);
         if (HERBS.contains(type) && !placed) award(player, "herbalism", 4);
         if (CROPS.contains(type) && mature(block)) award(player, "farming", 5);
     }
