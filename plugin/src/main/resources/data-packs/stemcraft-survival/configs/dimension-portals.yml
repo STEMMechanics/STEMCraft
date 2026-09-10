@@ -1,0 +1,40 @@
+# Vanilla appearances: no resource pack is required for these activation items.
+custom-items:
+  echo_core:
+    material: ECHO_SHARD
+    name: "<aqua>Echo Core"
+    lore: ["<gray>Awakens a reinforced deepslate gateway"]
+    placement: DENY
+  sky_eye:
+    material: ENDER_EYE
+    name: "<light_purple>Celestial Eye"
+    lore: ["<gray>Charges one purpur frame block"]
+    placement: DENY
+
+recipes:
+  shaped:
+    reinforced_gateway_frame:
+      result: REINFORCED_DEEPSLATE
+      amount: 4
+      shape: ["DID", "IAI", "DID"]
+      ingredients:
+        D: DEEPSLATE_BRICKS
+        I: IRON_INGOT
+        A: AMETHYST_SHARD
+    echo_core:
+      result: "stemcraft:echo_core"
+      amount: 1
+      shape: ["AEA", "EDE", "AEA"]
+      ingredients:
+        A: AMETHYST_SHARD
+        E: ECHO_SHARD
+        D: DIAMOND
+    sky_eye:
+      result: "stemcraft:sky_eye"
+      amount: 4
+      shape: ["AEA", "PNP", "AEA"]
+      ingredients:
+        A: AMETHYST_SHARD
+        E: ENDER_EYE
+        P: PURPUR_BLOCK
+        N: NETHER_STAR

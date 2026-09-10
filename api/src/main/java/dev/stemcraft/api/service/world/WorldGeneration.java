@@ -28,6 +28,35 @@ import java.util.*;
 
 public interface WorldGeneration {
 
+    /** Immutable metadata snapshots for versioned generators. Legacy factories have no metadata. */
+    default Collection<dev.stemcraft.api.service.world.generation.GeneratorDefinition> getGenerators() { return List.of(); }
+
+    default Optional<dev.stemcraft.api.service.world.generation.GeneratorDefinition> getGenerator(org.bukkit.NamespacedKey key) { return Optional.empty(); }
+
+    /** Lookup a retained historical generation version. */
+    default Optional<dev.stemcraft.api.service.world.generation.GeneratorDefinition> getGenerator(org.bukkit.NamespacedKey key, int version) {
+        return getGenerator(key).filter(definition -> definition.version() == version);
+    }
+
+    default Optional<dev.stemcraft.api.service.world.generation.GeneratedWorld> getGeneratedWorld(org.bukkit.World world) { return Optional.empty(); }
+
+    default boolean isGeneratedWorld(org.bukkit.World world) { return getGeneratedWorld(world).isPresent(); }
+
+    /** Register on the server thread while owner is enabled. The key namespace must match the
+     * owner's plugin name (lowercase). Duplicate key/version pairs are rejected; one owner may retain multiple versions of its key. Factories must return fresh,
+     * thread-safe generators; use WorldInfo for seed and height inputs. Registrations disappear
+     * on owner disable; already loaded worlds keep their attached generator until unloaded.
+     */
+    default void registerGenerator(org.bukkit.plugin.Plugin owner,
+            dev.stemcraft.api.service.world.generation.GeneratorDefinition definition,
+            ChunkGeneratorFactory factory) { throw new UnsupportedOperationException(); }
+
+    /** Server-thread only. Cannot remove another plugin's registration. */
+    default boolean unregisterGenerator(org.bukkit.plugin.Plugin owner, org.bukkit.NamespacedKey key) {
+        throw new UnsupportedOperationException();
+    }
+
+
     /**
      * Returns a sorted list of available chunk generator keys.
      *

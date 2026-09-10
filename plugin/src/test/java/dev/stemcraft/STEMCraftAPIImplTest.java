@@ -98,7 +98,8 @@ class STEMCraftAPIImplTest {
         "tabComplete",
         "tasks",
         "web",
-        "worlds"
+        "worlds",
+        "worldGeneration"
     );
 
     private STEMCraft plugin;
@@ -220,6 +221,9 @@ class STEMCraftAPIImplTest {
         expectedDelegates.put("tasks", tasks);
         expectedDelegates.put("web", web);
         expectedDelegates.put("worlds", worlds);
+        var worldGeneration = mock(dev.stemcraft.api.service.world.WorldGeneration.class);
+        when(worlds.generator()).thenReturn(worldGeneration);
+        expectedDelegates.put("worldGeneration", worldGeneration);
     }
 
     @AfterEach

@@ -34,6 +34,12 @@ import java.util.List;
  */
 public interface WorldService {
 
+    /** Survival multiblock portals, when the existing CustomPortals feature is enabled. */
+    default java.util.Optional<dev.stemcraft.api.service.world.portal.WorldPortalService> portals() {
+        return java.util.Optional.empty();
+    }
+
+
     enum SettingCommandMode {
         FLAG,           // e.g. /world flags <world> [flag] [args]
         SUBCOMMAND      // e.g. /world [subcommand] <world> [args]

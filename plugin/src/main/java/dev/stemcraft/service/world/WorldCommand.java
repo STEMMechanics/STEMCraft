@@ -98,7 +98,7 @@ public class WorldCommand {
                 .tabCompletion("create", "", "{world-generators}", "seed:{int}")
                 .tabCompletion("create", "", "{world-generators}", "{world-generator-options:$2}")
                 .tabCompletion("create", "", "{world-generators}", "{world-generator-options:$2}", "seed:{int}")
-                .tabCompletion("delete", "{world-command-loaded}")
+                .tabCompletion("delete", "{world-command-any}")
                 .tabCompletion("info")
                 .tabCompletion("info", "{world-command-any}")
                 .tabCompletion("displayname", "{world-command-any}")
@@ -109,6 +109,7 @@ public class WorldCommand {
                 .tabCompletion("duplicate")
                 .tabCompletion("duplicate", "{world-command-any}", "")
                 .tabCompletion("listgenerators")
+                .tabCompletion("generator", "info", "{world-generators}")
                 .tabCompletion("setgenerator", "{world-command-any}", "{world-generators}")
                 .tabCompletion("setgenerator", "{world-command-any}", "{world-generators}", "{world-generator-options:$2}")
                 .tabCompletion("setspawn")
@@ -162,7 +163,8 @@ public class WorldCommand {
             case "unload" -> handleSubCommandUnload(ctx);
             case "list" -> handleSubCommandList(ctx);
             case "duplicate" -> handleSubCommandDuplicate(ctx);
-            case "listgenerators" -> handleSubCommandListGenerators(ctx);
+            case "listgenerators", "generators" -> handleSubCommandListGenerators(ctx);
+            case "generator" -> handleSubCommandGeneratorInfo(ctx);
             case "setgenerator" -> handleSubCommandSetGenerator(ctx);
             case "setspawn" -> handleSubCommandSetSpawn(ctx);
             case "id" -> handleSubCommandId(ctx);
@@ -260,8 +262,8 @@ public class WorldCommand {
             ctx.returnError("WORLD_ALREADY_EXISTS", "world", name);
         }
 
-        String genKey = ctx.getArg(2, "normal");
-        String genOpt = ctx.getArg(3, "");
+        String genKey = generatorArgument(ctx, 2, "normal");
+        String genOpt = generatorArgument(ctx, 3, "");
         Long seed = parseSeedOption(ctx);
 
         if (!worldService.generator().isRegistered(genKey)) {
@@ -281,6 +283,20 @@ public class WorldCommand {
         }
 
         ctx.returnSuccess("WORLD_CREATED_DURATION", "world", name, "duration", formatElapsed(System.nanoTime() - startedAt));
+    }
+
+    /** Generator IDs and options can contain colons, which the general command parser treats
+     * as named options. Preserve those arguments while keeping the existing seed: option.
+     */
+    static String generatorArgument(CommandContext ctx, int index, String fallback) {
+        List<String> raw = ctx.rawArgs();
+        if (raw == null || raw.isEmpty()) return ctx.getArg(index, fallback);
+        int position = 0;
+        for (String argument : raw) {
+            if (argument.toLowerCase(Locale.ROOT).startsWith("seed:")) continue;
+            if (position++ == index) return argument;
+        }
+        return fallback;
     }
 
     private @Nullable Long parseSeedOption(@NotNull CommandContext ctx) {
@@ -312,11 +328,11 @@ public class WorldCommand {
             ctx.returnError("WORLD_DELETE_DEFAULT_DENY", "world", name);
         }
 
-        if (!api.worlds().worldExists(name) || world == null) {
+        if (!api.worlds().worldExists(name)) {
             ctx.returnError("WORLD_NOT_FOUND", "world", name);
         }
 
-        if (api.worlds().isWorldLoaded(name)) {
+        if (world != null) {
             if (!world.getPlayers().isEmpty()) {
                 ctx.info("WORLD_EVICTING_PLAYERS", "world", name);
                 api.worlds().evictAllPlayers(name);
@@ -325,17 +341,24 @@ public class WorldCommand {
             ctx.info("WORLD_UNLOADING", "world", name);
             api.tasks().retry(20, () -> api.worlds().unloadWorld(name, false), result -> {
                 if (result == TaskService.RetryResult.SUCCESS) {
-                    try {
-                        api.worlds().deleteWorld(name);
-                        ctx.info("WORLD_DELETED", "world", name);
-                    } catch (Exception e) {
-                        api.messages().error("WORLD_FAILED_DELETE", e, "world", name);
-                        ctx.error("WORLD_FAILED_DELETE", "world", name);
-                    }
+                    deleteUnloadedWorld(ctx, name);
                 } else {
                     ctx.error("WORLD_UNLOAD_FAILED", "world", name);
                 }
             });
+        } else {
+            // Deletion must not require loading the world or resolving its generator.
+            deleteUnloadedWorld(ctx, name);
+        }
+    }
+
+    private void deleteUnloadedWorld(CommandContext ctx, String name) {
+        try {
+            api.worlds().deleteWorld(name);
+            ctx.info("WORLD_DELETED", "world", name);
+        } catch (Exception e) {
+            api.messages().error("WORLD_FAILED_DELETE", e, "world", name);
+            ctx.error("WORLD_FAILED_DELETE", "world", name);
         }
     }
 
@@ -429,14 +452,18 @@ public class WorldCommand {
     }
 
     public void handleSubCommandSetGenerator(CommandContext ctx) {
-        ctx.checkArgsSizeAtLeast(3, "WORLD_COMMAND_USAGE_SETGENERATOR");
+        ctx.checkArgsSizeAtLeast(2, "WORLD_COMMAND_USAGE_SETGENERATOR");
+        if (generatorArgument(ctx, 2, "").isBlank()) {
+            ctx.returnError("WORLD_COMMAND_USAGE_SETGENERATOR");
+            return;
+        }
         String name = resolveRequiredWorldAlias(ctx, 1);
         if (!api.worlds().worldExists(name)) {
             ctx.returnError("WORLD_NOT_FOUND", "world", name);
         }
 
-        String generatorKey = ctx.getArg(2, "normal");
-        String generatorOptions = ctx.getArg(3, "");
+        String generatorKey = generatorArgument(ctx, 2, "normal");
+        String generatorOptions = generatorArgument(ctx, 3, "");
 
         try {
             worldService.setStoredGenerator(name, generatorKey, generatorOptions);
@@ -581,6 +608,25 @@ public class WorldCommand {
         }
 
         ctx.returnInfo(sb.toString());
+    }
+
+    private void handleSubCommandGeneratorInfo(CommandContext ctx) {
+        if (!ctx.getArg(1, "").equalsIgnoreCase("info") || generatorArgument(ctx, 2, "").isBlank()) {
+            ctx.returnError("Usage: /world generator info <id>");
+            return;
+        }
+        String raw = generatorArgument(ctx, 2, "").toLowerCase(java.util.Locale.ROOT);
+        org.bukkit.NamespacedKey key = org.bukkit.NamespacedKey.fromString(raw.contains(":") ? raw : "stemcraft:" + raw);
+        var definition = key == null ? java.util.Optional.<dev.stemcraft.api.service.world.generation.GeneratorDefinition>empty()
+                : worldService.generator().getGenerator(key);
+        if (definition.isEmpty()) {
+            ctx.returnInfo("No versioned metadata is available for this generator.");
+            return;
+        }
+        var d = definition.get();
+        ctx.returnInfo(d.displayName() + " (" + d.key() + ")\n" + d.description()
+                + "\nCategory: " + d.category() + " | Version: " + d.version()
+                + (d.experimental() ? " | Experimental" : ""));
     }
 
     /**
