@@ -11,8 +11,7 @@ import static dev.stemcraft.integration.CitizensAccess.*;
 public final class CitizensBotActor implements BotActor {
     private final Object npc;
     public CitizensBotActor(Plugin plugin,UUID owner,String name,Location spawn,BotSkinCache.Skin skin) {
-        Object registry=invokeStatic("net.citizensnpcs.api.CitizensAPI","createAnonymousNPCRegistry",
-            constructStore());
+        Object registry=invokeStatic("net.citizensnpcs.api.CitizensAPI","getTemporaryNPCRegistry");
         npc=invoke(registry,"createNPC",EntityType.PLAYER,name);
         try {
             Object filter=invoke(npc,"getOrAddTrait",type("net.citizensnpcs.api.trait.trait.PlayerFilter"));
@@ -35,10 +34,6 @@ public final class CitizensBotActor implements BotActor {
             Player viewer=plugin.getServer().getPlayer(owner);
             if(viewer!=null) viewer.showEntity(plugin,entity);
         } catch(RuntimeException failure) { invoke(npc,"destroy"); throw failure; }
-    }
-    private static Object constructStore() {
-        try { return type("net.citizensnpcs.api.npc.MemoryNPCDataStore").getConstructor().newInstance(); }
-        catch(ReflectiveOperationException e) { throw new IllegalStateException("Citizens memory registry unavailable",e); }
     }
     private Object navigator() { return invoke(npc,"getNavigator"); }
     private LivingEntity entity() { return (LivingEntity)invoke(npc,"getEntity"); }
