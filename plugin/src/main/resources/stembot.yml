@@ -1,0 +1,110 @@
+# All ordinary chat is private while a STEMBot session is active.
+# Responses use Java regex FULL matches, ignoring case. The first match wins.
+# World responses run before global responses. Commands below are internal bot actions.
+name: STEMBot
+skin:
+  url: 'http://192.168.1.40:8950/stembot.png'
+  slim: false
+spawn-distance: 2.5
+greeting-crouches: 3
+idle-timeout-seconds: 600
+first-join:
+  world: world
+  spawn: {x: -919, y: 89, z: 291, facing: W}
+movement:
+  speed: 1.15
+  wait-distance: 10
+  resume-distance: 6
+  jump-interval-ticks: 35
+messages:
+  greeting:
+    - 'Hi {player}! I am STEMBot, your own little guide!'
+    - 'Only you can see me. While we chat, your messages come only to me.'
+    - 'Would you like to follow me for a tour? Say yes or tour. Say bye or @close to return to normal chat.'
+  fallback:
+    - 'I did not quite understand. Try tour, pause, continue, repeat, help, or bye.'
+  farewell:
+    - 'See you soon! Our private chat is closed; your messages go to normal chat again.'
+  waiting:
+    - 'I will wait here for you! Come a little closer and we can carry on.'
+  stuck:
+    - 'I cannot find a way through here. Try continue to let me try again, or ask a staff member to adjust my route.'
+  complete:
+    - 'That is the tour! What would you like to know? Ask about survival, creative, minigames, challenges or voting.'
+    - 'Say bye whenever you are ready to return to normal chat.'
+responses:
+  close:
+    regex: '(?:@close|bye|goodbye|close|exit|no thanks)[.!]?'
+    actions: ['@close']
+  start:
+    regex: '(?:yes|yep|sure|ok|okay|tour|follow|@tour)[.!]?'
+    say: ['Brilliant! Follow me. I will wait if you need to catch up.']
+    actions: ['@tour']
+  pause:
+    regex: '(?:pause|wait|stop|@pause)[.!]?'
+    say: ['Of course! Say continue when you are ready.']
+    actions: ['@pause']
+  resume:
+    regex: '(?:continue|resume|ready|@resume)[.!]?'
+    say: ['Here we go!']
+    actions: ['@resume']
+  repeat:
+    regex: '(?:repeat|again|@repeat)[.!]?'
+    actions: ['@repeat']
+  help:
+    regex: '.*\b(?:help|commands)\b.*'
+    say: ['Try tour, pause, continue, repeat, or bye. You can also ask me about the places around the hub.']
+  thanks:
+    regex: '.*\b(?:thanks|thank you)\b.*'
+    say: ['You are very welcome, {player}! Anything else?']
+worlds:
+  world:
+    # Ordered stops; insert extra entries with say: [] to guide around obstacles.
+    # Y is the bot's feet position. Facing applies when the bot reaches the stop.
+    waypoints:
+      survival:
+        x: -864
+        y: 85
+        z: 245
+        facing: S
+        pause-ticks: 120
+        say: ['Here is the Survival portal! This is where your survival adventure begins.']
+      creative:
+        x: -864
+        y: 85
+        z: 266
+        facing: N
+        pause-ticks: 120
+        say: ['This is the Creative portal. Head through when you feel like building!']
+      minigames:
+        x: -901
+        y: 85
+        z: 289
+        facing: W
+        pause-ticks: 120
+        say: ['These stairs lead to the minigames hall. Come back when you are ready for a game!']
+      challenges:
+        x: -835
+        y: 85
+        z: 295
+        facing: S
+        pause-ticks: 120
+        say: ['Here is the monthly challenge and voting hall! Have a look around to see what is happening this month.']
+    responses:
+      survival:
+        regex: '.*\bsurvival\b.*'
+        say: ['The Survival portal is at -864, 85, 245. Say tour if you would like me to show you.']
+      creative:
+        regex: '.*\bcreative\b.*'
+        say: ['The Creative portal is at -864, 85, 266.']
+      games:
+        regex: '.*\b(?:minigames|games)\b.*'
+        say: ['The stairs to the minigames hall are at -901, 85, 289.']
+      voting:
+        regex: '.*\b(?:voting|vote|challenge|challenges)\b.*'
+        say: ['The monthly challenge and voting hall is at -835, 85, 295.']
+  survival:
+    responses:
+      help:
+        regex: '.*\b(?:help|survival)\b.*'
+        say: ['You are in Survival! Explore, gather resources and build a home.']
