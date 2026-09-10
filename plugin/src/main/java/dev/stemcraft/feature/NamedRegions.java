@@ -95,7 +95,7 @@ public final class NamedRegions extends BaseFeature {
             .tabCompletion("info").tabCompletion("list").tabCompletion("find")
             .tabCompletion("nearby").tabCompletion("teleport", "{named-area}")
             .tabCompletion("rename", "{named-area}")
-            .tabCompletion("retired").tabCompletion("fallbacks")
+            .tabCompletion("retired").tabCompletion("fallbacks").tabCompletion("fallbacks", "*")
             .tabCompletion("release", "*").tabCompletion("regenerate", "*")
             .executor((unused, cmd, ctx) -> executeCommand(ctx)).register(STEMCraft.getPlugin());
         for (World world : Bukkit.getWorlds()) if (enabled(world)) for (Chunk chunk : world.getLoadedChunks()) discover(chunk);
@@ -490,7 +490,8 @@ public final class NamedRegions extends BaseFeature {
             }
             case "retired" -> showRetired(ctx,ctx.getArgsAsString(1,"").trim());
             case "fallbacks" -> {
-                String type=normaliseType(ctx.getArgsAsString(1,"").trim());
+                String requestedType=ctx.getArgsAsString(1,"").trim();
+                String type=requestedType.equals("*")?"":normaliseType(requestedType);
                 List<Area> found=areas.values().stream().filter(a->type.isEmpty()||a.type.equals(type))
                     .filter(a->isFallbackName(a.name,a.type,a.id)).sorted(Comparator.comparing(Area::type).thenComparing(Area::name)).toList();
                 showList(ctx,found,type.isEmpty()?"Fallback-named regions":"Fallback-named "+friendly(type)+" regions");

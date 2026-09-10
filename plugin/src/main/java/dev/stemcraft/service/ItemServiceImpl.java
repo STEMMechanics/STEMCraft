@@ -686,7 +686,8 @@ public class ItemServiceImpl extends BaseService implements ItemService {
         if (template == null) {
             String path = specification.id().contains(":")
                 ? specification.id().substring(specification.id().indexOf(':') + 1) : specification.id();
-            template = itemTemplates.get(path.replace('_', '-'));
+            template = itemTemplates.get(path);
+            if (template == null) template = itemTemplates.get(path.replace('_', '-'));
         }
         if (template == null) {
             return null;

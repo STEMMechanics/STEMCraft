@@ -26,6 +26,20 @@ class ItemServiceImplTest {
     }
 
     @Test
+    void namespacedPortalItemsPreserveUnderscoresAndLegacyHyphenAliasesStillWork() {
+        MockBukkit.mock();
+        STEMCraft plugin = mock(STEMCraft.class);
+        org.mockito.Mockito.when(plugin.getName()).thenReturn("STEMCraft");
+        org.mockito.Mockito.when(plugin.namespace()).thenReturn("stemcraft");
+        var service = new ItemServiceImpl(plugin, mock(STEMCraftAPI.class));
+        for (String id : List.of("echo_core", "sky_eye", "legacy-item")) {
+            service.registerCustomItem(id, new ItemStack(Material.ECHO_SHARD));
+            ItemStack created = service.createCustomItem("stemcraft:" + id.replace('-', '_'), 2);
+            org.junit.jupiter.api.Assertions.assertNotNull(created);
+            assertEquals(2, created.getAmount()); assertTrue(service.isCustomItemId(id, created));
+        }
+    }
+    @Test
     void itemNamePrefersCustomDisplayNameOverBackingMaterial() {
         MockBukkit.mock();
         ItemServiceImpl service = new ItemServiceImpl(mock(STEMCraft.class), mock(STEMCraftAPI.class));

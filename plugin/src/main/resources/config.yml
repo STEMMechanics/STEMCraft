@@ -165,6 +165,10 @@ custom-commands:
 
 custom-portals:
   enabled: true
+  # Survival multiblocks are defined in worlds/portals.yml; existing admin portals are unchanged.
+  survival:
+    enabled: true
+    max-portals: 512
   # Teleport as soon as a player enters a registered portal block. Set false to use the vanilla portal warm-up.
   instant-teleport: true
   portals: {}
@@ -1270,3 +1274,14 @@ gifts:
     empty: "/error/A Gift must contain at least one item."
     created: "/success/Gift created."
     updated: "/success/Gift updated."
+
+# Availability changes apply on restart. Loaded worlds retain their generator.
+world-generation:
+  deep:
+    enabled: true
+  wasteland:
+    enabled: true
+  skylands:
+    enabled: true
+  faraway:
+    enabled: true

@@ -24,6 +24,11 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.factory.ChunkGeneratorFactory;
 import dev.stemcraft.api.service.world.WorldGeneration;
 import org.bukkit.Bukkit;
+import org.bukkit.NamespacedKey;
+import org.bukkit.World;
+import org.bukkit.event.server.PluginDisableEvent;
+import dev.stemcraft.api.service.world.generation.GeneratedWorld;
+import dev.stemcraft.api.service.world.generation.GeneratorDefinition;
 import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.NotNull;
@@ -38,6 +43,87 @@ public class WorldGenerationImpl implements WorldGeneration {
     private final STEMCraftAPI api;
     private final Map<String, ChunkGeneratorFactory> registry = new ConcurrentHashMap<>();
 
+    private record Registration(Plugin owner, GeneratorDefinition definition, ChunkGeneratorFactory factory) {}
+    private record GeneratorVersion(NamespacedKey key, int version) {}
+    private final Map<GeneratorVersion, Registration> versions = new ConcurrentHashMap<>();
+    private final Map<NamespacedKey, Registration> definitions = new ConcurrentHashMap<>();
+    private final Map<ChunkGenerator, GeneratorDefinition> instances = Collections.synchronizedMap(new WeakHashMap<>());
+
+    @Override public Collection<GeneratorDefinition> getGenerators() {
+        return definitions.values().stream().map(Registration::definition)
+                .sorted(Comparator.comparing(d -> d.key().toString())).toList();
+    }
+    @Override public Optional<GeneratorDefinition> getGenerator(NamespacedKey key) {
+        Registration entry = definitions.get(key);
+        return entry == null ? Optional.empty() : Optional.of(entry.definition());
+    }
+    @Override public Optional<GeneratorDefinition> getGenerator(NamespacedKey key, int version) {
+        Registration entry = versions.get(new GeneratorVersion(key, version));
+        return entry == null ? Optional.empty() : Optional.of(entry.definition());
+    }
+    public Optional<GeneratorDefinition> definition(String key, int version) {
+        NamespacedKey id = namespacedKey(key);
+        return id == null ? Optional.empty() : getGenerator(id, version);
+    }
+    public ChunkGenerator get(String key, String options, int version) {
+        NamespacedKey id = namespacedKey(key);
+        Registration entry = id == null ? null : versions.get(new GeneratorVersion(id, version));
+        if (entry == null) throw new IllegalArgumentException("Required generator " + key + " version " + version + " is unavailable");
+        return create(entry, options);
+    }
+    private ChunkGenerator create(Registration registration, String options) {
+        ChunkGenerator generator = Objects.requireNonNull(registration.factory().create(options), "Generator factory returned null");
+        instances.put(generator, registration.definition());
+        return generator;
+    }
+    public Optional<GeneratorDefinition> definition(String key) {
+        NamespacedKey id = namespacedKey(key);
+        return id == null ? Optional.empty() : getGenerator(id);
+    }
+    @Override public Optional<GeneratedWorld> getGeneratedWorld(World world) {
+        ChunkGenerator generator = world.getGenerator();
+        GeneratorDefinition definition = generator instanceof dev.stemcraft.chunkgen.StemChunkGenerator stem
+                ? stem.definition() : instances.get(generator);
+        return definition == null ? Optional.empty()
+                : Optional.of(new GeneratedWorld(world.getUID(), definition, world.getSeed()));
+    }
+    @Override public synchronized void registerGenerator(Plugin owner, GeneratorDefinition definition, ChunkGeneratorFactory factory) {
+        requireServerThread();
+        Objects.requireNonNull(factory);
+        if (!owner.isEnabled()) throw new IllegalArgumentException("Generator owner must be enabled");
+        if (!definition.key().getNamespace().equals(owner.getName().toLowerCase(Locale.ROOT)))
+            throw new IllegalArgumentException("Generator namespace must match owning plugin");
+        String key = definition.key().toString();
+        if (registry.containsKey(key) || (definition.key().getNamespace().equals("stemcraft")
+                && registry.containsKey(definition.key().getKey())))
+            throw new IllegalArgumentException("Generator key already registered: " + key);
+        Registration existing = definitions.get(definition.key());
+        if (existing != null && existing.owner() != owner) throw new IllegalArgumentException("Generator belongs to another plugin");
+        Registration registration = new Registration(owner, definition, factory);
+        if (versions.putIfAbsent(new GeneratorVersion(definition.key(), definition.version()), registration) != null)
+            throw new IllegalArgumentException("Generator key/version already registered: " + key);
+        if (existing == null || existing.definition().version() < definition.version()) definitions.put(definition.key(), registration);
+    }
+    @Override public boolean unregisterGenerator(Plugin owner, NamespacedKey key) {
+        requireServerThread();
+        Registration registration = definitions.get(key);
+        if (registration == null) return false;
+        if (registration.owner() != owner) throw new IllegalArgumentException("Generator belongs to another plugin");
+        versions.entrySet().removeIf(entry -> entry.getKey().key().equals(key));
+        return definitions.remove(key, registration);
+    }
+    void unregisterOwner(Plugin owner) {
+        versions.entrySet().removeIf(entry -> entry.getValue().owner() == owner);
+        definitions.entrySet().removeIf(entry -> entry.getValue().owner() == owner);
+    }
+    private static void requireServerThread() {
+        if (!Bukkit.isPrimaryThread()) throw new IllegalStateException("Generator registration requires the server thread");
+    }
+    private static NamespacedKey namespacedKey(String key) {
+        String normalized = normalizeKey(key);
+        return NamespacedKey.fromString(normalized.contains(":") ? normalized : "stemcraft:" + normalized);
+    }
+
     /**
      * Creates a new WorldGeneration service.
      *
@@ -51,6 +137,7 @@ public class WorldGenerationImpl implements WorldGeneration {
      * Called when the service is enabled.
      */
     public void onEnable() {
+        api.events().register(PluginDisableEvent.class, event -> unregisterOwner(event.getPlugin()));
         api.tabComplete().register("world-generators", (player, args) -> list());
         api.tabComplete().register("world-generator-options", (player, args) -> {
             if (args.length == 0 || args[0].isBlank()) {
@@ -67,7 +154,10 @@ public class WorldGenerationImpl implements WorldGeneration {
      */
     @SuppressWarnings("EmptyMethod")
     public void onDisable() {
-        // not used
+        versions.clear();
+        definitions.clear();
+        registry.clear();
+        instances.clear();
     }
 
     /**
@@ -79,6 +169,7 @@ public class WorldGenerationImpl implements WorldGeneration {
     public @NotNull List<String> list() {
         Set<String> out = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
         out.addAll(registry.keySet());
+        for (NamespacedKey key : definitions.keySet()) out.add(key.toString());
 
         for (Plugin plugin : Bukkit.getPluginManager().getPlugins()) {
             listExternalGenerator(plugin).ifPresent(out::add);
@@ -93,8 +184,9 @@ public class WorldGenerationImpl implements WorldGeneration {
      * @param key The unique key for the chunk generator.
      * @param factory The factory to create chunk generator instances.
      */
-    public void register(@NotNull String key, @NotNull ChunkGeneratorFactory factory) {
+    public synchronized void register(@NotNull String key, @NotNull ChunkGeneratorFactory factory) {
         String k = normalizeKey(key);
+        if (definition(k).isPresent()) throw new IllegalArgumentException("Versioned generator already registered: " + k);
         registry.put(k, factory);
     }
 
@@ -106,7 +198,7 @@ public class WorldGenerationImpl implements WorldGeneration {
      */
     public boolean isRegistered(@NotNull String key) {
         String k = normalizeKey(key);
-        return registry.containsKey(k);
+        return registry.containsKey(k) || definition(k).isPresent();
     }
 
     @Override
@@ -142,6 +234,11 @@ public class WorldGenerationImpl implements WorldGeneration {
      */
     public @NotNull ChunkGenerator get(@NotNull String key, @NotNull String cfg) {
         String k = normalizeKey(key);
+        NamespacedKey id = namespacedKey(k);
+        Registration registration = id == null ? null : definitions.get(id);
+        if (registration != null) {
+            return create(registration, cfg);
+        }
         ChunkGeneratorFactory f = registry.get(k);
         if (f == null) throw new IllegalArgumentException("Unknown generator key: " + key);
         return f.create(cfg);

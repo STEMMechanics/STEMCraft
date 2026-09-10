@@ -86,9 +86,10 @@ public interface STEMCraftAPI {
     /** Get the comet event service. */
     CometService comets();
 
-    /**
-     * Get the STEMCraft configuration file.
-     */
+    /** Convenience access to the existing world generator service. */
+    default dev.stemcraft.api.service.world.WorldGeneration worldGeneration() { return worlds().generator(); }
+
+    /** Get the STEMCraft configuration file. */
     ConfigService config();
 
     /**

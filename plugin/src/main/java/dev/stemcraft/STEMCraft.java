@@ -279,6 +279,7 @@ public final class STEMCraft extends JavaPlugin {
         worlds.onEnable();
 
         registerBuiltInWorldGenerators();
+        dev.stemcraft.chunkgen.BuiltInGenerators.register(this, api);
 
         info("STEMCRAFT_ENABLED");
 
@@ -473,6 +474,13 @@ public final class STEMCraft extends JavaPlugin {
     /** {@inheritDoc} */
     @Override
     public @Nullable ChunkGenerator getDefaultWorldGenerator(@NotNull String worldName, String id) {
+        // Plugins may probe this hook without selecting a generator (for example PlotSquared).
+        if (id == null || id.isBlank()) {
+            return null;
+        }
+        if (worlds != null && worlds.generator() != null && worlds.generator().isRegistered(id)) {
+            return worlds.generator().get(id, "");
+        }
         BuiltInGeneratorSpec spec = parseBuiltInGeneratorSpec(id);
         if (spec.key().isEmpty()) {
             return null;

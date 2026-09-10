@@ -71,6 +71,10 @@ public class CustomPortals extends BaseFeature {
     private final Map<UUID, Long> instantTeleportGuards = new LinkedHashMap<>();
     private boolean instantTeleport;
     private Command command;
+    private dev.stemcraft.feature.portal.SurvivalPortals survival;
+
+    public dev.stemcraft.api.service.world.portal.WorldPortalService survivalPortals() { return survival; }
+
 
     record PortalBlockKey(String worldName, int x, int y, int z) {
         static @Nullable PortalBlockKey fromBlock(@Nullable Block block) {
@@ -245,6 +249,11 @@ public class CustomPortals extends BaseFeature {
         registerTabCompletions();
         registerCommand();
         loadPortalsFromConfig();
+        survival = new dev.stemcraft.feature.portal.SurvivalPortals(api, (player, destination) -> {
+            rememberForcedDestination(player, PortalDestination.fromLocation(destination), destination);
+            PlayerUtil.teleport(player, destination);
+        }, location -> portalBlockIndex.containsKey(PortalBlockKey.fromBlock(location.getBlock())), STEMCraft.getPlugin());
+        survival.enable(getConfigSection());
 
         api.events().register(PlayerPortalEvent.class, this::handlePortalEvent, EventPriority.HIGHEST, true);
         api.events().register(PlayerMoveEvent.class, this::handlePlayerMove, EventPriority.HIGHEST, true);
@@ -255,10 +264,14 @@ public class CustomPortals extends BaseFeature {
         super.onReload();
         instantTeleport = getConfigSection().getBoolean("instant-teleport", true);
         loadPortalsFromConfig();
+        if (survival != null) survival.reload(getConfigSection());
     }
+
+    @Override public void onSave() { if (survival != null) survival.save(); }
 
     @Override
     public void onDisable() {
+        if (survival != null) { survival.disable(); survival = null; }
         if (command != null) {
             command.unregister();
             command = null;
@@ -444,6 +457,7 @@ public class CustomPortals extends BaseFeature {
     }
 
     private void handlePlayerMove(@NotNull PlayerMoveEvent event) {
+        if (survival != null && survival.move(event)) return;
         if (!instantTeleport || event.getTo() == null) {
             return;
         }
@@ -461,6 +475,7 @@ public class CustomPortals extends BaseFeature {
     }
 
     private void handlePortalEvent(@NotNull PlayerPortalEvent event) {
+        if (survival != null && survival.portal(event)) return;
         if (event.getCause() != org.bukkit.event.player.PlayerTeleportEvent.TeleportCause.NETHER_PORTAL) {
             return;
         }

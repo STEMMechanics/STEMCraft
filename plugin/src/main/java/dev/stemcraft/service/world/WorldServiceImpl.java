@@ -66,6 +66,11 @@ public class WorldServiceImpl extends BaseService implements WorldService {
     private final Map<String, WorldSettingData> settings = new ConcurrentHashMap<>();
     private final Map<String, String> lastWorldOperationErrors = new ConcurrentHashMap<>();
     private WorldCommand worldCommand;
+    @Override public java.util.Optional<dev.stemcraft.api.service.world.portal.WorldPortalService> portals() {
+        dev.stemcraft.feature.CustomPortals feature = plugin.feature(dev.stemcraft.feature.CustomPortals.class);
+        return feature == null ? java.util.Optional.empty() : java.util.Optional.ofNullable(feature.survivalPortals());
+    }
+
     private WorldGenerationImpl worldGeneration;
     private WorldChangeRecorder worldChangeRecorder;
     private boolean startupLoadComplete = false;
@@ -425,6 +430,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         String resolvedGeneratorName = generatorName.trim().isEmpty() ? "normal" : generatorName.trim();
         String resolvedGeneratorOptions = generatorOptions.trim();
         try {
+            if (Bukkit.getWorld(name) != null) throw new IllegalArgumentException("World is already loaded: " + name);
             World world = ensure(
                 name,
                 resolveConfiguredGenerator(name, new ConfiguredGeneratorSpec(resolvedGeneratorName, resolvedGeneratorOptions)),
@@ -438,6 +444,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
                 } else {
                     config.set("generator.options", resolvedGeneratorOptions);
                 }
+                storeGeneratorMetadata(config, resolvedGeneratorName, world);
                 seedDefaultDimensionLinks(name, config);
                 config.save();
             }
@@ -464,6 +471,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         } else {
             config.set("generator.options", resolvedGeneratorOptions);
         }
+        storeGeneratorMetadata(config, resolvedGeneratorName, Bukkit.getWorld(worldName));
         config.save();
     }
 
@@ -731,7 +739,28 @@ public class WorldServiceImpl extends BaseService implements WorldService {
     }
 
     private @Nullable ChunkGenerator resolveStoredGenerator(@NotNull String worldName) {
-        return resolveConfiguredGenerator(worldName, readConfiguredGenerator(getExistingConfigSection(worldName)));
+        ConfigSection config = getExistingConfigSection(worldName);
+        ConfiguredGeneratorSpec spec = readConfiguredGenerator(config);
+        if (spec != null && config != null) {
+            int version = config.getInt("generator.version", 0);
+            if (version > 0 || worldGeneration.definition(spec.key()).isPresent()) {
+                // Versionless references to these generators mean v1, never the latest algorithm.
+                return worldGeneration.get(spec.key(), spec.options(), version == 0 ? 1 : version);
+            }
+        }
+        return resolveConfiguredGenerator(worldName, spec);
+    }
+
+    private void storeGeneratorMetadata(ConfigSection config, String key, @Nullable World world) {
+        var definition = worldGeneration.definition(key);
+        if (definition.isPresent()) {
+            config.set("generator.key", definition.get().key().toString());
+            config.set("generator.version", definition.get().version());
+            if (world != null) config.set("generator.seed", world.getSeed());
+        } else {
+            config.set("generator.version", null);
+            config.set("generator.seed", null);
+        }
     }
 
     private @Nullable ConfiguredGeneratorSpec readConfiguredGenerator(@Nullable ConfigSection config) {
@@ -1115,6 +1144,12 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         }
 
         if (world != null) {
+            worldGeneration.getGeneratedWorld(world).ifPresent(generated -> {
+                ConfigSection config = getConfigSection(name);
+                config.set("generator.key", generated.generator().key().toString());
+                config.set("generator.version", generated.generator().version());
+                config.set("generator.seed", generated.seed());
+            });
             getConfigSection().set(name + ".load", true);
             saveConfig();
             loadWorldSettings(world);
