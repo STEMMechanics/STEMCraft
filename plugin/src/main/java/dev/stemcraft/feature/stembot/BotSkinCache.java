@@ -18,7 +18,7 @@ import static dev.stemcraft.integration.CitizensAccess.invokeStatic;
  *
  * Priority:
  * 1. pre-signed texture embedded in stembot.yml
- * 2. persistent generated cache
+ * 2. legacy cache migration into stembot.yml
  * 3. PNG download + Citizens/MineSkin conversion
  */
 public final class BotSkinCache {
@@ -53,17 +53,20 @@ public final class BotSkinCache {
 
         if(script.skinUrl().isBlank()) return;
 
-        ConfigFile cache=api.config().load("stembot-skin-cache.yml");
         String key=script.skinUrl()+"|"+script.slim();
+        File legacyFile=new File(api.getDataFolder(),"stembot-skin-cache.yml");
+        ConfigFile cache=legacyFile.isFile()
+            ?api.config().load("stembot-skin-cache.yml",false):null;
 
-        assert cache != null;
-        if(key.equals(cache.getString("source",""))
+        if(cache!=null&&key.equals(cache.getString("source",""))
             &&!cache.getString("value","").isBlank()
             &&!cache.getString("signature","").isBlank()) {
             current=new Skin(
                 cache.getString("signature"),
                 cache.getString("value")
             );
+            if(saveSkin(api,script,current)&&!legacyFile.delete())
+                plugin.getLogger().warning("Skin migrated, but could not remove stembot-skin-cache.yml");
             ready.accept(current);
             return;
         }
@@ -82,12 +85,27 @@ public final class BotSkinCache {
                 }
 
                 current=skin;
-                cache.set("source",key);
-                cache.set("signature",skin.signature());
-                cache.set("value",skin.value());
-                cache.save();
+                saveSkin(api,script,skin);
                 ready.accept(skin);
             }));
+    }
+
+    private static boolean saveSkin(STEMCraftAPI api,BotScript script,Skin skin) {
+        ConfigFile config=api.config().load(new File(api.getDataFolder(),"stembot.yml"),false);
+        if(config==null||!config.reload())
+            throw new IllegalStateException("Unable to reload stembot.yml to save the skin");
+
+        // Conversion is asynchronous: preserve edits made while it was running.
+        if(!config.getString("skin.url","").equals(script.skinUrl())
+            ||config.getBoolean("skin.slim",false)!=script.slim()
+            ||!config.getString("skin.texture.value","").isBlank()
+            ||!config.getString("skin.texture.signature","").isBlank())
+            return false;
+
+        config.set("skin.texture.value",skin.value());
+        config.set("skin.texture.signature",skin.signature());
+        config.save();
+        return !config.isDirty();
     }
 
     private static Skin convert(BotScript script) {

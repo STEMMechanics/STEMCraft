@@ -17,6 +17,7 @@ public interface BotActor {
     void sneak(boolean sneaking);
     void animate(String animation);
     void skin(BotSkinCache.Skin skin);
+    void puff();
 
     void close();
 }

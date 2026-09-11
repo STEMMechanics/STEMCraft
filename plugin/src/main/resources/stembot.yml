@@ -1,20 +1,41 @@
 name: STEMBot
 
 skin:
-  # Fast path. If both fields are populated, STEMCraft skips MineSkin conversion.
+  # Filled automatically after MineSkin conversion (or migration of an old cache).
+  # If both fields are populated, STEMCraft uses them without conversion.
+  # To change the skin, clear both fields below and update url/slim, then reload.
   texture:
     value: ''
     signature: ''
 
-  # Fallback source. A generated signed texture is cached in stembot-skin-cache.yml.
+  # Fallback source. Generated value and signature are saved above in this file.
   url: 'http://192.168.1.40:8950/stembot.png'
   slim: false
 
 spawn-distance: 2.5
+# If the preferred spot is blocked, search around the player out to this radius.
+spawn-search-radius: 8
 idle-timeout-seconds: 600
+
+chat:
+  # Walking away pauses the conversation and returns chat to public.
+  disengage-distance: 12
+  # A smaller return distance avoids switching repeatedly near the boundary.
+  reengage-distance: 6
+  # Abandoned bots depart silently after this many seconds away.
+  away-timeout-seconds: 60
+
+effects:
+  # Linger before disappearing in a private cloud puff. Re-summons wait for this
+  # departure before appearing at the new location. 20 ticks = 1 second.
+  departure-delay-ticks: 60
 
 speech:
   enabled: true
+
+  # Quiet reading pause after every talk line, even when speech is disabled.
+  # 20 ticks = 1 second. Reply prompts remain immediate and ready for input.
+  post-delay-ticks: 60
 
   # Bukkit sound key.
   sound: 'block.note_block.bit'
@@ -39,13 +60,19 @@ speech:
     max: 18
 
 movement:
-  speed: 1.15
+  speed: 0.9
+  # Treat a walk as complete within this many blocks of its target.
+  arrival-distance: 3
   wait-distance: 10
   resume-distance: 6
 
-# Engine-generated messages. One entry is selected randomly each time.
+# Formats and engine-generated messages. Lists select one entry randomly.
 messages:
   prefix: ':stembot: &bSTEMBot: &f'
+  # Private player reply echo. Supports icons, colours, {player}, {bot}, {message}.
+  reply-format: ':chat_bubble: &7You → {bot}: {message}'
+  chat-disengaged: ':chat_bubble: &eYou are out of range. Your chat is public now. Come closer to resume; I will power down after {seconds} seconds away.'
+  chat-reengaged: ':chat_bubble: &ePrivate chat with STEMBot resumed. Your messages come only to me again.'
   waiting:
     - 'I will wait here for you! Come a little closer and we can carry on.'
     - 'No rush! Catch up with me and we will keep going.'
@@ -53,11 +80,12 @@ messages:
     - 'Beep boop... waiting mode! Come back over when you are ready.'
 
   stuck:
-    - 'I cannot find a way through here. Say continue to let me try again, or ask a staff member to adjust my route.'
-    - 'This route seems blocked. Say continue and I will try it again.'
+    # Include these details when reporting a route problem to an admin.
+    - 'Beep boop... navigation malfunction! My wheels have run out of ideas. Please tell an admin, or use /report STEMBot stuck in {world} at {target} during {action}.'
+    - 'Bzzzt! My pathfinding circuit needs a tune-up. Please report this to an admin: /report STEMBot stuck in {world} at {target} during {action}.'
 
   farewell:
-    - 'See you soon! Our private chat is closed.'
+    - 'See you soon! Our private chat is closed; your messages go to public chat again. Summon me with /help.'
 
 # ---------------------------------------------------------------------------
 # ACTION LANGUAGE
@@ -68,7 +96,7 @@ messages:
 #
 # talk:<text>
 #   Display text, use randomized robot speech and talking gestures, then wait
-#   until the calculated speech duration has finished.
+#   until speech finishes, then pause for speech.post-delay-ticks to allow reading.
 #
 # sleep:<ticks>
 #   Pause this action for the given number of server ticks.
@@ -110,88 +138,245 @@ messages:
 #   End the current STEMBot session.
 
 actions:
+  first-hub:
+    - 'wave'
+    - 'talk:Hi {player}! I am STEMBot, your private guide to STEMCraft.'
+    - 'talk:Only you can see me. While you are nearby and our private chat is active, your ordinary chat messages come only to me.'
+    - 'talk:When I show a reply prompt, open chat, type one of the example phrases without a /, and send it. Commands such as /hub still start with /.'
+    - 'talk:Reply bye or close at a prompt to return to public chat. Use /stembot close at any time. Summon me again with /help.'
+    - 'talk:We can tour Survival and the noticeboard, Creative, Minigames, and the monthly challenge and voting area.'
+    - 'action:hub-menu'
+
   hub:
     - 'wave'
-    - 'talk:Hi {player}! I am STEMBot, your own little guide!'
-    - 'sleep:8'
-    - 'talk:Only you can see me. While we chat, your messages come only to me.'
-    - 'sleep:8'
-    - 'talk:Would you like to follow me for a tour? Say yes or tour. Say bye or close to return to normal chat.'
-    - 'listen:yes|yep|sure|tour -> hub-survival, bye|close|exit -> close, *survival* -> survival-help, *creative* -> creative-help, * -> hub-confused'
+    - 'talk:Hi {player}! Back for directions or another tour? My navigation circuits are ready!'
+    - 'talk:Only you can see me. While you are nearby and our private chat is active, your ordinary chat messages come only to me.'
+    - 'talk:When I show a reply prompt, open chat, type one of the example phrases without a /, and send it. Commands such as /hub still start with /.'
+    - 'talk:Reply bye or close at a prompt to return to public chat. Use /stembot close at any time. Summon me again with /help.'
+    - 'action:hub-menu'
+
+  hub-menu:
+    - 'say::chat_bubble: &eReply: tour, Survival, Creative, noticeboard, minigames, monthly challenge, voting, rules, or hub, or bye to finish.'
+    - 'listen:bye|bye!|close|exit -> close, yes|yep|sure|*tour* -> hub-survival, *survival* -> survival-help, *creative* -> creative-help, *notice* -> hub-noticeboard, *minigame*|*games* -> hub-games, *month*|*challenge*|*vot* -> hub-voting, *rules* -> rules, *hub*|*help*|*chat* -> hub-navigation, * -> hub-confused'
 
   hub-confused:
-    - 'talk:I am still learning human language!'
-    - 'sleep:6'
-    - 'talk:Try saying tour, Survival, Creative, or close.'
-    - 'listen:yes|tour -> hub-survival, *survival* -> survival-help, *creative* -> creative-help, bye|close|exit -> close, * -> hub-confused'
+    - 'talk:Beep boop! I recognise a few topics. Try one of the examples below.'
+    - 'action:hub-menu'
 
   hub-survival:
-    - 'talk:Follow me to the Survival portal. Try to keep up!'
-    - 'walk:-864 85 245'
-    - 'sleep:25'
-    - 'point:-864 85 245'
-    - 'talk:Here is the Survival portal! This is where your survival adventure begins.'
+    - 'talk:Follow me to the Survival portal and the nearby noticeboard!'
+    - 'walk:-871 85 346'
+    - 'point:-871 85 346'
+    - 'talk:This is the Survival portal. Gather resources, build a home, explore, and look for quest NPCs with yellow question marks.'
+    - 'talk:Respect other players and their builds. Once inside, use /help and ask me about getting started, quests, rules, or commands.'
+    - 'talk:You can also see the noticeboard here. Read community notices to find trades, projects, and people to build with.'
+    - 'talk:Click the board to create a notice with a heading and message. You can have one active board notice; click again to edit or delete it.'
+    - 'talk:Keep notices friendly and leave out personal information. Trades are arranged directly with players, and old notices expire automatically.'
     - 'action:hub-creative'
 
   hub-creative:
-    - 'talk:Follow me to the Creative portal. Let us walk a bit faster this time!'
-    - 'speed:1.30'
-    - 'walk:-864 85 266'
-    - 'sleep:25'
-    - 'point:-864 85 266'
-    - 'talk:Here is the Creative portal! This is where your creative trials start.'
-    - 'speed:1.15'
-    - 'end'
+    - 'talk:Next stop: Creative! Follow me to the Creative portal.'
+    - 'walk:-864 85 236'
+    - 'point:-864 85 236'
+    - 'talk:Creative gives you a plot to build and experiment with Creative mode blocks. Try a castle, a redstone invention, or a tiny dream home!'
+    - 'talk::chat_bubble: In Creative, use /help and ask how do I claim a plot. I can explain plot commands and building rules there.'
+    - 'action:hub-minigames'
+
+  hub-minigames:
+    - 'talk:Follow me to the Minigames entrance.'
+    - 'walk:-836 85 289'
+    - 'point:-836 85 289'
+    - 'talk:Try BedWars to defend your bed, Bridge to reach the opposing goal, or Boat Race to race through checkpoints.'
+    - 'talk:Parkour tests your jumps, TNT Run keeps you moving over a disappearing floor, and Minefield challenges you to find a safe route.'
+    - 'talk:Nightfall is about preparing by day and surviving zombie nights. SkyBlock starts you on a tiny floating island.'
+    - 'talk:Check the entrance menus, signs, and portals for the games and arenas currently open. Play fairly and follow the instructions for each game.'
+    - 'action:hub-challenge'
+
+  hub-challenge:
+    - 'talk:Our final stop is the monthly challenge and voting area.'
+    - 'walk:-902 85 289'
+    - 'point:-902 85 289'
+    - 'talk:Check the information here for the current challenge, entry instructions, rules, and closing date. The challenge changes, so read it before starting!'
+    - 'talk:Voting is a way to support the creations you enjoy and recognise the effort other players put into them. Look around before choosing your favourites.'
+    - 'talk:When voting is open, right-click the lever for your choice. Click it again to retract that vote. You cannot vote for your own entry. Use /vote status to check voting status and your allowance.'
+    - 'talk:That is our hub tour! Use /hub to return from other worlds, and /help whenever you want to summon me again.'
+    - 'action:hub-menu'
 
   survival-help:
-    - 'talk:The Survival portal is over there.'
-    - 'point:-864 85 245'
-    - 'end'
+    - 'talk:The Survival portal is at -871 85 346, beside the noticeboard. Reply tour if you would like me to lead the full tour.'
+    - 'talk:Inside Survival, use /help for advice on starting out, quests, rules, commands, and recovering items after a death.'
+    - 'action:hub-menu'
 
   creative-help:
-    - 'talk:The Creative portal is over there.'
-    - 'point:-864 85 266'
-    - 'end'
+    - 'talk:The Creative portal is at -864 85 236. You can also enter with /creative.'
+    - 'talk:Inside Creative, use /help for plot commands, building ideas, and rules. Reply tour here to follow the full hub tour.'
+    - 'action:hub-menu'
+
+  hub-noticeboard:
+    - 'talk:The noticeboard is visible by the Survival portal at -871 85 346. Read it for community projects, trades, or requests.'
+    - 'talk:Click the board to create a heading and message. Each player can have one active board notice; click again to edit or delete yours.'
+    - 'talk:Notices expire automatically. Keep them friendly, protect personal information, and arrange advertised trades directly with the other player.'
+    - 'action:hub-menu'
+
+  hub-games:
+    - 'talk:The Minigames entrance is at -836 85 289. Check its menus, signs, and portals for currently open games.'
+    - 'talk:BedWars: defend beds. Bridge: reach the opposing goal. Boat Race: race through checkpoints. Parkour: jump through a course.'
+    - 'talk:TNT Run: keep moving as the floor disappears. Minefield: find a safe path. Nightfall: survive zombie nights. SkyBlock: grow a floating island.'
+    - 'talk:Type an available game command, such as /bedwars or /parkour, to see its choices.'
+    - 'action:hub-menu'
+
+  hub-voting:
+    - 'talk:The monthly challenge and voting area is at -902 85 289. Read the current theme, entry instructions, rules, and deadline there.'
+    - 'talk:Explore the entries and vote for the work you enjoy. Your vote supports fellow creators and helps the community choose its favourites.'
+    - 'talk:While voting is open, right-click a voting lever to vote, or click it again to retract your vote. You cannot vote for your own entry. /vote status shows voting status and your allowance.'
+    - 'action:hub-menu'
+
+  rules:
+    - 'talk:Be kind and respectful. No bullying, spam, stealing, griefing, cheats, or exploits. Respect builds and restricted areas.'
+    - 'talk:Keep personal information private. Follow world and challenge rules, and use /report <message> to report a problem to staff.'
+    - 'action:hub-menu'
+
+  hub-navigation:
+    - 'talk:Use /hub to return to the hub and /help to summon me. At my reply prompts, send ordinary chat text such as tour without a slash.'
+    - 'talk:Your chat is private while we are talking nearby. Walking away returns it to public chat; coming closer resumes our chat. Reply bye at a prompt, or use /stembot close at any time, to return to public chat.'
+    - 'action:hub-menu'
 
   survival:
     - 'wave'
-    - 'talk:Hi {player}! You are in the Survival world.'
-    - 'sleep:25'
-    - 'talk:Explore, gather resources, build a home, and work with other players.'
-    - 'sleep:15'
-    - 'end'
+    - 'talk:Hi {player}! Need a hand in Survival? Let us work it out.'
+    - 'talk:Only you can see me. While you are nearby and our private chat is active, your ordinary chat messages come only to me.'
+    - 'talk:When I show a reply prompt, open chat, type one of the example phrases without a /, and send it. Commands such as /hub still start with /.'
+    - 'talk:Reply bye or close at a prompt to return to public chat. Use /stembot close at any time. Summon me again with /help.'
+    - 'action:survival-menu'
 
   creative:
     - 'wave'
-    - 'talk:Hi {player}! This is the Creative Plot world.'
-    - 'sleep:25'
-    - 'talk:To claim a plot, use the command /plot create while standing in an empty plot.'
-    - 'sleep:25'
-    - 'talk:To go back to the hub, use the command /hub.'
-    - 'sleep:25'
-    - 'end'
+    - 'talk:Hi {player}! Need a hand in Creative? Let us work it out.'
+    - 'talk:Only you can see me. While you are nearby and our private chat is active, your ordinary chat messages come only to me.'
+    - 'talk:When I show a reply prompt, open chat, type one of the example phrases without a /, and send it. Commands such as /hub still start with /.'
+    - 'talk:Reply bye or close at a prompt to return to public chat. Use /stembot close at any time. Summon me again with /help.'
+    - 'action:creative-menu'
 
-  first-hub:
+  first-survival:
     - 'wave'
-    - 'talk:Hi {player}! I am STEMBot.'
-    - 'sleep:8'
-    - 'talk:I can show you around or help you find something.'
-    - 'sleep:8'
-    - 'talk:What can I help you with?'
-    - 'listen:*survival* -> survival-help, *creative* -> creative-help, *rules* -> rules, yes|tour -> hub-survival, bye|close -> close, * -> first-hub-confused'
+    - 'talk:Welcome to Survival, {player}! Start with wood, tools, food, and a safe shelter before nightfall.'
+    - 'talk:Only you can see me. While you are nearby and our private chat is active, your ordinary chat messages come only to me.'
+    - 'talk:When I show a reply prompt, open chat, type one of the example phrases without a /, and send it. Commands such as /hub still start with /.'
+    - 'talk:Reply bye or close at a prompt to return to public chat. Use /stembot close at any time. Summon me again with /help.'
+    - 'talk:Explore and build while respecting other players. Leave their builds, chests, animals, and belongings alone unless you have permission.'
+    - 'talk:Look for quest NPCs with yellow question marks. Their books give you goals as you explore, gather resources, and develop your homestead.'
+    - 'talk:Use /quest for active quests, /spawn for an available world spawn, /coord for coordinates, and /hub to return to the hub.'
+    - 'action:survival-menu'
 
-  first-hub-confused:
-    - 'talk:Try asking me about Survival, Creative, the rules, or say tour.'
-    - 'listen:*survival* -> survival-help, *creative* -> creative-help, *rules* -> rules, yes|tour -> hub-survival, bye|close -> close, * -> first-hub-confused'
+  survival-menu:
+    - 'say::chat_bubble: &eReply: getting started, quests, rules, commands, I died, how do I get back to the hub, or chat, or bye to finish.'
+    - 'listen:bye|bye!|close|exit -> close, *quest* -> survival-quests, *rules* -> survival-rules, *command* -> survival-commands, *died*|*death*|*grave* -> survival-graves, *hub*|*back*|*lost*|*spawn* -> survival-navigation, *start*|*build*|*food*|*shelter* -> survival-start, *chat*|*help* -> survival-chat, * -> survival-confused'
 
-  rules:
-    - 'talk:Be kind, build fairly, and respect other players and their creations.'
-    - 'sleep:15'
-    - 'talk:If you are unsure whether something is allowed, ask a staff member.'
-    - 'end'
+  survival-confused:
+    - 'talk:Beep boop! I recognise a few topics. Try one of the examples below.'
+    - 'action:survival-menu'
 
-# /stembot routes to one named action based on the current Bukkit world name.
-# "world" is included because the existing STEMCraft hub currently uses that name.
+  survival-start:
+    - 'talk:Gather wood, make tools, find food, and light a shelter before your first night. Bring spare supplies when exploring.'
+    - 'talk:Choose space away from existing builds and ask before building beside someone else. Keep shared paths and entrances clear.'
+    - 'talk:Quest NPCs can give your adventure direction. Ask me about quests, or try /quest to see the quests you have accepted.'
+    - 'action:survival-menu'
+
+  survival-quests:
+    - 'talk:Look for an NPC with a yellow question mark and right-click them to see available quest books. Move an offered book into your inventory and close the menu to accept.'
+    - 'talk:Read your book for the story and objectives. Quests can involve gathering, crafting supplies, fighting mobs, exploring, or meeting another NPC.'
+    - 'talk:Use /quest to list active quests. /quest track auto follows a carried quest book; /quest track <id> chooses one, and /quest track off hides tracking.'
+    - 'talk:A yellow exclamation mark marks a current NPC objective or ready turn-in. Carry your current book and required items, then right-click the right NPC to progress or finish.'
+    - 'talk:Some quests have time limits or prerequisites. Read the book carefully; if you want to give one up, /quest abandon <id> abandons it and removes its carried books.'
+    - 'action:survival-menu'
+
+  survival-rules:
+    - 'talk:Be kind, play fairly, and respect other players. Do not steal, grief, open or take from belongings owned by other players without permission, or damage their builds.'
+    - 'talk:Do not use cheats or exploits, bypass protections, or enter restricted areas. Keep chat friendly and personal information private.'
+    - 'talk:If something goes wrong, ask staff or use /report <message>. Use the noticeboard to find people for a shared project instead of changing their builds uninvited.'
+    - 'action:survival-menu'
+
+  survival-commands:
+    - 'talk:/quest lists active quests. /quest track auto enables automatic quest tracking while you carry your books.'
+    - 'talk:/spawn takes you to an available world spawn. /hub returns to the hub. /back returns to your previous stored location when allowed.'
+    - 'talk:/coord toggles coordinates above the hotbar; /coordbar toggles the world, time, and direction display. /help summons me again.'
+    - 'action:survival-menu'
+
+  survival-graves:
+    - 'talk:After a death, read chat for the death location. When possible, your dropped items are stored in a grave chest near that spot. Otherwise they drop normally.'
+    - 'talk:The coordinate boss bar guides you towards an unopened grave. Use /coordbar if you need to toggle the display, and return carefully with food and equipment.'
+    - 'talk:/back may return you to your previous stored location when allowed. Check the surroundings before recovering your items, and respect graves belonging to others.'
+    - 'action:survival-menu'
+
+  survival-navigation:
+    - 'talk:Type /hub to return to the hub. /spawn takes you to an available world spawn, and /coord helps you keep track of where you are.'
+    - 'talk:Use /help whenever you need me here again. Try phrases such as how do quests work, I died, or what commands can I use at my reply prompt.'
+    - 'action:survival-menu'
+
+  survival-chat:
+    - 'talk:Open chat and send a topic without a slash at my reply prompt. Try how do quests work, I need food, or what are the rules.'
+    - 'talk:Only I receive your ordinary chat while you are nearby. Walking away pauses our chat; coming closer resumes it. Reply bye at a prompt or type /stembot close any time to return to public chat. Use /help to summon me again.'
+    - 'action:survival-menu'
+
+  first-creative:
+    - 'wave'
+    - 'talk:Welcome to Creative, {player}! This is a place to build, experiment, and practise with Creative mode blocks.'
+    - 'talk:Only you can see me. While you are nearby and our private chat is active, your ordinary chat messages come only to me.'
+    - 'talk:When I show a reply prompt, open chat, type one of the example phrases without a /, and send it. Commands such as /hub still start with /.'
+    - 'talk:Reply bye or close at a prompt to return to public chat. Use /stembot close at any time. Summon me again with /help.'
+    - 'talk:Find an unclaimed plot, stand inside it, and use /plot claim. Or use /plot auto to find and claim an available plot automatically.'
+    - 'talk:Use /plot home to return to your plot. Respect other plots, keep builds appropriate, and ask before altering a build that belongs to someone else.'
+    - 'talk:Creative builds and items stay separate from Survival. Use /hub to return to the hub, and /help for more ideas or plot advice.'
+    - 'action:creative-menu'
+
+  creative-menu:
+    - 'say::chat_bubble: &eReply: how do I claim a plot, commands, rules, building ideas, monthly challenge, quests, hub, or chat, or bye to finish.'
+    - 'listen:bye|bye!|close|exit -> close, *plot*|*claim*|*command* -> creative-plots, *rules* -> creative-rules, *idea*|*build*|*start* -> creative-ideas, *month*|*challenge*|*vot* -> creative-challenge, *quest*|*survival* -> creative-survival, *hub*|*back*|*lost* -> creative-navigation, *chat*|*help* -> creative-chat, * -> creative-confused'
+
+  creative-confused:
+    - 'talk:Beep boop! I recognise a few topics. Try one of the examples below.'
+    - 'action:creative-menu'
+
+  creative-plots:
+    - 'talk:Stand inside an unclaimed plot and type /plot claim, or use /plot auto to automatically find and claim an available plot.'
+    - 'talk:Use /plot home to return to your plot. Available plot commands depend on permissions; check command suggestions for further options.'
+    - 'talk:Keep building within your plot and ask before involving someone else in your build. Your Creative items and builds cannot be transferred to Survival.'
+    - 'action:creative-menu'
+
+  creative-rules:
+    - 'talk:Build within your plot, respect the creations of other players, and ask permission before changing their work. Keep builds and signs appropriate for everyone.'
+    - 'talk:Be kind in chat, keep personal information private, and avoid spam. Do not use cheats, exploits, or contraptions intended to disrupt the server.'
+    - 'talk:Follow the posted rules for any challenge you enter. If you need staff help, use /report <message> to report a problem.'
+    - 'action:creative-menu'
+
+  creative-ideas:
+    - 'talk:Try a cosy cottage, a treehouse, a space station, or a redstone door. Sketch the shape first, then add colour, lighting, and detail.'
+    - 'talk:Practise one skill at a time: roofs, paths, gardens, or interiors. Ask another builder for friendly feedback.'
+    - 'talk:For a themed project, visit the monthly challenge and voting area in the hub and read the current entry instructions.'
+    - 'action:creative-menu'
+
+  creative-challenge:
+    - 'talk:Use /hub and visit -902 85 289 for the monthly challenge and voting. Read the current theme, rules, entry instructions, and deadline before building.'
+    - 'talk:Visit the entries and support your favourites. When voting is open, right-click their voting levers; clicking again retracts a vote. /vote status shows status and your allowance.'
+    - 'action:creative-menu'
+
+  creative-survival:
+    - 'talk:For resource gathering and NPC quests, head to Survival through its hub portal at -871 85 346. Use /hub to get there first.'
+    - 'talk:In Survival, summon me with /help and reply quests for a guide to accepting, tracking, and completing quests.'
+    - 'action:creative-menu'
+
+  creative-navigation:
+    - 'talk:Use /plot home to return to your plot or /hub to return to the hub. /help summons me again in Creative.'
+    - 'talk:At my reply prompt you can type how do I claim a plot, give me building ideas, or what are the rules.'
+    - 'action:creative-menu'
+
+  creative-chat:
+    - 'talk:Open chat at my reply prompt and send a phrase such as how do I claim a plot without a slash. Commands such as /plot home still need their slash.'
+    - 'talk:Only I receive your ordinary chat while you are nearby. Walking away pauses our chat; coming closer resumes it. Reply bye at a prompt or use /stembot close at any time to return to public chat.'
+    - 'action:creative-menu'
+
+# /help (alias of /stembot) routes by the current Bukkit world name.
+# The existing hub uses "world".
 command:
   world:
     world: hub
@@ -200,10 +385,10 @@ command:
     creative: creative
 
 # Automatically run once per player, per configured world.
-# Completion is stored in the player's PersistentDataContainer.
+# Completion is stored in the player PersistentDataContainer.
 first-time:
   world:
     world: first-hub
     hub: first-hub
-    survival: survival
-    creative: creative
+    survival: first-survival
+    creative: first-creative

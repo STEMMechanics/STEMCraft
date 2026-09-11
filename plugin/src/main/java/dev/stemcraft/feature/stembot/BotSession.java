@@ -19,6 +19,7 @@ public final class BotSession {
     public interface Output {
         void say(String text);
         int talk(String text);
+        default void depart(BotActor actor) { actor.close(); }
     }
 
     private enum WaitMode { NONE,SLEEP,TALK,WAVE,POINT,WALK,LISTEN,STUCK }
@@ -42,7 +43,9 @@ public final class BotSession {
     private Location progress;
     private int lastProgress;
     private boolean playerBehind;
-    private boolean closed;
+    private volatile boolean closed;
+    private volatile boolean chatEngaged=true;
+    private int awayTicks;
 
     public BotSession(
         BotScript script,
@@ -61,23 +64,31 @@ public final class BotSession {
 
     public BotActor actor() { return actor; }
     public boolean closed() { return closed; }
+    public boolean chatEngaged() { return chatEngaged&&!closed; }
     public String action() { return action; }
 
     public void input(String text) {
-        if(closed) return;
+        if(!chatEngaged()) return;
         idle=0;
 
         String input=text.trim();
 
         if(waitMode==WaitMode.STUCK) {
-            if(input.matches("(?i)(?:continue|resume|ready|retry)[.!]?")) {
+            if(input.matches("(?i)(?:retry|try again)[.!]?")) {
                 waitMode=WaitMode.WALK;
                 resetWalkProgress();
                 return;
             }
-            if(input.matches("(?i)(?:bye|close|exit)[.!]?")) {
+            if(input.matches("(?i)(?:yes|yep|continue|resume|ready|skip)[.!]?")) {
+                walkTarget=null;
+                progress=null;
+                waitMode=WaitMode.NONE;
+                return;
+            }
+            if(input.matches("(?i)(?:no|nope|bye|close|exit)[.!]?")) {
                 close();
             }
+            if(!closed) stuckPrompt();
             return;
         }
 
@@ -100,7 +111,6 @@ public final class BotSession {
     }
 
     public void tick(Location owner) {
-        age+=5;
         idle+=5;
 
         if(closed) return;
@@ -108,14 +118,38 @@ public final class BotSession {
         if(!actor.valid()
             ||owner.getWorld()==null
             ||!owner.getWorld().getName().equals(world)) {
-            close();
+            close(chatEngaged);
             return;
         }
 
         if(idle>=script.idleSeconds()*20) {
-            close();
+            close(chatEngaged);
             return;
         }
+
+        double distance=actor.location().distanceSquared(owner);
+        if(chatEngaged&&distance>script.chat().disengageDistance()*script.chat().disengageDistance()) {
+            chatEngaged=false;
+            awayTicks=0;
+            actor.cancel();
+            output.say(script.chat().disengaged()
+                .replace("{seconds}",Integer.toString(script.chat().awayTimeoutSeconds())));
+        } else if(!chatEngaged&&distance<=script.chat().reengageDistance()*script.chat().reengageDistance()) {
+            chatEngaged=true;
+            awayTicks=0;
+            idle=0;
+            if(waitMode==WaitMode.WALK) resetWalkProgress();
+            output.say(script.chat().reengaged());
+        }
+
+        if(!chatEngaged) {
+            awayTicks+=5;
+            if(awayTicks>=script.chat().awayTimeoutSeconds()*20) close(false);
+            return;
+        }
+
+        // Freeze script timers while away, but keep the cleanup timer running.
+        age+=5;
 
         switch(waitMode) {
             case SLEEP -> {
@@ -123,9 +157,15 @@ public final class BotSession {
                 else return;
             }
             case TALK -> {
+                if(age>=waitUntil) {
+                    waitMode=WaitMode.SLEEP;
+                    waitUntil=age+script.speech().postDelayTicks();
+                    if(script.speech().postDelayTicks()>0) return;
+                    waitMode=WaitMode.NONE;
+                    break;
+                }
                 animateTalk(owner);
-                if(age>=waitUntil) waitMode=WaitMode.NONE;
-                else return;
+                return;
             }
             case WAVE -> {
                 animateWave(owner);
@@ -286,7 +326,7 @@ public final class BotSession {
             resetWalkProgress();
         }
 
-        if(here.distanceSquared(walkTarget)<=1.5) {
+        if(here.distanceSquared(walkTarget)<=script.arrivalDistance()*script.arrivalDistance()) {
             actor.cancel();
             walkTarget=null;
             progress=null;
@@ -303,7 +343,11 @@ public final class BotSession {
             waitMode=WaitMode.STUCK;
 
             for(String line:script.randomSystemMessage(script.stuck()))
-                output.say(line);
+                output.say(line.replace("{action}",action)
+                    .replace("{world}",world)
+                    .replace("{target}",walkTarget.getBlockX()+" "+walkTarget.getBlockY()+" "+walkTarget.getBlockZ()));
+
+            stuckPrompt();
 
             return false;
         }
@@ -329,6 +373,13 @@ public final class BotSession {
             script.speech().talkGestureMinTicks(),
             script.speech().talkGestureMaxTicks()+1
         );
+    }
+
+    private void stuckPrompt() {
+        boolean more=pc<script.actions().get(action).size();
+        output.say(more
+            ?":chat_bubble: &eShall we carry on from here? Reply continue to skip this walk, retry to try it again, or bye to finish."
+            :":chat_bubble: &eThis was my last step. Reply retry to try again, or bye to finish.");
     }
 
     private void animateWave(Location owner) {
@@ -357,16 +408,24 @@ public final class BotSession {
     }
 
     public void close() {
+        close(true);
+    }
+
+    public void close(boolean farewell) {
         if(closed) return;
         closed=true;
 
         try {
             actor.cancel();
             actor.sneak(false);
-            actor.close();
         } finally {
-            for(String line:script.farewell())
-                output.say(line);
+            try {
+                output.depart(actor);
+            } finally {
+                if(farewell)
+                    for(String line:script.farewell())
+                        output.say(line);
+            }
         }
     }
 }

@@ -1,6 +1,7 @@
 package dev.stemcraft.feature.stembot;
 
 import org.bukkit.Location;
+import org.bukkit.Particle;
 import org.bukkit.entity.*;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.util.Vector;
@@ -197,6 +198,14 @@ public final class CitizensBotActor implements BotActor {
             npcPlayer,
             List.of(viewer)
         );
+    }
+
+    @Override
+    public void puff() {
+        Player viewer=plugin.getServer().getPlayer(owner);
+        if(viewer==null||!valid()||!viewer.getWorld().equals(location().getWorld())) return;
+        // Like the NPC itself, the effect is visible only to its owner.
+        viewer.spawnParticle(Particle.CLOUD,location().add(0,0.9,0),24,0.35,0.65,0.35,0.025);
     }
 
     @Override

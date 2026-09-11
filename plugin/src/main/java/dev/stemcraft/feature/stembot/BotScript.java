@@ -9,15 +9,20 @@ import java.util.regex.Pattern;
 public record BotScript(
     String name,
     String prefix,
+    String replyFormat,
     String skinUrl,
     String skinValue,
     String skinSignature,
     boolean slim,
     double spawnDistance,
+    double spawnSearchRadius,
+    int departureDelayTicks,
+    double arrivalDistance,
     double defaultSpeed,
     double waitDistance,
     double resumeDistance,
     int idleSeconds,
+    ChatSettings chat,
     SpeechSettings speech,
     List<String> waiting,
     List<String> stuck,
@@ -26,6 +31,9 @@ public record BotScript(
     Map<String,String> commandWorld,
     Map<String,String> firstTimeWorld
 ) {
+    public record ChatSettings(double disengageDistance,double reengageDistance,
+                               int awayTimeoutSeconds,String disengaged,String reengaged) {}
+
     public enum Op {
         SAY,TALK,SLEEP,WALK,SPEED,LOOK,POINT,WAVE,SNEAK,STAND,ACTION,LISTEN,END,CLOSE
     }
@@ -42,7 +50,8 @@ public record BotScript(
         int minBeeps,
         int maxBeeps,
         int talkGestureMinTicks,
-        int talkGestureMaxTicks
+        int talkGestureMaxTicks,
+        int postDelayTicks
     ) {}
 
     public record Instruction(
@@ -88,6 +97,14 @@ public record BotScript(
 
         double wait=bounded(config.getDouble("movement.wait-distance",10),2,64);
         double resume=bounded(config.getDouble("movement.resume-distance",6),1,wait-0.01);
+        double chatDistance=bounded(config.getDouble("chat.disengage-distance",12),2,64);
+        ChatSettings chat=new ChatSettings(
+            chatDistance,
+            bounded(config.getDouble("chat.reengage-distance",6),1,chatDistance-0.01),
+            boundedInt(config.getInt("chat.away-timeout-seconds",60),5,3600),
+            config.getString("messages.chat-disengaged",":chat_bubble: &eYou are out of range. Your chat is public now. Come closer to resume; I will power down after {seconds} seconds away."),
+            config.getString("messages.chat-reengaged",":chat_bubble: &ePrivate chat with STEMBot resumed. Your messages come only to me again.")
+        );
 
         int intervalMin=boundedInt(config.getInt("speech.beep-interval-ticks.min",2),1,40);
         int intervalMax=boundedInt(config.getInt("speech.beep-interval-ticks.max",6),intervalMin,40);
@@ -106,7 +123,8 @@ public record BotScript(
             boundedInt(config.getInt("speech.min-beeps",2),1,100),
             boundedInt(config.getInt("speech.max-beeps",30),1,200),
             gestureMin,
-            gestureMax
+            gestureMax,
+            boundedInt(config.getInt("speech.post-delay-ticks",60),0,1200)
         );
 
         if(speech.pitchMax()<speech.pitchMin())
@@ -123,15 +141,20 @@ public record BotScript(
         return new BotScript(
             config.getString("name","STEMBot"),
             config.getString("messages.prefix",":stembot: &bSTEMBot: &f"),
+            config.getString("messages.reply-format",":chat_bubble: &7You → {bot}: {message}"),
             config.getString("skin.url",""),
             skinValue,
             skinSignature,
             config.getBoolean("skin.slim",false),
             bounded(config.getDouble("spawn-distance",2.5),1,6),
-            bounded(config.getDouble("movement.speed",1.15),0.2,2.5),
+            bounded(config.getDouble("spawn-search-radius",8),6,16),
+            boundedInt(config.getInt("effects.departure-delay-ticks",60),0,200),
+            bounded(config.getDouble("movement.arrival-distance",3),0.5,6),
+            bounded(config.getDouble("movement.speed",0.9),0.2,2.5),
             wait,
             resume,
             boundedInt(config.getInt("idle-timeout-seconds",600),30,3600),
+            chat,
             speech,
             List.copyOf(config.getStringList("messages.waiting")),
             List.copyOf(config.getStringList("messages.stuck")),

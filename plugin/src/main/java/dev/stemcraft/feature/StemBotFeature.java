@@ -30,6 +30,10 @@ public final class StemBotFeature extends BaseFeature {
     private final Set<AsyncChatEvent> privateChat=
         Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
     private final Map<UUID,Integer> pendingFirstTime=new HashMap<>();
+    private final Map<UUID,PendingSummon> pendingSummons=new ConcurrentHashMap<>();
+    private final Map<BotActor,Departure> departures=new HashMap<>();
+    private record Departure(UUID owner,int ticks) {}
+    private record PendingSummon(String action,int ticks) {}
     private final BotSkinCache skins=new BotSkinCache();
 
     private BotScript script;
@@ -52,6 +56,7 @@ public final class StemBotFeature extends BaseFeature {
         load();
 
         api.commands().create("stembot")
+            .aliases("help")
             .description("Talk privately to your STEMBot guide.")
             .usage("/stembot [close]")
             .tabCompletion("close")
@@ -86,8 +91,7 @@ public final class StemBotFeature extends BaseFeature {
                     return;
                 }
 
-                close(player.getUniqueId());
-                start(player,action,false);
+                summon(player,action);
             })
             .register(STEMCraft.getPlugin());
 
@@ -99,13 +103,13 @@ public final class StemBotFeature extends BaseFeature {
         );
 
         api.events().register(PlayerChangedWorldEvent.class,event->{
-            close(event.getPlayer().getUniqueId());
+            close(event.getPlayer().getUniqueId(),false);
             queueFirstTime(event.getPlayer(),20);
         });
 
         api.events().register(PlayerQuitEvent.class,event->{
             pendingFirstTime.remove(event.getPlayer().getUniqueId());
-            close(event.getPlayer().getUniqueId());
+            close(event.getPlayer().getUniqueId(),false);
         });
 
         api.events().register(
@@ -142,12 +146,14 @@ public final class StemBotFeature extends BaseFeature {
     }
 
     public boolean hasActiveSession(UUID player) {
-        return sessions.containsKey(player);
+        return sessions.containsKey(player)||pendingSummons.containsKey(player);
     }
 
     public boolean isPrivateChat(AsyncChatEvent event) {
+        BotSession session=sessions.get(event.getPlayer().getUniqueId());
         return privateChat.contains(event)
-            ||hasActiveSession(event.getPlayer().getUniqueId());
+            ||(session!=null&&session.chatEngaged())
+            ||pendingSummons.containsKey(event.getPlayer().getUniqueId());
     }
 
     private boolean available() {
@@ -157,11 +163,14 @@ public final class StemBotFeature extends BaseFeature {
     void chat(AsyncChatEvent event) {
         UUID id=event.getPlayer().getUniqueId();
         BotSession session=sessions.get(id);
-        if(session==null) return;
+        if(session==null&&!pendingSummons.containsKey(id)) return;
+        if(session!=null&&!session.chatEngaged()) return;
 
         privateChat.add(event);
         event.setCancelled(true);
         event.viewers().clear();
+        // During a re-summon the conversation is still private, but not listening yet.
+        if(session==null) return;
 
         String text=PlainTextComponentSerializer.plainText()
             .serialize(event.message());
@@ -173,7 +182,7 @@ public final class StemBotFeature extends BaseFeature {
             if(player==null) return;
 
             player.sendMessage(
-                Component.text("You → STEMBot: "+text,NamedTextColor.GRAY)
+                replyLine(player,text)
             );
 
             session.input(text);
@@ -236,6 +245,21 @@ public final class StemBotFeature extends BaseFeature {
     private void tick() {
         if(!available()) return;
 
+        tickDepartures();
+        for(var entry:new ArrayList<>(pendingSummons.entrySet())) {
+            int remaining=entry.getValue().ticks()-5;
+            if(remaining>0) {
+                pendingSummons.put(entry.getKey(),new PendingSummon(entry.getValue().action(),remaining));
+                continue;
+            }
+            Player player=Bukkit.getPlayer(entry.getKey());
+            try {
+                if(player!=null&&!verifying(player)) start(player,entry.getValue().action(),false);
+            } finally {
+                pendingSummons.remove(entry.getKey());
+            }
+        }
+
         for(var entry:new ArrayList<>(pendingFirstTime.entrySet())) {
             Player player=Bukkit.getPlayer(entry.getKey());
 
@@ -263,7 +287,7 @@ public final class StemBotFeature extends BaseFeature {
 
             pendingFirstTime.remove(entry.getKey());
 
-            if(!sessions.containsKey(player.getUniqueId()))
+            if(!sessions.containsKey(player.getUniqueId())&&!pendingSummons.containsKey(player.getUniqueId()))
                 start(player,action,true);
         }
 
@@ -297,6 +321,38 @@ public final class StemBotFeature extends BaseFeature {
         return first!=null&&first.hasActiveSession(player.getUniqueId());
     }
 
+    void summon(Player player,String action) {
+        UUID id=player.getUniqueId();
+        close(id,false);
+        int delay=departures.values().stream().filter(departure->departure.owner().equals(id))
+            .mapToInt(Departure::ticks).max().orElse(0);
+        if(delay>0)
+            pendingSummons.put(id,new PendingSummon(action,delay));
+        else
+            start(player,action,false);
+    }
+
+    void depart(UUID owner,BotActor actor,int delay) {
+        departures.put(actor,new Departure(owner,delay));
+    }
+
+    void tickDepartures() {
+        for(var entry:new ArrayList<>(departures.entrySet())) {
+            int remaining=entry.getValue().ticks()-5;
+            if(remaining>0) {
+                departures.put(entry.getKey(),new Departure(entry.getValue().owner(),remaining));
+                continue;
+            }
+            departures.remove(entry.getKey());
+            BotActor actor=entry.getKey();
+            try {
+                if(actor.valid()) actor.puff();
+            } finally {
+                actor.close();
+            }
+        }
+    }
+
     private void start(Player player,String action,boolean firstTime) {
         if(!available()||!player.isOnline()) return;
 
@@ -304,7 +360,7 @@ public final class StemBotFeature extends BaseFeature {
         World world=player.getWorld();
         Location playerLocation=player.getLocation();
 
-        Location actorSpawn=findSpawn(playerLocation,script.spawnDistance());
+        Location actorSpawn=findSpawn(playerLocation,script.spawnDistance(),script.spawnSearchRadius());
         if(actorSpawn==null) {
             player.sendMessage(
                 Component.text(
@@ -330,6 +386,11 @@ public final class StemBotFeature extends BaseFeature {
 
             BotSession.Output output=new BotSession.Output() {
                 @Override
+                public void depart(BotActor departing) {
+                    StemBotFeature.this.depart(id,departing,script.departureDelayTicks());
+                }
+
+                @Override
                 public void say(String text) {
                     sayLine(player,text);
                 }
@@ -349,6 +410,7 @@ public final class StemBotFeature extends BaseFeature {
             );
 
             sessions.put(id,session);
+            actor.puff();
 
             if(firstTime)
                 markSeenWorld(player,world.getName());
@@ -369,9 +431,10 @@ public final class StemBotFeature extends BaseFeature {
         }
     }
 
-    private @javax.annotation.Nullable Location findSpawn(
+    static @javax.annotation.Nullable Location findSpawn(
         Location player,
-        double distance
+        double distance,
+        double searchRadius
     ) {
         World world=player.getWorld();
         if(world==null) return null;
@@ -381,14 +444,21 @@ public final class StemBotFeature extends BaseFeature {
             direction.setZ(1);
         direction.normalize();
 
-        // Prefer in front; then try slightly shorter distances and vertical offsets.
-        for(double scale:new double[]{distance,Math.max(1.2,distance-0.8),1.2}) {
-            Location front=player.clone().add(direction.clone().multiply(scale));
-
-            for(int dy:new int[]{0,-1,1,-2,2}) {
-                Location candidate=front.clone().add(0,dy,0);
-                if(safe(candidate))
-                    return candidate;
+        // Prefer nearby ground in front, then search rings around the player.
+        List<Double> radii=new ArrayList<>(List.of(distance,Math.max(1.5,distance-1)));
+        for(double radius=distance+1;radius<=searchRadius;radius++) radii.add(radius);
+        radii.add(searchRadius);
+        for(double radius:radii) {
+            for(int degrees:new int[]{0,30,-30,60,-60,90,-90,120,-120,150,-150,180}) {
+                Location around=player.clone().add(direction.clone().rotateAroundY(Math.toRadians(degrees)).multiply(radius));
+                for(int dy:new int[]{0,-1,1,-2,2,-3,3}) {
+                    Location candidate=around.clone();
+                    candidate.setX(candidate.getBlockX()+0.5);
+                    candidate.setY(player.getBlockY()+dy);
+                    candidate.setZ(candidate.getBlockZ()+0.5);
+                    if(candidate.distanceSquared(player)<1.5*1.5) continue;
+                    if(safe(candidate)) return candidate;
+                }
             }
         }
 
@@ -431,6 +501,20 @@ public final class StemBotFeature extends BaseFeature {
         );
     }
 
+    private Component replyLine(Player player,String text) {
+        String format=script==null?"&7You → STEMBot: {message}":script.replyFormat();
+        format=format.replace("{player}",player.getName())
+            .replace("{bot}",script==null?"STEMBot":script.name());
+        if(script!=null) format=api.messages().tokens().apply(format);
+        return formatReply(format,text);
+    }
+
+    static Component formatReply(String format,String text) {
+        // Parse only the configured format; player replies remain literal text.
+        return TextUtil.colourise(format).replaceText(builder->builder
+            .matchLiteral("{message}").replacement(Component.text(text)));
+    }
+
     /**
      * Displays the line, schedules randomized robot beeps and returns the exact
      * resulting duration. BotSession blocks the script for this duration.
@@ -459,7 +543,11 @@ public final class StemBotFeature extends BaseFeature {
 
             Bukkit.getScheduler().runTaskLater(
                 STEMCraft.getPlugin(),
-                ()->playSpeechBeep(player,actor),
+                ()->{
+                    BotSession active=sessions.get(player.getUniqueId());
+                    if(active!=null&&active.chatEngaged()&&active.actor()==actor)
+                        playSpeechBeep(player,actor);
+                },
                 beepDelay
             );
 
@@ -535,20 +623,28 @@ public final class StemBotFeature extends BaseFeature {
     }
 
     private void close(UUID id) {
+        close(id,true);
+    }
+
+    private void close(UUID id,boolean farewell) {
         pendingFirstTime.remove(id);
+        pendingSummons.remove(id);
 
         BotSession session=sessions.remove(id);
         if(session!=null)
-            session.close();
+            session.close(farewell);
     }
 
     private void stop() {
         epoch++;
         pendingFirstTime.clear();
+        pendingSummons.clear();
         skins.close();
 
         for(UUID id:List.copyOf(sessions.keySet()))
-            close(id);
+            close(id,false);
+        for(BotActor actor:List.copyOf(departures.keySet())) actor.close();
+        departures.clear();
     }
 
     @Override
