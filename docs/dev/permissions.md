@@ -13,6 +13,7 @@ manage your preferred grouping in LuckPerms.
 
 | Permission | Access |
 | --- | --- |
+| `stemcraft.command.afk` | Toggle your own AFK status (granted by default) |
 | `stemcraft.command.hub` | Return yourself to the hub |
 | `stemcraft.command.survival` | Use the configured fixed Survival shortcut |
 | `stemcraft.command.creative` | Use the configured fixed Creative shortcut |
@@ -152,3 +153,7 @@ Permissions are checked directly by the owning code. There are no permission YAM
 or declarations in `plugin.yml`. FormattedSigns registers its own single permission in
 code with a false default, and removes that registration when disabled.
 The plugin does not rewrite your live LuckPerms groups.
+
+### AFK kick exemption
+
+`stemcraft.afk.kick-exempt` exempts a player from STEMCraft's AFK kick timer. It defaults to false, including for operators; grant it explicitly only where needed. It does not prevent AFK status or announcements and does not bypass Paper's separate idle timeout.

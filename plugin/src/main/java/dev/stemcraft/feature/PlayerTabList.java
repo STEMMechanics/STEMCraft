@@ -177,11 +177,18 @@ public class PlayerTabList extends BaseFeature {
                 mm.deserialize(normalizeMiniMessage(footer))
             );
 
-            // Config uses MiniMessage. Vault placeholders are converted from legacy before insertion.
-            String nameLine = applyPlaceholders(nameFormat, p, prefix, suffix, online, max);
-            Component tabName = trimVisible(mm.deserialize(normalizeMiniMessage(nameLine)), maxNameLen);
-            p.playerListName(tabName);
+            refreshName(p);
         }
+    }
+
+    void refreshName(Player player) {
+        String nameLine = applyPlaceholders(nameFormat, player, getVaultPrefix(player), getVaultSuffix(player),
+            Bukkit.getOnlinePlayers().size(), Bukkit.getMaxPlayers(), true);
+        player.playerListName(trimVisible(mm.deserialize(normalizeMiniMessage(nameLine)), maxNameLen));
+    }
+
+    static String playerName(String name, boolean afk) {
+        return afk ? "<italic>" + name + "</italic>" : name;
     }
 
     /**
@@ -196,6 +203,10 @@ public class PlayerTabList extends BaseFeature {
      * @return The string with placeholders replaced.
      */
     private String applyPlaceholders(String s, Player p, String prefix, String suffix, int online, int max) {
+        return applyPlaceholders(s, p, prefix, suffix, online, max, false);
+    }
+
+    private String applyPlaceholders(String s, Player p, String prefix, String suffix, int online, int max, boolean tabName) {
         if (s == null) return "";
 
         String pingColour;
@@ -208,8 +219,9 @@ public class PlayerTabList extends BaseFeature {
             pingColour = "red";
         }
 
+        Afk afk = STEMCraft.getPlugin().feature(Afk.class);
         String out = s
-                .replace("{player}", p.getName())
+                .replace("{player}", playerName(p.getName(), tabName && afk != null && afk.isAfk(p)))
                 .replace("{world}", api.worlds().getDisplayName(p.getWorld()))
                 .replace("{world-raw}", p.getWorld().getName())
                 .replace("{ping}", String.valueOf(ping))
