@@ -467,24 +467,25 @@ public class MessageServiceImpl extends BaseService implements MessageService {
         if (str == null) {
             return null;
         }
+        // Explicit message data (such as a milestone's achiever) takes precedence
+        // over the recipient's implicit player/uuid placeholders.
+        if (placeholders != null && placeholders.length > 1) {
+            String[] processed = StringUtil.toStrings(placeholders);
+            for (int i = 1; i < processed.length; i += 2) {
+                String value = processed[i];
+                if (value == null) continue;
+                Matcher localized = LOCALIZED_PLACEHOLDER_VALUE.matcher(value);
+                if (localized.matches()) {
+                    processed[i] = api.locales().resolve(sender, localized.group(1));
+                }
+            }
+            str = PlaceholderUtil.apply(str, processed);
+        }
         if (sender instanceof Player player) {
             str = PlaceholderUtil.apply(str,
                 "player", player.getName(),
                 "uuid", player.getUniqueId().toString());
         }
-        if (placeholders == null || placeholders.length <= 1) {
-            return str;
-        }
-
-        String[] processed = StringUtil.toStrings(placeholders);
-        for (int i = 1; i < processed.length; i += 2) {
-            String value = processed[i];
-            if (value == null) continue;
-            Matcher localized = LOCALIZED_PLACEHOLDER_VALUE.matcher(value);
-            if (localized.matches()) {
-                processed[i] = api.locales().resolve(sender, localized.group(1));
-            }
-        }
-        return PlaceholderUtil.apply(str, processed);
+        return str;
     }
 }

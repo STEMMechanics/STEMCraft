@@ -135,6 +135,34 @@ class MessageServiceImplTest {
     }
 
     @Test
+    void milestoneAchieverIsTheSameForEveryRecipientAndConsole() {
+        MessageServiceImpl service = new MessageServiceImpl(mock(STEMCraft.class), mock(STEMCraftAPI.class));
+        String message = "{player} has placed {value} blocks in {group}";
+        String expected = "Builder has placed 10000 blocks in Creative";
+        Object[] values = {"player", "Builder", "value", 10000, "group", "Creative"};
+        assertEquals(expected, service.applyPlaceholders(null, message, values));
+        for (String name : java.util.List.of("Builder", "Observer", "AnotherPlayer")) {
+            var recipient = mock(org.bukkit.entity.Player.class);
+            when(recipient.getName()).thenReturn(name);
+            when(recipient.getUniqueId()).thenReturn(java.util.UUID.randomUUID());
+            assertEquals(expected, service.applyPlaceholders(recipient, message, values));
+        }
+    }
+
+    @Test
+    void recipientPlaceholdersRemainDefaultsAndExplicitUuidWins() {
+        MessageServiceImpl service = new MessageServiceImpl(mock(STEMCraft.class), mock(STEMCraftAPI.class));
+        var recipient = mock(org.bukkit.entity.Player.class);
+        var uuid = java.util.UUID.randomUUID();
+        when(recipient.getName()).thenReturn("Observer");
+        when(recipient.getUniqueId()).thenReturn(uuid);
+        assertEquals("Observer " + uuid, service.applyPlaceholders(recipient, "{player} {uuid}"));
+        assertEquals("Builder achiever-id", service.applyPlaceholders(recipient, "{player} {uuid}",
+            "player", "Builder", "uuid", "achiever-id"));
+        assertEquals("Observer 10", service.applyPlaceholders(recipient, "{player} {value}", "value", 10));
+    }
+
+    @Test
     void bracedPlaceholderValuesAreLocalizedExplicitly() {
         STEMCraftAPI api = mock(STEMCraftAPI.class);
         LocaleService locales = mock(LocaleService.class);
