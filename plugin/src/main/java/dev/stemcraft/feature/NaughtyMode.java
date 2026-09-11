@@ -150,6 +150,7 @@ public class NaughtyMode extends BaseFeature {
             .register(STEMCraft.getPlugin());
 
         api.events().register(AsyncChatEvent.class, event -> {
+            if (STEMCraft.getPlugin().stemBot() != null && STEMCraft.getPlugin().stemBot().isPrivateChat(event)) return;
             if (isNaughty(event.getPlayer().getUniqueId())) {
                 event.setCancelled(true);
                 api.messages().error(event.getPlayer(), "NAUGHTY_NO_CHAT");
