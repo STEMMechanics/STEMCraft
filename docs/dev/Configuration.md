@@ -65,8 +65,26 @@ The world service stores per-world settings under the `worlds` config section. T
 `selection_preview` renders player-specific previews for cuboid, sphere/ellipsoid,
 cylinder, and 2D polygon selections. `particle`, `particles-per-block`,
 `particle-send-interval`, `particle-viewdistance`, and `max-selection-size-to-display`
-control the outline. `advanced-grid.enabled` adds geometry-appropriate surface grids;
-`spacing` and `max-points` bound their density and cost.
+control the outline. Defaults are one particle per two blocks, ten ticks between updates,
+and a 48-block viewing distance. `max-particles-per-update` caps the total WorldEdit
+particle calls per player per update (default 1,000, clamped to 16–10,000), including
+markers and grids. Lines are clipped before sampling and nearby preview geometry is
+cached until the selection or the viewer's block position changes. Incomplete
+selections show only the primary-position marker, never a box to an unset origin.
+
+`advanced-grid.enabled` defaults to false. Players can override that default with
+`/selpreview grid [on|off]`, independently of `/selpreview [on|off]`. Both preferences
+persist across reconnects and affect only automatic WorldEdit previews. Feature and
+minigame highlights remain visible. `advanced-grid.max-side-length` automatically
+suppresses the WorldEdit grid when any inclusive selection bounding-box side exceeds
+64 blocks; shrinking the selection restores the grid without changing the preference.
+`spacing` controls cuboid grid spacing too, and `max-points` defaults to 1,000.
+
+The density, interval, particle types and default grid setting are shared with feature
+highlights. The total WorldEdit budget, player preferences, cache and grid side cutoff
+apply specifically to automatic WorldEdit previews. Existing saved configuration values
+are preserved on reload: update the `selection_preview` section to adopt these reduced
+defaults on an existing server.
 
 ## Data Model Guidance
 

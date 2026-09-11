@@ -84,7 +84,7 @@ public final class WorldEditRegionSupport {
 
     /**
      * Gets the player's WorldEdit selection for preview purposes.
-     * Falls back to incomplete selector state if a full selection is not yet available.
+     * Incomplete selections are rendered separately as a primary-position marker.
      *
      * @param player The player whose preview selection to retrieve.
      * @return The preview region, or null if nothing useful can be rendered.
@@ -95,21 +95,17 @@ public final class WorldEditRegionSupport {
                 .getSessionManager()
                 .get(wePlayer);
         com.sk89q.worldedit.world.World weWorld = wePlayer.getWorld();
+        return previewSelection(session.getRegionSelector(weWorld), player.getWorld());
+    }
+
+    static @Nullable SCRegion previewSelection(RegionSelector selector, org.bukkit.World world) {
+        if (selector == null) return null;
         try {
-            Region complete = session.getSelection(weWorld);
-            if (isPreviewSupported(complete)) return snapshot(complete, player.getWorld());
-        } catch (IncompleteRegionException ignored) { }
-        RegionSelector selector = session.getRegionSelector(weWorld);
-        if (selector == null) {
-            return null;
+            Region complete = selector.getRegion();
+            return isPreviewSupported(complete) ? snapshot(complete, world) : null;
+        } catch (IncompleteRegionException ignored) {
+            return null; // An unset corner must never become an origin-to-player preview.
         }
-
-        Region incomplete = selector.getIncompleteRegion();
-        if (!isPreviewSupported(incomplete)) {
-            return null;
-        }
-
-        return snapshot(incomplete, player.getWorld());
     }
 
     private static boolean isPreviewSupported(Region region) {
@@ -232,7 +228,7 @@ public final class WorldEditRegionSupport {
     }
 
     private static SCRegion snapshot(Region region, org.bukkit.World world) {
-        com.sk89q.worldedit.world.World weWorld = BukkitAdapter.adapt(world);
+        com.sk89q.worldedit.world.World weWorld = world == null ? null : BukkitAdapter.adapt(world);
 
         if (region instanceof CuboidRegion cuboid) {
             Region copy = new CuboidRegion(weWorld, cuboid.getMinimumPoint(), cuboid.getMaximumPoint());
@@ -245,6 +241,9 @@ public final class WorldEditRegionSupport {
             return new SCRegion(copy, world);
         }
 
+        if (region instanceof EllipsoidRegion || region instanceof CylinderRegion) {
+            return new SCRegion(region, world);
+        }
         throw new IllegalArgumentException("Unsupported region type: " + region.getClass().getSimpleName());
     }
 }
