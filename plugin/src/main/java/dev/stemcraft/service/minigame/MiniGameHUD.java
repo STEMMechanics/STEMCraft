@@ -47,6 +47,10 @@ public class MiniGameHUD {
     }
 
     public String bossbar(MiniGamePlayer player) {
+        return bossbar(player, true);
+    }
+
+    public String bossbar(MiniGamePlayer player, boolean advance) {
         if (bossBarLines.isEmpty()) {
             return "";
         }
@@ -64,7 +68,9 @@ public class MiniGameHUD {
 
         int index = 0;
         if (player instanceof MiniGamePlayerImpl impl) {
-            index = impl.nextBossBarLineIndex(visibleLines.size(), bossBarLineHoldUpdates);
+            index = advance
+                ? impl.nextBossBarLineIndex(visibleLines.size(), bossBarLineHoldUpdates)
+                : impl.currentBossBarLineIndex(visibleLines.size(), bossBarLineHoldUpdates);
         }
         return visibleLines.get(index);
     }

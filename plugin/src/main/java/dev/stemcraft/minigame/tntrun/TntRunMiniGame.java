@@ -71,6 +71,7 @@ public class TntRunMiniGame extends BaseMiniGame {
         configFile.setAutoSave(true);
         config.onEnable(configFile);
         MiniGameHudConfigSupport.apply(minigame, configFile, defaultHudDefinitions());
+        configureRewards(minigame, configFile);
 
         new TntRunCommand(api, this).onEnable();
         loadArenas();
@@ -196,6 +197,7 @@ public class TntRunMiniGame extends BaseMiniGame {
 
         config.onEnable(configFile);
         MiniGameHudConfigSupport.apply(minigame, configFile, defaultHudDefinitions());
+        configureRewards(minigame, configFile);
         unloadArenas(minigame);
         loadArenas();
         return true;

@@ -3,6 +3,7 @@ package dev.stemcraft.minigame;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigFile;
 import dev.stemcraft.api.config.ConfigSection;
+import dev.stemcraft.api.config.ConfigSectionView;
 import dev.stemcraft.api.minigame.MiniGame;
 import dev.stemcraft.api.minigame.MiniGameArena;
 import dev.stemcraft.api.minigame.MiniGameArenaHandler;
@@ -36,6 +37,11 @@ public class BaseMiniGame {
 
     protected final boolean reloadConfigFile(@Nullable ConfigFile configFile) {
         return configFile != null && configFile.reload();
+    }
+
+    protected final void configureRewards(@NotNull MiniGame minigame, @Nullable ConfigFile configFile) {
+        ConfigSectionView rewards = configFile == null ? null : configFile.getSection("rewards");
+        minigame.configureRewards(rewards);
     }
 
     protected final void unloadArenas(@NotNull MiniGame minigame) {

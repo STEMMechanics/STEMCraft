@@ -20,15 +20,20 @@
 
 package dev.stemcraft.feature;
 
+import dev.stemcraft.api.service.playerreset.*;
+
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.Command;
 import dev.stemcraft.api.config.ConfigSection;
+import dev.stemcraft.api.service.protection.ProtectionRequest;
+import dev.stemcraft.api.service.protection.ProtectionType;
 import dev.stemcraft.api.util.LocationUtil;
+import dev.stemcraft.api.util.TeleportContext;
+import dev.stemcraft.api.util.TeleportOptions;
 import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.api.util.WorldUtil;
 import org.bukkit.Bukkit;
-import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.World;
@@ -37,29 +42,29 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventPriority;
-import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
+import java.time.Duration;
 import java.util.List;
 
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import org.jetbrains.annotations.NotNull;
 
 /**
  * Feature that provides various teleportation utilities such as /tpall, /tphere, /back, /warp, /setwarp, /delwarp, /spawn, /tpworld, /top, /jump, and /thru.
  */
 public class TeleportUtils extends BaseFeature {
     private static final long DAMAGE_PROTECTION_MILLIS = 10_000L;
-    private static final long DAMAGE_PROTECTION_TICKS = DAMAGE_PROTECTION_MILLIS / 50L;
 
     private final Map<UUID, Location> backLocations = new ConcurrentHashMap<>();
     private final Map<UUID, Map<String, WorldLastLocation>> worldLastLocations = new ConcurrentHashMap<>();
     private final Map<String, Location> warps = new ConcurrentHashMap<>();
-    private final Map<UUID, Long> damageProtectionUntil = new ConcurrentHashMap<>();
 
     private record WorldLastLocation(
             String worldName,
@@ -89,22 +94,57 @@ public class TeleportUtils extends BaseFeature {
         ensureBackLocationStorage();
         loadBackLocationsFromStorage();
         loadWorldLastLocationsFromStorage();
+        api.playerResets().register(new PlayerResetHandler() {
+            public @NotNull String id() { return "player-locations"; }
+            public @NotNull Set<PlayerResetScope> scopes() { return Set.of(PlayerResetScope.GAMEPLAY, PlayerResetScope.COMPLETE); }
+            public int priority() { return 180; }
+            public @NotNull PlayerResetPreview preview(@NotNull PlayerResetContext context) {
+                int count = backLocations.containsKey(context.playerUuid()) ? 1 : 0;
+                count += worldLastLocations.getOrDefault(context.playerUuid(), Map.of()).size();
+                return new PlayerResetPreview("Back and per-world last locations", count);
+            }
+            public void reset(@NotNull PlayerResetContext context) {
+                UUID uuid = context.playerUuid(); backLocations.remove(uuid); worldLastLocations.remove(uuid);
+            }
+        });
 
         // Track previous locations for /back
         api.events().register(PlayerTeleportEvent.class, event -> {
+            if (isMovementAdjustment(event) || isNoOpTeleport(event.getFrom(), event.getTo())) {
+                return;
+            }
             Player player = event.getPlayer();
-            grantDamageProtection(player);
+            TeleportOptions options = TeleportContext.current(player.getUniqueId());
+            if (options.grantDamageProtection()) {
+                api.protections().request(
+                    player,
+                    Duration.ofMillis(DAMAGE_PROTECTION_MILLIS),
+                    new ProtectionRequest(ProtectionType.TELEPORT_DAMAGE, "teleport-utils", event.getFrom(), event.getTo())
+                );
+            }
             Location from = event.getFrom();
-            setBackLocation(player.getUniqueId(), from);
-            setWorldLastLocation(player.getUniqueId(), from);
+            if (options.updateBackLocation()) {
+                setBackLocation(player.getUniqueId(), from);
+            }
+            if (options.updateWorldLastLocation()) {
+                setWorldLastLocation(player.getUniqueId(), from);
+            }
 
             Location to = event.getTo();
-            setWorldLastLocation(player.getUniqueId(), to);
+            if (options.updateWorldLastLocation()) {
+                setWorldLastLocation(player.getUniqueId(), to);
+            }
         });
 
         api.events().register(PlayerTeleportEvent.class, event -> {
             Location to = event.getTo();
             if (to == null) {
+                return;
+            }
+            if (isMovementAdjustment(event) || isNoOpTeleport(event.getFrom(), to)) {
+                return;
+            }
+            if (!TeleportContext.current(event.getPlayer().getUniqueId()).logToConsole()) {
                 return;
             }
 
@@ -117,37 +157,24 @@ public class TeleportUtils extends BaseFeature {
 
         api.events().register(PlayerJoinEvent.class, event -> {
             Player player = event.getPlayer();
-            grantDamageProtection(player);
+            api.protections().request(
+                player,
+                Duration.ofMillis(DAMAGE_PROTECTION_MILLIS),
+                new ProtectionRequest(ProtectionType.TELEPORT_DAMAGE, "player-join", null, player.getLocation())
+            );
             setWorldLastLocation(player.getUniqueId(), player.getLocation());
         });
         api.events().register(PlayerQuitEvent.class, event -> {
             Player player = event.getPlayer();
-            damageProtectionUntil.remove(player.getUniqueId());
-            api.tasks().cancel(damageProtectionTaskId(player.getUniqueId()));
+            api.protections().clear(player, ProtectionType.TELEPORT_DAMAGE);
             setWorldLastLocation(player.getUniqueId(), player.getLocation());
         });
-
-        api.events().register(EntityDamageEvent.class, event -> {
-            if (!(event.getEntity() instanceof Player player)) {
-                return;
-            }
-
-            Long protectedUntil = damageProtectionUntil.get(player.getUniqueId());
-            if (protectedUntil == null) {
-                return;
-            }
-
-            if (System.currentTimeMillis() < protectedUntil) {
-                event.setCancelled(true);
-            } else {
-                damageProtectionUntil.remove(player.getUniqueId());
-            }
-        }, EventPriority.HIGHEST, false);
 
         // Run configured commands when a player teleports to a different world
         api.events().register(PlayerTeleportEvent.class, event -> {
             Location from = event.getFrom();
             Location to = event.getTo();
+            if (isMovementAdjustment(event) || isNoOpTeleport(from, to)) return;
             if (from.getWorld() == null || to.getWorld() == null) return;
             if (from.getWorld().equals(to.getWorld())) return;
 
@@ -261,6 +288,7 @@ public class TeleportUtils extends BaseFeature {
         api.commands().create("back")
                 .usage("BACK_USAGE")
                 .permission("stemcraft.command.back")
+                .access((sender, args) -> dev.stemcraft.permission.PlayerCommandAccess.ownTarget(sender, args, 0, "stemcraft.command.back.others"))
                 .description("BACK_DESCRIPTION")
                 .executor((plugin, cmd, ctx) -> {
                     Player target;
@@ -387,6 +415,7 @@ public class TeleportUtils extends BaseFeature {
         api.commands().create("spawn")
                 .usage("SPAWN_USAGE")
                 .permission("stemcraft.command.spawn")
+                .access(dev.stemcraft.permission.PlayerCommandAccess::spawn)
                 .description("SPAWN_DESCRIPTION")
                 .executor((plugin, cmd, ctx) -> {
                     if (ctx.args().isEmpty()) {
@@ -633,42 +662,13 @@ public class TeleportUtils extends BaseFeature {
                 .register(STEMCraft.getPlugin());
     }
 
-    private void grantDamageProtection(Player player) {
-        if (player == null) {
-            return;
-        }
-        UUID uuid = player.getUniqueId();
-        if (player.getGameMode() != GameMode.SURVIVAL) {
-            damageProtectionUntil.remove(uuid);
-            api.tasks().cancel(damageProtectionTaskId(uuid));
-            return;
-        }
-
-        long protectionUntil = System.currentTimeMillis() + DAMAGE_PROTECTION_MILLIS;
-        damageProtectionUntil.put(uuid, protectionUntil);
-
-        api.tasks().runOnceDelay(damageProtectionTaskId(uuid), DAMAGE_PROTECTION_TICKS, () -> {
-            Long current = damageProtectionUntil.get(uuid);
-            if (current == null || current != protectionUntil) {
-                return;
-            }
-
-            if (System.currentTimeMillis() < current) {
-                return;
-            }
-
-            damageProtectionUntil.remove(uuid);
-            Player online = Bukkit.getPlayer(uuid);
-            if (online != null && online.isOnline() && online.getGameMode() == GameMode.SURVIVAL) {
-                api.messages().info(online, "TELEPORT_DAMAGE_PROTECTION_ENDED");
-            }
-        });
+    private boolean isNoOpTeleport(Location from, Location to) {
+        return from != null && to != null && from.equals(to);
     }
 
-    private String damageProtectionTaskId(UUID uuid) {
-        return "teleportutils:damage-protection-expire:" + uuid;
+    private boolean isMovementAdjustment(PlayerTeleportEvent event) {
+        return event.getCause() == PlayerTeleportEvent.TeleportCause.DISMOUNT;
     }
-
     /**
      * Load warps from configuration.
      */

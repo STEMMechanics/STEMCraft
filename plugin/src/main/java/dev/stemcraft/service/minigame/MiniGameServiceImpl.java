@@ -27,13 +27,16 @@ import dev.stemcraft.api.minigame.MiniGameArena;
 import dev.stemcraft.api.minigame.MiniGameArenaHandler;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.service.minigame.MiniGameService;
+import dev.stemcraft.api.service.protection.ProtectionType;
 import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.service.BaseService;
+import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.AbstractArrow;
 import org.bukkit.entity.Player;
+import org.bukkit.permissions.PermissionAttachment;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
@@ -44,6 +47,8 @@ import org.bukkit.event.entity.EntityShootBowEvent;
 import org.bukkit.event.entity.FoodLevelChangeEvent;
 import org.bukkit.event.entity.ItemDespawnEvent;
 import org.bukkit.event.entity.ItemMergeEvent;
+import org.bukkit.event.inventory.CraftItemEvent;
+import org.bukkit.event.inventory.PrepareItemCraftEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
@@ -66,7 +71,8 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
     private final Map<String, Map<String, MiniGameArenaImpl>> arenasByNamespace = new HashMap<>();
     private final Map<UUID, ArenaOccupancy> players = new HashMap<>();
     private final Map<UUID, StoredPlayerState> prevPlayerStates = new HashMap<>();
-    private final MiniGameTeamSelectionSupport teamSelectionSupport;
+    private final Map<UUID, PermissionAttachment> minigamePermissionAttachments = new HashMap<>();
+    private MiniGameTeamSelectionSupport teamSelectionSupport;
 
     /**
      * Constructs a MiniGameServiceImpl instance.
@@ -76,13 +82,14 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
      */
     public MiniGameServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
-        this.teamSelectionSupport = new MiniGameTeamSelectionSupport(api, this);
     }
 
     @Override
     public void onReload() {
         super.onReload();
-        teamSelectionSupport.reloadConfig();
+        if (teamSelectionSupport != null) {
+            teamSelectionSupport.reloadConfig();
+        }
     }
 
     /**
@@ -90,6 +97,13 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
      */
     @Override
     public void onEnable() {
+        if (teamSelectionSupport == null) {
+            teamSelectionSupport = new MiniGameTeamSelectionSupport(api);
+            teamSelectionSupport.attachService(this);
+        }
+        api.protections().registerRule("minigame-teleport-damage", (player, request) ->
+            request.type() != ProtectionType.TELEPORT_DAMAGE || findPlayerArena(player) == null
+        );
 
         // Countdown Task
         api.tasks().repeating("minigame-countdown", 20, 20, () -> {
@@ -235,6 +249,32 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
             restoreFullHunger(player);
         });
 
+        api.events().register(PrepareItemCraftEvent.class, event -> {
+            if (!(event.getView().getPlayer() instanceof Player player)) {
+                return;
+            }
+
+            MiniGameArenaImpl arena = findParticipantArena(player);
+            if (arena == null || isCraftingAllowed(arena)) {
+                return;
+            }
+
+            event.getInventory().setResult(null);
+        });
+
+        api.events().register(CraftItemEvent.class, event -> {
+            if (!(event.getWhoClicked() instanceof Player player)) {
+                return;
+            }
+
+            MiniGameArenaImpl arena = findParticipantArena(player);
+            if (arena == null || isCraftingAllowed(arena)) {
+                return;
+            }
+
+            event.setCancelled(true);
+        });
+
         api.events().register(EntityExplodeEvent.class, event -> {
             for (MiniGameArenaImpl arena : findArenasForExplosion(event.getLocation(), event.blockList())) {
                 MiniGameArenaHandler handler = handlers.get(arena.namespace());
@@ -366,6 +406,7 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
 
     @Override
     public void onDisable() {
+        clearAllMinigamePermissionAttachments();
         for (MiniGame minigame : new ArrayList<>(minigames.values())) {
             for (MiniGameArena arena : new ArrayList<>(minigame.arenas())) {
                 minigame.removeArena(arena.id());
@@ -665,6 +706,101 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
         }
     }
 
+    void applyArenaJoinActions(@NotNull MiniGameArena arena, @NotNull Player player, boolean spectator) {
+        attachArenaPermissions(arena, player, spectator);
+        executeArenaLifecycleCommands(arena.getJoinCommands(), arena, player, spectator);
+    }
+
+    void applyArenaLeaveActions(@NotNull MiniGameArena arena, @NotNull Player player, boolean spectator) {
+        executeArenaLifecycleCommands(arena.getLeaveCommands(), arena, player, spectator);
+        clearArenaPermissions(player.getUniqueId());
+    }
+
+    private void attachArenaPermissions(@NotNull MiniGameArena arena, @NotNull Player player, boolean spectator) {
+        clearArenaPermissions(player.getUniqueId());
+
+        List<String> permissions = arena.getJoinPermissions().stream()
+            .map(permission -> resolveArenaLifecycleTokens(permission, arena, player, spectator))
+            .map(String::trim)
+            .filter(permission -> !permission.isBlank())
+            .toList();
+        if (permissions.isEmpty()) {
+            return;
+        }
+
+        PermissionAttachment attachment = player.addAttachment(plugin);
+        for (String permission : permissions) {
+            attachment.setPermission(permission, true);
+        }
+        minigamePermissionAttachments.put(player.getUniqueId(), attachment);
+    }
+
+    private void clearArenaPermissions(@NotNull UUID playerId) {
+        PermissionAttachment attachment = minigamePermissionAttachments.remove(playerId);
+        if (attachment == null) {
+            return;
+        }
+
+        Player player = Bukkit.getPlayer(playerId);
+        if (player != null && player.isOnline()) {
+            player.removeAttachment(attachment);
+        }
+    }
+
+    private void clearAllMinigamePermissionAttachments() {
+        for (UUID playerId : new ArrayList<>(minigamePermissionAttachments.keySet())) {
+            clearArenaPermissions(playerId);
+        }
+    }
+
+    private void executeArenaLifecycleCommands(@NotNull List<String> commands,
+                                               @NotNull MiniGameArena arena,
+                                               @NotNull Player player,
+                                               boolean spectator) {
+        if (commands.isEmpty()) {
+            return;
+        }
+
+        for (String rawCommand : commands) {
+            String command = resolveArenaLifecycleTokens(rawCommand, arena, player, spectator).trim();
+            if (command.isBlank()) {
+                continue;
+            }
+
+            String lowered = command.toLowerCase(Locale.ROOT);
+            if (lowered.startsWith("server:")) {
+                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command.substring("server:".length()).trim());
+                continue;
+            }
+
+            String playerCommand = lowered.startsWith("player:")
+                ? command.substring("player:".length()).trim()
+                : command;
+            if (!playerCommand.isBlank()) {
+                Bukkit.dispatchCommand(player, playerCommand);
+            }
+        }
+    }
+
+    private @NotNull String resolveArenaLifecycleTokens(@Nullable String raw,
+                                                        @NotNull MiniGameArena arena,
+                                                        @NotNull Player player,
+                                                        boolean spectator) {
+        if (raw == null || raw.isBlank()) {
+            return "";
+        }
+
+        String role = spectator ? "spectator" : "player";
+        return raw
+            .replace("{player}", player.getName())
+            .replace("{uuid}", player.getUniqueId().toString())
+            .replace("{arena}", arena.id())
+            .replace("{arena-name}", arena.getName())
+            .replace("{minigame}", arena.namespace())
+            .replace("{namespace}", arena.namespace())
+            .replace("{role}", role);
+    }
+
     private @NotNull List<MiniGameArenaImpl> findArenasForExplosion(@NotNull Location location, @NotNull List<org.bukkit.block.Block> blocks) {
         World world = location.getWorld();
         if (world == null) {
@@ -675,7 +811,7 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
         for (Map<String, MiniGameArenaImpl> arenas : arenasByNamespace.values()) {
             for (MiniGameArenaImpl arena : arenas.values()) {
                 MiniGameArenaHandler handler = handlers.get(arena.namespace());
-                if (handler == null || !handler.isActive(arena) || !arena.world().equals(world)) {
+                if (handler == null || !isArenaActiveForEvents(arena) || !arena.world().equals(world)) {
                     continue;
                 }
 
@@ -690,6 +826,13 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
             }
         }
         return matches;
+    }
+
+    private boolean isArenaActiveForEvents(MiniGameArena arena) {
+        MiniGameArena.ArenaStatus status = arena.getStatus();
+        return status != MiniGameArena.ArenaStatus.DISABLED
+            && status != MiniGameArena.ArenaStatus.SETUP
+            && status != MiniGameArena.ArenaStatus.SHUTDOWN;
     }
 
     private boolean explosionTouchesRegion(@NotNull SCRegion region, @NotNull List<org.bukkit.block.Block> blocks) {
@@ -711,6 +854,10 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
         MiniGame miniGame = minigames.get(arena.namespace());
         boolean defaultValue = miniGame == null || miniGame.disablesHungerByDefault();
         return arena.get("disableHunger", Boolean.class, defaultValue);
+    }
+
+    private boolean isCraftingAllowed(@NotNull MiniGameArenaImpl arena) {
+        return arena.get("allowCrafting", Boolean.class, false);
     }
 
     private void restoreFullHunger(@NotNull Player player) {

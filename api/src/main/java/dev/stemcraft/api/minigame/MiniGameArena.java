@@ -29,6 +29,7 @@ import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -45,6 +46,9 @@ public interface MiniGameArena extends MessageService, HasMeta<MiniGameArena> {
     String LOBBY_REGION_META_KEY = "lobbyRegion";
     String TEAM_SELECTION_INPUT_META_KEY = "teamSelectionInput";
     String TEAM_SELECTION_INPUTS_META_KEY = "teamSelectionInputs";
+    String JOIN_COMMANDS_META_KEY = "joinCommands";
+    String LEAVE_COMMANDS_META_KEY = "leaveCommands";
+    String JOIN_PERMISSIONS_META_KEY = "joinPermissions";
 
     enum ArenaStatus {
         DISABLED,   // Arena is disabled/unavailable
@@ -185,6 +189,66 @@ public interface MiniGameArena extends MessageService, HasMeta<MiniGameArena> {
     }
 
     /**
+     * Get commands that should run when a player or spectator joins this arena from outside the minigame.
+     * Commands use the same prefix convention as world transition commands:
+     * {@code server:} runs as console, otherwise the command runs as the player.
+     *
+     * @return The configured join commands.
+     */
+    default List<String> getJoinCommands() {
+        return List.copyOf(getList(JOIN_COMMANDS_META_KEY, String.class, List.of()));
+    }
+
+    /**
+     * Set commands that should run when a player or spectator joins this arena from outside the minigame.
+     *
+     * @param commands The commands to run.
+     * @return The arena instance.
+     */
+    default MiniGameArena setJoinCommands(List<String> commands) {
+        return set(JOIN_COMMANDS_META_KEY, commands == null ? List.of() : new ArrayList<>(commands));
+    }
+
+    /**
+     * Get commands that should run when a player or spectator fully leaves this arena.
+     *
+     * @return The configured leave commands.
+     */
+    default List<String> getLeaveCommands() {
+        return List.copyOf(getList(LEAVE_COMMANDS_META_KEY, String.class, List.of()));
+    }
+
+    /**
+     * Set commands that should run when a player or spectator fully leaves this arena.
+     *
+     * @param commands The commands to run.
+     * @return The arena instance.
+     */
+    default MiniGameArena setLeaveCommands(List<String> commands) {
+        return set(LEAVE_COMMANDS_META_KEY, commands == null ? List.of() : new ArrayList<>(commands));
+    }
+
+    /**
+     * Get permissions that should be granted while a player or spectator is inside this arena.
+     * These permissions are attached on join and automatically removed on leave.
+     *
+     * @return The configured temporary permissions.
+     */
+    default List<String> getJoinPermissions() {
+        return List.copyOf(getList(JOIN_PERMISSIONS_META_KEY, String.class, List.of()));
+    }
+
+    /**
+     * Set permissions that should be granted while a player or spectator is inside this arena.
+     *
+     * @param permissions The permissions to attach.
+     * @return The arena instance.
+     */
+    default MiniGameArena setJoinPermissions(List<String> permissions) {
+        return set(JOIN_PERMISSIONS_META_KEY, permissions == null ? List.of() : new ArrayList<>(permissions));
+    }
+
+    /**
      * Get the spectator spawn location.
      *
      * @return The spectator spawn location, or null to fall back to the lobby.
@@ -224,13 +288,7 @@ public interface MiniGameArena extends MessageService, HasMeta<MiniGameArena> {
      *
      * @return The updated countdown time.
      */
-    default int decrementCountdown() {
-        int current = getCountdown();
-        if (current > 0) {
-            setCountdown(current - 1);
-        }
-        return getCountdown();
-    }
+    int decrementCountdown();
 
     /**
      * Number of players currently in the arena related to the minigame.
@@ -693,28 +751,80 @@ public interface MiniGameArena extends MessageService, HasMeta<MiniGameArena> {
      * @param secondsRemaining The number of seconds remaining before the round starts.
      * @param subtitle The subtitle text to show beneath the countdown.
      */
-    default void showStartingCountdownTitle(int secondsRemaining, String subtitle) {
-        if (secondsRemaining <= 0) {
-            return;
-        }
-
-        showTitle(
-            "<gradient:#fde047:#f97316><bold>" + secondsRemaining + "</bold></gradient>",
-            subtitle,
-            0,
-            1000,
-            200
-        );
-    }
+    void showStartingCountdownTitle(int secondsRemaining, String subtitle);
 
     /**
      * Show a standard start countdown title to the arena players.
      *
      * @param secondsRemaining The number of seconds remaining before the round starts.
      */
-    default void showStartingCountdownTitle(int secondsRemaining) {
-        showStartingCountdownTitle(secondsRemaining, "<gold>Game starts in</gold>");
+    void showStartingCountdownTitle(int secondsRemaining);
+
+    /**
+     * Pull one arena occupant toward a target location at a fixed movement speed.
+     *
+     * @param player The player to pull.
+     * @param target The destination location.
+     * @param blocksPerSecond Straight-line movement speed in blocks per second.
+     */
+    default void pullPlayer(Player player, Location target, double blocksPerSecond) {
+        pullPlayer(player, target, blocksPerSecond, null);
     }
+
+    /**
+     * Pull one arena occupant toward a target location at a fixed movement speed.
+     *
+     * @param player The player to pull.
+     * @param target The destination location.
+     * @param blocksPerSecond Straight-line movement speed in blocks per second.
+     * @param onComplete Optional callback invoked after the pull completes.
+     */
+    default void pullPlayer(Player player, Location target, double blocksPerSecond, Runnable onComplete) {
+        if (player == null || target == null) {
+            if (onComplete != null) {
+                onComplete.run();
+            }
+            return;
+        }
+        pullPlayers(Map.of(player, target), blocksPerSecond, onComplete);
+    }
+
+    /**
+     * Pull arena occupants toward explicit target locations at a fixed movement speed.
+     *
+     * Movement is applied in straight-line steps each tick until every target is reached.
+     *
+     * @param targets Destination locations keyed by player.
+     * @param blocksPerSecond Straight-line movement speed in blocks per second.
+     */
+    default void pullPlayers(Map<Player, Location> targets, double blocksPerSecond) {
+        pullPlayers(targets, blocksPerSecond, null);
+    }
+
+    /**
+     * Pull arena occupants toward explicit target locations at a fixed movement speed.
+     *
+     * Movement is applied in straight-line steps each tick until every target is reached.
+     * Any existing arena player pull is replaced.
+     *
+     * @param targets Destination locations keyed by player.
+     * @param blocksPerSecond Straight-line movement speed in blocks per second.
+     * @param onComplete Optional callback invoked after all pulls complete.
+     */
+    void pullPlayers(Map<Player, Location> targets, double blocksPerSecond, Runnable onComplete);
+
+    /**
+     * Cancel any active arena-managed player pulls.
+     */
+    void cancelPlayerPulls();
+
+    /**
+     * Check whether the player is currently being pulled by the arena framework.
+     *
+     * @param player The player to check.
+     * @return {@code true} if the player is currently being pulled.
+     */
+    boolean isPlayerBeingPulled(Player player);
 
     /**
      * Reset the title to the default state for all players.
@@ -730,9 +840,34 @@ public interface MiniGameArena extends MessageService, HasMeta<MiniGameArena> {
     void trackSupplyDrop(Item item, Location markerLocation);
 
     /**
+     * Spawn a shared supply-drop crate that descends onto the target location and turns into a chest on landing.
+     *
+     * @param item The loot to place into the landed chest.
+     * @param landingLocation The target landing location above the accepted support block.
+     */
+    void spawnSupplyDropCrate(ItemStack item, Location landingLocation);
+
+    /**
+     * Spawn a shared supply-drop crate that descends onto the target location and turns into a chest on landing.
+     *
+     * @param items The loot stacks to place into the landed chest.
+     * @param landingLocation The target landing location above the accepted support block.
+     */
+    void spawnSupplyDropCrate(Collection<ItemStack> items, Location landingLocation);
+
+    /**
      * Clear all active supply-drop markers in this arena.
      */
     void clearAllSupplyDrops();
+
+    /**
+     * Count currently active framework-managed supply drops in this arena.
+     *
+     * This includes both in-flight crate visuals and landed crates that have not yet been removed.
+     *
+     * @return The current active supply-drop count.
+     */
+    int countActiveSupplyDrops();
 
     /**
      * Find a valid supply-drop spawn location inside this arena's configured arena region.

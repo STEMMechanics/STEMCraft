@@ -1,0 +1,84 @@
+recipes:
+  shapeless:
+    coconut_milk: {ingredients: ["stemcraft:coconut", GLASS_BOTTLE], result: "stemcraft:coconut_milk"}
+    rice_flour: {ingredients: ["stemcraft:rice", "stemcraft:rice", "stemcraft:rice"], result: "stemcraft:rice_flour", amount: 2}
+    rice_noodles: {ingredients: ["stemcraft:rice_flour", "stemcraft:rice_flour", WATER_BUCKET], result: "stemcraft:rice_noodles", amount: 3}
+    coconut_cream: {ingredients: ["stemcraft:coconut_milk", SUGAR], result: "stemcraft:coconut_cream", amount: 2}
+    fruit_slices: {ingredients: ["stemcraft:pineapple", "stemcraft:banana", "stemcraft:mango"], result: "stemcraft:fruit_slices", amount: 3}
+    chopped_vegetables: {ingredients: ["stemcraft:tomato", "stemcraft:onion", CARROT], result: "stemcraft:chopped_vegetables", amount: 2}
+    vegetable_stock: {ingredients: [GLASS_BOTTLE, CARROT, POTATO, "stemcraft:onion", "stemcraft:fresh_herbs"], result: "stemcraft:vegetable_stock"}
+    mushroom_stock: {ingredients: [GLASS_BOTTLE, RED_MUSHROOM, BROWN_MUSHROOM, "stemcraft:fresh_herbs"], result: "stemcraft:mushroom_stock"}
+    seafood_stock: {ingredients: [GLASS_BOTTLE, COD, KELP, "stemcraft:sea_salt"], result: "stemcraft:seafood_stock"}
+    cooking_oil: {ingredients: [GLASS_BOTTLE, SUNFLOWER, WHEAT_SEEDS, WHEAT_SEEDS], result: "stemcraft:cooking_oil"}
+    sea_salt: {ingredients: [WATER_BUCKET, BOWL], result: "stemcraft:sea_salt", amount: 4}
+    miners_breakfast: {ingredients: ["stemcraft:fried_egg", BAKED_POTATO, COOKED_PORKCHOP, BOWL], result: "stemcraft:miners_breakfast"}
+    mushroom_risotto: {ingredients: [BOWL, "stemcraft:cooked_rice", RED_MUSHROOM, BROWN_MUSHROOM, "stemcraft:mushroom_stock"], result: "stemcraft:mushroom_risotto"}
+    seafood_risotto: {ingredients: [BOWL, "stemcraft:cooked_rice", COOKED_COD, "stemcraft:seafood_stock", "stemcraft:fresh_herbs"], result: "stemcraft:seafood_risotto"}
+    pumpkin_risotto: {ingredients: [BOWL, "stemcraft:cooked_rice", PUMPKIN, "stemcraft:vegetable_stock"], result: "stemcraft:pumpkin_risotto"}
+    cooked_rice_bowl: {ingredients: [BOWL, "stemcraft:cooked_rice", "stemcraft:cooked_rice"], result: "stemcraft:cooked_rice_bowl"}
+    rice_ball: {ingredients: ["stemcraft:cooked_rice", "stemcraft:cooked_rice", "stemcraft:sea_salt"], result: "stemcraft:rice_ball", amount: 2}
+    salmon_sushi: {ingredients: ["stemcraft:cooked_rice", SALMON, "stemcraft:edible_seaweed"], result: "stemcraft:salmon_sushi", amount: 2}
+    cod_sushi: {ingredients: ["stemcraft:cooked_rice", COD, "stemcraft:edible_seaweed"], result: "stemcraft:cod_sushi", amount: 2}
+    tropical_fish_sushi: {ingredients: ["stemcraft:cooked_rice", TROPICAL_FISH, "stemcraft:edible_seaweed"], result: "stemcraft:tropical_fish_sushi", amount: 2}
+    pufferfish_sushi: {ingredients: ["stemcraft:cooked_rice", PUFFERFISH, "stemcraft:edible_seaweed"], result: "stemcraft:pufferfish_sushi", amount: 2}
+    vegetable_sushi: {ingredients: ["stemcraft:cooked_rice", CARROT, "stemcraft:edible_seaweed"], result: "stemcraft:vegetable_sushi", amount: 2}
+    seaweed_salad: {ingredients: [BOWL, "stemcraft:edible_seaweed", "stemcraft:edible_seaweed", CARROT, "stemcraft:lime"], result: "stemcraft:seaweed_salad"}
+    tropical_salad: {ingredients: [BOWL, "stemcraft:fruit_slices", "stemcraft:lime", "stemcraft:coconut"], result: "stemcraft:tropical_salad"}
+    fish_and_chips: {ingredients: [COOKED_COD, BAKED_POTATO, "stemcraft:sea_salt"], result: "stemcraft:fish_and_chips"}
+    tropical_fish_curry: {ingredients: [BOWL, TROPICAL_FISH, "stemcraft:coconut_milk", "stemcraft:chilli_pepper", CARROT], result: "stemcraft:tropical_fish_curry"}
+    coconut_chicken_curry: {ingredients: [BOWL, COOKED_CHICKEN, "stemcraft:coconut_milk", "stemcraft:chilli_pepper", CARROT], result: "stemcraft:coconut_chicken_curry"}
+    vegetable_curry: {ingredients: [BOWL, "stemcraft:chopped_vegetables", "stemcraft:coconut_milk", "stemcraft:chilli_pepper"], result: "stemcraft:vegetable_curry"}
+    mushroom_noodles: {ingredients: [BOWL, "stemcraft:rice_noodles", RED_MUSHROOM, BROWN_MUSHROOM, "stemcraft:mushroom_stock"], result: "stemcraft:mushroom_noodles"}
+    seafood_noodles: {ingredients: [BOWL, "stemcraft:rice_noodles", COOKED_SALMON, "stemcraft:seafood_stock"], result: "stemcraft:seafood_noodles"}
+    vegetable_noodles: {ingredients: [BOWL, "stemcraft:rice_noodles", "stemcraft:chopped_vegetables", "stemcraft:vegetable_stock"], result: "stemcraft:vegetable_noodles"}
+    fried_rice: {ingredients: [BOWL, "stemcraft:cooked_rice", "stemcraft:chopped_vegetables", EGG, "stemcraft:cooking_oil"], result: "stemcraft:fried_rice"}
+    seafood_fried_rice: {ingredients: [BOWL, "stemcraft:cooked_rice", COOKED_SALMON, EGG, "stemcraft:cooking_oil"], result: "stemcraft:seafood_fried_rice"}
+    stuffed_mushroom: {ingredients: [BROWN_MUSHROOM, BREAD, "stemcraft:garlic", "stemcraft:fresh_herbs"], result: "stemcraft:stuffed_mushroom", amount: 2}
+    mushroom_skewer: {ingredients: [STICK, RED_MUSHROOM, BROWN_MUSHROOM], result: "stemcraft:mushroom_skewer", amount: 2}
+    honey_glazed_pork: {ingredients: [COOKED_PORKCHOP, HONEY_BOTTLE, "stemcraft:ginger"], result: "stemcraft:honey_glazed_pork"}
+    nether_chilli: {ingredients: [BOWL, COOKED_BEEF, BEETROOT, BLAZE_POWDER, "stemcraft:chilli_pepper"], result: "stemcraft:nether_chilli"}
+    apple_pie: {ingredients: [APPLE, APPLE, WHEAT, WHEAT, SUGAR, EGG], result: "stemcraft:apple_pie"}
+    sweet_berry_tart: {ingredients: [SWEET_BERRIES, SWEET_BERRIES, WHEAT, WHEAT, SUGAR], result: "stemcraft:sweet_berry_tart"}
+    hot_chocolate: {ingredients: [GLASS_BOTTLE, COCOA_BEANS, SUGAR, MILK_BUCKET], result: "stemcraft:hot_chocolate"}
+    coconut_water: {ingredients: [GLASS_BOTTLE, "stemcraft:coconut"], result: "stemcraft:coconut_water"}
+    tropical_smoothie: {ingredients: [GLASS_BOTTLE, "stemcraft:fruit_slices", "stemcraft:coconut_milk"], result: "stemcraft:tropical_smoothie"}
+    mango_juice: {ingredients: [GLASS_BOTTLE, "stemcraft:mango", SUGAR], result: "stemcraft:mango_juice"}
+    limeade: {ingredients: [GLASS_BOTTLE, "stemcraft:lime", SUGAR], result: "stemcraft:limeade"}
+    chorus_parfait: {ingredients: [CHORUS_FRUIT, "stemcraft:coconut_cream", SWEET_BERRIES, BOWL], result: "stemcraft:chorus_parfait"}
+    rotten_sandwich: {ingredients: [BREAD, BREAD, ROTTEN_FLESH], result: "stemcraft:rotten_sandwich"}
+
+  furnace:
+    cooked_rice: {input: "stemcraft:rice", result: "stemcraft:cooked_rice", exp: 0.1, time: 200}
+    dried_fruit: {input: "stemcraft:fruit_slices", result: "stemcraft:dried_fruit", exp: 0.1, time: 200}
+    roasted_seeds: {input: MELON_SEEDS, result: "stemcraft:roasted_seeds", exp: 0.1, time: 120}
+    phantom_jerky: {input: PHANTOM_MEMBRANE, result: "stemcraft:phantom_jerky", exp: 0.2, time: 200}
+  smoker:
+    cooked_rice_smoker: {input: "stemcraft:rice", result: "stemcraft:cooked_rice", exp: 0.1, time: 100}
+    dried_fruit_smoker: {input: "stemcraft:fruit_slices", result: "stemcraft:dried_fruit", exp: 0.1, time: 100}
+    phantom_jerky_smoker: {input: PHANTOM_MEMBRANE, result: "stemcraft:phantom_jerky", exp: 0.2, time: 100}
+
+  brewing:
+    haste:
+      input: AWKWARD
+      ingredient: AMETHYST_SHARD
+      effect: HASTE
+      duration-ticks: 3600
+      amplifier: 0
+      name: "<yellow>Potion of Haste"
+      color: "D9B84A"
+    long_haste:
+      input: "effect:HASTE"
+      ingredient: REDSTONE
+      effect: HASTE
+      duration-ticks: 9600
+      amplifier: 0
+      name: "<yellow>Long Potion of Haste"
+      color: "D9B84A"
+    strong_haste:
+      input: "effect:HASTE"
+      ingredient: GLOWSTONE_DUST
+      effect: HASTE
+      duration-ticks: 1800
+      amplifier: 1
+      name: "<gold>Strong Potion of Haste"
+      color: "E6A82D"

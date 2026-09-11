@@ -2,16 +2,6 @@ name: CI
 
 on:
   pull_request:
-    paths:
-      - 'api/**'
-      - 'plugin/**'
-      - 'gradle/**'
-      - 'build.gradle'
-      - 'buildSource.gradle'
-      - 'gradle.properties'
-      - 'settings.gradle'
-      - 'gradlew'
-      - 'gradlew.bat'
   push:
     branches: [ '**' ]
     paths:

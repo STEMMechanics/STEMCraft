@@ -1,6 +1,7 @@
 package dev.stemcraft.minigame.minefield;
 
 import dev.stemcraft.api.model.SCRegion;
+import dev.stemcraft.service.region.RegionLocationSupport;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -82,12 +83,12 @@ public record MinefieldArenaRecord(
             return center;
         }
 
-        Location ground = startRegion.getRandomGroundLocation();
+        Location ground = RegionLocationSupport.randomGroundLocation(startRegion);
         if (ground != null) {
             return ground;
         }
 
-        Location fallback = startRegion.getRandomLocation();
+        Location fallback = RegionLocationSupport.randomLocation(startRegion);
         return fallback == null ? center : fallback;
     }
 

@@ -8,6 +8,7 @@ import dev.stemcraft.api.minigame.MiniGame;
 import dev.stemcraft.api.minigame.MiniGameArena;
 import dev.stemcraft.api.minigame.MiniGamePlayer;
 import dev.stemcraft.api.model.SCRegion;
+import dev.stemcraft.service.region.RegionLocationSupport;
 import dev.stemcraft.api.service.hologram.HologramTypeHandler;
 import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.api.util.StringUtil;
@@ -522,12 +523,12 @@ public class ParkourMiniGame extends BaseMiniGame {
             return center;
         }
 
-        Location ground = region.getRandomGroundLocation();
+        Location ground = RegionLocationSupport.randomGroundLocation(region);
         if (ground != null) {
             return ground;
         }
 
-        Location fallback = region.getRandomLocation();
+        Location fallback = RegionLocationSupport.randomLocation(region);
         if (fallback != null) {
             return fallback;
         }

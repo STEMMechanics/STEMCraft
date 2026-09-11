@@ -6,6 +6,7 @@ import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.minigame.ArenaValidationResult;
 import dev.stemcraft.api.minigame.MiniGameArena;
 import dev.stemcraft.api.model.SCRegion;
+import dev.stemcraft.api.service.comet.CometLoot;
 import dev.stemcraft.api.util.StringUtil;
 import dev.stemcraft.exception.MiniGameInvalidArenaConfigException;
 import org.bukkit.Bukkit;
@@ -40,8 +41,8 @@ public class NightfallCommand {
             .toList());
 
         api.commands().create("nightfall")
-            .permission("stemcraft.command.nightfall")
-            .usage("/nightfall <list|info|create|delete|join|joinall|spectate|leave|start|stop|restart|cycle|respawn|save|reload|validate|enable|disable|set|select|sel|show|generators|addgenerator|setgenerator|removegenerator|dropblocks|adddropblock|setdropweight|removedropblock>")
+            .access((sender, args) -> dev.stemcraft.permission.PlayerCommandAccess.minigame(sender, args, "nightfall"))
+            .usage("/nightfall <list|info|create|delete|join|joinall|spectate|leave|start|stop|restart|cycle|respawn|save|reload|validate|enable|disable|set|select|sel|show|comets|lobbies|addlobby|setlobby|removelobby|generators|addgenerator|setgenerator|removegenerator|dropblocks|adddropblock|setdropweight|removedropblock>")
             .tabCompletion("list")
             .tabCompletion("info")
             .tabCompletion("info", "{nightfall-arenas}")
@@ -71,9 +72,13 @@ public class NightfallCommand {
             .tabCompletion("set", "{nightfall-arenas}", "maxplayers")
             .tabCompletion("set", "{nightfall-arenas}", "lives")
             .tabCompletion("set", "{nightfall-arenas}", "prepseconds")
+            .tabCompletion("set", "{nightfall-arenas}", "latejoin")
             .tabCompletion("set", "{nightfall-arenas}", "dropmindelay")
             .tabCompletion("set", "{nightfall-arenas}", "dropmaxdelay")
             .tabCompletion("set", "{nightfall-arenas}", "dropmaxactive")
+            .tabCompletion("set", "{nightfall-arenas}", "dropgroupdistance")
+            .tabCompletion("set", "{nightfall-arenas}", "droplootmin")
+            .tabCompletion("set", "{nightfall-arenas}", "droplootmax")
             .tabCompletion("set", "{nightfall-arenas}", "zombiebasenightly")
             .tabCompletion("set", "{nightfall-arenas}", "zombienightlyincrease")
             .tabCompletion("set", "{nightfall-arenas}", "zombiehealthmultiplier")
@@ -84,6 +89,7 @@ public class NightfallCommand {
             .tabCompletion("set", "{nightfall-arenas}", "bloodmoonchance")
             .tabCompletion("set", "{nightfall-arenas}", "bloodmoonmultiplier")
             .tabCompletion("set", "{nightfall-arenas}", "bloodmoonbabychance")
+            .tabCompletion("set", "{nightfall-arenas}", "bloodmoonbuildersourceremovalchance")
             .tabCompletion("set", "{nightfall-arenas}", "timespeed")
             .tabCompletion("set", "{nightfall-arenas}", "daytimespeed")
             .tabCompletion("set", "{nightfall-arenas}", "nighttimespeed")
@@ -102,6 +108,26 @@ public class NightfallCommand {
             .tabCompletion("show", "{nightfall-arenas}", "spectator")
             .tabCompletion("show", "{nightfall-arenas}", "spawn")
             .tabCompletion("show", "{nightfall-arenas}", "generator")
+            .tabCompletion("comets", "{nightfall-arenas}")
+            .tabCompletion("comets", "{nightfall-arenas}", "set")
+            .tabCompletion("comets", "{nightfall-arenas}", "loot")
+            .tabCompletion("comets", "{nightfall-arenas}", "addloot")
+            .tabCompletion("comets", "{nightfall-arenas}", "setloot")
+            .tabCompletion("comets", "{nightfall-arenas}", "removeloot")
+            .tabCompletion("comets", "{nightfall-arenas}", "set", "enabled")
+            .tabCompletion("comets", "{nightfall-arenas}", "set", "startnight")
+            .tabCompletion("comets", "{nightfall-arenas}", "set", "chance")
+            .tabCompletion("comets", "{nightfall-arenas}", "set", "chanceincrease")
+            .tabCompletion("comets", "{nightfall-arenas}", "set", "maximumchance")
+            .tabCompletion("comets", "{nightfall-arenas}", "set", "maximumpernight")
+            .tabCompletion("comets", "{nightfall-arenas}", "set", "minimumdistance")
+            .tabCompletion("comets", "{nightfall-arenas}", "set", "maximumdistance")
+            .tabCompletion("comets", "{nightfall-arenas}", "set", "edgebuffer")
+            .tabCompletion("comets", "{nightfall-arenas}", "set", "pathsafetylength")
+            .tabCompletion("lobbies", "{nightfall-arenas}")
+            .tabCompletion("addlobby", "{nightfall-arenas}")
+            .tabCompletion("setlobby", "{nightfall-arenas}")
+            .tabCompletion("removelobby", "{nightfall-arenas}")
             .tabCompletion("generators", "{nightfall-arenas}")
             .tabCompletion("addgenerator", "{nightfall-arenas}")
             .tabCompletion("setgenerator", "{nightfall-arenas}")
@@ -111,6 +137,10 @@ public class NightfallCommand {
             .tabCompletion("setdropweight", "{nightfall-arenas}")
             .tabCompletion("removedropblock", "{nightfall-arenas}")
             .executor((ignored, cmd, ctx) -> {
+                if (ctx.args().isEmpty() && !dev.stemcraft.permission.PlayerCommandAccess.gameAdmin(ctx.getSender(), "nightfall")) {
+                    ctx.returnInfo("Use /nightfall list, info, join or leave, spectate.");
+                    return;
+                }
                 ctx.checkArgsSizeAtLeast(1);
 
                 switch (ctx.getArgLower(0)) {
@@ -135,6 +165,11 @@ public class NightfallCommand {
                     case "set" -> commandSet(ctx);
                     case "select", "sel" -> commandSelect(ctx);
                     case "show" -> commandShow(ctx);
+                    case "comets" -> commandComets(ctx);
+                    case "lobbies" -> commandLobbies(ctx);
+                    case "addlobby" -> commandAddLobby(ctx);
+                    case "setlobby" -> commandSetLobby(ctx);
+                    case "removelobby" -> commandRemoveLobby(ctx);
                     case "generators" -> commandGenerators(ctx);
                     case "addgenerator" -> commandAddGenerator(ctx);
                     case "setgenerator" -> commandSetGenerator(ctx);
@@ -178,18 +213,22 @@ public class NightfallCommand {
         ctx.info(" - Min players: " + arena.getMinPlayers());
         ctx.info(" - Start countdown: " + nightfall.startCountdownSeconds(arena) + " sec");
         ctx.info(" - Reset countdown: " + nightfall.endingSeconds(arena) + " sec");
-        ctx.info(" - Lobby: " + formatLocation(arena.getLobbySpawn()));
+        ctx.info(" - Lobbies: " + nightfall.lobbyLocations(arena).size()
+            + " (fallback " + formatLocation(arena.getLobbySpawn()) + ")");
         ctx.info(" - Spectator: " + formatLocation(arena.getSpectatorSpawn()));
         ctx.info(" - Spawn: " + formatLocation(nightfall.playSpawn(arena)));
         ctx.info(" - Arena region: " + formatRegion(arena.get("arenaRegion", SCRegion.class)));
         ctx.info(" - Deaths: creative ghost until sunrise, then respawn at play spawn");
         ctx.info(" - Prep seconds: " + nightfall.prepSeconds(arena));
+        ctx.info(" - Late join: " + (nightfall.allowLateJoin(arena) ? "enabled" : "disabled"));
         ctx.info(" - Day time speed: " + String.format(Locale.ROOT, "%.2fx", nightfall.dayTimeSpeedMultiplier(arena)));
         ctx.info(" - Night time speed: " + String.format(Locale.ROOT, "%.2fx", nightfall.nightTimeSpeedMultiplier(arena)));
         ctx.info(" - Drop delay: " + (nightfall.dropsEnabled(arena)
             ? nightfall.dropMinSeconds(arena) + "-" + nightfall.dropMaxSeconds(arena) + " sec"
             : "disabled"));
         ctx.info(" - Drop max active items: " + nightfall.dropMaxActiveItems(arena));
+        ctx.info(" - Drop group distance: " + nightfall.dropGroupDistance(arena) + " blocks");
+        ctx.info(" - Drop loot stacks: " + nightfall.dropLootMinStacks(arena) + "-" + nightfall.dropLootMaxStacks(arena));
         ctx.info(" - Drop radius: 5-20 blocks around each player with open sky");
         ctx.info(" - Zombie nightly base: " + nightfall.zombieBaseNightlySpawns(arena));
         ctx.info(" - Zombie nightly increase: " + nightfall.zombieNightlySpawnIncrease(arena));
@@ -200,6 +239,8 @@ public class NightfallCommand {
         ctx.info(" - Blood moon chance: " + nightfall.bloodMoonChancePercent(arena) + "%");
         ctx.info(" - Blood moon spawn multiplier: " + String.format(Locale.ROOT, "%.2fx", nightfall.bloodMoonZombieSpawnMultiplier(arena)));
         ctx.info(" - Blood moon baby zombie chance: " + nightfall.bloodMoonBabyZombieChancePercent(arena) + "%");
+        ctx.info(" - Blood moon builder source removal chance: "
+            + nightfall.bloodMoonBuilderSourceRemovalChancePercent(arena) + "%");
         ctx.info(" - Drop tiers: " + nightfall.dropItems(arena).size() + " (" + nightfall.dropItemCount(arena) + " items)");
         if (validation.hasErrors()) {
             ctx.warn(" - Validation: failed");
@@ -253,8 +294,9 @@ public class NightfallCommand {
         }
         ensureNotInArena(ctx, targetPlayer);
 
-        if (arena.getStatus() == MiniGameArena.ArenaStatus.PREPARATION
-            || arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING
+        if ((!nightfall.allowLateJoin(arena)
+            && (arena.getStatus() == MiniGameArena.ArenaStatus.PREPARATION
+            || arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING))
             || arena.getStatus() == MiniGameArena.ArenaStatus.COOLDOWN
             || arena.getStatus() == MiniGameArena.ArenaStatus.ENDING) {
             arena.addSpectator(targetPlayer);
@@ -274,10 +316,11 @@ public class NightfallCommand {
     private void commandJoinAll(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2);
         MiniGameArena arena = requireArena(ctx);
-        boolean spectateOnly = arena.getStatus() == MiniGameArena.ArenaStatus.PREPARATION
-            || arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING
+        boolean spectateOnly = ((!nightfall.allowLateJoin(arena)
+            && (arena.getStatus() == MiniGameArena.ArenaStatus.PREPARATION
+            || arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING))
             || arena.getStatus() == MiniGameArena.ArenaStatus.COOLDOWN
-            || arena.getStatus() == MiniGameArena.ArenaStatus.ENDING;
+            || arena.getStatus() == MiniGameArena.ArenaStatus.ENDING);
         if (!spectateOnly && !arena.isJoinable()) {
             ctx.returnError("Arena '" + arena.id() + "' is not joinable right now.");
             return;
@@ -498,6 +541,9 @@ public class NightfallCommand {
                 Player player = requirePlayer(ctx);
                 ensureArenaWorld(ctx, arena, player.getLocation(), "Lobby spawn");
                 arena.setLobbySpawn(player.getLocation());
+                List<Location> lobbies = nightfall.lobbyLocations(arena);
+                if (lobbies.isEmpty()) lobbies.add(player.getLocation().clone());
+                else lobbies.set(0, player.getLocation().clone());
                 showLocationPreview(player, "lobby", player.getLocation());
                 ctx.success("Lobby spawn updated for arena '" + arena.id() + "'.");
             }
@@ -550,6 +596,21 @@ public class NightfallCommand {
                 int prepSeconds = ctx.getArgAsInt(3, 300, 0, null);
                 arena.set("prepSeconds", prepSeconds);
                 ctx.success("Prep seconds set to " + prepSeconds + " for arena '" + arena.id() + "'.");
+            }
+            case "latejoin" -> {
+                ctx.checkArgsSizeAtLeast(4);
+                String value = ctx.getArgLower(3);
+                Boolean enabled = switch (value) {
+                    case "true", "on", "yes", "enabled" -> true;
+                    case "false", "off", "no", "disabled" -> false;
+                    default -> null;
+                };
+                if (enabled == null) {
+                    ctx.returnError("Late join must be one of: true, false, on, off, yes, no.");
+                    return;
+                }
+                arena.set("allowLateJoin", enabled);
+                ctx.success("Late join " + (enabled ? "enabled" : "disabled") + " for arena '" + arena.id() + "'.");
             }
             case "timespeed" -> {
                 ctx.checkArgsSizeAtLeast(4);
@@ -608,6 +669,30 @@ public class NightfallCommand {
                 int value = ctx.getArgAsInt(3, 10, 0, null);
                 arena.set("dropMaxActiveItems", value);
                 ctx.success("Maximum active drops set to " + value + " for arena '" + arena.id() + "'.");
+            }
+            case "dropgroupdistance" -> {
+                ctx.checkArgsSizeAtLeast(4);
+                int value = ctx.getArgAsInt(3, 100, 0, null);
+                arena.set("dropGroupDistance", value);
+                ctx.success("Drop group distance set to " + value + " blocks for arena '" + arena.id() + "'.");
+            }
+            case "droplootmin" -> {
+                ctx.checkArgsSizeAtLeast(4);
+                int value = ctx.getArgAsInt(3, 2, 1, null);
+                arena.set("dropLootMinStacks", value);
+                if (nightfall.dropLootMaxStacks(arena) < value) {
+                    arena.set("dropLootMaxStacks", value);
+                }
+                ctx.success("Minimum drop loot stacks set to " + value + " for arena '" + arena.id() + "'.");
+            }
+            case "droplootmax" -> {
+                ctx.checkArgsSizeAtLeast(4);
+                int value = ctx.getArgAsInt(3, 4, 1, null);
+                arena.set("dropLootMaxStacks", value);
+                if (nightfall.dropLootMinStacks(arena) > value) {
+                    arena.set("dropLootMinStacks", value);
+                }
+                ctx.success("Maximum drop loot stacks set to " + value + " for arena '" + arena.id() + "'.");
             }
             case "zombiebasenightly" -> {
                 ctx.checkArgsSizeAtLeast(4);
@@ -677,9 +762,16 @@ public class NightfallCommand {
                 arena.set("bloodMoonBabyZombieChancePercent", value);
                 ctx.success("Blood moon baby zombie chance set to " + value + "% for arena '" + arena.id() + "'.");
             }
+            case "bloodmoonbuildersourceremovalchance" -> {
+                ctx.checkArgsSizeAtLeast(4);
+                int value = ctx.getArgAsInt(3, 70, 0, 100);
+                arena.set("bloodMoonBuilderSourceRemovalChancePercent", value);
+                ctx.success("Blood moon builder source removal chance set to " + value
+                    + "% for arena '" + arena.id() + "'.");
+            }
             case "name" -> {
                 ctx.checkArgsSizeAtLeast(4);
-                arena.setName(ctx.getArgsAsString(4));
+                arena.setName(ctx.getArgsAsString(3));
                 ctx.success("Display name updated for arena '" + arena.id() + "'.");
             }
             default -> ctx.returnError("Unknown Nightfall set target '" + target + "'.");
@@ -771,6 +863,194 @@ public class NightfallCommand {
         for (int i = 0; i < generators.size(); i++) {
             ctx.info(" - #" + (i + 1) + " " + formatLocation(generators.get(i)));
         }
+    }
+
+    private void commandLobbies(CommandContext ctx) {
+        MiniGameArena arena = requireArena(ctx);
+        List<Location> lobbies = nightfall.lobbyLocations(arena);
+        ctx.info("Lobby locations for arena '" + arena.id() + "':");
+        for (int i = 0; i < lobbies.size(); i++) {
+            ctx.info(" - #" + (i + 1) + " " + formatLocation(lobbies.get(i)));
+        }
+    }
+
+    private void commandComets(CommandContext ctx) {
+        MiniGameArena arena = requireArena(ctx);
+        if (ctx.numArgs() < 3) {
+            showCometSettings(ctx, arena);
+            return;
+        }
+
+        switch (ctx.getArgLower(2)) {
+            case "set" -> commandSetCometSetting(ctx, arena);
+            case "loot" -> showCometLoot(ctx, arena);
+            case "addloot" -> commandAddCometLoot(ctx, arena);
+            case "setloot" -> commandSetCometLoot(ctx, arena);
+            case "removeloot" -> commandRemoveCometLoot(ctx, arena);
+            default -> ctx.returnError("Unknown comet action. Use set, loot, addloot, setloot, or removeloot.");
+        }
+    }
+
+    private void showCometSettings(CommandContext ctx, MiniGameArena arena) {
+        BloodMoonCometSettings settings = nightfall.bloodMoonComets(arena);
+        ctx.info("Blood Moon comet settings for arena '" + arena.id() + "':");
+        ctx.info(" - Enabled: " + settings.enabled());
+        ctx.info(" - Start night: " + settings.startNight());
+        ctx.info(" - Chance: " + settings.chancePercent() + "% + " + settings.chanceIncreasePerNight()
+            + "% per night, maximum " + settings.maximumChancePercent() + "%");
+        ctx.info(" - Maximum per night: " + settings.maximumPerNight());
+        ctx.info(" - Player distance: " + settings.minimumPlayerDistance() + "-"
+            + settings.maximumPlayerDistance() + " blocks");
+        ctx.info(" - Arena edge buffer: " + settings.arenaEdgeBuffer() + " blocks");
+        ctx.info(" - Path safety length: " + settings.pathSafetyLength() + " blocks");
+        ctx.info(" - Loot entries: " + settings.loot().size());
+    }
+
+    private void commandSetCometSetting(CommandContext ctx, MiniGameArena arena) {
+        ctx.checkArgsSizeAtLeast(5);
+        BloodMoonCometSettings old = nightfall.bloodMoonComets(arena);
+        String key = ctx.getArgLower(3);
+
+        boolean enabled = old.enabled();
+        int startNight = old.startNight();
+        int chance = old.chancePercent();
+        int increase = old.chanceIncreasePerNight();
+        int maximumChance = old.maximumChancePercent();
+        int maximumPerNight = old.maximumPerNight();
+        int minimumDistance = old.minimumPlayerDistance();
+        int maximumDistance = old.maximumPlayerDistance();
+        int edgeBuffer = old.arenaEdgeBuffer();
+        int pathSafetyLength = old.pathSafetyLength();
+
+        switch (key) {
+            case "enabled" -> enabled = parseBoolean(ctx, 4);
+            case "startnight" -> startNight = ctx.getArgAsInt(4, startNight, 1, null);
+            case "chance" -> chance = ctx.getArgAsInt(4, chance, 0, 100);
+            case "chanceincrease" -> increase = ctx.getArgAsInt(4, increase, 0, 100);
+            case "maximumchance" -> maximumChance = ctx.getArgAsInt(4, maximumChance, 0, 100);
+            case "maximumpernight" -> maximumPerNight = ctx.getArgAsInt(4, maximumPerNight, 0, 20);
+            case "minimumdistance" -> {
+                minimumDistance = ctx.getArgAsInt(4, minimumDistance, 0, null);
+                maximumDistance = Math.max(maximumDistance, minimumDistance);
+            }
+            case "maximumdistance" -> maximumDistance = ctx.getArgAsInt(4, maximumDistance, minimumDistance, null);
+            case "edgebuffer" -> edgeBuffer = ctx.getArgAsInt(4, edgeBuffer, 0, null);
+            case "pathsafetylength" -> pathSafetyLength = ctx.getArgAsInt(4, pathSafetyLength, 1, null);
+            default -> {
+                ctx.returnError("Unknown comet setting '" + key + "'.");
+                return;
+            }
+        }
+
+        arena.set("bloodMoonComets", new BloodMoonCometSettings(enabled, startNight, chance, increase,
+            maximumChance, maximumPerNight, minimumDistance, maximumDistance, edgeBuffer, pathSafetyLength,
+            old.loot()));
+        ctx.success("Comet setting '" + key + "' updated for arena '" + arena.id() + "'.");
+    }
+
+    private void showCometLoot(CommandContext ctx, MiniGameArena arena) {
+        List<CometLoot> loot = nightfall.bloodMoonComets(arena).loot();
+        if (loot.isEmpty()) {
+            ctx.info("Arena '" + arena.id() + "' has no comet loot configured.");
+            return;
+        }
+        ctx.info("Comet loot for arena '" + arena.id() + "':");
+        for (int i = 0; i < loot.size(); i++) {
+            CometLoot entry = loot.get(i);
+            ctx.info(" - #" + (i + 1) + " " + entry.material().name() + " "
+                + entry.minimum() + "-" + entry.maximum());
+        }
+    }
+
+    private void commandAddCometLoot(CommandContext ctx, MiniGameArena arena) {
+        ctx.checkArgsSizeAtLeast(6);
+        List<CometLoot> loot = new ArrayList<>(nightfall.bloodMoonComets(arena).loot());
+        loot.add(parseCometLoot(ctx, 3, 4, 5));
+        setCometLoot(arena, loot);
+        ctx.success("Added comet loot entry " + loot.size() + " to arena '" + arena.id() + "'.");
+    }
+
+    private void commandSetCometLoot(CommandContext ctx, MiniGameArena arena) {
+        ctx.checkArgsSizeAtLeast(7);
+        List<CometLoot> loot = new ArrayList<>(nightfall.bloodMoonComets(arena).loot());
+        int index = requireOneBasedIndex(ctx, 3, loot.size(), "comet loot item");
+        loot.set(index, parseCometLoot(ctx, 4, 5, 6));
+        setCometLoot(arena, loot);
+        ctx.success("Updated comet loot entry " + (index + 1) + " for arena '" + arena.id() + "'.");
+    }
+
+    private void commandRemoveCometLoot(CommandContext ctx, MiniGameArena arena) {
+        ctx.checkArgsSizeAtLeast(4);
+        List<CometLoot> loot = new ArrayList<>(nightfall.bloodMoonComets(arena).loot());
+        int index = requireOneBasedIndex(ctx, 3, loot.size(), "comet loot item");
+        loot.remove(index);
+        setCometLoot(arena, loot);
+        ctx.success("Removed comet loot entry " + (index + 1) + " from arena '" + arena.id() + "'.");
+    }
+
+    private CometLoot parseCometLoot(CommandContext ctx, int materialIndex, int minimumIndex, int maximumIndex) {
+        Material material = Material.matchMaterial(ctx.getArg(materialIndex));
+        if (material == null || material.isAir() || !material.isBlock()) {
+            ctx.returnError("Comet loot material must be a valid block.");
+            throw new IllegalArgumentException("Invalid comet loot material");
+        }
+        int minimum = ctx.getArgAsInt(minimumIndex, 0, 0, 4096);
+        int maximum = ctx.getArgAsInt(maximumIndex, minimum, minimum, 4096);
+        return new CometLoot(material, minimum, maximum);
+    }
+
+    private void setCometLoot(MiniGameArena arena, List<CometLoot> loot) {
+        BloodMoonCometSettings old = nightfall.bloodMoonComets(arena);
+        arena.set("bloodMoonComets", new BloodMoonCometSettings(old.enabled(), old.startNight(),
+            old.chancePercent(), old.chanceIncreasePerNight(), old.maximumChancePercent(), old.maximumPerNight(),
+            old.minimumPlayerDistance(), old.maximumPlayerDistance(), old.arenaEdgeBuffer(), old.pathSafetyLength(), loot));
+    }
+
+    private boolean parseBoolean(CommandContext ctx, int index) {
+        return switch (ctx.getArgLower(index)) {
+            case "true", "yes", "on", "enabled" -> true;
+            case "false", "no", "off", "disabled" -> false;
+            default -> {
+                ctx.returnError("Expected true/false, on/off, or enabled/disabled.");
+                throw new IllegalArgumentException("Invalid boolean value");
+            }
+        };
+    }
+
+    private void commandAddLobby(CommandContext ctx) {
+        Player player = requirePlayer(ctx);
+        MiniGameArena arena = requireArena(ctx);
+        ensureArenaWorld(ctx, arena, player.getLocation(), "Lobby location");
+        nightfall.lobbyLocations(arena).add(player.getLocation().clone());
+        showLocationPreview(player, "lobby-add", player.getLocation());
+        ctx.success("Added lobby location " + nightfall.lobbyLocations(arena).size()
+            + " to arena '" + arena.id() + "'.");
+    }
+
+    private void commandSetLobby(CommandContext ctx) {
+        ctx.checkArgsSizeAtLeast(3);
+        Player player = requirePlayer(ctx);
+        MiniGameArena arena = requireArena(ctx);
+        int index = requireOneBasedIndex(ctx, 2, nightfall.lobbyLocations(arena).size(), "lobby");
+        ensureArenaWorld(ctx, arena, player.getLocation(), "Lobby location");
+        nightfall.lobbyLocations(arena).set(index, player.getLocation().clone());
+        if (index == 0) arena.setLobbySpawn(player.getLocation().clone());
+        showLocationPreview(player, "lobby-set-" + index, player.getLocation());
+        ctx.success("Updated lobby location " + (index + 1) + " for arena '" + arena.id() + "'.");
+    }
+
+    private void commandRemoveLobby(CommandContext ctx) {
+        ctx.checkArgsSizeAtLeast(3);
+        MiniGameArena arena = requireArena(ctx);
+        List<Location> lobbies = nightfall.lobbyLocations(arena);
+        if (lobbies.size() <= 1) {
+            ctx.returnError("Arena '" + arena.id() + "' must keep at least one lobby location.");
+            return;
+        }
+        int index = requireOneBasedIndex(ctx, 2, lobbies.size(), "lobby");
+        lobbies.remove(index);
+        arena.setLobbySpawn(lobbies.getFirst().clone());
+        ctx.success("Removed lobby location " + (index + 1) + " from arena '" + arena.id() + "'.");
     }
 
     private void commandAddGenerator(CommandContext ctx) {

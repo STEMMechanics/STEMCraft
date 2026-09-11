@@ -49,6 +49,9 @@ public interface Command extends HasMessages {
      * @return the command permission.
      */
     String getPermission();
+
+    /** Returns whether parsing should be skipped for this zero-based argument position. */
+    default boolean isIgnoredArg(int position) { return false; }
     
     /**
      * Register the command on the server.

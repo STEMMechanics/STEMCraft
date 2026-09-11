@@ -121,6 +121,7 @@ public class CustomCommands extends BaseFeature {
                 continue;
             }
 
+            migrateSurvivalShortcut(id, entry);
             CustomCommandEntry customCommandEntry = readEntry(id, entry);
             activeEntries.put(customCommandEntry.id(), customCommandEntry);
             registerRuntimeCommand(customCommandEntry);
@@ -544,6 +545,14 @@ public class CustomCommands extends BaseFeature {
         return commands;
     }
 
+    static void migrateSurvivalShortcut(String id, ConfigSection entry) {
+        if (!id.equals("survival") || !normalizeLabel(entry.getString("command", id)).equals("survival")) return;
+        CustomCommandEntry existing = readEntry(id, entry);
+        if (!existing.runCommands().equals(List.of("tpworld survival"))) return;
+        entry.set("run", List.of("server:tpworld survival {player}"));
+        entry.save();
+    }
+
     static CustomCommandEntry readEntry(String id, ConfigSection entry) {
         String label = normalizeLabel(entry.getString("command", id));
         boolean explicitPermission = entry.contains("permission");
@@ -687,6 +696,7 @@ public class CustomCommands extends BaseFeature {
         return String.join(" ", ctx.rawArgs().subList(start, ctx.rawArgs().size()));
     }
 
+    @SuppressWarnings("rawtypes") // Adventure is non-generic on supported proxy/runtime versions.
     private Component actionButton(String text, NamedTextColor color, ClickEvent clickEvent, String hoverText) {
         return Component.text(text, color)
                 .clickEvent(clickEvent)

@@ -4,6 +4,7 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.minigame.MiniGameArena;
 import dev.stemcraft.api.model.SCRegion;
+import dev.stemcraft.service.region.RegionLocationSupport;
 import dev.stemcraft.api.util.LocationUtil;
 import dev.stemcraft.api.util.StringUtil;
 import dev.stemcraft.exception.MiniGameInvalidArenaConfigException;
@@ -250,8 +251,8 @@ public class MinefieldConfig {
             return center;
         }
 
-        Location ground = startRegion.getRandomGroundLocation();
-        return ground != null ? ground : startRegion.getRandomLocation();
+        Location ground = RegionLocationSupport.randomGroundLocation(startRegion);
+        return ground != null ? ground : RegionLocationSupport.randomLocation(startRegion);
     }
 
     private void ensureLoaded() {

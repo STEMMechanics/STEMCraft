@@ -8,9 +8,12 @@ import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.service.event.EventService;
 import dev.stemcraft.api.service.region.RegionListener;
 import dev.stemcraft.api.service.region.RegionService;
+import dev.stemcraft.api.service.task.TaskService;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Sound;
+import org.bukkit.entity.Boat;
+import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
 import org.junit.jupiter.api.Test;
@@ -27,7 +30,9 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -40,6 +45,7 @@ class BoatRaceArenaHandlerTest {
     void finishRaceAdvanceShowsTitleForNextLap() throws Exception {
         STEMCraftAPI api = mock(STEMCraftAPI.class);
         EventService events = mock(EventService.class);
+        TaskService tasks = mock(TaskService.class);
         BoatRaceMiniGame boatRace = mock(BoatRaceMiniGame.class);
         MiniGameArena arena = mock(MiniGameArena.class);
         Player player = mock(Player.class);
@@ -51,6 +57,7 @@ class BoatRaceArenaHandlerTest {
         Map<UUID, Location> checkpointLocations = new LinkedHashMap<>();
 
         when(api.events()).thenReturn(events);
+        when(api.tasks()).thenReturn(tasks);
         when(events.register(any(Class.class), any())).thenReturn(listenerRegistration);
 
         when(arena.getStatus()).thenReturn(MiniGameArena.ArenaStatus.RUNNING);
@@ -88,10 +95,12 @@ class BoatRaceArenaHandlerTest {
 
             STEMCraftAPI api = mock(STEMCraftAPI.class);
             EventService events = mock(EventService.class);
+            TaskService tasks = mock(TaskService.class);
             BoatRaceMiniGame boatRace = mock(BoatRaceMiniGame.class);
             Listener listenerRegistration = mock(Listener.class);
 
             when(api.events()).thenReturn(events);
+            when(api.tasks()).thenReturn(tasks);
             when(events.register(any(Class.class), any())).thenReturn(listenerRegistration);
 
             BoatRaceArenaHandler handler = new BoatRaceArenaHandler(api, boatRace);
@@ -125,6 +134,7 @@ class BoatRaceArenaHandlerTest {
             STEMCraftAPI api = mock(STEMCraftAPI.class);
             EventService events = mock(EventService.class);
             RegionService regions = mock(RegionService.class);
+            TaskService tasks = mock(TaskService.class);
             BoatRaceMiniGame boatRace = mock(BoatRaceMiniGame.class);
             MiniGameArena arena = mock(MiniGameArena.class);
             Player player = mock(Player.class);
@@ -136,6 +146,7 @@ class BoatRaceArenaHandlerTest {
 
             when(api.events()).thenReturn(events);
             when(api.regions()).thenReturn(regions);
+            when(api.tasks()).thenReturn(tasks);
             when(events.register(any(Class.class), any())).thenReturn(listenerRegistration);
 
             when(arena.id()).thenReturn("test");
@@ -155,6 +166,9 @@ class BoatRaceArenaHandlerTest {
                 .thenReturn(new LinkedHashMap<UUID, Long>());
             when(arena.getOrCreate(org.mockito.ArgumentMatchers.eq("tntBounceKeys"), org.mockito.ArgumentMatchers.eq(Map.class), any()))
                 .thenReturn(new LinkedHashMap<UUID, String>());
+            when(arena.getOrCreate(org.mockito.ArgumentMatchers.eq("pendingBoatSpawns"), org.mockito.ArgumentMatchers.eq(Map.class), any()))
+                .thenReturn(new LinkedHashMap<UUID, UUID>());
+            when(arena.world()).thenReturn(world);
             when(arena.getLobbySpawn()).thenReturn(null);
 
             BoatRaceArenaHandler handler = new BoatRaceArenaHandler(api, boatRace);
@@ -178,6 +192,100 @@ class BoatRaceArenaHandlerTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void arenaUnloadRemovesUntrackedBoatsInsideCourse() {
+        ServerMock server = MockBukkit.mock();
+        try {
+            WorldMock world = server.addSimpleWorld("boatrace-cleanup");
+            Boat courseBoat = (Boat) world.spawnEntity(new Location(world, 5.0d, 65.0d, 5.0d), EntityType.OAK_BOAT);
+            Boat outsideBoat = (Boat) world.spawnEntity(new Location(world, 25.0d, 65.0d, 25.0d), EntityType.OAK_BOAT);
+
+            STEMCraftAPI api = mock(STEMCraftAPI.class);
+            EventService events = mock(EventService.class);
+            RegionService regions = mock(RegionService.class);
+            TaskService tasks = mock(TaskService.class);
+            BoatRaceMiniGame boatRace = mock(BoatRaceMiniGame.class);
+            MiniGameArena arena = mock(MiniGameArena.class);
+            Listener listenerRegistration = mock(Listener.class);
+            SCRegion arenaRegion = new SCRegion(new CuboidRegion(
+                BlockVector3.at(0, 60, 0),
+                BlockVector3.at(10, 70, 10)
+            ), world);
+            Map<UUID, UUID> assignments = new LinkedHashMap<>();
+            Map<UUID, UUID> pendingSpawns = new LinkedHashMap<>();
+
+            when(api.events()).thenReturn(events);
+            when(api.regions()).thenReturn(regions);
+            when(api.tasks()).thenReturn(tasks);
+            when(events.register(any(Class.class), any())).thenReturn(listenerRegistration);
+            when(arena.id()).thenReturn("cleanup");
+            when(arena.world()).thenReturn(world);
+            when(arena.get("arenaRegion", SCRegion.class)).thenReturn(arenaRegion);
+            when(arena.getOrCreate(org.mockito.ArgumentMatchers.eq("pendingBoatSpawns"), org.mockito.ArgumentMatchers.eq(Map.class), any()))
+                .thenReturn(pendingSpawns);
+            when(boatRace.boatAssignments(arena)).thenReturn(assignments);
+
+            BoatRaceArenaHandler handler = new BoatRaceArenaHandler(api, boatRace);
+            handler.onArenaUnload(arena);
+
+            assertFalse(courseBoat.isValid());
+            assertTrue(outsideBoat.isValid());
+        } finally {
+            MockBukkit.unmock();
+        }
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void staleSpawnCallbackCannotCreateDuplicateBoat() throws Exception {
+        ServerMock server = MockBukkit.mock();
+        try {
+            WorldMock world = server.addSimpleWorld("boatrace-spawn-token");
+            STEMCraftAPI api = mock(STEMCraftAPI.class);
+            EventService events = mock(EventService.class);
+            TaskService tasks = mock(TaskService.class);
+            BoatRaceMiniGame boatRace = mock(BoatRaceMiniGame.class);
+            MiniGameArena arena = mock(MiniGameArena.class);
+            Player player = mock(Player.class);
+            Listener listenerRegistration = mock(Listener.class);
+            UUID playerId = UUID.randomUUID();
+            UUID activeToken = UUID.randomUUID();
+            UUID staleToken = UUID.randomUUID();
+            Map<UUID, UUID> assignments = new LinkedHashMap<>();
+            Map<UUID, UUID> pendingSpawns = new LinkedHashMap<>();
+            pendingSpawns.put(playerId, activeToken);
+
+            when(api.events()).thenReturn(events);
+            when(api.tasks()).thenReturn(tasks);
+            when(events.register(any(Class.class), any())).thenReturn(listenerRegistration);
+            when(arena.id()).thenReturn("spawn-token");
+            when(arena.hasPlayer(player)).thenReturn(true);
+            when(arena.getStatus()).thenReturn(MiniGameArena.ArenaStatus.STARTING);
+            when(arena.getOrCreate(org.mockito.ArgumentMatchers.eq("pendingBoatSpawns"), org.mockito.ArgumentMatchers.eq(Map.class), any()))
+                .thenReturn(pendingSpawns);
+            when(boatRace.boatAssignments(arena)).thenReturn(assignments);
+            when(player.getUniqueId()).thenReturn(playerId);
+            when(player.isOnline()).thenReturn(true);
+
+            BoatRaceArenaHandler handler = new BoatRaceArenaHandler(api, boatRace);
+            Method spawnBoatEntity = BoatRaceArenaHandler.class.getDeclaredMethod(
+                "spawnBoatEntity", MiniGameArena.class, Player.class, Location.class, int.class, UUID.class
+            );
+            spawnBoatEntity.setAccessible(true);
+            Location spawn = new Location(world, 5.0d, 65.0d, 5.0d);
+
+            spawnBoatEntity.invoke(handler, arena, player, spawn, 0, staleToken);
+            assertEquals(0, world.getEntities().size());
+
+            spawnBoatEntity.invoke(handler, arena, player, spawn, 0, activeToken);
+            spawnBoatEntity.invoke(handler, arena, player, spawn, 0, activeToken);
+            assertEquals(1, world.getEntities().size());
+        } finally {
+            MockBukkit.unmock();
+        }
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void refreshRegionListenersRebindsWithoutClearingRaceState() {
         ServerMock server = MockBukkit.mock();
         try {
@@ -186,6 +294,7 @@ class BoatRaceArenaHandlerTest {
             STEMCraftAPI api = mock(STEMCraftAPI.class);
             EventService events = mock(EventService.class);
             RegionService regions = mock(RegionService.class);
+            TaskService tasks = mock(TaskService.class);
             BoatRaceMiniGame boatRace = mock(BoatRaceMiniGame.class);
             MiniGameArena arena = mock(MiniGameArena.class);
             Listener listenerRegistration = mock(Listener.class);
@@ -215,6 +324,7 @@ class BoatRaceArenaHandlerTest {
 
             when(api.events()).thenReturn(events);
             when(api.regions()).thenReturn(regions);
+            when(api.tasks()).thenReturn(tasks);
             when(events.register(any(Class.class), any())).thenReturn(listenerRegistration);
 
             when(arena.id()).thenReturn("test");

@@ -43,6 +43,16 @@ import java.util.*;
  */
 public class CommandImpl extends HasMessagesImpl implements Command, TabCompleter {
 
+    private java.util.function.BiPredicate<CommandSender, List<String>> access = (sender, args) -> true;
+
+    public void setAccess(java.util.function.BiPredicate<CommandSender, List<String>> access) {
+        this.access = java.util.Objects.requireNonNull(access);
+    }
+
+    public boolean canAccess(CommandSender sender, List<String> args) {
+        return (permission == null || permission.isEmpty() || sender.hasPermission(permission)) && access.test(sender, args);
+    }
+
     @Getter
     private final String label;
 
@@ -63,6 +73,7 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
 
     @Getter
     private final List<String[]> tabCompletions = new ArrayList<>();
+    private final Set<Integer> ignoredArgs = new HashSet<>();
 
     /**
      * The underlying Bukkit command instance after registration.
@@ -82,7 +93,9 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
      * @param executor The command executor.
      * @param tabCompletions The tab completion patterns.
      */
-    public CommandImpl(STEMCraftAPI api, String label, String description, String usage, List<String> aliases, String permission, CommandExecutor executor, List<String[]> tabCompletions) {
+    public CommandImpl(STEMCraftAPI api, String label, String description, String usage, List<String> aliases,
+                       String permission, CommandExecutor executor, List<String[]> tabCompletions,
+                       Set<Integer> ignoredArgs) {
         this.label = label;
         this.description = description;
         this.usage = usage;
@@ -90,6 +103,12 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
         this.permission = permission;
         this.executor = executor;
         this.tabCompletions.addAll(tabCompletions);
+        this.ignoredArgs.addAll(ignoredArgs);
+    }
+
+    @Override
+    public boolean isIgnoredArg(int position) {
+        return ignoredArgs.contains(position);
     }
 
     /**
@@ -117,7 +136,7 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
             pluginCommand.setExecutor((sender, command, label, args) -> {
                 CommandContext context = new CommandContextImpl(this, sender, label, new ArrayList<>(Arrays.asList(args)));
 
-                if (!permission.isEmpty() && !sender.hasPermission(permission)) {
+                if (!canAccess(sender, context.args())) {
                     STEMCraftAPI.api().messages().error(sender, "COMMAND_NO_PERMISSION");
                     return true;
                 }
@@ -507,10 +526,12 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
      */
     @Override
     public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull org.bukkit.command.Command cmd, @NotNull String label, String[] args) {
+        args = CommandArgumentTokenizer.tokenize(Arrays.asList(args)).toArray(String[]::new);
         Player player = (sender instanceof Player p) ? p : null;
         List<String> tabCompletionResults = new ArrayList<>();
         List<String> optionArgsAvailable = new ArrayList<>();
         Map<String, List<String>> valueOptionArgsAvailable = new HashMap<>();
+        if (args.length == 0) args = new String[]{""};
         String[] fullArgs = new String[args.length - 1];
 
         System.arraycopy(args, 0, fullArgs, 0, args.length - 1);
@@ -607,6 +628,12 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
             tabCompletionResults.removeIf(item -> !item.contains(arg));
         }
 
+        tabCompletionResults.removeIf(candidate -> {
+            List<String> completed = new ArrayList<>(Arrays.asList(fullArgs));
+            completed.add(candidate);
+            return !canAccess(sender, completed);
+        });
         return tabCompletionResults;
     }
+
 }

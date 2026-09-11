@@ -11,15 +11,18 @@ import dev.stemcraft.api.service.resourcepack.generator.AbstractResourcePackGene
 import dev.stemcraft.exception.ResourcePackGeneratorException;
 import dev.stemcraft.service.resourcepack.ResourcePackServiceImpl;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -37,6 +40,7 @@ public class GlyphGenerator extends AbstractResourcePackGenerator {
     public void generate(@NotNull ResourcePackBuildContext context) throws IOException {
         ConfigSection manifest = context.writer().manifest();
         Set<Integer> reservedCodePoints = collectReservedCodePoints(manifest);
+        Map<Integer, Set<String>> existingCodePointOwners = collectCodePointOwners(manifest);
         Set<String> reservedFilePaths = new HashSet<>();
 
         for (File dataPackDir : service.dataPackDirectories()) {
@@ -59,7 +63,8 @@ public class GlyphGenerator extends AbstractResourcePackGenerator {
                 if (!namespace.isEmpty()) {
                     File namespaceDir = new File(contentsDir, namespace);
                     if (namespaceDir.exists() && namespaceDir.isDirectory()) {
-                        processNamespace(context, namespace, config, namespaceDir, reservedCodePoints, reservedFilePaths);
+                        processNamespace(context, namespace, config, namespaceDir, reservedCodePoints,
+                            existingCodePointOwners, reservedFilePaths);
                     }
                     continue;
                 }
@@ -75,6 +80,7 @@ public class GlyphGenerator extends AbstractResourcePackGenerator {
                         config,
                         namespaceDir,
                         reservedCodePoints,
+                        existingCodePointOwners,
                         reservedFilePaths
                     );
                 }
@@ -87,6 +93,7 @@ public class GlyphGenerator extends AbstractResourcePackGenerator {
                                   @NotNull ConfigSection config,
                                   @NotNull File dataPackDir,
                                   @NotNull Set<Integer> reservedCodePoints,
+                                  @NotNull Map<Integer, Set<String>> existingCodePointOwners,
                                   @NotNull Set<String> reservedFilePaths) throws IOException {
         ConfigSection manifest = context.writer().manifest();
         ConfigSection glyphsSection = getGlyphSection(config);
@@ -94,6 +101,8 @@ public class GlyphGenerator extends AbstractResourcePackGenerator {
             Path fontJsonPath = context.writer().resolve("assets/minecraft/font/default.json");
             JsonObject json = loadOrCreateDefaultFont(fontJsonPath);
             JsonArray providers = ensureProvidersArray(json);
+            String tokenPrefix = config.getString("name_prefix");
+            int nextCodePoint = parseCodePoint(config.getString("starting_char", "\uE200"), 0xE200);
 
             for (String glyphName : glyphsSection.getKeys()) {
                 ConfigSection glyphConfig = glyphsSection.getSection(glyphName);
@@ -101,23 +110,29 @@ public class GlyphGenerator extends AbstractResourcePackGenerator {
                     continue;
                 }
 
-                String charString = glyphConfig.getString("char");
-                if (charString.isEmpty()) {
-                    continue;
-                }
-                int glyphCodePoint = parseCodePoint(charString, -1);
-                if (glyphCodePoint < 0 || glyphCodePoint > 0x10FFFF) {
-                    continue;
-                }
-                reservedCodePoints.add(glyphCodePoint);
-                String glyphChars = new String(Character.toChars(glyphCodePoint));
-
                 String filePath = glyphConfig.getString("file");
                 if (filePath.isBlank()) {
                     continue;
                 }
                 String normalizedFilePath = filePath.replace("\\", "/");
                 reservedFilePaths.add(normalizedFilePath.toLowerCase(Locale.ROOT));
+                String token = tokenPrefix + glyphName;
+                int glyphCodePoint = resolveGlyphCodePoint(
+                    manifest,
+                    token,
+                    glyphConfig.getString("char"),
+                    reservedCodePoints,
+                    existingCodePointOwners,
+                    nextCodePoint
+                );
+                if (glyphCodePoint < 0 || glyphCodePoint > 0x10FFFF) {
+                    continue;
+                }
+                if (glyphConfig.getString("char").isEmpty()) {
+                    nextCodePoint = glyphCodePoint + 1;
+                }
+                reservedCodePoints.add(glyphCodePoint);
+                String glyphChars = new String(Character.toChars(glyphCodePoint));
 
                 File src = new File(new File(dataPackDir, "textures"), normalizedFilePath);
                 if (!src.exists()) {
@@ -139,10 +154,9 @@ public class GlyphGenerator extends AbstractResourcePackGenerator {
                 provider.add("chars", chars);
                 providers.add(provider);
 
-                String tokenPrefix = config.getString("name_prefix");
-                String token = tokenPrefix + glyphName;
                 writeTokenMeta(manifest, token, namespace, normalizedFilePath, ascent, height, glyphConfig);
                 manifest.set("tokens." + token, glyphChars);
+                reserveToken(existingCodePointOwners, token, glyphCodePoint);
             }
 
             writeFontJson(fontJsonPath, json);
@@ -154,6 +168,7 @@ public class GlyphGenerator extends AbstractResourcePackGenerator {
             config,
             dataPackDir,
             reservedCodePoints,
+            existingCodePointOwners,
             reservedFilePaths
         );
     }
@@ -188,6 +203,35 @@ public class GlyphGenerator extends AbstractResourcePackGenerator {
         return root.getAsJsonArray("providers");
     }
 
+    private int resolveGlyphCodePoint(@NotNull ConfigSection manifest,
+                                      @NotNull String token,
+                                      @Nullable String configuredChar,
+                                      @NotNull Set<Integer> reservedCodePoints,
+                                      @NotNull Map<Integer, Set<String>> existingCodePointOwners,
+                                      int nextCodePoint) {
+        int configuredCodePoint = parseCodePoint(configuredChar, -1);
+        if (configuredCodePoint >= 0) {
+            return configuredCodePoint;
+        }
+
+        int existingCodePoint = parseCodePoint(manifest.getString("tokens." + token, ""), -1);
+        if (canReusePersistedCodePoint(token, existingCodePoint, existingCodePointOwners)) {
+            return existingCodePoint;
+        }
+
+        while (reservedCodePoints.contains(nextCodePoint)) {
+            nextCodePoint++;
+        }
+        return nextCodePoint;
+    }
+
+    static boolean canReusePersistedCodePoint(@NotNull String token,
+                                               int codePoint,
+                                               @NotNull Map<Integer, Set<String>> ownersByCodePoint) {
+        Set<String> owners = ownersByCodePoint.getOrDefault(codePoint, Set.of());
+        return codePoint >= 0 && owners.size() == 1 && owners.contains(token);
+    }
+
     private ConfigSection getGlyphSection(ConfigSection config) {
         if (config.contains("glyphs")) {
             return config.getSection("glyphs");
@@ -206,6 +250,7 @@ public class GlyphGenerator extends AbstractResourcePackGenerator {
         @NotNull ConfigSection config,
         @NotNull File namespaceDir,
         @NotNull Set<Integer> reservedCodePoints,
+        @NotNull Map<Integer, Set<String>> existingCodePointOwners,
         @NotNull Set<String> reservedFilePaths
     ) throws IOException {
         if (!config.contains("generate_font_images")) {
@@ -253,7 +298,7 @@ public class GlyphGenerator extends AbstractResourcePackGenerator {
             String tokenName = deriveGeneratedTokenName(texturesDir, pngFile, namePrefix);
             int glyphCodePoint = parseCodePoint(manifest.getString("tokens." + tokenName, ""), -1);
 
-            if (glyphCodePoint < 0) {
+            if (!canReusePersistedCodePoint(tokenName, glyphCodePoint, existingCodePointOwners)) {
                 while (reservedCodePoints.contains(nextCodePoint)) {
                     nextCodePoint++;
                 }
@@ -273,6 +318,7 @@ public class GlyphGenerator extends AbstractResourcePackGenerator {
 
             writeTokenMeta(manifest, tokenName, namespace, relative, ascent, height, section);
             manifest.set("tokens." + tokenName, new String(Character.toChars(glyphCodePoint)));
+            reserveToken(existingCodePointOwners, tokenName, glyphCodePoint);
             reservedCodePoints.add(glyphCodePoint);
         }
 
@@ -389,5 +435,27 @@ public class GlyphGenerator extends AbstractResourcePackGenerator {
         }
 
         return reserved;
+    }
+
+    private Map<Integer, Set<String>> collectCodePointOwners(ConfigSection manifest) {
+        Map<Integer, Set<String>> owners = new HashMap<>();
+        ConfigSection tokens = manifest.getSection("tokens");
+        if (tokens == null) {
+            return owners;
+        }
+        for (String token : tokens.getKeys()) {
+            int codePoint = parseCodePoint(tokens.getString(token, ""), -1);
+            if (codePoint >= 0) {
+                owners.computeIfAbsent(codePoint, ignored -> new HashSet<>()).add(token);
+            }
+        }
+        return owners;
+    }
+
+    private void reserveToken(@NotNull Map<Integer, Set<String>> owners,
+                              @NotNull String token,
+                              int codePoint) {
+        owners.values().forEach(tokens -> tokens.remove(token));
+        owners.computeIfAbsent(codePoint, ignored -> new HashSet<>()).add(token);
     }
 }

@@ -2,6 +2,7 @@ package dev.stemcraft.service.firstjoin;
 
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.api.service.playerreset.*;
 import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.service.BaseService;
 import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
@@ -21,6 +22,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -55,6 +57,15 @@ public class FirstJoinService extends BaseService {
         ensureStorage();
         new FirstJoinListener(plugin, api, this).register();
         timeoutTask = Bukkit.getGlobalRegionScheduler().runAtFixedRate(plugin, task -> expireTimedOutSessions(), 20L, 20L);
+        api.playerResets().register(new PlayerResetHandler() {
+            public @NotNull String id() { return "first-join-state"; }
+            public @NotNull Set<PlayerResetScope> scopes() { return Set.of(PlayerResetScope.COMPLETE); }
+            public int priority() { return 400; }
+            public @NotNull PlayerResetPreview preview(@NotNull PlayerResetContext context) {
+                return new PlayerResetPreview("First-join verification", isVerified(context.playerUuid()) ? 1 : 0);
+            }
+            public void reset(@NotNull PlayerResetContext context) { removeSession(context.playerUuid()); }
+        });
     }
 
     @Override

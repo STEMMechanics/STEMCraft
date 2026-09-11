@@ -81,7 +81,7 @@ public class MotdCommand extends BaseCommand {
     private void setMotd(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3, "MOTD_COMMAND_USAGE");
         String field = Objects.requireNonNullElse(ctx.getArgLower(1), "");
-        String value = ctx.getArgsAsString(3).trim();
+        String value = ctx.getArgsAsString(2).trim();
         boolean centered = ctx.hasFlag("c", false);
 
         if (value.isEmpty()) {

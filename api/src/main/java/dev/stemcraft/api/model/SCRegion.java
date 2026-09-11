@@ -29,9 +29,7 @@ import dev.stemcraft.api.serialize.RegionSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
-import org.bukkit.block.Block;
 import org.bukkit.configuration.serialization.ConfigurationSerializable;
-import org.bukkit.entity.Player;
 import org.jspecify.annotations.NonNull;
 
 import java.util.ArrayList;
@@ -355,74 +353,6 @@ public class SCRegion implements ConfigurationSerializable {
     }
 
     /**
-     * Returns a random location within the region.
-     * May return null if no valid location found after several attempts.
-     *
-     * @return Random location inside the region, or null if none found.
-     */
-    public Location getRandomLocation() {
-        World world = getWorld();
-        if (world == null) {
-            return null;
-        }
-        Random random = ThreadLocalRandom.current();
-        BlockVector3 min = region.getMinimumPoint();
-        BlockVector3 max = region.getMaximumPoint();
-
-        int attempts = 1000;
-
-        while (attempts-- > 0) {
-            int x = randomBetween(min.x(), max.x(), random);
-            int y = randomBetween(min.y(), max.y(), random);
-            int z = randomBetween(min.z(), max.z(), random);
-
-            BlockVector3 pos = BlockVector3.at(x, y, z);
-            if (!region.contains(pos)) continue; // works for cuboid and polygon
-
-            return new Location(world, x + 0.5, y + 0.5, z + 0.5);
-        }
-
-        return null;
-    }
-
-    /**
-     * Returns a random ground location within the region.
-     * The location will be on solid ground with air above for player placement.
-     * May return null if no valid ground location found after several attempts.
-     *
-     * @return Random ground location inside the region, or null if none found.
-     */
-    public Location getRandomGroundLocation() {
-        for (int i = 0; i < 200; i++) {
-            Location base = getRandomLocation();
-            if (base == null) continue;
-
-            World w = base.getWorld();
-            int x = base.getBlockX();
-            int z = base.getBlockZ();
-
-            // start at the highest valid Y in the region
-            int y = base.getBlockY();
-
-            // walk downward until we hit something
-            for (int dy = y; dy > w.getMinHeight(); dy--) {
-                Block ground = w.getBlockAt(x, dy - 1, z);
-                Block feet = w.getBlockAt(x, dy, z);
-                Block head = w.getBlockAt(x, dy + 1, z);
-
-                if (ground.getType().isSolid()
-                        && feet.getType().isAir()
-                        && head.getType().isAir()) {
-
-                    return new Location(w, x + 0.5, dy, z + 0.5);
-                }
-            }
-        }
-
-        return null;
-    }
-
-    /**
      * Checks if the region is a cuboid.
      *
      * @return true if the region is a cuboid.
@@ -461,17 +391,6 @@ public class SCRegion implements ConfigurationSerializable {
     }
 
     /**
-     * Checks if the given player is inside this region.
-     *
-     * @param player The player to check.
-     * @return True if the player is inside the region, false otherwise.
-     */
-    public boolean containsPlayer(Player player) {
-        if (player == null) return false;
-        return contains(player.getLocation());
-    }
-
-    /**
      * Returns the minimum block corner of the region as a Bukkit location.
      *
      * @return The minimum corner location.
@@ -491,18 +410,6 @@ public class SCRegion implements ConfigurationSerializable {
         World world = getWorld();
         BlockVector3 max = region.getMaximumPoint();
         return new Location(world, max.x(), max.y(), max.z());
-    }
-
-    /**
-     * Returns a list of all online players currently inside this region.
-     *
-     * @return List of players inside the region.
-     */
-    public List<Player> getPlayers() {
-        return Bukkit.getOnlinePlayers().stream()
-                .filter(this::containsPlayer)
-                .map(p -> (Player) p) // cast from ? extends Player to Player
-                .toList();
     }
 
     /**

@@ -55,7 +55,7 @@ public class BedWarsCommand {
         });
 
         api.commands().create("bedwars")
-            .permission("stemcraft.command.bedwars")
+            .access((sender, args) -> dev.stemcraft.permission.PlayerCommandAccess.minigame(sender, args, "bedwars"))
             .usage("/bedwars <list|info|create|delete|join|joinall|spectate|leave|start|stop|restart|save|reload|validate|enable|disable|addteam|removeteam|set|select|sel|show|dropitems|adddropitem|removedropitem>")
             .tabCompletion("list")
             .tabCompletion("list", "{int}")
@@ -112,6 +112,10 @@ public class BedWarsCommand {
             .tabCompletion("removedropitem", "{bedwars-arenas}")
             .tabCompletion("removedropitem", "{bedwars-arenas}", "{int}")
             .executor((ignored, cmd, ctx) -> {
+                if (ctx.args().isEmpty() && !dev.stemcraft.permission.PlayerCommandAccess.gameAdmin(ctx.getSender(), "bedwars")) {
+                    ctx.returnInfo("Use /bedwars list, info, join or leave, spectate.");
+                    return;
+                }
                 ctx.checkArgsSizeAtLeast(1);
 
                 switch (ctx.getArgLower(0)) {
@@ -564,13 +568,13 @@ public class BedWarsCommand {
             }
             case "name" -> {
                 ctx.checkArgsSizeAtLeast(4);
-                arena.setName(ctx.getArgsAsString(4));
+                arena.setName(ctx.getArgsAsString(3));
                 ctx.success("Display name updated for arena '" + arena.id() + "'.");
             }
             case "teamname" -> {
                 ctx.checkArgsSizeAtLeast(5);
                 MiniGameTeam team = requireTeam(ctx, arena, 3);
-                team.set("displayName", ctx.getArgsAsString(5));
+                team.set("displayName", ctx.getArgsAsString(4));
                 bedWars.refreshArenaKits(arena);
                 ctx.success("Display name updated for team '" + team.getName() + "' in arena '" + arena.id() + "'.");
             }

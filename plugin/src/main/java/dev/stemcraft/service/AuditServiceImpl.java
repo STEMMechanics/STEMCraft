@@ -154,6 +154,7 @@ public class AuditServiceImpl extends BaseService implements AuditService {
         );
 
         api.events().register(AsyncChatEvent.class, event -> {
+            if (plugin.stemBot() != null && plugin.stemBot().isPrivateChat(event)) return;
             if (plugin.firstJoin() != null && plugin.firstJoin().hasActiveSession(event.getPlayer().getUniqueId())) {
                 return;
             }
@@ -337,6 +338,11 @@ public class AuditServiceImpl extends BaseService implements AuditService {
     @Override
     public void onDisable() {
         active = false;
+        flushAll();
+    }
+
+    @Override
+    public void onSave() {
         flushAll();
     }
 

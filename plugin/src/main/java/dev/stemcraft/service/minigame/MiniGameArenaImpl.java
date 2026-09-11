@@ -8,6 +8,7 @@ import dev.stemcraft.api.minigame.MiniGamePlayer;
 import dev.stemcraft.api.minigame.MiniGameTeam;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.util.NamespaceId;
+import dev.stemcraft.api.util.InventoryUtil;
 import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.api.util.StringUtil;
 import dev.stemcraft.api.util.TextUtil;
@@ -22,7 +23,10 @@ import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
+import org.bukkit.block.Chest;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.BlockDisplay;
+import org.bukkit.entity.Display;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Firework;
 import org.bukkit.entity.Item;
@@ -40,6 +44,9 @@ import java.util.function.Predicate;
 
 public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements MiniGameArena {
     private static final double SUPPLY_DROP_SPAWN_ABOVE_SURFACE_OFFSET = 0.15d;
+    private static final double SUPPLY_DROP_CRATE_START_HEIGHT_ABOVE_LANDING = 100.0d;
+    private static final double SUPPLY_DROP_CRATE_DESCENT_PER_TICK = 0.24d;
+    private static final double SUPPLY_DROP_PARACHUTE_HEIGHT = 4.0d;
     private static final BlockFace[] SUPPLY_DROP_SUPPORT_FACES = new BlockFace[] {
         BlockFace.NORTH,
         BlockFace.SOUTH,
@@ -57,6 +64,45 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         Color.AQUA,
         Color.LIME,
         Color.FUCHSIA
+    };
+    private static final SupplyDropParachutePart[] SUPPLY_DROP_PARACHUTE_PARTS = new SupplyDropParachutePart[] {
+        new SupplyDropParachutePart(-1, 0, -1, parachuteStripe(-1)),
+        new SupplyDropParachutePart(0, 0, -1, parachuteStripe(-1)),
+        new SupplyDropParachutePart(1, 0, -1, parachuteStripe(-1)),
+        new SupplyDropParachutePart(-1, 0, 0, parachuteStripe(0)),
+        new SupplyDropParachutePart(0, 0, 0, parachuteStripe(0)),
+        new SupplyDropParachutePart(1, 0, 0, parachuteStripe(0)),
+        new SupplyDropParachutePart(-1, 0, 1, parachuteStripe(1)),
+        new SupplyDropParachutePart(0, 0, 1, parachuteStripe(1)),
+        new SupplyDropParachutePart(1, 0, 1, parachuteStripe(1)),
+        new SupplyDropParachutePart(-2, -1, -1, parachuteStripe(-1)),
+        new SupplyDropParachutePart(-2, -1, 0, parachuteStripe(0)),
+        new SupplyDropParachutePart(-2, -1, 1, parachuteStripe(1)),
+        new SupplyDropParachutePart(-1, -1, -2, parachuteStripe(-2)),
+        new SupplyDropParachutePart(-1, -1, 2, parachuteStripe(2)),
+        new SupplyDropParachutePart(0, -1, -2, parachuteStripe(-2)),
+        new SupplyDropParachutePart(0, -1, 2, parachuteStripe(2)),
+        new SupplyDropParachutePart(1, -1, -2, parachuteStripe(-2)),
+        new SupplyDropParachutePart(1, -1, 2, parachuteStripe(2)),
+        new SupplyDropParachutePart(2, -1, -1, parachuteStripe(-1)),
+        new SupplyDropParachutePart(2, -1, 0, parachuteStripe(0)),
+        new SupplyDropParachutePart(2, -1, 1, parachuteStripe(1)),
+        new SupplyDropParachutePart(-3, -2, -1, parachuteStripe(-1)),
+        new SupplyDropParachutePart(-3, -2, 0, parachuteStripe(0)),
+        new SupplyDropParachutePart(-3, -2, 1, parachuteStripe(1)),
+        new SupplyDropParachutePart(-2, -2, -2, parachuteStripe(-2)),
+        new SupplyDropParachutePart(-2, -2, 2, parachuteStripe(2)),
+        new SupplyDropParachutePart(-1, -2, -3, parachuteStripe(-3)),
+        new SupplyDropParachutePart(-1, -2, 3, parachuteStripe(3)),
+        new SupplyDropParachutePart(0, -2, -3, parachuteStripe(-3)),
+        new SupplyDropParachutePart(0, -2, 3, parachuteStripe(3)),
+        new SupplyDropParachutePart(1, -2, -3, parachuteStripe(-3)),
+        new SupplyDropParachutePart(1, -2, 3, parachuteStripe(3)),
+        new SupplyDropParachutePart(2, -2, -2, parachuteStripe(-2)),
+        new SupplyDropParachutePart(2, -2, 2, parachuteStripe(2)),
+        new SupplyDropParachutePart(3, -2, -1, parachuteStripe(-1)),
+        new SupplyDropParachutePart(3, -2, 0, parachuteStripe(0)),
+        new SupplyDropParachutePart(3, -2, 1, parachuteStripe(1))
     };
     private static final long SUPPLY_DROP_SIGNAL_PERIOD_TICKS = 40L;
 
@@ -93,6 +139,8 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
     private final Set<Material> unlimitedPlacements = EnumSet.noneOf(Material.class);
     private final Set<String> activeCelebrationKeys = new HashSet<>();
     private final Map<UUID, SupplyDropMarker> supplyDropMarkers = new HashMap<>();
+    private final Map<UUID, SupplyDropCrate> supplyDropCrates = new HashMap<>();
+    private final Map<UUID, PlayerTransition> playerTransitions = new HashMap<>();
     private final Map<UUID, Long> protectionUntil = new HashMap<>();
     private final Map<String, Map<Material, Integer>> kits = new HashMap<>();
 
@@ -149,6 +197,10 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
 
     @Override
     public boolean isJoinable() {
+        if (get("allowLateJoin", Boolean.class, false)
+            && (status == ArenaStatus.PREPARATION || status == ArenaStatus.RUNNING)) {
+            return true;
+        }
         if (get("allowRunningJoin", Boolean.class, false) && status == ArenaStatus.RUNNING) {
             return true;
         }
@@ -376,6 +428,7 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
     @Override
     public void addPlayer(Player player) {
         if (players.containsKey(player)) return;
+        boolean joiningFromOutside = !spectators.contains(player);
 
         MiniGameArenaImpl existingArena = service.findPlayerArena(player);
         if (existingArena != null && existingArena != this) {
@@ -400,12 +453,14 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         }
 
         service.storePreviousPlayerState(player);
-        service.prepareActivePlayer(player);
         if (mgPlayer == null) {
             mgPlayer = new MiniGamePlayerImpl(service, player);
         }
         players.put(player, mgPlayer);
         service.registerPlayerArena(player, this, false);
+        // Register occupancy before changing game mode so features which ignore
+        // minigame-managed transitions (such as GameModeInventories) can see it.
+        service.prepareActivePlayer(player);
 
         if (mgPlayer.getTeam() != null) {
             MiniGameTeamImpl preservedTeam = teams.get(mgPlayer.getTeam());
@@ -424,6 +479,11 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         }
 
         MiniGameArenaHandler handler = service.getHandler(namespace);
+        if (getStatus() == ArenaStatus.IDLE) {
+            setStatus(ArenaStatus.WAITING);
+        } else if (getStatus() == ArenaStatus.WAITING && numPlayers() >= getMinPlayers()) {
+            setStatus(ArenaStatus.STARTING, 30);
+        }
         Location location = handler.onPlayerJoinArena(this, player);
         if (location == null) {
             location = (getStatus() == ArenaStatus.PREPARATION || getStatus() == ArenaStatus.RUNNING)
@@ -432,6 +492,9 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         }
 
         PlayerUtil.teleport(player, location);
+        if (joiningFromOutside) {
+            service.applyArenaJoinActions(this, player, false);
+        }
         service.teamSelectionSupport().onPlayerJoinedArena(this, player);
     }
 
@@ -467,6 +530,7 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
     @Override
     public void addSpectator(Player player) {
         if (spectators.contains(player)) return;
+        boolean joiningFromOutside = !players.containsKey(player);
 
         MiniGameArenaImpl existingArena = service.findPlayerArena(player);
         if (existingArena != null && existingArena != this) {
@@ -480,13 +544,14 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         }
 
         service.storePreviousPlayerState(player);
-        service.prepareSpectatorPlayer(player);
         if (spectatorProfile == null) {
             spectatorProfile = new MiniGamePlayerImpl(service, player);
         }
         spectators.add(player);
         spectatorProfiles.put(player, spectatorProfile);
         service.registerPlayerArena(player, this, true);
+        // As with active players, occupancy must exist before the game-mode event.
+        service.prepareSpectatorPlayer(player);
 
         MiniGameArenaHandler handler = service.getHandler(namespace);
         Location location = handler.onPlayerJoinSpectator(this, player);
@@ -495,6 +560,9 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         }
 
         PlayerUtil.teleport(player, location);
+        if (joiningFromOutside) {
+            service.applyArenaJoinActions(this, player, true);
+        }
     }
 
     @Override
@@ -910,10 +978,64 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
     }
 
     @Override
+    public void spawnSupplyDropCrate(ItemStack item, Location landingLocation) {
+        if (item == null || item.getType().isAir()) {
+            return;
+        }
+        spawnSupplyDropCrate(List.of(item), landingLocation);
+    }
+
+    @Override
+    public void spawnSupplyDropCrate(Collection<ItemStack> items, Location landingLocation) {
+        if (items == null || landingLocation == null || landingLocation.getWorld() == null) {
+            return;
+        }
+
+        List<ItemStack> loot = items.stream()
+            .filter(Objects::nonNull)
+            .map(ItemStack::clone)
+            .filter(stack -> !stack.getType().isAir())
+            .toList();
+        if (loot.isEmpty()) {
+            return;
+        }
+
+        Block chestBlock = resolveSupplyDropChestBlock(landingLocation);
+        if (chestBlock == null) {
+            return;
+        }
+        UUID crateId = UUID.randomUUID();
+        clearSupplyDropCrate(crateId);
+
+        Location chestBlockLocation = chestBlock.getLocation();
+        double startY = chestBlockLocation.getY() + SUPPLY_DROP_CRATE_START_HEIGHT_ABOVE_LANDING;
+        Location visualLocation = chestBlockLocation.clone();
+        visualLocation.setY(startY);
+
+        SupplyDropCrate crate = new SupplyDropCrate(
+            crateId,
+            loot,
+            chestBlockLocation,
+            spawnSupplyDropChestDisplay(visualLocation),
+            spawnSupplyDropParachuteDisplays(visualLocation)
+        );
+        supplyDropCrates.put(crateId, crate);
+        startSupplyDropCrateDescent(crate);
+    }
+
+    @Override
     public void clearAllSupplyDrops() {
         for (UUID itemId : new ArrayList<>(supplyDropMarkers.keySet())) {
             clearSupplyDrop(itemId);
         }
+        for (UUID crateId : new ArrayList<>(supplyDropCrates.keySet())) {
+            clearSupplyDropCrate(crateId);
+        }
+    }
+
+    @Override
+    public int countActiveSupplyDrops() {
+        return supplyDropMarkers.size() + supplyDropCrates.size();
     }
 
     @Override
@@ -983,6 +1105,29 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
                 continue;
             }
             clearSupplyDrop(itemId);
+        }
+
+        for (UUID crateId : new ArrayList<>(supplyDropCrates.keySet())) {
+            SupplyDropCrate crate = supplyDropCrates.get(crateId);
+            if (crate == null || !crate.landed()) {
+                continue;
+            }
+
+            Block chestBlock = crate.chestBlockLocation().getBlock();
+            if (!(chestBlock.getState() instanceof Chest chest)) {
+                clearSupplyDropCrate(crateId);
+                continue;
+            }
+            if (!chest.getBlockInventory().getViewers().isEmpty()) {
+                crate.setOpened(true);
+                continue;
+            }
+            if (!chest.getBlockInventory().isEmpty() || !crate.opened()) {
+                continue;
+            }
+
+            InventoryUtil.clearBlock(chestBlock, false);
+            clearSupplyDropCrate(crateId);
         }
     }
 
@@ -1064,6 +1209,26 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         stopCelebration(marker.celebrationKey());
     }
 
+    void clearSupplyDropCrate(@NotNull UUID crateId) {
+        SupplyDropCrate crate = supplyDropCrates.remove(crateId);
+        if (crate == null) {
+            return;
+        }
+
+        api.tasks().cancel(supplyDropCrateTaskId(crateId));
+        removeEntity(crate.chestDisplayId());
+        for (UUID parachuteDisplayId : crate.parachuteDisplayIds()) {
+            removeEntity(parachuteDisplayId);
+        }
+
+        if (crate.landed()) {
+            Block chestBlock = crate.chestBlockLocation().getBlock();
+            if (chestBlock.getType() == Material.CHEST) {
+                InventoryUtil.clearBlock(chestBlock, false);
+            }
+        }
+    }
+
     private void startSupplyDropSignal(@NotNull UUID itemId, @NotNull Location signalLocation) {
         String taskId = supplyDropSignalTaskId(itemId);
         api.tasks().cancel(taskId);
@@ -1105,6 +1270,214 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         return "minigame-supply-drop-signal-" + NamespaceId.sanitizePath(namespace)
             + "-" + NamespaceId.sanitizePath(id)
             + "-" + itemId.toString().replace('-', '_');
+    }
+
+    private void startSupplyDropCrateDescent(@NotNull SupplyDropCrate crate) {
+        String taskId = supplyDropCrateTaskId(crate.id());
+        api.tasks().cancel(taskId);
+        api.tasks().repeating(taskId, 0L, 1L, () -> {
+            if (!crate.landed()) {
+                Entity chestDisplay = world.getEntity(crate.chestDisplayId());
+                if (!(chestDisplay instanceof BlockDisplay display) || !display.isValid()) {
+                    clearSupplyDropCrate(crate.id());
+                    return;
+                }
+
+                double currentY = display.getLocation().getY();
+                double targetY = crate.chestBlockLocation().getY();
+                double nextY = Math.max(targetY, currentY - SUPPLY_DROP_CRATE_DESCENT_PER_TICK);
+                updateSupplyDropCrateDisplays(crate, nextY);
+
+                if (nextY > targetY) {
+                    return;
+                }
+
+                landSupplyDropCrate(crate.id());
+                return;
+            }
+
+            double nextParachuteBaseY = crate.parachuteBaseY() - SUPPLY_DROP_CRATE_DESCENT_PER_TICK;
+            crate.setParachuteBaseY(nextParachuteBaseY);
+            if (!updateSupplyDropParachuteDisplays(crate)) {
+                api.tasks().cancel(taskId);
+            }
+        });
+    }
+
+    private void landSupplyDropCrate(@NotNull UUID crateId) {
+        SupplyDropCrate crate = supplyDropCrates.get(crateId);
+        if (crate == null || crate.landed()) {
+            return;
+        }
+
+        removeEntity(crate.chestDisplayId());
+
+        Block chestBlock = crate.chestBlockLocation().getBlock();
+        if (!chestBlock.isPassable() && chestBlock.getType() != Material.CHEST) {
+            clearSupplyDropCrate(crateId);
+            return;
+        }
+
+        api.worlds().changes(world).captureBlock(chestBlock);
+        chestBlock.setType(Material.CHEST, false);
+        if (chestBlock.getState() instanceof Chest chest) {
+            chest.getBlockInventory().clear();
+            distributeSupplyDropLoot(chest, crate.loot());
+            crate.setLanded(true);
+            return;
+        }
+
+        chestBlock.setType(Material.AIR, false);
+        clearSupplyDropCrate(crateId);
+    }
+
+    private @NotNull UUID spawnSupplyDropChestDisplay(@NotNull Location location) {
+        BlockDisplay display = world.spawn(location, BlockDisplay.class, entity -> {
+            entity.setBlock(Material.CHEST.createBlockData());
+            entity.setBillboard(Display.Billboard.FIXED);
+            entity.setViewRange(48.0f);
+            entity.setShadowRadius(0.0f);
+            entity.setShadowStrength(0.0f);
+            entity.setPersistent(false);
+            entity.setInvulnerable(true);
+            entity.setGravity(false);
+            entity.setSilent(true);
+        });
+        return display.getUniqueId();
+    }
+
+    private @NotNull List<UUID> spawnSupplyDropParachuteDisplays(@NotNull Location baseLocation) {
+        List<UUID> displayIds = new ArrayList<>();
+        for (SupplyDropParachutePart part : SUPPLY_DROP_PARACHUTE_PARTS) {
+            Location canopyLocation = baseLocation.clone().add(part.xOffset(), SUPPLY_DROP_PARACHUTE_HEIGHT + part.yOffset(), part.zOffset());
+            BlockDisplay display = world.spawn(canopyLocation, BlockDisplay.class, entity -> {
+                entity.setBlock(part.material().createBlockData());
+                entity.setBillboard(Display.Billboard.FIXED);
+                entity.setViewRange(48.0f);
+                entity.setShadowRadius(0.0f);
+                entity.setShadowStrength(0.0f);
+                entity.setPersistent(false);
+                entity.setInvulnerable(true);
+                entity.setGravity(false);
+                entity.setSilent(true);
+            });
+            displayIds.add(display.getUniqueId());
+        }
+        return displayIds;
+    }
+
+    private void updateSupplyDropCrateDisplays(@NotNull SupplyDropCrate crate, double nextY) {
+        Location chestLocation = crate.chestBlockLocation().clone();
+        chestLocation.setY(nextY);
+        Entity chestDisplay = world.getEntity(crate.chestDisplayId());
+        if (chestDisplay != null && chestDisplay.isValid()) {
+            chestDisplay.teleport(chestLocation);
+        }
+
+        crate.setParachuteBaseY(nextY + SUPPLY_DROP_PARACHUTE_HEIGHT);
+        updateSupplyDropParachuteDisplays(crate);
+    }
+
+    private boolean updateSupplyDropParachuteDisplays(@NotNull SupplyDropCrate crate) {
+        boolean anyVisible = false;
+        double groundY = crate.chestBlockLocation().getY();
+        for (int i = 0; i < crate.parachuteDisplayIds().size(); i++) {
+            UUID displayId = crate.parachuteDisplayIds().get(i);
+            Entity canopyDisplay = world.getEntity(displayId);
+            if (canopyDisplay == null || !canopyDisplay.isValid()) {
+                continue;
+            }
+
+            SupplyDropParachutePart part = SUPPLY_DROP_PARACHUTE_PARTS[i];
+            double partY = crate.parachuteBaseY() + part.yOffset();
+            if (partY <= groundY) {
+                canopyDisplay.remove();
+                continue;
+            }
+
+            Location canopyLocation = crate.chestBlockLocation().clone().add(part.xOffset(), partY - groundY, part.zOffset());
+            canopyDisplay.teleport(canopyLocation);
+            anyVisible = true;
+        }
+        return anyVisible;
+    }
+
+    private void removeEntity(@NotNull UUID entityId) {
+        Entity entity = world.getEntity(entityId);
+        if (entity != null) {
+            entity.remove();
+        }
+    }
+
+    private String supplyDropCrateTaskId(@NotNull UUID crateId) {
+        return "minigame-supply-drop-crate-" + NamespaceId.sanitizePath(namespace)
+            + "-" + NamespaceId.sanitizePath(id)
+            + "-" + crateId.toString().replace('-', '_');
+    }
+
+    private String playerPullTaskId() {
+        return "minigame-player-pull-" + NamespaceId.sanitizePath(namespace)
+            + "-" + NamespaceId.sanitizePath(id);
+    }
+
+    private double lerp(double from, double to, double progress) {
+        return from + ((to - from) * progress);
+    }
+
+    private double lerpAngle(double from, double to, double progress) {
+        double delta = ((to - from + 540.0d) % 360.0d) - 180.0d;
+        return from + (delta * progress);
+    }
+
+    private @Nullable Block resolveSupplyDropChestBlock(@NotNull Location landingLocation) {
+        Block origin = landingLocation.getBlock();
+        for (int yOffset = 1; yOffset >= -3; yOffset--) {
+            Block candidate = origin.getRelative(BlockFace.UP, yOffset);
+            if (!isValidSupplyDropChestSpace(candidate)) {
+                continue;
+            }
+
+            Block support = candidate.getRelative(BlockFace.DOWN);
+            if (!isValidSupplyDropSupport(support)) {
+                continue;
+            }
+
+            Block above = candidate.getRelative(BlockFace.UP);
+            if (!isValidSupplyDropHeadroom(above)) {
+                continue;
+            }
+            return candidate;
+        }
+        return null;
+    }
+
+    private boolean isValidSupplyDropChestSpace(@NotNull Block block) {
+        return block.getType() == Material.CHEST || block.getType().isAir();
+    }
+
+    private boolean isValidSupplyDropSupport(@NotNull Block block) {
+        return !block.getType().isAir() && !block.isPassable() && !block.isLiquid();
+    }
+
+    private boolean isValidSupplyDropHeadroom(@NotNull Block block) {
+        return (block.getType().isAir() || block.isPassable()) && !block.isLiquid();
+    }
+
+    private static @NotNull Material parachuteStripe(int zOffset) {
+        return Math.floorMod(zOffset, 2) == 0 ? Material.WHITE_WOOL : Material.RED_WOOL;
+    }
+
+    private void distributeSupplyDropLoot(@NotNull Chest chest, @NotNull List<ItemStack> loot) {
+        List<Integer> slots = new ArrayList<>(27);
+        for (int slot = 0; slot < 27; slot++) {
+            slots.add(slot);
+        }
+        Collections.shuffle(slots, ThreadLocalRandom.current());
+
+        int limit = Math.min(loot.size(), slots.size());
+        for (int i = 0; i < limit; i++) {
+            chest.getBlockInventory().setItem(slots.get(i), loot.get(i).clone());
+        }
     }
 
     private @Nullable Location highestSupplyDropLocation(
@@ -1164,6 +1537,7 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         }
 
         service.restorePreviousPlayerState(player, restoreLocation);
+        service.applyArenaLeaveActions(this, player, false);
     }
 
     private void removeSpectatorInternal(Player player, boolean restoreLocation, boolean quitting) {
@@ -1172,6 +1546,7 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
             return;
         }
         service.restorePreviousPlayerState(player, restoreLocation);
+        service.applyArenaLeaveActions(this, player, true);
     }
 
     private @Nullable MiniGamePlayerImpl detachActiveProfile(Player player, boolean notifyHandler, boolean quitting) {
@@ -1243,6 +1618,113 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
     }
 
     @Override
+    public void showStartingCountdownTitle(int secondsRemaining, String subtitle) {
+        if (secondsRemaining <= 0) return;
+        showTitle("<gradient:#fde047:#f97316><bold>" + secondsRemaining + "</bold></gradient>",
+            subtitle, 0, 1000, 200);
+    }
+
+    @Override
+    public void showStartingCountdownTitle(int secondsRemaining) {
+        showStartingCountdownTitle(secondsRemaining, "<gold>Game starts in</gold>");
+    }
+
+    @Override
+    public void pullPlayers(Map<Player, Location> targets, double blocksPerSecond, Runnable onComplete) {
+        cancelPlayerPulls();
+
+        if (targets == null || targets.isEmpty()) {
+            if (onComplete != null) {
+                onComplete.run();
+            }
+            return;
+        }
+
+        double stepDistance = Math.max(0.05d, blocksPerSecond / 20.0d);
+        for (Map.Entry<Player, Location> entry : targets.entrySet()) {
+            Player player = entry.getKey();
+            Location target = entry.getValue();
+            if (player == null || target == null || target.getWorld() == null || !hasOccupant(player)) {
+                continue;
+            }
+
+            playerTransitions.put(
+                player.getUniqueId(),
+                new PlayerTransition(target.clone(), stepDistance)
+            );
+        }
+
+        if (playerTransitions.isEmpty()) {
+            if (onComplete != null) {
+                onComplete.run();
+            }
+            return;
+        }
+
+        String taskId = playerPullTaskId();
+        api.tasks().repeating(taskId, 0L, 1L, () -> {
+            Iterator<Map.Entry<UUID, PlayerTransition>> iterator = playerTransitions.entrySet().iterator();
+            while (iterator.hasNext()) {
+                Map.Entry<UUID, PlayerTransition> entry = iterator.next();
+                Player player = Bukkit.getPlayer(entry.getKey());
+                if (player == null || !hasOccupant(player)) {
+                    iterator.remove();
+                    continue;
+                }
+
+                PlayerTransition transition = entry.getValue();
+                Location target = transition.target();
+                if (target.getWorld() == null || player.getWorld() != target.getWorld()) {
+                    player.teleport(target);
+                    iterator.remove();
+                    continue;
+                }
+
+                Location current = player.getLocation();
+                double distance = current.distance(target);
+                if (distance <= transition.stepDistance()) {
+                    player.setVelocity(new org.bukkit.util.Vector());
+                    player.setFallDistance(0.0f);
+                    player.teleport(target);
+                    iterator.remove();
+                    continue;
+                }
+
+                double ratio = transition.stepDistance() / distance;
+                Location next = current.clone();
+                next.setX(lerp(current.getX(), target.getX(), ratio));
+                next.setY(lerp(current.getY(), target.getY(), ratio));
+                next.setZ(lerp(current.getZ(), target.getZ(), ratio));
+                next.setYaw((float) lerpAngle(current.getYaw(), target.getYaw(), ratio));
+                next.setPitch((float) lerpAngle(current.getPitch(), target.getPitch(), ratio));
+                player.setVelocity(new org.bukkit.util.Vector());
+                player.setFallDistance(0.0f);
+                player.teleport(next);
+            }
+
+            if (!playerTransitions.isEmpty()) {
+                return;
+            }
+
+            api.tasks().cancel(taskId);
+            if (onComplete != null) {
+                onComplete.run();
+            }
+        });
+    }
+
+    @Override
+    public void cancelPlayerPulls() {
+        api.tasks().cancel(playerPullTaskId());
+        playerTransitions.clear();
+    }
+
+    @Override
+    public boolean isPlayerBeingPulled(Player player) {
+        return player != null && playerTransitions.containsKey(player.getUniqueId());
+    }
+
+    @Override
     public void resetTitle() {
         players.forEach((player, minigamePlayer) -> player.resetTitle());
     }
@@ -1304,5 +1786,81 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
     }
 
     private record SupplyDropMarker(@NotNull String celebrationKey) {
+    }
+
+    private record PlayerTransition(@NotNull Location target, double stepDistance) {
+    }
+
+    private record SupplyDropParachutePart(int xOffset, int yOffset, int zOffset, @NotNull Material material) {
+    }
+
+    private static final class SupplyDropCrate {
+        private final UUID id;
+        private final List<ItemStack> loot;
+        private final Location chestBlockLocation;
+        private final UUID chestDisplayId;
+        private final List<UUID> parachuteDisplayIds;
+        private boolean landed;
+        private boolean opened;
+        private double parachuteBaseY;
+
+        private SupplyDropCrate(
+            @NotNull UUID id,
+            @NotNull List<ItemStack> loot,
+            @NotNull Location chestBlockLocation,
+            @NotNull UUID chestDisplayId,
+            @NotNull List<UUID> parachuteDisplayIds
+        ) {
+            this.id = id;
+            this.loot = List.copyOf(loot);
+            this.chestBlockLocation = chestBlockLocation.clone();
+            this.chestDisplayId = chestDisplayId;
+            this.parachuteDisplayIds = List.copyOf(parachuteDisplayIds);
+            this.parachuteBaseY = chestBlockLocation.getY() + SUPPLY_DROP_PARACHUTE_HEIGHT;
+        }
+
+        private @NotNull UUID id() {
+            return id;
+        }
+
+        private @NotNull List<ItemStack> loot() {
+            return loot;
+        }
+
+        private @NotNull Location chestBlockLocation() {
+            return chestBlockLocation.clone();
+        }
+
+        private @NotNull UUID chestDisplayId() {
+            return chestDisplayId;
+        }
+
+        private @NotNull List<UUID> parachuteDisplayIds() {
+            return parachuteDisplayIds;
+        }
+
+        private boolean landed() {
+            return landed;
+        }
+
+        private void setLanded(boolean landed) {
+            this.landed = landed;
+        }
+
+        private boolean opened() {
+            return opened;
+        }
+
+        private void setOpened(boolean opened) {
+            this.opened = opened;
+        }
+
+        private double parachuteBaseY() {
+            return parachuteBaseY;
+        }
+
+        private void setParachuteBaseY(double parachuteBaseY) {
+            this.parachuteBaseY = parachuteBaseY;
+        }
     }
 }

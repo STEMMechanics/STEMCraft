@@ -36,6 +36,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.io.File;
+import org.bukkit.Color;
+import org.bukkit.Registry;
+import org.bukkit.inventory.meta.PotionMeta;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
+import org.bukkit.potion.PotionType;
+import io.papermc.paper.potion.PotionMix;
 
 /**
  * Implementation of the RecipeService for managing custom recipes.
@@ -65,7 +73,27 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
      * Load recipes from the configuration.
      */
     private void loadFromConfig() {
-        ConfigSection recipesSec = getConfigSection();
+        loadRecipes(getConfigSection());
+        File dataPacks = new File(plugin.getDataFolder(), "data-packs");
+        File[] packDirectories = dataPacks.listFiles(File::isDirectory);
+        if (packDirectories == null) return;
+        for (File packDirectory : packDirectories) {
+            File root = new File(packDirectory, "config.yml");
+            ConfigSection rootConfig = root.isFile() ? api.config().load(root) : null;
+            if (rootConfig == null || !rootConfig.getBoolean("pack.enabled", true)) continue;
+            loadRecipes(rootConfig.getSection("recipes", false));
+            File configs = new File(packDirectory, "configs");
+            File[] files = configs.listFiles((directory, name) -> name.toLowerCase(Locale.ROOT).endsWith(".yml"));
+            if (files != null) for (File file : files) loadRecipesFromFile(file);
+        }
+    }
+
+    private void loadRecipesFromFile(File file) {
+        ConfigSection config = api.config().load(file);
+        if (config != null) loadRecipes(config.getSection("recipes", false));
+    }
+
+    private void loadRecipes(ConfigSection recipesSec) {
         if (recipesSec == null) return;
 
         /* -------- REMOVE -------- */
@@ -131,13 +159,13 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
                 if (rSec == null) continue;
 
                 String resultMatStr = rSec.getString("result");
-                Material resultMat = Material.matchMaterial(resultMatStr.toUpperCase(Locale.ROOT));
-                if (resultMat == null) {
-                    plugin.getLogger().warning("shaped." + id + " unknown result material: " + resultMatStr);
-                    continue;
-                }
                 int amount = rSec.getInt("amount", 1);
                 if (amount <= 0) amount = 1;
+                ItemStack result = createRecipeResult(resultMatStr, amount);
+                if (result == null) {
+                    plugin.getLogger().warning("shaped." + id + " unknown result: " + resultMatStr);
+                    continue;
+                }
 
                 List<String> shapeList = rSec.getStringList("shape");
                 if (shapeList.isEmpty()) {
@@ -152,7 +180,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
                     continue;
                 }
 
-                Map<Character, Material> ingMap = new HashMap<>();
+                Map<Character, RecipeChoice> ingMap = new HashMap<>();
                 for (String key : ingSec.getKeys(false)) {
                     if (key.length() != 1) {
                         plugin.getLogger().warning("shaped." + id + " ingredient key must be 1 char: " + key);
@@ -160,16 +188,17 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
                     }
                     char c = key.charAt(0);
                     String matStr = ingSec.getString(key);
-                    Material m = Material.matchMaterial(matStr.toUpperCase(Locale.ROOT));
-                    if (m == null) {
-                        plugin.getLogger().warning("shaped." + id + " unknown material: " + matStr);
+                    RecipeChoice choice = ingredientChoice(matStr);
+                    if (choice == null) {
+                        plugin.getLogger().warning("shaped." + id + " unknown ingredient: " + matStr);
                         continue;
                     }
-                    ingMap.put(c, m);
+                    ingMap.put(c, choice);
                 }
-
-                ItemStack result = new ItemStack(resultMat, amount);
-                addShaped(id, result, shape, ingMap);
+                ShapedRecipe recipe = new ShapedRecipe(key(id), result);
+                recipe.shape(shape);
+                ingMap.forEach(recipe::setIngredient);
+                Bukkit.addRecipe(recipe);
                 api.messages().info("RECIPE_SHAPED_LOADED", "id", id);
             }
         }
@@ -182,13 +211,13 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
                 if (rSec == null) continue;
 
                 String resultMatStr = rSec.getString("result");
-                Material resultMat = Material.matchMaterial(resultMatStr.toUpperCase(Locale.ROOT));
-                if (resultMat == null) {
-                    plugin.getLogger().warning("shapeless." + id + " unknown result material: " + resultMatStr);
-                    continue;
-                }
                 int amount = rSec.getInt("amount", 1);
                 if (amount <= 0) amount = 1;
+                ItemStack result = createRecipeResult(resultMatStr, amount);
+                if (result == null) {
+                    plugin.getLogger().warning("shapeless." + id + " unknown result: " + resultMatStr);
+                    continue;
+                }
 
                 List<String> ingList = rSec.getStringList("ingredients");
                 if (ingList.isEmpty()) {
@@ -196,15 +225,14 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
                     continue;
                 }
 
-                ItemStack result = new ItemStack(resultMat, amount);
                 ShapelessRecipe recipe = new ShapelessRecipe(key(id), result);
                 for (String matStr : ingList) {
-                    Material m = Material.matchMaterial(matStr.toUpperCase(Locale.ROOT));
-                    if (m == null) {
-                        plugin.getLogger().warning("shapeless." + id + " unknown material: " + matStr);
+                    RecipeChoice choice = ingredientChoice(matStr);
+                    if (choice == null) {
+                        plugin.getLogger().warning("shapeless." + id + " unknown ingredient: " + matStr);
                         continue;
                     }
-                    recipe.addIngredient(m);
+                    recipe.addIngredient(choice);
                 }
                 Bukkit.addRecipe(recipe);
                 api.messages().info("RECIPE_SHAPELESS_LOADED", "id", id);
@@ -216,6 +244,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
         loadCookingSection(recipesSec.getSection("smoker"),   "smoker");
         loadCookingSection(recipesSec.getSection("blast_furnace"), "blast_furnace");
         loadCookingSection(recipesSec.getSection("campfire"), "campfire");
+        loadBrewingSection(recipesSec.getSection("brewing"));
 
         /* -------- SMITHING TRANSFORM -------- */
         ConfigSection smithTransSec = recipesSec.getSection("smithing_transform");
@@ -225,9 +254,9 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
                 if (rSec == null) continue;
 
                 String resultMatStr = rSec.getString("result");
-                Material resultMat = Material.matchMaterial(resultMatStr.toUpperCase(Locale.ROOT));
-                if (resultMat == null) {
-                    plugin.getLogger().warning("smithing_transform." + id + " unknown result material: " + resultMatStr);
+                ItemStack result = createRecipeResult(resultMatStr, rSec.getInt("amount", 1));
+                if (result == null) {
+                    plugin.getLogger().warning("smithing_transform." + id + " unknown result: " + resultMatStr);
                     continue;
                 }
 
@@ -244,7 +273,6 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
                     continue;
                 }
 
-                ItemStack result = new ItemStack(resultMat);
                 RecipeChoice template = new RecipeChoice.MaterialChoice(templateMat);
                 RecipeChoice base     = new RecipeChoice.MaterialChoice(baseMat);
                 RecipeChoice addition = new RecipeChoice.MaterialChoice(addMat);
@@ -303,27 +331,89 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
             float exp        = (float) rSec.getDouble("exp", 0.0);
             int time         = rSec.getInt("time", 200);
 
-            Material inputMat  = Material.matchMaterial(inputStr.toUpperCase(Locale.ROOT));
-            Material resultMat = Material.matchMaterial(resultStr.toUpperCase(Locale.ROOT));
-
-            if (inputMat == null || resultMat == null) {
-                plugin.getLogger().warning(type + "." + id + " invalid materials");
+            RecipeChoice input = ingredientChoice(inputStr);
+            ItemStack result = createRecipeResult(resultStr, amount);
+            if (input == null || result == null) {
+                plugin.getLogger().warning(type + "." + id + " invalid input or result");
                 continue;
             }
             if (amount <= 0) amount = 1;
 
-            ItemStack result = new ItemStack(resultMat, amount);
-
             switch (type) {
-                case "furnace" -> addFurnace(id, inputMat, result, exp, time);
-                case "smoker" -> addSmoker(id, inputMat, result, exp, time);
-                case "blast_furnace" -> addBlastFurnace(id, inputMat, result, exp, time);
-                case "campfire" -> addCampfire(id, inputMat, result, exp, time);
+                case "furnace" -> Bukkit.addRecipe(new FurnaceRecipe(key(id), result, input, exp, time));
+                case "smoker" -> Bukkit.addRecipe(new SmokingRecipe(key(id), result, input, exp, time));
+                case "blast_furnace" -> Bukkit.addRecipe(new BlastingRecipe(key(id), result, input, exp, time));
+                case "campfire" -> Bukkit.addRecipe(new CampfireRecipe(key(id), result, input, exp, time));
                 default -> {
                 }
             }
             api.messages().info("RECIPE_COOKING_LOADED", "type", type, "id", id);
         }
+    }
+
+    private ItemStack createRecipeResult(String configured, int amount) {
+        if (configured == null || configured.isBlank()) return null;
+        String value = configured.trim();
+        String customId = value.regionMatches(true, 0, "custom:", 0, 7) ? value.substring(7) : value;
+        ItemStack custom = api.items().createCustomItem(customId, Math.max(1, amount));
+        if (custom != null) return custom;
+        Material material = Material.matchMaterial(value.toUpperCase(Locale.ROOT));
+        return material == null ? null : new ItemStack(material, Math.max(1, amount));
+    }
+
+    private RecipeChoice ingredientChoice(String configured) {
+        if (configured == null || configured.isBlank()) return null;
+        String value = configured.trim();
+        ItemStack custom = api.items().createCustomItem(value, 1);
+        if (custom != null) return new RecipeChoice.ExactChoice(custom);
+        Material material = Material.matchMaterial(value.toUpperCase(Locale.ROOT));
+        return material == null ? null : new RecipeChoice.MaterialChoice(material);
+    }
+
+    private void loadBrewingSection(ConfigSection section) {
+        if (section == null) return;
+        for (String id : section.getKeys(false)) {
+            ConfigSection recipe = section.getSection(id, false);
+            if (recipe == null) continue;
+            RecipeChoice ingredient = ingredientChoice(recipe.getString("ingredient"));
+            PotionEffectType effect = Registry.MOB_EFFECT.get(NamespacedKey.minecraft(
+                recipe.getString("effect").toLowerCase(Locale.ROOT)));
+            if (ingredient == null || effect == null) {
+                plugin.getLogger().warning("brewing." + id + " has an invalid ingredient or effect");
+                continue;
+            }
+            ItemStack result = new ItemStack(Material.POTION);
+            PotionMeta meta = (PotionMeta) result.getItemMeta();
+            meta.addCustomEffect(new PotionEffect(effect, Math.max(1, recipe.getInt("duration-ticks", 3600)),
+                Math.max(0, recipe.getInt("amplifier", 0))), true);
+            String name = recipe.getString("name", "").trim();
+            if (!name.isEmpty()) meta.displayName(dev.stemcraft.api.util.TextUtil.colourise(name)
+                .decoration(net.kyori.adventure.text.format.TextDecoration.ITALIC, false));
+            String color = recipe.getString("color", "").replace("#", "");
+            try { if (!color.isEmpty()) meta.setColor(Color.fromRGB(Integer.parseInt(color, 16))); }
+            catch (IllegalArgumentException ignored) { plugin.getLogger().warning("brewing." + id + " has an invalid color"); }
+            result.setItemMeta(meta);
+
+            RecipeChoice input = potionInputChoice(recipe.getString("input", "AWKWARD"));
+            if (input == null) continue;
+            NamespacedKey key = key("brew_" + id);
+            Bukkit.getPotionBrewer().removePotionMix(key);
+            Bukkit.getPotionBrewer().addPotionMix(new PotionMix(key, result, input, ingredient));
+        }
+    }
+
+    private RecipeChoice potionInputChoice(String configured) {
+        String value = configured.trim();
+        if (value.regionMatches(true, 0, "effect:", 0, 7)) {
+            PotionEffectType effect = Registry.MOB_EFFECT.get(NamespacedKey.minecraft(value.substring(7).toLowerCase(Locale.ROOT)));
+            return effect == null ? null : PotionMix.createPredicateChoice(item -> item.getItemMeta() instanceof PotionMeta potion
+                && potion.hasCustomEffect(effect));
+        }
+        PotionType type;
+        try { type = PotionType.valueOf(value.toUpperCase(Locale.ROOT)); }
+        catch (IllegalArgumentException ignored) { return null; }
+        return PotionMix.createPredicateChoice(item -> item.getItemMeta() instanceof PotionMeta potion
+            && potion.getBasePotionType() == type);
     }
 
     /**

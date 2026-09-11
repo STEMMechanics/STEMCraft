@@ -5,14 +5,11 @@ import com.sk89q.worldedit.math.BlockVector3;
 import com.sk89q.worldedit.regions.CuboidRegion;
 import com.sk89q.worldedit.regions.Polygonal2DRegion;
 import org.bukkit.Location;
-import org.bukkit.Material;
-import org.bukkit.entity.Player;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockbukkit.mockbukkit.MockBukkit;
 import org.mockbukkit.mockbukkit.ServerMock;
-import org.mockbukkit.mockbukkit.entity.PlayerMock;
 import org.mockbukkit.mockbukkit.world.WorldMock;
 
 import java.util.List;
@@ -26,14 +23,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class SCRegionTest {
     private WorldMock world;
     private WorldMock otherWorld;
-    private PlayerMock player;
 
     @BeforeEach
     void setUp() {
         ServerMock server = MockBukkit.mock();
         world = server.addSimpleWorld("region-tests");
         otherWorld = server.addSimpleWorld("other-world");
-        player = server.addPlayer("Alex");
     }
 
     @AfterEach
@@ -68,28 +63,7 @@ class SCRegionTest {
     }
 
     @Test
-    void randomLocationAndGroundLocationStayWithinRegion() {
-        for (int x = 0; x <= 1; x++) {
-            for (int z = 0; z <= 1; z++) {
-                world.getBlockAt(x, 63, z).setType(Material.STONE);
-            }
-        }
-
-        SCRegion region = new SCRegion(cuboid(0, 64, 0, 1, 66, 1), world);
-
-        Location random = region.getRandomLocation();
-        assertNotNull(random);
-        assertTrue(region.contains(random));
-
-        Location ground = region.getRandomGroundLocation();
-        assertNotNull(ground);
-        assertEquals(world, ground.getWorld());
-        assertTrue(region.contains(ground));
-        assertEquals(Material.STONE, world.getBlockAt(ground.getBlockX(), ground.getBlockY() - 1, ground.getBlockZ()).getType());
-    }
-
-    @Test
-    void polygonRegionsExposeVerticesPlayersAndSerializationHelpers() {
+    void polygonRegionsExposeVerticesAndSerializationHelpers() {
         SCRegion polygon = new SCRegion(polygon(List.of(
             BlockVector2.at(0, 0),
             BlockVector2.at(4, 0),
@@ -97,14 +71,9 @@ class SCRegionTest {
             BlockVector2.at(0, 4)
         )), world);
 
-        player.teleport(new Location(world, 1.5, 61, 1.5));
-
         assertTrue(polygon.isPolygon());
         assertFalse(polygon.isCuboid());
         assertEquals(4, polygon.getPolygonVertices().size());
-        assertTrue(polygon.containsPlayer(player));
-        assertEquals(List.of((Player) player), polygon.getPlayers());
-
         SCRegion deserialized = SCRegion.deserialize(polygon.serialize());
         assertNotNull(deserialized);
         assertEquals(polygon.toString(), deserialized.toString());

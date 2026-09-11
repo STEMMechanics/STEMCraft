@@ -79,6 +79,7 @@ public class BoatRaceMiniGame extends BaseMiniGame {
         configFile.setAutoSave(true);
         config.onEnable(configFile);
         MiniGameHudConfigSupport.apply(minigame, configFile, defaultHudDefinitions());
+        configureRewards(minigame, configFile);
         loadArenas();
         registerRecordHolograms();
         new BoatRaceCommand(api, this).onEnable();
@@ -213,6 +214,7 @@ public class BoatRaceMiniGame extends BaseMiniGame {
 
         config.onEnable(configFile);
         MiniGameHudConfigSupport.apply(minigame, configFile, defaultHudDefinitions());
+        configureRewards(minigame, configFile);
         unloadArenas(minigame);
         loadArenas();
         api.holograms().update(RECORD_HOLOGRAM_TYPE, null);

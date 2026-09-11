@@ -40,7 +40,7 @@ public class BoatRaceCommand {
             .toList());
 
         api.commands().create("boatrace")
-            .permission("stemcraft.command.boatrace")
+            .access((sender, args) -> dev.stemcraft.permission.PlayerCommandAccess.minigame(sender, args, "boatrace"))
             .usage("/boatrace <list|info|create|delete|join|joinall|spectate|leave|start|stop|restart|save|reload|validate|enable|disable|set|addgrid|setgrid|removegrid|addcheckpoint|setcheckpoint|removecheckpoint|select|sel|show>")
             .tabCompletion("list")
             .tabCompletion("list", "{int}")
@@ -91,6 +91,10 @@ public class BoatRaceCommand {
             .tabCompletion("show", "{boatrace-arenas}", "spectator")
             .tabCompletion("show", "{boatrace-arenas}", "grid", "{int}")
             .executor((ignored, cmd, ctx) -> {
+                if (ctx.args().isEmpty() && !dev.stemcraft.permission.PlayerCommandAccess.gameAdmin(ctx.getSender(), "boatrace")) {
+                    ctx.returnInfo("Use /boatrace list, info, join or leave, spectate.");
+                    return;
+                }
                 ctx.checkArgsSizeAtLeast(1);
 
                 switch (ctx.getArgLower(0)) {
@@ -511,7 +515,7 @@ public class BoatRaceCommand {
             }
             case "name" -> {
                 ctx.checkArgsSizeAtLeast(4);
-                arena.setName(ctx.getArgsAsString(4));
+                arena.setName(ctx.getArgsAsString(3));
                 ctx.success("Display name updated for arena '" + arena.id() + "'.");
             }
             default -> ctx.returnError("Unknown Boat Race set target '" + target + "'.");

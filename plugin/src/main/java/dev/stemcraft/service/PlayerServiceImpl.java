@@ -25,16 +25,21 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.service.player.PlayerService;
 import dev.stemcraft.api.util.PlayerUtil;
 import org.bukkit.Bukkit;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Implementation of the PlayerService for logging player actions.
  */
 public class PlayerServiceImpl extends BaseService implements PlayerService {
+    private static final Pattern PLAIN_PLAYER_NAME_PATTERN = Pattern.compile("^[A-Za-z0-9_]{1,16}$");
+    private static final Pattern DECORATED_PLAYER_NAME_PATTERN = Pattern.compile("^[^A-Za-z0-9_]+([A-Za-z0-9_]{1,16})$");
     private final List<Player> hiddenPlayers = new ArrayList<>();
 
     /**
@@ -80,7 +85,71 @@ public class PlayerServiceImpl extends BaseService implements PlayerService {
     }
 
     @Override
+    public @Nullable ResolvedPlayer resolveIdentity(@Nullable String input) {
+        for (String candidate : lookupCandidates(input)) {
+            for (Player online : Bukkit.getOnlinePlayers()) {
+                if (online.getName().equalsIgnoreCase(candidate)) {
+                    return ResolvedPlayer.of(online);
+                }
+            }
+
+            OfflinePlayer cached = Bukkit.getOfflinePlayerIfCached(candidate);
+            ResolvedPlayer cachedResolved = cached == null ? null : ResolvedPlayer.of(cached);
+            if (cachedResolved != null) {
+                return cachedResolved;
+            }
+
+            for (OfflinePlayer offline : Bukkit.getOfflinePlayers()) {
+                if (offline.getName() == null || !offline.getName().equalsIgnoreCase(candidate)) {
+                    continue;
+                }
+
+                ResolvedPlayer resolved = ResolvedPlayer.of(offline);
+                if (resolved != null) {
+                    return resolved;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    @Override
+    public @Nullable ResolvedPlayer resolveIdentityByUuid(@NotNull UUID uuid) {
+        Player online = Bukkit.getPlayer(uuid);
+        if (online != null) {
+            return ResolvedPlayer.of(online);
+        }
+        return ResolvedPlayer.of(Bukkit.getOfflinePlayer(uuid));
+    }
+
+    @Override
     public boolean isWhitelisted(@Nullable UUID uuid, @Nullable String username, @Nullable String platform) {
         return PlayerUtil.isWhitelistedVanilla(uuid, username);
+    }
+
+    private @NotNull List<String> lookupCandidates(@Nullable String input) {
+        if (input == null) {
+            return List.of();
+        }
+
+        String name = input.trim();
+        if (name.isEmpty()) {
+            return List.of();
+        }
+
+        LinkedHashSet<String> candidates = new LinkedHashSet<>();
+        candidates.add(name);
+
+        Matcher decoratedMatcher = DECORATED_PLAYER_NAME_PATTERN.matcher(name);
+        if (decoratedMatcher.matches()) {
+            candidates.add(decoratedMatcher.group(1));
+        }
+
+        if (PLAIN_PLAYER_NAME_PATTERN.matcher(name).matches()) {
+            candidates.add("*" + name);
+        }
+
+        return List.copyOf(candidates);
     }
 }

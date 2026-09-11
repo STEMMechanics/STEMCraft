@@ -1,0 +1,38 @@
+{
+  "textures": {
+    "post": "minecraft:block/cobblestone",
+    "barrel_side": "minecraft:block/barrel_side",
+    "barrel_top": "minecraft:block/barrel_top",
+    "barrel_bottom": "minecraft:block/barrel_bottom",
+    "particle": "minecraft:block/barrel_side"
+  },
+  "elements": [
+    {
+      "from": [5.5, 0, 5.5],
+      "to": [10.5, 10, 10.5],
+      "faces": {
+        "north": {"texture": "#post"}, "south": {"texture": "#post"},
+        "east": {"texture": "#post"}, "west": {"texture": "#post"},
+        "up": {"texture": "#post"}, "down": {"texture": "#post"}
+      }
+    },
+    {
+      "from": [5.5, 10, 5.5],
+      "to": [10.5, 15, 10.5],
+      "faces": {
+        "north": {"texture": "#barrel_top"}, "south": {"texture": "#barrel_bottom"},
+        "east": {"texture": "#barrel_side"}, "west": {"texture": "#barrel_side"},
+        "up": {"texture": "#barrel_side"}, "down": {"texture": "#barrel_side"}
+      }
+    }
+  ],
+  "display": {
+    "thirdperson_righthand": {"rotation": [75, 45, 0], "translation": [0, 2.5, 0], "scale": [0.8, 0.8, 0.8]},
+    "thirdperson_lefthand": {"rotation": [75, 45, 0], "translation": [0, 2.5, 0], "scale": [0.8, 0.8, 0.8]},
+    "firstperson_righthand": {"rotation": [0, 45, 0], "translation": [0, 0, 0], "scale": [1.2, 1.2, 1.2]},
+    "firstperson_lefthand": {"rotation": [0, 225, 0], "translation": [0, 0, 0], "scale": [1.2, 1.2, 1.2]},
+    "gui": {"rotation": [30, 225, 0], "translation": [0, 0, 0], "scale": [0.625, 0.625, 0.625]},
+    "ground": {"translation": [0, 3, 0], "scale": [0.25, 0.25, 0.25]},
+    "fixed": {"scale": [0.5, 0.5, 0.5]}
+  }
+}

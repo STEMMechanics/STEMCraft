@@ -40,6 +40,7 @@ import dev.stemcraft.service.BaseService;
 import dev.stemcraft.service.resourcepack.generators.GlyphGenerator;
 import dev.stemcraft.service.resourcepack.generators.MinecraftPackGenerator;
 import dev.stemcraft.service.resourcepack.generators.PackMetaGenerator;
+import dev.stemcraft.service.resourcepack.generators.CustomItemGenerator;
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.resource.ResourcePackInfo;
 import net.kyori.adventure.resource.ResourcePackRequest;
@@ -80,6 +81,14 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
     private PackFormatRange baseSupportedRange;
     private List<PlannedBuildSegment> plannedBuildSegments = List.of();
     private record BedrockGlyphAsset(Path image, int javaHeight, int bedrockHeight, boolean autoScale, double scale, int yOffset) {}
+    private record BedrockCustomItemPackEntry(
+        @NotNull String javaItemId,
+        @NotNull String itemModelId,
+        @NotNull String bedrockIdentifier,
+        @NotNull String icon,
+        @NotNull String displayName,
+        @NotNull Path textureSource
+    ) {}
     private record ResourcePackFormatVersion(int[] minecraftVersion, int formatVersion) {}
     public record OverlayBuildPlanEntry(@NotNull String directory, @NotNull PackFormatRange supportedRange) {}
     private record PlannedBuildSegment(
@@ -169,6 +178,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
         registerGenerator(new PackMetaGenerator(this));
         registerGenerator(new GlyphGenerator(this));
         registerGenerator(new MinecraftPackGenerator(this));
+        registerGenerator(new CustomItemGenerator());
         attemptPendingGeneratorRegistrations();
         logPendingGenerators();
 
@@ -638,8 +648,6 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
         }
 
         int configuredMinSupportedVersion = config.getInt("min_pack_format", minSupportedVersion);
-        int configuredMaxSupportedVersion = config.getInt("max_pack_format", maxSupportedVersion);
-
         if (configuredMinSupportedVersion < RESOURCE_PACK_FORMAT_VERSIONS.getFirst().formatVersion()) {
             if (warningCallback != null) {
                 warningCallback.accept(
@@ -664,18 +672,6 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
                 );
             }
             configuredMinSupportedVersion = maxSupportedVersion;
-        }
-
-        if (configuredMaxSupportedVersion != maxSupportedVersion && warningCallback != null) {
-            warningCallback.accept(
-                "[resource-pack] Configured max_pack_format "
-                    + configuredMaxSupportedVersion
-                    + " does not match the current Minecraft pack format "
-                    + maxSupportedVersion
-                    + ". The service must support the running server version, so max_pack_format is clamped to "
-                    + maxSupportedVersion
-                    + "."
-            );
         }
 
         return new int[] { configuredMinSupportedVersion, maxSupportedVersion };
@@ -1013,6 +1009,9 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
                 api.messages().tokens().add(token, value);
             }
         }
+        if (api.holograms() != null) {
+            api.tasks().nextTick(() -> api.holograms().refreshDynamic());
+        }
     }
 
     /**
@@ -1158,11 +1157,13 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
             return;
         }
 
+        List<BedrockCustomItemPackEntry> customItems = collectBedrockCustomItems(javaPackDir.toPath());
         ConfigSectionView tokens = manifest.getSection("tokens");
         ConfigSectionView tokenMeta = manifest.getSection("token-meta");
+        boolean hasGlyphs = tokens != null && tokenMeta != null;
 
-        if (tokens == null || tokenMeta == null) {
-            plugin.getLogger().info("[resource-pack] Bedrock pack '" + packName + "': no glyph metadata available");
+        if (!hasGlyphs && customItems.isEmpty()) {
+            plugin.getLogger().info("[resource-pack] Bedrock pack '" + packName + "': no glyph or custom item metadata available");
             String iconSignature = copyBedrockPackIcon(bedrockPackDir);
             writeBedrockManifest(bedrockPackDir, packName, 0, "empty|icon=" + iconSignature);
             writeBedrockZip(bedrockPackDir, bedrockZip);
@@ -1176,92 +1177,135 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
         textureRoot.addProperty("texture_name", "atlas.items");
         JsonObject textureData = new JsonObject();
         textureRoot.add("texture_data", textureData);
+        JsonArray flipbookTextures = new JsonArray();
         StringBuilder signatureBuilder = new StringBuilder("bedrock|pack=").append(packName).append("|build=").append(buildNonce);
 
         JsonObject glyphMap = new JsonObject();
         Map<Integer, BedrockGlyphAsset> glyphImagesByCodepoint = new HashMap<>();
         Map<Integer, String> codepointOwners = new HashMap<>();
 
-        List<String> sortedTokens = new ArrayList<>(tokenMeta.getKeys());
-        sortedTokens.sort(String.CASE_INSENSITIVE_ORDER);
-        for (String token : sortedTokens) {
-            ConfigSectionView tokenSection = tokenMeta.getSection(token);
-            if (tokenSection == null) {
-                continue;
+        if (hasGlyphs) {
+            List<String> sortedTokens = new ArrayList<>(tokenMeta.getKeys());
+            sortedTokens.sort(String.CASE_INSENSITIVE_ORDER);
+            for (String token : sortedTokens) {
+                ConfigSectionView tokenSection = tokenMeta.getSection(token);
+                if (tokenSection == null) {
+                    continue;
+                }
+
+                String namespace = tokenSection.getString("namespace", "").trim();
+                String file = tokenSection.getString("file", "").trim();
+                if (namespace.isEmpty() || file.isEmpty()) {
+                    continue;
+                }
+
+                Path src = javaPackDir.toPath().resolve("assets").resolve(namespace).resolve("textures").resolve(file);
+                if (!Files.exists(src) || !Files.isRegularFile(src)) {
+                    continue;
+                }
+
+                String safeToken = sanitizeToken(token);
+                Path dest = bedrockPackDir
+                    .resolve("textures")
+                    .resolve("stemcraft")
+                    .resolve("glyphs")
+                    .resolve(safeToken + ".png");
+
+                try {
+                    Path parent = dest.getParent();
+                    if (parent != null) {
+                        Files.createDirectories(parent);
+                    }
+                    Files.copy(src, dest, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
+                } catch (IOException e) {
+                    plugin.getLogger().warning("[resource-pack] Failed to copy bedrock glyph '" + token + "': " + e.getMessage());
+                    continue;
+                }
+
+                JsonObject texDef = new JsonObject();
+                texDef.addProperty("textures", "textures/stemcraft/glyphs/" + safeToken);
+                textureData.add(safeToken, texDef);
+
+                JsonObject mapDef = new JsonObject();
+                mapDef.addProperty("token", ":" + token + ":");
+                String unicode = tokens.getString(token, "");
+                mapDef.addProperty("unicode", unicode);
+                mapDef.addProperty("texture", "textures/stemcraft/glyphs/" + safeToken + ".png");
+                glyphMap.add(safeToken, mapDef);
+                signatureBuilder
+                    .append("|token=").append(token)
+                    .append("|unicode=").append(unicode)
+                    .append("|namespace=").append(namespace)
+                    .append("|file=").append(file)
+                    .append("|hash=").append(FileUtil.sha1Hex(dest.toFile()))
+                    .append("|javaHeight=").append(tokenSection.getInt("height", 8))
+                    .append("|bedrockHeight=").append(tokenSection.getInt("bedrock.height", tokenSection.getInt("height", 8)))
+                    .append("|autoScale=").append(tokenSection.getBoolean("bedrock.auto_scale", true))
+                    .append("|scale=").append(tokenSection.getDouble("bedrock.scale", 1.0d))
+                    .append("|yOffset=").append(tokenSection.getInt("bedrock.y_offset", 0));
+
+                int codepoint = parseUnicodeCodepoint(unicode);
+                if (codepoint >= 0 && codepoint <= 0xFFFF) {
+                    String previousOwner = codepointOwners.putIfAbsent(codepoint, token);
+                    if (previousOwner != null) {
+                        plugin.getLogger().warning(
+                            "[resource-pack] Duplicate glyph codepoint U+"
+                                + String.format(Locale.ROOT, "%04X", codepoint)
+                                + " for tokens '" + previousOwner + "' and '" + token
+                                + "'. Keeping first token mapping."
+                        );
+                    } else {
+                        glyphImagesByCodepoint.put(codepoint, new BedrockGlyphAsset(
+                            dest,
+                            tokenSection.getInt("height", 8),
+                            tokenSection.getInt("bedrock.height", tokenSection.getInt("height", 8)),
+                            tokenSection.getBoolean("bedrock.auto_scale", true),
+                            tokenSection.getDouble("bedrock.scale", 1.0d),
+                            tokenSection.getInt("bedrock.y_offset", 0)
+                        ));
+                    }
+                }
+                copied++;
             }
+        }
 
-            String namespace = tokenSection.getString("namespace", "").trim();
-            String file = tokenSection.getString("file", "").trim();
-            if (namespace.isEmpty() || file.isEmpty()) {
-                continue;
-            }
-
-            Path src = javaPackDir.toPath().resolve("assets").resolve(namespace).resolve("textures").resolve(file);
-            if (!Files.exists(src) || !Files.isRegularFile(src)) {
-                continue;
-            }
-
-            String safeToken = sanitizeToken(token);
-            Path dest = bedrockPackDir
-                .resolve("textures")
-                .resolve("stemcraft")
-                .resolve("glyphs")
-                .resolve(safeToken + ".png");
-
+        for (BedrockCustomItemPackEntry customItem : customItems) {
+            Path destination = bedrockPackDir.resolve("textures").resolve("items").resolve(customItem.icon() + ".png");
             try {
-                Path parent = dest.getParent();
+                Path parent = destination.getParent();
                 if (parent != null) {
                     Files.createDirectories(parent);
                 }
-                Files.copy(src, dest, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
+                Files.copy(customItem.textureSource(), destination, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
             } catch (IOException e) {
-                plugin.getLogger().warning("[resource-pack] Failed to copy bedrock glyph '" + token + "': " + e.getMessage());
+                plugin.getLogger().warning("[resource-pack] Failed to copy bedrock custom item '" + customItem.bedrockIdentifier() + "': " + e.getMessage());
                 continue;
             }
 
             JsonObject texDef = new JsonObject();
-            texDef.addProperty("textures", "textures/stemcraft/glyphs/" + safeToken);
-            textureData.add(safeToken, texDef);
-
-            JsonObject mapDef = new JsonObject();
-            mapDef.addProperty("token", ":" + token + ":");
-            String unicode = tokens.getString(token, "");
-            mapDef.addProperty("unicode", unicode);
-            mapDef.addProperty("texture", "textures/stemcraft/glyphs/" + safeToken + ".png");
-            glyphMap.add(safeToken, mapDef);
-            signatureBuilder
-                .append("|token=").append(token)
-                .append("|unicode=").append(unicode)
-                .append("|namespace=").append(namespace)
-                .append("|file=").append(file)
-                .append("|hash=").append(FileUtil.sha1Hex(dest.toFile()))
-                .append("|javaHeight=").append(tokenSection.getInt("height", 8))
-                .append("|bedrockHeight=").append(tokenSection.getInt("bedrock.height", tokenSection.getInt("height", 8)))
-                .append("|autoScale=").append(tokenSection.getBoolean("bedrock.auto_scale", true))
-                .append("|scale=").append(tokenSection.getDouble("bedrock.scale", 1.0d))
-                .append("|yOffset=").append(tokenSection.getInt("bedrock.y_offset", 0));
-
-            int codepoint = parseUnicodeCodepoint(unicode);
-            if (codepoint >= 0 && codepoint <= 0xFFFF) {
-                String previousOwner = codepointOwners.putIfAbsent(codepoint, token);
-                if (previousOwner != null) {
-                    plugin.getLogger().warning(
-                        "[resource-pack] Duplicate glyph codepoint U+"
-                            + String.format(Locale.ROOT, "%04X", codepoint)
-                            + " for tokens '" + previousOwner + "' and '" + token
-                            + "'. Keeping first token mapping."
-                    );
-                } else {
-                    glyphImagesByCodepoint.put(codepoint, new BedrockGlyphAsset(
-                        dest,
-                        tokenSection.getInt("height", 8),
-                        tokenSection.getInt("bedrock.height", tokenSection.getInt("height", 8)),
-                        tokenSection.getBoolean("bedrock.auto_scale", true),
-                        tokenSection.getDouble("bedrock.scale", 1.0d),
-                        tokenSection.getInt("bedrock.y_offset", 0)
-                    ));
+            texDef.addProperty("textures", "textures/items/" + customItem.icon());
+            textureData.add(customItem.icon(), texDef);
+            try {
+                BufferedImage image = ImageIO.read(destination.toFile());
+                if (image != null && image.getHeight() > image.getWidth()
+                    && image.getHeight() % image.getWidth() == 0) {
+                    JsonObject flipbook = new JsonObject();
+                    flipbook.addProperty("flipbook_texture", "textures/items/" + customItem.icon());
+                    flipbook.addProperty("atlas_tile", customItem.icon());
+                    flipbook.addProperty("ticks_per_frame", 6);
+                    flipbook.addProperty("blend_frames", false);
+                    flipbookTextures.add(flipbook);
                 }
+            } catch (IOException exception) {
+                plugin.getLogger().warning("[resource-pack] Failed reading custom item animation '"
+                    + customItem.bedrockIdentifier() + "': " + exception.getMessage());
             }
+            signatureBuilder
+                .append("|custom-item=").append(customItem.bedrockIdentifier())
+                .append("|javaItem=").append(customItem.javaItemId())
+                .append("|itemModel=").append(customItem.itemModelId())
+                .append("|icon=").append(customItem.icon())
+                .append("|hash=").append(FileUtil.sha1Hex(destination.toFile()));
             copied++;
         }
 
@@ -1272,6 +1316,13 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
                 new GsonBuilder().setPrettyPrinting().create().toJson(textureRoot),
                 StandardCharsets.UTF_8
             );
+            if (!flipbookTextures.isEmpty()) {
+                Files.writeString(
+                    bedrockPackDir.resolve("textures").resolve("flipbook_textures.json"),
+                    new GsonBuilder().setPrettyPrinting().create().toJson(flipbookTextures),
+                    StandardCharsets.UTF_8
+                );
+            }
 
             Files.writeString(
                 bedrockPackDir.resolve("glyph-map.json"),
@@ -1283,8 +1334,9 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
             String signature = signatureBuilder.append("|icon=").append(iconSignature).toString();
             writeBedrockManifest(bedrockPackDir, packName, copied, signature);
             writeBedrockFontPages(bedrockPackDir, glyphImagesByCodepoint);
+            writeGeyserCustomItemMappings(config, customItems);
             writeBedrockZip(bedrockPackDir, bedrockZip);
-            plugin.getLogger().info("[resource-pack] Bedrock pack '" + packName + "': " + copied + " mapped glyph textures -> " + bedrockPackDir);
+            plugin.getLogger().info("[resource-pack] Bedrock pack '" + packName + "': " + copied + " mapped assets -> " + bedrockPackDir);
             plugin.getLogger().info("[resource-pack] Bedrock pack zip: " + bedrockZip);
         } catch (IOException e) {
             plugin.getLogger().warning("[resource-pack] Failed writing bedrock pack metadata: " + e.getMessage());
@@ -1299,6 +1351,101 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
             resolved = base.resolve(raw).normalize();
         }
         return resolved;
+    }
+
+    private Path resolveBedrockCustomMappingsDir(ConfigSectionView config) {
+        String raw = config.getString("bedrock.custom_items.mappings_dir", "../Geyser-Spigot/custom_mappings").trim();
+        Path base = plugin.getDataFolder().toPath();
+        Path resolved = Path.of(raw);
+        if (!resolved.isAbsolute()) {
+            resolved = base.resolve(raw).normalize();
+        }
+        return resolved;
+    }
+
+    private @NotNull List<BedrockCustomItemPackEntry> collectBedrockCustomItems(@NotNull Path javaPackRoot) {
+        List<BedrockCustomItemPackEntry> entries = new ArrayList<>();
+        for (dev.stemcraft.api.service.item.CustomItemDefinition definition : api.items().customItemDefinitions()) {
+            if (definition.clients() == null || definition.clients().java() == null || definition.clients().bedrock() == null) {
+                continue;
+            }
+
+            dev.stemcraft.api.service.item.JavaItemVisualDefinition java = definition.clients().java();
+            dev.stemcraft.api.service.item.BedrockItemVisualDefinition bedrock = definition.clients().bedrock();
+            String[] textureParts = splitNamespacedPath(bedrock.texturePath());
+            Path source = javaPackRoot.resolve("assets").resolve(textureParts[0]).resolve("textures").resolve(textureParts[1] + ".png");
+            if (!Files.exists(source) || !Files.isRegularFile(source)) {
+                plugin.getLogger().warning("[resource-pack] Missing custom item texture for '" + definition.id() + "': " + source);
+                continue;
+            }
+
+            entries.add(new BedrockCustomItemPackEntry(
+                definition.template().getType().getKey().toString(),
+                java.itemModelId(),
+                bedrock.identifier(),
+                bedrock.icon(),
+                bedrock.displayName(),
+                source
+            ));
+            for (dev.stemcraft.api.service.item.CustomItemClientDefinition state : definition.visualStates().values()) {
+                if (state.java() == null || state.bedrock() == null) continue;
+                dev.stemcraft.api.service.item.JavaItemVisualDefinition stateJava = state.java();
+                dev.stemcraft.api.service.item.BedrockItemVisualDefinition stateBedrock = state.bedrock();
+                String[] stateTextureParts = splitNamespacedPath(stateBedrock.texturePath());
+                Path stateSource = javaPackRoot.resolve("assets").resolve(stateTextureParts[0])
+                    .resolve("textures").resolve(stateTextureParts[1] + ".png");
+                if (!Files.exists(stateSource) || !Files.isRegularFile(stateSource)) {
+                    plugin.getLogger().warning("[resource-pack] Missing custom item state texture for '"
+                        + definition.id() + "': " + stateSource);
+                    continue;
+                }
+                entries.add(new BedrockCustomItemPackEntry(
+                    definition.template().getType().getKey().toString(), stateJava.itemModelId(),
+                    stateBedrock.identifier(), stateBedrock.icon(), stateBedrock.displayName(), stateSource));
+            }
+        }
+        return entries;
+    }
+
+    private void writeGeyserCustomItemMappings(@NotNull ConfigSectionView config,
+                                               @NotNull List<BedrockCustomItemPackEntry> customItems) throws IOException {
+        if (customItems.isEmpty() || !config.getBoolean("bedrock.custom_items.enabled", true)) {
+            return;
+        }
+
+        Path mappingsDir = resolveBedrockCustomMappingsDir(config);
+        Files.createDirectories(mappingsDir);
+        String fileName = config.getString("bedrock.custom_items.mappings_file", "stemcraft-custom-items.json").trim();
+        if (fileName.isBlank()) {
+            fileName = "stemcraft-custom-items.json";
+        }
+
+        JsonObject root = new JsonObject();
+        root.addProperty("format_version", 2);
+        JsonObject items = new JsonObject();
+        root.add("items", items);
+
+        Map<String, JsonArray> definitionsByJavaItem = new LinkedHashMap<>();
+        for (BedrockCustomItemPackEntry entry : customItems) {
+            JsonArray definitions = definitionsByJavaItem.computeIfAbsent(entry.javaItemId(), ignored -> new JsonArray());
+            JsonObject definition = new JsonObject();
+            definition.addProperty("type", "definition");
+            definition.addProperty("model", entry.itemModelId());
+            definition.addProperty("bedrock_identifier", entry.bedrockIdentifier());
+            definition.addProperty("display_name", entry.displayName());
+            JsonObject bedrockOptions = new JsonObject();
+            bedrockOptions.addProperty("icon", entry.icon());
+            definition.add("bedrock_options", bedrockOptions);
+            definitions.add(definition);
+        }
+
+        for (Map.Entry<String, JsonArray> entry : definitionsByJavaItem.entrySet()) {
+            items.add(entry.getKey(), entry.getValue());
+        }
+
+        Path target = mappingsDir.resolve(fileName);
+        Files.writeString(target, new GsonBuilder().setPrettyPrinting().create().toJson(root), StandardCharsets.UTF_8);
+        plugin.getLogger().info("[resource-pack] Wrote Geyser custom item mappings: " + target);
     }
 
     private void copyJavaPackIcon(File javaPackDir) {
@@ -1430,6 +1577,14 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
             out = "glyph";
         }
         return out;
+    }
+
+    private @NotNull String[] splitNamespacedPath(@NotNull String value) {
+        int separator = value.indexOf(':');
+        if (separator <= 0 || separator == value.length() - 1) {
+            throw new IllegalArgumentException("Invalid namespaced path: " + value);
+        }
+        return new String[] {value.substring(0, separator), value.substring(separator + 1)};
     }
 
     private int parseUnicodeCodepoint(String value) {

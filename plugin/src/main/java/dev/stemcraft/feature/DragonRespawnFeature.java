@@ -24,6 +24,7 @@ import dev.stemcraft.api.STEMCraftAPI;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.entity.EnderDragon;
+import org.bukkit.entity.EnderCrystal;
 import org.bukkit.event.entity.EntityDeathEvent;
 
 import java.util.List;
@@ -110,10 +111,24 @@ public class DragonRespawnFeature extends BaseFeature {
             return;
         }
 
-        try {
-            battle.initiateRespawn();
-        } catch (IllegalStateException ignored) {
-            // Requires valid respawn setup in The End.
+        var portal = battle.getEndPortalLocation();
+        if (portal == null) return;
+        int[][] offsets = { { 3, 0 }, { -3, 0 }, { 0, 3 }, { 0, -3 } };
+        for (int[] offset : offsets) {
+            var location = portal.clone().add(offset[0] + 0.5D, 1D, offset[1] + 0.5D);
+            boolean present = world.getNearbyEntities(location, 1.25D, 1.25D, 1.25D).stream()
+                .anyMatch(EnderCrystal.class::isInstance);
+            if (!present) {
+                EnderCrystal crystal = world.spawn(location, EnderCrystal.class);
+                crystal.setShowingBottom(false);
+            }
         }
+        api.tasks().runLater(2L, () -> {
+            try {
+                battle.initiateRespawn();
+            } catch (IllegalStateException ignored) {
+                // The battle may already have started from the fourth crystal placement.
+            }
+        });
     }
 }

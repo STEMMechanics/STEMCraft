@@ -32,6 +32,13 @@ import java.util.*;
  * Implementation of the CommandBuilder interface.
  */
 public class CommandBuilderImpl implements CommandBuilder {
+    private java.util.function.BiPredicate<org.bukkit.command.CommandSender, java.util.List<String>> access = (sender, args) -> true;
+
+    @Override public CommandBuilder access(java.util.function.BiPredicate<org.bukkit.command.CommandSender, java.util.List<String>> access) {
+        this.access = java.util.Objects.requireNonNull(access);
+        return this;
+    }
+
     private final STEMCraftAPI api;
     private String label;
     private String description;
@@ -40,6 +47,7 @@ public class CommandBuilderImpl implements CommandBuilder {
     private String permission = "";
     private CommandExecutor executor;
     private final List<String[]> tabCompletions = new ArrayList<>();
+    private final Set<Integer> ignoredArgs = new HashSet<>();
 
     /**
      * Constructor for CommandBuilderImpl.
@@ -107,6 +115,15 @@ public class CommandBuilderImpl implements CommandBuilder {
         return this;
     }
 
+    @Override
+    public CommandBuilder ignoreArg(int... positions) {
+        for (int position : positions) {
+            if (position < 0) throw new IllegalArgumentException("Argument positions cannot be negative");
+            ignoredArgs.add(position);
+        }
+        return this;
+    }
+
     /**
      * Add a tab completion track.
      *
@@ -136,7 +153,9 @@ public class CommandBuilderImpl implements CommandBuilder {
      * @return The registered Command instance.
      */
     public Command register(JavaPlugin plugin) {
-        Command command = new CommandImpl(api, label, description, usage, aliases, permission, executor, tabCompletions);
+        CommandImpl command = new CommandImpl(api, label, description, usage, aliases, permission, executor,
+            tabCompletions, ignoredArgs);
+        command.setAccess(access);
         command.register(plugin);
         return command;
     }

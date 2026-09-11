@@ -113,8 +113,7 @@ class MiniGamePlayerImpl extends HasMetaImpl<MiniGamePlayer> implements MiniGame
             hudBedrockCompatibility = bedrockCompatibility;
             scoreboard = Bukkit.getScoreboardManager().getNewScoreboard();
             if (bedrockCompatibility) {
-                //noinspection deprecation
-                objective = scoreboard.registerNewObjective("stmc", criteria, "");
+                objective = registerLegacyObjective(scoreboard);
             } else {
                 objective = scoreboard.registerNewObjective("stmc", criteria, Component.empty());
                 objective.numberFormat(NumberFormat.blank());
@@ -193,8 +192,7 @@ class MiniGamePlayerImpl extends HasMetaImpl<MiniGamePlayer> implements MiniGame
 
         if (scoreboardLines == null || scoreboardLines.isEmpty()) {
             if (hudBedrockCompatibility) {
-                //noinspection deprecation
-                objective.setDisplayName("");
+                setLegacyDisplayName("");
             } else {
                 objective.displayName(Component.empty());
             }
@@ -204,8 +202,7 @@ class MiniGamePlayerImpl extends HasMetaImpl<MiniGamePlayer> implements MiniGame
         // First line as scoreboard title, remaining lines as entries.
         String title = service.api().messages().tokens().apply(scoreboardLines.getFirst());
         if (hudBedrockCompatibility) {
-            //noinspection deprecation
-            objective.setDisplayName(TextUtil.colouriseToSection(title));
+            setLegacyDisplayName(TextUtil.colouriseToSection(title));
         } else {
             objective.displayName(TextUtil.colourise(title));
         }
@@ -219,6 +216,18 @@ class MiniGamePlayerImpl extends HasMetaImpl<MiniGamePlayer> implements MiniGame
             String entry = uniqueEntry(legacy, i);
             objective.getScore(entry).setScore(score--);
         }
+    }
+
+    /** Retains legacy text for Bedrock scoreboard compatibility. */
+    @SuppressWarnings("deprecation")
+    private Objective registerLegacyObjective(Scoreboard targetScoreboard) {
+        return targetScoreboard.registerNewObjective("stmc", criteria, "");
+    }
+
+    /** Retains legacy text for Bedrock scoreboard compatibility. */
+    @SuppressWarnings("deprecation")
+    private void setLegacyDisplayName(String title) {
+        objective.setDisplayName(title);
     }
 
     private void refreshBossBarAttachment(boolean bedrockCompatibility) {
@@ -268,5 +277,20 @@ class MiniGamePlayerImpl extends HasMetaImpl<MiniGamePlayer> implements MiniGame
         int index = (bossBarFrame / effectiveHold) % size;
         bossBarFrame = (bossBarFrame + 1) % cycleLength;
         return index;
+    }
+
+    int currentBossBarLineIndex(int size, int holdUpdates) {
+        if (size <= 0) {
+            return 0;
+        }
+
+        int effectiveHold = Math.max(1, holdUpdates);
+        int cycleLength = size * effectiveHold;
+        if (cycleLength <= 0) {
+            return 0;
+        }
+
+        int normalizedFrame = Math.floorMod(bossBarFrame, cycleLength);
+        return (normalizedFrame / effectiveHold) % size;
     }
 }

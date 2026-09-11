@@ -67,6 +67,13 @@ public class WorldCommand {
      * Enable the world command.
      */
     public void onEnable() {
+        api.tabComplete().register("world-command-loaded", (player, args) -> {
+            List<String> worlds = new ArrayList<>(); worlds.add("~");
+            Bukkit.getWorlds().stream().map(World::getName).forEach(worlds::add); return worlds;
+        });
+        api.tabComplete().register("world-command-any", (player, args) -> {
+            List<String> worlds = new ArrayList<>(); worlds.add("~"); worlds.addAll(api.worlds().listWorlds()); return worlds;
+        });
         api.tabComplete().register("world-transition-command-index", (player, args) -> {
             if (args.length < 2) {
                 return List.of();
@@ -91,30 +98,34 @@ public class WorldCommand {
                 .tabCompletion("create", "", "{world-generators}", "seed:{int}")
                 .tabCompletion("create", "", "{world-generators}", "{world-generator-options:$2}")
                 .tabCompletion("create", "", "{world-generators}", "{world-generator-options:$2}", "seed:{int}")
-                .tabCompletion("delete", "{world}")
+                .tabCompletion("delete", "{world-command-any}")
                 .tabCompletion("info")
-                .tabCompletion("info", "{world-any}")
-                .tabCompletion("load", "{world-offline}")
-                .tabCompletion("unload", "{world}")
+                .tabCompletion("info", "{world-command-any}")
+                .tabCompletion("displayname", "{world-command-any}")
+                .tabCompletion("displayname", "{world-command-any}", "clear")
+                .tabCompletion("load", "{world-command-any}")
+                .tabCompletion("unload", "{world-command-loaded}")
                 .tabCompletion("list")
                 .tabCompletion("duplicate")
+                .tabCompletion("duplicate", "{world-command-any}", "")
                 .tabCompletion("listgenerators")
-                .tabCompletion("setgenerator", "{world-any}", "{world-generators}")
-                .tabCompletion("setgenerator", "{world-any}", "{world-generators}", "{world-generator-options:$2}")
+                .tabCompletion("generator", "info", "{world-generators}")
+                .tabCompletion("setgenerator", "{world-command-any}", "{world-generators}")
+                .tabCompletion("setgenerator", "{world-command-any}", "{world-generators}", "{world-generator-options:$2}")
                 .tabCompletion("setspawn")
-                .tabCompletion("id", "{world}")
+                .tabCompletion("id", "{world-command-loaded}")
                 .tabCompletion("joincommands")
-                .tabCompletion("joincommands", "{world-any}")
-                .tabCompletion("joincommands", "{world-any}", "{int}")
+                .tabCompletion("joincommands", "{world-command-any}")
+                .tabCompletion("joincommands", "{world-command-any}", "{int}")
                 .tabCompletion("leavecommands")
-                .tabCompletion("leavecommands", "{world-any}")
-                .tabCompletion("leavecommands", "{world-any}", "{int}")
-                .tabCompletion("addjoincommand", "{world-any}")
-                .tabCompletion("addleavecommand", "{world-any}")
-                .tabCompletion("setjoincommand", "{world-any}", "{world-transition-command-index:join:$1}")
-                .tabCompletion("setleavecommand", "{world-any}", "{world-transition-command-index:leave:$1}")
-                .tabCompletion("removejoincommand", "{world-any}", "{world-transition-command-index:join:$1}")
-                .tabCompletion("removeleavecommand", "{world-any}", "{world-transition-command-index:leave:$1}")
+                .tabCompletion("leavecommands", "{world-command-any}")
+                .tabCompletion("leavecommands", "{world-command-any}", "{int}")
+                .tabCompletion("addjoincommand", "{world-command-any}")
+                .tabCompletion("addleavecommand", "{world-command-any}")
+                .tabCompletion("setjoincommand", "{world-command-any}", "{world-transition-command-index:join:$1}")
+                .tabCompletion("setleavecommand", "{world-command-any}", "{world-transition-command-index:leave:$1}")
+                .tabCompletion("removejoincommand", "{world-command-any}", "{world-transition-command-index:join:$1}")
+                .tabCompletion("removeleavecommand", "{world-command-any}", "{world-transition-command-index:leave:$1}")
                 .executor(this::onCommand)
                 .register(STEMCraft.getPlugin());
     }
@@ -147,11 +158,13 @@ public class WorldCommand {
             case "create" -> handleSubCommandCreate(ctx);
             case "delete" -> handleSubCommandDelete(ctx);
             case "info" -> handleSubCommandInfo(ctx);
+            case "displayname" -> handleSubCommandDisplayName(ctx);
             case "load" -> handleSubCommandLoad(ctx);
             case "unload" -> handleSubCommandUnload(ctx);
             case "list" -> handleSubCommandList(ctx);
             case "duplicate" -> handleSubCommandDuplicate(ctx);
-            case "listgenerators" -> handleSubCommandListGenerators(ctx);
+            case "listgenerators", "generators" -> handleSubCommandListGenerators(ctx);
+            case "generator" -> handleSubCommandGeneratorInfo(ctx);
             case "setgenerator" -> handleSubCommandSetGenerator(ctx);
             case "setspawn" -> handleSubCommandSetSpawn(ctx);
             case "id" -> handleSubCommandId(ctx);
@@ -165,7 +178,7 @@ public class WorldCommand {
             case "removeleavecommand" -> handleRemoveTransitionCommand(ctx, WorldService.TransitionCommandPhase.LEAVE);
             case "flags" -> {
                 String worldArg = ctx.getArg(1, null);
-                World explicitWorld = ctx.getArgAsWorld(1);
+                World explicitWorld = resolveLoadedWorld(ctx, 1);
                 World world;
                 int flagIndex;
 
@@ -190,7 +203,7 @@ public class WorldCommand {
             default -> {
                 String subCommand = ctx.getArg(0, "").toLowerCase(Locale.ROOT);
                 String worldArg = ctx.getArg(1, null);
-                World explicitWorld = ctx.getArgAsWorld(1);
+                World explicitWorld = resolveLoadedWorld(ctx, 1);
                 World world;
 
                 if(explicitWorld != null) {
@@ -221,7 +234,7 @@ public class WorldCommand {
      */
     public World getWorldFromArg(CommandContext ctx, int argIndex) {
         String worldArg = ctx.getArg(argIndex, null);
-        World world = ctx.getArgAsWorld(argIndex);
+        World world = resolveLoadedWorld(ctx, argIndex);
         if(world == null) {
             if(ctx.isConsole()) {
                 if (worldArg == null || worldArg.isBlank()) {
@@ -249,8 +262,8 @@ public class WorldCommand {
             ctx.returnError("WORLD_ALREADY_EXISTS", "world", name);
         }
 
-        String genKey = ctx.getArg(2, "normal");
-        String genOpt = ctx.getArg(3, "");
+        String genKey = generatorArgument(ctx, 2, "normal");
+        String genOpt = generatorArgument(ctx, 3, "");
         Long seed = parseSeedOption(ctx);
 
         if (!worldService.generator().isRegistered(genKey)) {
@@ -270,6 +283,20 @@ public class WorldCommand {
         }
 
         ctx.returnSuccess("WORLD_CREATED_DURATION", "world", name, "duration", formatElapsed(System.nanoTime() - startedAt));
+    }
+
+    /** Generator IDs and options can contain colons, which the general command parser treats
+     * as named options. Preserve those arguments while keeping the existing seed: option.
+     */
+    static String generatorArgument(CommandContext ctx, int index, String fallback) {
+        List<String> raw = ctx.rawArgs();
+        if (raw == null || raw.isEmpty()) return ctx.getArg(index, fallback);
+        int position = 0;
+        for (String argument : raw) {
+            if (argument.toLowerCase(Locale.ROOT).startsWith("seed:")) continue;
+            if (position++ == index) return argument;
+        }
+        return fallback;
     }
 
     private @Nullable Long parseSeedOption(@NotNull CommandContext ctx) {
@@ -293,7 +320,7 @@ public class WorldCommand {
      */
     public void handleSubCommandDelete(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2, "WORLD_COMMAND_USAGE_DELETE");
-        String name = ctx.getArg(1);
+        String name = resolveRequiredWorldAlias(ctx, 1);
 
         World world = Bukkit.getWorld(name);
 
@@ -301,11 +328,11 @@ public class WorldCommand {
             ctx.returnError("WORLD_DELETE_DEFAULT_DENY", "world", name);
         }
 
-        if (!api.worlds().worldExists(name) || world == null) {
+        if (!api.worlds().worldExists(name)) {
             ctx.returnError("WORLD_NOT_FOUND", "world", name);
         }
 
-        if (api.worlds().isWorldLoaded(name)) {
+        if (world != null) {
             if (!world.getPlayers().isEmpty()) {
                 ctx.info("WORLD_EVICTING_PLAYERS", "world", name);
                 api.worlds().evictAllPlayers(name);
@@ -314,17 +341,24 @@ public class WorldCommand {
             ctx.info("WORLD_UNLOADING", "world", name);
             api.tasks().retry(20, () -> api.worlds().unloadWorld(name, false), result -> {
                 if (result == TaskService.RetryResult.SUCCESS) {
-                    try {
-                        api.worlds().deleteWorld(name);
-                        ctx.info("WORLD_DELETED", "world", name);
-                    } catch (Exception e) {
-                        api.messages().error("WORLD_FAILED_DELETE", e, "world", name);
-                        ctx.error("WORLD_FAILED_DELETE", "world", name);
-                    }
+                    deleteUnloadedWorld(ctx, name);
                 } else {
                     ctx.error("WORLD_UNLOAD_FAILED", "world", name);
                 }
             });
+        } else {
+            // Deletion must not require loading the world or resolving its generator.
+            deleteUnloadedWorld(ctx, name);
+        }
+    }
+
+    private void deleteUnloadedWorld(CommandContext ctx, String name) {
+        try {
+            api.worlds().deleteWorld(name);
+            ctx.info("WORLD_DELETED", "world", name);
+        } catch (Exception e) {
+            api.messages().error("WORLD_FAILED_DELETE", e, "world", name);
+            ctx.error("WORLD_FAILED_DELETE", "world", name);
         }
     }
 
@@ -334,7 +368,7 @@ public class WorldCommand {
      * @param ctx The command context.
      */
     public void handleSubCommandInfo(CommandContext ctx) {
-        String requestedName = ctx.getArg(1, null);
+        String requestedName = resolveCurrentWorldAlias(ctx, ctx.getArg(1, null));
         if ((requestedName == null || requestedName.isBlank()) && ctx.isConsole()) {
             ctx.returnError("WORLD_COMMAND_CONSOLE_WORLD_REQUIRED");
         }
@@ -358,13 +392,49 @@ public class WorldCommand {
     }
 
     /**
+     * Set or clear the player-facing display name for a world.
+     *
+     * @param ctx The command context.
+     */
+    public void handleSubCommandDisplayName(CommandContext ctx) {
+        ctx.checkArgsSizeAtLeast(3, "WORLD_COMMAND_USAGE_DISPLAY_NAME");
+        String worldName = resolveRequiredWorldAlias(ctx, 1);
+        if (!api.worlds().worldExists(worldName) && Bukkit.getWorld(worldName) == null) {
+            ctx.returnError("WORLD_NOT_FOUND", "world", worldName);
+            return;
+        }
+
+        String requestedName = ctx.getArgsAsString(2, "").trim();
+        ConfigSection config = worldService.getConfigSection(worldName);
+        if (requestedName.equalsIgnoreCase("clear")) {
+            config.set("display-name", null);
+            config.save();
+            ctx.returnSuccess(
+                "WORLD_DISPLAY_NAME_CLEARED",
+                "world", worldName,
+                "display_name", WorldService.defaultDisplayName(worldName)
+            );
+            return;
+        }
+
+        if (requestedName.isBlank()) {
+            ctx.returnError("WORLD_COMMAND_USAGE_DISPLAY_NAME");
+            return;
+        }
+
+        config.set("display-name", requestedName);
+        config.save();
+        ctx.returnSuccess("WORLD_DISPLAY_NAME_SET", "world", worldName, "display_name", requestedName);
+    }
+
+    /**
      * Handle the 'load' sub-command.
      *
      * @param ctx The command context.
      */
     public void handleSubCommandLoad(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2, "WORLD_COMMAND_USAGE_LOAD");
-        String name = ctx.getArg(1);
+        String name = resolveRequiredWorldAlias(ctx, 1);
         if (!api.worlds().worldExists(name)) {
             ctx.returnError("WORLD_NOT_FOUND", "world", name);
         }
@@ -382,14 +452,18 @@ public class WorldCommand {
     }
 
     public void handleSubCommandSetGenerator(CommandContext ctx) {
-        ctx.checkArgsSizeAtLeast(3, "WORLD_COMMAND_USAGE_SETGENERATOR");
-        String name = ctx.getArg(1);
+        ctx.checkArgsSizeAtLeast(2, "WORLD_COMMAND_USAGE_SETGENERATOR");
+        if (generatorArgument(ctx, 2, "").isBlank()) {
+            ctx.returnError("WORLD_COMMAND_USAGE_SETGENERATOR");
+            return;
+        }
+        String name = resolveRequiredWorldAlias(ctx, 1);
         if (!api.worlds().worldExists(name)) {
             ctx.returnError("WORLD_NOT_FOUND", "world", name);
         }
 
-        String generatorKey = ctx.getArg(2, "normal");
-        String generatorOptions = ctx.getArg(3, "");
+        String generatorKey = generatorArgument(ctx, 2, "normal");
+        String generatorOptions = generatorArgument(ctx, 3, "");
 
         try {
             worldService.setStoredGenerator(name, generatorKey, generatorOptions);
@@ -413,7 +487,7 @@ public class WorldCommand {
      */
     public void handleSubCommandUnload(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2, "WORLD_COMMAND_USAGE_UNLOAD");
-        String name = ctx.getArg(1);
+        String name = resolveRequiredWorldAlias(ctx, 1);
 
         if (!api.worlds().isWorldLoaded(name)) {
             ctx.returnError("WORLD_NOT_LOADED", "world", name);
@@ -506,7 +580,7 @@ public class WorldCommand {
     public void handleSubCommandDuplicate(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3, "WORLD_COMMAND_USAGE_DUPLICATE");
 
-        String src = ctx.getArg(1);
+        String src = resolveRequiredWorldAlias(ctx, 1);
         String dst = ctx.getArg(2);
 
         try {
@@ -536,6 +610,25 @@ public class WorldCommand {
         ctx.returnInfo(sb.toString());
     }
 
+    private void handleSubCommandGeneratorInfo(CommandContext ctx) {
+        if (!ctx.getArg(1, "").equalsIgnoreCase("info") || generatorArgument(ctx, 2, "").isBlank()) {
+            ctx.returnError("Usage: /world generator info <id>");
+            return;
+        }
+        String raw = generatorArgument(ctx, 2, "").toLowerCase(java.util.Locale.ROOT);
+        org.bukkit.NamespacedKey key = org.bukkit.NamespacedKey.fromString(raw.contains(":") ? raw : "stemcraft:" + raw);
+        var definition = key == null ? java.util.Optional.<dev.stemcraft.api.service.world.generation.GeneratorDefinition>empty()
+                : worldService.generator().getGenerator(key);
+        if (definition.isEmpty()) {
+            ctx.returnInfo("No versioned metadata is available for this generator.");
+            return;
+        }
+        var d = definition.get();
+        ctx.returnInfo(d.displayName() + " (" + d.key() + ")\n" + d.description()
+                + "\nCategory: " + d.category() + " | Version: " + d.version()
+                + (d.experimental() ? " | Experimental" : ""));
+    }
+
     /**
      * Handle the 'setspawn' sub-command.
      *
@@ -559,7 +652,7 @@ public class WorldCommand {
      */
     public void handleSubCommandId(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2, "WORLD_COMMAND_USAGE_ID");
-        World world = ctx.getArgAsWorld(1);
+        World world = resolveLoadedWorld(ctx, 1);
         if (world == null) {
             ctx.returnError("WORLD_NOT_FOUND", "world", ctx.getArg(1));
             return;
@@ -722,6 +815,7 @@ public class WorldCommand {
         ConfigSection config = worldService.getConfigSection(world);
 
         ctx.info("World '" + world.getName() + "':");
+        ctx.info(" - Display name: " + describeDisplayName(world.getName(), config));
         ctx.info(" - Status: loaded");
         ctx.info(" - Environment: " + formatEnvironment(world.getEnvironment()));
         ctx.info(" - UUID: " + world.getUID());
@@ -744,6 +838,7 @@ public class WorldCommand {
         ConfigSection config = worldService.getExistingConfigSection(worldName);
 
         ctx.info("World '" + worldName + "':");
+        ctx.info(" - Display name: " + describeDisplayName(worldName, config));
         ctx.info(" - Status: unloaded");
         ctx.info(" - Environment: " + formatEnvironment(WorldUtil.resolveEnvironment(worldName)));
         ctx.info(" - Generator: " + describeConfiguredGenerator(config));
@@ -922,6 +1017,13 @@ public class WorldCommand {
         return formatGeneratorDetail(key, options);
     }
 
+    static @NotNull String describeDisplayName(@NotNull String worldName, @Nullable ConfigSection config) {
+        String configured = config == null ? "" : config.getString("display-name", "").trim();
+        return configured.isEmpty()
+            ? WorldService.defaultDisplayName(worldName) + " (automatic)"
+            : configured + " (custom)";
+    }
+
     private @NotNull String describeWeather(@NotNull World world) {
         if (world.isThundering()) {
             return "thunder";
@@ -965,7 +1067,7 @@ public class WorldCommand {
     }
 
     private @NotNull String resolveWorldName(@NotNull CommandContext ctx, int argIndex) {
-        String requestedName = ctx.getArg(argIndex, null);
+        String requestedName = resolveCurrentWorldAlias(ctx, ctx.getArg(argIndex, null));
         if (requestedName == null || requestedName.isBlank()) {
             if (ctx.isConsole()) {
                 ctx.returnError("WORLD_COMMAND_CONSOLE_WORLD_REQUIRED");
@@ -977,6 +1079,21 @@ public class WorldCommand {
             ctx.returnError("WORLD_NOT_FOUND", "world", requestedName);
         }
         return requestedName;
+    }
+
+    private @Nullable World resolveLoadedWorld(@NotNull CommandContext ctx, int argIndex) {
+        String requestedName = resolveCurrentWorldAlias(ctx, ctx.getArg(argIndex, null));
+        return requestedName == null || requestedName.isBlank() ? null : Bukkit.getWorld(requestedName);
+    }
+
+    private @NotNull String resolveRequiredWorldAlias(@NotNull CommandContext ctx, int argIndex) {
+        return Objects.requireNonNull(resolveCurrentWorldAlias(ctx, ctx.getArg(argIndex)));
+    }
+
+    private @Nullable String resolveCurrentWorldAlias(@NotNull CommandContext ctx, @Nullable String requestedName) {
+        if (!"~".equals(requestedName)) return requestedName;
+        if (ctx.isConsole()) ctx.returnError("WORLD_COMMAND_CONSOLE_WORLD_REQUIRED");
+        return ctx.asPlayer().getWorld().getName();
     }
 
     private @NotNull List<Component> buildTransitionCommandLines(

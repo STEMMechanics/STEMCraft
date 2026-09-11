@@ -55,6 +55,7 @@ public class PWeatherCommand extends BaseCommand {
         setDescription("PWEATHER_DESCRIPTION");
         setUsage("PWEATHER_USAGE");
         setPermission(PERMISSION);
+        setAccess((sender, args) -> dev.stemcraft.permission.PlayerCommandAccess.ownTarget(sender, args, 1, "stemcraft.command.pweather.others"));
         addTabCompletion("sun", "{player}");
         addTabCompletion("rain", "{player}");
         addTabCompletion("storm", "{player}");

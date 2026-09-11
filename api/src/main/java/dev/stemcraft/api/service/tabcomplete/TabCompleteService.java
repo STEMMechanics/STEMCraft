@@ -35,6 +35,10 @@ public interface TabCompleteService {
      *
      * @param name The name of the tab completion provider.
      * @param callback The callback to provide tab completions.
+     * @example Registering a provider
+     * {@code
+     * api.tabComplete().register("arena", (player, args) -> arenaIds);
+     * }
      */
     void register(@NotNull String name, @NotNull TabCompletionProvider callback);
 

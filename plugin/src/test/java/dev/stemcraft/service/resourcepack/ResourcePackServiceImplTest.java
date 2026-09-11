@@ -1,5 +1,8 @@
 package dev.stemcraft.service.resourcepack;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigFile;
@@ -26,6 +29,7 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
@@ -94,10 +98,9 @@ class ResourcePackServiceImplTest {
     }
 
     @Test
-    void resolveSupportedVersionRangeUsesConfiguredMinButKeepsCurrentMinecraftAsMax() {
+    void resolveSupportedVersionRangeUsesConfiguredMinAndDerivesCurrentMinecraftAsMax() {
         ConfigSectionView config = mock(ConfigSectionView.class);
         when(config.getInt("min_pack_format", 32)).thenReturn(65);
-        when(config.getInt("max_pack_format", 88)).thenReturn(69);
 
         List<String> warnings = new ArrayList<>();
         int[] supportedRange = ResourcePackServiceImpl.resolveSupportedVersionRange(
@@ -108,14 +111,13 @@ class ResourcePackServiceImplTest {
 
         assertEquals(65, supportedRange[0]);
         assertEquals(88, supportedRange[1]);
-        assertEquals(1, warnings.size());
+        assertEquals(0, warnings.size());
     }
 
     @Test
     void resolveSupportedVersionRangeClampsConfiguredMinToCurrentMinecraftFormat() {
         ConfigSectionView config = mock(ConfigSectionView.class);
         when(config.getInt("min_pack_format", 32)).thenReturn(90);
-        when(config.getInt("max_pack_format", 88)).thenReturn(88);
 
         List<String> warnings = new ArrayList<>();
         int[] supportedRange = ResourcePackServiceImpl.resolveSupportedVersionRange(
@@ -130,7 +132,7 @@ class ResourcePackServiceImplTest {
     }
 
     @Test
-    void recalculateSupportedVersionRangeLogsRepeatedMaxFormatMismatchOnlyOncePerLifecycle() throws Exception {
+    void recalculateSupportedVersionRangeIgnoresObsoleteConfiguredMaxFormat() throws Exception {
         MockBukkit.mock();
         Logger logger = Logger.getLogger("resource-pack-warning-test");
         logger.setUseParentHandlers(false);
@@ -163,7 +165,7 @@ class ResourcePackServiceImplTest {
                 ))
                 .count();
 
-            assertEquals(1, mismatchWarnings);
+            assertEquals(0, mismatchWarnings);
         } finally {
             logger.removeHandler(handler);
         }
@@ -323,9 +325,37 @@ class ResourcePackServiceImplTest {
         assertZipContains(zip, "assets/minecraft/font/default.json");
     }
 
+    @Test
+    void fontImagesWithoutCharAutoAssignsStartingCodePoint() throws Exception {
+        GenerationHarness harness = new GenerationHarness(tempDir.resolve("font-images-auto-char"));
+        harness.createFontImagesWithoutCharDataPack();
+
+        harness.service.registerGenerator(new GlyphGenerator(harness.service));
+        harness.service.generatePack(null);
+
+        String fontJson = readZipEntry(harness.resourcePackZip(), "assets/minecraft/font/default.json");
+        JsonObject root = JsonParser.parseString(fontJson).getAsJsonObject();
+        JsonArray providers = root.getAsJsonArray("providers");
+        assertEquals(1, providers.size());
+
+        JsonObject provider = providers.get(0).getAsJsonObject();
+        assertEquals("testns:font/mail.png", provider.get("file").getAsString());
+        String glyph = provider.getAsJsonArray("chars").get(0).getAsString();
+        assertEquals(0xE321, glyph.codePointAt(0));
+    }
+
     private static void assertZipContains(File zipFile, String entryName) throws Exception {
         try (ZipFile zip = new ZipFile(zipFile, StandardCharsets.UTF_8)) {
             assertNotNull(zip.getEntry(entryName), "Missing zip entry: " + entryName);
+        }
+    }
+
+    private static String readZipEntry(File zipFile, String entryName) throws Exception {
+        try (ZipFile zip = new ZipFile(zipFile, StandardCharsets.UTF_8)) {
+            assertNotNull(zip.getEntry(entryName), "Missing zip entry: " + entryName);
+            try (InputStream stream = zip.getInputStream(zip.getEntry(entryName))) {
+                return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+            }
         }
     }
 
@@ -432,6 +462,30 @@ class ResourcePackServiceImplTest {
                   accept:
                     char: "\\uE100"
                     file: font/icon.png
+                    ascent: 8
+                    height: 8
+                """.stripIndent()
+            );
+        }
+
+        private void createFontImagesWithoutCharDataPack() throws Exception {
+            Path packRoot = dataPacksDir.resolve("font-images-pack");
+            Path namespaceRoot = packRoot.resolve("contents").resolve("testns");
+            Files.createDirectories(namespaceRoot.resolve("textures").resolve("font"));
+
+            BufferedImage image = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB);
+            image.setRGB(0, 0, 0xFFFFFFFF);
+            ImageIO.write(image, "png", namespaceRoot.resolve("textures").resolve("font").resolve("mail.png").toFile());
+
+            Files.writeString(
+                packRoot.resolve("config.yml"),
+                """
+                namespace: testns
+                name_prefix: ""
+                starting_char: "\\uE321"
+                font_images:
+                  mail:
+                    file: font/mail.png
                     ascent: 8
                     height: 8
                 """.stripIndent()

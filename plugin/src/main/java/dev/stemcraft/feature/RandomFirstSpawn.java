@@ -20,14 +20,17 @@
 
 package dev.stemcraft.feature;
 
+import dev.stemcraft.api.service.playerreset.*;
+
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.util.PlayerUtil;
+import io.papermc.paper.registry.RegistryAccess;
+import io.papermc.paper.registry.RegistryKey;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
-import org.bukkit.Registry;
 import org.bukkit.Tag;
 import org.bukkit.World;
 import org.bukkit.WorldBorder;
@@ -42,6 +45,7 @@ import org.bukkit.event.player.PlayerRespawnEvent;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
+import org.jetbrains.annotations.NotNull;
 
 /**
  * Randomizes the initial spawn location for first-time players in configured worlds.
@@ -110,6 +114,22 @@ public class RandomFirstSpawn extends BaseFeature {
         ensureStorage();
         loadSeenWorldEntries();
         loadStoredSpawns();
+        api.playerResets().register(new PlayerResetHandler() {
+            public @NotNull String id() { return "random-first-spawn"; }
+            public @NotNull Set<PlayerResetScope> scopes() { return Set.of(PlayerResetScope.COMPLETE); }
+            public int priority() { return 410; }
+            public @NotNull PlayerResetPreview preview(@NotNull PlayerResetContext context) {
+                String prefix = context.playerUuid().toString().toLowerCase(Locale.ROOT) + "|";
+                int count = (int) seenWorldEntries.stream().filter(v -> v.startsWith(prefix)).count();
+                count += (int) storedSpawnsByPlayerWorld.keySet().stream().filter(v -> v.startsWith(prefix)).count();
+                return new PlayerResetPreview("Random first-spawn history", count);
+            }
+            public void reset(@NotNull PlayerResetContext context) {
+                String prefix = context.playerUuid().toString().toLowerCase(Locale.ROOT) + "|";
+                seenWorldEntries.removeIf(v -> v.startsWith(prefix));
+                storedSpawnsByPlayerWorld.keySet().removeIf(v -> v.startsWith(prefix));
+            }
+        });
 
         if (worldRules.isEmpty()) {
             return;
@@ -368,9 +388,8 @@ public class RandomFirstSpawn extends BaseFeature {
         return out;
     }
 
-    @SuppressWarnings("deprecation")
     private Biome resolveBiome(String normalized) {
-        return Registry.BIOME.get(NamespacedKey.minecraft(normalized));
+        return RegistryAccess.registryAccess().getRegistry(RegistryKey.BIOME).get(NamespacedKey.minecraft(normalized));
     }
 
     private Set<Material> parseMaterials(List<String> raw, String worldName) {

@@ -36,7 +36,7 @@ public class ParkourCommand {
             .toList());
 
         api.commands().create("parkour")
-            .permission("stemcraft.command.parkour")
+            .access((sender, args) -> dev.stemcraft.permission.PlayerCommandAccess.minigame(sender, args, "parkour"))
             .usage("/parkour <list|info|create|delete|join|joinall|restart|leave|save|reload|validate|enable|disable|set|select|sel|show>")
             .tabCompletion("list")
             .tabCompletion("list", "{int}")
@@ -66,6 +66,10 @@ public class ParkourCommand {
             .tabCompletion("sel", "{parkour-arenas}", "finish")
             .tabCompletion("show", "{parkour-arenas}", "lobby")
             .executor((ignored, cmd, ctx) -> {
+                if (ctx.args().isEmpty() && !dev.stemcraft.permission.PlayerCommandAccess.gameAdmin(ctx.getSender(), "parkour")) {
+                    ctx.returnInfo("Use /parkour list, info, join or leave, restart.");
+                    return;
+                }
                 ctx.checkArgsSizeAtLeast(1);
 
                 switch (ctx.getArgLower(0)) {
@@ -375,7 +379,7 @@ public class ParkourCommand {
             }
             case "name" -> {
                 ctx.checkArgsSizeAtLeast(4);
-                arena.setName(ctx.getArgsAsString(4));
+                arena.setName(ctx.getArgsAsString(3));
                 arena.remove("loadError");
                 ctx.success("Display name updated for arena '" + arena.id() + "'.");
             }

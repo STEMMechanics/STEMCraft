@@ -4,20 +4,31 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.internal.InstanceHolder;
 import dev.stemcraft.service.AuditServiceImpl;
 import dev.stemcraft.service.ConfigServiceImpl;
+import dev.stemcraft.service.CoordinateBarServiceImpl;
 import dev.stemcraft.service.DatabaseServiceImpl;
 import dev.stemcraft.service.EventServiceImpl;
 import dev.stemcraft.service.HologramServiceImpl;
+import dev.stemcraft.service.GiftServiceImpl;
 import dev.stemcraft.service.ItemServiceImpl;
+import dev.stemcraft.service.ImageMapServiceImpl;
 import dev.stemcraft.service.LocaleServiceImpl;
 import dev.stemcraft.service.MotdServiceImpl;
 import dev.stemcraft.service.PlaceholderServiceImpl;
+import dev.stemcraft.service.PlacedObjectServiceImpl;
 import dev.stemcraft.service.ProfanityFilterServiceImpl;
+import dev.stemcraft.service.ProtectionServiceImpl;
 import dev.stemcraft.service.PlayerServiceImpl;
 import dev.stemcraft.service.PlayerStatsServiceImpl;
+import dev.stemcraft.service.PlayerResetServiceImpl;
 import dev.stemcraft.service.PunishmentServiceImpl;
 import dev.stemcraft.service.RecipeServiceImpl;
 import dev.stemcraft.service.RegionServiceImpl;
+import dev.stemcraft.service.DialogServiceImpl;
+import dev.stemcraft.api.service.comet.CometService;
+import dev.stemcraft.api.service.mailbox.MailboxService;
+import dev.stemcraft.service.resourcepack.ResourcePackServiceImpl;
 import dev.stemcraft.service.SelectionServiceImpl;
+import dev.stemcraft.service.SaveServiceImpl;
 import dev.stemcraft.service.TaskServiceImpl;
 import dev.stemcraft.service.WebServiceImpl;
 import dev.stemcraft.service.command.CommandServiceImpl;
@@ -45,6 +56,7 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -54,28 +66,40 @@ import static org.mockito.Mockito.when;
 class STEMCraftAPIImplTest {
     private static final List<String> SERVICE_ACCESSOR_NAMES = List.of(
         "audit",
+        "comets",
         "commands",
+        "coordinateBar",
         "config",
         "database",
+        "dialogs",
         "events",
+        "gifts",
         "holograms",
+        "imageMaps",
         "items",
         "locales",
+        "mailboxes",
         "messages",
         "minigames",
         "motd",
+        "placedObjects",
         "players",
         "placeholders",
+        "protections",
         "profanityFilter",
         "punishments",
         "playerStats",
+        "playerResets",
+        "resourcePacks",
         "recipes",
+        "saves",
         "selections",
         "regions",
         "tabComplete",
         "tasks",
         "web",
-        "worlds"
+        "worlds",
+        "worldGeneration"
     );
 
     private STEMCraft plugin;
@@ -93,22 +117,33 @@ class STEMCraftAPIImplTest {
         when(plugin.isMaintenanceMode()).thenReturn(true);
 
         AuditServiceImpl audit = mock(AuditServiceImpl.class);
+        CometService comets = mock(CometService.class);
         CommandServiceImpl commands = mock(CommandServiceImpl.class);
+        CoordinateBarServiceImpl coordinateBar = mock(CoordinateBarServiceImpl.class);
         ConfigServiceImpl config = mock(ConfigServiceImpl.class);
         DatabaseServiceImpl database = mock(DatabaseServiceImpl.class);
+        DialogServiceImpl dialogs = mock(DialogServiceImpl.class);
         EventServiceImpl events = mock(EventServiceImpl.class);
+        GiftServiceImpl gifts = mock(GiftServiceImpl.class);
         HologramServiceImpl holograms = mock(HologramServiceImpl.class);
         ItemServiceImpl items = mock(ItemServiceImpl.class);
+        ImageMapServiceImpl imageMaps = mock(ImageMapServiceImpl.class);
         LocaleServiceImpl locales = mock(LocaleServiceImpl.class);
+        MailboxService mailboxes = mock(MailboxService.class);
         MessageServiceImpl messages = mock(MessageServiceImpl.class);
         MiniGameServiceImpl minigames = mock(MiniGameServiceImpl.class);
         MotdServiceImpl motd = mock(MotdServiceImpl.class);
+        PlacedObjectServiceImpl placedObjects = mock(PlacedObjectServiceImpl.class);
         PlayerServiceImpl players = mock(PlayerServiceImpl.class);
         PlaceholderServiceImpl placeholders = mock(PlaceholderServiceImpl.class);
+        ProtectionServiceImpl protections = mock(ProtectionServiceImpl.class);
         ProfanityFilterServiceImpl profanityFilter = mock(ProfanityFilterServiceImpl.class);
         PunishmentServiceImpl punishments = mock(PunishmentServiceImpl.class);
         PlayerStatsServiceImpl playerStats = mock(PlayerStatsServiceImpl.class);
+        PlayerResetServiceImpl playerResets = mock(PlayerResetServiceImpl.class);
+        ResourcePackServiceImpl resourcePacks = mock(ResourcePackServiceImpl.class);
         RecipeServiceImpl recipes = mock(RecipeServiceImpl.class);
+        SaveServiceImpl saves = mock(SaveServiceImpl.class);
         SelectionServiceImpl selections = mock(SelectionServiceImpl.class);
         RegionServiceImpl regions = mock(RegionServiceImpl.class);
         TabCompleteServiceImpl tabComplete = mock(TabCompleteServiceImpl.class);
@@ -117,22 +152,33 @@ class STEMCraftAPIImplTest {
         WorldServiceImpl worlds = mock(WorldServiceImpl.class);
 
         when(plugin.audit()).thenReturn(audit);
+        when(plugin.comets()).thenReturn(comets);
         when(plugin.commands()).thenReturn(commands);
+        when(plugin.coordinateBar()).thenReturn(coordinateBar);
         when(plugin.config()).thenReturn(config);
         when(plugin.database()).thenReturn(database);
+        when(plugin.dialogs()).thenReturn(dialogs);
         when(plugin.events()).thenReturn(events);
+        when(plugin.gifts()).thenReturn(gifts);
         when(plugin.holograms()).thenReturn(holograms);
         when(plugin.items()).thenReturn(items);
+        when(plugin.imageMaps()).thenReturn(imageMaps);
         when(plugin.locales()).thenReturn(locales);
+        when(plugin.mailboxes()).thenReturn(mailboxes);
         when(plugin.messages()).thenReturn(messages);
         when(plugin.minigames()).thenReturn(minigames);
         when(plugin.motd()).thenReturn(motd);
+        when(plugin.placedObjects()).thenReturn(placedObjects);
         when(plugin.players()).thenReturn(players);
         when(plugin.placeholders()).thenReturn(placeholders);
+        when(plugin.protections()).thenReturn(protections);
         when(plugin.profanityFilter()).thenReturn(profanityFilter);
         when(plugin.punishments()).thenReturn(punishments);
         when(plugin.playerStats()).thenReturn(playerStats);
+        when(plugin.playerResets()).thenReturn(playerResets);
+        when(plugin.resourcePack()).thenReturn(resourcePacks);
         when(plugin.recipes()).thenReturn(recipes);
+        when(plugin.saves()).thenReturn(saves);
         when(plugin.selections()).thenReturn(selections);
         when(plugin.regions()).thenReturn(regions);
         when(plugin.tabComplete()).thenReturn(tabComplete);
@@ -142,28 +188,42 @@ class STEMCraftAPIImplTest {
 
         expectedDelegates = new LinkedHashMap<>();
         expectedDelegates.put("audit", audit);
+        expectedDelegates.put("comets", comets);
         expectedDelegates.put("commands", commands);
+        expectedDelegates.put("coordinateBar", coordinateBar);
         expectedDelegates.put("config", config);
         expectedDelegates.put("database", database);
+        expectedDelegates.put("dialogs", dialogs);
         expectedDelegates.put("events", events);
+        expectedDelegates.put("gifts", gifts);
         expectedDelegates.put("holograms", holograms);
         expectedDelegates.put("items", items);
+        expectedDelegates.put("imageMaps", imageMaps);
         expectedDelegates.put("locales", locales);
+        expectedDelegates.put("mailboxes", mailboxes);
         expectedDelegates.put("messages", messages);
         expectedDelegates.put("minigames", minigames);
         expectedDelegates.put("motd", motd);
+        expectedDelegates.put("placedObjects", placedObjects);
         expectedDelegates.put("players", players);
         expectedDelegates.put("placeholders", placeholders);
+        expectedDelegates.put("protections", protections);
         expectedDelegates.put("profanityFilter", profanityFilter);
         expectedDelegates.put("punishments", punishments);
         expectedDelegates.put("playerStats", playerStats);
+        expectedDelegates.put("playerResets", playerResets);
+        expectedDelegates.put("resourcePacks", resourcePacks);
         expectedDelegates.put("recipes", recipes);
+        expectedDelegates.put("saves", saves);
         expectedDelegates.put("selections", selections);
         expectedDelegates.put("regions", regions);
         expectedDelegates.put("tabComplete", tabComplete);
         expectedDelegates.put("tasks", tasks);
         expectedDelegates.put("web", web);
         expectedDelegates.put("worlds", worlds);
+        var worldGeneration = mock(dev.stemcraft.api.service.world.WorldGeneration.class);
+        when(worlds.generator()).thenReturn(worldGeneration);
+        expectedDelegates.put("worldGeneration", worldGeneration);
     }
 
     @AfterEach
@@ -192,6 +252,16 @@ class STEMCraftAPIImplTest {
         assertArrayEquals(new int[] {0, 0, 0}, STEMCraft.parseMinecraftVersion(null));
         assertArrayEquals(new int[] {0, 0, 0}, STEMCraft.parseMinecraftVersion(""));
         assertArrayEquals(new int[] {0, 0, 0}, STEMCraft.parseMinecraftVersion("release"));
+    }
+
+    @Test
+    void minecraftVersionSupportStartsAt26_2() {
+        assertFalse(STEMCraft.isMinecraftVersionSupported(new int[] {1, 21, 11}));
+        assertFalse(STEMCraft.isMinecraftVersionSupported(new int[] {26, 1, 9}));
+        assertTrue(STEMCraft.isMinecraftVersionSupported(new int[] {26, 2, 0}));
+        assertTrue(STEMCraft.isMinecraftVersionSupported(new int[] {26, 2, 1}));
+        assertTrue(STEMCraft.isMinecraftVersionSupported(new int[] {27, 0, 0}));
+        assertFalse(STEMCraft.isMinecraftVersionSupported(null));
     }
 
     @Test

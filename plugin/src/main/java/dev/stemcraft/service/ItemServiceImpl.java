@@ -22,18 +22,49 @@ package dev.stemcraft.service;
 
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.api.service.item.CustomItemDefinition;
+import dev.stemcraft.api.service.item.CustomItemClientDefinition;
+import dev.stemcraft.api.service.item.JavaItemVisualDefinition;
+import dev.stemcraft.api.service.item.BedrockItemVisualDefinition;
+import dev.stemcraft.api.service.item.CustomItemPlacementMode;
 import dev.stemcraft.api.service.item.ItemService;
+import dev.stemcraft.api.service.item.CustomItemPropertyHandler;
+import dev.stemcraft.api.config.ConfigSection;
+import dev.stemcraft.api.util.TextUtil;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
+import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
+import org.bukkit.Bukkit;
+import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerItemConsumeEvent;
+import org.bukkit.event.block.Action;
+import org.bukkit.event.EventPriority;
+import org.bukkit.block.Campfire;
+import org.bukkit.inventory.CampfireRecipe;
+import org.bukkit.GameMode;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.components.CustomModelDataComponent;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.io.File;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.Locale;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Implementation of the ItemService for managing item attributes and custom items.
@@ -41,6 +72,12 @@ import java.util.Map;
 public class ItemServiceImpl extends BaseService implements ItemService {
     private static final String ATTR_ITEM_ID_KEY = "custom-item-id";
     private final Map<String, ItemStack> itemTemplates = new HashMap<>();
+    private final Map<String, CustomItemDefinition> itemDefinitions = new LinkedHashMap<>();
+    private final Map<String, CustomItemPropertyHandler> propertyHandlers = new HashMap<>();
+    private final Set<Integer> configuredModelData = new HashSet<>();
+    private final Map<String, FoodBehavior> foodBehaviors = new HashMap<>();
+    private dev.stemcraft.api.command.Command giveCommand;
+    private org.bukkit.command.Command originalGiveCommand;
 
     /**
      * Constructor for ItemServiceImpl.
@@ -57,6 +94,10 @@ public class ItemServiceImpl extends BaseService implements ItemService {
      */
     @Override
     public void onEnable() {
+        loadConfiguredItems();
+        registerGiveCommand();
+        api.events().register(PlayerInteractEvent.class, this::handleCampfireInput, EventPriority.HIGHEST, false);
+        api.events().register(PlayerItemConsumeEvent.class, this::handleConfiguredFood, EventPriority.MONITOR, true);
         api.events().register(PlayerDropItemEvent.class, (event) -> {
             ItemStack item = event.getItemDrop().getItemStack();
             ItemMeta meta = item.getItemMeta();
@@ -71,6 +112,351 @@ public class ItemServiceImpl extends BaseService implements ItemService {
                 }
             }
         });
+
+        api.events().register(BlockPlaceEvent.class, event -> {
+            CustomItemDefinition definition = customItemDefinition(getCustomItemId(event.getItemInHand()));
+            if (definition == null) {
+                return;
+            }
+            if (definition.placementMode() == CustomItemPlacementMode.DENY) {
+                event.setCancelled(true);
+            }
+        });
+    }
+
+    @Override
+    public void onDisable() {
+        if (giveCommand != null) giveCommand.unregister();
+        if (originalGiveCommand != null) Bukkit.getCommandMap().getKnownCommands().put("give", originalGiveCommand);
+        giveCommand = null;
+        originalGiveCommand = null;
+    }
+
+    private void loadConfiguredItems() {
+        plugin.exportBundledDirectory("data-packs");
+        var config = api.config().load("config.yml");
+        ConfigSection items = config == null ? null : config.getSection("custom-items", false);
+        loadConfiguredItems(items, "stemcraft");
+        File dataPacks = new File(plugin.getDataFolder(), "data-packs");
+        File[] packDirectories = dataPacks.listFiles(File::isDirectory);
+        if (packDirectories == null) return;
+        for (File packDirectory : packDirectories) {
+            File packConfigFile = new File(packDirectory, "config.yml");
+            if (!packConfigFile.isFile()) continue;
+            ConfigSection packConfig = api.config().load(packConfigFile);
+            if (packConfig == null || !packConfig.getBoolean("pack.enabled", true)) continue;
+            String namespace = packConfig.getString("pack.namespace",
+                packDirectory.getName().toLowerCase(java.util.Locale.ROOT).replace('-', '_'));
+            loadConfiguredItems(packConfig.getSection("custom-items", false), namespace);
+            File configsDirectory = new File(packDirectory, "configs");
+            File[] configFiles = configsDirectory.listFiles((directory, name) ->
+                name.toLowerCase(java.util.Locale.ROOT).endsWith(".yml"));
+            if (configFiles == null) continue;
+            for (File configFile : configFiles) {
+                ConfigSection extraConfig = api.config().load(configFile);
+                if (extraConfig != null) loadConfiguredItems(extraConfig.getSection("custom-items", false), namespace);
+            }
+        }
+    }
+
+    private void loadConfiguredItems(ConfigSection items, String namespace) {
+        if (items == null) return;
+        for (String id : items.getKeys(false)) {
+            ConfigSection section = items.getSection(id, false);
+            if (section == null) continue;
+            Material material = Material.matchMaterial(section.getString("material", "").trim());
+            if (material == null) {
+                plugin.getLogger().warning("[items] Custom item '" + id + "' has an invalid material");
+                continue;
+            }
+            try {
+                ItemStack template = new ItemStack(material);
+                ItemMeta meta = template.getItemMeta();
+                String name = section.getString("name", "").trim();
+                if (!name.isBlank()) meta.displayName(TextUtil.colourise(name)
+                    .decoration(net.kyori.adventure.text.format.TextDecoration.ITALIC, false));
+                List<net.kyori.adventure.text.Component> lore = section.getStringList("lore").stream()
+                    .map(TextUtil::colourise).toList();
+                if (!lore.isEmpty()) meta.lore(lore);
+                int maxStackSize = section.getInt("max-stack-size", 0);
+                if (maxStackSize > 0) meta.setMaxStackSize(Math.min(99, maxStackSize));
+                int maxDamage = section.getInt("max-damage", 0);
+                if (maxDamage > 0) {
+                    if (!(meta instanceof org.bukkit.inventory.meta.Damageable damageable)) {
+                        throw new IllegalArgumentException("material does not support durability");
+                    }
+                    damageable.setMaxDamage(maxDamage);
+                }
+                if (section.contains("glint")) meta.setEnchantmentGlintOverride(section.getBoolean("glint", false));
+                ConfigSection food = section.getSection("food", false);
+                if (food != null) {
+                    var component = meta.getFood();
+                    component.setNutrition(Math.max(0, food.getInt("nutrition", 0)));
+                    component.setSaturation((float) Math.max(0D, food.getDouble("saturation", 0D)));
+                    component.setCanAlwaysEat(food.getBoolean("always-edible", false));
+                    meta.setFood(component);
+                    foodBehaviors.put(normaliseCustomItemId(id), parseFoodBehavior(food));
+                }
+                template.setItemMeta(meta);
+                CustomItemPlacementMode placement = CustomItemPlacementMode.valueOf(
+                    section.getString("placement", "DENY").trim().toUpperCase(java.util.Locale.ROOT));
+                CustomItemClientDefinition clients = parseClients(section, namespace, id, name);
+                Map<String, CustomItemClientDefinition> visualStates = new LinkedHashMap<>();
+                ConfigSection states = section.getSection("visual-states", false);
+                if (states != null) {
+                    for (String state : states.getKeys(false)) {
+                        ConfigSection stateSection = states.getSection(state, false);
+                        if (stateSection != null) visualStates.put(state, parseClients(
+                            stateSection, namespace, id + "_" + state, name));
+                    }
+                }
+                registerCustomItem(new CustomItemDefinition(id, template, placement, null, clients, visualStates));
+            } catch (IllegalArgumentException exception) {
+                plugin.getLogger().warning("[items] Could not load custom item '" + id + "': " + exception.getMessage());
+            }
+        }
+    }
+
+    private FoodBehavior parseFoodBehavior(ConfigSection food) {
+        List<ConfiguredEffect> effects = new java.util.ArrayList<>();
+        for (Object raw : food.getList("effects")) {
+            if (!(raw instanceof Map<?, ?> values)) continue;
+            Object configuredType = values.get("type");
+            String type = configuredType == null ? "" : configuredType.toString().trim();
+            if (type.isEmpty()) continue;
+            effects.add(new ConfiguredEffect(type,
+                number(values.get("duration-seconds"), 0D),
+                (int) number(values.get("amplifier"), 0D),
+                clamp(number(values.get("probability"), 1D), 0D, 1D)));
+        }
+        return new FoodBehavior(food.getDouble("heal", 0D), food.getDouble("damage", 0D),
+            food.getString("returns", ""), List.copyOf(effects));
+    }
+
+    private void handleConfiguredFood(PlayerItemConsumeEvent event) {
+        String id = getCustomItemId(event.getItem());
+        if (id == null) return;
+        FoodBehavior behavior = foodBehaviors.get(normaliseCustomItemId(id));
+        if (behavior == null) return;
+        var player = event.getPlayer();
+        if (behavior.heal() > 0D) player.heal(behavior.heal());
+        if (behavior.damage() > 0D) player.damage(behavior.damage());
+        for (ConfiguredEffect effect : behavior.effects()) {
+            if (ThreadLocalRandom.current().nextDouble() > effect.probability()) continue;
+            NamespacedKey effectKey = NamespacedKey.minecraft(effect.type().toLowerCase(Locale.ROOT));
+            PotionEffectType type = org.bukkit.Registry.MOB_EFFECT.get(effectKey);
+            if (type != null) player.addPotionEffect(new PotionEffect(type,
+                Math.max(1, (int) Math.round(effect.durationSeconds() * 20D)), Math.max(0, effect.amplifier())));
+        }
+        if (!behavior.returns().isBlank() && !hasVanillaContainerReturn(event.getItem().getType())) api.tasks().runLater(1L, () -> {
+            ItemStack returned = createRecipeResult(behavior.returns(), 1);
+            if (returned == null) return;
+            Map<Integer, ItemStack> excess = player.getInventory().addItem(returned);
+            excess.values().forEach(item -> player.getWorld().dropItemNaturally(player.getLocation(), item));
+        });
+    }
+
+    private static boolean hasVanillaContainerReturn(Material material) {
+        return material == Material.RABBIT_STEW || material == Material.MUSHROOM_STEW
+            || material == Material.BEETROOT_SOUP || material == Material.SUSPICIOUS_STEW
+            || material == Material.HONEY_BOTTLE || material == Material.MILK_BUCKET;
+    }
+
+    private ItemStack createRecipeResult(String configured, int amount) {
+        ItemStack custom = createCustomItem(configured, amount);
+        if (custom != null) return custom;
+        Material material = Material.matchMaterial(configured.toUpperCase(Locale.ROOT));
+        return material == null ? null : new ItemStack(material, amount);
+    }
+
+    private static double number(Object value, double fallback) {
+        return value instanceof Number number ? number.doubleValue() : fallback;
+    }
+
+    private static double clamp(double value, double minimum, double maximum) {
+        return Math.max(minimum, Math.min(maximum, value));
+    }
+
+    private record ConfiguredEffect(String type, double durationSeconds, int amplifier, double probability) { }
+    private record FoodBehavior(double heal, double damage, String returns, List<ConfiguredEffect> effects) { }
+
+    private void registerGiveCommand() {
+        api.tabComplete().register("give-target", (player, args) -> {
+            java.util.List<String> targets = new java.util.ArrayList<>(
+                Bukkit.getOnlinePlayers().stream().map(org.bukkit.entity.Player::getName).toList());
+            targets.addAll(java.util.List.of("@s", "@p", "@a", "@r", "@e"));
+            return targets;
+        });
+        api.tabComplete().register("give-item", (player, args) -> {
+            java.util.List<String> items = new java.util.ArrayList<>();
+            for (Material material : Material.values()) {
+                if (material.isItem()) items.add("minecraft:" + material.getKey().getKey());
+            }
+            itemTemplates.keySet().stream().map(id -> "stemcraft:" + id.replace('-', '_')).forEach(items::add);
+            return items;
+        });
+        var builder = api.commands().create("give")
+            .description("Give an item to one or more players")
+            .usage("/give <targets> <item> [count]")
+            .permission("minecraft.command.give")
+            .ignoreArg(1)
+            .executor((unusedApi, unusedCommand, context) -> executeGive(context));
+        builder.tabCompletion("{give-target}", "{give-item}");
+        builder.tabCompletion("{give-target}", "{give-item}", "{number}");
+        originalGiveCommand = Bukkit.getCommandMap().getCommand("give");
+        giveCommand = builder.register(STEMCraft.getPlugin());
+        org.bukkit.command.Command registered = Bukkit.getCommandMap().getCommand("stemcraft:give");
+        if (registered != null) Bukkit.getCommandMap().getKnownCommands().put("give", registered);
+    }
+
+    private void executeGive(dev.stemcraft.api.command.CommandContext context) {
+        List<String> arguments = context.args();
+        if (arguments.size() < 2) {
+            context.error("Usage: /give <targets> <item> [count]");
+            return;
+        }
+        org.bukkit.command.CommandSender sender = context.getSender();
+        String targetArgument = arguments.get(0);
+        String exactTargetName = unquoteTarget(targetArgument);
+        String itemArgument = arguments.get(1);
+        ItemStack probe;
+        try {
+            probe = createCustomItem(itemArgument);
+        } catch (IllegalArgumentException exception) {
+            context.error(exception.getMessage());
+            return;
+        }
+        if (probe == null) {
+            List<String> vanillaArguments = new java.util.ArrayList<>(arguments);
+            org.bukkit.entity.Player exactPlayer = Bukkit.getPlayerExact(exactTargetName);
+            if (exactPlayer != null) vanillaArguments.set(0, vanillaPlayerTarget(exactPlayer.getName()));
+            try {
+                Bukkit.dispatchCommand(sender, "minecraft:give " + String.join(" ", vanillaArguments));
+            } catch (org.bukkit.command.CommandException exception) {
+                Throwable cause = exception.getCause();
+                context.error(cause == null || cause.getMessage() == null ? exception.getMessage() : cause.getMessage());
+            }
+            return;
+        }
+        int amount = 1;
+        if (arguments.size() > 2) {
+            try { amount = Math.max(1, Math.min(99 * 36, Integer.parseInt(arguments.get(2)))); }
+            catch (NumberFormatException exception) {
+                context.error("Invalid item count: {count}", "count", arguments.get(2));
+                return;
+            }
+        }
+        java.util.List<org.bukkit.entity.Entity> selected;
+        org.bukkit.entity.Player exactPlayer = Bukkit.getPlayerExact(exactTargetName);
+        if (exactPlayer != null) {
+            selected = java.util.List.of(exactPlayer);
+        } else {
+            try {
+                selected = Bukkit.selectEntities(sender, targetArgument);
+            } catch (IllegalArgumentException exception) {
+                context.error(exception.getMessage() == null ? "Invalid target selector." : exception.getMessage());
+                return;
+            }
+        }
+        int recipients = 0;
+        for (org.bukkit.entity.Entity entity : selected) {
+            if (!(entity instanceof org.bukkit.entity.Player player)) continue;
+            int remaining = amount;
+            int maximum = probe.getMaxStackSize();
+            while (remaining > 0) {
+                ItemStack stack = createCustomItem(itemArgument, Math.min(maximum, remaining));
+                if (stack == null) break;
+                player.getInventory().addItem(stack).values()
+                    .forEach(item -> player.getWorld().dropItemNaturally(player.getLocation(), item));
+                remaining -= stack.getAmount();
+            }
+            recipients++;
+        }
+        context.success("Gave {amount} [{item}] to {recipients} player(s)",
+            "amount", amount, "item", itemArgument, "recipients", recipients);
+    }
+
+    private static String unquoteTarget(String target) {
+        if (target.length() >= 2 && target.startsWith("\"") && target.endsWith("\"")) {
+            return target.substring(1, target.length() - 1).replace("\\\"", "\"").replace("\\\\", "\\");
+        }
+        return target;
+    }
+
+    private static String vanillaPlayerTarget(String name) {
+        if (name.matches("[A-Za-z0-9_]{1,16}")) return name;
+        return "\"" + name.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+    }
+
+    private void handleCampfireInput(PlayerInteractEvent event) {
+        if (event.getAction() != Action.RIGHT_CLICK_BLOCK || event.getClickedBlock() == null
+            || !(event.getClickedBlock().getState() instanceof Campfire campfire) || event.getItem() == null) return;
+        CampfireRecipe recipe = null;
+        java.util.Iterator<org.bukkit.inventory.Recipe> recipes = Bukkit.recipeIterator();
+        while (recipes.hasNext()) {
+            org.bukkit.inventory.Recipe candidate = recipes.next();
+            if (candidate instanceof CampfireRecipe campfireRecipe
+                && campfireRecipe.getInputChoice().test(event.getItem())
+                && event.getItem().getType() == Material.EGG) {
+                recipe = campfireRecipe;
+                break;
+            }
+        }
+        if (recipe == null) return;
+        int slot = -1;
+        for (int index = 0; index < campfire.getSize(); index++) {
+            ItemStack existing = campfire.getItem(index);
+            if (existing == null || existing.getType().isAir()) { slot = index; break; }
+        }
+        if (slot < 0) return;
+        event.setCancelled(true);
+        ItemStack input = event.getItem().clone();
+        input.setAmount(1);
+        campfire.setItem(slot, input);
+        campfire.setCookTime(slot, 0);
+        campfire.setCookTimeTotal(slot, recipe.getCookingTime());
+        campfire.startCooking(slot);
+        campfire.update(true);
+        if (event.getPlayer().getGameMode() != GameMode.CREATIVE) event.getItem().subtract(1);
+    }
+
+    private CustomItemClientDefinition parseClients(ConfigSection item, String namespace, String id, String name) {
+        String texture = item.getString("texture", "").trim();
+        if (texture.isBlank()) return null;
+        String safeId = id.toLowerCase(java.util.Locale.ROOT).replace('-', '_');
+        String textureId = texture.contains(":") ? texture : namespace + ":" + texture;
+        ConfigSection overrides = item.getSection("overrides", false);
+        ConfigSection javaOverrides = overrides == null ? null : overrides.getSection("java", false);
+        ConfigSection bedrockOverrides = overrides == null ? null : overrides.getSection("bedrock", false);
+        int customModelData;
+        if (javaOverrides != null && javaOverrides.contains("custom-model-data")) {
+            customModelData = javaOverrides.getInt("custom-model-data", 0);
+            if (!configuredModelData.add(customModelData)) {
+                throw new IllegalArgumentException("duplicate custom-model-data " + customModelData);
+            }
+        } else {
+            customModelData = allocateModelData(namespace + ":" + id);
+        }
+        String itemModel = javaOverrides == null ? namespace + ":" + safeId
+            : javaOverrides.getString("item-model", namespace + ":" + safeId);
+        String model = javaOverrides == null ? textureId
+            : javaOverrides.getString("model", textureId);
+        JavaItemVisualDefinition java = new JavaItemVisualDefinition(customModelData, itemModel, model, textureId);
+        String defaultIcon = textureId.substring(textureId.indexOf(':') + 1).replace('/', '_');
+        String identifier = bedrockOverrides == null ? namespace + ":" + safeId
+            : bedrockOverrides.getString("identifier", namespace + ":" + safeId);
+        String icon = bedrockOverrides == null ? defaultIcon : bedrockOverrides.getString("icon", defaultIcon);
+        String displayName = bedrockOverrides == null ? TextUtil.stripColour(name)
+            : bedrockOverrides.getString("display-name", TextUtil.stripColour(name));
+        BedrockItemVisualDefinition bedrock = new BedrockItemVisualDefinition(identifier, icon, textureId,
+            displayName.isBlank() ? id : displayName);
+        return new CustomItemClientDefinition(java, bedrock);
+    }
+
+    private int allocateModelData(String key) {
+        int value = 50_000 + Math.floorMod(key.hashCode(), 900_000);
+        while (!configuredModelData.add(value)) value++;
+        return value;
     }
 
     /**
@@ -179,6 +565,8 @@ public class ItemServiceImpl extends BaseService implements ItemService {
                 return (PersistentDataType<Z, T>) PersistentDataType.DOUBLE;
             } else if (typeClass == Float.class) {
                 return (PersistentDataType<Z, T>) PersistentDataType.FLOAT;
+            } else if (typeClass == byte[].class) {
+                return (PersistentDataType<Z, T>) PersistentDataType.BYTE_ARRAY;
             }
         } else {
             if (object instanceof String) {
@@ -191,6 +579,8 @@ public class ItemServiceImpl extends BaseService implements ItemService {
                 return (PersistentDataType<Z, T>) PersistentDataType.DOUBLE;
             } else if (object instanceof Float) {
                 return (PersistentDataType<Z, T>) PersistentDataType.FLOAT;
+            } else if (object instanceof byte[]) {
+                return (PersistentDataType<Z, T>) PersistentDataType.BYTE_ARRAY;
             }
         }
         // Add more types if needed
@@ -217,6 +607,67 @@ public class ItemServiceImpl extends BaseService implements ItemService {
         itemTemplates.put(id, cloned);
     }
 
+    @Override
+    public void registerCustomItem(@NotNull CustomItemDefinition definition) {
+        ItemStack template = definition.template().clone();
+        ItemMeta meta = template.getItemMeta();
+        if (meta != null && definition.clients() != null && definition.clients().java() != null) {
+            NamespacedKey itemModel = NamespacedKey.fromString(definition.clients().java().itemModelId());
+            if (itemModel == null) {
+                throw new IllegalArgumentException("Invalid item model id '" + definition.clients().java().itemModelId() + "'");
+            }
+            meta.setItemModel(itemModel);
+            CustomModelDataComponent customModelData = meta.getCustomModelDataComponent();
+            customModelData.setFloats(List.of((float) definition.clients().java().customModelData()));
+            meta.setCustomModelDataComponent(customModelData);
+            if (!template.setItemMeta(meta)) {
+                throw new IllegalStateException("Failed to apply item metadata for custom item '" + definition.id() + "'");
+            }
+        }
+        registerCustomItem(definition.id(), template);
+        itemDefinitions.put(definition.id(), new CustomItemDefinition(
+            definition.id(),
+            template,
+            definition.placementMode(),
+            definition.managedObjectType(),
+            definition.clients(),
+            definition.visualStates()
+        ));
+    }
+
+    @Override
+    public @Nullable CustomItemDefinition customItemDefinition(@NotNull String id) {
+        return itemDefinitions.get(id);
+    }
+
+    @Override
+    public @NotNull Collection<CustomItemDefinition> customItemDefinitions() {
+        return Collections.unmodifiableCollection(itemDefinitions.values());
+    }
+
+    @Override
+    public boolean applyCustomItemVisualState(@NotNull ItemStack item, @Nullable String state) {
+        String id = getCustomItemId(item);
+        CustomItemDefinition definition = id == null ? null : customItemDefinition(id);
+        if (definition == null) return false;
+        CustomItemClientDefinition clients = state == null || state.isBlank()
+            ? definition.clients() : definition.visualStates().get(state);
+        if (clients == null || clients.java() == null) return false;
+        return applyClientVisual(item, clients);
+    }
+
+    static boolean applyClientVisual(@NotNull ItemStack item, @NotNull CustomItemClientDefinition clients) {
+        if (clients.java() == null) return false;
+        ItemMeta meta = item.getItemMeta();
+        NamespacedKey model = NamespacedKey.fromString(clients.java().itemModelId());
+        if (model == null) return false;
+        meta.setItemModel(model);
+        CustomModelDataComponent data = meta.getCustomModelDataComponent();
+        data.setFloats(List.of((float) clients.java().customModelData()));
+        meta.setCustomModelDataComponent(data);
+        return item.setItemMeta(meta);
+    }
+
     /**
      * Creates a new ItemStack instance of the custom item with the given id and quantity.
      *
@@ -230,15 +681,63 @@ public class ItemServiceImpl extends BaseService implements ItemService {
             return null;
         }
 
-        ItemStack template = itemTemplates.get(id);
+        CustomItemSpecification specification = parseCustomItemSpecification(id);
+        ItemStack template = itemTemplates.get(specification.id());
+        if (template == null) {
+            String path = specification.id().contains(":")
+                ? specification.id().substring(specification.id().indexOf(':') + 1) : specification.id();
+            template = itemTemplates.get(path);
+            if (template == null) template = itemTemplates.get(path.replace('_', '-'));
+        }
         if (template == null) {
             return null;
         }
 
         ItemStack stack = template.clone();
         stack.setAmount(quantity);
+        if (!specification.properties().isEmpty()) {
+            String path = normaliseCustomItemId(specification.id());
+            CustomItemPropertyHandler handler = propertyHandlers.get(path);
+            if (handler == null) throw new IllegalArgumentException("Custom item '" + specification.id()
+                + "' does not support properties.");
+            handler.apply(stack, specification.properties());
+        }
         return stack;
     }
+
+    @Override
+    public void registerCustomItemPropertyHandler(@NotNull String id, @NotNull CustomItemPropertyHandler handler) {
+        propertyHandlers.put(normaliseCustomItemId(id), handler);
+    }
+
+    @Override
+    public void unregisterCustomItemPropertyHandler(@NotNull String id) {
+        propertyHandlers.remove(normaliseCustomItemId(id));
+    }
+
+    private static String normaliseCustomItemId(String id) {
+        String path = id.contains(":") ? id.substring(id.indexOf(':') + 1) : id;
+        return path.replace('_', '-').toLowerCase(java.util.Locale.ROOT);
+    }
+
+    private static CustomItemSpecification parseCustomItemSpecification(String value) {
+        int open = value.indexOf('[');
+        if (open < 0) return new CustomItemSpecification(value, Map.of());
+        if (!value.endsWith("]") || open == 0) throw new IllegalArgumentException("Invalid custom item properties: " + value);
+        String id = value.substring(0, open);
+        String body = value.substring(open + 1, value.length() - 1).trim();
+        if (body.isEmpty()) return new CustomItemSpecification(id, Map.of());
+        Map<String, String> properties = new LinkedHashMap<>();
+        for (String entry : body.split(",")) {
+            String[] pair = entry.split("=", 2);
+            if (pair.length != 2 || pair[0].isBlank() || pair[1].isBlank())
+                throw new IllegalArgumentException("Invalid custom item property: " + entry.trim());
+            properties.put(pair[0].trim().toLowerCase(java.util.Locale.ROOT), pair[1].trim());
+        }
+        return new CustomItemSpecification(id, Collections.unmodifiableMap(properties));
+    }
+
+    private record CustomItemSpecification(String id, Map<String, String> properties) { }
 
     /**
      * Checks if the given ItemStack matches the custom item with the specified id.
@@ -264,6 +763,25 @@ public class ItemServiceImpl extends BaseService implements ItemService {
         if (item == null) {
             return null;
         }
-        return getAttrib(item, ATTR_ITEM_ID_KEY, String.class, "");
+        String id = getAttrib(item, ATTR_ITEM_ID_KEY, String.class, "");
+        return id.isBlank() ? null : id;
+    }
+
+    @Override
+    public @NotNull String getItemName(@NotNull ItemStack item) {
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null && meta.hasDisplayName() && meta.displayName() != null) {
+            String displayName = PlainTextComponentSerializer.plainText().serialize(meta.displayName()).trim();
+            if (!displayName.isBlank()) return displayName;
+        }
+        String materialName = item.getType().name().toLowerCase(Locale.ROOT).replace('_', ' ');
+        StringBuilder result = new StringBuilder(materialName.length());
+        boolean capitalize = true;
+        for (int index = 0; index < materialName.length(); index++) {
+            char character = materialName.charAt(index);
+            result.append(capitalize ? Character.toUpperCase(character) : character);
+            capitalize = character == ' ';
+        }
+        return result.toString();
     }
 }

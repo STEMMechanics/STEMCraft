@@ -143,7 +143,7 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
                         return;
                     }
 
-                    String reason = moderatedReasonOrReturn(ctx.getArgsAsString(2, "Kicked by " + ctx.getSenderName()), cmd, ctx.getSender());
+                    String reason = moderatedReasonOrReturn(ctx.getArgsAsString(1, "Kicked by " + ctx.getSenderName()), cmd, ctx.getSender());
                     if (reason == null) {
                         return;
                     }
@@ -176,7 +176,7 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
                         return;
                     }
 
-                    String reason = moderatedReasonOrReturn(ctx.getArgsAsString(2, "Warned by " + ctx.getSenderName()), cmd, ctx.getSender());
+                    String reason = moderatedReasonOrReturn(ctx.getArgsAsString(1, "Warned by " + ctx.getSenderName()), cmd, ctx.getSender());
                     if (reason == null) {
                         return;
                     }
@@ -209,13 +209,13 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
                         return;
                     }
 
-                    int reasonIndex = 3;
+                    int reasonIndex = 2;
                     String durationArg = ctx.getArg(1, "");
 
                     Duration duration = ctx.getArgAsDuration(1);
                     if(duration == null) {
                         if(!durationArg.equalsIgnoreCase("perm") && !durationArg.equalsIgnoreCase("unban")) {
-                            reasonIndex = 2;
+                            reasonIndex = 1;
                         }
 
                         if(durationArg.equalsIgnoreCase("unban")) {
@@ -548,7 +548,7 @@ public class PunishmentServiceImpl extends BaseService implements PunishmentServ
      * @param record The punishment record to alert about.
      */
     private void alert(PunishmentRecord record) {
-        Player player = record.getPlayerIfOnline();
+        Player player = Bukkit.getPlayer(record.targetUuid());
         if(player != null) {
             boolean result = alerts.get(record.type()).run(record.type(), player, record);
             if(result) {

@@ -20,6 +20,8 @@
 
 package dev.stemcraft.minigame.bridge;
 
+import dev.stemcraft.STEMCraft;
+
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.minigame.ArenaValidationResult;
 import dev.stemcraft.api.minigame.MiniGameArena;
@@ -28,6 +30,7 @@ import dev.stemcraft.api.minigame.MiniGamePlayer;
 import dev.stemcraft.api.minigame.MiniGameTeam;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.service.region.RegionListener;
+import dev.stemcraft.api.util.InventoryUtil;
 import dev.stemcraft.api.util.NamespaceId;
 import dev.stemcraft.api.util.PlayerUtil;
 import org.bukkit.Color;
@@ -54,8 +57,10 @@ import org.jetbrains.annotations.Nullable;
 import org.jspecify.annotations.NonNull;
 
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.UUID;
@@ -64,7 +69,8 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
     private static final int TEAM_SCORE_START = 7;
     private static final int RUNNING_COUNTDOWN_SECONDS = 300;
     private static final int DROP_INTERVAL_SECONDS = 30;
-    private static final int TNT_FUSE_TICKS = 60;
+    private static final int TNT_FUSE_TICKS = 80;
+    private static final double SCORE_RESET_PULL_SPEED_BLOCKS_PER_SECOND = 50.0d;
     private static final int DROP_LOCATION_ATTEMPTS = 64;
     private static final int DROP_AVAILABILITY_CHECK_ATTEMPTS = 256;
 
@@ -152,6 +158,9 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
                 @Override
                 public void onExit(@NotNull Player player, @NotNull SCRegion region, @Nullable Location from, @Nullable Location to) {
                     if (arena.hasPlayer(player) && arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING) {
+                        if (arena.isPlayerBeingPulled(player)) {
+                            return;
+                        }
                         if (tryHandlePortalScore(arena, player, from, to)) {
                             return;
                         }
@@ -182,7 +191,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
                     if (!arena.hasPlayer(player) || arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
                         return;
                     }
-                    if (isRespawning(arena, player)) {
+                    if (isRespawning(arena, player) || arena.isPlayerBeingPulled(player)) {
                         return;
                     }
                     tryHandlePortalScore(arena, player, from, to);
@@ -193,6 +202,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
 
     @Override
     public void onArenaUnload(MiniGameArena arena) {
+        arena.cancelPlayerPulls();
         arena.stopWinnerCelebration();
         clearTrackedEntities(arena);
         String listenerPrefix = regionListenerPrefix(arena.id());
@@ -207,6 +217,9 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
         if (arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
             return HandlerEventResult.DENY;
         }
+        if (arena.isPlayerBeingPulled(player)) {
+            return HandlerEventResult.DENY;
+        }
 
         Set<Location> blockLocations = placedBlocks(arena);
         if (blockLocations.remove(block.getLocation())) {
@@ -218,6 +231,9 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
     @Override
     public HandlerEventResult onBlockPlace(MiniGameArena arena, Player player, org.bukkit.block.Block block) {
         if (arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
+            return HandlerEventResult.DENY;
+        }
+        if (arena.isPlayerBeingPulled(player)) {
             return HandlerEventResult.DENY;
         }
 
@@ -244,6 +260,9 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
             return HandlerEventResult.ALLOW;
         }
         if (arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
+            return HandlerEventResult.DENY;
+        }
+        if (arena.isPlayerBeingPulled(player)) {
             return HandlerEventResult.DENY;
         }
 
@@ -307,8 +326,12 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
 
         if (newStatus == MiniGameArena.ArenaStatus.ENDING) {
             MiniGameTeam winner = winningTeam(arena);
+            List<UUID> winnerIds = winner == null ? List.of() : arena.getTeamPlayers(winner.getName()).stream().map(Player::getUniqueId).toList();
+            STEMCraft.getPlugin().entitlements().recordMinigameResult("bridge", arena.getOccupants(), winnerIds);
             if (winner != null) {
                 updateWinStreakStats(arena, winner);
+                bridge.minigame().rewardWinners(arena, arena.getTeamPlayers(winner.getName()).stream()
+                    .map(Player::getUniqueId).toList());
             } else {
                 resetWinStreakStats(arena);
             }
@@ -372,6 +395,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
     }
 
     private void startRound(MiniGameArena arena) {
+        arena.cancelPlayerPulls();
         arena.stopWinnerCelebration();
         clearPlacedBlocks(arena);
         clearTrackedEntities(arena);
@@ -390,6 +414,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
     }
 
     private void resetRound(MiniGameArena arena) {
+        arena.cancelPlayerPulls();
         arena.stopWinnerCelebration();
         clearPlacedBlocks(arena);
         clearTrackedEntities(arena);
@@ -419,7 +444,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
     private void clearPlacedBlocks(MiniGameArena arena) {
         Set<Location> blocks = placedBlocks(arena);
         for (Location loc : new LinkedHashSet<>(blocks)) {
-            loc.getBlock().setType(Material.AIR);
+            InventoryUtil.clearBlock(loc.getBlock(), true);
         }
         blocks.clear();
     }
@@ -480,7 +505,6 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
         }
     }
 
-    @Override
     public void clearPlayerInventory(Player player) {
         player.getInventory().clear();
         player.getInventory().setArmorContents(new ItemStack[0]);
@@ -509,10 +533,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
             return;
         }
 
-        for (Player arenaPlayer : arena.getPlayers()) {
-            equipPlayer(arena, arenaPlayer);
-            arena.teleportToTeamSpawn(arenaPlayer);
-        }
+        startScoreResetPull(arena);
     }
 
     private MiniGameTeam winningTeam(MiniGameArena arena) {
@@ -619,7 +640,6 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
 
         java.util.logging.Logger.getLogger(BridgeArenaHandler.class.getName())
             .warning("[STEMCraft] Bridge arena '" + arena.id() + "' has drop items configured but no valid drop locations matched the configured drop surface materials.");
-        broadcastInfoToOccupants(arena, "<yellow>Supply drops are enabled, but this arena has no valid drop locations for the configured drop surface materials.</yellow>");
     }
 
     private void startWinnerCelebration(MiniGameArena arena, MiniGameTeam winner) {
@@ -673,8 +693,50 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
         return respawningPlayers(arena).contains(player.getUniqueId());
     }
 
+    private boolean startScoreResetPull(@NotNull MiniGameArena arena) {
+        if (arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
+            return false;
+        }
+
+        Map<Player, Location> targets = new LinkedHashMap<>();
+        for (Player player : arena.getPlayers()) {
+            MiniGameTeam team = arena.getPlayerTeam(player);
+            Location spawn = team == null ? null : team.getSpawn();
+            if (spawn == null || spawn.getWorld() == null) {
+                continue;
+            }
+
+            equipPlayer(arena, player);
+            player.setVelocity(new Vector());
+            player.setFallDistance(0.0f);
+            targets.put(player, spawn.clone());
+        }
+
+        if (targets.isEmpty()) {
+            return false;
+        }
+
+        arena.showTitle(
+            "<gold><bold>Score!</bold></gold>",
+            "<gray>Resetting positions</gray>",
+            0,
+            900,
+            250
+        );
+        playSoundToOccupants(arena, Sound.ITEM_TRIDENT_RETURN, 0.9f, 1.0f);
+        arena.pullPlayers(targets, SCORE_RESET_PULL_SPEED_BLOCKS_PER_SECOND, () -> {
+            for (Player player : arena.getPlayers()) {
+                player.setHealth(PlayerUtil.getMaxHealth(player));
+            }
+        });
+        return true;
+    }
+
     private boolean tryHandlePortalScore(@NotNull MiniGameArena arena, @NotNull Player player, @Nullable Location from, @Nullable Location to) {
         if (from == null || to == null || !arena.hasPlayer(player) || arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
+            return false;
+        }
+        if (arena.isPlayerBeingPulled(player)) {
             return false;
         }
 
@@ -723,8 +785,8 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
     }
 
     private void announceSupplyDrop(@NotNull MiniGameArena arena, @NotNull Location dropLocation) {
-        for (Player occupant : arena.getOccupants()) {
-            arena.info(occupant, supplyDropHint(occupant, dropLocation));
+        for (Player player : arena.getPlayers()) {
+            arena.info(player, supplyDropHint(player, dropLocation));
         }
     }
 
@@ -732,7 +794,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
         int distance = Math.max(1, (int) Math.round(horizontalDistance(player.getLocation(), dropLocation)));
         String direction = relativeDirection(player, dropLocation);
         String suffix = distance == 1 ? "block" : "blocks";
-        return "<gold>A supply drop has landed " + distance + " " + suffix + " " + direction + ".</gold>";
+        return "<gold>A supply drop is descending " + distance + " " + suffix + " " + direction + ".</gold>";
     }
 
     private double horizontalDistance(@NotNull Location from, @NotNull Location to) {
@@ -785,7 +847,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
                 return;
             }
 
-            block.setType(Material.AIR, false);
+            InventoryUtil.clearBlock(block, false);
             TNTPrimed primedTnt = block.getWorld().spawn(spawnLocation, TNTPrimed.class);
             primedTnt.setFuseTicks(TNT_FUSE_TICKS);
             primedTnt.setSource(player);
@@ -821,10 +883,7 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
         }
 
         ItemStack item = new ItemStack(configuredDrops.get(ThreadLocalRandom.current().nextInt(configuredDrops.size())));
-        Item droppedItem = dropLocation.getWorld().dropItem(dropLocation, item);
-        droppedItem.setPickupDelay(10);
-        trackedEntities(arena).add(droppedItem.getUniqueId());
-        arena.trackSupplyDrop(droppedItem, dropLocation);
+        arena.spawnSupplyDropCrate(item, dropLocation);
         announceSupplyDrop(arena, dropLocation);
         playSoundToOccupants(arena, Sound.ENTITY_ITEM_PICKUP, 0.6f, 1.35f);
     }

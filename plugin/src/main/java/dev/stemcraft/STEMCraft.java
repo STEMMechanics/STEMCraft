@@ -35,6 +35,11 @@ import dev.stemcraft.chunkgen.FlatGenerator;
 import dev.stemcraft.chunkgen.WaterGenerator;
 import dev.stemcraft.chunkgen.VoidGenerator;
 import dev.stemcraft.feature.BaseFeature;
+import dev.stemcraft.feature.CometFeature;
+import dev.stemcraft.feature.Mailboxes;
+import dev.stemcraft.api.service.comet.CometService;
+import dev.stemcraft.api.service.mailbox.MailboxService;
+import dev.stemcraft.api.service.save.SaveReport;
 import dev.stemcraft.service.command.CommandServiceImpl;
 import dev.stemcraft.service.message.MessageServiceImpl;
 import dev.stemcraft.service.minigame.MiniGameServiceImpl;
@@ -65,10 +70,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Enumeration;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -85,6 +92,8 @@ import java.util.regex.Pattern;
 @Getter
 @Accessors(fluent = true)
 public final class STEMCraft extends JavaPlugin {
+    public static final String MINIMUM_MINECRAFT_VERSION = "26.2";
+    private static final int[] MINIMUM_MINECRAFT_VERSION_COMPONENTS = {26, 2, 0};
     private static final Pattern VERSION_COMPONENT_PATTERN = Pattern.compile("\\d+");
     private static final String BOOTSTRAP_ERROR_LOAD_CONFIG = "Could not load config.yml.";
     private static STEMCraftAPI api;
@@ -92,28 +101,40 @@ public final class STEMCraft extends JavaPlugin {
 
     private ChatServiceImpl chat;
     private CommandServiceImpl commands;
+    private CoordinateBarServiceImpl coordinateBar;
     private ConfigServiceImpl config;
     private AuditServiceImpl audit;
     private DatabaseServiceImpl database;
+    private DialogServiceImpl dialogs;
     private EventServiceImpl events;
+    private GiftServiceImpl gifts;
     private HologramServiceImpl holograms;
+    private ImageMapServiceImpl imageMaps;
     private ItemServiceImpl items;
     private LocaleServiceImpl locales;
     private MessageServiceImpl messages;
     private MiniGameServiceImpl minigames;
     private MotdServiceImpl motd;
+    private CometService comets;
+    private MailboxService mailboxes;
     private PlaceholderServiceImpl placeholders;
+    private PlacedObjectServiceImpl placedObjects;
     private PlayerServiceImpl players;
     private PlayerStatsServiceImpl playerStats;
+    private EntitlementService entitlements;
+    private PlayerResetServiceImpl playerResets;
+    private ProtectionServiceImpl protections;
     private ProfanityFilterServiceImpl profanityFilter;
     private PunishmentServiceImpl punishments;
     private RecipeServiceImpl recipes;
     private RegionServiceImpl regions;
     private ResourcePackServiceImpl resourcePack;
     private SelectionServiceImpl selections;
+    private SaveServiceImpl saves;
     private TabCompleteServiceImpl tabComplete;
     private TaskServiceImpl tasks;
     private FirstJoinService firstJoin;
+    private dev.stemcraft.feature.StemBotFeature stemBot;
     private WebServiceImpl web;
     private WorldServiceImpl worlds;
 
@@ -142,12 +163,22 @@ public final class STEMCraft extends JavaPlugin {
             return;
         }
 
+        if (!isMinecraftVersionSupported(getMinecraftVersion())) {
+            getLogger().severe(
+                "STEMCraft requires Minecraft " + MINIMUM_MINECRAFT_VERSION + " or newer; this server is running "
+                    + Bukkit.getMinecraftVersion() + ". STEMCraft will be disabled."
+            );
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
+
         initializeApi(this);
         InstanceHolder.set(api, this);
 
         // Load pre-early services
         config = new ConfigServiceImpl(this, api);
         tasks = new TaskServiceImpl(this, api);
+        saves = new SaveServiceImpl(this, api);
         tasks.onEnable();
         config.onEnable();
 
@@ -189,15 +220,23 @@ public final class STEMCraft extends JavaPlugin {
         audit = new AuditServiceImpl(this, api);
         chat = new ChatServiceImpl(this, api);
         commands = new CommandServiceImpl(this, api);
+        coordinateBar = new CoordinateBarServiceImpl(this, api);
         database = new DatabaseServiceImpl(this, api);
+        dialogs = new DialogServiceImpl(this, api);
         events = new EventServiceImpl(this, api);
+        gifts = new GiftServiceImpl(this, api);
         holograms = new HologramServiceImpl(this, api);
+        imageMaps = new ImageMapServiceImpl(this, api);
         items = new ItemServiceImpl(this, api);
         minigames = new MiniGameServiceImpl(this, api);
         motd = new MotdServiceImpl(this, api);
         placeholders = new PlaceholderServiceImpl(this, api);
+        placedObjects = new PlacedObjectServiceImpl(this, api);
         players = new PlayerServiceImpl(this, api);
         playerStats = new PlayerStatsServiceImpl(this, api);
+        entitlements = new EntitlementService(this, api);
+        playerResets = new PlayerResetServiceImpl(this, api);
+        protections = new ProtectionServiceImpl(this, api);
         profanityFilter = new ProfanityFilterServiceImpl(this, api);
         punishments = new PunishmentServiceImpl(this, api);
         recipes = new RecipeServiceImpl(this, api);
@@ -210,18 +249,26 @@ public final class STEMCraft extends JavaPlugin {
         worlds = new WorldServiceImpl(this, api);
 
         database.onEnable();
+        dialogs.onEnable();
         firstJoin.onEnable();
         audit.onEnable();
         chat.onEnable();
         commands.onEnable();
+        coordinateBar.onEnable();
         events.onEnable();
         holograms.onEnable();
+        imageMaps.onEnable();
         items.onEnable();
+        gifts.onEnable();
         minigames.onEnable();
         motd.onEnable();
         placeholders.onEnable();
+        placedObjects.onEnable();
         players.onEnable();
         playerStats.onEnable();
+        entitlements.onEnable();
+        playerResets.onEnable();
+        protections.onEnable();
         profanityFilter.onEnable();
         punishments.onEnable();
         recipes.onEnable();
@@ -233,6 +280,7 @@ public final class STEMCraft extends JavaPlugin {
         worlds.onEnable();
 
         registerBuiltInWorldGenerators();
+        dev.stemcraft.chunkgen.BuiltInGenerators.register(this, api);
 
         info("STEMCRAFT_ENABLED");
 
@@ -321,6 +369,23 @@ public final class STEMCraft extends JavaPlugin {
     /** {@inheritDoc} */
     @Override
     public void onDisable() {
+        if (saves != null) {
+            SaveReport report = saves.saveAll();
+            if (!report.successful()) {
+                getLogger().severe("STEMCraft shutdown save completed with " + report.failures().size() + " failure(s): "
+                    + String.join(", ", report.failures().keySet()));
+            }
+        }
+        List<BaseFeature> featuresToDisable = new ArrayList<>(loadedFeatures);
+        Collections.reverse(featuresToDisable);
+        for (BaseFeature feature : featuresToDisable) {
+            try {
+                feature.onDisable();
+            } catch (RuntimeException exception) {
+                getLogger().log(java.util.logging.Level.SEVERE, "Could not disable feature " + feature.id(), exception);
+            }
+        }
+        loadedFeatures.clear();
         disableService(minigames);
         disableService(worlds);
         disableService(web);
@@ -331,17 +396,24 @@ public final class STEMCraft extends JavaPlugin {
         disableService(recipes);
         disableService(punishments);
         disableService(profanityFilter);
+        disableService(entitlements);
+        disableService(playerResets);
         disableService(playerStats);
         disableService(placeholders);
+        disableService(placedObjects);
         disableService(players);
         disableService(motd);
+        disableService(gifts);
         disableService(items);
+        disableService(imageMaps);
         disableService(holograms);
         disableService(events);
         disableService(firstJoin);
         disableService(audit);
         disableService(database);
+        disableService(dialogs);
         disableService(commands);
+        disableService(coordinateBar);
         disableService(chat);
 
         disableService(tasks);
@@ -349,9 +421,67 @@ public final class STEMCraft extends JavaPlugin {
         disableService(messages);
     }
 
+    /** Save all active STEMCraft features, services, configs, and registered extensions. */
+    public SaveReport saveStemCraftState() {
+        Map<String, String> failures = new LinkedHashMap<>();
+        int attempted = 0;
+        int succeeded = 0;
+
+        for (BaseFeature feature : loadedFeatures) {
+            attempted++;
+            if (runSaveParticipant("feature:" + feature.id(), feature::onSave, failures)) succeeded++;
+        }
+        for (BaseService service : loadedCoreServices()) {
+            attempted++;
+            if (runSaveParticipant("service:" + service.getId(), service::onSave, failures)) succeeded++;
+        }
+        if (saves != null) {
+            SaveReport extensions = saves.saveExtensions();
+            attempted += extensions.attempted();
+            succeeded += extensions.succeeded();
+            failures.putAll(extensions.failures());
+        }
+        return new SaveReport(attempted, succeeded, failures);
+    }
+
+    private List<BaseService> loadedCoreServices() {
+        List<BaseService> services = new ArrayList<>();
+        for (Field field : STEMCraft.class.getDeclaredFields()) {
+            if (!BaseService.class.isAssignableFrom(field.getType())) continue;
+            try {
+                Object value = field.get(this);
+                if (value instanceof BaseService service && service != saves) services.add(service);
+            } catch (IllegalAccessException exception) {
+                throw new IllegalStateException("Could not inspect STEMCraft services", exception);
+            }
+        }
+        services.sort(Comparator.comparing(BaseService::getId));
+        return services;
+    }
+
+    private boolean runSaveParticipant(String id, Runnable participant, Map<String, String> failures) {
+        try {
+            participant.run();
+            return true;
+        } catch (RuntimeException exception) {
+            String message = exception.getMessage();
+            failures.put(id, exception.getClass().getSimpleName()
+                + (message == null || message.isBlank() ? "" : ": " + message));
+            getLogger().log(java.util.logging.Level.SEVERE, "Could not save " + id, exception);
+            return false;
+        }
+    }
+
     /** {@inheritDoc} */
     @Override
     public @Nullable ChunkGenerator getDefaultWorldGenerator(@NotNull String worldName, String id) {
+        // Plugins may probe this hook without selecting a generator (for example PlotSquared).
+        if (id == null || id.isBlank()) {
+            return null;
+        }
+        if (worlds != null && worlds.generator() != null && worlds.generator().isRegistered(id)) {
+            return worlds.generator().get(id, "");
+        }
         BuiltInGeneratorSpec spec = parseBuiltInGeneratorSpec(id);
         if (spec.key().isEmpty()) {
             return null;
@@ -476,6 +606,13 @@ public final class STEMCraft extends JavaPlugin {
         }
 
         feature.onEnable();
+        if (feature instanceof dev.stemcraft.feature.StemBotFeature bot) stemBot = bot;
+        if (feature instanceof CometFeature cometFeature) {
+            comets = cometFeature;
+        }
+        if (feature instanceof Mailboxes mailboxFeature) {
+            mailboxes = mailboxFeature;
+        }
         loadedFeatures.add(feature);
         debug("STEMCRAFT_FEATURE_LOADED", "name", feature.id());
     }
@@ -550,6 +687,16 @@ public final class STEMCraft extends JavaPlugin {
             components[index++] = Integer.parseInt(matcher.group());
         }
         return components;
+    }
+
+    static boolean isMinecraftVersionSupported(@Nullable int[] version) {
+        if (version == null) return false;
+        for (int index = 0; index < MINIMUM_MINECRAFT_VERSION_COMPONENTS.length; index++) {
+            int actual = index < version.length ? version[index] : 0;
+            int minimum = MINIMUM_MINECRAFT_VERSION_COMPONENTS[index];
+            if (actual != minimum) return actual > minimum;
+        }
+        return true;
     }
 
     /**
@@ -654,6 +801,7 @@ public final class STEMCraft extends JavaPlugin {
             }
             if (placeholders != null) {
                 placeholders.onReload();
+                entitlements.onReload();
             }
             for (BaseFeature feature : loadedFeatures) {
                 try {

@@ -54,6 +54,7 @@ public class PTimeCommand extends BaseCommand {
         setDescription("PTIME_DESCRIPTION");
         setUsage("PTIME_USAGE");
         setPermission(PERMISSION);
+        setAccess((sender, args) -> dev.stemcraft.permission.PlayerCommandAccess.ownTarget(sender, args, 1, "stemcraft.command.ptime.others"));
         addTabCompletion("day", "{player}");
         addTabCompletion("night", "{player}");
         addTabCompletion("reset", "{player}");

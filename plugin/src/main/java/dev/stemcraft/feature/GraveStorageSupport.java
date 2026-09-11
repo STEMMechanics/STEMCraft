@@ -22,6 +22,7 @@ package dev.stemcraft.feature;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
+import org.bukkit.Tag;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.Chest;
@@ -74,6 +75,9 @@ final class GraveStorageSupport {
                 continue;
             }
             if (isHazard(candidateType)) {
+                continue;
+            }
+            if (!allowLiquidPartner && !isStableLandSupport(candidate.getRelative(BlockFace.DOWN).getType())) {
                 continue;
             }
 
@@ -178,6 +182,11 @@ final class GraveStorageSupport {
 
     static boolean isLiquid(Material mat) {
         return mat == Material.WATER || mat == Material.LAVA;
+    }
+
+    static boolean isStableLandSupport(Material mat) {
+        return mat.isSolid() && !Tag.LEAVES.isTagged(mat) && !Tag.LOGS.isTagged(mat)
+            && !isLiquid(mat) && !isHazard(mat);
     }
 
     static boolean isHazard(Material mat) {

@@ -1,0 +1,4 @@
+pack:
+  enabled: true
+  namespace: stemcraft_cooking
+  description: "STEMCraft Farming, Foraging & Cooking"

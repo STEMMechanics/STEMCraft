@@ -6,6 +6,7 @@ import dev.stemcraft.api.minigame.MiniGameArena;
 import dev.stemcraft.api.minigame.MiniGameArenaHandler;
 import dev.stemcraft.api.minigame.MiniGamePlayer;
 import dev.stemcraft.api.model.SCRegion;
+import dev.stemcraft.service.region.RegionLocationSupport;
 import dev.stemcraft.api.service.region.RegionListener;
 import dev.stemcraft.api.util.NamespaceId;
 import dev.stemcraft.api.util.PlayerUtil;
@@ -182,6 +183,7 @@ public class MinefieldArenaHandler implements MiniGameArenaHandler {
             if (!"-".equals(minefield.winnerName(arena))) {
                 Player winner = Bukkit.getPlayerExact(minefield.winnerName(arena));
                 if (winner != null) {
+                    minefield.minigame().rewardWinners(arena, List.of(winner.getUniqueId()));
                     arena.startWinnerCelebration(winner.getLocation(), 4);
                 }
                 broadcastToOccupants(arena, "<gold>" + minefield.resultLine(arena) + "</gold>");
@@ -827,11 +829,11 @@ public class MinefieldArenaHandler implements MiniGameArenaHandler {
         if (region.contains(center)) {
             return center;
         }
-        Location ground = region.getRandomGroundLocation();
+        Location ground = RegionLocationSupport.randomGroundLocation(region);
         if (ground != null) {
             return ground;
         }
-        Location fallback = region.getRandomLocation();
+        Location fallback = RegionLocationSupport.randomLocation(region);
         return fallback != null ? fallback : center;
     }
 

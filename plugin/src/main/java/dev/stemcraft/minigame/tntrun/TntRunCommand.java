@@ -39,7 +39,7 @@ public class TntRunCommand {
             .toList());
 
         api.commands().create("tntrun")
-            .permission("stemcraft.command.tntrun")
+            .access((sender, args) -> dev.stemcraft.permission.PlayerCommandAccess.minigame(sender, args, "tntrun"))
             .usage("/tntrun <list|info|create|delete|join|joinall|spectate|leave|start|stop|restart|save|reload|validate|enable|disable|set|addspawn|setspawn|removespawn|select|sel|show>")
             .tabCompletion("list")
             .tabCompletion("list", "{int}")
@@ -86,6 +86,10 @@ public class TntRunCommand {
             .tabCompletion("show", "{tntrun-arenas}", "spectator")
             .tabCompletion("show", "{tntrun-arenas}", "spawn", "{int}")
             .executor((ignored, cmd, ctx) -> {
+                if (ctx.args().isEmpty() && !dev.stemcraft.permission.PlayerCommandAccess.gameAdmin(ctx.getSender(), "tntrun")) {
+                    ctx.returnInfo("Use /tntrun list, info, join or leave, spectate.");
+                    return;
+                }
                 ctx.checkArgsSizeAtLeast(1);
 
                 switch (ctx.getArgLower(0)) {
@@ -530,7 +534,7 @@ public class TntRunCommand {
             }
             case "name" -> {
                 ctx.checkArgsSizeAtLeast(4);
-                arena.setName(ctx.getArgsAsString(4));
+                arena.setName(ctx.getArgsAsString(3));
                 ctx.success("Display name updated for arena '" + arena.id() + "'.");
             }
             default -> ctx.returnError("Unknown TNT Run set target '" + target + "'.");

@@ -59,6 +59,23 @@ public interface CommandBuilder {
      */
     CommandBuilder permission(String permission);
 
+    /** Additional authorization for execution and completion candidates; arguments are positional. */
+    default CommandBuilder access(java.util.function.BiPredicate<org.bukkit.command.CommandSender, java.util.List<String>> access) {
+        throw new UnsupportedOperationException("This command builder does not support access policies");
+    }
+
+    /**
+     * Marks zero-based argument positions that the context parser must ignore.
+     * Ignored arguments remain in the positional argument list without being
+     * interpreted as flags or {@code key:value} options.
+     *
+     * @param positions zero-based argument positions
+     * @return The command builder.
+     */
+    default CommandBuilder ignoreArg(int... positions) {
+        throw new UnsupportedOperationException("This command builder does not support ignored arguments");
+    }
+
     /**
      * Add a tab completion for the command.
      *

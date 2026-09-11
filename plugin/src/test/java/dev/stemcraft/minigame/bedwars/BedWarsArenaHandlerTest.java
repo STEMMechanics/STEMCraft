@@ -12,6 +12,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.inventory.PlayerInventory;
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.Test;
+import java.lang.reflect.Method;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -148,6 +149,54 @@ class BedWarsArenaHandlerTest {
     }
 
     @Test
+    void onBlockBreakSuppressesDropsForTrackedPlacedBlocks() {
+        STEMCraftAPI api = mock(STEMCraftAPI.class);
+        EventService events = mock(EventService.class);
+        BedWarsMiniGame game = mock(BedWarsMiniGame.class);
+        MiniGameArena arena = mock(MiniGameArena.class);
+        Player player = mock(Player.class);
+        org.bukkit.block.Block block = mock(org.bukkit.block.Block.class);
+        Location placedLocation = new Location(null, 4.0d, 64.0d, 9.0d);
+        Set<Location> placedBlocks = new LinkedHashSet<>(Set.of(placedLocation));
+
+        when(api.events()).thenReturn(events);
+        when(events.register(any(), any())).thenReturn(mock(Listener.class));
+        when(arena.getStatus()).thenReturn(MiniGameArena.ArenaStatus.RUNNING);
+        when(arena.getOrCreate(eq("blocks"), eq(Set.class), any())).thenReturn(placedBlocks);
+        when(block.getLocation()).thenReturn(placedLocation);
+
+        BedWarsArenaHandler handler = new BedWarsArenaHandler(api, game);
+        BedWarsArenaHandler.HandlerEventResult result = handler.onBlockBreak(arena, player, block);
+
+        assertEquals(BedWarsArenaHandler.HandlerEventResult.ALLOW_NO_DROPS, result);
+        assertTrue(placedBlocks.isEmpty());
+    }
+
+    @Test
+    void announceSupplyDropSkipsSpectators() throws Exception {
+        STEMCraftAPI api = mock(STEMCraftAPI.class);
+        EventService events = mock(EventService.class);
+        BedWarsMiniGame game = mock(BedWarsMiniGame.class);
+        MiniGameArena arena = mock(MiniGameArena.class);
+        Player activePlayer = mock(Player.class);
+        Player spectator = mock(Player.class);
+
+        when(api.events()).thenReturn(events);
+        when(events.register(any(), any())).thenReturn(mock(Listener.class));
+        when(arena.getPlayers()).thenReturn(List.of(activePlayer));
+        when(arena.getSpectators()).thenReturn(List.of(spectator));
+        when(activePlayer.getLocation()).thenReturn(new Location(null, 0.0d, 64.0d, 0.0d));
+        when(spectator.getLocation()).thenReturn(new Location(null, 0.0d, 64.0d, 0.0d));
+
+        BedWarsArenaHandler handler = new BedWarsArenaHandler(api, game);
+        Method announceSupplyDrop = BedWarsArenaHandler.class.getDeclaredMethod("announceSupplyDrop", MiniGameArena.class, Location.class);
+        announceSupplyDrop.setAccessible(true);
+        announceSupplyDrop.invoke(handler, arena, new Location(null, 5.0d, 64.0d, 0.0d));
+
+        verify(arena).info(eq(activePlayer), any());
+        verify(arena, never()).info(eq(spectator), any());
+    }
+
     private MiniGameTeam team(String name) {
         MiniGameTeam team = mock(MiniGameTeam.class);
         when(team.getName()).thenReturn(name);

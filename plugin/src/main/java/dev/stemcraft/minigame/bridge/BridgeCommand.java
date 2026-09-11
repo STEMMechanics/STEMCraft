@@ -65,7 +65,7 @@ public class BridgeCommand {
         api.tabComplete().register("bridge-teams", (sender, args) -> List.of("red", "blue"));
 
         api.commands().create("bridge")
-            .permission("stemcraft.command.bridge")
+            .access((sender, args) -> dev.stemcraft.permission.PlayerCommandAccess.minigame(sender, args, "bridge"))
             .usage("/bridge <list|info [arena]|create <arena> [world]|delete|join|joinall|spectate|leave|start|stop|restart|save|reload|validate|enable|disable|set|select|sel|show|dropitems|adddropitem|removedropitem>")
             .tabCompletion("list")
             .tabCompletion("list", "{int}")
@@ -130,6 +130,10 @@ public class BridgeCommand {
             .tabCompletion("removedropitem", "{bridge-arenas}")
             .tabCompletion("removedropitem", "{bridge-arenas}", "{int}")
             .executor((ignored, cmd, ctx) -> {
+                if (ctx.args().isEmpty() && !dev.stemcraft.permission.PlayerCommandAccess.gameAdmin(ctx.getSender(), "bridge")) {
+                    ctx.returnInfo("Use /bridge list, info, join or leave, spectate.");
+                    return;
+                }
                 ctx.checkArgsSizeAtLeast(1);
 
                 switch (ctx.getArgLower(0)) {
@@ -205,7 +209,7 @@ public class BridgeCommand {
                                 .append(Component.text("[Spectate]", NamedTextColor.AQUA)
                                     .clickEvent(ClickEvent.runCommand("/bridge spectate " + arena.id()))
                                     .hoverEvent(HoverEvent.showText(Component.text("Spectate this arena"))));
-                        } else {
+                        } else if (dev.stemcraft.permission.PlayerCommandAccess.gameAdmin(ctx.getSender(), "bridge")) {
                             line = line
                                 .append(Component.text(" "))
                                 .append(Component.text("[Validate]", NamedTextColor.BLUE)
@@ -586,7 +590,7 @@ public class BridgeCommand {
             }
             case "name" -> {
                 ctx.checkArgsSizeAtLeast(4);
-                arena.setName(ctx.getArgsAsString(4));
+                arena.setName(ctx.getArgsAsString(3));
                 ctx.success("Display name updated for arena '" + arena.id() + "'.");
             }
             default -> ctx.returnError("Unknown Bridge set target '" + target + "'.");

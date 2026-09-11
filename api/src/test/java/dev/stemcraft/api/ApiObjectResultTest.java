@@ -91,15 +91,13 @@ class ApiObjectResultTest {
     }
 
     @Test
-    void punishmentRecordExposesStateAndFindsOnlinePlayers() {
-        ServerMock server = MockBukkit.mock();
-        PlayerMock player = server.addPlayer("Target");
+    void punishmentRecordExposesState() {
         Instant createdAt = Instant.parse("2026-04-21T00:00:00Z");
 
         PunishmentRecord permanent = new PunishmentRecord(
             1L,
-            player.getUniqueId(),
-            player.getName(),
+            UUID.randomUUID(),
+            "Target",
             UUID.randomUUID(),
             "Mod",
             "ban",
@@ -111,7 +109,6 @@ class ApiObjectResultTest {
         assertTrue(permanent.permanent());
         assertFalse(permanent.cancelled());
         assertNull(permanent.expiresAt());
-        assertSame(player, permanent.getPlayerIfOnline());
 
         PunishmentRecord timed = new PunishmentRecord(
             2L,
@@ -126,7 +123,6 @@ class ApiObjectResultTest {
             60L
         );
         assertEquals(createdAt.plusSeconds(60), timed.expiresAt());
-        assertNull(timed.getPlayerIfOnline());
         assertFalse(timed.alerted());
         timed.setAlerted();
         assertTrue(timed.alerted());

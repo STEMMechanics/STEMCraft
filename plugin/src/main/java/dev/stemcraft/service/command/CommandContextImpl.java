@@ -64,16 +64,24 @@ public class CommandContextImpl implements CommandContext {
         this.sender = sender;
         this.labelUsed = labelUsed.toLowerCase(Locale.ROOT);
 
-        // Preserve original args
-        this.rawArgs = List.copyOf(args);
+        List<String> logicalArgs = CommandArgumentTokenizer.tokenize(args);
+
+        // Preserve logical arguments before flag and key-value parsing.
+        this.rawArgs = List.copyOf(logicalArgs);
 
         // Parse into positional args, flags, and key-value options
         java.util.List<String> positional = new java.util.ArrayList<>();
         java.util.Set<String> flagSet = new java.util.HashSet<>();
         java.util.Map<String, String> optionMap = new java.util.HashMap<>();
 
-        for (String arg : args) {
+        for (int position = 0; position < logicalArgs.size(); position++) {
+            String arg = logicalArgs.get(position);
             if (arg == null || arg.isEmpty()) {
+                continue;
+            }
+
+            if (command.isIgnoredArg(position)) {
+                positional.add(arg);
                 continue;
             }
 
@@ -380,12 +388,12 @@ public class CommandContextImpl implements CommandContext {
      */
     @Override
     public String getArg(int index, String def) {
-        if (args.isEmpty() || index >= args.size()) {
-            return def;
-        }
-
         if (index < 0) {
             index = args.size() + index; // -1 -> last, -2 -> second last
+        }
+
+        if (index < 0 || index >= args.size()) {
+            return def;
         }
 
         return args.get(index);
@@ -399,14 +407,11 @@ public class CommandContextImpl implements CommandContext {
      */
     @Override
     public String getArgsAsString(int index, String def) {
-        // convert 1-based → 0-based
-        int start = index - 1;
-
-        if (start < 0 || start >= args.size()) {
+        if (index < 0 || index >= args.size()) {
             return def;
         }
 
-        return String.join(" ", args.subList(start, args.size()));
+        return String.join(" ", args.subList(index, args.size()));
     }
 
     /**
@@ -455,7 +460,7 @@ public class CommandContextImpl implements CommandContext {
             String arg = getArg(index, null);
             result = (arg != null ? Double.parseDouble(arg) : def);
         } catch(NumberFormatException ex) {
-            return def;
+            result = def;
         }
 
         if(min != null && result < min) {
@@ -510,7 +515,13 @@ public class CommandContextImpl implements CommandContext {
             return def;
         }
 
-        return arg.equalsIgnoreCase("true") || arg.equalsIgnoreCase("yes") || arg.equalsIgnoreCase("1");
+        if(arg.equalsIgnoreCase("true") || arg.equalsIgnoreCase("yes") || arg.equals("1")) {
+            return true;
+        }
+        if(arg.equalsIgnoreCase("false") || arg.equalsIgnoreCase("no") || arg.equals("0")) {
+            return false;
+        }
+        return def;
     }
 
     /**
@@ -596,7 +607,7 @@ public class CommandContextImpl implements CommandContext {
             long secs = TimeUtil.parseDuration(durationStr);
             return Duration.ofSeconds(secs);
         }  catch(Exception ignored) {
-            return null;
+            return def;
         }
     }
 

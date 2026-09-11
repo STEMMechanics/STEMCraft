@@ -8,7 +8,6 @@ import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.PlayerInventory;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -85,13 +84,7 @@ public interface MiniGameArenaHandler {
      * @return The location to teleport the player to upon joining.
      */
     default Location onPlayerJoinArena(MiniGameArena arena, Player player) {
-        if (arena.getStatus() == ArenaStatus.IDLE) {
-            arena.setStatus(ArenaStatus.WAITING);
-        } else if (arena.getStatus() == ArenaStatus.WAITING && arena.numPlayers() >= arena.getMinPlayers()) {
-            arena.setStatus(ArenaStatus.STARTING, 30);
-        }
-
-        return arena.getLobbySpawn();
+        return null;
     }
 
     /**
@@ -111,8 +104,7 @@ public interface MiniGameArenaHandler {
      * @return The location to teleport the spectator to.
      */
     default Location onPlayerJoinSpectator(MiniGameArena arena, Player player) {
-        Location spectatorSpawn = arena.getSpectatorSpawn();
-        return spectatorSpawn != null ? spectatorSpawn : arena.getLobbySpawn();
+        return null;
     }
 
     /**
@@ -207,35 +199,4 @@ public interface MiniGameArenaHandler {
         return HandlerEventResult.ALLOW;
     }
 
-    /**
-     * Check if the arena is currently active (waiting, countdown, or running).
-     *
-     * @return True if the arena is active, false otherwise.
-     */
-    default boolean isActive(MiniGameArena arena) {
-        ArenaStatus status = arena.getStatus();
-        return status != ArenaStatus.DISABLED && status != ArenaStatus.SETUP && status != ArenaStatus.SHUTDOWN;
-    }
-
-    /**
-     * Check if players can join the pending/current game in the arena.
-     * If the arena is in WAITING or STARTING status, players can join
-     * and are placed into the game.
-     * If the arena is in any other status, players cannot join and
-     * will be placed into the lobby.
-     *
-     * @return True if players can join, false otherwise.
-     */
-    default boolean isJoinable(MiniGameArena arena) {
-        ArenaStatus status = arena.getStatus();
-        return status == ArenaStatus.WAITING || status == ArenaStatus.STARTING;
-    }
-
-    default void clearPlayerInventory(Player player) {
-        PlayerInventory inventory = player.getInventory();
-        inventory.clear();
-        ItemStack[] emptyItemStacks = {};
-        inventory.setArmorContents(emptyItemStacks);
-        inventory.setItemInOffHand(null);
-    }
 }

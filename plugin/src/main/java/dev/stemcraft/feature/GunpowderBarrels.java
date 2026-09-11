@@ -22,6 +22,7 @@ package dev.stemcraft.feature;
 
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigSection;
+import dev.stemcraft.api.util.InventoryUtil;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
@@ -190,7 +191,7 @@ public class GunpowderBarrels extends BaseFeature {
      */
     private void explodeBarrel(Block barrelBlock) {
         // Remove first to avoid re-processing and odd drops
-        barrelBlock.setType(Material.AIR, false);
+        InventoryUtil.clearBlock(barrelBlock, false);
 
         Location loc = barrelBlock.getLocation().add(0.5, 0.5, 0.5);
         World w = loc.getWorld();

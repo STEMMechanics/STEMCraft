@@ -10,10 +10,13 @@ This is the core STEMCraft plugin that provides the core functionality and helpe
 - Java 25
 - Paper 26.2 or higher
 
+STEMCraft checks the server version during startup and disables itself with a clear log message when run on Minecraft versions older than 26.2.
+
 
 ## Usage
 
-Start with the local docs in [docs/README.md](docs/README.md) for commands, features, and integration notes.
+- Players: read the [STEMCraft Player Handbook](docs/pub/README.md).
+- Developers and administrators: read the [STEMCraft Wiki](https://github.com/STEMMechanics/stemcraft/wiki).
 
 ## Builds & API
 
@@ -44,6 +47,22 @@ STEMCraftAPI.api();
 ```
 
 `STEMCraftAPI.api();` may be null until after the STEMCraft plugin enables.
+
+## Pl3xMap theme
+
+An optional STEMCraft-branded theme for Pl3xMap is available in
+[`tools/pl3xmap-theme`](tools/pl3xmap-theme). It adds the STEMCraft logo and colour palette to the
+map controls, sidebar, popups, and mobile layout without changing map tiles or marker data.
+
+Stop the server and install it over Pl3xMap's generated web directory:
+
+```sh
+tools/pl3xmap-theme/install.sh /path/to/plugins/Pl3xMap/web
+```
+
+Then set `settings.web-directory.read-only: true` in Pl3xMap's configuration before restarting.
+See the [theme README](tools/pl3xmap-theme/README.md) for testing, rollback, and Pl3xMap upgrade
+instructions.
 
 ## Get in touch!
 

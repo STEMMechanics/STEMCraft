@@ -21,24 +21,35 @@
 package dev.stemcraft;
 
 import dev.stemcraft.api.service.command.CommandService;
+import dev.stemcraft.api.service.comet.CometService;
+import dev.stemcraft.api.service.coordinatebar.CoordinateBarService;
 import dev.stemcraft.api.service.audit.AuditService;
 import dev.stemcraft.api.service.config.ConfigService;
 import dev.stemcraft.api.service.database.DatabaseService;
+import dev.stemcraft.api.service.dialog.DialogService;
 import dev.stemcraft.api.service.event.EventService;
 import dev.stemcraft.api.service.motd.MotdService;
 import dev.stemcraft.api.service.player.PlayerService;
 import dev.stemcraft.api.service.playerstats.PlayerStatsService;
+import dev.stemcraft.api.service.playerreset.PlayerResetService;
 import dev.stemcraft.api.service.placeholder.PlaceholderService;
+import dev.stemcraft.api.service.placedobject.PlacedObjectService;
+import dev.stemcraft.api.service.protection.ProtectionService;
 import dev.stemcraft.api.service.profanity.ProfanityFilterService;
 import dev.stemcraft.api.service.recipe.RecipeService;
 import dev.stemcraft.capability.HasMessagesImpl;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.service.hologram.HologramService;
+import dev.stemcraft.api.service.gift.GiftService;
 import dev.stemcraft.api.service.item.ItemService;
+import dev.stemcraft.api.service.imagemap.ImageMapService;
 import dev.stemcraft.api.service.locale.LocaleService;
+import dev.stemcraft.api.service.mailbox.MailboxService;
 import dev.stemcraft.api.service.message.MessageService;
 import dev.stemcraft.api.service.region.RegionService;
+import dev.stemcraft.api.service.resourcepack.ResourcePackService;
 import dev.stemcraft.api.service.selection.SelectionService;
+import dev.stemcraft.api.service.save.SaveService;
 import dev.stemcraft.api.service.task.TaskService;
 import dev.stemcraft.api.service.punishment.PunishmentService;
 import dev.stemcraft.api.service.tabcomplete.TabCompleteService;
@@ -86,6 +97,13 @@ public class STEMCraftAPIImpl extends HasMessagesImpl implements STEMCraftAPI {
         return plugin.commands();
     }
 
+    @Override
+    public CoordinateBarService coordinateBar() { return plugin.coordinateBar(); }
+
+    /** Get the comet event service. */
+    @Override
+    public CometService comets() { return plugin.comets(); }
+
     /**
      * Get the STEMCraft configuration file.
      */
@@ -109,6 +127,12 @@ public class STEMCraftAPIImpl extends HasMessagesImpl implements STEMCraftAPI {
     }
 
     /**
+     * Get the cross-platform dialog service.
+     */
+    @Override
+    public DialogService dialogs() { return plugin.dialogs(); }
+
+    /**
      * Get the event service.
      */
     @Override
@@ -120,17 +144,30 @@ public class STEMCraftAPIImpl extends HasMessagesImpl implements STEMCraftAPI {
     @Override
     public HologramService holograms() { return plugin.holograms(); }
 
+    @Override
+    public GiftService gifts() { return plugin.gifts(); }
+
     /**
      * Get the item service.
      */
     @Override
     public ItemService items() { return plugin.items(); }
 
+    /** Get the image-map display service. */
+    @Override
+    public ImageMapService imageMaps() { return plugin.imageMaps(); }
+
     /**
      * Get the locale service.
      */
     @Override
     public LocaleService locales() { return plugin.locales(); }
+
+    /**
+     * Get the mailbox delivery service.
+     */
+    @Override
+    public MailboxService mailboxes() { return plugin.mailboxes(); }
 
     /**
      * Get the messenger service.
@@ -153,6 +190,12 @@ public class STEMCraftAPIImpl extends HasMessagesImpl implements STEMCraftAPI {
     public MotdService motd() { return plugin.motd(); }
 
     /**
+     * Get the placed object service.
+     */
+    @Override
+    public PlacedObjectService placedObjects() { return plugin.placedObjects(); }
+
+    /**
      * Get the player log service.
      */
     @Override
@@ -163,6 +206,12 @@ public class STEMCraftAPIImpl extends HasMessagesImpl implements STEMCraftAPI {
      */
     @Override
     public PlaceholderService placeholders() { return plugin.placeholders(); }
+
+    /**
+     * Get the protection service.
+     */
+    @Override
+    public ProtectionService protections() { return plugin.protections(); }
 
     /**
      * Get the profanity filter service.
@@ -182,6 +231,15 @@ public class STEMCraftAPIImpl extends HasMessagesImpl implements STEMCraftAPI {
     @Override
     public PlayerStatsService playerStats() { return plugin.playerStats(); }
 
+    @Override
+    public PlayerResetService playerResets() { return plugin.playerResets(); }
+
+    /**
+     * Get the resource pack service.
+     */
+    @Override
+    public ResourcePackService resourcePacks() { return plugin.resourcePack(); }
+
     /**
      * Get the recipe service.
      */
@@ -193,6 +251,9 @@ public class STEMCraftAPIImpl extends HasMessagesImpl implements STEMCraftAPI {
      */
     @Override
     public SelectionService selections() { return plugin.selections(); }
+
+    @Override
+    public SaveService saves() { return plugin.saves(); }
 
     /**
      * Get the region service.

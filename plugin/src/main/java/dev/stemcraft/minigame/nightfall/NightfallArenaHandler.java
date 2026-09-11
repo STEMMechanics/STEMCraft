@@ -9,6 +9,7 @@ import dev.stemcraft.api.minigame.MiniGameArenaHandler;
 import dev.stemcraft.api.minigame.MiniGamePlayer;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.service.region.RegionListener;
+import dev.stemcraft.api.service.comet.CometLoot;
 import dev.stemcraft.api.service.world.WorldChangeSession;
 import dev.stemcraft.api.util.NamespaceId;
 import dev.stemcraft.api.util.PlayerUtil;
@@ -21,18 +22,20 @@ import org.bukkit.attribute.Attribute;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.data.Bisected;
+import org.bukkit.block.data.Levelled;
 import org.bukkit.block.data.type.Door;
 import org.bukkit.entity.Entity;
-import org.bukkit.entity.Item;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
 import org.bukkit.entity.Zombie;
 import org.bukkit.event.EventPriority;
+import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.entity.EntityTransformEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
@@ -70,9 +73,19 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
     private static final int DROP_RADIUS_MIN = 5;
     private static final int DROP_RADIUS_MAX = 20;
     private static final int DROP_TARGET_RESET_DISTANCE = 30;
-    private static final double DROP_SPAWN_HEIGHT_MIN = 7.0d;
-    private static final double DROP_SPAWN_HEIGHT_MAX = 12.0d;
+    private static final double DROP_ANNOUNCEMENT_RANGE = 200.0d;
+    private static final double DROP_ANNOUNCEMENT_RANGE_SQUARED = DROP_ANNOUNCEMENT_RANGE * DROP_ANNOUNCEMENT_RANGE;
     private static final int RANDOM_LOCATION_ATTEMPTS = 24;
+    private static final double BLOOD_MOON_TNT_HORIZONTAL_TRIGGER_RANGE_SQUARED = 20.25d;
+    private static final double BLOOD_MOON_TNT_STUCK_BREACH_RANGE_SQUARED = 36.0d;
+    private static final float BLOOD_MOON_TNT_EXPLOSION_POWER = 4.0f;
+    private static final double BLOOD_MOON_STUCK_DISTANCE_SQUARED = 0.25d;
+    private static final int BLOOD_MOON_STUCK_TICKS_REQUIRED = 8;
+    private static final long BLOOD_MOON_UTILITY_ITEM_HOLD_MILLIS = 1000L;
+    private static final long BURNING_ZOMBIE_FIRE_INTERVAL_MILLIS = 1000L;
+    private static final int BURNING_ZOMBIE_PLAYER_IGNITE_CHANCE_PERCENT = 20;
+    private static final int BURNING_ZOMBIE_PLAYER_FIRE_TICKS = 80;
+    private static final double BURNING_ZOMBIE_PLAYER_RANGE_SQUARED = 2.25d;
     private static final double PREP_SPAWN_CLUSTER_RADIUS = 15.0d;
     private static final double PREP_SPAWN_MIN_PLAYER_DISTANCE = 10.0d;
     private static final double PREP_SPAWN_MIN_PLAYER_DISTANCE_SQUARED =
@@ -143,6 +156,10 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         if (dropMaxActiveItems < 0) {
             result.addError("Maximum active drops cannot be negative.", "dropMaxActiveItems");
         }
+        int dropGroupDistance = arena.get("dropGroupDistance", Integer.class, 100);
+        if (dropGroupDistance < 0) {
+            result.addError("Drop group distance cannot be negative.", "dropGroupDistance");
+        }
         if (nightfall.zombieWaveIntervalSeconds(arena) < 1) {
             result.addError("Zombie wave interval must be at least 1 second.", "zombieWaveIntervalSeconds");
         }
@@ -159,6 +176,17 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         if (nightfall.nightTimeSpeedMultiplier(arena) < 1.0d) {
             result.addError("Night time speed multiplier must be at least 1.0.", "nightTimeSpeedMultiplier");
         }
+        int dropLootMinStacks = arena.get("dropLootMinStacks", Integer.class, 2);
+        int dropLootMaxStacks = arena.get("dropLootMaxStacks", Integer.class, 4);
+        if (dropLootMinStacks < 1) {
+            result.addError("Minimum drop loot stacks must be at least 1.", "dropLootMinStacks");
+        }
+        if (dropLootMaxStacks < 1) {
+            result.addError("Maximum drop loot stacks must be at least 1.", "dropLootMaxStacks");
+        }
+        if (dropLootMaxStacks < dropLootMinStacks) {
+            result.addError("Maximum drop loot stacks cannot be lower than minimum drop loot stacks.", "dropLootMaxStacks");
+        }
         if (nightfall.zombieSpawnRadiusMax(arena) < nightfall.zombieSpawnRadiusMin(arena)) {
             result.addError("Zombie spawn max radius must be at least the min radius.", "zombieSpawnRadiusMax");
         }
@@ -174,6 +202,10 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         if (bloodMoonBabyChancePercent < 0 || bloodMoonBabyChancePercent > 100) {
             result.addError("Blood moon baby zombie chance must be between 0 and 100 percent.", "bloodMoonBabyZombieChancePercent");
         }
+        int bloodMoonTntZombieChancePercent = arena.get("bloodMoonTntZombieChancePercent", Integer.class, 3);
+        if (bloodMoonTntZombieChancePercent < 0 || bloodMoonTntZombieChancePercent > 100) {
+            result.addError("Blood moon TNT zombie chance must be between 0 and 100 percent.", "bloodMoonTntZombieChancePercent");
+        }
 
         if (playSpawn != null && !arena.world().equals(playSpawn.getWorld())) {
             result.addError("Play spawn must be in the arena world.", "spawn");
@@ -183,6 +215,12 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
 
         if (arena.getLobbySpawn() != null && !arena.world().equals(arena.getLobbySpawn().getWorld())) {
             result.addError("Lobby spawn must be in the arena world.", "lobbySpawn");
+        }
+        if (nightfall.lobbyLocations(arena).isEmpty()) {
+            result.addError("At least one lobby location is required.", "lobbyLocations");
+        } else if (nightfall.lobbyLocations(arena).stream()
+            .anyMatch(location -> location.getWorld() == null || !arena.world().equals(location.getWorld()))) {
+            result.addError("All lobby locations must be in the arena world.", "lobbyLocations");
         }
         if (arena.getSpectatorSpawn() != null && !arena.world().equals(arena.getSpectatorSpawn().getWorld())) {
             result.addError("Spectator spawn must be in the arena world.", "spectatorSpawn");
@@ -235,9 +273,14 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         arena.getOrCreate("nightEliminatedPlayers", Set.class, LinkedHashSet::new);
         arena.getOrCreate("playerDropDueAt", Map.class, LinkedHashMap::new);
         arena.getOrCreate("playerDropTargets", Map.class, LinkedHashMap::new);
-        arena.getOrCreate("activeDropItems", Set.class, LinkedHashSet::new);
         arena.getOrCreate("pendingDeathRespawns", Map.class, LinkedHashMap::new);
         arena.getOrCreate("prepSpawnAssignments", Map.class, LinkedHashMap::new);
+        arena.getOrCreate("bloodMoonZombieLastLocations", Map.class, LinkedHashMap::new);
+        arena.getOrCreate("bloodMoonZombieStuckTicks", Map.class, LinkedHashMap::new);
+        arena.getOrCreate("bloodMoonZombieUtilityHoldUntil", Map.class, LinkedHashMap::new);
+        arena.getOrCreate("bloodMoonTntZombies", Set.class, LinkedHashSet::new);
+        arena.getOrCreate("burningZombieFireDueAt", Map.class, LinkedHashMap::new);
+        arena.getOrCreate("bloodMoonPendingExplosions", Integer.class, () -> 0);
         arena.set("daylightLocked", false);
         arena.set("wasNight", false);
         arena.set("currentNight", 0);
@@ -250,6 +293,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         arena.set("bloodMoonActive", false);
         arena.set("activeSurvivorCount", 0);
         arena.set("zombiesRemaining", 0);
+        arena.set("selectedLobbyLocation", null);
 
         SCRegion arenaRegion = arena.get("arenaRegion", SCRegion.class);
         if (arenaRegion != null) {
@@ -271,6 +315,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
 
     @Override
     public void onArenaUnload(MiniGameArena arena) {
+        restoreDownedPlayerVisibility(arena);
         stopRecording(arena);
         rollbackWorld(arena);
         restoreWorldSettings(arena);
@@ -340,6 +385,24 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
     }
 
     @Override
+    public void onEntityExplode(MiniGameArena arena, EntityExplodeEvent event) {
+        if (consumeBloodMoonPendingExplosion(arena)) {
+            captureExplosionBlocks(arena, event.blockList());
+        } else {
+            event.blockList().clear();
+        }
+    }
+
+    @Override
+    public void onBlockExplode(MiniGameArena arena, BlockExplodeEvent event) {
+        if (consumeBloodMoonPendingExplosion(arena)) {
+            captureExplosionBlocks(arena, event.blockList());
+        } else {
+            event.blockList().clear();
+        }
+    }
+
+    @Override
     public HandlerEventResult onPlayerDropItem(MiniGameArena arena, Player player, ItemStack item) {
         return isNightEliminated(arena, player) ? HandlerEventResult.DENY : HandlerEventResult.ALLOW;
     }
@@ -352,6 +415,10 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         }
 
         if (newStatus == MiniGameArena.ArenaStatus.COOLDOWN || newStatus == MiniGameArena.ArenaStatus.ENDING) {
+            if (newStatus == MiniGameArena.ArenaStatus.ENDING) {
+                STEMCraft.getPlugin().entitlements().recordMinigameResult("nightfall", arena.getOccupants(),
+                    arena.getPlayers().stream().map(Player::getUniqueId).toList());
+            }
             endRound(arena);
             return;
         }
@@ -359,6 +426,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         if (newStatus == MiniGameArena.ArenaStatus.RESETTING) {
             debugArenaEvent(arena, "Entering RESETTING.");
             resetRound(arena);
+            arena.set("selectedLobbyLocation", null);
             arena.setStatus(MiniGameArena.ArenaStatus.WAITING);
         }
     }
@@ -397,14 +465,30 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
 
     @Override
     public Location onPlayerJoinArena(MiniGameArena arena, Player player) {
+        hideDownedPlayersFrom(arena, player);
+        MiniGameArena.ArenaStatus status = arena.getStatus();
+        if (status == MiniGameArena.ArenaStatus.WAITING || status == MiniGameArena.ArenaStatus.STARTING) {
+            selectLobbyForMatch(arena);
+        }
+        if (status == MiniGameArena.ArenaStatus.PREPARATION || status == MiniGameArena.ArenaStatus.RUNNING) {
+            initializeParticipantForRound(arena, player);
+        }
         if (arena.getStatus() == MiniGameArena.ArenaStatus.WAITING && arena.numPlayers() >= arena.getMinPlayers()) {
             arena.setStatus(MiniGameArena.ArenaStatus.STARTING, nightfall.startCountdownSeconds(arena));
+        }
+        if (arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING) {
+            return activeSpawn(arena);
+        }
+        if (arena.getStatus() == MiniGameArena.ArenaStatus.WAITING
+            || arena.getStatus() == MiniGameArena.ArenaStatus.STARTING) {
+            return selectedLobbyForMatch(arena);
         }
         return assignedPreparationSpawn(arena, player);
     }
 
     @Override
     public Location onPlayerJoinSpectator(MiniGameArena arena, Player player) {
+        hideDownedPlayersFrom(arena, player);
         Location spectatorSpawn = arena.getSpectatorSpawn();
         return spectatorSpawn != null ? spectatorSpawn : activeSpawn(arena);
     }
@@ -413,7 +497,9 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
     public void onPlayerLeaveArena(MiniGameArena arena, Player player) {
         debugArenaEvent(arena, player.getName() + " left arena while status=" + arena.getStatus().name()
             + ", remaining-players=" + arena.getPlayers().size());
-        nightEliminatedPlayers(arena).remove(player.getUniqueId());
+        if (nightEliminatedPlayers(arena).remove(player.getUniqueId())) {
+            showPlayerToArena(arena, player);
+        }
         playerDropDueAt(arena).remove(player.getUniqueId());
         playerDropTargets(arena).remove(player.getUniqueId());
         pendingDeathRespawns(arena).remove(player.getUniqueId());
@@ -431,6 +517,24 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         } else if (isActiveRoundStatus(arena)) {
             checkForMatchEnd(arena);
         }
+        if (arena.getPlayers().isEmpty()
+            && (arena.getStatus() == MiniGameArena.ArenaStatus.WAITING
+                || arena.getStatus() == MiniGameArena.ArenaStatus.STARTING)) {
+            arena.set("selectedLobbyLocation", null);
+        }
+    }
+
+    private void selectLobbyForMatch(@NotNull MiniGameArena arena) {
+        if (arena.get("selectedLobbyLocation", Location.class) != null) return;
+        List<Location> locations = nightfall.lobbyLocations(arena);
+        Location selected = locations.isEmpty() ? arena.getLobbySpawn()
+            : locations.get(ThreadLocalRandom.current().nextInt(locations.size()));
+        if (selected != null) arena.set("selectedLobbyLocation", selected.clone());
+    }
+
+    private @Nullable Location selectedLobbyForMatch(@NotNull MiniGameArena arena) {
+        Location selected = arena.get("selectedLobbyLocation", Location.class);
+        return selected != null ? selected.clone() : arena.getLobbySpawn();
     }
 
     @Override
@@ -451,8 +555,9 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
             if (isNightPhase(arena)) {
                 spawnZombieWave(arena);
             }
+            tickBurningZombieFire(arena);
             if (nightfall.isBloodMoonActive(arena)) {
-                tickBloodMoonDoors(arena);
+                tickBloodMoonUtilities(arena);
             }
         }
     }
@@ -472,7 +577,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
 
     private void tickDrops(@NotNull MiniGameArena arena) {
         Map<Integer, List<Material>> dropItems = nightfall.dropItems(arena);
-        List<Player> activePlayers = activeSurvivors(arena);
+        List<Player> activePlayers = dropGroupRepresentatives(activeSurvivors(arena), nightfall.dropGroupDistance(arena));
         int maxActiveDrops = nightfall.dropMaxActiveItems(arena);
         if (dropItems.isEmpty() || activePlayers.isEmpty() || maxActiveDrops <= 0 || !nightfall.dropsEnabled(arena)) {
             return;
@@ -481,8 +586,9 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         long now = System.currentTimeMillis();
         Map<UUID, Long> dueAt = playerDropDueAt(arena);
         Map<UUID, Location> dropTargets = playerDropTargets(arena);
-        int activeDropCount = countActiveDropItems(arena);
+        int activeDropCount = arena.countActiveSupplyDrops();
         Set<UUID> activePlayerIds = new LinkedHashSet<>();
+        Set<String> reservedTargets = new HashSet<>();
         for (Player player : activePlayers) {
             activePlayerIds.add(player.getUniqueId());
         }
@@ -495,8 +601,10 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
             if (!dueAt.containsKey(playerId)) {
                 dueAt.put(playerId, due);
             }
-            if (now < due) {
-                continue;
+
+            Block block = resolveDropTargetBlock(arena, player, reservedTargets);
+            if (block != null) {
+                reservedTargets.add(dropTargetKey(block));
             }
 
             if (activeDropCount >= maxActiveDrops) {
@@ -504,23 +612,59 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
                 continue;
             }
 
-            Block block = resolveDropTargetBlock(arena, player);
+            if (now < due) {
+                continue;
+            }
+
             if (block == null) {
                 dueAt.put(playerId, now + 1000L);
                 continue;
             }
 
-            Material material = pickDropItem(dropItems);
-            if (material == null || material.isAir()) {
+            List<ItemStack> loot = buildDropLoot(arena, dropItems);
+            if (loot.isEmpty()) {
                 dueAt.put(playerId, now + 1000L);
                 continue;
             }
 
-            if (spawnItemDrop(arena, block.getLocation(), material)) {
+            if (spawnSupplyDrop(arena, block.getLocation(), loot)) {
                 activeDropCount++;
+                announceSupplyDrop(arena, block.getLocation());
             }
             dueAt.put(playerId, now + randomDropDelayMillis(arena));
         }
+    }
+
+    /**
+     * Returns one player per connected proximity group. If A is close to B and B is close to C,
+     * all three share one drop even when A and C are farther apart than the configured distance.
+     */
+    private @NotNull List<Player> dropGroupRepresentatives(@NotNull List<Player> players, int groupDistance) {
+        List<Player> representatives = new ArrayList<>();
+        Set<UUID> assigned = new HashSet<>();
+        double maxDistanceSquared = (double) groupDistance * groupDistance;
+
+        for (Player seed : players) {
+            if (!assigned.add(seed.getUniqueId())) {
+                continue;
+            }
+            representatives.add(seed);
+            List<Player> pending = new ArrayList<>();
+            pending.add(seed);
+            for (int index = 0; index < pending.size(); index++) {
+                Player current = pending.get(index);
+                for (Player candidate : players) {
+                    if (assigned.contains(candidate.getUniqueId())
+                            || !sameWorld(current.getLocation(), candidate.getLocation())
+                            || dropHorizontalDistanceSquared(current.getLocation(), candidate.getLocation()) > maxDistanceSquared) {
+                        continue;
+                    }
+                    assigned.add(candidate.getUniqueId());
+                    pending.add(candidate);
+                }
+            }
+        }
+        return representatives;
     }
 
     private void tickNightCycle(@NotNull MiniGameArena arena) {
@@ -600,10 +744,110 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         arena.set("nextWaveAt", System.currentTimeMillis());
         arena.set("nightFastForwarding", false);
         arena.set("timeSpeedCarry", 0.0d);
+        arena.set("bloodMoonCometsLaunched", 0);
 
         broadcastToOccupants(arena, nightfall.nightStartMessage(night));
         playSoundToOccupants(arena, Sound.ENTITY_ZOMBIE_AMBIENT, 0.75f, 0.9f);
+        tryLaunchBloodMoonComet(arena, night);
         updateArenaStateCounters(arena);
+    }
+
+    private void tryLaunchBloodMoonComet(@NotNull MiniGameArena arena, int night) {
+        BloodMoonCometSettings settings = nightfall.bloodMoonComets(arena);
+        if (!nightfall.isBloodMoonActive(arena) || !settings.enabled() || night < settings.startNight()
+            || settings.maximumPerNight() <= 0) {
+            return;
+        }
+
+        int launched = arena.get("bloodMoonCometsLaunched", Integer.class, 0);
+        int chance = Math.min(settings.maximumChancePercent(), settings.chancePercent()
+            + Math.max(0, night - settings.startNight()) * settings.chanceIncreasePerNight());
+        while (launched < settings.maximumPerNight()
+            && chance > 0 && ThreadLocalRandom.current().nextInt(100) < chance) {
+            Vector direction = randomHorizontalDirection();
+            Location impact = findBloodMoonCometImpact(arena, settings, direction);
+            if (impact == null) {
+                break;
+            }
+
+            String from = cardinalDirection(direction.clone().multiply(-1.0d));
+            broadcastPlainToOccupants(arena, "A treasure-bearing comet is approaching from the " + from
+                + " — take cover!");
+            playSoundToOccupants(arena, Sound.ENTITY_WITHER_SPAWN, 1.0f, 0.65f);
+            api.comets().launch(impact, direction, settings.loot().toArray(CometLoot[]::new));
+            launched++;
+            arena.set("bloodMoonCometsLaunched", launched);
+        }
+    }
+
+    private @Nullable Location findBloodMoonCometImpact(@NotNull MiniGameArena arena,
+                                                         @NotNull BloodMoonCometSettings settings,
+                                                         @NotNull Vector direction) {
+        List<Player> players = activeSurvivors(arena);
+        if (players.isEmpty()) return null;
+
+        double centerX = players.stream().mapToDouble(player -> player.getLocation().getX()).average().orElse(0.0d);
+        double centerZ = players.stream().mapToDouble(player -> player.getLocation().getZ()).average().orElse(0.0d);
+        World world = arena.world();
+        for (int attempt = 0; attempt < RANDOM_LOCATION_ATTEMPTS; attempt++) {
+            double angle = ThreadLocalRandom.current().nextDouble(Math.PI * 2.0d);
+            double distance = settings.minimumPlayerDistance() == settings.maximumPlayerDistance()
+                ? settings.minimumPlayerDistance()
+                : ThreadLocalRandom.current().nextDouble(settings.minimumPlayerDistance(),
+                    settings.maximumPlayerDistance());
+            int x = (int) Math.floor(centerX + Math.cos(angle) * distance);
+            int z = (int) Math.floor(centerZ + Math.sin(angle) * distance);
+            Location impact = world.getHighestBlockAt(x, z).getLocation().add(0.5d, 1.0d, 0.5d);
+            if (isSafeCometImpact(arena, impact, direction, settings, players)) return impact;
+        }
+        return null;
+    }
+
+    private boolean isSafeCometImpact(@NotNull MiniGameArena arena, @NotNull Location impact,
+                                      @NotNull Vector direction, @NotNull BloodMoonCometSettings settings,
+                                      @NotNull List<Player> players) {
+        double minimumSquared = settings.minimumPlayerDistance() * (double) settings.minimumPlayerDistance();
+        double maximumSquared = settings.maximumPlayerDistance() * (double) settings.maximumPlayerDistance();
+        boolean nearPlayers = false;
+        for (Player player : players) {
+            double distance = horizontalDistanceSquared(impact, player.getLocation());
+            if (distance < minimumSquared) return false;
+            nearPlayers |= distance <= maximumSquared;
+        }
+        if (!nearPlayers || !awayFromProtectedLocations(arena, impact, settings.arenaEdgeBuffer())) return false;
+
+        Vector lateral = new Vector(-direction.getZ(), 0.0d, direction.getX()).normalize();
+        for (int distance = 0; distance <= settings.pathSafetyLength(); distance += 5) {
+            Location center = impact.clone().add(direction.clone().multiply(distance));
+            for (int side : new int[] {-settings.arenaEdgeBuffer(), 0, settings.arenaEdgeBuffer()}) {
+                Location sample = center.clone().add(lateral.clone().multiply(side));
+                sample.setY(arena.world().getHighestBlockYAt(sample.getBlockX(), sample.getBlockZ()) + 1.0d);
+                if (!insideArena(arena, sample)) return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean awayFromProtectedLocations(@NotNull MiniGameArena arena, @NotNull Location impact, int buffer) {
+        double bufferSquared = buffer * (double) buffer;
+        List<Location> protectedLocations = new ArrayList<>(nightfall.generatorLocations(arena));
+        Location playSpawn = nightfall.playSpawn(arena);
+        if (playSpawn != null) protectedLocations.add(playSpawn);
+        Location spectatorSpawn = arena.getSpectatorSpawn();
+        if (spectatorSpawn != null) protectedLocations.add(spectatorSpawn);
+        return protectedLocations.stream().noneMatch(location -> sameWorld(impact, location)
+            && horizontalDistanceSquared(impact, location) < bufferSquared);
+    }
+
+    private Vector randomHorizontalDirection() {
+        double angle = ThreadLocalRandom.current().nextDouble(Math.PI * 2.0d);
+        return new Vector(Math.cos(angle), 0.0d, Math.sin(angle));
+    }
+
+    private String cardinalDirection(@NotNull Vector direction) {
+        double angle = Math.toDegrees(Math.atan2(-direction.getX(), direction.getZ()));
+        return new String[] {"south", "south-west", "west", "north-west", "north", "north-east", "east", "south-east"}
+            [(int) Math.round((angle + 360.0d) / 45.0d) % 8];
     }
 
     private void endNight(@NotNull MiniGameArena arena) {
@@ -657,11 +901,28 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         updateArenaStateCounters(arena);
     }
 
-    private void tickBloodMoonDoors(@NotNull MiniGameArena arena) {
+    private void tickBloodMoonUtilities(@NotNull MiniGameArena arena) {
         WorldChangeSession session = api.worlds().changes(arena.world());
         for (UUID entityId : new LinkedHashSet<>(managedZombies(arena))) {
             Entity entity = arena.world().getEntity(entityId);
             if (!(entity instanceof Zombie zombie) || zombie.isDead() || !zombie.isValid()) {
+                continue;
+            }
+
+            clearExpiredZombieUtilityItem(arena, zombie);
+
+            if (tryPrimeTntCarrier(arena, zombie)) {
+                continue;
+            }
+
+            int night = Math.max(1, nightfall.currentNight(arena));
+            BloodMoonEscalation escalation = nightfall.bloodMoonEscalation(arena);
+            if (night >= escalation.bucketStartNight() && tryRemoveWaterTrap(arena, session, zombie, escalation, night)) {
+                continue;
+            }
+
+            if (tryNeutralizeNearbyLava(arena, session, zombie)) {
+                showZombieUtilityItem(arena, zombie, Material.WATER_BUCKET);
                 continue;
             }
 
@@ -670,11 +931,151 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
                 continue;
             }
 
+            boolean openedDoor = false;
             for (BlockFace face : CARDINAL_FACES) {
                 if (tryOpenDoor(session, origin.getRelative(face))) {
+                    openedDoor = true;
                     break;
                 }
             }
+
+            if (openedDoor) {
+                continue;
+            }
+
+            if (night >= escalation.axeStartNight() && tryBreakWoodenBarrier(arena, session, zombie)) {
+                showZombieUtilityItem(arena, zombie, Material.IRON_AXE);
+                continue;
+            }
+
+            if (night >= escalation.builderStartNight()) {
+                Material buildingMaterial = tryBuildTowardTarget(arena, session, zombie);
+                if (buildingMaterial != null) showZombieUtilityItem(arena, zombie, buildingMaterial);
+            }
+        }
+    }
+
+    private boolean tryRemoveWaterTrap(@NotNull MiniGameArena arena, @NotNull WorldChangeSession session,
+                                       @NotNull Zombie zombie, @NotNull BloodMoonEscalation escalation, int night) {
+        Block origin = zombie.getLocation().getBlock();
+        if (!origin.isLiquid() || !isZombieStuck(arena, zombie)) {
+            return false;
+        }
+        int radius = night >= escalation.spongeStartNight() ? Math.max(1, escalation.spongeRadius()) : 0;
+        Material held = radius > 0 ? Material.SPONGE : Material.BUCKET;
+        int changed = 0;
+        for (int x = -radius; x <= radius; x++) {
+            for (int y = -radius; y <= radius; y++) {
+                for (int z = -radius; z <= radius; z++) {
+                    Block block = origin.getRelative(x, y, z);
+                    if (block.getType() != Material.WATER || !insideArena(arena, block.getLocation())) {
+                        continue;
+                    }
+                    session.captureBlock(block);
+                    block.setType(Material.AIR, true);
+                    changed++;
+                    if (radius == 0) {
+                        showZombieUtilityItem(arena, zombie, held);
+                        return true;
+                    }
+                }
+            }
+        }
+        if (changed > 0) {
+            showZombieUtilityItem(arena, zombie, held);
+        }
+        return changed > 0;
+    }
+
+    private boolean tryBreakWoodenBarrier(@NotNull MiniGameArena arena, @NotNull WorldChangeSession session,
+                                          @NotNull Zombie zombie) {
+        if (!isZombieStuck(arena, zombie)) {
+            return false;
+        }
+        Block origin = zombie.getLocation().getBlock();
+        for (BlockFace face : CARDINAL_FACES) {
+            Block block = origin.getRelative(face);
+            if (!isBreakableWood(block.getType()) || !insideArena(arena, block.getLocation())) {
+                continue;
+            }
+            session.captureBlock(block);
+            block.setType(Material.AIR, true);
+            return true;
+        }
+        return false;
+    }
+
+    private boolean insideArena(@NotNull MiniGameArena arena, @NotNull Location location) {
+        SCRegion region = arena.get("arenaRegion", SCRegion.class);
+        return region == null || region.contains(location);
+    }
+
+    private boolean isBreakableWood(@NotNull Material material) {
+        String name = material.name();
+        return name.endsWith("_PLANKS") || name.endsWith("_LOG") || name.endsWith("_WOOD")
+            || name.endsWith("_FENCE") || name.endsWith("_FENCE_GATE") || name.endsWith("_TRAPDOOR")
+            || (name.endsWith("_DOOR") && material != Material.IRON_DOOR);
+    }
+
+    private void tickBurningZombieFire(@NotNull MiniGameArena arena) {
+        long now = System.currentTimeMillis();
+        Map<UUID, Long> dueAt = burningZombieFireDueAt(arena);
+        Set<UUID> tracked = managedZombies(arena);
+        dueAt.keySet().removeIf(entityId -> !tracked.contains(entityId));
+
+        for (UUID entityId : new LinkedHashSet<>(tracked)) {
+            Entity entity = arena.world().getEntity(entityId);
+            if (!(entity instanceof Zombie zombie) || zombie.isDead() || !zombie.isValid() || zombie.getFireTicks() <= 0) {
+                dueAt.remove(entityId);
+                continue;
+            }
+            if (bloodMoonTntZombies(arena).contains(entityId)) {
+                detonateZombieTnt(arena, zombie);
+                continue;
+            }
+            if (now < dueAt.getOrDefault(entityId, 0L)) {
+                continue;
+            }
+
+            dueAt.put(entityId, now + BURNING_ZOMBIE_FIRE_INTERVAL_MILLIS);
+            igniteBlockNearBurningZombie(arena, zombie);
+            ignitePlayersNearBurningZombie(arena, zombie);
+        }
+    }
+
+    private void igniteBlockNearBurningZombie(@NotNull MiniGameArena arena, @NotNull Zombie zombie) {
+        List<Block> candidates = new ArrayList<>();
+        Block feet = zombie.getLocation().getBlock();
+        candidates.add(feet);
+        for (BlockFace face : CARDINAL_FACES) {
+            candidates.add(feet.getRelative(face));
+        }
+        Collections.shuffle(candidates);
+
+        SCRegion arenaRegion = arena.get("arenaRegion", SCRegion.class);
+        for (Block candidate : candidates) {
+            if (!candidate.getType().isAir() || !candidate.getRelative(BlockFace.DOWN).getType().isSolid()) {
+                continue;
+            }
+            if (arenaRegion != null && !arenaRegion.contains(candidate.getLocation())) {
+                continue;
+            }
+
+            WorldChangeSession session = api.worlds().changes(arena.world());
+            session.captureBlock(candidate);
+            candidate.setType(Material.FIRE, true);
+            return;
+        }
+    }
+
+    private void ignitePlayersNearBurningZombie(@NotNull MiniGameArena arena, @NotNull Zombie zombie) {
+        for (Player player : activeSurvivors(arena)) {
+            if (!sameWorld(zombie.getLocation(), player.getLocation())
+                || zombie.getLocation().distanceSquared(player.getLocation()) > BURNING_ZOMBIE_PLAYER_RANGE_SQUARED
+                || ThreadLocalRandom.current().nextInt(100) >= BURNING_ZOMBIE_PLAYER_IGNITE_CHANCE_PERCENT) {
+                continue;
+            }
+            player.setFireTicks(Math.max(player.getFireTicks(), BURNING_ZOMBIE_PLAYER_FIRE_TICKS));
         }
     }
 
@@ -699,6 +1100,248 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
 
     private boolean isBloodMoonDoorMaterial(@NotNull Material material) {
         return material != Material.IRON_DOOR && material.name().endsWith("_DOOR");
+    }
+
+    private boolean tryNeutralizeNearbyLava(@NotNull MiniGameArena arena,
+                                            @NotNull WorldChangeSession session,
+                                            @NotNull Zombie zombie) {
+        Block lavaBlock = findNearbyLavaBlock(arena, zombie);
+        if (lavaBlock == null) {
+            return false;
+        }
+
+        session.captureBlock(lavaBlock);
+        lavaBlock.setType(isLavaSourceBlock(lavaBlock) ? Material.OBSIDIAN : Material.COBBLESTONE, true);
+        resetZombieStuckTracking(arena, zombie);
+        return true;
+    }
+
+    private @Nullable Block findNearbyLavaBlock(@NotNull MiniGameArena arena, @NotNull Zombie zombie) {
+        SCRegion arenaRegion = arena.get("arenaRegion", SCRegion.class);
+        Block origin = zombie.getLocation().getBlock();
+        for (int yOffset = 1; yOffset >= -2; yOffset--) {
+            for (int xOffset = -1; xOffset <= 1; xOffset++) {
+                for (int zOffset = -1; zOffset <= 1; zOffset++) {
+                    Block candidate = origin.getRelative(xOffset, yOffset, zOffset);
+                    if (arenaRegion != null && !arenaRegion.contains(candidate.getLocation())) {
+                        continue;
+                    }
+                    if (candidate.getType() == Material.LAVA) {
+                        return candidate;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private boolean isLavaSourceBlock(@NotNull Block block) {
+        if (!(block.getBlockData() instanceof Levelled levelled)) {
+            return true;
+        }
+        return levelled.getLevel() == 0;
+    }
+
+    private boolean tryPrimeTntCarrier(@NotNull MiniGameArena arena, @NotNull Zombie zombie) {
+        if (!bloodMoonTntZombies(arena).contains(zombie.getUniqueId())) {
+            return false;
+        }
+        if (zombie.getFireTicks() > 0) {
+            detonateZombieTnt(arena, zombie);
+            return true;
+        }
+
+        LivingEntity target = zombie.getTarget();
+        if (!(target instanceof Player player) || !arena.hasPlayer(player)) {
+            return false;
+        }
+
+        if (!sameWorld(zombie.getLocation(), player.getLocation())) {
+            return false;
+        }
+
+        double horizontalDistanceSquared = horizontalDistanceSquared(zombie.getLocation(), player.getLocation());
+        if (horizontalDistanceSquared <= BLOOD_MOON_TNT_HORIZONTAL_TRIGGER_RANGE_SQUARED) {
+            detonateZombieTnt(arena, zombie);
+            return true;
+        }
+
+        if (horizontalDistanceSquared <= BLOOD_MOON_TNT_STUCK_BREACH_RANGE_SQUARED && isZombieStuck(arena, zombie)) {
+            detonateZombieTnt(arena, zombie);
+            return true;
+        }
+
+        return false;
+    }
+
+    private void detonateZombieTnt(@NotNull MiniGameArena arena, @NotNull Zombie zombie) {
+        Location explosionLocation = zombie.getLocation().clone().add(0.0d, 0.5d, 0.0d);
+        UUID zombieId = zombie.getUniqueId();
+        managedZombies(arena).remove(zombieId);
+        cleanupTrackedZombie(arena, zombieId);
+        zombie.remove();
+        queueBloodMoonPendingExplosion(arena);
+        arena.world().createExplosion(explosionLocation, BLOOD_MOON_TNT_EXPLOSION_POWER, false, true);
+    }
+
+    private @Nullable Material tryBuildTowardTarget(@NotNull MiniGameArena arena,
+                                                     @NotNull WorldChangeSession session,
+                                                     @NotNull Zombie zombie) {
+        LivingEntity target = zombie.getTarget();
+        if (!(target instanceof Player player) || !arena.hasPlayer(player)) {
+            resetZombieStuckTracking(arena, zombie);
+            return null;
+        }
+
+        if (!isZombieStuck(arena, zombie)) {
+            return null;
+        }
+
+        Block placement = resolveZombieBuildPlacement(arena, zombie, player);
+        if (placement == null) {
+            return null;
+        }
+
+        Block source = findZombieBuildingSource(arena, zombie, placement);
+        if (source == null) return null;
+        Material material = source.getType();
+        session.captureBlock(placement);
+        if (ThreadLocalRandom.current().nextInt(100)
+            < nightfall.bloodMoonBuilderSourceRemovalChancePercent(arena)) {
+            session.captureBlock(source);
+            source.setType(Material.AIR, true);
+        }
+        placement.setType(material, true);
+        resetZombieStuckTracking(arena, zombie);
+        return material;
+    }
+
+    private @Nullable Block findZombieBuildingSource(@NotNull MiniGameArena arena, @NotNull Zombie zombie,
+                                                       @NotNull Block placement) {
+        Block origin = zombie.getLocation().getBlock();
+        List<Block> candidates = new ArrayList<>();
+        candidates.add(origin.getRelative(BlockFace.DOWN));
+        candidates.add(origin.getRelative(BlockFace.DOWN, 2));
+        for (BlockFace face : CARDINAL_FACES) candidates.add(origin.getRelative(face).getRelative(BlockFace.DOWN));
+        return candidates.stream().filter(block -> !block.equals(placement))
+            .filter(block -> insideArena(arena, block.getLocation()))
+            .filter(block -> isZombieBuildingMaterial(block.getType())).findFirst().orElse(null);
+    }
+
+    static boolean isZombieBuildingMaterial(@NotNull Material material) {
+        return material == Material.DIRT || material == Material.COARSE_DIRT || material == Material.ROOTED_DIRT
+            || material == Material.GRASS_BLOCK || material == Material.PODZOL || material == Material.MYCELIUM
+            || material == Material.MUD;
+    }
+
+    private boolean isZombieStuck(@NotNull MiniGameArena arena, @NotNull Zombie zombie) {
+        Map<UUID, Location> lastLocations = bloodMoonZombieLastLocations(arena);
+        Map<UUID, Integer> stuckTicks = bloodMoonZombieStuckTicks(arena);
+
+        UUID entityId = zombie.getUniqueId();
+        Location current = zombie.getLocation().clone();
+        Location previous = lastLocations.put(entityId, current);
+        if (previous == null) {
+            stuckTicks.put(entityId, 0);
+            return false;
+        }
+
+        if (!sameWorld(previous, current) || previous.distanceSquared(current) > BLOOD_MOON_STUCK_DISTANCE_SQUARED) {
+            stuckTicks.put(entityId, 0);
+            return false;
+        }
+
+        int updated = stuckTicks.getOrDefault(entityId, 0) + 1;
+        stuckTicks.put(entityId, updated);
+        return updated >= BLOOD_MOON_STUCK_TICKS_REQUIRED;
+    }
+
+    private @Nullable Block resolveZombieBuildPlacement(@NotNull MiniGameArena arena,
+                                                        @NotNull Zombie zombie,
+                                                        @NotNull Player target) {
+        SCRegion arenaRegion = arena.get("arenaRegion", SCRegion.class);
+        Block origin = zombie.getLocation().getBlock();
+        int stepX = Integer.compare(target.getLocation().getBlockX(), origin.getX());
+        int stepZ = Integer.compare(target.getLocation().getBlockZ(), origin.getZ());
+        if (stepX == 0 && stepZ == 0) {
+            return null;
+        }
+
+        Block forward = origin.getRelative(stepX, 0, stepZ);
+        Block support = forward.getRelative(BlockFace.DOWN);
+        if (canPlaceZombieUtilityBlock(arenaRegion, support, forward, forward.getRelative(BlockFace.UP))) {
+            return support;
+        }
+
+        if (target.getY() > zombie.getY() + 0.75d
+            && canPlaceZombieUtilityBlock(arenaRegion, forward, forward.getRelative(BlockFace.UP), forward.getRelative(BlockFace.UP, 2))) {
+            return forward;
+        }
+
+        return null;
+    }
+
+    private boolean canPlaceZombieUtilityBlock(@Nullable SCRegion arenaRegion,
+                                               @NotNull Block placement,
+                                               @NotNull Block feet,
+                                               @NotNull Block head) {
+        if (arenaRegion != null) {
+            if (!arenaRegion.contains(placement.getLocation())
+                || !arenaRegion.contains(feet.getLocation())
+                || !arenaRegion.contains(head.getLocation())) {
+                return false;
+            }
+        }
+
+        if (!(placement.isPassable() || placement.isLiquid() || placement.getType().isAir())) {
+            return false;
+        }
+
+        return (feet.isPassable() || feet.isLiquid()) && (head.isPassable() || head.isLiquid());
+    }
+
+    private void showZombieUtilityItem(@NotNull MiniGameArena arena, @NotNull Zombie zombie, @NotNull Material material) {
+        var equipment = zombie.getEquipment();
+        if (equipment == null) {
+            return;
+        }
+
+        if (material.isAir()) {
+            equipment.setItemInMainHand(null);
+        } else {
+            equipment.setItemInMainHand(new ItemStack(material));
+            equipment.setItemInMainHandDropChance(0.0f);
+        }
+        bloodMoonZombieUtilityHoldUntil(arena).put(zombie.getUniqueId(), System.currentTimeMillis() + BLOOD_MOON_UTILITY_ITEM_HOLD_MILLIS);
+    }
+
+    private void clearExpiredZombieUtilityItem(@NotNull MiniGameArena arena, @NotNull Zombie zombie) {
+        Map<UUID, Long> holdUntil = bloodMoonZombieUtilityHoldUntil(arena);
+        Long expiresAt = holdUntil.get(zombie.getUniqueId());
+        if (expiresAt == null || System.currentTimeMillis() < expiresAt) {
+            return;
+        }
+
+        var equipment = zombie.getEquipment();
+        if (equipment != null) {
+            equipment.setItemInMainHand(null);
+        }
+        holdUntil.remove(zombie.getUniqueId());
+    }
+
+    private void resetZombieStuckTracking(@NotNull MiniGameArena arena, @NotNull Zombie zombie) {
+        bloodMoonZombieLastLocations(arena).put(zombie.getUniqueId(), zombie.getLocation().clone());
+        bloodMoonZombieStuckTicks(arena).put(zombie.getUniqueId(), 0);
+    }
+
+    private boolean sameWorld(@NotNull Location first, @NotNull Location second) {
+        return first.getWorld() != null && first.getWorld().equals(second.getWorld());
+    }
+
+    private double horizontalDistanceSquared(@NotNull Location first, @NotNull Location second) {
+        double dx = first.getX() - second.getX();
+        double dz = first.getZ() - second.getZ();
+        return (dx * dx) + (dz * dz);
     }
 
     private @Nullable Location findSpawnLocationNearPlayer(@NotNull MiniGameArena arena, @NotNull Player player) {
@@ -735,7 +1378,49 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         return null;
     }
 
-    private @Nullable Block findDropBlockNearPlayer(@NotNull MiniGameArena arena, @NotNull Player player) {
+    private @Nullable Block resolveDropTargetBlock(@NotNull MiniGameArena arena,
+                                                   @NotNull Player player,
+                                                   @NotNull Set<String> reservedTargets) {
+        Map<UUID, Location> dropTargets = playerDropTargets(arena);
+        UUID playerId = player.getUniqueId();
+        Location target = dropTargets.get(playerId);
+        Block dropBlock = target == null ? null : target.getBlock();
+
+        if (dropBlock == null || needsNewDropTarget(arena, player, dropBlock, reservedTargets)) {
+            dropBlock = findDropBlockNearPlayer(arena, player, reservedTargets);
+            if (dropBlock == null) {
+                dropTargets.remove(playerId);
+                return null;
+            }
+            dropTargets.put(playerId, dropBlock.getLocation());
+        }
+
+        return dropBlock;
+    }
+
+    private boolean needsNewDropTarget(@NotNull MiniGameArena arena,
+                                       @NotNull Player player,
+                                       @NotNull Block dropBlock,
+                                       @NotNull Set<String> reservedTargets) {
+        Location target = dropBlock.getLocation();
+        if (target.getWorld() == null || !target.getWorld().equals(player.getWorld())) {
+            return true;
+        }
+        if (player.getLocation().distanceSquared(target) > (DROP_TARGET_RESET_DISTANCE * DROP_TARGET_RESET_DISTANCE)) {
+            return true;
+        }
+        if (reservedTargets.contains(dropTargetKey(dropBlock))) {
+            return true;
+        }
+        if (hasActiveSupplyDropAt(arena, dropBlock)) {
+            return true;
+        }
+        return !isUsableDropBlock(arena, dropBlock);
+    }
+
+    private @Nullable Block findDropBlockNearPlayer(@NotNull MiniGameArena arena,
+                                                    @NotNull Player player,
+                                                    @NotNull Set<String> reservedTargets) {
         World world = arena.world();
 
         for (int attempt = 0; attempt < RANDOM_LOCATION_ATTEMPTS; attempt++) {
@@ -748,8 +1433,14 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
             if (!ground.getType().isSolid()) {
                 continue;
             }
+            if (ground.isLiquid() || ground.isPassable()) {
+                continue;
+            }
 
             Block dropBlock = ground.getRelative(BlockFace.UP);
+            if (reservedTargets.contains(dropTargetKey(dropBlock)) || hasActiveSupplyDropAt(arena, dropBlock)) {
+                continue;
+            }
             if (isUsableDropBlock(arena, dropBlock)) {
                 return dropBlock;
             }
@@ -758,33 +1449,23 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         return null;
     }
 
-    private @Nullable Block resolveDropTargetBlock(@NotNull MiniGameArena arena, @NotNull Player player) {
-        Map<UUID, Location> dropTargets = playerDropTargets(arena);
-        UUID playerId = player.getUniqueId();
-        Location target = dropTargets.get(playerId);
-        Block dropBlock = target == null ? null : target.getBlock();
-
-        if (dropBlock == null || needsNewDropTarget(arena, player, dropBlock)) {
-            dropBlock = findDropBlockNearPlayer(arena, player);
-            if (dropBlock == null) {
-                dropTargets.remove(playerId);
-                return null;
-            }
-            dropTargets.put(playerId, dropBlock.getLocation());
+    private boolean hasActiveSupplyDropAt(@NotNull MiniGameArena arena, @NotNull Block dropBlock) {
+        if (dropBlock.getType() == Material.CHEST) {
+            return true;
         }
 
-        return dropBlock;
+        Location center = dropBlock.getLocation().clone().add(0.5d, 0.5d, 0.5d);
+        return !arena.world().getNearbyEntities(
+            center,
+            0.75d,
+            128.0d,
+            0.75d,
+            entity -> entity instanceof org.bukkit.entity.BlockDisplay
+        ).isEmpty();
     }
 
-    private boolean needsNewDropTarget(@NotNull MiniGameArena arena, @NotNull Player player, @NotNull Block dropBlock) {
-        Location target = dropBlock.getLocation();
-        if (target.getWorld() == null || !target.getWorld().equals(player.getWorld())) {
-            return true;
-        }
-        if (player.getLocation().distanceSquared(target) > (DROP_TARGET_RESET_DISTANCE * DROP_TARGET_RESET_DISTANCE)) {
-            return true;
-        }
-        return !isUsableDropBlock(arena, dropBlock);
+    private @NotNull String dropTargetKey(@NotNull Block dropBlock) {
+        return dropBlock.getWorld().getUID() + ":" + dropBlock.getX() + ":" + dropBlock.getY() + ":" + dropBlock.getZ();
     }
 
     private boolean isUsableDropBlock(@NotNull MiniGameArena arena, @NotNull Block dropBlock) {
@@ -806,9 +1487,12 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         if (!(dropBlock.getType().isAir() || dropBlock.isPassable() || dropBlock.isLiquid())) {
             return false;
         }
+        if (dropBlock.isLiquid()) {
+            return false;
+        }
 
         Block above = dropBlock.getRelative(BlockFace.UP);
-        return above.isPassable();
+        return above.isPassable() && !above.isLiquid();
     }
 
     private void startRound(@NotNull MiniGameArena arena) {
@@ -820,20 +1504,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         startRecording(arena);
 
         for (Player player : arena.getPlayers()) {
-            MiniGamePlayer miniGamePlayer = arena.getPlayer(player);
-            if (miniGamePlayer == null) {
-                continue;
-            }
-
-            miniGamePlayer.setScore(0);
-            miniGamePlayer.setKills(0);
-            miniGamePlayer.setDeaths(0);
-            miniGamePlayer.set("livesRemaining", 1);
-            prepareParticipantForRound(player);
-            Location prepSpawn = assignedPreparationSpawn(arena, player);
-            if (prepSpawn != null) {
-                player.teleport(prepSpawn);
-            }
+            initializeParticipantForRound(arena, player);
         }
 
         for (Player spectator : arena.getSpectators()) {
@@ -846,6 +1517,28 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         broadcastToOccupants(arena, nightfall.roundStartMessage());
         playSoundToOccupants(arena, Sound.ENTITY_PLAYER_LEVELUP, 0.9f, 1.15f);
         updateArenaStateCounters(arena);
+    }
+
+    private void initializeParticipantForRound(@NotNull MiniGameArena arena, @NotNull Player player) {
+        MiniGamePlayer miniGamePlayer = arena.getPlayer(player);
+        if (miniGamePlayer == null) {
+            return;
+        }
+
+        miniGamePlayer.setScore(0);
+        miniGamePlayer.setKills(0);
+        miniGamePlayer.setDeaths(0);
+        miniGamePlayer.set("livesRemaining", 1);
+        nightEliminatedPlayers(arena).remove(player.getUniqueId());
+        pendingDeathRespawns(arena).remove(player.getUniqueId());
+        playerDropTargets(arena).remove(player.getUniqueId());
+        if (nightfall.dropsEnabled(arena)) {
+            playerDropDueAt(arena).put(
+                player.getUniqueId(), System.currentTimeMillis() + randomDropDelayMillis(arena));
+        } else {
+            playerDropDueAt(arena).remove(player.getUniqueId());
+        }
+        prepareParticipantForRound(player);
     }
 
     private void endRound(@NotNull MiniGameArena arena) {
@@ -912,6 +1605,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
 
     private void markPlayerDowned(@NotNull MiniGameArena arena, @NotNull Player player, @NotNull MiniGamePlayer miniGamePlayer) {
         nightEliminatedPlayers(arena).add(player.getUniqueId());
+        hidePlayerFromArena(arena, player);
         miniGamePlayer.set("livesRemaining", 0);
         updateArenaStateCounters(arena);
         checkForMatchEnd(arena);
@@ -1008,6 +1702,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
     }
 
     private void resetRuntimeState(@NotNull MiniGameArena arena) {
+        restoreDownedPlayerVisibility(arena);
         arena.set("daylightLocked", true);
         arena.set("wasNight", false);
         arena.set("currentNight", 0);
@@ -1018,12 +1713,18 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         arena.set("timeSpeedCarry", 0.0d);
         arena.set("wasSunsetOrNight", false);
         arena.set("bloodMoonActive", false);
-        activeDropItems(arena).clear();
         arena.clearAllSupplyDrops();
         playerDropDueAt(arena).clear();
         playerDropTargets(arena).clear();
         nightEliminatedPlayers(arena).clear();
         pendingDeathRespawns(arena).clear();
+        bloodMoonZombieLastLocations(arena).clear();
+        bloodMoonZombieStuckTicks(arena).clear();
+        bloodMoonZombieUtilityHoldUntil(arena).clear();
+        bloodMoonTntZombies(arena).clear();
+        burningZombieFireDueAt(arena).clear();
+        arena.set("bloodMoonPendingExplosions", 0);
+        arena.set("bloodMoonCometsLaunched", 0);
         updateArenaStateCounters(arena);
     }
 
@@ -1101,30 +1802,24 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         return ThreadLocalRandom.current().nextLong(min, max + 1L) * 1000L;
     }
 
-    private boolean spawnItemDrop(@NotNull MiniGameArena arena, @NotNull Location target, @NotNull Material material) {
-        World world = target.getWorld();
-        if (world == null) {
+    private boolean spawnSupplyDrop(@NotNull MiniGameArena arena, @NotNull Location target, @NotNull List<ItemStack> loot) {
+        if (loot.isEmpty()) {
             return false;
         }
-
-        double height = ThreadLocalRandom.current().nextDouble(DROP_SPAWN_HEIGHT_MIN, DROP_SPAWN_HEIGHT_MAX);
-        Location spawnLocation = target.clone().add(0.5d, height, 0.5d);
-        Item item = world.dropItem(spawnLocation, new ItemStack(material));
-        item.setVelocity(new Vector());
-        item.setPickupDelay(20);
-        activeDropItems(arena).add(item.getUniqueId());
-        arena.trackSupplyDrop(item, target.clone().add(0.5d, 1.0d, 0.5d));
-        api.worlds().changes(arena.world()).captureEntity(item);
+        arena.spawnSupplyDropCrate(loot, target);
         return true;
     }
 
-    private int countActiveDropItems(@NotNull MiniGameArena arena) {
-        Set<UUID> tracked = activeDropItems(arena);
-        tracked.removeIf(entityId -> {
-            Entity entity = arena.world().getEntity(entityId);
-            return !(entity instanceof Item item) || item.isDead() || !item.isValid();
-        });
-        return tracked.size();
+    private void announceSupplyDrop(@NotNull MiniGameArena arena, @NotNull Location dropLocation) {
+        for (Player player : arena.getPlayers()) {
+            if (!sameWorld(player.getLocation(), dropLocation)) {
+                continue;
+            }
+            if (dropHorizontalDistanceSquared(player.getLocation(), dropLocation) > DROP_ANNOUNCEMENT_RANGE_SQUARED) {
+                continue;
+            }
+            arena.info(player, supplyDropHint(player, dropLocation));
+        }
     }
 
     private void configureManagedZombie(@NotNull MiniGameArena arena, @NotNull Zombie zombie, @NotNull Player target) {
@@ -1136,6 +1831,24 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         }
         zombie.setTarget(target);
         applyNightlyZombieHealth(arena, zombie);
+        applyBloodMoonEscalation(arena, zombie);
+        if (shouldSpawnTntZombie(arena)) {
+            markAsTntZombie(arena, zombie);
+        }
+    }
+
+    private void applyBloodMoonEscalation(@NotNull MiniGameArena arena, @NotNull Zombie zombie) {
+        if (!nightfall.isBloodMoonActive(arena)) {
+            return;
+        }
+        BloodMoonEscalation escalation = nightfall.bloodMoonEscalation(arena);
+        if (nightfall.currentNight(arena) < escalation.knockbackStartNight()) {
+            return;
+        }
+        var resistance = zombie.getAttribute(Attribute.KNOCKBACK_RESISTANCE);
+        if (resistance != null) {
+            resistance.setBaseValue(Math.clamp(escalation.knockbackResistance(), 0.0d, 1.0d));
+        }
     }
 
     private void applyNightlyZombieHealth(@NotNull MiniGameArena arena, @NotNull Zombie zombie) {
@@ -1157,6 +1870,22 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         }
 
         return ThreadLocalRandom.current().nextInt(100) < nightfall.bloodMoonBabyZombieChancePercent(arena);
+    }
+
+    private boolean shouldSpawnTntZombie(@NotNull MiniGameArena arena) {
+        if (!nightfall.isBloodMoonActive(arena)) {
+            return false;
+        }
+        return ThreadLocalRandom.current().nextInt(100) < nightfall.bloodMoonTntZombieChancePercentForNight(arena);
+    }
+
+    private void markAsTntZombie(@NotNull MiniGameArena arena, @NotNull Zombie zombie) {
+        bloodMoonTntZombies(arena).add(zombie.getUniqueId());
+        var equipment = zombie.getEquipment();
+        if (equipment != null) {
+            equipment.setItemInOffHand(new ItemStack(Material.TNT));
+            equipment.setItemInOffHandDropChance(0.0f);
+        }
     }
 
     private long applyConfiguredTimeSpeed(@NotNull MiniGameArena arena, @NotNull World world) {
@@ -1217,6 +1946,72 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         return materials.get(ThreadLocalRandom.current().nextInt(materials.size()));
     }
 
+    private @NotNull List<ItemStack> buildDropLoot(@NotNull MiniGameArena arena,
+                                                   @NotNull Map<Integer, List<Material>> dropItems) {
+        int minStacks = nightfall.dropLootMinStacks(arena);
+        int maxStacks = nightfall.dropLootMaxStacks(arena);
+        int stackCount = ThreadLocalRandom.current().nextInt(minStacks, maxStacks + 1);
+        List<ItemStack> loot = new ArrayList<>(stackCount);
+        for (int i = 0; i < stackCount; i++) {
+            Material material = pickDropItem(dropItems);
+            if (material == null || material.isAir()) {
+                continue;
+            }
+            loot.add(new ItemStack(material));
+        }
+        return loot;
+    }
+
+    private @NotNull String supplyDropHint(@NotNull Player player, @NotNull Location dropLocation) {
+        int distance = Math.max(1, (int) Math.round(Math.sqrt(dropHorizontalDistanceSquared(player.getLocation(), dropLocation))));
+        String direction = relativeDirection(player, dropLocation);
+        String suffix = distance == 1 ? "block" : "blocks";
+        return "<gold>A supply drop is descending " + distance + " " + suffix + " " + direction + ".</gold>";
+    }
+
+    private double dropHorizontalDistanceSquared(@NotNull Location from, @NotNull Location to) {
+        double dx = to.getX() - from.getX();
+        double dz = to.getZ() - from.getZ();
+        return (dx * dx) + (dz * dz);
+    }
+
+    private @NotNull String relativeDirection(@NotNull Player player, @NotNull Location target) {
+        Vector forward = player.getLocation().getDirection().setY(0.0d);
+        Vector toward = target.toVector().subtract(player.getLocation().toVector()).setY(0.0d);
+        if (forward.lengthSquared() < 1.0E-6 || toward.lengthSquared() < 1.0E-6) {
+            return "near you";
+        }
+
+        forward.normalize();
+        toward.normalize();
+        double cross = (forward.getX() * toward.getZ()) - (forward.getZ() * toward.getX());
+        double dot = (forward.getX() * toward.getX()) + (forward.getZ() * toward.getZ());
+        double angle = Math.toDegrees(Math.atan2(cross, dot));
+
+        if (angle >= -22.5d && angle < 22.5d) {
+            return "in front of you";
+        }
+        if (angle >= 22.5d && angle < 67.5d) {
+            return "front-left of you";
+        }
+        if (angle >= 67.5d && angle < 112.5d) {
+            return "to your left";
+        }
+        if (angle >= 112.5d && angle < 157.5d) {
+            return "behind-left of you";
+        }
+        if (angle >= -67.5d && angle < -22.5d) {
+            return "front-right of you";
+        }
+        if (angle >= -112.5d && angle < -67.5d) {
+            return "to your right";
+        }
+        if (angle >= -157.5d && angle < -112.5d) {
+            return "behind-right of you";
+        }
+        return "behind you";
+    }
+
     private void clearTrackedZombies(@NotNull MiniGameArena arena) {
         Set<UUID> tracked = managedZombies(arena);
         for (UUID entityId : new LinkedHashSet<>(tracked)) {
@@ -1226,6 +2021,12 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
             }
         }
         tracked.clear();
+        bloodMoonZombieLastLocations(arena).clear();
+        bloodMoonZombieStuckTicks(arena).clear();
+        bloodMoonZombieUtilityHoldUntil(arena).clear();
+        bloodMoonTntZombies(arena).clear();
+        burningZombieFireDueAt(arena).clear();
+        arena.set("bloodMoonPendingExplosions", 0);
     }
 
     private void igniteTrackedZombiesAtSunrise(@NotNull MiniGameArena arena) {
@@ -1247,6 +2048,11 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
     @SuppressWarnings("unchecked")
     private Set<UUID> managedZombies(@NotNull MiniGameArena arena) {
         return arena.getOrCreate("managedZombies", Set.class, LinkedHashSet::new);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<UUID, Long> burningZombieFireDueAt(@NotNull MiniGameArena arena) {
+        return arena.getOrCreate("burningZombieFireDueAt", Map.class, LinkedHashMap::new);
     }
 
     @SuppressWarnings("unchecked")
@@ -1367,7 +2173,14 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         Set<UUID> tracked = managedZombies(arena);
         tracked.removeIf(entityId -> {
             Entity entity = arena.world().getEntity(entityId);
-            return !(entity instanceof Zombie zombie) || zombie.isDead() || !zombie.isValid();
+            boolean remove = !(entity instanceof Zombie zombie) || zombie.isDead() || !zombie.isValid();
+            if (remove) {
+                bloodMoonZombieLastLocations(arena).remove(entityId);
+                bloodMoonZombieStuckTicks(arena).remove(entityId);
+                bloodMoonZombieUtilityHoldUntil(arena).remove(entityId);
+                bloodMoonTntZombies(arena).remove(entityId);
+            }
+            return remove;
         });
         return tracked.size();
     }
@@ -1509,6 +2322,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
     private void revivePlayer(@NotNull MiniGameArena arena, @NotNull Player player, @NotNull MiniGamePlayer miniGamePlayer) {
         UUID playerId = player.getUniqueId();
         nightEliminatedPlayers(arena).remove(playerId);
+        showPlayerToArena(arena, player);
         pendingDeathRespawns(arena).remove(playerId);
         playerDropTargets(arena).remove(playerId);
         if (nightfall.dropsEnabled(arena)) {
@@ -1523,6 +2337,40 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
             PlayerUtil.teleport(player, respawn);
         }
         player.setHealth(PlayerUtil.getMaxHealth(player));
+    }
+
+    private void hidePlayerFromArena(@NotNull MiniGameArena arena, @NotNull Player hiddenPlayer) {
+        STEMCraft plugin = STEMCraft.getPlugin();
+        for (Player viewer : arena.getOccupants()) {
+            if (!viewer.getUniqueId().equals(hiddenPlayer.getUniqueId())) {
+                viewer.hidePlayer(plugin, hiddenPlayer);
+            }
+        }
+    }
+
+    private void hideDownedPlayersFrom(@NotNull MiniGameArena arena, @NotNull Player viewer) {
+        for (Player downedPlayer : arena.getPlayers()) {
+            if (!viewer.getUniqueId().equals(downedPlayer.getUniqueId()) && isNightEliminated(arena, downedPlayer)) {
+                viewer.hidePlayer(STEMCraft.getPlugin(), downedPlayer);
+            }
+        }
+    }
+
+    private void showPlayerToArena(@NotNull MiniGameArena arena, @NotNull Player shownPlayer) {
+        STEMCraft plugin = STEMCraft.getPlugin();
+        for (Player viewer : arena.getOccupants()) {
+            if (!viewer.getUniqueId().equals(shownPlayer.getUniqueId())) {
+                viewer.showPlayer(plugin, shownPlayer);
+            }
+        }
+    }
+
+    private void restoreDownedPlayerVisibility(@NotNull MiniGameArena arena) {
+        for (Player player : arena.getPlayers()) {
+            if (isNightEliminated(arena, player)) {
+                showPlayerToArena(arena, player);
+            }
+        }
     }
 
     private @NotNull Location resolveDownedLocation(@NotNull MiniGameArena arena, @NotNull Location deathLocation) {
@@ -1690,12 +2538,6 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         return false;
     }
 
-    private double horizontalDistanceSquared(@NotNull Location first, @NotNull Location second) {
-        double dx = first.getX() - second.getX();
-        double dz = first.getZ() - second.getZ();
-        return (dx * dx) + (dz * dz);
-    }
-
     @SuppressWarnings("unchecked")
     private Map<UUID, Long> playerDropDueAt(@NotNull MiniGameArena arena) {
         return arena.getOrCreate("playerDropDueAt", Map.class, LinkedHashMap::new);
@@ -1707,8 +2549,40 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
     }
 
     @SuppressWarnings("unchecked")
-    private Set<UUID> activeDropItems(@NotNull MiniGameArena arena) {
-        return arena.getOrCreate("activeDropItems", Set.class, LinkedHashSet::new);
+    private Map<UUID, Location> bloodMoonZombieLastLocations(@NotNull MiniGameArena arena) {
+        return arena.getOrCreate("bloodMoonZombieLastLocations", Map.class, LinkedHashMap::new);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<UUID, Integer> bloodMoonZombieStuckTicks(@NotNull MiniGameArena arena) {
+        return arena.getOrCreate("bloodMoonZombieStuckTicks", Map.class, LinkedHashMap::new);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<UUID, Long> bloodMoonZombieUtilityHoldUntil(@NotNull MiniGameArena arena) {
+        return arena.getOrCreate("bloodMoonZombieUtilityHoldUntil", Map.class, LinkedHashMap::new);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Set<UUID> bloodMoonTntZombies(@NotNull MiniGameArena arena) {
+        return arena.getOrCreate("bloodMoonTntZombies", Set.class, LinkedHashSet::new);
+    }
+
+    private void queueBloodMoonPendingExplosion(@NotNull MiniGameArena arena) {
+        arena.set("bloodMoonPendingExplosions", bloodMoonPendingExplosions(arena) + 1);
+    }
+
+    private boolean consumeBloodMoonPendingExplosion(@NotNull MiniGameArena arena) {
+        int pending = bloodMoonPendingExplosions(arena);
+        if (pending <= 0) {
+            return false;
+        }
+        arena.set("bloodMoonPendingExplosions", pending - 1);
+        return true;
+    }
+
+    private int bloodMoonPendingExplosions(@NotNull MiniGameArena arena) {
+        return Math.max(0, arena.get("bloodMoonPendingExplosions", Integer.class, 0));
     }
 
     @SuppressWarnings("unchecked")
@@ -1913,6 +2787,8 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
                     continue;
                 }
 
+                cleanupTrackedZombie(arena, entityId);
+
                 Player killer = zombie.getKiller();
                 if (killer != null && arena.hasPlayer(killer)) {
                     MiniGamePlayer miniGamePlayer = arena.getPlayer(killer);
@@ -1942,9 +2818,17 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
                     LivingEntity target = zombie.getTarget();
                     tracked.add(transformedZombie.getUniqueId());
                     transformedZombie.setCanPickupItems(false);
+                    if (bloodMoonTntZombies(arena).remove(originalId)) {
+                        markAsTntZombie(arena, transformedZombie);
+                    }
+                    bloodMoonZombieLastLocations(arena).remove(originalId);
+                    bloodMoonZombieStuckTicks(arena).remove(originalId);
+                    bloodMoonZombieUtilityHoldUntil(arena).remove(originalId);
                     if (target != null) {
                         transformedZombie.setTarget(target);
                     }
+                } else {
+                    cleanupTrackedZombie(arena, originalId);
                 }
 
                 updateArenaStateCounters(arena);
@@ -1965,6 +2849,31 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
             }
         }
         return null;
+    }
+
+    private void cleanupTrackedZombie(@NotNull MiniGameArena arena, @NotNull UUID entityId) {
+        bloodMoonZombieLastLocations(arena).remove(entityId);
+        bloodMoonZombieStuckTicks(arena).remove(entityId);
+        bloodMoonZombieUtilityHoldUntil(arena).remove(entityId);
+        bloodMoonTntZombies(arena).remove(entityId);
+        burningZombieFireDueAt(arena).remove(entityId);
+    }
+
+    private void captureExplosionBlocks(@NotNull MiniGameArena arena, @NotNull List<Block> blocks) {
+        if (arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
+            blocks.clear();
+            return;
+        }
+
+        WorldChangeSession session = api.worlds().changes(arena.world());
+        SCRegion arenaRegion = arena.get("arenaRegion", SCRegion.class);
+        blocks.removeIf(block -> {
+            if (arenaRegion != null && !arenaRegion.contains(block.getLocation())) {
+                return true;
+            }
+            session.captureBlock(block);
+            return false;
+        });
     }
 
     private void broadcastToOccupants(@NotNull MiniGameArena arena, @NotNull String message, Player... exclude) {

@@ -1,6 +1,7 @@
 package dev.stemcraft.service.placeholderapi;
 
 import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.minigame.MiniGame;
 import dev.stemcraft.api.minigame.MiniGameArena;
 import me.clip.placeholderapi.expansion.PlaceholderExpansion;
@@ -51,6 +52,18 @@ final class PlaceholderApiService extends PlaceholderExpansion {
         String normalized = params.toLowerCase(Locale.ROOT);
         if (normalized.startsWith("glyph:")) {
             return glyph(params.substring("glyph:".length()));
+        }
+        if (normalized.equals("badge")) {
+            return player == null ? "" : STEMCraft.getPlugin().entitlements().renderBadges(player.getUniqueId(), 0);
+        }
+        if (normalized.startsWith("badge:")) {
+            if (player == null) return "";
+            try {
+                return STEMCraft.getPlugin().entitlements().renderBadges(player.getUniqueId(),
+                    Integer.parseInt(normalized.substring("badge:".length())));
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
         }
         if (normalized.startsWith("arena_status:")) {
             return arenaStatus(params.substring("arena_status:".length()));

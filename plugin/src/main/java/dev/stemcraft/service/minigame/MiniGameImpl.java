@@ -15,6 +15,7 @@ public class MiniGameImpl implements MiniGame {
     private final String namespace;
     private boolean disableHungerByDefault = true;
     private MiniGameTeamSelectionPolicy teamSelectionPolicy;
+    private final MiniGameGiftRewards giftRewards;
 
     private final Map<MiniGameArena.ArenaStatus, MiniGameHUD> huds = new HashMap<>();
 
@@ -31,6 +32,7 @@ public class MiniGameImpl implements MiniGame {
     public MiniGameImpl(MiniGameServiceImpl service, String namespace) {
         this.service = service;
         this.namespace = namespace;
+        this.giftRewards = new MiniGameGiftRewards(STEMCraftAPI.api(), namespace);
     }
 
     /**
@@ -152,6 +154,22 @@ public class MiniGameImpl implements MiniGame {
     @Override
     public MiniGameTeamSelectionPolicy getTeamSelectionPolicy() {
         return teamSelectionPolicy;
+    }
+
+    @Override
+    public MiniGame configureRewards(dev.stemcraft.api.config.ConfigSectionView rewards) {
+        giftRewards.configure(rewards);
+        return this;
+    }
+
+    @Override
+    public void rewardWinners(java.util.Collection<java.util.UUID> winnerUuids) {
+        giftRewards.reward(null, winnerUuids);
+    }
+
+    @Override
+    public void rewardWinners(MiniGameArena arena, java.util.Collection<java.util.UUID> winnerUuids) {
+        giftRewards.reward(arena, winnerUuids);
     }
 
     /**

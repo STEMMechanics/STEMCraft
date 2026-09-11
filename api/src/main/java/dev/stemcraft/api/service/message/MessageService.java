@@ -87,6 +87,35 @@ public interface MessageService {
     default void send(@NotNull CommandSender sender, @NotNull String message, @NotNull Object... placeholders) { send(sender, message, null, placeholders); }
 
     /**
+     * Send with an explicit type and optional configured context. Leading
+     * directives in the resolved message may override these values.
+     */
+    default void send(@Nullable CommandSender sender,
+                      @NotNull MessageType type,
+                      @Nullable String context,
+                      @NotNull String message,
+                      @Nullable Throwable ex,
+                      @NotNull Object... placeholders) {
+        switch (type) {
+            case PLAIN -> send(sender, message, ex, placeholders);
+            case LOG -> log(sender, message, ex, placeholders);
+            case INFO -> info(sender, message, ex, placeholders);
+            case WARNING -> warn(sender, message, ex, placeholders);
+            case ERROR -> error(sender, message, ex, placeholders);
+            case SUCCESS -> success(sender, message, ex, placeholders);
+            case BROADCAST -> broadcast(message, (List<Player>) null, placeholders);
+        }
+    }
+
+    default void send(@NotNull CommandSender sender,
+                      @NotNull MessageType type,
+                      @Nullable String context,
+                      @NotNull String message,
+                      @NotNull Object... placeholders) {
+        send(sender, type, context, message, null, placeholders);
+    }
+
+    /**
      * Send an info message to the sender or console if null.
      *
      * @param sender The command sender to send the message to, or null for console.

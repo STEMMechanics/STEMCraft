@@ -1,0 +1,72 @@
+custom-items:
+  dog-treat:
+    material: BONE
+    name: "<gold>Dog Treat"
+    lore:
+      - "<gray>A tasty treat for a tamed wolf"
+    texture: "stemcraft_rotten_flesh:item/dog_treat"
+    placement: DENY
+    max-stack-size: 64
+
+  zombie-bait:
+    material: ROTTEN_FLESH
+    name: "<green>Zombie Bait"
+    lore:
+      - "<gray>Zombies can smell this from far away"
+    texture: "stemcraft_rotten_flesh:item/zombie_bait"
+    placement: DENY
+    max-stack-size: 64
+
+  rotten-flesh-stew:
+    material: SUSPICIOUS_STEW
+    name: "<dark_green>Rotten Flesh Stew"
+    lore:
+      - "<gray>Useful, but questionable"
+    placement: DENY
+    max-stack-size: 1
+
+recipes:
+  shapeless:
+    rotten_flesh_leather:
+      ingredients:
+        - ROTTEN_FLESH
+        - ROTTEN_FLESH
+        - ROTTEN_FLESH
+        - ROTTEN_FLESH
+        - ROTTEN_FLESH
+        - ROTTEN_FLESH
+        - ROTTEN_FLESH
+        - ROTTEN_FLESH
+        - ROTTEN_FLESH
+      result: LEATHER
+      amount: 1
+
+    dog_treat:
+      ingredients:
+        - ROTTEN_FLESH
+        - ROTTEN_FLESH
+        - ROTTEN_FLESH
+        - ROTTEN_FLESH
+        - BONE
+      result: "stemcraft:dog_treat"
+      amount: 2
+
+    zombie_bait:
+      ingredients:
+        - ROTTEN_FLESH
+        - ROTTEN_FLESH
+        - ROTTEN_FLESH
+        - ROTTEN_FLESH
+        - SPIDER_EYE
+        - STRING
+      result: "stemcraft:zombie_bait"
+      amount: 1
+
+    rotten_flesh_stew:
+      ingredients:
+        - BOWL
+        - ROTTEN_FLESH
+        - BROWN_MUSHROOM
+        - RED_MUSHROOM
+      result: "stemcraft:rotten_flesh_stew"
+      amount: 1

@@ -1,0 +1,53 @@
+custom-items:
+  chisel:
+    material: FLINT
+    name: "<gray>Chisel"
+    texture: "stemcraft_survival:item/chisel"
+    lore:
+      - "<dark_gray>Right-click a supported block to rotate it"
+    placement: DENY
+    max-stack-size: 1
+    max-damage: 256
+
+  fried-egg:
+    material: DRIED_KELP
+    name: "Fried Egg"
+    texture: "item/fried_egg"
+    placement: DENY
+    food:
+      nutrition: 3
+      saturation: 2.4
+      always-edible: false
+
+recipes:
+  shaped:
+    chisel:
+      result: "stemcraft:chisel"
+      amount: 1
+      shape:
+        - " I "
+        - " S "
+      ingredients:
+        I: IRON_INGOT
+        S: STICK
+  furnace:
+    fried_egg:
+      input: EGG
+      result: "stemcraft:fried_egg"
+      amount: 1
+      exp: 0.1
+      time: 200
+  smoker:
+    fried_egg_smoker:
+      input: EGG
+      result: "stemcraft:fried_egg"
+      amount: 1
+      exp: 0.1
+      time: 100
+  campfire:
+    fried_egg_campfire:
+      input: EGG
+      result: "stemcraft:fried_egg"
+      amount: 1
+      exp: 0.1
+      time: 600

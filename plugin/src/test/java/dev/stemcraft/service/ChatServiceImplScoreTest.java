@@ -69,4 +69,16 @@ class ChatServiceImplScoreTest {
         assertFalse(kickReason.contains("content_filter_rejected"));
         assertFalse(banReason.contains("content_filter_rejected"));
     }
+
+    @Test
+    void duplicateProtectionAllowsTwoEquivalentMessagesAndResetsOnDifferentContent() {
+        UUID playerId = UUID.randomUUID();
+        service.configureDuplicateMessageLimitForTest(2);
+
+        assertFalse(service.isDuplicateMessageBlocked(playerId, "Hello   World"));
+        assertFalse(service.isDuplicateMessageBlocked(playerId, " hello world "));
+        assertEquals(true, service.isDuplicateMessageBlocked(playerId, "HELLO WORLD"));
+        assertFalse(service.isDuplicateMessageBlocked(playerId, "Something different"));
+        assertFalse(service.isDuplicateMessageBlocked(playerId, "hello world"));
+    }
 }

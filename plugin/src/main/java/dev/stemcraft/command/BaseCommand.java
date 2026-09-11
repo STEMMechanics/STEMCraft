@@ -88,10 +88,14 @@ public class BaseCommand extends HasMessagesImpl {
         builder.usage(usage);
     }
 
+    /** Set the additional authorization policy for execution and tab completion. */
+    public void setAccess(java.util.function.BiPredicate<org.bukkit.command.CommandSender, java.util.List<String>> access) {
+        builder.access(access);
+    }
+
     /**
      * Set the permission required to execute the command.
-     *
-     * @param permission the permission string.
+     * @param permission the permission string
      */
     public void setPermission(String permission) {
         builder.permission(permission);

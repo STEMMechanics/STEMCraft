@@ -1,3 +1,11 @@
+database:
+  # Reclaim deleted SQLite pages before services/features start using the database.
+  # Runs only when BOTH thresholds are reached. Large databases can extend startup.
+  # A feature migration frees pages after this check: they are reclaimed next restart.
+  compact-on-startup: true
+  compact-minimum-free-mib: 64
+  compact-minimum-free-percent: 20
+
 logging:
   prefixes:
     log: "[STEMCraft] "
@@ -6,6 +14,12 @@ logging:
     error: "<red>\uE132</red> "
     success: "<dark_green><bold>[ \u2714 ]</bold></dark_green> "
     broadcast: "<dark_purple><bold>[ ! ]</bold></dark_purple> "
+  contexts:
+    survival:
+      prefix: "[:sword: <gold><bold>SURVIVAL</bold></gold>] "
+      hide-when:
+        worlds:
+          - "survival*"
 
 motd:
   title: "<blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple> <yellow><bold>STEMCRAFT</bold></yellow> <blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple><blue>■</blue><light_purple>■</light_purple>"
@@ -26,16 +40,247 @@ hub:
       command: "tb leave"
       as-player: true
 
+worlds:
+  world:
+    display-name: "World"
+
+coordinates:
+  defaults:
+    # Initial state for players who have not used /coordbar or /coord yet.
+    boss-bar: false
+    action-bar: false
+
+tps-bar:
+  enabled: true
+  default-enabled: false
+  title: "<white>TPS: <tps>   MSPT: <mspt>   Ping: <ping>ms"
+  overlay: NOTCHED_20
+  fill-mode: MSPT
+  progress-color:
+    good: GREEN
+    medium: YELLOW
+    low: RED
+  text-color:
+    good: "<gradient:#55ff55:#00aa00><text></gradient>"
+    medium: "<gradient:#ffff55:#ffaa00><text></gradient>"
+    low: "<gradient:#ff5555:#aa0000><text></gradient>"
+  tick-interval: 20
+
+named-regions:
+  enabled: true
+  worlds:
+    - survival
+  display:
+    # Title and subtitle are independently optional. Missing or blank values are not displayed.
+    title: ""
+    subtitle: "<gold>{name}</gold>"
+    fade-in: 500
+    stay: 5000
+    fade-out: 1000
+  coordbar:
+    enabled: true
+    # Amendments include their own spacing. No separator is added by the coordbar API.
+    format: " ({name})"
+  map:
+    enabled: true
+    # Publish accumulated region changes to Pl3xMap at most once every few minutes.
+    update-minutes: 5
+    # Region names appear when the polygon is hovered. Set true to keep every label visible.
+    permanent-labels: false
+    layers:
+      biomes: "Regions"
+      structures: "Structures"
+    biomes:
+      # Each region consistently selects one translucent ARGB colour from this palette.
+      # The same RGB value is used at full opacity for its border.
+      palette:
+        - "#4054A0FF"
+        - "#405BCB8A"
+        - "#40F2C14E"
+        - "#40E87979"
+        - "#40B983E3"
+        - "#404CC9C0"
+        - "#40ED8F4A"
+        - "#4088B04B"
+      # Used when palette is empty, preserving compatibility with older configurations.
+      stroke-colour: "#FFFF9800"
+      fill-colour: "#40FF9800"
+      line-thickness: 2
+    structures:
+      # Discovered structures use type-appropriate icons instead of boundary polygons.
+      icon-size: 24
+    # Existing generated terrain is loaded asynchronously and processed gradually.
+    backfill-existing-chunks: true
+    # Historical gaps can wait; chunks visited by players are still discovered normally.
+    backfill-only-when-empty: true
+    backfill-period-ticks: 10
+    backfill-max-in-flight: 1
+  structures:
+    # Small, easily triggered structures are disabled by default.
+    buried-treasure:
+      enabled: false
+    nether-fossil:
+      enabled: false
+  names:
+    retirement-days: 5
+    # One-word entries are roots expanded through the biome's naming forms. Multi-word entries are used verbatim.
+    # Changing these lists affects only newly named or explicitly regenerated regions.
+    sources:
+      desert: [Ratta, Suncleft, Amber, Mirage, Scorched, Dunewatch, Sunspire, Ashwind, Golden, Redglass, Sunscar, Dustveil, Ochre, Firewind, Glassreach, Sandstone, Daybreak, Brass, Heatwave, Solstice, Saffron, Sunward, Copper, Ember, Flint, Dusklit, Starglass, Drybone, Fireclay, Rustwind, Durotar, Tanaris, Silithus, Uldum, Vol'dun, Netherstorm, Hellfire Peninsula, Blasted Lands]
+      forest: [Elder, Whisper, Greenveil, Mosslight, Raven, Oakheart, Fernwatch, Wildwood, Moonpine, Thorn, Ashgrove, Briar, Deerwood, Elmshade, Foxglove, Hazel, Leafsong, Rowan, Silverwood, Wren, Alder, Greenbough, Moonleaf, Silverfern, Thornwood, Mossy, Owlsong, Amberleaf, Starroot, Willowmist, Elwynn Forest, Eversong Woods, Silverpine Forest, Tirisfal Glades, Ashenvale, Darkshore, Felwood, Duskwood, Feralas, Teldrassil, Moonglade, Ghostlands, Val'sharah, Drustvar, Ardenweald, Jade Forest, Emerald Dream, Azuremyst Isle, Bloodmyst Isle]
+      jungle: [Emerald, Vine, Jaguar, Rainveil, Canopy, Temple, Orchid, Sunleaf, Parrot, Ancient, Bamboo, Cascade, Cocoa, Feather, Fernfall, Mistvine, Palm, Python, Stormleaf, Toucan, Jade, Verdant, Rainborn, Sunvine, Mistleaf, Thunderbloom, Greencrest, Vineheart, Stormbloom, Wildorchid, Stranglethorn Vale, Sholazar Basin, Tanaan Jungle, Un'Goro Crater, Zuldazar, Nazmir, Gorgrond, Krasarang Wilds]
+      ocean: [Azure, Coral, Tempest, Sapphire, Deepwater, Tide, Mariner, Stormglass, Seabird, Moonwake, Bluewater, Current, Dolphin, Foam, Leviathan, Pearl, Reef, Saltwind, Seafarer, Whalefall, Cerulean, Stormtide, Seaborn, Starcurrent, Deepblue, Mooncurrent, Tideglass, Wavecrest, Starwake, Coralwind, Vashj'ir, Nazjatar, Tiragarde Sound, Stormsong Valley, Azshara, Darkmoon Island, Timeless Isle, Forbidden Reach]
+      mountains: [Ironpeak, Cloudspire, Frosthorn, Highwatch, Stonecrown, Eagle, Thunder, Whitecap, Skyrend, Crag, Alpine, Boulder, Cliffwatch, Granite, Hawkwatch, Ironcrest, Slate, Stormpeak, Summit, Windcrown, Adamant, Cloudbreak, Stormcrown, Highstone, Eaglecrest, Ironwind, Skypierce, Thunderhead, Frostspire, Stoneward, Dun Morogh, Redridge Mountains, Stonetalon Mountains, Alterac Mountains, Arathi Highlands, Twilight Highlands, Highmountain, Kun-Lai Summit, Storm Peaks, Searing Gorge, Burning Steppes, Deepholm]
+      snow: [Frostmere, Whitewind, Winter, Icefall, Snowglass, Pale, Northwatch, Coldharbour, Frozen, Wolf, Blizzard, Crystal, Everfrost, Glacier, Hailstone, Hoarfrost, Polar, Rime, Sleet, Wintertide, Rimebound, Whiteglass, Frostwind, Palesun, Iceborn, Northstar, Snowfall, Coldlight, Winterglass, Frostward, Winterspring, Dragonblight, Icecrown, Frostfire Ridge, Azure Span, Borean Tundra, Howling Fjord, Crystalsong Forest, Wintergrasp, Storm Peaks]
+      swamp: [Mire, Blackwater, Fen, Witchlight, Reed, Murk, Willow, Fogmere, Cypress, Bog, Brackwater, Bullrush, Dragonfly, Gloomwater, Lily, Mosshollow, Newt, Peat, Stillwater, Tanglewood, Murkfen, Willowmist, Blackreed, Fogroot, Stillmire, Mosswater, Moonsedge, Reedshadow, Boglight, Fenroot, Dustwallow Marsh, Zangarmarsh, Wetlands, Nazmir]
+      badlands: [Redstone, Copper, Ashmesa, Rust, Sunscar, Canyon, Ochre, Dryfall, Embercliff, Terracotta, Claystone, Dustbowl, Flint, Gulch, Ironmesa, Painted, Redrock, Sandscar, Sunbaked, Vermilion, Rustwind, Redglass, Emberstone, Copperdust, Flintrock, Ashfall, Drybone, Fireclay, Dustscar, Clayfire, Badlands, Desolace, Blasted Lands, Searing Gorge, Burning Steppes, Thousand Needles, Deadwind Pass, Antoran Wastes]
+      savanna: [Goldgrass, Acacia, Sunveld, Lion, Amberplain, Longgrass, Drywind, Copperleaf, Horizon, Thornveld, Baobab, Cheetah, Dawnveld, Elephant, Grasssea, Marula, Pride, Sunland, Tallgrass, Zebra, Sunmane, Longshadow, Amberwind, Lionheart, Dawncrest, Goldwind, Sungrass, Pridewind, Grasscrown, Sunreach, Mulgore, Westfall, Nagrand, The Barrens, Arathi Highlands, Hillsbrad Foothills, Ohn'ahran Plains, Talador, Shadowmoon Valley]
+      taiga: [Pinewatch, Wolfwood, Spruce, Northwood, Needle, Elk, Frostpine, Darkfir, Coldwood, Bear, Cedar, Firshade, Lynx, Moose, Northernpine, Pinecone, Ravenwood, Snowfir, Timber, Wolverine, Wolfpine, Frostbough, Ravenpine, Elkwood, Coldcedar, Needlefall, Bearroot, Silverfir, Northfir, Winterpine, Grizzly Hills, Howling Fjord, Stormheim, Highmountain, Azure Span, Drustvar]
+      mushroom-fields: [Mycelium, Mooshroom, Sporecap, Redcap, Fungal, Mooncap, Mistycap, Giantcap, Oddwood, Toadstool, Bluecap, Glowspore, Greycap, Moldmere, Puffball, Shroomlight, Sporefall, Stemwood, Violetcap, Wondercap, Sporelight, Mycelial, Glowstem, Mistcap, Violetspore, Dreamcap, Sporemist, Glowcap, Moonstem, Sporebloom, Zangarmarsh, Deepholm, Korthia, Maldraxxus]
+      plains: [Ratta, Greenfield, Meadow, Westreach, Sunfield, Windmere, Goldmead, Openvale, Larkspur, Clover, Barley, Brookfield, Daisy, Dawnmead, Flax, Harvest, Hayfield, Primrose, Skylark, Wheatland, Larksong, Goldmeadow, Windward, Sunbarley, Cloverfield, Dawnwheat, Brookgrass, Starmead, Meadowwind, Wheatvale, Mulgore, Westfall, Nagrand, The Barrens, Arathi Highlands, Hillsbrad Foothills, Ohn'ahran Plains, Talador, Shadowmoon Valley]
+      mineshaft: [Ratta, Deepdelve, Ember, Blackpick, Oldstone, Coppervein, Ironroot, Underhill, Lostpick, Grimcoal, Blacklamp, Deepstone, Goldvein, Ironpick, Lantern, Lode, Oldrail, Prospector, Silverpick, Underdark, Deadmines, Deepwind Gorge, Silvershard Mines, Stonevault, Darkflame Cleft]
+      village: [Ratta, Stoneford, Oakstead, Millhaven, Westbridge, Greenwick, Amberton, Rivermeet, Highfield, Willowby, Alderwick, Bellford, Brookstead, Cedarham, Dunwich, Fairmead, Mapleton, Redbrook, Thatchwick, Woodhaven, Goldshire, Darkshire, Lakeshire, Astranaar, Everlook, Southshore, Crossroads, Ratchet, Brill, Sentinel Hill, Halfhill, Dornogal]
+      shipwreck: [Maribel, Stormcrow, Sea Wraith, Golden Gull, North Star, Wayfarer, Tide Runner, Blue Finch, Argent Dawn, Red Sail, Albatross, Black Pearl, Corsair, Fair Wind, Flying Fish, Grey Petrel, Ocean Rose, Sea Drake, Silver Spray, Wanderer, Lost Fleet, Shipwreck Shore, Faldir's Cove, Steamwheedle Port, Menethil Harbor, Stormwind Harbor]
+      ruined-portal: [Fallen, Shattered, Ashen, Silent, Lost, Crimson, Broken, Forgotten, Ancient, Withered, Blighted, Charred, Ember, Fractured, Hollow, Obsidian, Riven, Scorched, Smouldering, Sundered, Dark Portal, Emerald Dream, Darkmoon Faire]
+      default: [Ratta, Ancient, Hidden, Forgotten, Silent, Ember, Stone, Shadow, Golden, Lost, Broken, Cinder, Deep, Echo, Fallen, Hollow, Iron, Moon, Old, Veiled, Hallowfall, Azj-Kahet, Shadowlands, Dragon Isles, Broken Isles, Argus, Outland, Northrend, Pandaria, Draenor, Kalimdor, Khaz Algar, Undermine, Revendreth, Bastion, The Maw, Forbidden Reach, Emerald Dream]
+    # Templates applied to one-word source entries. Multi-word source entries bypass these forms.
+    forms:
+      desert: ["{root} Desert", "{root} Sands", "{root} Expanse", "Dunes of {root}", "{root} Wastes", "{root} Dunes", "{root} Barrens", "The {root}"]
+      forest: ["{root} Forest", "{root} Wood", "{root} Wilds", "The {root}", "{root} Grove", "{root} Thicket", "{root} Timberlands", "The Woods of {root}"]
+      jungle: ["{root} Forest", "{root} Wood", "{root} Wilds", "The {root}", "{root} Grove", "{root} Thicket", "{root} Timberlands", "The Woods of {root}"]
+      taiga: ["{root} Forest", "{root} Wood", "{root} Wilds", "The {root}", "{root} Grove", "{root} Thicket", "{root} Timberlands", "The Woods of {root}"]
+      ocean: ["{root} Sea", "{root} Ocean", "{root} Waters", "The {root}", "{root} Deep", "{root} Expanse", "{root} Sound", "The Seas of {root}"]
+      mountains: ["{root} Mountains", "{root} Range", "{root} Peaks", "The {root}", "{root} Heights", "{root} Ridge", "{root} Highlands", "The Spine of {root}"]
+      snow: ["{root} Tundra", "{root} Expanse", "{root} Fields", "The {root}", "{root} Wastes", "{root} Icefield", "{root} Snows", "The Frosts of {root}"]
+      swamp: ["{root} Marsh", "{root} Swamp", "{root} Fen", "The {root}", "{root} Wetlands", "{root} Mire", "{root} Morass", "The Bogs of {root}"]
+      badlands: ["{root} Badlands", "{root} Mesa", "{root} Reach", "The {root}", "{root} Barrens", "{root} Bluffs", "{root} Canyon", "The Cliffs of {root}"]
+      savanna: ["{root} Plains", "{root} Fields", "{root} Reach", "The {root}", "{root} Grasslands", "{root} Prairie", "{root} Meadow", "The Veld of {root}"]
+      plains: ["{root} Plains", "{root} Fields", "{root} Reach", "The {root}", "{root} Grasslands", "{root} Prairie", "{root} Meadow", "The Veld of {root}"]
+      mushroom-fields: ["{root} Fields", "{root} Isles", "{root} Reach", "The {root}", "{root} Gardens", "{root} Colony", "{root} Wilds", "The Caps of {root}"]
+      mineshaft: ["{root} Mine", "{root} Mines", "{root} Delve", "The {root} Diggings", "{root} Shaft", "{root} Tunnels", "{root} Lode", "The Pits of {root}"]
+      village: ["{root}", "{root} Village", "{root} Settlement", "The Hamlet of {root}", "{root} Township", "{root} Borough", "{root} Crossroads", "The Houses of {root}"]
+      shipwreck: ["The {root}", "Wreck of the {root}", "{root}'s Rest", "The Lost {root}", "{root}'s Grave", "Remains of the {root}", "The Sunken {root}", "Last Voyage of the {root}"]
+      ruined-portal: ["The {root} Gate", "{root} Portal", "{root} Threshold", "The Arch of {root}", "{root} Gateway", "{root} Rift", "{root} Crossing", "The Rupture of {root}"]
+      default: ["{root} Hold", "{root} Reach", "{root} Ruins", "The {root}", "{root} Keep", "{root} Remnant", "{root} Enclave", "The Halls of {root}"]
+    pools: {}
+
 custom-commands:
   survival:
     permission: stemcraft.command.survival
     command: survival
     run:
-      - tpworld survival
+      - "server:tpworld survival {player}"
+  creative:
+    permission: stemcraft.command.creative
+    command: creative
+    run:
+      - "server:tpworld creative {player}"
 
 custom-portals:
   enabled: true
+  # Survival multiblocks are defined in worlds/portals.yml; existing admin portals are unchanged.
+  survival:
+    enabled: true
+    max-portals: 512
+  # Teleport as soon as a player enters a registered portal block. Set false to use the vanilla portal warm-up.
+  instant-teleport: true
   portals: {}
+
+slime-buckets:
+  enabled: true
+
+mailboxes:
+  enabled: true
+  hologram:
+    text: ":mail_large:"
+  delivery:
+    # Initial delivery delay before mail is delivered to the recipient inbox.
+    base-delay: 72000
+    # How often the delivery queue runs, in ticks.
+    process-mail-queue: 20
+    # Minimum time between "mailbox full" notices to the same player, in ticks.
+    mailbox-full-cooldown: 72000
+  dialog:
+    title: "STEMCraft Mail"
+    notice: "<yellow>This message and all items in the mailbox will be sent to the player below.</yellow>"
+    recipient-label: "Send to"
+    message-label: "Message"
+    send-label: "Send"
+    cancel-label: "Cancel"
+    open-failed: "/error/Could not open the mail dialog. Your items remain in the mailbox."
+    cancelled: "/info/Send mail cancelled. Your items remain in the mailbox."
+  messages:
+    place-failed: "/error/Failed to place mailbox: {error}"
+    recipient-required: "/error/Enter the name of the player you want to send this mail to."
+    recipient-not-found: "/error/Could not find a player named '{recipient}'."
+    self-recipient: "/error/You cannot send mail to yourself."
+    too-many-items: "/error/You cannot send that many items to a player at once."
+    queued: "/success/Mail sent to {recipient}"
+    mailbox-full: "/survival//warn/Your mailbox is full."
+    received: "/survival//info/<gold>You received mail from {sender}."
+
+image-maps:
+  enabled: true
+  # PNG files available to /imagemap, relative to the STEMCraft data folder.
+  directory: imagemaps
+
+notice-boards:
+  enabled: true
+  retention-days: 14
+  server-author: "STEMCraft"
+  title: "SERVER NOTICE / REQUEST BOARD ★★★★★"
+  # Optional PNG path, relative to the STEMCraft data folder. Missing images fall back to title text.
+  title-image: ""
+  dialog:
+    manage-title: "Your notice"
+    create-title: "Post a notice"
+    edit-title: "Edit your notice"
+    admin-edit-title: "Edit notice by {author}"
+    lifetime: "Notices remain on the board for {days} days."
+    header-label: "Header"
+    message-label: "Short message"
+    edit-label: "Edit"
+    delete-label: "Delete"
+    post-label: "Post"
+    save-label: "Save"
+    cancel-label: "Cancel"
+  messages:
+    dialog-open-failed: "/error/Could not open the notice dialog."
+    required: "/error/A header and message are required."
+    already-active: "/error/You already have an active notice. Click the board to edit or delete it."
+    posted: "/success/Your notice has been posted for {days} days."
+    save-failed: "/error/Could not save your notice."
+    updated: "/success/Your notice has been updated for another {days} days."
+    unavailable: "/error/That notice is no longer available."
+    deleted: "/success/Your notice has been deleted."
+  commands:
+    help: "/info/Use /noticeboard post, list, edit, expiry, remove, or board."
+    unknown: "/error/Unknown noticeboard command."
+    server-post-usage: "/error/Usage: /noticeboard post <header> | <message>"
+    server-post-too-long: "/error/Header must be at most {header_max} characters and message at most {message_max} characters."
+    server-posted: "/success/Server notice posted for {days} days."
+    only-player-list: "/error/Only players can list their notices."
+    no-active: "/info/You have no active notices."
+    active-title: "/info/Your active notices:"
+    active-entry: "{id} - {header}"
+    list-title: "Notice board posts"
+    list-empty: "No active notice-board posts."
+    edit-usage: "/error/Usage: /noticeboard edit <post-id> [header | message]"
+    edit-invalid: "/error/A header and message within the configured limits are required."
+    edited: "/success/Notice {id} updated."
+    expiry-usage: "/error/Usage: /noticeboard expiry <post-id> <1d|14h|-1>"
+    expiry-invalid: "/error/Use a positive duration such as 1d or 14h, or -1 for no expiry."
+    expiry-set: "/success/Notice {id} expiry set to {expiry}."
+    expiry-never: "never"
+    remove-usage: "/error/Usage: /noticeboard remove <post-id>"
+    not-found: "/error/Notice not found."
+    not-owner: "/error/You can only remove your own notices."
+    removed: "/success/Notice removed."
+    no-permission: "/error/You do not have permission to manage notice boards."
+    board-usage: "/error/Usage: /noticeboard board <create|delete> <id> [columns] [rows]"
+    board-removed: "/success/Notice board removed."
+    target-block: "/error/Look at the bottom-left backing block for the board."
+    board-created: "/success/Notice board created. The targeted block is its bottom-left backing block."
 
 interactive-menus:
   enabled: true
@@ -44,6 +289,7 @@ web_server:
     enabled: true
     port: 8950
     path: www
+    public-url: ""
 
 first-join:
   enabled: true
@@ -181,6 +427,262 @@ player-welcome:
 
 player_stats:
   autosave_ticks: 1200
+  time_in:
+    survival:
+      title: Survival Time
+      worlds: ["survival", "survival_nether", "survival_the_end"]
+    creative:
+      title: Creative Time
+      worlds: ["creative"]
+    mini_games:
+      title: Minigame Time
+      worlds: ["bedwars", "bridge", "boatrace", "tntrun", "nightfall"]
+  groups:
+    creative:
+      title: Creative
+      gamemode: creative
+    mini-games:
+      title: Mini-games
+      worlds:
+        - "bedwars*"
+        - "bridge*"
+        - "nightfall*"
+      gamemode: survival
+    survival:
+      title: Survival
+      worlds:
+        - "survival*"
+      gamemode: survival
+  milestones:
+    blocks_broken:
+      values: [10000, 25000, 50000, 100000]
+      message: "&e{player} has broken {value} blocks in {group}"
+    blocks_placed:
+      values: [10000, 25000, 50000, 100000]
+      message: "&e{player} has placed {value} blocks in {group}"
+
+entitlements:
+  notifications:
+    enabled: true
+    ability-gained: "/survival//success/New ability: <yellow>{name}</yellow> — {description}"
+    ability-lost: "/survival//warn/Ability lost: <yellow>{name}</yellow> — {description}"
+    badge-gained: "/success/Badge earned: {badge} <yellow>{description}</yellow>"
+    badge-lost: "/warn/Badge lost: {badge} <yellow>{description}</yellow>"
+  badge-display:
+    prefix: " "
+    separator: ""
+    suffix: ""
+  badges:
+    explorer:
+      display: ":compass:"
+      description: "Completed 10 different quests"
+      permission: stemcraft.badge.explorer
+      priority: 20
+    quest-master:
+      display: ":question_yellow:"
+      description: "Completed 50 different quests"
+      permission: stemcraft.badge.quest-master
+      priority: 60
+    veteran:
+      display: ":clock:"
+      description: "Played on STEMCraft for 100 hours"
+      permission: stemcraft.badge.veteran
+      priority: 50
+    survival-veteran:
+      display: ":survival:"
+      description: "Played Survival for 100 hours"
+      permission: stemcraft.badge.survival-veteran
+      priority: 55
+    bedwars-player:
+      display: ":swords:"
+      description: "Completed 50 BedWars games"
+      permission: stemcraft.badge.bedwars-player
+      priority: 30
+    bedwars-champion:
+      display: ":crown:"
+      description: "Won 25 BedWars games"
+      permission: stemcraft.badge.bedwars-champion
+      priority: 70
+    bridge-hot-streak:
+      display: ":star:"
+      description: "Won 10 Bridge games in 28 days"
+      permission: stemcraft.badge.bridge-hot-streak
+      priority: 80
+    builder:
+      display: ":crafting_table:"
+      description: "Placed 10,000 Survival blocks"
+      permission: stemcraft.badge.builder
+      priority: 35
+    event-winner:
+      display: ":trophy:"
+      description: "Winner of a STEMCraft community event"
+      permission: stemcraft.badge.event-winner
+      priority: 100
+  definitions:
+    # Conditions may use nested `all` (AND), `any` (OR), and `not` groups.
+    # Leaf conditions support `stat`, `permission`, `quest-completed`, and `quests-completed`.
+    # Existing singular `stat`, `stats`, `permissions`, and quest conditions remain supported.
+    # Example skill-tree branch:
+    # when:
+    #   all:
+    #     - stat: {key: skill_mining_xp, at-least: 400}
+    #     - stat: {key: skill_farming_xp, at-least: 800}
+    #     - permission: stemcraft.skilltree.foundation
+    #     - not:
+    #         permission: stemcraft.skilltree.conflicting-branch
+    explorer:
+      when:
+        quests-completed:
+          at-least: 10
+      grants:
+        badges: [explorer]
+    quest-master:
+      when:
+        quests-completed:
+          at-least: 50
+      grants:
+        badges: [quest-master]
+    veteran:
+      when:
+        stat:
+          key: play_time
+          at-least: 100
+      grants:
+        badges: [veteran]
+    survival-veteran:
+      when:
+        stat:
+          key: time_in_survival
+          at-least: 100
+      grants:
+        badges: [survival-veteran]
+    bedwars-player:
+      when:
+        stat:
+          key: minigame_bedwars_games_played
+          at-least: 50
+      grants:
+        badges: [bedwars-player]
+    bedwars-champion:
+      when:
+        stat:
+          key: minigame_bedwars_wins
+          at-least: 25
+      grants:
+        badges: [bedwars-champion]
+    bridge-hot-streak:
+      when:
+        stat:
+          key: minigame_bridge_wins
+          at-least: 10
+          duration: 28d
+      grants:
+        badges: [bridge-hot-streak]
+    builder:
+      when:
+        stat:
+          key: blocks_placed_group_survival
+          at-least: 10000
+      grants:
+        badges: [builder]
+    qol-tool-refill:
+      name: "Backup tools"
+      description: "A matching tool or weapon is automatically equipped when yours breaks."
+      # Level 5: 1,600 lifetime XP in each required skill.
+      when:
+        any:
+          - stat: {key: skill_mining_xp, at-least: 1600}
+          - stat: {key: skill_herbalism_xp, at-least: 1600}
+          - stat: {key: skill_farming_xp, at-least: 1600}
+          - stat: {key: skill_melee_combat_xp, at-least: 1600}
+          - stat: {key: skill_ranged_combat_xp, at-least: 1600}
+      grants:
+        permissions: [stemcraft.qol.auto-refill-tools]
+    qol-farming-hoe-harvest:
+      name: "Quick crop harvest"
+      description: "Sneak and right-click a ripe crop with a hoe to harvest and replant a 3×3 area."
+      # Level 15: 19,600 lifetime XP in each required skill.
+      when:
+        stat:
+          key: skill_farming_xp
+          at-least: 19600
+      grants:
+        permissions: [stemcraft.qol.hoe-harvest]
+    qol-engineering-auto-refill:
+      name: "Automatic item refill"
+      description: "Used blocks and items are automatically replaced from your inventory."
+      # Level 10: 8,100 lifetime XP in each required skill.
+      when:
+        stat:
+          key: skill_engineering_xp
+          at-least: 8100
+      grants:
+        permissions: [stemcraft.qol.auto-refill]
+    qol-vein-mining:
+      name: "Vein mining"
+      description: "Sneak-mine ore with a diamond or netherite pickaxe to harvest connected ore of the same type."
+      # Level 25: 57,600 lifetime XP in each required skill.
+      when:
+        stat: {key: skill_mining_xp, at-least: 57600}
+      grants:
+        permissions: [stemcraft.qol.vein-mining]
+    qol-tree-felling:
+      name: "Tree felling"
+      description: "Sneak-chop a tree with a diamond or netherite axe to harvest connected logs from that height upwards."
+      # Level 25: 57,600 lifetime XP in each required skill.
+      when:
+        stat: {key: skill_herbalism_xp, at-least: 57600}
+      grants:
+        permissions: [stemcraft.qol.tree-felling]
+    qol-auto-select-tool:
+      name: "Automatic tool selection"
+      description: "Start breaking a block to equip the best available tool for it from your inventory."
+      # Level 20: 36,100 lifetime XP in each required skill.
+      when:
+        all:
+          - stat: {key: skill_mining_xp, at-least: 36100}
+          - stat: {key: skill_engineering_xp, at-least: 36100}
+      grants:
+        permissions: [stemcraft.qol.auto-select-tool]
+    qol-farming-stronger-leads:
+      name: "Stronger leads"
+      description: "Leads no longer snap when an animal falls too far behind."
+      # Level 8: 4,900 lifetime XP in each required skill.
+      when:
+        stat:
+          key: skill_farming_xp
+          at-least: 4900
+      grants:
+        permissions: [stemcraft.qol.stronger-leads]
+    qol-engineering-powered-minecarts:
+      name: "Faster minecarts"
+      description: "Powered minecarts travel faster."
+      # Level 15: 19,600 lifetime XP in each required skill.
+      when:
+        stat:
+          key: skill_engineering_xp
+          at-least: 19600
+      grants:
+        permissions: [stemcraft.qol.powered-minecarts]
+    qol-farming-named-mob-info:
+      name: "Animal information"
+      description: "Right-click a named animal to see its health and owner."
+      # Level 5: 1,600 lifetime XP in each required skill.
+      when:
+        stat:
+          key: skill_farming_xp
+          at-least: 1600
+      grants:
+        permissions: [stemcraft.qol.named-mob-info]
+    event-winner:
+      grants:
+        badges: [event-winner]
+
+professions:
+  enabled: true
+  worlds:
+    - "survival*"
+  level-up-message: "&eYou have reached {skill} Level {level}"
 
 holograms:
   visibility:
@@ -191,7 +693,7 @@ holograms:
     apply_to_citizens: true
 
 dragon-respawn:
-  enabled: false
+  enabled: true
   days: 3
   # Optional allow-list of End world names.
   # Leave empty to allow all THE_END worlds.
@@ -204,8 +706,8 @@ distance_difficulty:
 chat:
   format: "{prefix}{player}: {message}{suffix}"
   filter_command: ""
-  spam_cooldown: 3
-  spam_message: "Please do not spam the chat"
+  duplicate_message_limit: 2
+  duplicate_message_warning: "Please do not repeat the same message"
   content_filter:
     enabled: true
     minimum_severity: mild
@@ -288,6 +790,34 @@ player_logs:
         - ".*BED"
         - ".*_ORE"
         - "ANCIENT_DEBRIS"
+
+rotten-flesh-uses:
+  enabled: true
+  composting:
+    enabled: true
+  dog-treat:
+    heal: 12.0
+    love-mode-ticks: 600
+  zombie-bait:
+    carried-range-multiplier: 1.5
+    held-range-multiplier: 2.0
+    dropped-range: 20.0
+    consume-distance: 1.5
+    path-speed: 1.1
+    update-ticks: 10
+  stew:
+    night-vision-ticks: 400
+    hunger-ticks: 200
+
+iron-golem-poppy:
+  enabled: true
+  range: 10.0
+  path-speed: 1.0
+  switch-advantage: 2.0
+  update-ticks: 10
+
+chisel:
+  enabled: true
 
 recipes:
   # Remove some annoying / useless recipes
@@ -439,7 +969,7 @@ deny_spawn_eggs:
 drop_player_heads:
   enabled: true
 no_anvil_repair_cost:
-  enabled: true
+  enabled: false
 rebalance_iron_golem:
   enabled: true
   min_drops: 3
@@ -447,15 +977,186 @@ rebalance_iron_golem:
 leaf_decay_random_tick:
   enabled: true
   scan_radius: 7
+  # Leaf candidates processed per tick when no world override is configured.
+  default_tick_speed: 8
   candidate_retention_ticks: 1200
+  replant:
+    enabled: true
+    # Wait until the tree has been gone this long and every player has moved away.
+    delay-seconds: 90
+    player-clear-radius: 24
+    minimum-offset: 3
+    maximum-offset: 7
+    # Placing a constructed block near the old trunk treats the land as repurposed.
+    repurpose-radius: 8
+    candidate-lifetime-seconds: 600
+voting:
+  enabled: true
+  # Leave blank to allow every player to vote.
+  permission: ""
+  tower:
+    materials:
+      lever: LEVER
+      sign: OAK_WALL_SIGN
+      lamp: REDSTONE_LAMP
+    schema:
+      # Reserved characters: 0-9 vote lamps, G managed sign, V personalized lever.
+      # Rows are top-to-bottom. Columns run front-to-back. Dot preserves a block; space forces air.
+      blocks:
+        L: LECTERN
+        S: STONE
+      place-if-not-solid: [S]
+      # [column, row from bottom]; this position becomes the clicked block at [0, 0, 0].
+      click-point: [1, 0]
+      layout:
+        - '...9'
+        - '...8'
+        - '...7'
+        - '...6'
+        - '...5'
+        - '...4'
+        - '...3'
+        - '...2'
+        - '...1'
+        - '...0'
+        - '..GS'
+        - 'VL.S'
+
+survival-qol:
+  supported-worlds: ["survival*"]
+  supported-game-modes: [SURVIVAL]
+  hoe-harvest:
+    enabled: true
+    permission: stemcraft.qol.hoe-harvest
+  stronger-leads:
+    enabled: true
+    permission: stemcraft.qol.stronger-leads
+  disable-crop-trampling:
+    enabled: true
+    permission: ""
+  auto-refill:
+    enabled: true
+    permission: stemcraft.qol.auto-refill
+  auto-refill-tools:
+    enabled: true
+    permission: stemcraft.qol.auto-refill-tools
+  tree-felling:
+    enabled: true
+    permission: stemcraft.qol.tree-felling
+    require-sneaking: true
+    tools: [DIAMOND_AXE, NETHERITE_AXE]
+    max-blocks: 128
+  vein-mining:
+    enabled: true
+    permission: stemcraft.qol.vein-mining
+    require-sneaking: true
+    tools: [DIAMOND_PICKAXE, NETHERITE_PICKAXE]
+    max-blocks: 64
+  auto-select-tool:
+    enabled: true
+    permission: stemcraft.qol.auto-select-tool
+  named-mob-info:
+    enabled: false
+    permission: stemcraft.qol.named-mob-info
+    message: "/info/{name} • {type} • {health}/{max_health} health • Owner: {owner}"
+  anvil-warning:
+    enabled: true
+    permission: ""
+    level: 35
+    message: "/warn/This anvil operation costs {levels} levels and is close to becoming Too Expensive!"
+  powered-minecarts:
+    enabled: true
+    permission: stemcraft.qol.powered-minecarts
+    multiplier: 1.08
+    max-speed: 0.8
+  durability-warning:
+    enabled: true
+    permission: ""
+    warning-percent: 10
+    critical-percent: 2
+    warning-message: "/warn/⚠ Your {item} is getting badly damaged!"
+    critical-message: "/warn/⚠ Your {item} is about to break!"
+animal-barrels:
+  enabled: true
+  item-name: "Animal Crate"
+  filled-name: "Animal Crate ({animal})"
+  messages:
+    capture-failed: "/error/Could not prepare the animal crate."
+    not-owner: "/error/That animal belongs to another player."
+    no-space: "/error/There is not enough room to release that animal."
+    captured: "/success/Picked up {animal}."
+    released: "/success/Released {animal}."
 naughty:
   allowed_commands:
     - "hub"
+sleeping-bags:
+  enabled: true
 skip_night:
   required: 0.25
   random_tick_speed: 300
   worlds:
     - "survival"
+quest:
+  enabled: true
+  messages:
+    # Prefix any message with routing directives such as /survival//error/ to set its context and style.
+    abandoned: "<yellow>Quest {quest} abandoned.</yellow>"
+    abandon-all-warning: "<yellow>This will abandon all {count} active quests.</yellow>"
+    abandoned-all-one: "<yellow>Abandoned {count} active quest.</yellow>"
+    abandoned-all-many: "<yellow>Abandoned {count} active quests.</yellow>"
+    tracking-auto-empty: "<yellow>Quest tracking mode: automatic. No quest is currently active.</yellow>"
+    tracking-auto: "<yellow>Quest tracking mode: automatic. Tracking {quest}.</yellow>"
+    tracking-specific: "<yellow>Quest tracking mode: specific. Tracking {quest}.</yellow>"
+    tracking-off-status: "<yellow>Quest tracking mode: off.</yellow>"
+    tracking-auto-enabled: "<yellow>Quest automatic tracking enabled.</yellow>"
+    tracking-off: "<yellow>Quest tracking turned off.</yellow>"
+    tracking-quest: "<yellow>Tracking quest {quest}.</yellow>"
+    accepted: "<yellow>Quest {quest} accepted.</yellow>"
+    unavailable: "/error/That quest is not available."
+    already-active: "/warn/That quest is already active."
+    inventory-space-required: "/error/Make room in your inventory for the quest book."
+    started: "/success/Quest started: {quest}"
+    time-limit: "<yellow>Time limit: {duration}.</yellow>"
+    ready-to-return: "<yellow>{quest} is complete. Return to {npc}.</yellow>"
+    objective-complete: "/success/Quest objective complete."
+    book-required: "/error/You must be carrying your quest book to claim the reward."
+    required-items-missing: "/error/You do not have all required quest items."
+    reward-delivery-failed: "/error/Your reward could not fit and could not be mailed. Make inventory space and try again."
+    rewards-mailed: "/info/Your inventory was full, so some quest rewards were sent to your mailbox."
+    save-failed: "/error/The quest could not be saved. Your items were restored; please try again."
+    completed: "<yellow>Quest {quest} completed.</yellow>"
+    old-book-removed: "/warn/This old quest book fades away."
+    countdown: "<yellow>{quest}: {remaining} remaining.</yellow>"
+    countdown-urgent: "<red>{quest}: {remaining} remaining.</red>"
+    failed: "<red>{quest} failed. {reason}</red>"
+    failure-reasons:
+      time-ran-out: "Time ran out."
+      limited-completed: "Another player completed this limited quest first."
+  npc-leaving:
+    # Random delay after an NPC's availability window closes, preventing simultaneous departures.
+    random-delay-ticks: 500
+    # Despawn after reaching this distance from every player.
+    player-distance: 150
+    # Failsafe for NPCs that cannot path away or are followed continuously.
+    timeout-ticks: 3600
+  # Only show the tracked quest boss bar in these worlds. Supports * wildcards.
+  tracking-worlds:
+    - "survival*"
+  npc-names:
+    - "Rokar"
+    - "Tailor"
+    - "Mira"
+    - "Bram"
+    - "Elowen"
+    - "Tobin"
+    - "Nessa"
+    - "Orin"
+citizens-npc-proximity:
+  enabled: true
+  # Hysteresis prevents NPCs repeatedly spawning and despawning at one boundary.
+  spawn-radius: 96
+  despawn-radius: 128
+  check-ticks: 100
 player_game_messages:
   join:
     enabled: true
@@ -524,17 +1225,46 @@ tab:
     - "<gray>Ping</gray> {ping-colour}{ping}ms{/ping-colour} <dark_gray>•</dark_gray> <gray>Online</gray> <green>{online}</green>/<green>{max}</green>"
     - "<gray>Tab Name</gray> <white>{player}</white>"
 
-  name_format: "{prefix}{player}"
+  name_format: "{prefix}{player}{badge-3}"
   # optional: enforce max length (tab list name has limits)
   max_name_len: 48
 selection_preview:
   enabled: true
-  update_ticks: 6
-  point_spacing: 2.0
-  max_points: 180
-  major_marker_interval: 5
-  max_view_distance: 96.0
+  particle: DUST
+  corner-particle: FLAME
+  particles-per-block: 0.5
+  major-marker-interval: 10
+  particle-send-interval: 10
+  particle-viewdistance: 48.0
+  max-selection-size-to-display: 10000000
+  # Total WorldEdit particle calls per player per update, including markers and grid.
+  max-particles-per-update: 1000
+  advanced-grid:
+    # Default for players without a saved /selpreview grid preference.
+    enabled: false
+    spacing: 5.0
+    max-points: 1000
+    # WorldEdit grids automatically hide if any side exceeds this many blocks.
+    max-side-length: 64.0
   flash_material: GLOWSTONE
+
+comet:
+  enabled: true
+  start-y: 290
+  landing-angle-degrees: 10.0 # flight and crash scar meet at this pitch
+  flight-ticks: 400 # 20 seconds
+  trail-length: 40.0
+  impact-explosions: 10
+  crash-scar-length: 80.0 # constrained to 50-100 blocks
+  crash-scar-radius: 6
+  explosion-power: 10.0
+  fire: true
+  warning-radius: 200
+  heat-radius: 16.0
+  lethal-heat-radius: 5.0
+  heat-damage: 8.0 # maximum damage every 5 ticks, reducing with distance
+  geode-radius: 8
+  magma-debris: 60
 
 
 bindings:
@@ -559,3 +1289,35 @@ bindings:
   click_action_left: "\uE133"
   click_action_right: "\uE134"
   chest: "\uE135"
+gifts:
+  ui:
+    create-title: "Create Gift"
+    edit-title: "Edit Gift"
+    inspect-title: "Gift Contents"
+  messages:
+    opened: "/success/You opened your gift!"
+    player-only: "Only players can edit Gifts."
+    hold-gift: "/error/Hold a Gift in your main hand."
+    empty: "/error/A Gift must contain at least one item."
+    created: "/success/Gift created."
+    updated: "/success/Gift updated."
+
+# Availability changes apply on restart. Loaded worlds retain their generator.
+world-generation:
+  deep:
+    enabled: true
+  wasteland:
+    enabled: true
+  skylands:
+    enabled: true
+  faraway:
+    enabled: true
+
+# Private Citizens guide. Dialogue, skin and routes live in stembot.yml.
+stembot:
+  enabled: true
+
+# Colors &0-&f, bold &l, underline &n, italic &o, reset &r, and registered :glyph: tokens.
+# Use && for a literal ampersand. Unsupported codes such as &m remain text.
+formatted-signs:
+  enabled: true

@@ -1,29 +1,55 @@
 name: Sync Wiki
 
 on:
+  pull_request:
+    paths:
+      - 'api/**'
+      - 'docs/dev/**'
+      - '.github/workflows/wiki-sync.yml'
   push:
     branches: [ '**' ]
     paths:
-      - 'docs/wiki/**'
+      - 'api/**'
+      - 'docs/dev/**'
       - '.github/workflows/wiki-sync.yml'
   workflow_dispatch:
 
-permissions:
-  contents: write
+permissions: read-all
 
 concurrency:
   group: wiki-sync-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  sync:
-    name: Publish docs/wiki to GitHub Wiki
-    if: ${{ github.event_name != 'push' || github.ref_name == github.event.repository.default_branch }}
+  validate:
+    name: Validate docs/dev JavaDoc includes
+    if: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+
+      - name: Validate API JavaDoc includes
+        uses: STEMMechanics/javadoc-include-action@v1
+        with:
+          docs: 'docs/dev/**/*.md'
+
+  sync:
+    name: Publish docs/dev to GitHub Wiki
+    if: ${{ github.event_name != 'pull_request' && (github.event_name != 'push' || github.ref_name == github.event.repository.default_branch) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Include API JavaDocs
+        uses: STEMMechanics/javadoc-include-action@v1
+        with:
+          docs: 'docs/dev/**/*.md'
 
       - name: Sync wiki repository
         env:
@@ -33,9 +59,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          SOURCE_DIR="docs/wiki"
+          SOURCE_DIR="docs/dev"
           if [ ! -d "$SOURCE_DIR" ]; then
-            echo "No docs/wiki directory found." >> "$GITHUB_STEP_SUMMARY"
+            echo "No docs/dev directory found." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
@@ -69,5 +95,5 @@ jobs:
           {
             echo "## Wiki Sync"
             echo
-            echo "Published \`docs/wiki\` to \`${REPOSITORY}.wiki.git\` on branch \`${WIKI_BRANCH}\`."
+            echo "Published \`docs/dev\` to \`${REPOSITORY}.wiki.git\` on branch \`${WIKI_BRANCH}\`."
           } >> "$GITHUB_STEP_SUMMARY"
