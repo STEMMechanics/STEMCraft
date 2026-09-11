@@ -13,6 +13,7 @@ import dev.stemcraft.api.service.region.RegionListener;
 import dev.stemcraft.api.util.NamespaceId;
 import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.minigame.mobarena.MobArenaSpawnerRecord.IncrementType;
+import dev.stemcraft.service.region.RegionLocationSupport;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -37,11 +38,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jspecify.annotations.NonNull;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * <p>The arena handler for Mob Arena arenas.</p>
@@ -232,6 +229,9 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
             case VOID -> {
                 return MobDeathReason.LeftRegion;
             }
+            case FALL -> {
+                return MobDeathReason.Fell;
+            }
         }
 
         return null;
@@ -279,6 +279,7 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
      */
     private enum MobDeathReason {
         Exploded,
+        Fell,
         LeftRegion
     }
 
@@ -312,7 +313,7 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
             if (causingEntity != null) {
                 broadcastInfoToOccupants(entityArena, "A <red>" + entity.getName() + "</red> was just killed by <gold>" + causingEntity.getName() + "</gold>.");
             } else {
-                broadcastInfoToOccupants(entityArena, "<red>" + entity.getName() + "</red> died.");
+                broadcastInfoToOccupants(entityArena, "A <red>" + entity.getName() + "</red> died.");
             }
         } else {
             switch (mobDeathReason) {
@@ -328,6 +329,13 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
                         broadcastInfoToOccupants(entityArena, "A <red>" + entity.getName() + "</red> was just forced to leave the arena by <gold>" + causingEntity.getName() + "</gold>.");
                     } else {
                         broadcastInfoToOccupants(entityArena, "A <red>" + entity.getName() + "</red> just left the arena.");
+                    }
+                }
+                case Fell -> {
+                    if (causingEntity != null) {
+                        broadcastInfoToOccupants(entityArena, "A <red>" + entity.getName() + "</red> was doomed to fall by <gold>" + causingEntity.getName() + "</gold>.");
+                    } else {
+                        broadcastInfoToOccupants(entityArena, "A <red>" + entity.getName() + "</red> fell.");
                     }
                 }
             }
@@ -427,7 +435,7 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
         switch (newStatus) {
             case RUNNING -> {
                 prepareWave(arena, 1);
-                arena.getPlayers().forEach(player -> arena.teleport(player, arena.getRegion().getRandomGroundLocation()));
+                arena.getPlayers().forEach(player -> arena.teleport(player, RegionLocationSupport.randomGroundLocation(arena.getRegion())));
                 playSoundToOccupants(arena, Sound.ENTITY_PLAYER_LEVELUP, 0.85f, 1.0f);
             }
             case RESETTING -> {
@@ -513,6 +521,13 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
         clearPlayerInventory(player);
         player.setGameMode(GameMode.ADVENTURE);
         return arena.getLobbySpawn();
+    }
+
+    private void clearPlayerInventory(final Player player) {
+        player.getInventory().clear();
+        player.getInventory().setArmorContents(new ItemStack[0]);
+        player.getInventory().setItemInOffHand(null);
+        player.updateInventory();
     }
 
     /**
@@ -605,7 +620,7 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
             mobsSpawned += mobsToSpawn;
 
             for (int j = 0; j < mobsToSpawn; j++) {
-                @NotNull final Entity newEntity = arena.world().spawn(spawnZoneRegion.getRandomGroundLocation(), entityClass);
+                @NotNull final Entity newEntity = arena.world().spawn(Objects.requireNonNull(RegionLocationSupport.randomGroundLocation(spawnZoneRegion)), entityClass);
                 entityMiniGameArenaMap.put(newEntity, arena);
                 if (arena.get(spawnerConfigPrefix + "countTowardsMobCount", Boolean.class)) {
                     trackedEntityMiniGameArenaMap.put(newEntity, arena);
