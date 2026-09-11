@@ -41,7 +41,7 @@ public class NightfallCommand {
             .toList());
 
         api.commands().create("nightfall")
-            .permission("stemcraft.command.nightfall")
+            .access((sender, args) -> dev.stemcraft.permission.PlayerCommandAccess.minigame(sender, args, "nightfall"))
             .usage("/nightfall <list|info|create|delete|join|joinall|spectate|leave|start|stop|restart|cycle|respawn|save|reload|validate|enable|disable|set|select|sel|show|comets|lobbies|addlobby|setlobby|removelobby|generators|addgenerator|setgenerator|removegenerator|dropblocks|adddropblock|setdropweight|removedropblock>")
             .tabCompletion("list")
             .tabCompletion("info")
@@ -137,6 +137,10 @@ public class NightfallCommand {
             .tabCompletion("setdropweight", "{nightfall-arenas}")
             .tabCompletion("removedropblock", "{nightfall-arenas}")
             .executor((ignored, cmd, ctx) -> {
+                if (ctx.args().isEmpty() && !dev.stemcraft.permission.PlayerCommandAccess.gameAdmin(ctx.getSender(), "nightfall")) {
+                    ctx.returnInfo("Use /nightfall list, info, join or leave, spectate.");
+                    return;
+                }
                 ctx.checkArgsSizeAtLeast(1);
 
                 switch (ctx.getArgLower(0)) {

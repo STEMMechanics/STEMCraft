@@ -232,8 +232,8 @@ BREAK_NO_TARGET: "No target block found or block is out of range."
 BREAK_SUCCESS: "Broke {count} blocks in radius {radius}."
 
 # /enderchest
-ENDERCHEST_DESCRIPTION: "Inspect the contents of a player's enderchest."
-ENDERCHEST_USAGE: "/enderchest <player>"
+ENDERCHEST_DESCRIPTION: "Open your ender chest, or another player's with permission."
+ENDERCHEST_USAGE: "/enderchest [player]"
 ENDERCHEST_VIEWING: "Viewing enderchest of {player}."
 
 MUTE_EXPIRED_BROADCAST: "The player {player} is no longer muted."

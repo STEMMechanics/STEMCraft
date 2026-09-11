@@ -293,6 +293,7 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
 
         api.commands().create("clearsel")
             .permission("stemcraft.command.clearsel")
+                .access((sender, args) -> dev.stemcraft.permission.PlayerCommandAccess.ownTarget(sender, args, 0, "stemcraft.command.clearsel.others"))
             .usage("/clearsel [player]")
             .tabCompletion("{player}")
             .executor((ignored, cmd, ctx) -> {

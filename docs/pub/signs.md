@@ -1,5 +1,9 @@
 # Formatted signs
 
+Sign formatting requires an explicit grant of `stemcraft.sign.format`, which defaults
+to **false**, including for operators. Without that permission, formatting codes and
+glyph names remain literal text. The global `formatted-signs.enabled` flag still applies.
+
 Use formatting codes on normal or hanging signs, on either side:
 
 - `&0`–`&f`: Minecraft's sixteen text colors (for example, `&b` is aqua).

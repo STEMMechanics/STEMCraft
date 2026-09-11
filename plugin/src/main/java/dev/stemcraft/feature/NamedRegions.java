@@ -91,7 +91,7 @@ public final class NamedRegions extends BaseFeature {
         api.events().register(PlayerMoveEvent.class, this::onMove);
         api.tabComplete().register("named-area", (player, args) -> new ArrayList<>(areas.keySet()));
         api.commands().create("namedregion").usage("/namedregion <info|list|find|nearby|teleport|rename|retired|fallbacks|release|regenerate>")
-            .description("Inspect or rename generated regions.").permission("stemcraft.command.namedregion")
+            .description("Inspect or rename generated regions.").access(dev.stemcraft.permission.PlayerCommandAccess::namedRegion)
             .tabCompletion("info").tabCompletion("list").tabCompletion("find")
             .tabCompletion("nearby").tabCompletion("teleport", "{named-area}")
             .tabCompletion("rename", "{named-area}")

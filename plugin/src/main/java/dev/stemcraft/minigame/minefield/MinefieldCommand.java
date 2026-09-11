@@ -38,7 +38,7 @@ public class MinefieldCommand {
             .toList());
 
         api.commands().create("minefield")
-            .permission("stemcraft.command.minefield")
+            .access((sender, args) -> dev.stemcraft.permission.PlayerCommandAccess.minigame(sender, args, "minefield"))
             .usage("/minefield <list|info|create|delete|join|joinall|spectate|leave|start|stop|restart|save|reload|validate|enable|disable|set|select|sel|show>")
             .tabCompletion("list")
             .tabCompletion("list", "{int}")
@@ -91,6 +91,10 @@ public class MinefieldCommand {
             .tabCompletion("show", "{minefield-arenas}", "field")
             .tabCompletion("show", "{minefield-arenas}", "finish")
             .executor((ignored, cmd, ctx) -> {
+                if (ctx.args().isEmpty() && !dev.stemcraft.permission.PlayerCommandAccess.gameAdmin(ctx.getSender(), "minefield")) {
+                    ctx.returnInfo("Use /minefield list, info, join or leave, spectate.");
+                    return;
+                }
                 ctx.checkArgsSizeAtLeast(1);
 
                 switch (ctx.getArgLower(0)) {
