@@ -57,7 +57,7 @@ dependencies {
     testImplementation "io.papermc.paper:paper-api:${rootProject.ext.paperApiVersion}"
     testImplementation("com.sk89q.worldedit:worldedit-bukkit:7.4.4")
     //noinspection VulnerableLibrariesLocal
-    testImplementation("org.mockbukkit.mockbukkit:mockbukkit-v26.1.2:4.114.0") {
+    testImplementation("org.mockbukkit.mockbukkit:mockbukkit-v26.2:4.116.1") {
         exclude group: "org.junit"
         exclude group: "org.junit.jupiter"
         exclude group: "org.junit.platform"
