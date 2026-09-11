@@ -3,6 +3,7 @@ package dev.stemcraft.service;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigSection;
+import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.integration.worldedit.WorldEditRegionSupport;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.service.selection.SelectionService;
@@ -15,10 +16,12 @@ import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.Particle;
 import org.bukkit.World;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Player;
+import org.bukkit.persistence.PersistentDataType;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -45,6 +48,7 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
     private static final Particle.DustOptions RED_DUST = new Particle.DustOptions(Color.fromRGB(255, 72, 72), 1.0f);
 
     private final Map<String, Highlight> highlights = new LinkedHashMap<>();
+    private final NamespacedKey worldEditPreviewPreference;
 
     private boolean worldEditPreviewEnabled;
     private long updateTicks;
@@ -63,6 +67,7 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
 
     public SelectionServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
+        worldEditPreviewPreference = new NamespacedKey(plugin, "worldedit-preview-enabled");
     }
 
     @Override
@@ -262,6 +267,14 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
     }
 
     private void registerCommands() {
+        api.commands().create("selpreview")
+            .description("Show or hide your WorldEdit selection particles.")
+            .usage("/selpreview [on|off]")
+            .tabCompletion("on")
+            .tabCompletion("off")
+            .executor((ignored, cmd, ctx) -> commandSelectionPreview(ctx))
+            .register(plugin);
+
         api.commands().create("clearsel")
             .permission("stemcraft.command.clearsel")
             .usage("/clearsel [player]")
@@ -283,6 +296,34 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
         api.tasks().repeating(TASK_ID, 1L, updateTicks, this::tick);
     }
 
+    void commandSelectionPreview(CommandContext ctx) {
+        ctx.checkNotConsole();
+        if (ctx.args().size() > 1) {
+            ctx.returnUsage();
+            return;
+        }
+        Player player = ctx.asPlayer();
+        boolean enabled;
+        switch (ctx.getArg(0, "").toLowerCase(java.util.Locale.ROOT)) {
+            case "" -> enabled = !isWorldEditPreviewEnabled(player);
+            case "on" -> enabled = true;
+            case "off" -> enabled = false;
+            default -> {
+                ctx.returnUsage();
+                return;
+            }
+        }
+        player.getPersistentDataContainer().set(worldEditPreviewPreference, PersistentDataType.BYTE,
+            enabled ? (byte) 1 : (byte) 0);
+        ctx.success(enabled ? "WorldEdit selection preview enabled."
+            : "WorldEdit selection preview hidden. Use /selpreview on to show it again.");
+    }
+
+    boolean isWorldEditPreviewEnabled(Player player) {
+        return player.getPersistentDataContainer().getOrDefault(worldEditPreviewPreference,
+            PersistentDataType.BYTE, (byte) 1) != 0;
+    }
+
     private void tick() {
         if (worldEditPreviewEnabled) {
             renderWorldEditSelections();
@@ -292,7 +333,7 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
 
     private void renderWorldEditSelections() {
         for (Player player : Bukkit.getOnlinePlayers()) {
-            if (!shouldRender(player)) {
+            if (!shouldRender(player) || !isWorldEditPreviewEnabled(player)) {
                 continue;
             }
 

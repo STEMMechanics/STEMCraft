@@ -53,3 +53,9 @@ Remember that the [Community Expectations](safety-and-community/README.md) still
 | `/plot home`  | Return to your plot               |
 
 More commands can be found in the [Commands guide](commands/README.md).
+
+### Selection Particles
+
+If the server's WorldEdit selection particles get in your way, use `/selpreview off` to hide them. Use `/selpreview on` to show them again, or `/selpreview` to toggle. Your preference is saved across reconnects.
+
+This hides STEMCraft's WorldEdit outline and corner particles while keeping your selected region and WorldEdit commands available. Other feature highlights and client-side selection displays have their own controls.
