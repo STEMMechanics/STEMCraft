@@ -102,15 +102,10 @@ public final class WorldEditRegionSupport {
         if (selector == null) return null;
         try {
             Region complete = selector.getRegion();
-            return isPreviewSupported(complete) ? snapshot(complete, world) : null;
+            return snapshot(complete, world);
         } catch (IncompleteRegionException ignored) {
             return null; // An unset corner must never become an origin-to-player preview.
         }
-    }
-
-    private static boolean isPreviewSupported(Region region) {
-        return region instanceof CuboidRegion || region instanceof EllipsoidRegion
-            || region instanceof CylinderRegion || region instanceof Polygonal2DRegion;
     }
 
     /**
@@ -125,19 +120,19 @@ public final class WorldEditRegionSupport {
                 .getSessionManager()
                 .get(wePlayer);
         com.sk89q.worldedit.world.World weWorld = wePlayer.getWorld();
-        RegionSelector selector = session.getRegionSelector(weWorld);
-        if (selector == null) {
-            return null;
-        }
+        return primaryPosition(session.getRegionSelector(weWorld), player.getWorld());
+    }
 
-        BlockVector3 primary;
+    static @Nullable Location primaryPosition(RegionSelector selector, org.bukkit.World world) {
+        if (selector == null) return null;
         try {
-            primary = selector.getPrimaryPosition();
-        } catch (IncompleteRegionException e) {
+            BlockVector3 primary = selector.getPrimaryPosition();
+            // Some selectors return null instead of throwing when no primary is set.
+            if (primary == null) return null;
+            return new Location(world, primary.x() + 0.5, primary.y() + 0.5, primary.z() + 0.5);
+        } catch (IncompleteRegionException ignored) {
             return null;
         }
-
-        return new Location(player.getWorld(), primary.x() + 0.5, primary.y() + 0.5, primary.z() + 0.5);
     }
 
     /**
@@ -227,7 +222,7 @@ public final class WorldEditRegionSupport {
         session.dispatchCUISelection(wePlayer);
     }
 
-    private static SCRegion snapshot(Region region, org.bukkit.World world) {
+    private static @Nullable SCRegion snapshot(Region region, org.bukkit.World world) {
         com.sk89q.worldedit.world.World weWorld = world == null ? null : BukkitAdapter.adapt(world);
 
         if (region instanceof CuboidRegion cuboid) {
@@ -244,6 +239,6 @@ public final class WorldEditRegionSupport {
         if (region instanceof EllipsoidRegion || region instanceof CylinderRegion) {
             return new SCRegion(region, world);
         }
-        throw new IllegalArgumentException("Unsupported region type: " + region.getClass().getSimpleName());
+        return null; // Unsupported selector shapes must not interrupt the recurring preview task.
     }
 }

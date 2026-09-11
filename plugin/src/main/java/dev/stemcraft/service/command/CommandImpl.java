@@ -117,6 +117,10 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
      * @param plugin The plugin registering the command.
      */
     public void register(JavaPlugin plugin) {
+        unregister();
+        if (this.pluginCommand != null) {
+            throw new IllegalStateException("Previous registration could not be removed: " + label);
+        }
         PluginCommand pluginCommand = null;
 
         try {
@@ -178,12 +182,13 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
 
         try {
             CommandMap commandMap = getCommandMap();
-            registeredCommand.unregister(commandMap);
             removeKnownCommands(commandMap, registeredCommand);
+            registeredCommand.unregister(commandMap);
+            this.pluginCommand = null;
         } catch (RuntimeException ex) {
             STEMCraftAPI.api().messages().warn("COMMAND_FAIL_UNREGISTER", "label", label);
-        } finally {
-            this.pluginCommand = null;
+            registeredCommand.getPlugin().getLogger().log(java.util.logging.Level.WARNING,
+                "Command cleanup failed for " + label, ex);
         }
     }
 
@@ -305,25 +310,17 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private void removeKnownCommands(@NotNull CommandMap commandMap, @NotNull org.bukkit.command.Command command) {
-        Class<?> type = commandMap.getClass();
-
-        while (type != null) {
-            try {
-                Field field = type.getDeclaredField("knownCommands");
-                field.setAccessible(true);
-
-                Object value = field.get(commandMap);
-                if (value instanceof Map<?, ?> knownCommands) {
-                    ((Map<String, org.bukkit.command.Command>) knownCommands).entrySet().removeIf(entry -> entry.getValue() == command);
-                }
-                return;
-            } catch (NoSuchFieldException ignored) {
-                type = type.getSuperclass();
-            } catch (IllegalAccessException ex) {
-                STEMCraftAPI.api().messages().warn("COMMAND_FAIL_UNREGISTER", "label", label);
-                return;
+    static void removeKnownCommands(@NotNull CommandMap commandMap, @NotNull org.bukkit.command.Command command) {
+        Map<String, org.bukkit.command.Command> knownCommands = commandMap.getKnownCommands();
+        // Paper's entry iterator cannot remove entries. Use the map API so removal
+        // also updates Brigadier, including aliases and namespaced registrations.
+        List<String> labels = knownCommands.entrySet().stream()
+            .filter(entry -> entry.getValue() == command)
+            .map(Map.Entry::getKey)
+            .toList();
+        for (String registeredLabel : labels) {
+            if (knownCommands.get(registeredLabel) == command) {
+                knownCommands.remove(registeredLabel);
             }
         }
     }
