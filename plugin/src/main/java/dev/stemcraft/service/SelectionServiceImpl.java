@@ -36,13 +36,13 @@ import java.util.UUID;
  */
 public class SelectionServiceImpl extends BaseService implements SelectionService {
     private static final String TASK_ID = "selection-service-render";
-    private static final long DEFAULT_UPDATE_TICKS = 6L;
+    private static final long DEFAULT_UPDATE_TICKS = 10L;
     private static final double DEFAULT_POINT_SPACING = 2.0D;
     private static final int DEFAULT_MAX_POINTS = 180;
-    private static final int DEFAULT_MAJOR_MARKER_INTERVAL = 5;
-    private static final double DEFAULT_SURFACE_POINT_SPACING = 3.0D;
-    private static final int DEFAULT_MAX_SURFACE_POINTS = 8000;
-    private static final double DEFAULT_MAX_VIEW_DISTANCE = 96.0D;
+    private static final int DEFAULT_MAJOR_MARKER_INTERVAL = 10;
+    private static final double DEFAULT_SURFACE_POINT_SPACING = 5.0D;
+    private static final int DEFAULT_MAX_SURFACE_POINTS = 1000;
+    private static final double DEFAULT_MAX_VIEW_DISTANCE = 48.0D;
     private static final double REGION_EDGE_OFFSET = 0.03D;
     private static final Material DEFAULT_FLASH_MATERIAL = Material.GLOWSTONE;
     private static final Particle.DustOptions RED_DUST = new Particle.DustOptions(Color.fromRGB(255, 72, 72), 1.0f);
@@ -50,6 +50,11 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
     private final Map<String, Highlight> highlights = new LinkedHashMap<>();
     private final NamespacedKey worldEditPreviewPreference;
 
+    private final NamespacedKey worldEditGridPreference;
+    private final Map<UUID, PreviewCache> previewCache = new LinkedHashMap<>();
+    private PreviewCapture previewCapture;
+    private int previewParticleBudget = 1000;
+    private double gridMaxSideLength = 64;
     private boolean worldEditPreviewEnabled;
     private long updateTicks;
     private double pointSpacing;
@@ -68,6 +73,7 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
     public SelectionServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
         worldEditPreviewPreference = new NamespacedKey(plugin, "worldedit-preview-enabled");
+        worldEditGridPreference = new NamespacedKey(plugin, "worldedit-grid-enabled");
     }
 
     @Override
@@ -98,6 +104,7 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
     public void onDisable() {
         api.tasks().cancel(TASK_ID);
         clearHighlights("");
+        previewCache.clear();
     }
 
     @Override
@@ -222,6 +229,7 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
     }
 
     private void reloadConfig() {
+        previewCache.clear();
         ConfigSection section = getConfigSection();
         boolean changed = false;
 
@@ -229,27 +237,32 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
         changed |= ensureDefault(section, "flash_material", DEFAULT_FLASH_MATERIAL.name());
         changed |= ensureDefault(section, "particle", "DUST");
         changed |= ensureDefault(section, "corner-particle", "FLAME");
-        changed |= ensureDefault(section, "particles-per-block", 2.0D);
+        changed |= ensureDefault(section, "particles-per-block", 0.5D);
         changed |= ensureDefault(section, "major-marker-interval", DEFAULT_MAJOR_MARKER_INTERVAL);
-        changed |= ensureDefault(section, "particle-send-interval", 6L);
-        changed |= ensureDefault(section, "particle-viewdistance", 96.0D);
+        changed |= ensureDefault(section, "particle-send-interval", DEFAULT_UPDATE_TICKS);
+        changed |= ensureDefault(section, "particle-viewdistance", DEFAULT_MAX_VIEW_DISTANCE);
         changed |= ensureDefault(section, "max-selection-size-to-display", 10_000_000L);
-        changed |= ensureDefault(section, "advanced-grid.enabled", true);
-        changed |= ensureDefault(section, "advanced-grid.spacing", 3.0D);
+        changed |= ensureDefault(section, "advanced-grid.enabled", false);
+        changed |= ensureDefault(section, "advanced-grid.spacing", DEFAULT_SURFACE_POINT_SPACING);
         changed |= ensureDefault(section, "advanced-grid.max-points", DEFAULT_MAX_SURFACE_POINTS);
+
+        changed |= ensureDefault(section, "max-particles-per-update", 1000);
+        changed |= ensureDefault(section, "advanced-grid.max-side-length", 64.0D);
 
         if (changed) {
             section.save();
         }
 
+        previewParticleBudget = Math.clamp(section.getInt("max-particles-per-update", 1000), 16, 10000);
+        gridMaxSideLength = Math.max(1, section.getDouble("advanced-grid.max-side-length", 64));
         worldEditPreviewEnabled = section.getBoolean("enabled", true);
         updateTicks = Math.max(1L, section.getLong("particle-send-interval", section.getLong("update_ticks", DEFAULT_UPDATE_TICKS)));
-        double particlesPerBlock = Math.clamp(section.getDouble("particles-per-block", 2.0D), 0.25D, 5.0D);
+        double particlesPerBlock = Math.clamp(section.getDouble("particles-per-block", 0.5D), 0.25D, 5.0D);
         pointSpacing = 1.0D / particlesPerBlock;
         maxPoints = Math.max(16, section.getInt("max_points", DEFAULT_MAX_POINTS));
         majorMarkerInterval = Math.max(2, section.getInt("major-marker-interval",
             section.getInt("major_marker_interval", DEFAULT_MAJOR_MARKER_INTERVAL)));
-        advancedGridEnabled = section.getBoolean("advanced-grid.enabled", true);
+        advancedGridEnabled = section.getBoolean("advanced-grid.enabled", false);
         gridPointSpacing = Math.max(1.0D, section.getDouble("advanced-grid.spacing", DEFAULT_SURFACE_POINT_SPACING));
         surfacePointSpacing = gridPointSpacing;
         maxSurfacePoints = Math.max(128, section.getInt("advanced-grid.max-points", section.getInt("max_surface_points", DEFAULT_MAX_SURFACE_POINTS)));
@@ -268,10 +281,13 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
 
     private void registerCommands() {
         api.commands().create("selpreview")
+            .aliases("selprev")
             .description("Show or hide your WorldEdit selection particles.")
-            .usage("/selpreview [on|off]")
+            .usage("/selpreview [on|off|grid [on|off]]")
             .tabCompletion("on")
             .tabCompletion("off")
+            .tabCompletion("grid", "on")
+            .tabCompletion("grid", "off")
             .executor((ignored, cmd, ctx) -> commandSelectionPreview(ctx))
             .register(plugin);
 
@@ -298,20 +314,30 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
 
     void commandSelectionPreview(CommandContext ctx) {
         ctx.checkNotConsole();
-        if (ctx.args().size() > 1) {
+        Player player = ctx.asPlayer();
+        boolean grid = ctx.getArg(0, "").equalsIgnoreCase("grid");
+        if (ctx.args().size() > (grid ? 2 : 1)) {
             ctx.returnUsage();
             return;
         }
-        Player player = ctx.asPlayer();
         boolean enabled;
-        switch (ctx.getArg(0, "").toLowerCase(java.util.Locale.ROOT)) {
-            case "" -> enabled = !isWorldEditPreviewEnabled(player);
+        switch (ctx.getArg(grid ? 1 : 0, "").toLowerCase(java.util.Locale.ROOT)) {
+            case "" -> enabled = !(grid ? isWorldEditGridEnabled(player) : isWorldEditPreviewEnabled(player));
             case "on" -> enabled = true;
             case "off" -> enabled = false;
             default -> {
                 ctx.returnUsage();
                 return;
             }
+        }
+        previewCache.remove(player.getUniqueId());
+        if (grid) {
+            player.getPersistentDataContainer().set(worldEditGridPreference, PersistentDataType.BYTE,
+                enabled ? (byte) 1 : (byte) 0);
+            ctx.success(enabled ? "WorldEdit grid enabled for selections up to " + gridMaxSideLength
+                + " blocks per side. Your selection preview must also be on."
+                : "WorldEdit grid hidden. Selection outlines are unchanged.");
+            return;
         }
         player.getPersistentDataContainer().set(worldEditPreviewPreference, PersistentDataType.BYTE,
             enabled ? (byte) 1 : (byte) 0);
@@ -324,7 +350,13 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
             PersistentDataType.BYTE, (byte) 1) != 0;
     }
 
+    boolean isWorldEditGridEnabled(Player player) {
+        return player.getPersistentDataContainer().getOrDefault(worldEditGridPreference,
+            PersistentDataType.BYTE, advancedGridEnabled ? (byte) 1 : (byte) 0) != 0;
+    }
+
     private void tick() {
+        previewCache.keySet().removeIf(id -> Bukkit.getPlayer(id) == null);
         if (worldEditPreviewEnabled) {
             renderWorldEditSelections();
         }
@@ -339,7 +371,7 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
 
             SCRegion selection = getWorldEditPreviewSelection(player);
             if (canRenderRegion(player, selection) && isNearSelection(player.getLocation(), selection, maxViewDistance)) {
-                renderRegion(player, selection);
+                renderWorldEditPreview(player, selection);
                 continue;
             }
 
@@ -350,6 +382,100 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
             renderLocation(player, primary);
         }
     }
+
+    private int geometryPointBudget() {
+        return previewCapture == null ? maxSurfacePoints : Math.min(maxSurfacePoints, previewParticleBudget);
+    }
+
+    private boolean renderGridEnabled() {
+        return previewCapture == null ? advancedGridEnabled : previewCapture.grid;
+    }
+
+    boolean isGridWithinLimit(SCRegion region) {
+        Location min = region.getMinimumLocation();
+        Location max = region.getMaximumLocation();
+        return max.getX() - min.getX() + 1 <= gridMaxSideLength
+            && max.getY() - min.getY() + 1 <= gridMaxSideLength
+            && max.getZ() - min.getZ() + 1 <= gridMaxSideLength;
+    }
+
+    private void renderWorldEditPreview(Player player, SCRegion region) {
+        Region shape = region.getRegion();
+        if (shape.getVolume() > maxSelectionSize) return;
+        boolean grid = isWorldEditGridEnabled(player) && isGridWithinLimit(region);
+        Location viewer = player.getLocation();
+        // Cache bounded, nearby geometry. Crossing a block or changing the selection rebuilds it.
+        String shapeKey = shape.getClass().getName() + shape.getMinimumPoint() + ":" + shape.getMaximumPoint();
+        if (shape instanceof com.sk89q.worldedit.regions.Polygonal2DRegion polygon)
+            shapeKey += polygon.getPoints().toString();
+        if (shape instanceof EllipsoidRegion ellipsoid)
+            shapeKey += ellipsoid.getCenter().toString() + ellipsoid.getRadius();
+        if (shape instanceof CylinderRegion cylinder)
+            shapeKey += cylinder.getCenter().toString() + cylinder.getRadius();
+        String key = region.getWorld().getUID() + ":" + shapeKey + ":" + grid + ":"
+            + viewer.getBlockX() + ":" + viewer.getBlockY() + ":" + viewer.getBlockZ();
+        PreviewCache cached = previewCache.get(player.getUniqueId());
+        if (cached == null || !cached.key.equals(key)) {
+            PreviewCapture capture = new PreviewCapture(new Location(viewer.getWorld(), viewer.getBlockX() + 0.5, viewer.getBlockY() + 0.5, viewer.getBlockZ() + 0.5), grid);
+            previewCapture = capture;
+            try {
+                renderRegion(player, region);
+            } finally {
+                previewCapture = null;
+            }
+            cached = new PreviewCache(key, List.copyOf(capture.points));
+            previewCache.put(player.getUniqueId(), cached);
+        }
+        for (PreviewPoint point : cached.points) {
+            if (!isNearLocation(viewer, point.location, maxViewDistance)) continue;
+            if (point.marker) spawnFlame(player, point.location);
+            else spawnDust(player, point.location);
+        }
+    }
+
+    private boolean capturePreview(Location location, boolean marker) {
+        if (previewCapture == null) return false;
+        if (previewCapture.points.size() < previewParticleBudget
+            && isNearLocation(previewCapture.viewer, location, maxViewDistance)) {
+            previewCapture.points.add(new PreviewPoint(location, marker));
+        }
+        return true;
+    }
+
+    // Clip before sampling, so a long edge does not allocate or send distant points.
+    private Line clipPreviewLine(Line line) {
+        if (previewCapture == null) return line;
+        double[] start = {line.start.getX(), line.start.getY(), line.start.getZ()};
+        double[] end = {line.end.getX(), line.end.getY(), line.end.getZ()};
+        Location viewer = previewCapture.viewer;
+        double[] center = {viewer.getX(), viewer.getY(), viewer.getZ()};
+        double from = 0, to = 1;
+        for (int axis = 0; axis < 3; axis++) {
+            double delta = end[axis] - start[axis];
+            double min = center[axis] - maxViewDistance, max = center[axis] + maxViewDistance;
+            if (Math.abs(delta) < 1.0e-9) {
+                if (start[axis] < min || start[axis] > max) return null;
+            } else {
+                double a = (min - start[axis]) / delta, b = (max - start[axis]) / delta;
+                from = Math.max(from, Math.min(a, b));
+                to = Math.min(to, Math.max(a, b));
+                if (from > to) return null;
+            }
+        }
+        return line(point(line.start.getWorld(), start[0] + (end[0] - start[0]) * from,
+            start[1] + (end[1] - start[1]) * from, start[2] + (end[2] - start[2]) * from),
+            point(line.start.getWorld(), start[0] + (end[0] - start[0]) * to,
+                start[1] + (end[1] - start[1]) * to, start[2] + (end[2] - start[2]) * to));
+    }
+
+    private static final class PreviewCapture {
+        private final Location viewer;
+        private final boolean grid;
+        private final List<PreviewPoint> points = new ArrayList<>();
+        private PreviewCapture(Location viewer, boolean grid) { this.viewer = viewer; this.grid = grid; }
+    }
+    private record PreviewPoint(Location location, boolean marker) { }
+    private record PreviewCache(String key, List<PreviewPoint> points) { }
 
     private void renderHighlights() {
         if (highlights.isEmpty()) {
@@ -627,16 +753,16 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
         List<Line> lines = cuboidLines(bounds);
         renderLines(player, lines);
         renderMajorMarkers(player, lines);
-        if (advancedGridEnabled) renderCuboidExteriorGrid(player, bounds);
+        if (renderGridEnabled()) renderCuboidExteriorGrid(player, bounds);
     }
 
     private void renderCuboidExteriorGrid(Player player, CuboidBounds bounds) {
         Location min = bounds.min();
         Location max = bounds.max();
         World world = min.getWorld();
-        List<Double> xs = axisPoints(min.getX(), max.getX(), majorMarkerInterval);
-        List<Double> ys = axisPoints(min.getY(), max.getY(), majorMarkerInterval);
-        List<Double> zs = axisPoints(min.getZ(), max.getZ(), majorMarkerInterval);
+        List<Double> xs = axisPoints(min.getX(), max.getX(), gridPointSpacing);
+        List<Double> ys = axisPoints(min.getY(), max.getY(), gridPointSpacing);
+        List<Double> zs = axisPoints(min.getZ(), max.getZ(), gridPointSpacing);
         List<Line> gridLines = new ArrayList<>();
 
         for (double z : List.of(min.getZ(), max.getZ())) {
@@ -654,9 +780,13 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
 
         Map<String, Location> dust = new LinkedHashMap<>();
         Map<String, Location> flames = new LinkedHashMap<>();
-        for (Line gridLine : gridLines) {
+        for (Line original : gridLines) {
+            Line gridLine = clipPreviewLine(original);
+            if (gridLine == null) continue;
+            if (dust.size() >= geometryPointBudget() && flames.size() >= geometryPointBudget()) break;
             addLinePoints(dust, gridLine, pointSpacing);
             for (Location marker : lineMarkers(gridLine, majorMarkerInterval)) {
+                if (flames.size() >= geometryPointBudget()) break;
                 flames.putIfAbsent(locationKey(marker), marker);
             }
         }
@@ -665,8 +795,10 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
     }
 
     private void addLinePoints(Map<String, Location> points, Line line, double spacing) {
-        int steps = Math.max(1, (int) Math.ceil(line.length() / spacing));
-        for (int index = 0; index <= steps; index++) {
+        line = clipPreviewLine(line);
+        if (line == null) return;
+        int steps = Math.min(geometryPointBudget(), Math.max(1, (int) Math.ceil(line.length() / spacing)));
+        for (int index = 0; index <= steps && points.size() < geometryPointBudget(); index++) {
             if (isMajorMarkerStep(line, index, steps)) continue;
             double factor = index / (double) steps;
             Location location = point(line.start().getWorld(),
@@ -678,12 +810,12 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
     }
 
     private void renderFlamePoints(Player player, List<Location> points) {
-        if (points.size() <= maxSurfacePoints) {
+        if (points.size() <= geometryPointBudget()) {
             points.forEach(location -> spawnFlame(player, location));
             return;
         }
-        double stride = (double) points.size() / maxSurfacePoints;
-        for (int index = 0; index < maxSurfacePoints; index++) {
+        double stride = (double) points.size() / geometryPointBudget();
+        for (int index = 0; index < geometryPointBudget(); index++) {
             spawnFlame(player, points.get(Math.min(points.size() - 1, (int) Math.floor(index * stride))));
         }
     }
@@ -696,9 +828,9 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
         addEllipse(outline, world, center.x(), center.y(), center.z(), radius.x() + 0.5D, radius.y() + 0.5D, 1);
         addEllipse(outline, world, center.x(), center.y(), center.z(), radius.z() + 0.5D, radius.y() + 0.5D, 2);
         List<Location> grid = new ArrayList<>();
-        if (advancedGridEnabled) {
-            int latitudeSteps = Math.max(4, (int) Math.ceil(Math.PI * Math.max(1.0D, radius.y()) / gridPointSpacing));
-            int longitudeSteps = Math.max(8, (int) Math.ceil(2 * Math.PI * Math.max(radius.x(), radius.z()) / gridPointSpacing));
+        if (renderGridEnabled()) {
+            int latitudeSteps = Math.min(32, Math.max(4, (int) Math.ceil(Math.PI * Math.max(1.0D, radius.y()) / gridPointSpacing)));
+            int longitudeSteps = Math.min(64, Math.max(8, (int) Math.ceil(2 * Math.PI * Math.max(radius.x(), radius.z()) / gridPointSpacing)));
             for (int lat = 0; lat <= latitudeSteps; lat++) {
                 double phi = Math.PI * lat / latitudeSteps;
                 for (int lon = 0; lon < longitudeSteps; lon++) {
@@ -709,7 +841,7 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
             }
         }
         renderIntervalOutline(player, outline);
-        if (advancedGridEnabled) renderSurfacePoints(player, grid);
+        if (renderGridEnabled()) renderSurfacePoints(player, grid);
     }
 
     private void renderCylinder(Player player, World world, CylinderRegion region) {
@@ -719,24 +851,27 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
         double top = region.getMaximumY() + 1.0D + REGION_EDGE_OFFSET;
         List<Location> ringPoints = new ArrayList<>();
         List<Location> gridPoints = new ArrayList<>();
-        int ringSteps = Math.max(12, (int) Math.ceil(2 * Math.PI * Math.max(radius.x(), radius.z()) / pointSpacing));
+        int ringSteps = Math.min(geometryPointBudget(), Math.max(12, (int) Math.ceil(2 * Math.PI * Math.max(radius.x(), radius.z()) / pointSpacing)));
         for (int step = 0; step < ringSteps; step++) {
             double angle = 2 * Math.PI * step / ringSteps;
             double x = center.x() + (radius.x() + 0.5D) * Math.cos(angle);
             double z = center.z() + (radius.z() + 0.5D) * Math.sin(angle);
             ringPoints.add(point(world, x, bottom, z));
             ringPoints.add(point(world, x, top, z));
-            if (advancedGridEnabled && step % Math.max(1, (int) Math.ceil(gridPointSpacing / pointSpacing)) == 0) {
-                for (double y : axisPoints(bottom, top, gridPointSpacing)) gridPoints.add(point(world, x, y, z));
+            if (renderGridEnabled() && step % Math.max(1, (int) Math.ceil(gridPointSpacing / pointSpacing)) == 0) {
+                for (double y : axisPoints(bottom, top, gridPointSpacing)) {
+                    if (gridPoints.size() >= geometryPointBudget()) break;
+                    gridPoints.add(point(world, x, y, z));
+                }
             }
         }
         renderCylinderOutline(player, ringPoints);
-        if (advancedGridEnabled) renderSurfacePoints(player, gridPoints);
+        if (renderGridEnabled()) renderSurfacePoints(player, gridPoints);
     }
 
     private void addEllipse(List<Location> points, World world, double cx, double cy, double cz,
                             double radiusA, double radiusB, int plane) {
-        int steps = Math.max(12, (int) Math.ceil(2 * Math.PI * Math.max(radiusA, radiusB) / pointSpacing));
+        int steps = Math.min(geometryPointBudget(), Math.max(12, (int) Math.ceil(2 * Math.PI * Math.max(radiusA, radiusB) / pointSpacing)));
         for (int step = 0; step < steps; step++) {
             double angle = 2 * Math.PI * step / steps;
             double a = radiusA * Math.cos(angle);
@@ -777,6 +912,7 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
     private List<Double> axisPoints(double start, double end, double spacing) {
         List<Double> points = new ArrayList<>();
         points.add(start);
+        spacing = Math.max(spacing, (end - start) / 64.0D);
         for (double value = start + spacing; value < end; value += spacing) points.add(value);
         if (end > start) points.add(end);
         return points;
@@ -787,12 +923,12 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
     }
 
     private void renderSurfacePoints(Player player, List<Location> points) {
-        if (points.size() <= maxSurfacePoints) {
+        if (points.size() <= geometryPointBudget()) {
             points.forEach(location -> spawnDust(player, location));
             return;
         }
-        double stride = (double) points.size() / maxSurfacePoints;
-        for (int index = 0; index < maxSurfacePoints; index++) {
+        double stride = (double) points.size() / geometryPointBudget();
+        for (int index = 0; index < geometryPointBudget(); index++) {
             spawnDust(player, points.get(Math.min(points.size() - 1, (int) Math.floor(index * stride))));
         }
     }
@@ -857,8 +993,10 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
             return;
         }
 
+        int lineBudget = previewCapture == null ? maxPoints
+            : Math.min(maxPoints, Math.max(1, (int) (previewParticleBudget * 0.65 / lines.size())));
         for (Line line : lines) {
-            renderLine(player, line, Integer.MAX_VALUE);
+            renderLine(player, line, lineBudget);
         }
     }
 
@@ -888,6 +1026,8 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
     }
 
     private void renderLine(Player player, Line line, int lineMaxPoints) {
+        line = clipPreviewLine(line);
+        if (line == null) return;
         double length = line.length();
         if (length <= 0.0D) {
             spawnDust(player, line.start());
@@ -923,7 +1063,9 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
         }
 
         Map<String, Location> markers = new LinkedHashMap<>();
-        for (Line line : lines) {
+        for (Line original : lines) {
+            Line line = clipPreviewLine(original);
+            if (line == null) continue;
             for (Location marker : lineMarkers(line, majorMarkerInterval)) {
                 markers.put(locationKey(marker), marker);
             }
@@ -934,7 +1076,8 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
         }
 
         List<Location> ordered = new ArrayList<>(markers.values());
-        int markerBudget = Math.max(64, maxPoints * 2);
+        int markerBudget = previewCapture == null ? Math.max(64, maxPoints * 2)
+            : Math.max(1, previewParticleBudget / 10);
         if (ordered.size() <= markerBudget) {
             for (Location location : ordered) {
                 spawnMajorMarker(player, location);
@@ -957,7 +1100,7 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
             return markers;
         }
 
-        int steps = Math.max(1, (int) Math.floor(length / spacing));
+        int steps = Math.min(maxPoints, Math.max(1, (int) Math.floor(length / spacing)));
         for (int i = 0; i <= steps; i++) {
             double t = (double) i / (double) steps;
             double x = line.start().getX() + ((line.end().getX() - line.start().getX()) * t);
@@ -974,6 +1117,7 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
     }
 
     private void spawnDust(Player player, Location location) {
+        if (capturePreview(location, false)) return;
         if (selectionParticle == Particle.DUST) {
             player.spawnParticle(Particle.DUST, location.getX(), location.getY(), location.getZ(),
                 1, 0.0D, 0.0D, 0.0D, 0.0D, RED_DUST, true);
@@ -984,11 +1128,13 @@ public class SelectionServiceImpl extends BaseService implements SelectionServic
     }
 
     private void spawnFlame(Player player, Location location) {
+        if (capturePreview(location, true)) return;
         player.spawnParticle(cornerParticle, location.getX(), location.getY(), location.getZ(),
             1, 0.02D, 0.02D, 0.02D, 0.0D, null, true);
     }
 
     private void spawnMajorMarker(Player player, Location location) {
+        if (previewCapture != null) { capturePreview(location, true); return; }
         player.spawnParticle(Particle.FLAME, location.getX(), location.getY(), location.getZ(),
             3, 0.08D, 0.08D, 0.08D, 0.0D, null, true);
         spawnDust(player, location);
