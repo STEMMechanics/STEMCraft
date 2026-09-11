@@ -38,12 +38,18 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jspecify.annotations.NonNull;
 
-import java.util.*;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 /**
  * <p>The arena handler for Mob Arena arenas.</p>
  */
 final class MobArenaArenaHandler implements MiniGameArenaHandler {
+    private static final ItemStack[] EMPTY_ITEMSTACK = new ItemStack[0];
     private final STEMCraftAPI api;
     private final MobArenaMiniGame mobArena;
     private final Map<Entity, MiniGameArena> trackedEntityMiniGameArenaMap;
@@ -69,7 +75,7 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
      * @param arena The arena to return the collective sum of health for all tracked mobs from.
      * @return The collective sum of health for all tracked mobs in the given arena.
      */
-    public Double getTrackedMobHealthForMinigame(@NotNull final MiniGameArena arena) {
+    private Double getTrackedMobHealthForMinigame(@NotNull final MiniGameArena arena) {
         return trackedEntityMiniGameArenaMap.entrySet()
                 .stream()
                 .reduce(0.0, (accumulator, value) ->
@@ -525,7 +531,7 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
 
     private void clearPlayerInventory(final Player player) {
         player.getInventory().clear();
-        player.getInventory().setArmorContents(new ItemStack[0]);
+        player.getInventory().setArmorContents(EMPTY_ITEMSTACK);
         player.getInventory().setItemInOffHand(null);
         player.updateInventory();
     }
@@ -698,15 +704,16 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
         player.getInventory().setItem(0, new ItemStack(Material.IRON_SWORD));
         player.getInventory().setItem(1, new ItemStack(Material.BOW));
         player.getInventory().setItem(2, new ItemStack(Material.ARROW, 64));
+        player.getInventory().setItemInOffHand(new ItemStack(Material.SHIELD));
         // Delay of two ticks here prevents the shield from disappearing on the client.
-        player.getScheduler().runDelayed(STEMCraft.getPlugin(), task ->
-                player.getInventory().setItemInOffHand(new ItemStack(Material.SHIELD)),
-                null, 2);
+        /*player.getScheduler().runDelayed(STEMCraft.getPlugin(), task ->
+                        player.getInventory().setItemInOffHand(new ItemStack(Material.SHIELD)),
+                null, 2);*/
         player.getInventory().setItem(EquipmentSlot.HEAD, new ItemStack(Material.IRON_HELMET));
         player.getInventory().setItem(EquipmentSlot.CHEST, new ItemStack(Material.IRON_CHESTPLATE));
         player.getInventory().setItem(EquipmentSlot.LEGS, new ItemStack(Material.IRON_LEGGINGS));
         player.getInventory().setItem(EquipmentSlot.FEET, new ItemStack(Material.IRON_BOOTS));
-
+        player.updateInventory();
     }
 
     /**
