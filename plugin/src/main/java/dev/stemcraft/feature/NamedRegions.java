@@ -155,7 +155,7 @@ public final class NamedRegions extends BaseFeature {
         api.commands().create("namedregion")
             .usage("/namedregion <info|list|find|nearby|teleport|rename|retired|fallbacks|release|regenerate>")
             .description("Inspect or rename generated regions.")
-            .permission("stemcraft.command.namedregion")
+            .access(dev.stemcraft.permission.PlayerCommandAccess::namedRegion)
             .tabCompletion("info")
             .tabCompletion("list")
             .tabCompletion("find")

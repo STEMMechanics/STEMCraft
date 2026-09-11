@@ -67,6 +67,7 @@ The list below reflects the active built-in command roots in source.
 | `/bridge` | `BridgeCommand` |
 | `/boatrace` | `BoatRaceCommand` |
 | `/bedwars` | `BedWarsCommand` |
+| `/minefield` | `MinefieldCommand` |
 | `/nightfall` | `NightfallCommand` |
 | `/parkour` | `ParkourCommand` |
 | `/skyblock` | `SkyBlockCommand` |
@@ -96,6 +97,9 @@ Join and leave commands run as the player by default. Use `player:` or `server:`
 Custom command aliases also run as the player by default. Use `player:` or `server:` on a configured run entry to force the sender, and `{player}` / `{uuid}` placeholders inside the configured command text.
 
 ## Permission Conventions
+
+See [Player and staff permissions](permissions.md) for the standard-player grant list,
+all eight minigames, other-player checks and migration from the old broad permissions.
 
 Most built-in commands follow:
 

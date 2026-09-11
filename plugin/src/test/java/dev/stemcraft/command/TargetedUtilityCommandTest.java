@@ -60,6 +60,24 @@ class TargetedUtilityCommandTest {
     }
 
     @Test
+    void enderChestDefaultsToSelfAndOpensOtherChestForTheCaller() {
+        PlayerMock sender = server.addPlayer("Alice");
+        PlayerMock target = server.addPlayer("Bob");
+        target.getEnderChest().setItem(0, new ItemStack(Material.DIAMOND));
+        CommandContext ctx = mock(CommandContext.class);
+        when(ctx.asPlayer()).thenReturn(sender);
+        when(ctx.args()).thenReturn(List.of());
+        var command = new EnderChestCommand(plugin, api);
+        command.onExecute(mock(Command.class), ctx);
+        assertEquals(sender.getEnderChest(), sender.getOpenInventory().getTopInventory());
+        when(ctx.args()).thenReturn(List.of("Bob"));
+        when(ctx.getPlayer(0, (Player) null)).thenReturn(target);
+        command.onExecute(mock(Command.class), ctx);
+        assertEquals(target.getEnderChest(), sender.getOpenInventory().getTopInventory());
+        assertEquals(Material.DIAMOND, sender.getOpenInventory().getTopInventory().getItem(0).getType());
+    }
+
+    @Test
     void clearInvUsesFirstArgumentForConsoleTargeting() {
         PlayerMock target = server.addPlayer("nomadjimbob");
         target.getInventory().addItem(new ItemStack(Material.STONE, 8));

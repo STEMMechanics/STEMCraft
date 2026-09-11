@@ -7,6 +7,9 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.Style;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
+import org.bukkit.Bukkit;
+import org.bukkit.permissions.Permission;
+import org.bukkit.permissions.PermissionDefault;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
@@ -21,6 +24,8 @@ public final class FormattedSigns extends BaseFeature {
         NamedTextColor.BLUE, NamedTextColor.GREEN, NamedTextColor.AQUA,
         NamedTextColor.RED, NamedTextColor.LIGHT_PURPLE, NamedTextColor.YELLOW, NamedTextColor.WHITE
     };
+    private static final String FORMAT_PERMISSION = "stemcraft.sign.format";
+    private Permission registeredPermission;
     private Listener listener;
 
     public FormattedSigns(STEMCraftAPI api) {
@@ -29,6 +34,12 @@ public final class FormattedSigns extends BaseFeature {
 
     @Override
     public void onEnable() {
+        var manager = Bukkit.getPluginManager();
+        if (manager.getPermission(FORMAT_PERMISSION) == null) {
+            registeredPermission = new Permission(FORMAT_PERMISSION,
+                "Use supported color codes and glyphs on signs.", PermissionDefault.FALSE);
+            manager.addPermission(registeredPermission);
+        }
         listener = api.events().register(SignChangeEvent.class, this::formatSign, EventPriority.HIGHEST, true);
     }
 
@@ -36,10 +47,18 @@ public final class FormattedSigns extends BaseFeature {
     public void onDisable() {
         if (listener != null) HandlerList.unregisterAll(listener);
         listener = null;
+        if (registeredPermission != null) {
+            var manager = Bukkit.getPluginManager();
+            if (manager.getPermission(FORMAT_PERMISSION) == registeredPermission) {
+                manager.removePermission(registeredPermission);
+                registeredPermission.recalculatePermissibles();
+            }
+            registeredPermission = null;
+        }
     }
 
     void formatSign(SignChangeEvent event) {
-        if (event.isCancelled()) return;
+        if (event.isCancelled() || !event.getPlayer().hasPermission(FORMAT_PERMISSION)) return;
         TokenProcessor tokens = api.messages().tokens();
         for (int line = 0; line < event.lines().size(); line++) {
             Component original = event.line(line);

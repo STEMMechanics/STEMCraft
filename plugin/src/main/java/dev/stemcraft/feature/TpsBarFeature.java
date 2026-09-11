@@ -34,11 +34,14 @@ public final class TpsBarFeature extends BaseFeature {
         api.events().register(PlayerJoinEvent.class,event->restore(event.getPlayer()));
         api.events().register(PlayerQuitEvent.class,event->hide(event.getPlayer()));
         api.commands().create("tpsbar").usage("/tpsbar [player]").description("Toggle the server performance boss bar.")
-            .permission("stemcraft.command.tpsbar").tabCompletion("{player}")
+            .permission("stemcraft.command.tpsbar")
+            .access((sender,args) -> dev.stemcraft.permission.PlayerCommandAccess.ownTarget(sender,args,0,"stemcraft.command.tpsbar.others")
+                || sender.hasPermission("stemcraft.command.tpsbar.other"))
+            .tabCompletion("{player}")
             .executor((unused,cmd,ctx)->{
                 Player target;
                 if(ctx.getArg(0,null)!=null){
-                    if(!ctx.hasPermission("stemcraft.command.tpsbar.other")){ctx.returnError("You cannot change another player's TPS bar.");return;}
+                    if(!ctx.hasPermission("stemcraft.command.tpsbar.others") && !ctx.hasPermission("stemcraft.command.tpsbar.other")){ctx.returnError("You cannot change another player's TPS bar.");return;}
                     target=ctx.getPlayer(0,null);if(target==null){ctx.returnError("That player is not online.");return;}
                 }else{ctx.checkNotConsole();target=ctx.asPlayer();}
                 boolean enabled=toggle(target);ctx.returnSuccess("TPS bar toggled "+(enabled?"on":"off")+" for "+target.getName()+".");
