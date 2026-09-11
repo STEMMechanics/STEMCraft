@@ -62,6 +62,7 @@ public final class EntitlementService extends BaseService {
         createTables();
         loadConfig();
         loadApplied();
+        repairCalculatedManualAwards();
         registerCommands();
         api.events().register(PlayerJoinEvent.class, event -> recalculate(event.getPlayer().getUniqueId()));
         api.tasks().repeating("entitlements:rolling-recalculation", HOURLY_TICKS, HOURLY_TICKS,
@@ -85,6 +86,7 @@ public final class EntitlementService extends BaseService {
     public void onReload() {
         super.onReload();
         loadConfig();
+        repairCalculatedManualAwards();
         knownPlayers().forEach(this::recalculate);
     }
 
@@ -400,6 +402,39 @@ public final class EntitlementService extends BaseService {
             revokedBadges.computeIfAbsent(UUID.fromString(rs.getString(1)), ignored -> ConcurrentHashMap.newKeySet()).add(rs.getString(2)));
     }
 
+    /** Remove only calculated grants for definitions with no automatic requirements. */
+    private void repairCalculatedManualAwards() {
+        Map<UUID, Set<String>> invalid = new LinkedHashMap<>();
+        api.database().queryEach("SELECT player_uuid,entitlement_id FROM player_entitlements WHERE source='calculated'", null, rs -> {
+            EntitlementDefinition definition = entitlements.get(rs.getString(2));
+            if (definition != null && definition.manual()) {
+                invalid.computeIfAbsent(UUID.fromString(rs.getString(1)), ignored -> new LinkedHashSet<>()).add(definition.id());
+            }
+        });
+        int removed = 0;
+        for (var entry : invalid.entrySet()) {
+            for (String id : entry.getValue()) {
+                int changed = api.database().update(
+                    "DELETE FROM player_entitlements WHERE player_uuid=? AND entitlement_id=? AND source='calculated'", ps -> {
+                        ps.setString(1, entry.getKey().toString()); ps.setString(2, id);
+                    });
+                if (changed > 0) {
+                    if (applied.containsKey(entry.getKey())) applied.get(entry.getKey()).remove(id);
+                    removed += changed;
+                }
+            }
+        }
+        if (removed > 0) plugin.getLogger().info("Removed " + removed + " incorrectly calculated manual-only entitlement awards.");
+
+        // Reconcile tracked nodes even after a restart interrupted an earlier cleanup.
+        // syncPermissions preserves direct badge awards, other entitlement owners and
+        // permissions which were not originally added by this plugin.
+        Map<UUID, Set<String>> managed = new LinkedHashMap<>();
+        api.database().queryEach("SELECT player_uuid,permission FROM player_managed_permissions", null, rs ->
+            managed.computeIfAbsent(UUID.fromString(rs.getString(1)), ignored -> new LinkedHashSet<>()).add(rs.getString(2)));
+        managed.forEach(this::syncPermissions);
+    }
+
     private Set<UUID> knownPlayers() {
         Set<UUID> uuids = new LinkedHashSet<>(applied.keySet());
         uuids.addAll(directBadges.keySet());
@@ -447,15 +482,18 @@ public final class EntitlementService extends BaseService {
             ConfigSectionView section = entitlementRoot.getSection(id);
             if (section == null || !valid(id)) continue;
             List<StatCondition> stats = readStats(section);
-            List<String> quests = new ArrayList<>(section.getStringList("when.quests"));
-            String quest = section.getString("when.quest-completed", "");
+            List<String> quests = new ArrayList<>(section.contains("when.quests") ? section.getStringList("when.quests") : List.of());
+            String quest = section.contains("when.quest-completed") ? section.getString("when.quest-completed", "") : "";
             if (!quest.isBlank()) quests.add(quest);
             Integer questCount = section.contains("when.quests-completed.at-least") ? section.getInt("when.quests-completed.at-least") : null;
             List<String> permissions = section.getStringList("grants.permissions");
             List<String> badgeIds = section.getStringList("grants.badges");
-            List<String> requiredPermissions = section.getStringList("when.permissions");
+            List<String> requiredPermissions = section.contains("when.permissions") ? section.getStringList("when.permissions") : List.of();
             Condition condition = readConditionTree(section);
-            boolean manual = !section.isSection("when") && !section.contains("when");
+            // Empty sections left by older loaders must not turn a manual award
+            // into an unconditional automatic entitlement.
+            boolean manual = stats.isEmpty() && quests.isEmpty() && questCount == null
+                && requiredPermissions.isEmpty() && condition == null;
             entitlements.put(id, new EntitlementDefinition(id,
                 section.getString("name", friendlyName(id)), section.getString("description", friendlyName(id)),
                 stats, quests, questCount, requiredPermissions,
@@ -522,7 +560,7 @@ public final class EntitlementService extends BaseService {
 
     private List<StatCondition> readStats(ConfigSectionView section) {
         List<StatCondition> result = new ArrayList<>();
-        ConfigSectionView singular = section.getSection("when.stat");
+        ConfigSectionView singular = section.isSection("when.stat") ? section.getSection("when.stat") : null;
         if (singular != null) addStat(result, singular);
         Object raw = section.get("when.stats");
         if (raw instanceof List<?> list) for (Object value : list) {
