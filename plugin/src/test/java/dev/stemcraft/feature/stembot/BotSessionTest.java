@@ -1,72 +1,109 @@
 package dev.stemcraft.feature.stembot;
 
-import dev.stemcraft.config.ConfigFileImpl;
-import org.bukkit.*;
-import org.junit.jupiter.api.*;
-import org.junit.jupiter.api.io.TempDir;
-import java.nio.file.*;
+import org.bukkit.Location;
+import org.bukkit.World;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
 import java.util.*;
+
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 class BotSessionTest {
-    @TempDir Path folder;
-    BotActor actor;
-    BotScript script;
-    BotSession session;
-    World world;
-    Location here;
-    List<List<String>> messages;
-    @BeforeEach void setup() throws Exception {
-        Path file=folder.resolve("stembot.yml");
-        try(var in=getClass().getResourceAsStream("/stembot.yml")) { Files.copy(Objects.requireNonNull(in),file); }
-        var config=new ConfigFileImpl();config.load(file.toFile(),true);script=BotScript.read(config);
-        world=mock(World.class);when(world.getName()).thenReturn("world");
-        here=new Location(world,-921,89,291);
-        actor=mock(BotActor.class);when(actor.valid()).thenReturn(true);when(actor.location()).thenAnswer(call->here.clone());
-        messages=new ArrayList<>();session=new BotSession(script,actor,"world",messages::add);
+    private BotActor actor;
+    private World world;
+    private Location here;
+    private List<String> output;
+    private BotSession session;
+
+    @BeforeEach
+    void setUp() {
+        world=mock(World.class);
+        when(world.getName()).thenReturn("world");
+
+        here=new Location(world,0,64,0);
+
+        actor=mock(BotActor.class);
+        when(actor.valid()).thenReturn(true);
+        when(actor.location()).thenAnswer(i->here.clone());
+
+        output=new ArrayList<>();
+
+        var speech=new BotScript.SpeechSettings(
+            true,"block.note_block.bit",.2f,1.2f,1.5f,
+            2,6,6,2,30,8,18
+        );
+
+        var actions=new LinkedHashMap<String,List<BotScript.Instruction>>();
+        actions.put("start",List.of(
+            BotScript.parseInstruction("say:hello"),
+            BotScript.parseInstruction("talk:talking"),
+            BotScript.parseInstruction("walk:10 64 0"),
+            BotScript.parseInstruction("listen:yes|tour -> done, * -> start")
+        ));
+        actions.put("done",List.of(BotScript.parseInstruction("end")));
+
+        var script=new BotScript(
+            "STEMBot","","","","",false,
+            2.5,1.15,10,6,600,speech,
+            List.of("wait"),List.of("stuck"),List.of(),
+            Map.copyOf(actions),Map.of("world","start"),Map.of()
+        );
+
+        session=new BotSession(
+            script,
+            actor,
+            "world",
+            "start",
+            new BotSession.Output() {
+                public void say(String text) { output.add(text); }
+                public int talk(String text) { output.add(text); return 10; }
+            }
+        );
     }
-    private void ticks(int ticks,Location owner) { for(int i=0;i<ticks;i+=5) session.tick(owner); }
-    @Test void greetsWithThreeCrouchesThenWaitsForConsent() {
-        ticks(40,here);
-        verify(actor,times(3)).sneak(true);verify(actor,times(3)).sneak(false);
-        verify(actor,never()).move(any(),anyDouble());
-        session.input("yes");session.tick(here);
-        verify(actor).move(argThat(l->l.getX()==-864&&l.getZ()==245),eq(1.15));
-    }
-    @Test void waitsForOwnerAndResumesWithHysteresis() {
-        session.startTour();ticks(40,here);
-        clearInvocations(actor);
-        session.tick(here.clone().add(15,0,0));verify(actor).pause(true);
-        int count=messages.size();
-        ticks(100,here.clone().add(8,0,0));assertEquals(count,messages.size());
-        session.tick(here.clone().add(5,0,0));verify(actor).pause(false);
-    }
-    @Test void stopsAndFacesEachWaypointBeforeProceeding() {
-        session.startTour();ticks(35,here);
-        for(var point:script.tours().get("world")) {
-            var p=point.point();here=new Location(world,p.x(),p.y(),p.z());
-            session.tick(here);verify(actor,atLeastOnce()).face(p.yaw());
-            assertEquals(point.say(),messages.getLast());
-            ticks(point.pauseTicks()+5,here);
-        }
+
+    @Test
+    void talkBlocksBeforeWalk() {
         session.tick(here);
-        assertEquals(script.complete(),messages.getLast());
+        assertEquals(List.of("hello","talking"),output);
+        verify(actor,never()).move(any(),anyDouble());
+
+        session.tick(here);
+        verify(actor,never()).move(any(),anyDouble());
+
+        session.tick(here);
+        verify(actor).move(argThat(l->l.getX()==10),eq(1.15));
+    }
+
+    @Test
+    void walkBlocksUntilArrivalThenListenBranches() {
+        session.tick(here);
+        session.tick(here);
+        session.tick(here);
+
+        here=new Location(world,10,64,0);
+        session.tick(here);
+
         assertFalse(session.closed());
-        session.input("bye");assertTrue(session.closed());verify(actor).close();
+
+        session.input("yes");
+        session.tick(here);
+
+        assertTrue(session.closed());
+        verify(actor).close();
     }
-    @Test void jumpsOnlyWhenMovingAndStopsOnBlockedRoute() {
-        when(actor.navigating()).thenReturn(true);
-        session.startTour();ticks(240,here);
-        verify(actor,atLeastOnce()).jump();verify(actor,atLeastOnce()).cancel();
-        assertEquals(script.stuck(),messages.getLast());
-        clearInvocations(actor);ticks(100,here);verify(actor,never()).move(any(),anyDouble());
-        session.input("continue");when(actor.navigating()).thenReturn(false);
-        session.tick(here);verify(actor).move(any(),anyDouble());
-    }
-    @Test void privateCloseIsIdempotentAndWorldChangesCloseTheActor() {
-        World other=mock(World.class);when(other.getName()).thenReturn("survival");
-        session.tick(new Location(other,0,64,0));
-        assertTrue(session.closed());session.close();verify(actor,times(1)).close();
+
+    @Test
+    void fallingBehindCancelsWalkAndRandomWaitingMessageIsShown() {
+        session.tick(here);
+        session.tick(here);
+        session.tick(here);
+
+        session.tick(new Location(world,20,64,0));
+
+        verify(actor,atLeastOnce()).cancel();
+        assertTrue(output.contains("wait"));
     }
 }

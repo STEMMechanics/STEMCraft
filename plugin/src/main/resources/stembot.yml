@@ -1,110 +1,209 @@
-# All ordinary chat is private while a STEMBot session is active.
-# Responses use Java regex FULL matches, ignoring case. The first match wins.
-# World responses run before global responses. Commands below are internal bot actions.
 name: STEMBot
+
 skin:
+  # Fast path. If both fields are populated, STEMCraft skips MineSkin conversion.
+  texture:
+    value: ''
+    signature: ''
+
+  # Fallback source. A generated signed texture is cached in stembot-skin-cache.yml.
   url: 'http://192.168.1.40:8950/stembot.png'
   slim: false
+
 spawn-distance: 2.5
-greeting-crouches: 3
 idle-timeout-seconds: 600
-first-join:
-  world: world
-  spawn: {x: -919, y: 89, z: 291, facing: W}
+
+speech:
+  enabled: true
+
+  # Bukkit sound key.
+  sound: 'block.note_block.bit'
+  volume: 0.22
+
+  pitch-min: 1.25
+  pitch-max: 1.55
+
+  # Each individual beep chooses a fresh random delay in this range.
+  beep-interval-ticks:
+    min: 2
+    max: 6
+
+  # Text length controls the number of beeps, which controls how long talk blocks.
+  characters-per-beep: 6
+  min-beeps: 2
+  max-beeps: 30
+
+  # Talking also performs occasional Citizens player arm animations.
+  talk-gesture-ticks:
+    min: 8
+    max: 18
+
 movement:
   speed: 1.15
   wait-distance: 10
   resume-distance: 6
-  jump-interval-ticks: 35
+
+# Engine-generated messages. One entry is selected randomly each time.
 messages:
-  greeting:
-    - 'Hi {player}! I am STEMBot, your own little guide!'
-    - 'Only you can see me. While we chat, your messages come only to me.'
-    - 'Would you like to follow me for a tour? Say yes or tour. Say bye or @close to return to normal chat.'
-  fallback:
-    - 'I did not quite understand. Try tour, pause, continue, repeat, help, or bye.'
-  farewell:
-    - 'See you soon! Our private chat is closed; your messages go to normal chat again.'
+  prefix: ':stembot: &bSTEMBot: &f'
   waiting:
     - 'I will wait here for you! Come a little closer and we can carry on.'
+    - 'No rush! Catch up with me and we will keep going.'
+    - 'I got a little ahead of you. Come closer and I will continue.'
+    - 'Beep boop... waiting mode! Come back over when you are ready.'
+
   stuck:
-    - 'I cannot find a way through here. Try continue to let me try again, or ask a staff member to adjust my route.'
-  complete:
-    - 'That is the tour! What would you like to know? Ask about survival, creative, minigames, challenges or voting.'
-    - 'Say bye whenever you are ready to return to normal chat.'
-responses:
-  close:
-    regex: '(?:@close|bye|goodbye|close|exit|no thanks)[.!]?'
-    actions: ['@close']
-  start:
-    regex: '(?:yes|yep|sure|ok|okay|tour|follow|@tour)[.!]?'
-    say: ['Brilliant! Follow me. I will wait if you need to catch up.']
-    actions: ['@tour']
-  pause:
-    regex: '(?:pause|wait|stop|@pause)[.!]?'
-    say: ['Of course! Say continue when you are ready.']
-    actions: ['@pause']
-  resume:
-    regex: '(?:continue|resume|ready|@resume)[.!]?'
-    say: ['Here we go!']
-    actions: ['@resume']
-  repeat:
-    regex: '(?:repeat|again|@repeat)[.!]?'
-    actions: ['@repeat']
-  help:
-    regex: '.*\b(?:help|commands)\b.*'
-    say: ['Try tour, pause, continue, repeat, or bye. You can also ask me about the places around the hub.']
-  thanks:
-    regex: '.*\b(?:thanks|thank you)\b.*'
-    say: ['You are very welcome, {player}! Anything else?']
-worlds:
-  world:
-    # Ordered stops; insert extra entries with say: [] to guide around obstacles.
-    # Y is the bot's feet position. Facing applies when the bot reaches the stop.
-    waypoints:
-      survival:
-        x: -864
-        y: 85
-        z: 245
-        facing: S
-        pause-ticks: 120
-        say: ['Here is the Survival portal! This is where your survival adventure begins.']
-      creative:
-        x: -864
-        y: 85
-        z: 266
-        facing: N
-        pause-ticks: 120
-        say: ['This is the Creative portal. Head through when you feel like building!']
-      minigames:
-        x: -901
-        y: 85
-        z: 289
-        facing: W
-        pause-ticks: 120
-        say: ['These stairs lead to the minigames hall. Come back when you are ready for a game!']
-      challenges:
-        x: -835
-        y: 85
-        z: 295
-        facing: S
-        pause-ticks: 120
-        say: ['Here is the monthly challenge and voting hall! Have a look around to see what is happening this month.']
-    responses:
-      survival:
-        regex: '.*\bsurvival\b.*'
-        say: ['The Survival portal is at -864, 85, 245. Say tour if you would like me to show you.']
-      creative:
-        regex: '.*\bcreative\b.*'
-        say: ['The Creative portal is at -864, 85, 266.']
-      games:
-        regex: '.*\b(?:minigames|games)\b.*'
-        say: ['The stairs to the minigames hall are at -901, 85, 289.']
-      voting:
-        regex: '.*\b(?:voting|vote|challenge|challenges)\b.*'
-        say: ['The monthly challenge and voting hall is at -835, 85, 295.']
+    - 'I cannot find a way through here. Say continue to let me try again, or ask a staff member to adjust my route.'
+    - 'This route seems blocked. Say continue and I will try it again.'
+
+  farewell:
+    - 'See you soon! Our private chat is closed.'
+
+# ---------------------------------------------------------------------------
+# ACTION LANGUAGE
+# ---------------------------------------------------------------------------
+#
+# say:<text>
+#   Display text immediately. No speech sound or talking gesture.
+#
+# talk:<text>
+#   Display text, use randomized robot speech and talking gestures, then wait
+#   until the calculated speech duration has finished.
+#
+# sleep:<ticks>
+#   Pause this action for the given number of server ticks.
+#
+# walk:<x> <y> <z>
+# walk:<x> <y> <z> <speed>
+#   Navigate there and block until STEMBot arrives.
+#   The optional speed overrides only that walk.
+#
+# speed:<value>
+#   Change the default speed for later walk instructions in this session.
+#
+# look:player
+# look:<x> <y> <z>
+#   Turn STEMBot toward the player or location.
+#
+# point:player
+# point:<x> <y> <z>
+#   Look at the target and perform a pointing-style arm gesture.
+#
+# wave
+# sneak
+# stand
+#
+# action:<name>
+#   Jump to another named action.
+#
+# listen:<pattern> -> <action>, <pattern> -> <action>
+#   Wait for private chat input.
+#   Alternatives use |:
+#       yes|yep|tour -> hub-tour
+#   Wildcards use *:
+#       *survival* -> survival-help
+#       * -> confused
+#   Targets "close" and "end" close the session.
+#
+# end
+# close
+#   End the current STEMBot session.
+
+actions:
+  hub:
+    - 'wave'
+    - 'talk:Hi {player}! I am STEMBot, your own little guide!'
+    - 'sleep:8'
+    - 'talk:Only you can see me. While we chat, your messages come only to me.'
+    - 'sleep:8'
+    - 'talk:Would you like to follow me for a tour? Say yes or tour. Say bye or close to return to normal chat.'
+    - 'listen:yes|yep|sure|tour -> hub-survival, bye|close|exit -> close, *survival* -> survival-help, *creative* -> creative-help, * -> hub-confused'
+
+  hub-confused:
+    - 'talk:I am still learning human language!'
+    - 'sleep:6'
+    - 'talk:Try saying tour, Survival, Creative, or close.'
+    - 'listen:yes|tour -> hub-survival, *survival* -> survival-help, *creative* -> creative-help, bye|close|exit -> close, * -> hub-confused'
+
+  hub-survival:
+    - 'talk:Follow me to the Survival portal. Try to keep up!'
+    - 'walk:-864 85 245'
+    - 'sleep:25'
+    - 'point:-864 85 245'
+    - 'talk:Here is the Survival portal! This is where your survival adventure begins.'
+    - 'action:hub-creative'
+
+  hub-creative:
+    - 'talk:Follow me to the Creative portal. Let us walk a bit faster this time!'
+    - 'speed:1.30'
+    - 'walk:-864 85 266'
+    - 'sleep:25'
+    - 'point:-864 85 266'
+    - 'talk:Here is the Creative portal! This is where your creative trials start.'
+    - 'speed:1.15'
+    - 'end'
+
+  survival-help:
+    - 'talk:The Survival portal is over there.'
+    - 'point:-864 85 245'
+    - 'end'
+
+  creative-help:
+    - 'talk:The Creative portal is over there.'
+    - 'point:-864 85 266'
+    - 'end'
+
   survival:
-    responses:
-      help:
-        regex: '.*\b(?:help|survival)\b.*'
-        say: ['You are in Survival! Explore, gather resources and build a home.']
+    - 'wave'
+    - 'talk:Hi {player}! You are in the Survival world.'
+    - 'sleep:25'
+    - 'talk:Explore, gather resources, build a home, and work with other players.'
+    - 'sleep:15'
+    - 'end'
+
+  creative:
+    - 'wave'
+    - 'talk:Hi {player}! This is the Creative Plot world.'
+    - 'sleep:25'
+    - 'talk:To claim a plot, use the command /plot create while standing in an empty plot.'
+    - 'sleep:25'
+    - 'talk:To go back to the hub, use the command /hub.'
+    - 'sleep:25'
+    - 'end'
+
+  first-hub:
+    - 'wave'
+    - 'talk:Hi {player}! I am STEMBot.'
+    - 'sleep:8'
+    - 'talk:I can show you around or help you find something.'
+    - 'sleep:8'
+    - 'talk:What can I help you with?'
+    - 'listen:*survival* -> survival-help, *creative* -> creative-help, *rules* -> rules, yes|tour -> hub-survival, bye|close -> close, * -> first-hub-confused'
+
+  first-hub-confused:
+    - 'talk:Try asking me about Survival, Creative, the rules, or say tour.'
+    - 'listen:*survival* -> survival-help, *creative* -> creative-help, *rules* -> rules, yes|tour -> hub-survival, bye|close -> close, * -> first-hub-confused'
+
+  rules:
+    - 'talk:Be kind, build fairly, and respect other players and their creations.'
+    - 'sleep:15'
+    - 'talk:If you are unsure whether something is allowed, ask a staff member.'
+    - 'end'
+
+# /stembot routes to one named action based on the current Bukkit world name.
+# "world" is included because the existing STEMCraft hub currently uses that name.
+command:
+  world:
+    world: hub
+    hub: hub
+    survival: survival
+    creative: creative
+
+# Automatically run once per player, per configured world.
+# Completion is stored in the player's PersistentDataContainer.
+first-time:
+  world:
+    world: first-hub
+    hub: first-hub
+    survival: survival
+    creative: creative

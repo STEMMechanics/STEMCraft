@@ -1,86 +1,372 @@
 package dev.stemcraft.feature.stembot;
 
 import org.bukkit.Location;
-import java.util.List;
-import java.util.function.Consumer;
 
-/** Main-thread conversation/tour state machine. Navigation itself remains with Citizens. */
+import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
+
+/**
+ * Main-thread STEMBot action interpreter.
+ *
+ * Blocking instructions:
+ * - talk: waits for the returned speech duration
+ * - sleep: waits the configured ticks
+ * - walk: waits until Citizens reaches the target
+ * - wave / point: briefly wait for the gesture
+ * - listen: waits for matching private chat input
+ */
 public final class BotSession {
+    public interface Output {
+        void say(String text);
+        int talk(String text);
+    }
+
+    private enum WaitMode { NONE,SLEEP,TALK,WAVE,POINT,WALK,LISTEN,STUCK }
+
     private final BotScript script;
     private final BotActor actor;
     private final String world;
-    private final Consumer<List<String>> output;
-    private String state="ready";
-    private List<String> last=List.of();
-    private int age,idle,index,pauseUntil,nextPath,lastProgress,nextJump;
+    private final Output output;
+
+    private String action;
+    private int pc;
+    private int age;
+    private int idle;
+    private int waitUntil;
+    private int nextGesture;
+    private double speed;
+    private double walkSpeed;
+    private WaitMode waitMode=WaitMode.NONE;
+    private List<BotScript.ListenRoute> listening=List.of();
+    private Location walkTarget;
     private Location progress;
-    private boolean touring,paused,waiting,arrived,closed;
-    public BotSession(BotScript script,BotActor actor,String world,Consumer<List<String>> output) {
-        this.script=script;this.actor=actor;this.world=world;this.output=output;
-        say(script.greeting());
+    private int lastProgress;
+    private boolean playerBehind;
+    private boolean closed;
+
+    public BotSession(
+        BotScript script,
+        BotActor actor,
+        String world,
+        String initialAction,
+        Output output
+    ) {
+        this.script=script;
+        this.actor=actor;
+        this.world=world;
+        this.output=output;
+        this.speed=script.defaultSpeed();
+        jumpTo(initialAction);
     }
+
     public BotActor actor() { return actor; }
     public boolean closed() { return closed; }
+    public String action() { return action; }
+
     public void input(String text) {
+        if(closed) return;
         idle=0;
-        if(text.length()>256) { say(script.fallback());return; }
-        var reply=script.respond(world,state,text.trim());
-        if(!reply.nextState().isBlank()) state=reply.nextState();
-        say(reply.say());
-        for(String action:reply.actions()) {
-            switch(action) {
-                case "@close" -> { close();return; }
-                case "@tour" -> startTour();
-                case "@pause" -> { paused=true;actor.pause(true); }
-                case "@resume" -> { paused=false;actor.pause(false);resetProgress(); }
-                case "@repeat" -> output.accept(last);
-                default -> throw new IllegalStateException("Unvalidated STEMBot action");
+
+        String input=text.trim();
+
+        if(waitMode==WaitMode.STUCK) {
+            if(input.matches("(?i)(?:continue|resume|ready|retry)[.!]?")) {
+                waitMode=WaitMode.WALK;
+                resetWalkProgress();
+                return;
+            }
+            if(input.matches("(?i)(?:bye|close|exit)[.!]?")) {
+                close();
+            }
+            return;
+        }
+
+        if(waitMode!=WaitMode.LISTEN) return;
+
+        for(BotScript.ListenRoute route:listening) {
+            if(!route.matches(input)) continue;
+
+            listening=List.of();
+            waitMode=WaitMode.NONE;
+
+            if(route.target().equalsIgnoreCase("close")
+                ||route.target().equalsIgnoreCase("end")) {
+                close();
+            } else {
+                jumpTo(route.target());
+            }
+            return;
+        }
+    }
+
+    public void tick(Location owner) {
+        age+=5;
+        idle+=5;
+
+        if(closed) return;
+
+        if(!actor.valid()
+            ||owner.getWorld()==null
+            ||!owner.getWorld().getName().equals(world)) {
+            close();
+            return;
+        }
+
+        if(idle>=script.idleSeconds()*20) {
+            close();
+            return;
+        }
+
+        switch(waitMode) {
+            case SLEEP -> {
+                if(age>=waitUntil) waitMode=WaitMode.NONE;
+                else return;
+            }
+            case TALK -> {
+                animateTalk(owner);
+                if(age>=waitUntil) waitMode=WaitMode.NONE;
+                else return;
+            }
+            case WAVE -> {
+                animateWave(owner);
+                if(age>=waitUntil) waitMode=WaitMode.NONE;
+                else return;
+            }
+            case POINT -> {
+                if(age>=waitUntil) waitMode=WaitMode.NONE;
+                else return;
+            }
+            case WALK -> {
+                if(!tickWalk(owner)) return;
+                waitMode=WaitMode.NONE;
+            }
+            case LISTEN,STUCK -> {
+                return;
+            }
+            case NONE -> {}
+        }
+
+        run(owner);
+    }
+
+    private void run(Location owner) {
+        int guard=0;
+
+        while(!closed&&waitMode==WaitMode.NONE&&guard++<64) {
+            List<BotScript.Instruction> program=script.actions().get(action);
+            if(program==null)
+                throw new IllegalStateException("Unknown STEMBot action: "+action);
+
+            if(pc>=program.size()) {
+                close();
+                return;
+            }
+
+            BotScript.Instruction instruction=program.get(pc++);
+
+            switch(instruction.op()) {
+                case SAY -> output.say(instruction.text());
+
+                case TALK -> {
+                    int duration=Math.max(1,output.talk(instruction.text()));
+                    waitMode=WaitMode.TALK;
+                    waitUntil=age+duration;
+                    nextGesture=age;
+                }
+
+                case SLEEP -> {
+                    waitMode=WaitMode.SLEEP;
+                    waitUntil=age+instruction.ticks();
+                }
+
+                case SPEED -> speed=instruction.number();
+
+                case WALK -> {
+                    walkTarget=new Location(
+                        owner.getWorld(),
+                        instruction.x(),
+                        instruction.y(),
+                        instruction.z()
+                    );
+
+                    walkSpeed=instruction.number()>0
+                        ?instruction.number()
+                        :speed;
+
+                    waitMode=WaitMode.WALK;
+                    resetWalkProgress();
+
+                    if(!tickWalk(owner)) return;
+                    waitMode=WaitMode.NONE;
+                }
+
+                case LOOK -> {
+                    if("player".equals(instruction.text()))
+                        actor.lookAt(owner.clone().add(0,1.4,0));
+                    else
+                        actor.lookAt(new Location(
+                            owner.getWorld(),
+                            instruction.x(),
+                            instruction.y(),
+                            instruction.z()
+                        ));
+                }
+
+                case POINT -> {
+                    Location target="player".equals(instruction.text())
+                        ?owner.clone().add(0,1.2,0)
+                        :new Location(
+                            owner.getWorld(),
+                            instruction.x(),
+                            instruction.y(),
+                            instruction.z()
+                        );
+
+                    actor.lookAt(target);
+                    actor.animate("ARM_SWING");
+                    waitMode=WaitMode.POINT;
+                    waitUntil=age+12;
+                }
+
+                case WAVE -> {
+                    actor.lookAt(owner.clone().add(0,1.4,0));
+                    actor.animate("ARM_SWING");
+                    waitMode=WaitMode.WAVE;
+                    waitUntil=age+22;
+                    nextGesture=age+7;
+                }
+
+                case SNEAK -> actor.sneak(true);
+                case STAND -> actor.sneak(false);
+
+                case ACTION -> jumpTo(instruction.text());
+
+                case LISTEN -> {
+                    listening=instruction.routes();
+                    waitMode=WaitMode.LISTEN;
+                }
+
+                case END,CLOSE -> close();
             }
         }
+
+        if(guard>=64)
+            throw new IllegalStateException(
+                "STEMBot action loop exceeded 64 immediate instructions; check action:"+action);
     }
-    public void startTour() {
-        if(script.tours().getOrDefault(world,List.of()).isEmpty()) { say(script.fallback());return; }
-        actor.cancel();touring=true;paused=false;waiting=false;arrived=false;index=0;state="tour";resetProgress();
-    }
-    public void tick(Location owner) {
-        age+=5;idle+=5;
-        if(closed) return;
-        if(!actor.valid()||!owner.getWorld().getName().equals(world)) { close();return; }
-        if(idle>=script.idleSeconds()*20) { close();return; }
-        if(age<=script.crouches()*10) { actor.sneak(age%10==5); return; }
-        if(!touring||paused) return;
-        var here=actor.location();
-        double distance=here.distanceSquared(owner);
-        if(distance>script.waitDistance()*script.waitDistance() || waiting && distance>script.resumeDistance()*script.resumeDistance()) {
-            if(!waiting) { waiting=true;actor.pause(true);say(script.waiting()); }
-            return;
+
+    /**
+     * @return true when the walk has completed.
+     */
+    private boolean tickWalk(Location owner) {
+        if(walkTarget==null)
+            throw new IllegalStateException("STEMBot WALK state has no target");
+
+        Location here=actor.location();
+
+        double playerDistance=here.distanceSquared(owner);
+        double waitDistance=script.waitDistance();
+        double resumeDistance=script.resumeDistance();
+
+        if(!playerBehind&&playerDistance>waitDistance*waitDistance) {
+            playerBehind=true;
+            actor.cancel();
+
+            for(String line:script.randomSystemMessage(script.waiting()))
+                output.say(line);
+
+            return false;
         }
-        if(waiting) { waiting=false;actor.pause(false);resetProgress(); }
-        var route=script.tours().getOrDefault(world,List.of());
-        if(index>=route.size()) { touring=false;state="questions";actor.cancel();say(script.complete());return; }
-        var step=route.get(index);
-        var p=step.point();
-        var target=new Location(owner.getWorld(),p.x(),p.y(),p.z(),p.yaw(),0);
-        if(here.distanceSquared(target)<=1.5) {
-            actor.cancel();actor.face(p.yaw());
-            if(owner.distanceSquared(here)>script.resumeDistance()*script.resumeDistance()) return;
-            if(!arrived) { arrived=true;pauseUntil=age+step.pauseTicks();say(step.say()); }
-            if(age>=pauseUntil) { index++;arrived=false;resetProgress(); }
-            return;
+
+        if(playerBehind) {
+            if(playerDistance>resumeDistance*resumeDistance)
+                return false;
+
+            playerBehind=false;
+            resetWalkProgress();
         }
-        if(arrived) { arrived=false; } // A knockback or edited path cannot skip its stop.
-        if(progress==null||here.distanceSquared(progress)>.5) { progress=here.clone();lastProgress=age; }
+
+        if(here.distanceSquared(walkTarget)<=1.5) {
+            actor.cancel();
+            walkTarget=null;
+            progress=null;
+            return true;
+        }
+
+        if(progress==null||here.distanceSquared(progress)>.5) {
+            progress=here.clone();
+            lastProgress=age;
+        }
+
         if(age-lastProgress>=200) {
-            paused=true;actor.cancel();say(script.stuck());return;
+            actor.cancel();
+            waitMode=WaitMode.STUCK;
+
+            for(String line:script.randomSystemMessage(script.stuck()))
+                output.say(line);
+
+            return false;
         }
-        if(!actor.navigating()&&age>=nextPath) { actor.move(target,script.speed());nextPath=age+40; }
-        if(actor.navigating()&&age>=nextJump) { actor.jump();nextJump=age+script.jumpTicks(); }
+
+        if(!actor.navigating()) {
+            actor.move(walkTarget,walkSpeed);
+        }
+
+        return false;
     }
-    private void resetProgress() { progress=null;lastProgress=age;nextPath=age; }
-    private void say(List<String> lines) { if(!lines.isEmpty()) { last=lines;output.accept(lines); } }
+
+    private void animateTalk(Location owner) {
+        if(age<nextGesture) return;
+
+        actor.lookAt(owner.clone().add(0,1.4,0));
+
+        // Mostly main-hand movement, occasionally off-hand, to avoid a rigid repeated wave.
+        actor.animate(ThreadLocalRandom.current().nextInt(4)==0
+            ?"ARM_SWING_OFFHAND"
+            :"ARM_SWING");
+
+        nextGesture=age+ThreadLocalRandom.current().nextInt(
+            script.speech().talkGestureMinTicks(),
+            script.speech().talkGestureMaxTicks()+1
+        );
+    }
+
+    private void animateWave(Location owner) {
+        actor.lookAt(owner.clone().add(0,1.4,0));
+
+        if(age>=nextGesture&&age<waitUntil) {
+            actor.animate("ARM_SWING");
+            nextGesture=age+7;
+        }
+    }
+
+    private void resetWalkProgress() {
+        actor.cancel();
+        progress=null;
+        lastProgress=age;
+    }
+
+    private void jumpTo(String target) {
+        if(!script.actions().containsKey(target))
+            throw new IllegalStateException("Unknown STEMBot action: "+target);
+
+        action=target;
+        pc=0;
+        waitMode=WaitMode.NONE;
+        listening=List.of();
+    }
+
     public void close() {
         if(closed) return;
         closed=true;
-        try { actor.close(); } finally { output.accept(script.farewell()); }
+
+        try {
+            actor.cancel();
+            actor.sneak(false);
+            actor.close();
+        } finally {
+            for(String line:script.farewell())
+                output.say(line);
+        }
     }
 }

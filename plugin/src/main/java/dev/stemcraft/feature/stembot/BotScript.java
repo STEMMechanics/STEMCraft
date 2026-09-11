@@ -1,74 +1,326 @@
 package dev.stemcraft.feature.stembot;
 
 import dev.stemcraft.api.config.ConfigSection;
+
 import java.util.*;
 import java.util.regex.Pattern;
 
-/** Immutable, validated dialogue and route configuration. Rules are evaluated in file order. */
-public record BotScript(String name, String skinUrl, boolean slim, String firstWorld, Point firstSpawn,
-                        double spawnDistance, double waitDistance, double resumeDistance, double speed,
-                        int jumpTicks, int crouches, int idleSeconds, List<String> greeting, List<String> fallback,
-                        List<String> farewell, List<String> waiting, List<String> stuck, List<String> complete,
-                        Map<String,List<Waypoint>> tours, Map<String,List<Rule>> worldRules, List<Rule> rules) {
-    public record Point(double x,double y,double z,float yaw) {}
-    public record Waypoint(String id,Point point,int pauseTicks,List<String> say) {}
-    public record Reply(List<String> say,List<String> actions,String nextState) {}
-    public record Rule(Pattern pattern,String state,Reply reply) {
-        boolean matches(String text,String current) { return (state.equals("*")||state.equals(current)) && pattern.matcher(text).matches(); }
+/** Parsed and validated STEMBot action program. */
+public record BotScript(
+    String name,
+    String prefix,
+    String skinUrl,
+    String skinValue,
+    String skinSignature,
+    boolean slim,
+    double spawnDistance,
+    double defaultSpeed,
+    double waitDistance,
+    double resumeDistance,
+    int idleSeconds,
+    SpeechSettings speech,
+    List<String> waiting,
+    List<String> stuck,
+    List<String> farewell,
+    Map<String,List<Instruction>> actions,
+    Map<String,String> commandWorld,
+    Map<String,String> firstTimeWorld
+) {
+    public enum Op {
+        SAY,TALK,SLEEP,WALK,SPEED,LOOK,POINT,WAVE,SNEAK,STAND,ACTION,LISTEN,END,CLOSE
     }
-    private static final Set<String> ACTIONS=Set.of("@close","@tour","@pause","@resume","@repeat");
-    public Reply respond(String world,String state,String text) {
-        for (Rule r:worldRules.getOrDefault(world,List.of())) if(r.matches(text,state)) return r.reply();
-        for (Rule r:rules) if(r.matches(text,state)) return r.reply();
-        return new Reply(fallback,List.of(),state);
+
+    public record SpeechSettings(
+        boolean enabled,
+        String sound,
+        float volume,
+        float pitchMin,
+        float pitchMax,
+        int beepIntervalMin,
+        int beepIntervalMax,
+        int charactersPerBeep,
+        int minBeeps,
+        int maxBeeps,
+        int talkGestureMinTicks,
+        int talkGestureMaxTicks
+    ) {}
+
+    public record Instruction(
+        Op op,
+        String text,
+        double x,
+        double y,
+        double z,
+        double number,
+        int ticks,
+        List<ListenRoute> routes
+    ) {
+        static Instruction simple(Op op) {
+            return new Instruction(op,"",0,0,0,0,0,List.of());
+        }
     }
+
+    public record ListenRoute(List<Pattern> patterns,String target) {
+        boolean matches(String input) {
+            return patterns.stream().anyMatch(p->p.matcher(input).matches());
+        }
+    }
+
+    public String commandAction(String world) {
+        return commandWorld.get(world.toLowerCase(Locale.ROOT));
+    }
+
+    public String firstTimeAction(String world) {
+        return firstTimeWorld.get(world.toLowerCase(Locale.ROOT));
+    }
+
+    public List<String> randomSystemMessage(List<String> choices) {
+        if(choices.isEmpty()) return List.of();
+        return List.of(choices.get(java.util.concurrent.ThreadLocalRandom.current().nextInt(choices.size())));
+    }
+
     public static BotScript read(ConfigSection config) {
-        Map<String,List<Waypoint>> tours=new LinkedHashMap<>();
-        Map<String,List<Rule>> overrides=new LinkedHashMap<>();
-        ConfigSection worlds=config.getSection("worlds",false);
-        if(worlds!=null) for(String world:worlds.getKeys(false)) {
-            var section=worlds.getSection(world);
-            var route=section.getSection("waypoints",false);
-            List<Waypoint> points=new ArrayList<>();
-            if(route!=null) for(String id:route.getKeys(false)) {
-                var step=route.getSection(id);
-                points.add(new Waypoint(id,point(step),bounded(step.getInt("pause-ticks",100),0,2400),List.copyOf(step.getStringList("say"))));
+        String skinValue=config.getString("skin.texture.value","");
+        String skinSignature=config.getString("skin.texture.signature","");
+        if(skinValue.isBlank()!=skinSignature.isBlank())
+            throw new IllegalArgumentException(
+                "skin.texture.value and skin.texture.signature must both be set or both be blank");
+
+        double wait=bounded(config.getDouble("movement.wait-distance",10),2,64);
+        double resume=bounded(config.getDouble("movement.resume-distance",6),1,wait-0.01);
+
+        int intervalMin=boundedInt(config.getInt("speech.beep-interval-ticks.min",2),1,40);
+        int intervalMax=boundedInt(config.getInt("speech.beep-interval-ticks.max",6),intervalMin,40);
+        int gestureMin=boundedInt(config.getInt("speech.talk-gesture-ticks.min",8),1,100);
+        int gestureMax=boundedInt(config.getInt("speech.talk-gesture-ticks.max",18),gestureMin,200);
+
+        SpeechSettings speech=new SpeechSettings(
+            config.getBoolean("speech.enabled",true),
+            config.getString("speech.sound","BLOCK_NOTE_BLOCK_BIT").toLowerCase(Locale.ROOT),
+            (float)bounded(config.getDouble("speech.volume",0.22),0,4),
+            (float)bounded(config.getDouble("speech.pitch-min",1.25),0.5,2),
+            (float)bounded(config.getDouble("speech.pitch-max",1.55),0.5,2),
+            intervalMin,
+            intervalMax,
+            boundedInt(config.getInt("speech.characters-per-beep",6),1,64),
+            boundedInt(config.getInt("speech.min-beeps",2),1,100),
+            boundedInt(config.getInt("speech.max-beeps",30),1,200),
+            gestureMin,
+            gestureMax
+        );
+
+        if(speech.pitchMax()<speech.pitchMin())
+            throw new IllegalArgumentException("speech.pitch-max must be >= speech.pitch-min");
+        if(speech.maxBeeps()<speech.minBeeps())
+            throw new IllegalArgumentException("speech.max-beeps must be >= speech.min-beeps");
+
+        Map<String,List<Instruction>> actions=readActions(config.getSection("actions",false));
+        Map<String,String> commandWorld=readRoutes(config.getSection("command.world",false));
+        Map<String,String> firstTimeWorld=readRoutes(config.getSection("first-time.world",false));
+
+        validateTargets(actions,commandWorld,firstTimeWorld);
+
+        return new BotScript(
+            config.getString("name","STEMBot"),
+            config.getString("messages.prefix",":stembot: &bSTEMBot: &f"),
+            config.getString("skin.url",""),
+            skinValue,
+            skinSignature,
+            config.getBoolean("skin.slim",false),
+            bounded(config.getDouble("spawn-distance",2.5),1,6),
+            bounded(config.getDouble("movement.speed",1.15),0.2,2.5),
+            wait,
+            resume,
+            boundedInt(config.getInt("idle-timeout-seconds",600),30,3600),
+            speech,
+            List.copyOf(config.getStringList("messages.waiting")),
+            List.copyOf(config.getStringList("messages.stuck")),
+            List.copyOf(config.getStringList("messages.farewell")),
+            Map.copyOf(actions),
+            Map.copyOf(commandWorld),
+            Map.copyOf(firstTimeWorld)
+        );
+    }
+
+    private static Map<String,List<Instruction>> readActions(ConfigSection section) {
+        if(section==null) return Map.of();
+
+        Map<String,List<Instruction>> result=new LinkedHashMap<>();
+        for(String name:section.getKeys(false)) {
+            List<?> raw=section.getList(name);
+            List<Instruction> program=new ArrayList<>();
+
+            for(Object item:raw) {
+                if(!(item instanceof String line))
+                    throw new IllegalArgumentException("actions."+name+" entries must be strings");
+                program.add(parseInstruction(line));
             }
-            tours.put(world,List.copyOf(points));
-            overrides.put(world,readRules(section.getSection("responses",false)));
+
+            result.put(name,List.copyOf(program));
         }
-        double wait=number(config.getDouble("movement.wait-distance",10),2,64);
-        double resume=number(config.getDouble("movement.resume-distance",6),1,wait-1);
-        return new BotScript(config.getString("name","STEMBot"),config.getString("skin.url",""),config.getBoolean("skin.slim",false),
-            config.getString("first-join.world","world"),point(config.getSection("first-join.spawn")),
-            number(config.getDouble("spawn-distance",2.5),1,6),wait,resume,number(config.getDouble("movement.speed",1.15),.2,2),
-            bounded(config.getInt("movement.jump-interval-ticks",35),10,200),bounded(config.getInt("greeting-crouches",3),0,10),
-            bounded(config.getInt("idle-timeout-seconds",600),30,3600),
-            lines(config,"greeting"),lines(config,"fallback"),lines(config,"farewell"),lines(config,"waiting"),
-            lines(config,"stuck"),lines(config,"complete"),Map.copyOf(tours),Map.copyOf(overrides),readRules(config.getSection("responses",false)));
+        return result;
     }
-    private static List<String> lines(ConfigSection c,String key) { return List.copyOf(c.getStringList("messages."+key)); }
-    private static List<Rule> readRules(ConfigSection section) {
-        if(section==null) return List.of();
-        List<Rule> result=new ArrayList<>();
-        for(String id:section.getKeys(false)) {
-            var r=section.getSection(id);
-            var actions=List.copyOf(r.getStringList("actions"));
-            for(String a:actions) if(!ACTIONS.contains(a)) throw new IllegalArgumentException("Unknown STEMBot action: "+a);
-            result.add(new Rule(Pattern.compile(r.getString("regex"),Pattern.CASE_INSENSITIVE|Pattern.UNICODE_CASE),
-                r.getString("state","*"),new Reply(List.copyOf(r.getStringList("say")),actions,r.getString("next-state",""))));
+
+    private static Map<String,String> readRoutes(ConfigSection section) {
+        if(section==null) return Map.of();
+
+        Map<String,String> result=new LinkedHashMap<>();
+        for(String world:section.getKeys(false)) {
+            String action=section.getString(world,"").trim();
+            if(!action.isBlank())
+                result.put(world.toLowerCase(Locale.ROOT),action);
         }
-        return List.copyOf(result);
+        return result;
     }
-    private static Point point(ConfigSection c) {
-        String facing=c.getString("facing","S").toUpperCase(Locale.ROOT);
-        float yaw=switch(facing) { case "N"->180;case "E"->-90;case "S"->0;case "W"->90;default->throw new IllegalArgumentException("Invalid facing: "+facing); };
-        return new Point(number(c.getDouble("x"),-30_000_000,30_000_000),number(c.getDouble("y"),-2048,2048),
-            number(c.getDouble("z"),-30_000_000,30_000_000),yaw);
+
+    static Instruction parseInstruction(String raw) {
+        String line=raw.trim();
+        if(line.isBlank())
+            throw new IllegalArgumentException("STEMBot action instruction cannot be blank");
+
+        int colon=line.indexOf(':');
+        String command=(colon<0?line:line.substring(0,colon)).trim().toLowerCase(Locale.ROOT);
+        String argument=colon<0?"":line.substring(colon+1).trim();
+
+        return switch(command) {
+            case "say" -> new Instruction(Op.SAY,required(argument,"say text"),0,0,0,0,0,List.of());
+            case "talk" -> new Instruction(Op.TALK,required(argument,"talk text"),0,0,0,0,0,List.of());
+            case "sleep" -> new Instruction(Op.SLEEP,"",0,0,0,0,
+                boundedInt(parseInt(argument,"sleep"),0,24000),List.of());
+            case "walk" -> parsePointInstruction(Op.WALK,argument,true);
+            case "look" -> argument.equalsIgnoreCase("player")
+                ?new Instruction(Op.LOOK,"player",0,0,0,0,0,List.of())
+                :parsePointInstruction(Op.LOOK,argument,false);
+            case "point" -> argument.equalsIgnoreCase("player")
+                ?new Instruction(Op.POINT,"player",0,0,0,0,0,List.of())
+                :parsePointInstruction(Op.POINT,argument,false);
+            case "speed" -> new Instruction(Op.SPEED,"",0,0,0,
+                bounded(parseDouble(argument,"speed"),0.2,2.5),0,List.of());
+            case "wave" -> Instruction.simple(Op.WAVE);
+            case "sneak" -> Instruction.simple(Op.SNEAK);
+            case "stand" -> Instruction.simple(Op.STAND);
+            case "action" -> new Instruction(Op.ACTION,required(argument,"action name"),0,0,0,0,0,List.of());
+            case "listen" -> new Instruction(Op.LISTEN,"",0,0,0,0,0,parseListen(argument));
+            case "end" -> Instruction.simple(Op.END);
+            case "close" -> Instruction.simple(Op.CLOSE);
+            default -> throw new IllegalArgumentException("Unknown STEMBot instruction: "+command);
+        };
     }
-    private static double number(double n,double low,double high) {
-        if(!Double.isFinite(n)||n<low||n>high) throw new IllegalArgumentException("STEMBot setting outside "+low+".."+high);
-        return n;
+
+    private static Instruction parsePointInstruction(Op op,String argument,boolean optionalSpeed) {
+        String[] parts=argument.trim().split("\\s+");
+        int min=3,max=optionalSpeed?4:3;
+        if(parts.length<min||parts.length>max)
+            throw new IllegalArgumentException(op.name().toLowerCase(Locale.ROOT)
+                +" expects x y z"+(optionalSpeed?" [speed]":""));
+
+        double x=parseDouble(parts[0],op.name());
+        double y=parseDouble(parts[1],op.name());
+        double z=parseDouble(parts[2],op.name());
+        double speed=parts.length==4?bounded(parseDouble(parts[3],"walk speed"),0.2,2.5):0;
+
+        return new Instruction(op,"",x,y,z,speed,0,List.of());
     }
-    private static int bounded(int n,int low,int high) { return (int)number(n,low,high); }
+
+    static List<ListenRoute> parseListen(String argument) {
+        if(argument.isBlank())
+            throw new IllegalArgumentException("listen requires at least one route");
+
+        List<ListenRoute> routes=new ArrayList<>();
+        for(String branch:argument.split("\\s*,\\s*")) {
+            String[] pair=branch.split("\\s*->\\s*",2);
+            if(pair.length!=2||pair[0].isBlank()||pair[1].isBlank())
+                throw new IllegalArgumentException(
+                    "listen routes must use 'pattern -> action'");
+
+            List<Pattern> patterns=new ArrayList<>();
+            for(String alternative:pair[0].split("\\|")) {
+                String value=alternative.trim();
+                if(value.isBlank()) continue;
+                patterns.add(wildcard(value));
+            }
+
+            if(patterns.isEmpty())
+                throw new IllegalArgumentException("listen route has no patterns");
+
+            routes.add(new ListenRoute(List.copyOf(patterns),pair[1].trim()));
+        }
+        return List.copyOf(routes);
+    }
+
+    private static Pattern wildcard(String value) {
+        if(value.equals("*"))
+            return Pattern.compile(".*",Pattern.CASE_INSENSITIVE|Pattern.UNICODE_CASE);
+
+        StringBuilder regex=new StringBuilder("^");
+        int start=0;
+        for(int i=0;i<value.length();i++) {
+            if(value.charAt(i)!='*') continue;
+            regex.append(Pattern.quote(value.substring(start,i))).append(".*");
+            start=i+1;
+        }
+        regex.append(Pattern.quote(value.substring(start))).append('$');
+
+        return Pattern.compile(regex.toString(),Pattern.CASE_INSENSITIVE|Pattern.UNICODE_CASE);
+    }
+
+    private static void validateTargets(
+        Map<String,List<Instruction>> actions,
+        Map<String,String> commandWorld,
+        Map<String,String> firstTimeWorld
+    ) {
+        for(var entry:actions.entrySet()) {
+            for(Instruction instruction:entry.getValue()) {
+                if(instruction.op()==Op.ACTION)
+                    requireTarget(actions,instruction.text(),"actions."+entry.getKey());
+
+                if(instruction.op()==Op.LISTEN)
+                    for(ListenRoute route:instruction.routes())
+                        if(!route.target().equalsIgnoreCase("close")
+                            &&!route.target().equalsIgnoreCase("end"))
+                            requireTarget(actions,route.target(),"listen in "+entry.getKey());
+            }
+        }
+
+        commandWorld.forEach((world,target)->requireTarget(actions,target,"command.world."+world));
+        firstTimeWorld.forEach((world,target)->requireTarget(actions,target,"first-time.world."+world));
+    }
+
+    private static void requireTarget(Map<String,List<Instruction>> actions,String target,String source) {
+        if(!actions.containsKey(target))
+            throw new IllegalArgumentException(source+" references unknown action '"+target+"'");
+    }
+
+    private static String required(String value,String what) {
+        if(value.isBlank()) throw new IllegalArgumentException(what+" cannot be blank");
+        return value;
+    }
+
+    private static int parseInt(String value, @SuppressWarnings("SameParameterValue") String name) {
+        try {
+            return Integer.parseInt(value.trim());
+        } catch(NumberFormatException ex) {
+            throw new IllegalArgumentException(name+" must be an integer",ex);
+        }
+    }
+
+    private static double parseDouble(String value,String name) {
+        try {
+            return Double.parseDouble(value.trim());
+        } catch(NumberFormatException ex) {
+            throw new IllegalArgumentException(name+" must be numeric",ex);
+        }
+    }
+
+    private static double bounded(double value,double min,double max) {
+        if(!Double.isFinite(value)||value<min||value>max)
+            throw new IllegalArgumentException("STEMBot setting outside "+min+".."+max);
+        return value;
+    }
+
+    private static int boundedInt(int value,int min,int max) {
+        if(value<min||value>max)
+            throw new IllegalArgumentException("STEMBot setting outside "+min+".."+max);
+        return value;
+    }
 }

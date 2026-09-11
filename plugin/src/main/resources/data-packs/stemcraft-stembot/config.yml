@@ -1,0 +1,8 @@
+pack:
+  enabled: true
+  description: "STEMCraft STEMBot"
+font_images:
+  stembot:
+    file: font/stembot.png
+    ascent: 8
+    height: 8
