@@ -4,6 +4,8 @@ import org.bukkit.Location;
 import org.bukkit.World;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.*;
 
@@ -24,6 +26,11 @@ class BotSessionTest {
     }
 
     private void setUp(int postDelayTicks) {
+        setUp(postDelayTicks,List.of("say:hello","talk:talking","walk:10 64 0",
+            "listen:yes|tour -> done, * -> start"));
+    }
+
+    private void setUp(int postDelayTicks,List<String> instructions) {
         world=mock(World.class);
         when(world.getName()).thenReturn("world");
 
@@ -41,12 +48,8 @@ class BotSessionTest {
         );
 
         var actions=new LinkedHashMap<String,List<BotScript.Instruction>>();
-        actions.put("start",List.of(
-            BotScript.parseInstruction("say:hello"),
-            BotScript.parseInstruction("talk:talking"),
-            BotScript.parseInstruction("walk:10 64 0"),
-            BotScript.parseInstruction("listen:yes|tour -> done, * -> start")
-        ));
+        actions.put("start",instructions.stream().map(BotScript::parseInstruction).toList());
+        actions.put("menu",List.of(BotScript.parseInstruction("listen:*quest* -> done, * -> start")));
         actions.put("done",List.of(BotScript.parseInstruction("end")));
 
         var script=new BotScript(
@@ -67,6 +70,49 @@ class BotSessionTest {
                 public int talk(String text) { output.add(text); return 10; }
             }
         );
+    }
+
+    @Test
+    void topicInterruptsWalkingThroughALaterActionMenu() {
+        setUp(0,List.of("walk:10 64 0","action:menu"));
+        session.tick(here);
+        clearInvocations(actor);
+        session.input("tell me about quests");
+        assertEquals("done",session.action());
+        verify(actor).cancel();
+        session.tick(here);
+        verify(actor,never()).move(any(),anyDouble());
+        assertTrue(session.closed());
+    }
+
+    @Test
+    void topicInterruptsSpeechAndInvalidatesQueuedSpeechSounds() {
+        session.tick(here);
+        long revision=session.speechRevision();
+        session.input("tour");
+        assertEquals("done",session.action());
+        assertTrue(session.speechRevision()>revision);
+        session.tick(here);
+        verify(actor,never()).move(any(),anyDouble());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings={"talk:talking","sleep:100","wave","point:10 64 0","walk:10 64 0"})
+    void byeInterruptsEveryBlockingInstruction(String instruction) {
+        setUp(0,List.of(instruction,"action:menu"));
+        session.tick(here);
+        session.input("bye");
+        assertTrue(session.closed());
+        session.tick(here);
+        verify(actor,times(1)).close();
+        assertEquals(1,output.stream().filter(line->line.equals("farewell")).count());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings={"bye","GOODBYE!","stop","cancel","go away","please go away","leave me alone please"})
+    void recognisesDismissalPhrases(String phrase) {
+        assertTrue(BotSession.isDismissal(phrase));
+        assertFalse(BotSession.isDismissal("how do I stop tracking quests"));
     }
 
     @Test
