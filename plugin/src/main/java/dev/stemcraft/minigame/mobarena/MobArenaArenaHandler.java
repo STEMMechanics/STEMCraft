@@ -705,10 +705,6 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
         player.getInventory().setItem(1, new ItemStack(Material.BOW));
         player.getInventory().setItem(2, new ItemStack(Material.ARROW, 64));
         player.getInventory().setItemInOffHand(new ItemStack(Material.SHIELD));
-        // Delay of two ticks here prevents the shield from disappearing on the client.
-        /*player.getScheduler().runDelayed(STEMCraft.getPlugin(), task ->
-                        player.getInventory().setItemInOffHand(new ItemStack(Material.SHIELD)),
-                null, 2);*/
         player.getInventory().setItem(EquipmentSlot.HEAD, new ItemStack(Material.IRON_HELMET));
         player.getInventory().setItem(EquipmentSlot.CHEST, new ItemStack(Material.IRON_CHESTPLATE));
         player.getInventory().setItem(EquipmentSlot.LEGS, new ItemStack(Material.IRON_LEGGINGS));
@@ -789,7 +785,7 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
 
                 final String spawnZone = arena.get(spawnerConfigPrefix + "spawnZone", String.class);
                 if (spawnZone == null) {
-                    result.addError("Spawner config '" + (i + 1) + "' was badly defined (spawnZone).", spawnerConfigPrefix + "spawn-zone");
+                    result.addError("Spawner config '" + (i + 1) + "' was badly defined (spawnZone == null).", spawnerConfigPrefix + "spawn-zone");
                 } else if (spawnZone.isBlank()) {
                     result.addError("Spawner config '" + (i + 1) + "' spawns in an empty spawn zone (never set?)", spawnerConfigPrefix + "spawn-zone");
                 } else if (!validZones.contains(spawnZone)) {
