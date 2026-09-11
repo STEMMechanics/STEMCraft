@@ -53,3 +53,9 @@ Remember that the [Community Expectations](safety-and-community/README.md) still
 | `/plot home`  | Return to your plot               |
 
 More commands can be found in the [Commands guide](commands/README.md).
+
+### Selection Particles
+
+If the server's WorldEdit selection particles get in your way, use `/selpreview off` to hide them. Use `/selpreview on` to show them again, or `/selpreview` to toggle. Your preference is saved across reconnects. Use `/selpreview grid on` or `/selpreview grid off` to control the additional grid independently, or `/selpreview grid` to toggle it. The grid defaults off and automatically hides when any selection side exceeds 64 blocks (configurable by the server). It returns when the selection is small enough again. These controls do not hide minigame or other feature highlights.
+
+This hides STEMCraft's WorldEdit outline and corner particles while keeping your selected region and WorldEdit commands available. Other feature highlights and client-side selection displays have their own controls.
