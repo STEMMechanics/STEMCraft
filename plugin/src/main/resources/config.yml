@@ -1,3 +1,11 @@
+database:
+  # Reclaim deleted SQLite pages before services/features start using the database.
+  # Runs only when BOTH thresholds are reached. Large databases can extend startup.
+  # A feature migration frees pages after this check: they are reclaimed next restart.
+  compact-on-startup: true
+  compact-minimum-free-mib: 64
+  compact-minimum-free-percent: 20
+
 logging:
   prefixes:
     log: "[STEMCraft] "

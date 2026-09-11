@@ -77,10 +77,27 @@ Bulk regeneration processes a small number of regions per server tick to avoid b
 Runtime state is stored in SQLite:
 
 - `named_areas` holds names, kinds, types, bounds, discovery state, and the rename lock
-- `named_region_cells` maps sampled world cells to biome-region IDs
+- `named_region_chunks` stores the sixteen sampled cells in each chunk as integer region IDs in one row
+- `named_region_worlds` and `named_region_ids` map compact integers to world names and public region IDs
+- `named_region_merges` resolves merged regions without rewriting every affected cell
 - `named_region_name_history` records retired names, their release time, and the reason for retirement
 
 The feature owns migrations for these tables through the database service. Do not edit the tables while the plugin is running: in-memory indexes are authoritative until shutdown, and map data is cached between refreshes.
+
+Schema v6 converts `named_region_cells` transactionally, preserving the 4×4-block sample resolution, then drops the legacy table and its index. Negative coordinates and separate worlds retain their original cell assignments. Both the compact rows and the schema version must commit before the migration is considered complete.
+
+Deleting the legacy table frees SQLite pages for reuse; it does not immediately shrink the database file. Built-in database compaction checks for free pages on startup, before services and features use the connection. Because the region migration runs after that check, its freed space is reclaimed on the **following restart**. A feature reload does not vacuum the live database.
+
+Configuration in `config.yml`:
+
+```yaml
+database:
+  compact-on-startup: true
+  compact-minimum-free-mib: 64
+  compact-minimum-free-percent: 20
+```
+
+Both thresholds must be met. The startup check checkpoints the WAL, runs `VACUUM`, then checkpoints and truncates the WAL again. Logs report the before/after logical database sizes. Large databases can take time to compact and [SQLite may require up to twice the original database size in free disk space](https://www.sqlite.org/lang_vacuum.html). Insufficient space, a busy database, or a maintenance error defers compaction; normal database startup continues. Once compaction succeeds, it is skipped on later startups until enough unused pages accumulate again. This compacts the entire `database.db`, preserving active rows; it does not prune name history.
 
 The feature is discovered through `BaseFeature`. Disabling it unregisters its coordinate-bar amendment and Pl3xMap layers, cancels backfill, and clears its runtime indexes; persisted area and history data remain available for the next enable.
 
