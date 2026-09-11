@@ -67,7 +67,9 @@ class FormattedSignsTest {
         var feature = new FormattedSigns(api);
         for (Side side : Side.values()) {
             var untouched = Component.text("Already styled", NamedTextColor.GREEN);
-            var event = new SignChangeEvent(mock(Block.class), mock(Player.class), new ArrayList<>(List.of(
+            var player = mock(Player.class);
+            when(player.hasPermission("stemcraft.sign.format")).thenReturn(true);
+            var event = new SignChangeEvent(mock(Block.class), player, new ArrayList<>(List.of(
                 Component.text("&bHello"), Component.text("Plain"), Component.text(":stembot:"), untouched)), side);
             feature.formatSign(event);
             assertEquals("\u00a7bHello", LegacyComponentSerializer.legacySection().serialize(event.line(0)));
@@ -86,6 +88,43 @@ class FormattedSignsTest {
         event.setCancelled(true);
         feature.formatSign(event);
         assertSame(original, event.line(0));
+    }
+
+    @Test void deniedPermissionLeavesCodesAndGlyphsLiteral() {
+        var feature = new FormattedSigns(mock(STEMCraftAPI.class));
+        var original = Component.text("&b:stembot:");
+        var event = new SignChangeEvent(mock(Block.class), mock(Player.class),
+            new ArrayList<>(List.of(original, Component.empty(), Component.empty(), Component.empty())), Side.BACK);
+        feature.formatSign(event);
+        assertSame(original, event.line(0));
+    }
+
+    @Test void formattingRequiresExplicitGrantEvenForOperatorsAcrossReload() {
+        var server = org.mockbukkit.mockbukkit.MockBukkit.mock();
+        try {
+            var plugin = org.mockbukkit.mockbukkit.MockBukkit.createMockPlugin();
+            var feature = new FormattedSigns(mock(STEMCraftAPI.class, RETURNS_DEEP_STUBS));
+            var player = server.addPlayer();
+            player.setOp(false);
+            feature.onEnable();
+            assertFalse(player.hasPermission("stemcraft.sign.format"));
+            player.setOp(true);
+            assertFalse(player.hasPermission("stemcraft.sign.format"));
+            var grant = player.addAttachment(plugin, "stemcraft.sign.format", true);
+            assertTrue(player.hasPermission("stemcraft.sign.format"));
+            grant.setPermission("stemcraft.sign.format", false);
+            assertFalse(player.hasPermission("stemcraft.sign.format"));
+            feature.onDisable();
+            assertNull(server.getPluginManager().getPermission("stemcraft.sign.format"));
+            feature.onEnable();
+            assertFalse(player.hasPermission("stemcraft.sign.format"));
+            assertFalse(server.addPlayer().hasPermission("stemcraft.sign.format"));
+            grant.setPermission("stemcraft.sign.format", true);
+            assertTrue(player.hasPermission("stemcraft.sign.format"));
+            feature.onDisable();
+        } finally {
+            org.mockbukkit.mockbukkit.MockBukkit.unmock();
+        }
     }
 
     private String legacy(String input) {

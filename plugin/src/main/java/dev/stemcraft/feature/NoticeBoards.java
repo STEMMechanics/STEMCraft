@@ -144,7 +144,7 @@ public final class NoticeBoards extends BaseFeature {
             .tabCompletion("remove")
             .tabCompletion("board", "create")
             .tabCompletion("board", "delete")
-            .permission("stemcraft.noticeboard.admin")
+            .access(dev.stemcraft.permission.PlayerCommandAccess::noticeboard)
             .executor(this::onCommand)
             .register(STEMCraft.getPlugin());
     }
@@ -166,13 +166,30 @@ public final class NoticeBoards extends BaseFeature {
         }
     }
 
+    private boolean canPost(Player player) {
+        if (player.hasPermission("stemcraft.noticeboard.post") || player.hasPermission("stemcraft.noticeboard.admin")) return true;
+        api.messages().error(player, "COMMAND_NO_PERMISSION");
+        return false;
+    }
+
+    private boolean canEditSilently(CommandSender sender, NoticePost post) {
+        return dev.stemcraft.permission.PlayerCommandAccess.owns(sender, post.authorUuid(),
+            "stemcraft.noticeboard.post", "stemcraft.noticeboard.admin");
+    }
+
+    private boolean canEdit(CommandSender sender, NoticePost post) {
+        if (canEditSilently(sender, post)) return true;
+        api.messages().error(sender, "COMMAND_NO_PERMISSION");
+        return false;
+    }
+
     private void openAdminPostDialog(CommandContext ctx) {
         Player player = ctx.asPlayer();
         if (player == null) {
             createServerPost(ctx);
             return;
         }
-        openNoticeEditor(player, null, false);
+        openNoticeEditor(player, null, !player.hasPermission("stemcraft.noticeboard.admin"));
     }
 
     private void createServerPost(CommandContext ctx) {
@@ -221,6 +238,7 @@ public final class NoticeBoards extends BaseFeature {
     }
 
     private void handleBoardClick(Player player) {
+        if (!canPost(player)) return;
         long now = System.currentTimeMillis();
         Long previous = lastBoardClicks.put(player.getUniqueId(), now);
         if (previous != null && now - previous < 500L) {
@@ -272,13 +290,14 @@ public final class NoticeBoards extends BaseFeature {
     }
 
     private void createPost(Player player, DialogResponse response, boolean enforceSingleNotice) {
+        if (!canPost(player)) return;
         String header = response.text("header").trim();
         String message = response.text("message").trim();
         if (header.isBlank() || message.isBlank()) {
             sendConfigured(player, "messages.required", "/error/A header and message are required.");
             return;
         }
-        if (enforceSingleNotice && !activePosts(player.getUniqueId()).isEmpty()) {
+        if ((enforceSingleNotice || !player.hasPermission("stemcraft.noticeboard.admin")) && !activePosts(player.getUniqueId()).isEmpty()) {
             sendConfigured(player, "messages.already-active", "/error/You already have an active notice. Click the board to edit or delete it.");
             return;
         }
@@ -307,6 +326,7 @@ public final class NoticeBoards extends BaseFeature {
     }
 
     private void updatePost(Player player, NoticePost post, DialogResponse response) {
+        if (!canEdit(player, post)) return;
         String header = response.text("header").trim();
         String message = response.text("message").trim();
         if (header.isBlank() || message.isBlank()) {
@@ -338,6 +358,7 @@ public final class NoticeBoards extends BaseFeature {
     }
 
     private void deletePlayerPost(Player player, NoticePost post) {
+        if (!canEdit(player, post)) return;
         int changed = api.database().update(
             "DELETE FROM notice_board_posts WHERE id = ? AND author_uuid = ?",
             statement -> {
@@ -400,16 +421,18 @@ public final class NoticeBoards extends BaseFeature {
                         .append(Component.text(" " + post.authorName() + " — ", NamedTextColor.GRAY))
                         .append(Component.text(post.header(), NamedTextColor.WHITE))
                         .append(Component.text(" (" + formatExpiry(post.expiresAt()) + ")", NamedTextColor.DARK_GRAY));
-                    if (isPlayer) {
+                    if (isPlayer && canEditSilently(ctx.getSender(), post)) {
                         line = line.append(Component.text(" "))
                             .append(actionButton("[Edit]", NamedTextColor.BLUE,
                                 ClickEvent.runCommand("/noticeboard edit " + id), "Edit this post"))
                             .append(Component.text(" "))
-                            .append(actionButton("[Expiry]", NamedTextColor.GOLD,
-                                ClickEvent.suggestCommand("/noticeboard expiry " + id + " "), "Set expiry, e.g. 1d or -1"))
-                            .append(Component.text(" "))
                             .append(actionButton("[Del]", NamedTextColor.RED,
                                 ClickEvent.runCommand("/noticeboard remove " + id), "Remove this post"));
+                        if (ctx.hasPermission("stemcraft.noticeboard.admin")) {
+                            line = line.append(Component.space())
+                                .append(actionButton("[Expiry]", NamedTextColor.GOLD,
+                                    ClickEvent.suggestCommand("/noticeboard expiry " + id + " "), "Set expiry, e.g. 1d or -1"));
+                        }
                     }
                     lines.add(line);
                 }
@@ -427,6 +450,7 @@ public final class NoticeBoards extends BaseFeature {
             sendConfigured(ctx, "commands.not-found", "/error/Notice not found.");
             return;
         }
+        if (!canEdit(ctx.getSender(), post)) return;
         Player player = ctx.asPlayer();
         if (player != null && ctx.args().size() == 2) {
             openAdminEditDialog(player, post);
@@ -454,6 +478,7 @@ public final class NoticeBoards extends BaseFeature {
     }
 
     private void saveAdminEdit(CommandSender sender, NoticePost post, String header, String message) {
+        if (!canEdit(sender, post)) return;
         if (header.isBlank() || message.isBlank() || header.length() > MAX_HEADER_LENGTH || message.length() > MAX_MESSAGE_LENGTH) {
             sendConfigured(sender, "commands.edit-invalid", "/error/A header and message within the configured limits are required.");
             return;
@@ -529,6 +554,7 @@ public final class NoticeBoards extends BaseFeature {
             sendConfigured(ctx, "commands.not-found", "/error/Notice not found.");
             return;
         }
+        if (!canEdit(ctx.getSender(), post)) return;
         api.database().update("DELETE FROM notice_board_posts WHERE id = ?", statement -> statement.setString(1, post.id().toString()));
         refreshBoards();
         sendConfigured(ctx, "commands.removed", "/success/Notice removed.");

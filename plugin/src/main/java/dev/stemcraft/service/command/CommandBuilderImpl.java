@@ -32,6 +32,13 @@ import java.util.*;
  * Implementation of the CommandBuilder interface.
  */
 public class CommandBuilderImpl implements CommandBuilder {
+    private java.util.function.BiPredicate<org.bukkit.command.CommandSender, java.util.List<String>> access = (sender, args) -> true;
+
+    @Override public CommandBuilder access(java.util.function.BiPredicate<org.bukkit.command.CommandSender, java.util.List<String>> access) {
+        this.access = java.util.Objects.requireNonNull(access);
+        return this;
+    }
+
     private final STEMCraftAPI api;
     private String label;
     private String description;
@@ -146,8 +153,9 @@ public class CommandBuilderImpl implements CommandBuilder {
      * @return The registered Command instance.
      */
     public Command register(JavaPlugin plugin) {
-        Command command = new CommandImpl(api, label, description, usage, aliases, permission, executor,
+        CommandImpl command = new CommandImpl(api, label, description, usage, aliases, permission, executor,
             tabCompletions, ignoredArgs);
+        command.setAccess(access);
         command.register(plugin);
         return command;
     }

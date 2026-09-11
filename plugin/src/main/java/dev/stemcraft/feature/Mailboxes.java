@@ -332,7 +332,7 @@ public class Mailboxes extends BaseFeature implements MailboxService {
             .tabCompletion("item", "amount")
             .description("Mailbox queue administration")
             .usage("/mailbox send <player> [message] | /mailbox queue [page] | /mailbox view <queue-id> [page] | /mailbox release <queue-id> | /mailbox hold <queue-id> [ticks] | /mailbox delete <queue-id> | /mailbox item <delete|amount> ...")
-            .permission("stemcraft.mailbox")
+            .access(dev.stemcraft.permission.PlayerCommandAccess::mailbox)
             .executor((unused, cmd, ctx) -> {
                 if (ctx.args().isEmpty()) {
                     renderQueueList(ctx, 1);

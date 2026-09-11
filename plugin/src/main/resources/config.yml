@@ -169,7 +169,12 @@ custom-commands:
     permission: stemcraft.command.survival
     command: survival
     run:
-      - tpworld survival
+      - "server:tpworld survival {player}"
+  creative:
+    permission: stemcraft.command.creative
+    command: creative
+    run:
+      - "server:tpworld creative {player}"
 
 custom-portals:
   enabled: true
