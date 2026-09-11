@@ -3,6 +3,7 @@ package dev.stemcraft.feature.stembot;
 import org.bukkit.Location;
 
 import java.util.List;
+import java.util.HashSet;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -46,6 +47,7 @@ public final class BotSession {
     private volatile boolean closed;
     private volatile boolean chatEngaged=true;
     private int awayTicks;
+    private long speechRevision;
 
     public BotSession(
         BotScript script,
@@ -66,12 +68,21 @@ public final class BotSession {
     public boolean closed() { return closed; }
     public boolean chatEngaged() { return chatEngaged&&!closed; }
     public String action() { return action; }
+    public long speechRevision() { return speechRevision; }
+
+    public static boolean isDismissal(String text) {
+        return text.trim().matches("(?i)(?:please\\s+)?(?:bye|goodbye|good bye|close|exit|stop|cancel|go away|leave me alone)(?:\\s+please)?[.!?]*");
+    }
 
     public void input(String text) {
         if(!chatEngaged()) return;
         idle=0;
 
         String input=text.trim();
+        if(isDismissal(input)) {
+            close();
+            return;
+        }
 
         if(waitMode==WaitMode.STUCK) {
             if(input.matches("(?i)(?:retry|try again)[.!]?")) {
@@ -88,15 +99,17 @@ public final class BotSession {
             if(input.matches("(?i)(?:no|nope|bye|close|exit)[.!]?")) {
                 close();
             }
-            if(!closed) stuckPrompt();
-            return;
+            if(closed) return;
         }
 
-        if(waitMode!=WaitMode.LISTEN) return;
-
-        for(BotScript.ListenRoute route:listening) {
+        for(BotScript.ListenRoute route:replyRoutes()) {
             if(!route.matches(input)) continue;
 
+            speechRevision++;
+            actor.cancel();
+            walkTarget=null;
+            progress=null;
+            playerBehind=false;
             listening=List.of();
             waitMode=WaitMode.NONE;
 
@@ -108,6 +121,27 @@ public final class BotSession {
             }
             return;
         }
+        if(waitMode==WaitMode.STUCK) stuckPrompt();
+    }
+
+    /** Find the upcoming reply prompt without executing its intervening actions. */
+    private List<BotScript.ListenRoute> replyRoutes() {
+        if(waitMode==WaitMode.LISTEN) return listening;
+        String nextAction=action;
+        int nextPc=pc;
+        var visited=new HashSet<String>();
+        while(visited.add(nextAction+":"+nextPc)) {
+            var program=script.actions().get(nextAction);
+            if(program==null||nextPc>=program.size()) return List.of();
+            var instruction=program.get(nextPc++);
+            switch(instruction.op()) {
+                case LISTEN -> { return instruction.routes(); }
+                case ACTION -> { nextAction=instruction.text(); nextPc=0; }
+                case END,CLOSE -> { return List.of(); }
+                default -> { }
+            }
+        }
+        return List.of();
     }
 
     public void tick(Location owner) {
@@ -414,6 +448,7 @@ public final class BotSession {
     public void close(boolean farewell) {
         if(closed) return;
         closed=true;
+        speechRevision++;
 
         try {
             actor.cancel();

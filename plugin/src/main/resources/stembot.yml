@@ -125,7 +125,8 @@ messages:
 #   Jump to another named action.
 #
 # listen:<pattern> -> <action>, <pattern> -> <action>
-#   Wait for private chat input.
+#   Wait for private chat input. Its routes are also available while preceding
+#   actions run. Dismissal phrases (bye, stop, go away) interrupt at any time.
 #   Alternatives use |:
 #       yes|yep|tour -> hub-tour
 #   Wildcards use *:
@@ -142,8 +143,8 @@ actions:
     - 'wave'
     - 'talk:Hi {player}! I am STEMBot, your private guide to STEMCraft.'
     - 'talk:Only you can see me. While you are nearby and our private chat is active, your ordinary chat messages come only to me.'
-    - 'talk:When I show a reply prompt, open chat, type one of the example phrases without a /, and send it. Commands such as /hub still start with /.'
-    - 'talk:Reply bye or close at a prompt to return to public chat. Use /stembot close at any time. Summon me again with /help.'
+    - 'talk:You can interrupt me: open chat and send an example topic without a /, or say bye or go away. Commands such as /hub still start with /.'
+    - 'talk:Say bye, stop, or go away at any time to return to public chat. Use /stembot close at any time. Summon me again with /help.'
     - 'talk:We can tour Survival and the noticeboard, Creative, Minigames, and the monthly challenge and voting area.'
     - 'action:hub-menu'
 
@@ -151,8 +152,8 @@ actions:
     - 'wave'
     - 'talk:Hi {player}! Back for directions or another tour? My navigation circuits are ready!'
     - 'talk:Only you can see me. While you are nearby and our private chat is active, your ordinary chat messages come only to me.'
-    - 'talk:When I show a reply prompt, open chat, type one of the example phrases without a /, and send it. Commands such as /hub still start with /.'
-    - 'talk:Reply bye or close at a prompt to return to public chat. Use /stembot close at any time. Summon me again with /help.'
+    - 'talk:You can interrupt me: open chat and send an example topic without a /, or say bye or go away. Commands such as /hub still start with /.'
+    - 'talk:Say bye, stop, or go away at any time to return to public chat. Use /stembot close at any time. Summon me again with /help.'
     - 'action:hub-menu'
 
   hub-menu:
@@ -238,31 +239,31 @@ actions:
 
   hub-navigation:
     - 'talk:Use /hub to return to the hub and /help to summon me. At my reply prompts, send ordinary chat text such as tour without a slash.'
-    - 'talk:Your chat is private while we are talking nearby. Walking away returns it to public chat; coming closer resumes our chat. Reply bye at a prompt, or use /stembot close at any time, to return to public chat.'
+    - 'talk:Your chat is private while we are talking nearby. Walking away returns it to public chat; coming closer resumes our chat. Say bye or go away at any time, or use /stembot close, to return to public chat.'
     - 'action:hub-menu'
 
   survival:
     - 'wave'
     - 'talk:Hi {player}! Need a hand in Survival? Let us work it out.'
     - 'talk:Only you can see me. While you are nearby and our private chat is active, your ordinary chat messages come only to me.'
-    - 'talk:When I show a reply prompt, open chat, type one of the example phrases without a /, and send it. Commands such as /hub still start with /.'
-    - 'talk:Reply bye or close at a prompt to return to public chat. Use /stembot close at any time. Summon me again with /help.'
+    - 'talk:You can interrupt me: open chat and send an example topic without a /, or say bye or go away. Commands such as /hub still start with /.'
+    - 'talk:Say bye, stop, or go away at any time to return to public chat. Use /stembot close at any time. Summon me again with /help.'
     - 'action:survival-menu'
 
   creative:
     - 'wave'
     - 'talk:Hi {player}! Need a hand in Creative? Let us work it out.'
     - 'talk:Only you can see me. While you are nearby and our private chat is active, your ordinary chat messages come only to me.'
-    - 'talk:When I show a reply prompt, open chat, type one of the example phrases without a /, and send it. Commands such as /hub still start with /.'
-    - 'talk:Reply bye or close at a prompt to return to public chat. Use /stembot close at any time. Summon me again with /help.'
+    - 'talk:You can interrupt me: open chat and send an example topic without a /, or say bye or go away. Commands such as /hub still start with /.'
+    - 'talk:Say bye, stop, or go away at any time to return to public chat. Use /stembot close at any time. Summon me again with /help.'
     - 'action:creative-menu'
 
   first-survival:
     - 'wave'
     - 'talk:Welcome to Survival, {player}! Start with wood, tools, food, and a safe shelter before nightfall.'
     - 'talk:Only you can see me. While you are nearby and our private chat is active, your ordinary chat messages come only to me.'
-    - 'talk:When I show a reply prompt, open chat, type one of the example phrases without a /, and send it. Commands such as /hub still start with /.'
-    - 'talk:Reply bye or close at a prompt to return to public chat. Use /stembot close at any time. Summon me again with /help.'
+    - 'talk:You can interrupt me: open chat and send an example topic without a /, or say bye or go away. Commands such as /hub still start with /.'
+    - 'talk:Say bye, stop, or go away at any time to return to public chat. Use /stembot close at any time. Summon me again with /help.'
     - 'talk:Explore and build while respecting other players. Leave their builds, chests, animals, and belongings alone unless you have permission.'
     - 'talk:Look for quest NPCs with yellow question marks. Their books give you goals as you explore, gather resources, and develop your homestead.'
     - 'talk:Use /quest for active quests, /spawn for an available world spawn, /coord for coordinates, and /hub to return to the hub.'
@@ -310,20 +311,20 @@ actions:
 
   survival-navigation:
     - 'talk:Type /hub to return to the hub. /spawn takes you to an available world spawn, and /coord helps you keep track of where you are.'
-    - 'talk:Use /help whenever you need me here again. Try phrases such as how do quests work, I died, or what commands can I use at my reply prompt.'
+    - 'talk:Use /help whenever you need me here again. Try phrases such as how do quests work, I died, or what commands can I use even while I am talking or walking.'
     - 'action:survival-menu'
 
   survival-chat:
-    - 'talk:Open chat and send a topic without a slash at my reply prompt. Try how do quests work, I need food, or what are the rules.'
-    - 'talk:Only I receive your ordinary chat while you are nearby. Walking away pauses our chat; coming closer resumes it. Reply bye at a prompt or type /stembot close any time to return to public chat. Use /help to summon me again.'
+    - 'talk:You can interrupt me by sending a topic without a slash. Try how do quests work, I need food, or what are the rules.'
+    - 'talk:Only I receive your ordinary chat while you are nearby. Walking away pauses our chat; coming closer resumes it. Say bye or go away at any time or type /stembot close to return to public chat. Use /help to summon me again.'
     - 'action:survival-menu'
 
   first-creative:
     - 'wave'
     - 'talk:Welcome to Creative, {player}! This is a place to build, experiment, and practise with Creative mode blocks.'
     - 'talk:Only you can see me. While you are nearby and our private chat is active, your ordinary chat messages come only to me.'
-    - 'talk:When I show a reply prompt, open chat, type one of the example phrases without a /, and send it. Commands such as /hub still start with /.'
-    - 'talk:Reply bye or close at a prompt to return to public chat. Use /stembot close at any time. Summon me again with /help.'
+    - 'talk:You can interrupt me: open chat and send an example topic without a /, or say bye or go away. Commands such as /hub still start with /.'
+    - 'talk:Say bye, stop, or go away at any time to return to public chat. Use /stembot close at any time. Summon me again with /help.'
     - 'talk:Find an unclaimed plot, stand inside it, and use /plot claim. Or use /plot auto to find and claim an available plot automatically.'
     - 'talk:Use /plot home to return to your plot. Respect other plots, keep builds appropriate, and ask before altering a build that belongs to someone else.'
     - 'talk:Creative builds and items stay separate from Survival. Use /hub to return to the hub, and /help for more ideas or plot advice.'
@@ -367,12 +368,12 @@ actions:
 
   creative-navigation:
     - 'talk:Use /plot home to return to your plot or /hub to return to the hub. /help summons me again in Creative.'
-    - 'talk:At my reply prompt you can type how do I claim a plot, give me building ideas, or what are the rules.'
+    - 'talk:You can interrupt me by typing how do I claim a plot, give me building ideas, or what are the rules.'
     - 'action:creative-menu'
 
   creative-chat:
-    - 'talk:Open chat at my reply prompt and send a phrase such as how do I claim a plot without a slash. Commands such as /plot home still need their slash.'
-    - 'talk:Only I receive your ordinary chat while you are nearby. Walking away pauses our chat; coming closer resumes it. Reply bye at a prompt or use /stembot close at any time to return to public chat.'
+    - 'talk:You can interrupt me by sending a phrase such as how do I claim a plot without a slash. Commands such as /plot home still need their slash.'
+    - 'talk:Only I receive your ordinary chat while you are nearby. Walking away pauses our chat; coming closer resumes it. Say bye or go away at any time or use /stembot close to return to public chat.'
     - 'action:creative-menu'
 
 # /help (alias of /stembot) routes by the current Bukkit world name.

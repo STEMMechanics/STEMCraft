@@ -169,11 +169,16 @@ public final class StemBotFeature extends BaseFeature {
         privateChat.add(event);
         event.setCancelled(true);
         event.viewers().clear();
-        // During a re-summon the conversation is still private, but not listening yet.
-        if(session==null) return;
-
         String text=PlainTextComponentSerializer.plainText()
             .serialize(event.message());
+
+        // A dismissal also cancels a re-summon while the old actor is departing.
+        if(session==null) {
+            PendingSummon pending=pendingSummons.get(id);
+            if(pending!=null&&BotSession.isDismissal(text))
+                api.tasks().nextTick(()->pendingSummons.remove(id,pending));
+            return;
+        }
 
         api.tasks().nextTick(()->{
             if(sessions.get(id)!=session) return;
@@ -537,6 +542,8 @@ public final class StemBotFeature extends BaseFeature {
                 script.speech().minBeeps(), script.speech().maxBeeps());
 
         int delay=0;
+        BotSession speaking=sessions.get(player.getUniqueId());
+        long revision=speaking==null?-1:speaking.speechRevision();
 
         for(int i=0;i<beepCount;i++) {
             int beepDelay=delay;
@@ -545,7 +552,8 @@ public final class StemBotFeature extends BaseFeature {
                 STEMCraft.getPlugin(),
                 ()->{
                     BotSession active=sessions.get(player.getUniqueId());
-                    if(active!=null&&active.chatEngaged()&&active.actor()==actor)
+                    if(active!=null&&active==speaking&&active.speechRevision()==revision
+                        &&active.chatEngaged()&&active.actor()==actor)
                         playSpeechBeep(player,actor);
                 },
                 beepDelay

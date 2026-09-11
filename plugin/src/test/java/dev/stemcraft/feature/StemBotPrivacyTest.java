@@ -61,6 +61,7 @@ class StemBotPrivacyTest {
         assertTrue(feature.hasActiveSession(owner.getUniqueId()));
         AsyncChatEvent event=mock(AsyncChatEvent.class);
         when(event.getPlayer()).thenReturn(owner);
+        when(event.message()).thenReturn(Component.text("hello"));
         Set<Audience> viewers=new HashSet<>(List.of(owner,other));
         when(event.viewers()).thenReturn(viewers);
         feature.chat(event);
@@ -73,6 +74,12 @@ class StemBotPrivacyTest {
         assertTrue(pending.containsKey(owner.getUniqueId()));
         feature.summon(owner,"hub");
         assertEquals(1,pending.size());
+        List<Runnable> queued=new ArrayList<>();
+        doAnswer(call->{queued.add(call.getArgument(0));return null;}).when(tasks).nextTick(any());
+        when(event.message()).thenReturn(Component.text("go away"));
+        feature.chat(event);
+        queued.getFirst().run();
+        assertTrue(pending.isEmpty(),"Dismissal must cancel the pending re-summon");
         feature.onDisable();
         assertTrue(pending.isEmpty());
         verify(actor).close();
