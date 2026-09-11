@@ -58,3 +58,27 @@ The administrative command requires `stemcraft.entitlements.admin`.
 Convenience entitlement fields are `stat`, `at-least`, `duration`, `quest`, `quests-at-least`, `badges`, `permissions`, and `manual`. Use `manual true` to remove the complete `when` block, `-` to remove an individual field, or `none` to clear a badges/permissions list. Badge fields correspond directly to configuration keys: `display`, `description`, `permission`, and `priority`.
 
 Generated permissions are placed in LuckPerms groups named `stemcraft-entitlement-<id>`. This keeps STEMCraft reconciliation separate from rank and permission nodes managed directly by administrators.
+
+## Manual-only award repair
+
+Definitions without effective requirements are manual-only, including an empty `when`
+section. Reading an optional stat condition no longer creates `when.stat`. Previously,
+that read could turn the manual `event-winner` definition into an unconditional automatic
+award and write its badge permission directly to each player's LuckPerms data.
+
+On enable and reload, STEMCraft removes saved entitlements whose source is exactly
+`calculated` when their current definition is manual-only. It retains `manual` and other
+explicit grant sources, direct badge awards, and calculated awards with actual conditions.
+The repair does not add revocations, so an affected player can legitimately earn a manual
+award later. A server log entry reports the number of removed entitlement rows.
+
+Tracked plugin-managed LuckPerms permissions are reconciled with the remaining awards.
+Permissions still needed by a direct badge or another entitlement remain; external grants
+not recorded as plugin-managed are not removed. Cleanup also retries tracked permissions
+on subsequent enable/reload if LuckPerms was unavailable previously.
+
+A later external grant of the exact same permission cannot be distinguished from an
+existing plugin-managed node. For legitimate winners, record an explicit manual badge or
+entitlement award through STEMCraft rather than relying on that accidental node.
+This repair does not change OP-based badge visibility; OP must still be disabled if admins
+should only display earned or explicitly granted badges.
