@@ -29,6 +29,7 @@ import dev.stemcraft.api.service.database.DatabaseService;
 import javax.annotation.Nullable;
 import org.jetbrains.annotations.NotNull;
 import java.io.File;
+import java.io.IOException;
 import java.sql.*;
 import java.util.*;
 
@@ -71,7 +72,7 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
      * @param api The STEMCraft API instance.
      */
     public DatabaseServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
-        super(plugin, api);
+        super(plugin, api, "database");
     }
 
     /**
@@ -129,6 +130,18 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
                 });
 
                 setMigrationVersion("stemcraft", 1);
+            }
+
+            // Only before feature/services startup; never vacuum the live shared connection.
+            if (getConfigSection().getBoolean("compact-on-startup",true)) {
+                long minimumBytes=Math.clamp(getConfigSection().getLong("compact-minimum-free-mib",64),1,1_048_576)*1_048_576L;
+                int minimumPercent=Math.clamp(getConfigSection().getInt("compact-minimum-free-percent",20),1,100);
+                try {
+                    DatabaseCompaction.compactIfNeeded(connection,database.toPath(),minimumBytes,minimumPercent,plugin.getLogger());
+                } catch (SQLException|IOException exception) {
+                    // Maintenance failure must not discard a usable connection or stop startup.
+                    plugin.getLogger().warning("SQLite compaction deferred until next startup: "+exception.getMessage());
+                }
             }
         } catch (SQLException e) {
             api.messages().error("Failed to open SQLite database connection.", e);
