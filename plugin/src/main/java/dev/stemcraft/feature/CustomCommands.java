@@ -121,6 +121,7 @@ public class CustomCommands extends BaseFeature {
                 continue;
             }
 
+            migrateSurvivalShortcut(id, entry);
             CustomCommandEntry customCommandEntry = readEntry(id, entry);
             activeEntries.put(customCommandEntry.id(), customCommandEntry);
             registerRuntimeCommand(customCommandEntry);
@@ -542,6 +543,14 @@ public class CustomCommands extends BaseFeature {
         }
 
         return commands;
+    }
+
+    static void migrateSurvivalShortcut(String id, ConfigSection entry) {
+        if (!id.equals("survival") || !normalizeLabel(entry.getString("command", id)).equals("survival")) return;
+        CustomCommandEntry existing = readEntry(id, entry);
+        if (!existing.runCommands().equals(List.of("tpworld survival"))) return;
+        entry.set("run", List.of("server:tpworld survival {player}"));
+        entry.save();
     }
 
     static CustomCommandEntry readEntry(String id, ConfigSection entry) {

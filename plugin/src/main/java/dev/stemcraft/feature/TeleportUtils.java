@@ -288,6 +288,7 @@ public class TeleportUtils extends BaseFeature {
         api.commands().create("back")
                 .usage("BACK_USAGE")
                 .permission("stemcraft.command.back")
+                .access((sender, args) -> dev.stemcraft.permission.PlayerCommandAccess.ownTarget(sender, args, 0, "stemcraft.command.back.others"))
                 .description("BACK_DESCRIPTION")
                 .executor((plugin, cmd, ctx) -> {
                     Player target;
@@ -414,6 +415,7 @@ public class TeleportUtils extends BaseFeature {
         api.commands().create("spawn")
                 .usage("SPAWN_USAGE")
                 .permission("stemcraft.command.spawn")
+                .access(dev.stemcraft.permission.PlayerCommandAccess::spawn)
                 .description("SPAWN_DESCRIPTION")
                 .executor((plugin, cmd, ctx) -> {
                     if (ctx.args().isEmpty()) {

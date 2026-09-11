@@ -63,6 +63,7 @@ public class PlayerSpeed extends BaseFeature {
                 .description("PLAYER_SPEED_DESCRIPTION")
                 .usage("PLAYER_SPEED_USAGE")
                 .permission("stemcraft.command.speed")
+                .access(dev.stemcraft.permission.PlayerCommandAccess::speed)
                 .tabCompletion("{speedtype}", "{speed}", "{player}")
                 .tabCompletion("{speedtype}", "{player}")
                 .tabCompletion("{speed}", "{player}")

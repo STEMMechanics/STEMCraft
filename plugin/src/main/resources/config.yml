@@ -169,7 +169,12 @@ custom-commands:
     permission: stemcraft.command.survival
     command: survival
     run:
-      - tpworld survival
+      - "server:tpworld survival {player}"
+  creative:
+    permission: stemcraft.command.creative
+    command: creative
+    run:
+      - "server:tpworld creative {player}"
 
 custom-portals:
   enabled: true
@@ -1301,4 +1306,9 @@ world-generation:
 
 # Private Citizens guide. Dialogue, skin and routes live in stembot.yml.
 stembot:
+  enabled: true
+
+# Colors &0-&f, bold &l, underline &n, italic &o, reset &r, and registered :glyph: tokens.
+# Use && for a literal ampersand. Unsupported codes such as &m remain text.
+formatted-signs:
   enabled: true

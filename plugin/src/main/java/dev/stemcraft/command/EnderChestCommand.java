@@ -51,6 +51,7 @@ public class EnderChestCommand extends BaseCommand {
         setDescription("ENDERCHEST_DESCRIPTION");
         setUsage("ENDERCHEST_USAGE");
         setPermission(PERMISSION);
+        setAccess((sender, args) -> dev.stemcraft.permission.PlayerCommandAccess.ownTarget(sender, args, 0, "stemcraft.command.enderchest.others"));
         addTabCompletion("{player}");
         register(plugin);
     }
@@ -63,19 +64,15 @@ public class EnderChestCommand extends BaseCommand {
      */
     @Override
     public void onExecute(Command cmd, CommandContext ctx) {
-        if(ctx.args().isEmpty()) {
-            cmd.error("PLAYER_REQUIRED");
-            return;
-        }
-
-        Player target = ctx.getPlayer(0, null);
+        Player target = ctx.args().isEmpty() ? ctx.asPlayer() : ctx.getPlayer(0, null);
         if(target == null) {
-            cmd.error("PLAYER_NOT_FOUND", "player", ctx.args().getFirst());
+            cmd.error("PLAYER_NOT_FOUND", "player", ctx.getArg(0, ""));
             return;
         }
 
         // Open the *live* inventory. Any changes are applied directly.
-        target.openInventory(target.getEnderChest());
+        Player viewer = ctx.asPlayer() == null ? target : ctx.asPlayer();
+        viewer.openInventory(target.getEnderChest());
         cmd.info(ctx.getSender(), "ENDERCHEST_VIEWING", "player", target.getName());
     }
 }

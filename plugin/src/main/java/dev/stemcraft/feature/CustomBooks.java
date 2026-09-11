@@ -84,6 +84,7 @@ public class CustomBooks extends BaseFeature {
                 .description("CUSTOM_BOOKS_DESCRIPTION")
                 .usage("CUSTOM_BOOKS_USAGE")
                 .permission("stemcraft.book")
+                .access(dev.stemcraft.permission.PlayerCommandAccess::book)
                 .executor((unused, cmd, ctx) -> {
                     // Check there are args
                     if(ctx.args().isEmpty()) {

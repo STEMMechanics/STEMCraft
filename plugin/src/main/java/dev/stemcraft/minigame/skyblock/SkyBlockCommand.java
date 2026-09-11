@@ -37,7 +37,7 @@ public class SkyBlockCommand {
             .toList());
 
         api.commands().create("skyblock")
-            .permission(PERMISSION)
+            .access((sender, args) -> dev.stemcraft.permission.PlayerCommandAccess.minigame(sender, args, "skyblock"))
             .usage("/skyblock <list|info|join|spectate|leave|reset|reload|pool>")
             .tabCompletion("list")
             .tabCompletion("list", "{int}")
@@ -45,10 +45,14 @@ public class SkyBlockCommand {
             .tabCompletion("join", "{player}")
             .tabCompletion("spectate", "{skyblock-owners}", "{player}")
             .tabCompletion("leave", "{player}")
-            .tabCompletion("reset", "{skyblock-owners}")
+            .tabCompletion("reset", "{skyblock-owners}", "confirm")
             .tabCompletion("reload")
             .tabCompletion("pool")
             .executor((ignored, cmd, ctx) -> {
+                if (ctx.args().isEmpty() && !dev.stemcraft.permission.PlayerCommandAccess.gameAdmin(ctx.getSender(), "skyblock")) {
+                    ctx.returnInfo("Use /skyblock list, info, join or leave, spectate.");
+                    return;
+                }
                 ctx.checkArgsSizeAtLeast(1);
 
                 switch (ctx.getArgLower(0)) {
@@ -187,11 +191,15 @@ public class SkyBlockCommand {
             return;
         }
         Player sender = ctx.asPlayer();
-        if ((sender == null || !skyBlock.isOwner(arena, sender)) && !ctx.hasPermission(PERMISSION_OTHERS)) {
+        if ((sender == null || !skyBlock.isOwner(arena, sender)) && !dev.stemcraft.permission.PlayerCommandAccess.gameAdmin(ctx.getSender(), "skyblock") && !ctx.hasPermission(PERMISSION_OTHERS)) {
             ctx.returnError("COMMAND_NO_PERMISSION_OTHERS");
             return;
         }
 
+        if (!ctx.getArg(2, "").equalsIgnoreCase("confirm")) {
+            ctx.returnError("Reset deletes this island. Use /skyblock reset " + arena.id() + " confirm to continue.");
+            return;
+        }
         skyBlock.endGame(arena, "Your SkyBlock island was reset.");
         ctx.success("SkyBlock '" + skyBlock.ownerName(arena) + "' was reset.");
     }

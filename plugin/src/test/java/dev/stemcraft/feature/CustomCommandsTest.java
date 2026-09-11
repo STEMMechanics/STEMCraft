@@ -25,6 +25,22 @@ class CustomCommandsTest {
     Path tempDir;
 
     @Test
+    void migratesOnlyTheOriginalSurvivalShortcutAndPersistsIt() {
+        ConfigFileImpl config = new ConfigFileImpl();
+        assertTrue(config.load(tempDir.toFile(), "survival-migration.yml", true));
+        config.set("survival.command", "survival");
+        config.set("survival.run", List.of("tpworld survival"));
+        CustomCommands.migrateSurvivalShortcut("survival", config.getSection("survival", false));
+        assertEquals(List.of("server:tpworld survival {player}"), config.getStringList("survival.run"));
+        ConfigFileImpl reloaded = new ConfigFileImpl();
+        assertTrue(reloaded.load(tempDir.toFile(), "survival-migration.yml", false));
+        assertEquals(List.of("server:tpworld survival {player}"), reloaded.getStringList("survival.run"));
+        config.set("survival.run", List.of("tpworld custom"));
+        CustomCommands.migrateSurvivalShortcut("survival", config.getSection("survival", false));
+        assertEquals(List.of("tpworld custom"), config.getStringList("survival.run"));
+    }
+
+    @Test
     void writeEntryOmitsDefaultPermissionButReadEntryRestoresIt() {
         ConfigFileImpl config = new ConfigFileImpl();
         assertTrue(config.load(tempDir.toFile(), "custom-commands.yml", true));
