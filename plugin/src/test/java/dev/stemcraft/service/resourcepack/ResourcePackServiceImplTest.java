@@ -231,7 +231,7 @@ class ResourcePackServiceImplTest {
         harness.service.registerGenerator(generator);
 
         assertEquals(2, harness.service.buildPlan().size());
-        assertEquals(84, harness.service.buildPlan().getFirst().packFormat());
+        assertEquals(88, harness.service.buildPlan().getFirst().packFormat());
         assertEquals(92, harness.service.buildPlan().get(1).packFormat());
         assertFalse(generator.supports(harness.service.buildPlan().getFirst()));
         assertTrue(generator.supports(harness.service.buildPlan().get(1)));
@@ -276,7 +276,7 @@ class ResourcePackServiceImplTest {
 
         assertNotNull(generator.loadedConfig);
         assertEquals("ready", generator.loadedConfig.getString("marker"));
-        assertEquals(List.of(84), generator.generatedFormats);
+        assertEquals(List.of(88), generator.generatedFormats);
         assertZipContains(harness.resourcePackZip(), "direct.txt");
     }
 
@@ -382,7 +382,7 @@ class ResourcePackServiceImplTest {
             when(generatorsConfig.getSection("glyphs")).thenReturn(mock(ConfigSectionView.class));
             when(generatorsConfig.getSection("minecraft")).thenReturn(mock(ConfigSectionView.class));
             when(config.getInt("min_pack_format", 32)).thenReturn(32);
-            when(config.getInt("max_pack_format", 84)).thenReturn(84);
+            when(config.getInt("max_pack_format", 88)).thenReturn(88);
 
             service = new TestService(plugin, api, config);
         }
@@ -435,7 +435,7 @@ class ResourcePackServiceImplTest {
             config.set("description", "Test Pack");
             config.set("bedrock.enabled", false);
             config.set("min_pack_format", 32);
-            config.set("max_pack_format", 84);
+            config.set("max_pack_format", 88);
             config.save();
 
             service = new TestService(plugin, api, config);
