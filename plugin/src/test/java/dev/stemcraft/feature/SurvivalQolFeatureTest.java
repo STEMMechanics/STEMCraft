@@ -29,8 +29,8 @@ class SurvivalQolFeatureTest {
     void massHarvestUnlocksRequireLevelTenAndHigherTierToolsByDefault() {
         var config = YamlConfiguration.loadConfiguration(new InputStreamReader(
             getClass().getResourceAsStream("/config.yml"), StandardCharsets.UTF_8));
-        assertUnlock(config, "tree-felling", "qol-tree-felling", "skill_herbalism_xp", 10);
-        assertUnlock(config, "vein-mining", "qol-vein-mining", "skill_mining_xp", 10);
+        assertUnlock(config, "tree-felling", "qol-tree-felling", "skill_herbalism_xp", 25);
+        assertUnlock(config, "vein-mining", "qol-vein-mining", "skill_mining_xp", 25);
         assertTrue(config.getBoolean("survival-qol.tree-felling.require-sneaking"));
         assertTrue(config.getBoolean("survival-qol.vein-mining.require-sneaking"));
         assertEquals(List.of("DIAMOND_AXE", "NETHERITE_AXE"), config.getStringList("survival-qol.tree-felling.tools"));
@@ -136,10 +136,10 @@ class SurvivalQolFeatureTest {
             "entitlements.definitions.qol-tool-refill.grants.permissions").getFirst());
         for (Map<?, ?> path : refillPaths) {
             Map<?, ?> stat = (Map<?, ?>) path.get("stat");
-            assertEquals(ProfessionsFeature.xpForLevel(3), ((Number) stat.get("at-least")).longValue());
+            assertEquals(ProfessionsFeature.xpForLevel(5), ((Number) stat.get("at-least")).longValue());
         }
-        assertUnlock(config, "hoe-harvest", "qol-farming-hoe-harvest", "skill_farming_xp", 3);
-        assertUnlock(config, "auto-refill", "qol-engineering-auto-refill", "skill_engineering_xp", 3);
+        assertUnlock(config, "hoe-harvest", "qol-farming-hoe-harvest", "skill_farming_xp", 15);
+        assertUnlock(config, "auto-refill", "qol-engineering-auto-refill", "skill_engineering_xp", 10);
         assertEquals("stemcraft.qol.auto-select-tool",
             config.getString("survival-qol.auto-select-tool.permission"));
         List<Map<?, ?>> requirements = config.getMapList(
@@ -147,11 +147,11 @@ class SurvivalQolFeatureTest {
         Map<?, ?> miningRequirement = (Map<?, ?>) requirements.get(0).get("stat");
         Map<?, ?> engineeringRequirement = (Map<?, ?>) requirements.get(1).get("stat");
         assertEquals("skill_mining_xp", miningRequirement.get("key"));
-        assertEquals(ProfessionsFeature.xpForLevel(4), ((Number) miningRequirement.get("at-least")).longValue());
+        assertEquals(ProfessionsFeature.xpForLevel(20), ((Number) miningRequirement.get("at-least")).longValue());
         assertEquals("skill_engineering_xp", engineeringRequirement.get("key"));
-        assertEquals(ProfessionsFeature.xpForLevel(4), ((Number) engineeringRequirement.get("at-least")).longValue());
-        assertUnlock(config, "stronger-leads", "qol-farming-stronger-leads", "skill_farming_xp", 4);
-        assertUnlock(config, "powered-minecarts", "qol-engineering-powered-minecarts", "skill_engineering_xp", 5);
+        assertEquals(ProfessionsFeature.xpForLevel(20), ((Number) engineeringRequirement.get("at-least")).longValue());
+        assertUnlock(config, "stronger-leads", "qol-farming-stronger-leads", "skill_farming_xp", 8);
+        assertUnlock(config, "powered-minecarts", "qol-engineering-powered-minecarts", "skill_engineering_xp", 15);
         assertUnlock(config, "named-mob-info", "qol-farming-named-mob-info", "skill_farming_xp", 5);
         assertEquals("", config.getString("entitlements.badge-display.separator"));
     }
