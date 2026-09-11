@@ -9,7 +9,7 @@ import org.bukkit.entity.EntityType;
 import org.bukkit.persistence.PersistentDataType;
 import org.json.simple.JSONObject;
 
-import java.lang.reflect.Method;
+import static dev.stemcraft.integration.CitizensAccess.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -159,33 +159,4 @@ public final class CitizensQuestNpcSupport {
         return invokeStatic("net.citizensnpcs.api.CitizensAPI", "getNPCRegistry");
     }
 
-    private static Class<?> type(String name) {
-        try {
-            return Class.forName(name, true, CitizensQuestNpcSupport.class.getClassLoader());
-        } catch (ClassNotFoundException ex) {
-            throw new IllegalStateException("Citizens API is unavailable", ex);
-        }
-    }
-
-    private static Object invokeStatic(String className, String method, Object... arguments) {
-        return invoke(type(className), null, method, arguments);
-    }
-
-    private static Object invoke(Object target, String method, Object... arguments) {
-        return invoke(target.getClass(), target, method, arguments);
-    }
-
-    private static Object invoke(Class<?> owner, Object target, String method, Object... arguments) {
-        for (Method candidate : owner.getMethods()) {
-            if (!candidate.getName().equals(method) || candidate.getParameterCount() != arguments.length) continue;
-            try {
-                return candidate.invoke(target, arguments);
-            } catch (IllegalArgumentException ignored) {
-                // Try another overload with the same arity.
-            } catch (ReflectiveOperationException ex) {
-                throw new IllegalStateException("Could not call Citizens method " + method, ex);
-            }
-        }
-        throw new IllegalStateException("Citizens method not found: " + owner.getName() + "." + method);
-    }
 }

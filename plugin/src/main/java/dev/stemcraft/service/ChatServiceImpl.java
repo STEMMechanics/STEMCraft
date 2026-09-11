@@ -152,6 +152,7 @@ public class ChatServiceImpl extends BaseService {
             .register(plugin);
 
         api.events().register(AsyncChatEvent.class, event -> {
+            if (plugin.stemBot() != null && plugin.stemBot().isPrivateChat(event)) return;
             if (plugin.firstJoin() != null && plugin.firstJoin().hasActiveSession(event.getPlayer().getUniqueId())) {
                 return;
             }
@@ -162,6 +163,7 @@ public class ChatServiceImpl extends BaseService {
         }, EventPriority.HIGH, true);
 
         api.events().register(AsyncChatEvent.class, event -> {
+            if (plugin.stemBot() != null && plugin.stemBot().isPrivateChat(event)) return;
             if (plugin.firstJoin() != null && plugin.firstJoin().hasActiveSession(event.getPlayer().getUniqueId())) {
                 return;
             }

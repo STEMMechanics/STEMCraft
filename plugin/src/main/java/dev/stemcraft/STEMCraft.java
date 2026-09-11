@@ -134,6 +134,7 @@ public final class STEMCraft extends JavaPlugin {
     private TabCompleteServiceImpl tabComplete;
     private TaskServiceImpl tasks;
     private FirstJoinService firstJoin;
+    private dev.stemcraft.feature.StemBotFeature stemBot;
     private WebServiceImpl web;
     private WorldServiceImpl worlds;
 
@@ -605,6 +606,7 @@ public final class STEMCraft extends JavaPlugin {
         }
 
         feature.onEnable();
+        if (feature instanceof dev.stemcraft.feature.StemBotFeature bot) stemBot = bot;
         if (feature instanceof CometFeature cometFeature) {
             comets = cometFeature;
         }

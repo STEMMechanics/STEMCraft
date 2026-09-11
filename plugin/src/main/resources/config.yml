@@ -1285,3 +1285,7 @@ world-generation:
     enabled: true
   faraway:
     enabled: true
+
+# Private Citizens guide. Dialogue, skin and routes live in stembot.yml.
+stembot:
+  enabled: true
