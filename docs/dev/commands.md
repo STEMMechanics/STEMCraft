@@ -48,6 +48,7 @@ The list below reflects the active built-in command roots in source.
 | `/workbench` | `WorkbenchCommand` | Virtual workstation surface plus aliases such as `anvil` and `stonecutter` |
 | `/invsee`, `/enderchest`, `/clearinv`, `/break`, `/repair` | Base commands | Inventory/admin utilities |
 | `/clearsel` | `SelectionServiceImpl` | Clears active selection state |
+| `/selpreview [on\|off\|grid [on\|off]]` | `SelectionServiceImpl` | Controls saved player preferences for WorldEdit outlines and grids; alias `/selprev`; available to all players |
 
 ## Content and Interaction
 

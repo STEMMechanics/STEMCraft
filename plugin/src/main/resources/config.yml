@@ -1,3 +1,11 @@
+database:
+  # Reclaim deleted SQLite pages before services/features start using the database.
+  # Runs only when BOTH thresholds are reached. Large databases can extend startup.
+  # A feature migration frees pages after this check: they are reclaimed next restart.
+  compact-on-startup: true
+  compact-minimum-free-mib: 64
+  compact-minimum-free-percent: 20
+
 logging:
   prefixes:
     log: "[STEMCraft] "
@@ -1210,15 +1218,20 @@ selection_preview:
   enabled: true
   particle: DUST
   corner-particle: FLAME
-  particles-per-block: 1.0
-  major-marker-interval: 5
-  particle-send-interval: 6
-  particle-viewdistance: 96.0
+  particles-per-block: 0.5
+  major-marker-interval: 10
+  particle-send-interval: 10
+  particle-viewdistance: 48.0
   max-selection-size-to-display: 10000000
+  # Total WorldEdit particle calls per player per update, including markers and grid.
+  max-particles-per-update: 1000
   advanced-grid:
-    enabled: true
+    # Default for players without a saved /selpreview grid preference.
+    enabled: false
     spacing: 5.0
-    max-points: 60000
+    max-points: 1000
+    # WorldEdit grids automatically hide if any side exceeds this many blocks.
+    max-side-length: 64.0
   flash_material: GLOWSTONE
 
 comet:

@@ -98,14 +98,12 @@ public final class PlayerResetServiceImpl extends BaseService implements PlayerR
 
     private void execute(PlayerResetPlan plan) {
         PlayerResetContext context = new PlayerResetContext(plan.playerUuid(), plan.playerName(), plan.scope(), plan.actorName());
-        List<String> completed = new ArrayList<>();
         String failure = null;
         String error = null;
         for (PlayerResetHandler handler : handlers()) {
             if (!handler.scopes().contains(plan.scope())) continue;
             try {
                 handler.reset(context);
-                completed.add(handler.id());
             } catch (Exception exception) {
                 failure = handler.id(); error = exception.getMessage();
                 plugin.getLogger().severe("Player reset failed in " + failure + " for " + plan.playerUuid() + ": " + error);
@@ -129,7 +127,6 @@ public final class PlayerResetServiceImpl extends BaseService implements PlayerR
             .tabCompletion("{player}", "progression")
             .tabCompletion("{player}", "gameplay")
             .tabCompletion("{player}", "complete")
-            .tabCompletion("confirm")
             .executor((unused, command, ctx) -> command(ctx)).register(plugin);
     }
 
@@ -164,11 +161,12 @@ public final class PlayerResetServiceImpl extends BaseService implements PlayerR
     }
 
     private void registerSqlHandlers() {
+        // quest_npc_death_day is shared NPC state keyed by profile_id, not player data.
         register(sqlHandler("progression-storage", PlayerResetScope.PROGRESSION, 200,
             List.of(
                 spec("quest_progress", "player_uuid"), spec("quest_npc_daily_roll", "player_uuid"),
                 spec("quest_completed", "player_uuid"), spec("quest_attempt_revision", "player_uuid"),
-                spec("quest_npc_death_day", "player_uuid"), spec("quest_attempt_timing", "player_uuid"),
+                spec("quest_attempt_timing", "player_uuid"),
                 spec("quest_failure", "player_uuid"), spec("quest_tracking", "player_uuid"),
                 spec("quest_tracking_preferences", "player_uuid")
             )));
