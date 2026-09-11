@@ -6,14 +6,18 @@ Each player-facing behaviour has an optional `permission` beside its `enabled` s
 
 | Convenience unlock | Default requirement | Permission |
 | --- | --- | --- |
-| Vein mining | Mining Level 10 (8,100 XP), diamond/netherite pickaxe | `stemcraft.qol.vein-mining` |
-| Tree felling | Herbalism Level 10 (8,100 XP), diamond/netherite axe | `stemcraft.qol.tree-felling` |
-| Automatic replacement for broken tools | Mining Level 3 (400 XP) | `stemcraft.qol.auto-refill-tools` |
-| 3×3 hoe harvesting | Farming Level 3 (400 XP) | `stemcraft.qol.hoe-harvest` |
-| Automatic stack refill | Engineering Level 3 (400 XP) | `stemcraft.qol.auto-refill` |
-| Stronger leads | Farming Level 4 (900 XP) | `stemcraft.qol.stronger-leads` |
-| Faster powered minecarts | Engineering Level 5 (1,600 XP) | `stemcraft.qol.powered-minecarts` |
+| Vein mining | Mining Level 25 (57,600 XP), diamond/netherite pickaxe | `stemcraft.qol.vein-mining` |
+| Tree felling | Herbalism Level 25 (57,600 XP), diamond/netherite axe | `stemcraft.qol.tree-felling` |
+| Automatic replacement for broken tools | Level 5 (1,600 XP) in Mining, Herbalism, Farming, Melee Combat or Ranged Combat | `stemcraft.qol.auto-refill-tools` |
+| 3×3 hoe harvesting | Farming Level 15 (19,600 XP) | `stemcraft.qol.hoe-harvest` |
+| Automatic stack refill | Engineering Level 10 (8,100 XP) | `stemcraft.qol.auto-refill` |
+| Automatic tool selection | Mining **and** Engineering Level 20 (36,100 XP each) | `stemcraft.qol.auto-select-tool` |
+| Stronger leads | Farming Level 8 (4,900 XP) | `stemcraft.qol.stronger-leads` |
+| Faster powered minecarts | Engineering Level 15 (19,600 XP) | `stemcraft.qol.powered-minecarts` |
 | Named-mob information, when enabled | Farming Level 5 (1,600 XP) | `stemcraft.qol.named-mob-info` |
+
+These defaults keep basic conveniences early and place bulk harvesting later. XP requirements
+use `100 × (level − 1)²`. Existing server configurations must be updated separately.
 
 Crop-trampling protection, durability warnings, and anvil warnings remain ungated.
 

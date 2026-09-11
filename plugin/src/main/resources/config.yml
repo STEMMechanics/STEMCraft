@@ -583,77 +583,86 @@ entitlements:
     qol-tool-refill:
       name: "Backup tools"
       description: "A matching tool or weapon is automatically equipped when yours breaks."
+      # Level 5: 1,600 lifetime XP in each required skill.
       when:
         any:
-          - stat: {key: skill_mining_xp, at-least: 400}
-          - stat: {key: skill_herbalism_xp, at-least: 400}
-          - stat: {key: skill_farming_xp, at-least: 400}
-          - stat: {key: skill_melee_combat_xp, at-least: 400}
-          - stat: {key: skill_ranged_combat_xp, at-least: 400}
+          - stat: {key: skill_mining_xp, at-least: 1600}
+          - stat: {key: skill_herbalism_xp, at-least: 1600}
+          - stat: {key: skill_farming_xp, at-least: 1600}
+          - stat: {key: skill_melee_combat_xp, at-least: 1600}
+          - stat: {key: skill_ranged_combat_xp, at-least: 1600}
       grants:
         permissions: [stemcraft.qol.auto-refill-tools]
     qol-farming-hoe-harvest:
       name: "Quick crop harvest"
       description: "Sneak and right-click a ripe crop with a hoe to harvest and replant a 3×3 area."
+      # Level 15: 19,600 lifetime XP in each required skill.
       when:
         stat:
           key: skill_farming_xp
-          at-least: 400
+          at-least: 19600
       grants:
         permissions: [stemcraft.qol.hoe-harvest]
     qol-engineering-auto-refill:
       name: "Automatic item refill"
       description: "Used blocks and items are automatically replaced from your inventory."
+      # Level 10: 8,100 lifetime XP in each required skill.
       when:
         stat:
           key: skill_engineering_xp
-          at-least: 400
+          at-least: 8100
       grants:
         permissions: [stemcraft.qol.auto-refill]
     qol-vein-mining:
       name: "Vein mining"
       description: "Sneak-mine ore with a diamond or netherite pickaxe to harvest connected ore of the same type."
+      # Level 25: 57,600 lifetime XP in each required skill.
       when:
-        stat: {key: skill_mining_xp, at-least: 8100}
+        stat: {key: skill_mining_xp, at-least: 57600}
       grants:
         permissions: [stemcraft.qol.vein-mining]
     qol-tree-felling:
       name: "Tree felling"
       description: "Sneak-chop a tree with a diamond or netherite axe to harvest connected logs from that height upwards."
+      # Level 25: 57,600 lifetime XP in each required skill.
       when:
-        stat: {key: skill_herbalism_xp, at-least: 8100}
+        stat: {key: skill_herbalism_xp, at-least: 57600}
       grants:
         permissions: [stemcraft.qol.tree-felling]
     qol-auto-select-tool:
       name: "Automatic tool selection"
       description: "Start breaking a block to equip the best available tool for it from your inventory."
+      # Level 20: 36,100 lifetime XP in each required skill.
       when:
         all:
-          - stat: {key: skill_mining_xp, at-least: 900}
-          - stat: {key: skill_engineering_xp, at-least: 900}
+          - stat: {key: skill_mining_xp, at-least: 36100}
+          - stat: {key: skill_engineering_xp, at-least: 36100}
       grants:
         permissions: [stemcraft.qol.auto-select-tool]
     qol-farming-stronger-leads:
       name: "Stronger leads"
       description: "Leads no longer snap when an animal falls too far behind."
+      # Level 8: 4,900 lifetime XP in each required skill.
       when:
         stat:
           key: skill_farming_xp
-          at-least: 900
+          at-least: 4900
       grants:
         permissions: [stemcraft.qol.stronger-leads]
     qol-engineering-powered-minecarts:
       name: "Faster minecarts"
       description: "Powered minecarts travel faster."
+      # Level 15: 19,600 lifetime XP in each required skill.
       when:
         stat:
           key: skill_engineering_xp
-          at-least: 1600
+          at-least: 19600
       grants:
         permissions: [stemcraft.qol.powered-minecarts]
     qol-farming-named-mob-info:
       name: "Animal information"
       description: "Right-click a named animal to see its health and owner."
+      # Level 5: 1,600 lifetime XP in each required skill.
       when:
         stat:
           key: skill_farming_xp
