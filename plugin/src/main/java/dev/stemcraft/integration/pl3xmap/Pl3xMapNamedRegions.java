@@ -18,7 +18,8 @@ import java.util.*;
 import java.util.function.Supplier;
 
 /** Optional live Pl3xMap layer for generated region and structure names. */
-public final class Pl3xMapNamedRegions {
+public final class Pl3xMapNamedRegions implements net.pl3x.map.core.event.EventListener {
+    private boolean enabled;
     public record Style(int strokeColour, int fillColour, int lineThickness) { }
     private static final String BIOME_KEY = "stemcraft_named_regions";
     private static final String STRUCTURE_KEY = "stemcraft_named_structures";
@@ -44,14 +45,47 @@ public final class Pl3xMapNamedRegions {
         this.structureLayerName = structureLayerName; this.updateIntervalSeconds = updateIntervalSeconds;
         this.structureIconSize = structureIconSize;
     }
-    public void enable() { registerStructureIcons(); Pl3xMap.api().getWorldRegistry().forEach(world -> {
-        world.getLayerRegistry().unregister(BIOME_KEY); world.getLayerRegistry().unregister(STRUCTURE_KEY);
+    public void enable() {
+        if (enabled) return;
+        enabled = true;
+        Pl3xMap.api().getEventRegistry().register(this);
+        registerStructureIcons();
+        Pl3xMap.api().getWorldRegistry().forEach(this::registerWorld);
+    }
+
+    @net.pl3x.map.core.event.EventHandler
+    public void onWorldLoaded(net.pl3x.map.core.event.world.WorldLoadedEvent event) {
+        if (enabled) registerWorld(event.getWorld());
+    }
+
+    @net.pl3x.map.core.event.EventHandler
+    public void onMapEnabled(net.pl3x.map.core.event.server.Pl3xMapEnabledEvent event) {
+        if (!enabled) return;
+        // Pl3xMap's own reload clears icons and reconstructs its worlds.
+        registerStructureIcons();
+        Pl3xMap.api().getWorldRegistry().forEach(this::registerWorld);
+    }
+
+    private void registerWorld(World world) {
+        world.getLayerRegistry().unregister(BIOME_KEY);
+        world.getLayerRegistry().unregister(STRUCTURE_KEY);
         world.getLayerRegistry().register(BIOME_KEY, new Layer(BIOME_KEY, biomeLayerName, world, false));
         world.getLayerRegistry().register(STRUCTURE_KEY, new Layer(STRUCTURE_KEY, structureLayerName, world, true));
-    }); }
-    public void disable() { Pl3xMap.api().getWorldRegistry().forEach(world -> {
-        world.getLayerRegistry().unregister(BIOME_KEY); world.getLayerRegistry().unregister(STRUCTURE_KEY);
-    }); ICON_NAMES.forEach(name->Pl3xMap.api().getIconRegistry().unregister(STRUCTURE_ICON_PREFIX+name)); }
+    }
+
+    public void disable() {
+        enabled = false;
+        // Pl3xMap has no EventRegistry.unregister API; event handler lists are mutable.
+        new net.pl3x.map.core.event.world.WorldLoadedEvent(null).getHandlers()
+            .removeIf(handler -> handler.getListener() == this);
+        new net.pl3x.map.core.event.server.Pl3xMapEnabledEvent().getHandlers()
+            .removeIf(handler -> handler.getListener() == this);
+        Pl3xMap.api().getWorldRegistry().forEach(world -> {
+            world.getLayerRegistry().unregister(BIOME_KEY);
+            world.getLayerRegistry().unregister(STRUCTURE_KEY);
+        });
+        ICON_NAMES.forEach(name -> Pl3xMap.api().getIconRegistry().unregister(STRUCTURE_ICON_PREFIX + name));
+    }
 
     private void registerStructureIcons() {
         for(String name:ICON_NAMES){String key=STRUCTURE_ICON_PREFIX+name;
