@@ -6,6 +6,8 @@ Commands are short instructions typed into Minecraft chat. Start with `/`, then 
 
 | Command        | Purpose                                               |
 | -------------- | ----------------------------------------------------- |
+| `/survival` | Enter Survival through the server shortcut. |
+| `/creative` | Enter Creative through the server shortcut. |
 | `/hub`         | Return to the hub.                                    |
 | `/spawn`       | Return to an available world spawn.                   |
 | `/back`        | Return to your previous stored location when allowed. |
@@ -15,6 +17,11 @@ Commands are short instructions typed into Minecraft chat. Start with `/`, then 
 
 | Command             | Purpose                                          |
 | ------------------- | ------------------------------------------------ |
+| `/help` | Summon STEMBot for private guidance. |
+| `/stembot close` | End the private bot session. |
+| `/afk` | Toggle your away status. |
+| `/skills` | View profession levels and progress. |
+| `/quest` | View available quest commands. |
 | `/coord`            | Toggle coordinate information above your hotbar. |
 | `/coordbar`         | Toggle world, time, and direction in a boss bar. |
 | `/resourcepack`     | Ask the server to resend its Java resource pack. |

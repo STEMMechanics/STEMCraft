@@ -58,6 +58,10 @@ Type your answer into Minecraft chat and send it. This quick check helps us keep
 
 Once you've completed the check, you're ready to explore STEMCraft!
 
+## Your guide
+
+Use `/help` to summon [STEMBot](stembot.md). You can follow a short tour, ask a topic, or say `bye` and explore yourself. The [Hub guide](hub.md) lists the portals and community activities.
+
 ## Where Next?
 
 When you arrive, you'll start in the **STEMCraft Hub**.
