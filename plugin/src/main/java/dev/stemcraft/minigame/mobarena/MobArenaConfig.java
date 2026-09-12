@@ -180,6 +180,10 @@ final class MobArenaConfig {
         return itemStack.getType().getKey().toString() + " " + itemStack.getAmount();
     }
 
+    static boolean isValidArmorSlot(EquipmentSlot slot) {
+        return (slot.isArmor() || slot == EquipmentSlot.OFF_HAND) && slot != EquipmentSlot.BODY;
+    }
+
     /**
      * @param arenaId The arena ID to load in.
      * @return An arena record for the given Arena ID.
@@ -229,11 +233,11 @@ final class MobArenaConfig {
                 loadoutItemStackMap.entrySet().stream()
                         .filter(entry ->
                                 Arrays.stream(EquipmentSlot.values())
-                                        .anyMatch(slot -> (slot.isArmor() || slot == EquipmentSlot.OFF_HAND) && slot.name().equals(entry.getKey()))
+                                        .anyMatch(slot -> (isValidArmorSlot(slot)) && slot.name().equals(entry.getKey()))
         ).collect(
                 Collectors.toMap(
                         entry -> Arrays.stream(EquipmentSlot.values())
-                                .filter(slot -> (slot.isArmor() || slot == EquipmentSlot.OFF_HAND) && slot.name().equals(entry.getKey())).findFirst().orElseThrow(),
+                                .filter(slot -> (isValidArmorSlot(slot)) && slot.name().equals(entry.getKey())).findFirst().orElseThrow(),
                         Map.Entry::getValue
                 ));
 

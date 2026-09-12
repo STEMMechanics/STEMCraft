@@ -16,9 +16,12 @@ import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -59,10 +62,16 @@ final class MobArenaCommand {
                 .sorted()
                 .toList());
         api.tabComplete().register("mobarena-mobs", (sender, args)-> Arrays.stream(EntityType.values())
+                .filter(EntityType::isAlive)
                 .map(Enum::toString)
                 .sorted()
                 .toList());
         api.tabComplete().register("mobarena-increment-type", (sender, args)-> Arrays.stream(IncrementType.values())
+                .map(Enum::toString)
+                .sorted()
+                .toList());
+        api.tabComplete().register("mobarena-equipment-slots", (sender, args)->Arrays.stream(EquipmentSlot.values())
+                .filter(MobArenaConfig::isValidArmorSlot)
                 .map(Enum::toString)
                 .sorted()
                 .toList());
@@ -98,6 +107,8 @@ final class MobArenaCommand {
                 .tabCompletion("set", "{mobarena-arenas}", "startcountdown")
                 .tabCompletion("set", "{mobarena-arenas}", "endingseconds")
                 .tabCompletion("set", "{mobarena-arenas}", "name")
+                .tabCompletion("set", "{mobarena-arenas}", "loadout", "{int}", "{item}", "{int}")
+                .tabCompletion("set", "{mobarena-arenas}", "loadout", "{mobarena-equipment-slots}", "{item}", "{int}")
                 .tabCompletion("select", "{mobarena-arenas}", "arena")
                 .tabCompletion("select", "{mobarena-arenas}", "lobby")
                 .tabCompletion("select", "{mobarena-arenas}", "spectator")
@@ -118,7 +129,6 @@ final class MobArenaCommand {
                 .tabCompletion("spawnerconfig", "{mobarena-arenas}", "set", "{int}", "countTowardsMobCount", "false")
                 .tabCompletion("zone", "{mobarena-arenas}", "")
                 .tabCompletion("zone", "{mobarena-arenas}", "delete", "")
-
                 .tabCompletion("zone", "{mobarena-arenas}", "select", "")
                 .executor((ignored, cmd, ctx) -> {
                     switch (ctx.getArgLower(0)) {
@@ -767,7 +777,42 @@ final class MobArenaCommand {
                 arena.setName(ctx.getArgsAsString(4));
                 ctx.success("Display name updated for arena '" + arena.id() + "'.");
             }
+            case "loadout" -> {
+                commandSetLoadout(ctx, arena);
+            }
             default -> ctx.returnError("Unknown Mob Arena set target '" + target + "'.");
+        }
+    }
+
+    private void commandSetLoadout(@NotNull final CommandContext ctx, @NotNull final MiniGameArena arena) {
+        ctx.checkArgsSizeAtLeast(5);
+        final String itemSlot = ctx.getArgsAsString(3, "0");
+        final String itemMaterialString = ctx.getArgsAsString(4);
+        final int itemAmount = ctx.getArgAsInt(5, 1);
+
+        final Material itemMaterial = Material.valueOf(itemMaterialString);
+        if (itemMaterial.isItem()) {
+            ctx.returnError("Invalid item material '" + itemMaterial + "'.");
+            return;
+        }
+
+        final ItemStack itemStack = new ItemStack(itemMaterial, itemAmount);
+
+        boolean isItemSlotInt;
+        try {
+            Integer.parseInt(itemSlot);
+            isItemSlotInt = true;
+        } catch (final NumberFormatException _) {
+            isItemSlotInt = false;
+        }
+
+        if (isItemSlotInt) {
+            final int itemSlotInt = Integer.parseInt(itemSlot);
+            arena.getMap("loadout.inventory", Integer.class, ItemStack.class).put(itemSlotInt, itemStack);
+        } else if (Arrays.stream(EquipmentSlot.values()).anyMatch(slot -> MobArenaConfig.isValidArmorSlot(slot) && slot.name().equals(itemSlot))) {
+            arena.getMap("loadout.equipment", EquipmentSlot.class, ItemStack.class).put(EquipmentSlot.valueOf(itemSlot), itemStack);
+        } else {
+            ctx.returnError("Unknown Equipment Slot '" + itemSlot + "'.");
         }
     }
 
