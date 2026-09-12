@@ -137,6 +137,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         }, EventPriority.HIGHEST, true);
 
         api.events().register(WorldLoadEvent.class, event -> {
+            if (isTemporaryWorld(event.getWorld().getName())) return;
             if (defaultWorld == null) {
                 defaultWorld = event.getWorld();
             }
@@ -147,11 +148,13 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         }, EventPriority.MONITOR, false);
 
         api.events().register(WorldUnloadEvent.class, event -> {
+            if (isTemporaryWorld(event.getWorld().getName())) return;
             getConfigSection().set(event.getWorld().getName() + ".load", null);
             unloadWorldSettings(event.getWorld());
         }, EventPriority.MONITOR, false);
 
         api.events().register(WorldDeleteEvent.class, event -> {
+            if (isTemporaryWorld(event.getWorldName())) return;
             getConfigSection().set(event.getWorldName() + ".load", null);
             deleteWorldSettings(event.getWorldName());
             purgeWorldScopedData(event.getWorldName());
@@ -378,6 +381,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      * @return The loaded World instance.
      */
     @Override public @Nullable World loadWorld(@NotNull String name) {
+        if (isTemporaryWorld(name)) return null;
         clearLastWorldOperationError(name);
 
         try {
@@ -572,6 +576,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         });
 
         Bukkit.getWorlds().forEach(world -> {
+            if (isTemporaryWorld(world.getName())) return;
             ConfigSection config = getConfigSection(world);
             setting.onWorldLoad(world, config);
         });
@@ -822,6 +827,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      * @param world The world to load settings for.
      */
     private void loadWorldSettings(World world) {
+        if (isTemporaryWorld(world.getName())) return;
         ConfigSection config = getConfigSection(world);
         migrateLegacyNestedSettingConfig(config);
 
@@ -900,6 +906,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      * @param world The world to unload settings for.
      */
     private void unloadWorldSettings(World world) {
+        if (isTemporaryWorld(world.getName())) return;
         ConfigSection config = getConfigSection(world);
 
         settings.forEach((key, value) -> value.setting().onWorldUnload(world, config));
@@ -963,7 +970,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         @Nullable World world,
         @NotNull TransitionCommandPhase phase
     ) {
-        if (world == null) {
+        if (world == null || isTemporaryWorld(world.getName())) {
             return;
         }
 
@@ -1246,7 +1253,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
 
         // 1) Loaded worlds
         for (World w : Bukkit.getWorlds()) {
-            names.add(w.getName());
+            if (!isTemporaryWorld(w.getName())) names.add(w.getName());
         }
 
         // 2) World folders on disk
@@ -1350,6 +1357,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
     private void loadWorlds() {
         // Load worlds
         ConfigSection worldsSection = getConfigSection();
+        removeTemporaryWorldConfiguration(worldsSection);
         Set<String> configuredWorlds = new HashSet<>();
         if (worldsSection != null) {
             for (String worldName : worldsSection.getKeys(false)) {
@@ -1423,8 +1431,24 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         return worldChangeRecorder.getSession(world);
     }
 
+    static boolean isTemporaryWorld(String name) {
+        return "faweregentempworld".equalsIgnoreCase(name);
+    }
+
+    static void removeTemporaryWorldConfiguration(ConfigSection worlds) {
+        if (worlds == null) return;
+        boolean changed = false;
+        for (String name : new ArrayList<>(worlds.getKeys(false))) {
+            if (isTemporaryWorld(name)) {
+                worlds.set(name, null);
+                changed = true;
+            }
+        }
+        if (changed) worlds.save();
+    }
+
     private @Nullable World firstLoadedWorld() {
-        return Bukkit.getWorlds().isEmpty() ? null : Bukkit.getWorlds().getFirst();
+        return Bukkit.getWorlds().stream().filter(world -> !isTemporaryWorld(world.getName())).findFirst().orElse(null);
     }
 
     static @NotNull Set<String> discoverWorldNames(@NotNull Path container) throws IOException {
@@ -1437,6 +1461,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
             }
 
             String rootWorldName = fileName.toString();
+            if (isTemporaryWorld(rootWorldName)) continue;
             names.add(rootWorldName);
 
             if (Files.isDirectory(paperDimensionPath(path, World.Environment.NETHER))) {
@@ -1455,6 +1480,7 @@ public class WorldServiceImpl extends BaseService implements WorldService {
                         .filter(Objects::nonNull)
                         .map(Path::toString)
                         .filter(name -> !RESERVED_PAPER_DIMENSION_NAMES.contains(name))
+                        .filter(name -> !isTemporaryWorld(name))
                         .sorted()
                         .forEach(names::add);
                 }

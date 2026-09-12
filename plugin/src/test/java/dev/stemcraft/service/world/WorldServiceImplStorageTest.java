@@ -18,6 +18,29 @@ class WorldServiceImplStorageTest {
     Path tempDir;
 
     @Test
+    void temporaryRegenWorldIsExcludedFromDiskDiscovery() throws IOException {
+        for (String name : Set.of("FAWERegenTempWorld", "survival", "faweregentempworld_backup")) {
+            Path root = Files.createDirectories(tempDir.resolve(name));
+            Files.createFile(root.resolve("level.dat"));
+        }
+        assertEquals(Set.of("survival", "faweregentempworld_backup"), WorldServiceImpl.discoverWorldNames(tempDir));
+    }
+
+    @Test
+    void staleTemporaryWorldConfigIsRemovedAndSavedWithoutRemovingOtherWorlds() {
+        var config = new dev.stemcraft.config.ConfigFileImpl();
+        assertTrue(config.load(tempDir.toFile(), "config.yml", true));
+        config.set("worlds.FAWERegenTempWorld.load", true);
+        config.set("worlds.survival.load", true);
+        WorldServiceImpl.removeTemporaryWorldConfiguration(config.getSection("worlds", false));
+        assertTrue(config.reload());
+        assertFalse(config.contains("worlds.FAWERegenTempWorld"));
+        assertTrue(config.getBoolean("worlds.survival.load", false));
+        WorldServiceImpl.removeTemporaryWorldConfiguration(config.getSection("worlds", false));
+        assertFalse(config.isDirty());
+    }
+
+    @Test
     void discoverWorldNamesIncludesIntegratedPaperDimensions() throws IOException {
         Path worldRoot = tempDir.resolve("world");
         Files.createDirectories(worldRoot);
