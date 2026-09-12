@@ -15,6 +15,19 @@ import static org.mockito.Mockito.when;
 
 class PlayerTabListTest {
     @Test
+    void afkOnlyItalicizesThePlayerName() {
+        Component rendered = MiniMessage.miniMessage().deserialize("<gold>Prefix </gold>"
+            + PlayerTabList.playerName("James", true) + "<aqua> Badge</aqua>");
+        assertEquals("Prefix James Badge", PlainTextComponentSerializer.plainText().serialize(rendered));
+        Component name = rendered.children().get(1);
+        assertEquals(net.kyori.adventure.text.format.TextDecoration.State.TRUE,
+            name.decoration(net.kyori.adventure.text.format.TextDecoration.ITALIC));
+        assertEquals(net.kyori.adventure.text.format.TextDecoration.State.NOT_SET,
+            rendered.children().getLast().decoration(net.kyori.adventure.text.format.TextDecoration.ITALIC));
+        assertEquals("James", PlayerTabList.playerName("James", false));
+    }
+
+    @Test
     void normalizesBritishMiniMessageColourTags() {
         String configured = "<dark_gray>world</dark_grey> <grey>lobby</grey>";
         Component rendered = MiniMessage.miniMessage().deserialize(PlayerTabList.normalizeMiniMessage(configured));

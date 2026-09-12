@@ -1325,3 +1325,9 @@ formatted-signs:
 # Generator-owned map policies; Pl3xMap remains optional.
 generator-maps:
   enabled: true
+# AFK is session-only and clears when a player returns or reconnects.
+afk:
+  enabled: true
+  idle-minutes: 5
+  # Minutes AFTER becoming AFK; 0 disables kicking (35 minutes total idle by default).
+  kick-after-afk-minutes: 30
