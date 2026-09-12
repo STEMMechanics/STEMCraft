@@ -9,3 +9,8 @@ The policy provides `displayName()`, `surfaceY(Column)` and an optional `color(C
 Deep embeds its policy in `DeepGenerator.mapRenderer()`. It starts beneath the generator's roof boundary, skips solid ceiling until it reaches air, then renders the first visible surface below it. Columns with no open cavern are transparent. Water uses biome water colors; this is an opaque top-surface map, not a translucent-fluid or multi-level cave map. Elevation shading uses the selected surface instead of the roof heightmap.
 
 After deployment run `pl3xmap fullrender <deep-world-name>` from the console and refresh the web map. Existing tiles retain the old gray roof until rerendered. This changes map pixels only: no terrain regeneration or dimension ceiling flags are needed. Pl3xMap 26.2-554 is the tested integration target.
+
+## Public contract
+
+<!-- javadoc:all api/src/main/java/dev/stemcraft/api/service/world/generation/GeneratorMapRenderer.java -->
+<!-- /javadoc -->

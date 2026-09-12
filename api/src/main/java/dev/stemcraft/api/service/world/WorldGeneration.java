@@ -26,11 +26,17 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
 
+/**
+ * Owner-scoped generator registry and loaded-world metadata access.
+ * Mutating registrations and looking up live Bukkit worlds require the server thread.
+ * Terrain factories and optional map policies must satisfy their own thread-safety contracts.
+ */
 public interface WorldGeneration {
 
     /** Immutable metadata snapshots for versioned generators. Legacy factories have no metadata. */
     default Collection<dev.stemcraft.api.service.world.generation.GeneratorDefinition> getGenerators() { return List.of(); }
 
+    /** @return current definition for the key, or empty when no version is registered */
     default Optional<dev.stemcraft.api.service.world.generation.GeneratorDefinition> getGenerator(org.bukkit.NamespacedKey key) { return Optional.empty(); }
 
     /** Lookup a retained historical generation version. */
@@ -38,8 +44,10 @@ public interface WorldGeneration {
         return getGenerator(key).filter(definition -> definition.version() == version);
     }
 
+    /** @return the attached registered generator snapshot, or empty for an ordinary/untracked world */
     default Optional<dev.stemcraft.api.service.world.generation.GeneratedWorld> getGeneratedWorld(org.bukkit.World world) { return Optional.empty(); }
 
+    /** @return whether the loaded world has registered generator metadata */
     default boolean isGeneratedWorld(org.bukkit.World world) { return getGeneratedWorld(world).isPresent(); }
 
     /** Register on the server thread while owner is enabled. The key namespace must match the
