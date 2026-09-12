@@ -58,9 +58,27 @@ public final class Pl3xMapGeneratorRenders implements EventListener {
         // Respect worlds where the administrator has removed the basic renderer.
         if (previous == null) return;
         Renderer.Builder replacement = new Renderer.Builder("basic", policy.displayName(), GeneratorRenderer.class);
+        Map<String, Renderer.Builder> renderers = mutableRenderers(world);
         GeneratorRenderer.POLICIES.put(world.getName(), policy);
-        world.getRenderers().put("basic", replacement);
+        renderers.put("basic", replacement);
         bindings.put(world, new Binding(previous, replacement));
+    }
+
+    /**
+     * Pl3xMap 26.2-554 exposes an unmodifiable view and no renderer mutation API.
+     * Keep this version-specific access inside the optional bridge; never mutate the
+     * global renderer registry, which would also change unrelated worlds.
+     */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Renderer.Builder> mutableRenderers(World world) {
+        try {
+            var field = World.class.getDeclaredField("renderers");
+            if (!field.trySetAccessible())
+                throw new IllegalStateException("Cannot access Pl3xMap world renderers for generator maps");
+            return (Map<String, Renderer.Builder>) field.get(world);
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException("Unsupported Pl3xMap renderer API for generator maps", exception);
+        }
     }
 
     /** Restore renderers and release all event subscriptions and generator references. */
@@ -70,7 +88,7 @@ public final class Pl3xMapGeneratorRenders implements EventListener {
         new net.pl3x.map.core.event.world.WorldUnloadedEvent(null).getHandlers()
             .removeIf(handler -> handler.getListener() == this);
         bindings.forEach((world, binding) -> {
-            world.getRenderers().replace("basic", binding.replacement(), binding.previous());
+            mutableRenderers(world).replace("basic", binding.replacement(), binding.previous());
             GeneratorRenderer.POLICIES.remove(world.getName());
         });
         bindings.clear();

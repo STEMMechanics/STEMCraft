@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class GeneratorMapLifecycleTest {
-    @Test void onlyGeneratorWorldsAreChangedAndReloadedWorldsGetTheirOwnBinding() {
+    @Test void onlyGeneratorWorldsAreChangedAndReloadedWorldsGetTheirOwnBinding() throws Exception {
         var api = mock(STEMCraftAPI.class, RETURNS_DEEP_STUBS);
         var map = mock(Pl3xMap.class, RETURNS_DEEP_STUBS);
         var registry = new WorldRegistry();
@@ -52,12 +52,15 @@ class GeneratorMapLifecycleTest {
             assertTrue(GeneratorRenderer.POLICIES.isEmpty());
         }
     }
-    private static World world(String name) {
+    private static World world(String name) throws Exception {
         World world = mock(World.class);
         when(world.getName()).thenReturn(name);
         Map<String, Renderer.Builder> renderers = new HashMap<>();
         renderers.put("basic", new Renderer.Builder("basic", "Basic", net.pl3x.map.core.renderer.BasicRenderer.class));
-        when(world.getRenderers()).thenReturn(renderers);
+        var field = World.class.getDeclaredField("renderers");
+        field.setAccessible(true);
+        field.set(world, renderers);
+        when(world.getRenderers()).thenCallRealMethod();
         return world;
     }
 }
