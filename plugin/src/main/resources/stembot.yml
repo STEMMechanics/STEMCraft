@@ -374,24 +374,6 @@ actions:
     - 'talk:Only I receive your ordinary chat while you are nearby. Walking away pauses our chat; coming closer resumes it. Say bye or go away at any time or use /stembot close to return to public chat.'
     - 'action:creative-menu'
 
-# /help (alias of /stembot) routes by the current Bukkit world name.
-# The existing hub uses "world".
-command:
-  world:
-    world: hub
-    hub: hub
-    survival: survival
-    creative: creative
-
-# Automatically run once per player, per configured world.
-# Completion is stored in the player PersistentDataContainer.
-first-time:
-  world:
-    world: first-hub
-    hub: first-hub
-    survival: first-survival
-    creative: first-creative
-
   creative-merge:
     - 'talk:To make more building space, first claim adjacent plots you are allowed to own. Stand in one and face the neighbour, then use /plot merge.'
     - 'talk:Read the confirmation before using /plot confirm if asked. Ownership, adjacency and plot limits still apply; merging cannot take someone else''s land.'
@@ -495,3 +477,22 @@ first-time:
   practice-skipped:
     - 'talk:No problem. We can leave practice there. If the step was unavailable, make sure you have space and are in Survival. Ask me about practice any time.'
     - 'action:survival-menu'
+
+
+# /help (alias of /stembot) routes by the current Bukkit world name.
+# The existing hub uses "world".
+command:
+  world:
+    world: hub
+    hub: hub
+    survival: survival
+    creative: creative
+
+# Automatically run once per player, per configured world.
+# Completion is stored in the player PersistentDataContainer.
+first-time:
+  world:
+    world: first-hub
+    hub: first-hub
+    survival: first-survival
+    creative: first-creative
