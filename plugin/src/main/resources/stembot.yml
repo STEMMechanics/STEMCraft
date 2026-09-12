@@ -268,8 +268,8 @@ actions:
     - 'action:survival-menu'
 
   survival-menu:
-    - 'say::chat_bubble: &eAsk about quests, practice, coordbar, skills, cooking, animals, mail, portals, graves, rules, or commands. Say bye to finish.'
-    - 'listen:bye|bye!|close|exit -> close, *practice*|*tutorial* -> survival-practice, *coord* -> survival-coordinates, *skill*|*level*|*unlock*|*xp*|*badge* -> survival-skills, *cook*|*rice*|*food*|*recipe*|*item* -> survival-cooking, *animal*|*crate*|*lead* -> survival-animals, *mail*|*gift* -> survival-mail, *portal*|*deep*|*skyland*|*wasteland*|*faraway* -> survival-portals, *sleep*|*night* -> survival-sleep, *quest* -> survival-quests, *rules* -> survival-rules, *command* -> survival-commands, *died*|*death*|*grave* -> survival-graves, *hub*|*back*|*lost*|*spawn* -> survival-navigation, *start*|*build*|*food*|*shelter* -> survival-start, *chat*|*help* -> survival-chat, * -> survival-confused'
+    - 'say::chat_bubble: &eAsk about quests, practice, coordbar, skills, cooking, animals, mail, portals, tools, harvesting, graves, rules, or commands. Say bye to finish.'
+    - 'listen:bye|bye!|close|exit -> close, *practice*|*tutorial* -> survival-practice, *coord* -> survival-coordinates, *vein*|*tree*|*harvest*|*refill*|*durability*|*anvil*|*tool*|*qol* -> survival-qol, *skill*|*level*|*unlock*|*xp*|*badge* -> survival-skills, *cook*|*rice*|*food*|*recipe*|*item*|*chisel*|*bucket*|*fertili* -> survival-cooking, *animal*|*crate*|*lead* -> survival-animals, *mail*|*gift* -> survival-mail, *portal*|*deep*|*skyland*|*wasteland*|*faraway* -> survival-portals, *sleep*|*night* -> survival-sleep, *quest* -> survival-quests, *rules* -> survival-rules, *command* -> survival-commands, *died*|*death*|*grave* -> survival-graves, *hub*|*back*|*lost*|*spawn* -> survival-navigation, *start*|*build*|*food*|*shelter* -> survival-start, *chat*|*help* -> survival-chat, * -> survival-confused'
 
   survival-confused:
     - 'talk:Beep boop! I recognise a few topics. Try one of the examples below.'
@@ -414,6 +414,13 @@ actions:
     - 'talk:Early levels are quick; later ones need more XP. With current defaults, stack refill unlocks at Engineering 10, hoe harvesting at Farming 15, and vein mining or tree felling at level 25 in their matching skill.'
     - 'talk:Automatic tool selection needs Mining and Engineering 20. The right tools and inventory supplies still matter. Live requirements can differ; /skills shows your progress.'
     - 'talk:Badges recognise building, playtime, quests and games. Community event awards are granted by staff.'
+    - 'action:survival-menu'
+
+  survival-qol:
+    - 'talk:Once unlocked, sneak while breaking ore with a suitable pickaxe for vein mining, or a natural tree with a suitable axe for tree felling. Extra blocks still use tool durability and respect protections.'
+    - 'talk:For hoe harvesting, sneak-right-click a mature crop with a hoe. It harvests and replants a small area of the same crop. Check /skills if it has not unlocked yet.'
+    - 'talk:Stack refill uses an identical stack from your main inventory. Automatic tool selection can choose a suitable tool when unlocked. Neither gives you free tools or items.'
+    - 'talk:Watch low-durability and anvil cost warnings before committing to more work. These conveniences and their level requirements depend on the server settings; ask about skills for the usual unlocks.'
     - 'action:survival-menu'
 
   survival-cooking:

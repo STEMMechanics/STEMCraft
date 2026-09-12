@@ -23,7 +23,30 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+@org.junit.jupiter.api.extension.ExtendWith(PracticeQuestGuideTest.RequireImplementedMock.class)
 class PracticeQuestGuideTest {
+    static class RequireImplementedMock implements org.junit.jupiter.api.extension.TestExecutionExceptionHandler,
+        org.junit.jupiter.api.extension.LifecycleMethodExecutionExceptionHandler {
+        @Override public void handleTestExecutionException(org.junit.jupiter.api.extension.ExtensionContext context, Throwable failure) {
+            throw new AssertionError("Practice guide regression must execute, not skip", failure);
+        }
+        @Override public void handleBeforeEachMethodExecutionException(org.junit.jupiter.api.extension.ExtensionContext context, Throwable failure) {
+            throw new AssertionError("Practice guide fixture must be fully supported", failure);
+        }
+    }
+
+    public static class SupportedBookMeta extends org.mockbukkit.mockbukkit.inventory.meta.BookMetaMock {
+        public SupportedBookMeta() { super(); }
+        public SupportedBookMeta(org.bukkit.inventory.meta.ItemMeta source) { super(source); }
+        @Override public org.bukkit.inventory.meta.BookMeta pages(List<net.kyori.adventure.text.Component> pages) {
+            setPages(pages.stream().map(net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()::serialize).toList());
+            return this;
+        }
+        @Override public SupportedBookMeta clone() { return new SupportedBookMeta(this); }
+    }
+    private java.lang.reflect.Field metaClassField;
+    private Object bookType;
+    private Object originalMetaClass;
     private final Map<Class<?>, EventHandler<?>> handlers = new HashMap<>();
     private STEMCraftAPI api;
     private PracticeQuestGuide guide;
@@ -33,8 +56,15 @@ class PracticeQuestGuideTest {
     private Location position;
     private final List<Boolean> results = new ArrayList<>();
 
-    @BeforeEach void setUp() {
+    @BeforeEach void setUp() throws Exception {
         var server = MockBukkit.mock();
+        // MockBukkit aborts Adventure book pages. Supply an implemented metadata class
+        // for this fixture only, and restore its registry entry after every test.
+        metaClassField = org.mockbukkit.mockbukkit.inventory.ItemTypeMock.class.getDeclaredField("metaClass");
+        metaClassField.setAccessible(true);
+        bookType = Material.WRITTEN_BOOK.asItemType();
+        originalMetaClass = metaClassField.get(bookType);
+        metaClassField.set(bookType, SupportedBookMeta.class);
         var inventoryOwner = server.addPlayer();
         api = mock(STEMCraftAPI.class, RETURNS_DEEP_STUBS);
         var events = api.events();
@@ -82,7 +112,13 @@ class PracticeQuestGuideTest {
         guide = new PracticeQuestGuide(api, plugin);
         guide.enable();
     }
-    @AfterEach void tearDown() { try { if (guide != null) guide.disable(); } finally { MockBukkit.unmock(); } }
+    @AfterEach void tearDown() throws Exception {
+        try { if (guide != null) guide.disable(); }
+        finally {
+            try { if (originalMetaClass != null) metaClassField.set(bookType, originalMetaClass); }
+            finally { MockBukkit.unmock(); }
+        }
+    }
 
     @SuppressWarnings("unchecked")
     private <T extends Event> void fire(T event) { ((EventHandler<T>) handlers.get(event.getClass())).handle(event); }

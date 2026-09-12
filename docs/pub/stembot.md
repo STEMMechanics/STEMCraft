@@ -14,7 +14,7 @@ STEMBot recognises configured topics rather than answering every possible senten
 | --- | --- |
 | Hub | `tour`, `survival`, `creative`, `minigames`, `noticeboard`, `voting` |
 | Creative | `plots`, `merge`, `delete`, `clear`, `helpers`, `selection`, `signs`, `rules` |
-| Survival | `getting started`, `quests`, `practice`, `coordbar`, `skills`, `cooking`, `animals`, `mail`, `portals`, `graves`, `sleep`, `rules` |
+| Survival | `getting started`, `quests`, `practice`, `coordbar`, `skills`, `vein mining`, `harvesting`, `tools`, `cooking`, `animals`, `mail`, `portals`, `graves`, `sleep`, `rules` |
 
 If STEMBot cannot walk to a stop, follow its retry/continue prompt. Tell an administrator where it happened and what you asked. You can still use `/hub` and other commands yourself.
 
