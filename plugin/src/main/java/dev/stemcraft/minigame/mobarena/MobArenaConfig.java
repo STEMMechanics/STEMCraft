@@ -9,24 +9,22 @@ import dev.stemcraft.api.util.LocationUtil;
 import dev.stemcraft.api.util.StringUtil;
 import dev.stemcraft.exception.MiniGameInvalidArenaConfigException;
 import dev.stemcraft.minigame.MiniGameConfigSupport;
+import dev.stemcraft.minigame.mobarena.MobArenaArenaHandler.MobDeathReason;
 import dev.stemcraft.minigame.mobarena.MobArenaSpawnerRecord.IncrementType;
 import lombok.Getter;
 import lombok.experimental.Accessors;
-import org.bukkit.Bukkit;
-import org.bukkit.Location;
-import org.bukkit.World;
+import org.bukkit.*;
 import org.bukkit.entity.EntityType;
+import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.Unmodifiable;
 import org.jspecify.annotations.NonNull;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * <p>Manages Mob Arena's config file.</p>
@@ -84,6 +82,7 @@ final class MobArenaConfig {
             config.setAutoSave(true);
 
             config.getSection("arenas", true);
+            config.getSection("messages", true);
 
             configEnabled = true;
         }
@@ -106,6 +105,59 @@ final class MobArenaConfig {
         });
 
         return MiniGameArenas;
+    }
+
+    /// Deserialises an `ItemStack` string description.
+    /// @param itemStackDescription The description of the `ItemStack`.
+    /// @return The `ItemStack` described by `itemStackDescription`.
+    /// @throws MiniGameInvalidArenaConfigException Thrown when `itemStackDescription` is invalid.
+    @Contract(value = "null -> fail", pure = true)
+    private static @NotNull ItemStack deserialiseItemStackDescription(@Nullable final String itemStackDescription)
+            throws MiniGameInvalidArenaConfigException {
+        if (itemStackDescription == null) {
+            throw new MiniGameInvalidArenaConfigException("Invalid ItemStack Description (type).");
+        }
+        final String[] splitDescription = itemStackDescription.split(" ");
+        if (splitDescription.length < 1 || splitDescription.length > 2) {
+            throw new MiniGameInvalidArenaConfigException("Invalid ItemStack Description (length).");
+        }
+        final NamespacedKey key = NamespacedKey.fromString(splitDescription[0]);
+        if (key == null) {
+            throw new MiniGameInvalidArenaConfigException("Invalid ItemStack Description (key).");
+        }
+        final Material material = Registry.MATERIAL.get(key);
+        if (material == null) {
+            throw new MiniGameInvalidArenaConfigException("Invalid ItemStack Description (material).");
+        }
+
+        final ItemStack itemStack = new ItemStack(material);
+
+        if (splitDescription.length == 2) {
+            final int amount;
+            try {
+                amount = Integer.parseInt(splitDescription[1]);
+            } catch (final NumberFormatException e) {
+                //noinspection ThrowInsideCatchBlockWhichIgnoresCaughtException
+                throw new MiniGameInvalidArenaConfigException("Invalid ItemStack Description (amount).");
+            }
+            itemStack.setAmount(amount);
+        }
+
+        return itemStack;
+    }
+
+    /// Serialises an `ItemStack` to an `ItemStack` string description.
+    ///
+    /// The format used is specific and should only be extended, not replaced.
+    /// The format is similar to a space-separated-value table.
+    ///
+    /// Example: `diamond_block 2` (2 Diamond Blocks)
+    ///
+    /// @param itemStack The `ItemStack`.
+    /// @return The `ItemStack` as an `ItemStack` string description.
+    @Contract(pure = true)
+    private static @NotNull String serialiseItemStackDescription(@NotNull final ItemStack itemStack) {
+        return itemStack.getType().getKey().toString() + " " + itemStack.getAmount();
     }
 
     /**
@@ -143,11 +195,54 @@ final class MobArenaConfig {
 
         final int minPlayers = arenaSection.getInt("min-players", 2);
         final int maxPlayers = arenaSection.getInt("max-players", 16);
-        @NotNull final String name = arenaSection.getString("name", StringUtil.beautify(arenaId));
+        final @NotNull String name = arenaSection.getString("name", StringUtil.beautify(arenaId));
 
-        @NotNull final List<MobArenaSpawnerRecord> spawnerRecords = loadSpawnerRecordsFromArena(arenaSection);
+        final Map<String, Object> loadoutStringMap = arenaSection.getMap("loadout", false);
 
-        @NotNull final Map<String, SCRegion> zones = loadZonesFromArena(arenaId, arenaSection, world);
+        final Map<String, @NotNull ItemStack> loadoutItemStackMap = loadoutStringMap.entrySet().stream().collect(
+                Collectors.toMap(
+                        Map.Entry::getKey,
+                        entry -> deserialiseItemStackDescription((String) entry.getValue())
+                ));
+
+        final @NotNull Map<EquipmentSlot, @NotNull ItemStack> equipmentLoadout =
+                loadoutItemStackMap.entrySet().stream()
+                        .filter(entry ->
+                                Arrays.stream(EquipmentSlot.values())
+                                        .anyMatch(slot -> (slot.isArmor() || slot == EquipmentSlot.OFF_HAND) && slot.name().equals(entry.getKey()))
+        ).collect(
+                Collectors.toMap(
+                        entry -> Arrays.stream(EquipmentSlot.values())
+                                .filter(slot -> (slot.isArmor() || slot == EquipmentSlot.OFF_HAND) && slot.name().equals(entry.getKey())).findFirst().orElseThrow(),
+                        Map.Entry::getValue
+                ));
+
+        final @NotNull Map<Integer, @NotNull ItemStack> inventoryLoadout =
+                loadoutItemStackMap.entrySet().stream()
+                        .filter(entry -> {
+                            try {
+                                Integer.parseInt(entry.getKey());
+                                return true;
+                            } catch(final NumberFormatException e) {
+                                return false;
+                            }
+                        }).collect(
+                                Collectors.toMap(
+                                        entry -> Integer.parseInt(entry.getKey()),
+                                        Map.Entry::getValue
+                                ));
+
+        final @NotNull List<MobArenaSpawnerRecord> spawnerRecords = loadSpawnerRecordsFromArena(arenaSection);
+
+        final @NotNull Map<String, SCRegion> zones = loadZonesFromArena(arenaId, arenaSection, world);
+
+        final Map<MobDeathReason, List<String>> entityDeathMessages = arenaSection.getSectionKeys("entity-death-messages", false).stream().collect(Collectors.toMap(
+                MobDeathReason::valueOf,
+                key -> arenaSection.getStringList("entity-death-messages." + key).stream().toList()
+        ));
+        final @NotNull MobArenaDeathMessageMode entityDeathMessagesMode = (MobArenaDeathMessageMode) arenaSection.get("entity-death-messages-mode");
+        final List<String> playerDeathMessages = arenaSection.getStringList("player-death-messages");
+        final @NotNull MobArenaDeathMessageMode playerDeathMessagesMode = (MobArenaDeathMessageMode) arenaSection.get("player-death-messages-mode");
 
         return new MobArenaArenaRecord(
                 arenaId,
@@ -160,6 +255,12 @@ final class MobArenaConfig {
                 minPlayers,
                 maxPlayers,
                 spawnerRecords,
+                inventoryLoadout,
+                equipmentLoadout,
+                entityDeathMessagesMode,
+                entityDeathMessages,
+                playerDeathMessagesMode,
+                playerDeathMessages,
                 zones
         );
     }
@@ -240,10 +341,45 @@ final class MobArenaConfig {
         toSave.set("spectator", serializeLocation(arenaRecord.spectator(), key,  "Spectator Location"));
         toSave.set("min-players", arenaRecord.minPlayers());
         toSave.set("max-players", arenaRecord.maxPlayers());
+        toSave.set("entity-death-messages-mode", arenaRecord.entityDeathMessagesMode());
+        toSave.set("player-death-messages-mode", arenaRecord.playerDeathMessagesMode());
+        toSave.set("player-death-messages", arenaRecord.playerDeathMessages());
+        saveEntityDeathMessagesToArena(toSave, arenaRecord);
+        saveLoadoutToArena(toSave, arenaRecord);
         saveSpawnerRecordsToArena(toSave, arenaRecord);
         saveZonesToArena(toSave, arenaRecord);
 
         config.save();
+    }
+
+    /// Saves an arena's entity death messages to an arena section..
+    ///
+    /// These death messages stored nested.
+    ///
+    /// @param toSave      The arena record with the loadout.
+    /// @param arenaRecord The arena config section to save to.
+    private static void saveEntityDeathMessagesToArena(@lombok.NonNull final ConfigSection toSave, @lombok.NonNull final MobArenaArenaRecord arenaRecord) {
+        Arrays.stream(MobDeathReason.values())
+                .filter(reason -> arenaRecord.entityDeathMessages().containsKey(reason))
+                .forEach(reason -> toSave.set("entity-death-messages." + reason.name(), arenaRecord.entityDeathMessages().get(reason)));
+    }
+
+    /// Saves an arena loadout to an arena section.
+    /// @param toSave The arena config section to save to.
+    /// @param arenaRecord The arena record with the loadout.
+    private void saveLoadoutToArena(@NotNull final ConfigSection toSave, @NotNull final MobArenaArenaRecord arenaRecord) {
+        final Map<String, String> loadoutCombined = new HashMap<>();
+
+        loadoutCombined.putAll(arenaRecord.inventoryLoadout().entrySet().stream().collect(Collectors.toMap(
+                entry -> entry.getKey().toString(),
+                entry -> serialiseItemStackDescription(entry.getValue())
+        )));
+        loadoutCombined.putAll(arenaRecord.equipmentLoadout().entrySet().stream().collect(Collectors.toMap(
+                entry -> entry.getKey().name(),
+                entry -> serialiseItemStackDescription(entry.getValue())
+        )));
+
+        toSave.set("loadout", loadoutCombined);
     }
 
     /**

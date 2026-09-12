@@ -38,12 +38,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jspecify.annotations.NonNull;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 
 /**
  * <p>The arena handler for Mob Arena arenas.</p>
@@ -283,7 +278,7 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
     /**
      * <p>An enum of possible reasons for a mob to die.</p>
      */
-    private enum MobDeathReason {
+     enum MobDeathReason {
         Exploded,
         Fell,
         LeftRegion
@@ -691,24 +686,22 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
     /**
      * <p>Sets up a player (I.E. sets health, food, and inventory).</p>
      *
-     * @param player The player to setup.
+     * @param arena The arena the player to set up is in.
+     * @param player The player to set up.
      */
-    private void setupPlayer(@NotNull final Player player) {
-        // TODO: Make customisable? - ProjectHSI
+    private void setupPlayer(@NotNull final MiniGameArena arena, @NotNull final Player player) {
         player.setHealth(PlayerUtil.getMaxHealth(player));
         player.setFoodLevel(20);
         player.setSaturation(20);
         player.clearActivePotionEffects();
 
         player.getInventory().clear();
-        player.getInventory().setItem(0, new ItemStack(Material.IRON_SWORD));
-        player.getInventory().setItem(1, new ItemStack(Material.BOW));
-        player.getInventory().setItem(2, new ItemStack(Material.ARROW, 64));
-        player.getInventory().setItemInOffHand(new ItemStack(Material.SHIELD));
-        player.getInventory().setItem(EquipmentSlot.HEAD, new ItemStack(Material.IRON_HELMET));
-        player.getInventory().setItem(EquipmentSlot.CHEST, new ItemStack(Material.IRON_CHESTPLATE));
-        player.getInventory().setItem(EquipmentSlot.LEGS, new ItemStack(Material.IRON_LEGGINGS));
-        player.getInventory().setItem(EquipmentSlot.FEET, new ItemStack(Material.IRON_BOOTS));
+        arena.getMap("loadout.inventory", Integer.class, ItemStack.class).forEach(player.getInventory()::setItem);
+        player.getInventory().setItemInOffHand(arena.get("loadout.off-hand", ItemStack.class));
+        player.getInventory().setItem(EquipmentSlot.HEAD, arena.get("loadout.helmet", ItemStack.class));
+        player.getInventory().setItem(EquipmentSlot.CHEST, arena.get("loadout.chest", ItemStack.class));
+        player.getInventory().setItem(EquipmentSlot.LEGS, arena.get("loadout.legs", ItemStack.class));
+        player.getInventory().setItem(EquipmentSlot.FEET, arena.get("loadout.feet", ItemStack.class));
         player.updateInventory();
     }
 
@@ -718,7 +711,7 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
      * @param arena The arena whose players to set up.
      */
     private void setupAllPlayers(@NotNull final MiniGameArena arena) {
-        arena.getPlayers().forEach(this::setupPlayer);
+        arena.getPlayers().forEach(player -> setupPlayer(arena, player));
     }
 
     /**
