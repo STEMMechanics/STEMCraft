@@ -1322,6 +1322,9 @@ stembot:
 formatted-signs:
   enabled: true
 
+# Generator-owned map policies; Pl3xMap remains optional.
+generator-maps:
+  enabled: true
 # AFK is session-only and clears when a player returns or reconnects.
 afk:
   enabled: true

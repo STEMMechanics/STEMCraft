@@ -49,7 +49,7 @@ public final class BuiltInGenerators {
                                  dev.stemcraft.chunkgen.feature.GenerationFeature... details) {
         if (config != null && !config.getBoolean("world-generation." + id + ".enabled", true)) return;
         GeneratorDefinition definition = new GeneratorDefinition(new NamespacedKey("stemcraft", id), name,
-                description, category, true, 1);
+                description, category, true, 1, id.equals("deep") ? DeepGenerator.mapRenderer() : null);
         api.worlds().generator().registerGenerator(owner, definition, options -> {
             if (!options.isBlank()) throw new IllegalArgumentException("Generator " + id + " accepts no terrain options");
             return new StemChunkGenerator(definition, factory, java.util.List.of(details));
