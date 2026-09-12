@@ -20,7 +20,7 @@ This wiki mirrors the current source tree and is intended to give server operato
 
 - [Architecture](https://github.com/STEMMechanics/stemcraft/wiki/Architecture)
 - [Services](https://github.com/STEMMechanics/stemcraft/wiki/Services)
-- [Features](https://github.com/STEMMechanics/stemcraft/wiki/Features)
+- [Features](https://github.com/STEMMechanics/stemcraft/wiki/features)
 - [Commands](https://github.com/STEMMechanics/stemcraft/wiki/commands)
 - [API](https://github.com/STEMMechanics/stemcraft/wiki/API)
 - [Minigames](https://github.com/STEMMechanics/stemcraft/wiki/Minigames)
@@ -28,7 +28,7 @@ This wiki mirrors the current source tree and is intended to give server operato
 
 ## Audience
 
-- Server owners: start with [Features](https://github.com/STEMMechanics/stemcraft/wiki/Features), [Commands](https://github.com/STEMMechanics/stemcraft/wiki/commands), and [Configuration](https://github.com/STEMMechanics/stemcraft/wiki/Configuration)
+- Server owners: start with [Features](https://github.com/STEMMechanics/stemcraft/wiki/features), [Commands](https://github.com/STEMMechanics/stemcraft/wiki/commands), and [Configuration](https://github.com/STEMMechanics/stemcraft/wiki/Configuration)
 - Plugin developers: start with [API](https://github.com/STEMMechanics/stemcraft/wiki/API), [Services](https://github.com/STEMMechanics/stemcraft/wiki/Services), and [Architecture](https://github.com/STEMMechanics/stemcraft/wiki/Architecture)
 - Contributors: use this wiki as the high-level index, then follow the package paths back into source
 
@@ -45,3 +45,7 @@ The wiki content is authored from this repository under `docs/dev`.
 ## Publishing Model
 
 When `docs/dev/**` changes on the repository default branch, GitHub Actions syncs this directory into the GitHub wiki repository.
+
+## Current extension guides
+
+Start with [STEMBot](stembot.md), [Quests](quests.md), [interactive guide callbacks](guide-callbacks.md), [World generation](world-generation.md), [map renderers](generator-map-renderers.md), [Pl3xMap lifecycle](pl3xmap.md), and [release verification](release-verification.md) for recent additions.

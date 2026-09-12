@@ -17,13 +17,27 @@ import java.util.concurrent.ThreadLocalRandom;
  * - listen: waits for matching private chat input
  */
 public final class BotSession {
+    /** Main-thread output boundary; implementations own speech presentation and actor departure. */
     public interface Output {
+        /** Send an immediate message without delaying the action interpreter. */
         void say(String text);
+        /** Speak a message and return the number of ticks before the next instruction may run. */
         int talk(String text);
+        /**
+         * Start a registered optional step. The provider may complete synchronously.
+         * @param key namespaced provider key
+         * @param completion receives verified success or provider failure on the server thread
+         * @return non-null, idempotent cancellation callback
+         */
+        default Runnable await(String key, java.util.function.Consumer<Boolean> completion) {
+            completion.accept(false);
+            return () -> { };
+        }
+        /** Dispose of an actor, optionally after a presentation delay owned by the output. */
         default void depart(BotActor actor) { actor.close(); }
     }
 
-    private enum WaitMode { NONE,SLEEP,TALK,WAVE,POINT,WALK,LISTEN,STUCK }
+    private enum WaitMode { NONE,SLEEP,TALK,WAVE,POINT,WALK,LISTEN,AWAIT,STUCK }
 
     private final BotScript script;
     private final BotActor actor;
@@ -48,7 +62,10 @@ public final class BotSession {
     private volatile boolean chatEngaged=true;
     private int awayTicks;
     private long speechRevision;
+    private long callbackRevision;
+    private Runnable cancelCallback = () -> { };
 
+    /** Create a session at a validated action; tick and input must run on the server thread. */
     public BotSession(
         BotScript script,
         BotActor actor,
@@ -64,16 +81,23 @@ public final class BotSession {
         jumpTo(initialAction);
     }
 
+    /** @return the private actor controlled by this session */
     public BotActor actor() { return actor; }
+    /** @return whether the session has terminated and no longer accepts input */
     public boolean closed() { return closed; }
+    /** @return whether nearby ordinary chat should currently route to the guide */
     public boolean chatEngaged() { return chatEngaged&&!closed; }
+    /** @return current script action identifier */
     public String action() { return action; }
+    /** @return revision used to reject speech queued before an interruption */
     public long speechRevision() { return speechRevision; }
 
+    /** Recognise dismissal phrases independently of the current action or wait mode. */
     public static boolean isDismissal(String text) {
         return text.trim().matches("(?i)(?:please\\s+)?(?:bye|goodbye|good bye|close|exit|stop|cancel|go away|leave me alone)(?:\\s+please)?[.!?]*");
     }
 
+    /** Route a private player reply, allowing recognised topics to interrupt an active action. */
     public void input(String text) {
         if(!chatEngaged()) return;
         idle=0;
@@ -81,6 +105,11 @@ public final class BotSession {
         String input=text.trim();
         if(isDismissal(input)) {
             close();
+            return;
+        }
+
+        if(waitMode==WaitMode.AWAIT && input.matches("(?i)(skip|later|not now)[.!]?")) {
+            jumpTo(listening.get(1).target());
             return;
         }
 
@@ -144,6 +173,7 @@ public final class BotSession {
         return List.of();
     }
 
+    /** Advance one five-tick scheduler interval using the owner location for proximity and navigation checks. */
     public void tick(Location owner) {
         idle+=5;
 
@@ -213,6 +243,10 @@ public final class BotSession {
             case WALK -> {
                 if(!tickWalk(owner)) return;
                 waitMode=WaitMode.NONE;
+            }
+            case AWAIT -> {
+                if(age < waitUntil) return;
+                jumpTo(listening.get(1).target());
             }
             case LISTEN,STUCK -> {
                 return;
@@ -314,6 +348,8 @@ public final class BotSession {
                 case STAND -> actor.sneak(false);
 
                 case ACTION -> jumpTo(instruction.text());
+
+                case AWAIT -> await(instruction);
 
                 case LISTEN -> {
                     listening=instruction.routes();
@@ -431,24 +467,50 @@ public final class BotSession {
         lastProgress=age;
     }
 
+    private void cancelCallback() {
+        callbackRevision++;
+        Runnable cancel = cancelCallback;
+        cancelCallback = () -> { };
+        cancel.run();
+    }
+
+    private void await(BotScript.Instruction instruction) {
+        cancelCallback();
+        long revision = callbackRevision;
+        listening = instruction.routes();
+        waitMode = WaitMode.AWAIT;
+        waitUntil = age + instruction.ticks();
+        Runnable cancellation = output.await(instruction.text(), success -> {
+            if (closed || revision != callbackRevision || waitMode != WaitMode.AWAIT) return;
+            idle = 0;
+            jumpTo(instruction.routes().get(success ? 0 : 1).target());
+        });
+        if (revision == callbackRevision && waitMode == WaitMode.AWAIT) cancelCallback = cancellation;
+        else cancellation.run(); // Includes providers that complete synchronously.
+    }
+
     private void jumpTo(String target) {
         if(!script.actions().containsKey(target))
             throw new IllegalStateException("Unknown STEMBot action: "+target);
 
+        cancelCallback();
         action=target;
         pc=0;
         waitMode=WaitMode.NONE;
         listening=List.of();
     }
 
+    /** End the session with its configured farewell. Idempotent. */
     public void close() {
         close(true);
     }
 
+    /** End the session, optionally suppressing farewell when replacing the guide elsewhere. */
     public void close(boolean farewell) {
         if(closed) return;
         closed=true;
         speechRevision++;
+        cancelCallback();
 
         try {
             actor.cancel();

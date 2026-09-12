@@ -53,6 +53,8 @@ dependencies {
     testImplementation "org.junit.jupiter:junit-jupiter:5.11.0"
     testImplementation "org.mockito:mockito-core:5.23.0"
     testImplementation "net.luckperms:api:5.4"
+    testImplementation "maven.modrinth:pl3xmap:26.2-554"
+    testRuntimeOnly "org.apache.logging.log4j:log4j-core:2.25.3"
     //noinspection VulnerableLibrariesLocal
     testImplementation "io.papermc.paper:paper-api:${rootProject.ext.paperApiVersion}"
     testImplementation("com.sk89q.worldedit:worldedit-bukkit:7.4.4")

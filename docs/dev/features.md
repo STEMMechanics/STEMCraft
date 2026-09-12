@@ -91,3 +91,16 @@ Common feature characteristics:
 If a new capability is optional and domain-specific, it usually belongs in `dev.stemcraft.feature`.
 
 Notice boards provide graphical lobby boards containing player-authored headers, short messages, and author names. Posts expire automatically and are displayed through the reusable image-map service.
+
+## Newer guide, rendering and progression features
+
+| Feature | Runtime contract |
+| --- | --- |
+| `StemBotFeature` | Owner-only Citizens guide and action interpreter; see [STEMBot](stembot.md) |
+| `ProfessionsFeature` | Eight level-1-to-100 skills with world/mode filtering; see [Professions](professions.md) |
+| `FormattedSigns` | Supported ampersand codes and glyphs, explicit `stemcraft.sign.format` grant |
+| `VotingFeature` | Challenge voting state and per-player allowance; inspect current event configuration |
+| `GeneratorMaps` | Optional generator-owned basic-map replacement; see [map renderers](generator-map-renderers.md) |
+| `Afk` | Optional inactivity announcements, tab styling and kicks; see [AFK](afk.md), introduced in PR #157 |
+
+See [Permissions](permissions.md) for individual player/admin grants. There is no required `stemcraft.player` bundle. Custom commands enforce a permission only when one is configured; fixed `/survival` and `/creative` shortcuts run their teleport as the server.

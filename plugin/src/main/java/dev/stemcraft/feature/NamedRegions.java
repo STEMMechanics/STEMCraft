@@ -101,6 +101,8 @@ public final class NamedRegions extends BaseFeature {
     private long mapRefreshMillis=300_000L;
 
     private Pl3xMapNamedRegions mapLayer;
+    private org.bukkit.event.Listener mapPluginEnableListener;
+    private org.bukkit.event.Listener mapPluginDisableListener;
     private BukkitTask backfillTask;
     private BukkitTask regenerationTask;
     private String titleTemplate,subtitleTemplate;
@@ -175,7 +177,7 @@ public final class NamedRegions extends BaseFeature {
                 for(Chunk chunk:world.getLoadedChunks())
                     discover(chunk);
 
-        enableMap();
+        watchMapPlugin();
         startBackfill();
     }
 
@@ -202,7 +204,11 @@ public final class NamedRegions extends BaseFeature {
             CoordinateBarSection.WORLD
         );
 
-        if(mapLayer!=null) mapLayer.disable();
+        if(mapPluginEnableListener!=null) org.bukkit.event.HandlerList.unregisterAll(mapPluginEnableListener);
+        if(mapPluginDisableListener!=null) org.bukkit.event.HandlerList.unregisterAll(mapPluginDisableListener);
+        mapPluginEnableListener=null;
+        mapPluginDisableListener=null;
+        disableMap();
         if(backfillTask!=null) backfillTask.cancel();
         if(regenerationTask!=null) regenerationTask.cancel();
 
@@ -1641,7 +1647,26 @@ public final class NamedRegions extends BaseFeature {
         return worlds.contains(world.getName().toLowerCase(Locale.ROOT));
     }
 
+    void watchMapPlugin() {
+        // STEMCraft loads at STARTUP; Pl3xMap loads at POSTWORLD.
+        mapPluginEnableListener=api.events().register(org.bukkit.event.server.PluginEnableEvent.class,event->{
+            if(event.getPlugin().getName().equals("Pl3xMap")) enableMap();
+        });
+        mapPluginDisableListener=api.events().register(org.bukkit.event.server.PluginDisableEvent.class,event->{
+            if(event.getPlugin().getName().equals("Pl3xMap")) disableMap();
+        });
+        enableMap();
+    }
+
+    private void disableMap() {
+        if(mapLayer!=null) {
+            mapLayer.disable();
+            mapLayer=null;
+        }
+    }
+
     private void enableMap() {
+        if(mapLayer!=null) return;
         if(!getConfigSection().getBoolean("map.enabled",true)) return;
 
         Plugin plugin=Bukkit.getPluginManager().getPlugin("Pl3xMap");
@@ -1677,9 +1702,9 @@ public final class NamedRegions extends BaseFeature {
             );
             mapLayer.enable();
         } catch(RuntimeException exception) {
-            STEMCraft.getPlugin().getLogger().warning(
-                "Could not enable named-region map layer: "
-                    +exception.getMessage());
+            disableMap();
+            STEMCraft.getPlugin().getLogger().log(java.util.logging.Level.WARNING,
+                "Could not enable named-region map layer",exception);
         }
     }
 

@@ -4,6 +4,13 @@ import java.lang.reflect.Method;
 
 /** Shared optional Citizens API access; never references server internals. */
 public final class CitizensAccess {
+    /** @return whether Citizens is enabled and has an initialized implementation */
+    public static boolean available() {
+        if (!org.bukkit.Bukkit.getPluginManager().isPluginEnabled("Citizens")) return false;
+        try { return (boolean) invokeStatic("net.citizensnpcs.api.CitizensAPI", "hasImplementation"); }
+        catch (RuntimeException ignored) { return false; }
+    }
+
     private CitizensAccess() {}
     public static Class<?> type(String name) {
         try {

@@ -6,6 +6,8 @@ STEMCraft Survival keeps the familiar Minecraft progression while adding practic
 
 ## Start here
 
+Begin with [quests](quests.md), [skills and unlocks](progression.md), or ask [STEMBot](../stembot.md) for a short explanation. When ready to explore further, read [Worlds & Exploration](../worlds/README.md).
+
 * Learn about [sleep voting, coordinates, and friendly world names](sleeping-and-navigation.md).
 * See the server's [quality-of-life improvements](quality-of-life.md) and [changes from vanilla](changes-from-vanilla.md).
 * Grow flooded rice, forage tropical ingredients, cook sushi and risotto, and make buff foods in [Farming, Foraging & Cooking](items-and-crafting/farming-and-cooking.md).

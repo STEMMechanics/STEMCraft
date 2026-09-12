@@ -8,7 +8,7 @@ import org.json.simple.JSONObject;
 import javax.imageio.ImageIO;
 import java.io.*;
 import java.net.*;
-import java.util.concurrent.CompletableFuture;
+import dev.stemcraft.integration.SkinRequests;
 import java.util.function.Consumer;
 
 import static dev.stemcraft.integration.CitizensAccess.invokeStatic;
@@ -26,6 +26,7 @@ public final class BotSkinCache {
 
     private long epoch;
     private Skin current;
+    private final SkinRequests<Skin> requests = new SkinRequests<>();
 
     public Skin current() {
         return current;
@@ -71,23 +72,15 @@ public final class BotSkinCache {
             return;
         }
 
-        CompletableFuture.supplyAsync(()->convert(script))
-            .whenComplete((skin,error)->api.tasks().nextTick(()->{
-                if(request!=epoch||!plugin.isEnabled()) return;
-
-                if(error!=null) {
-                    plugin.getLogger().log(
-                        java.util.logging.Level.WARNING,
-                        "STEMBot skin could not be loaded; using the default skin",
-                        error
-                    );
-                    return;
-                }
-
-                current=skin;
-                saveSkin(api,script,skin);
+        requests.request(api, plugin, "stembot.yml", key, () -> convert(script), skin -> {
+            if (request != epoch || !plugin.isEnabled()) return;
+            current = skin;
+            try {
+                saveSkin(api, script, skin);
+            } finally {
                 ready.accept(skin);
-            }));
+            }
+        });
     }
 
     private static boolean saveSkin(STEMCraftAPI api,BotScript script,Skin skin) {

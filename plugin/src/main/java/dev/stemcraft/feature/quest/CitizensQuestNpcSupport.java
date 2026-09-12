@@ -12,24 +12,21 @@ import org.json.simple.JSONObject;
 import static dev.stemcraft.integration.CitizensAccess.*;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
+import dev.stemcraft.integration.SkinRequests;
+import dev.stemcraft.api.STEMCraftAPI;
 
 /** Optional Citizens bridge. This class is only loaded when Citizens is enabled. */
 public final class CitizensQuestNpcSupport {
     private static final String SKIN_URL_METADATA = "stemcraft.quest.skin-url";
 
+    private static final SkinRequests<JSONObject> SKINS = new SkinRequests<>();
+
     private CitizensQuestNpcSupport() { }
 
     public record ProximityNpc(int id, boolean spawned, Location location, Entity entity) { }
 
-    public static boolean available() {
-        if (!Bukkit.getPluginManager().isPluginEnabled("Citizens")) return false;
-        try {
-            return (boolean) invokeStatic("net.citizensnpcs.api.CitizensAPI", "hasImplementation");
-        } catch (RuntimeException ignored) {
-            return false;
-        }
-    }
+    /** @return whether the shared Citizens integration is ready */
+    public static boolean available() { return dev.stemcraft.integration.CitizensAccess.available(); }
 
     public static Entity spawn(QuestNpcProfile profile, Location location, NamespacedKey profileKey) {
         Object registry = registry();
@@ -137,22 +134,26 @@ public final class CitizensQuestNpcSupport {
 
     private static void applySkin(Object npc, String url) {
         invoke(invoke(npc, "data"), "setPersistent", SKIN_URL_METADATA, url);
-        CompletableFuture.supplyAsync(() -> {
-            try { return (JSONObject) invokeStatic("net.citizensnpcs.util.MojangSkinGenerator",
-                "generateFromURL", url, false); }
-            catch (Exception ex) { throw new IllegalStateException(ex); }
-        }).thenAccept(data -> Bukkit.getScheduler().runTask(STEMCraft.getPlugin(), () -> {
-            if (data == null) return;
-            JSONObject texture = (JSONObject) data.get("texture");
-            if (texture == null) return;
-            String id = String.valueOf(data.get("uuid"));
-            Object skin = invoke(npc, "getOrAddTrait", type("net.citizensnpcs.trait.SkinTrait"));
-            invoke(skin, "setSkinPersistent", id,
-                String.valueOf(texture.get("signature")), String.valueOf(texture.get("value")));
-        })).exceptionally(error -> {
-            STEMCraft.getPlugin().getLogger().warning("Could not apply Citizens skin " + url + ": " + error.getMessage());
-            return null;
-        });
+        var plugin = STEMCraft.getPlugin();
+        SKINS.request(STEMCraftAPI.api(), plugin, "config.yml", "quest|" + url,
+            () -> {
+                JSONObject data = (JSONObject) invokeStatic("net.citizensnpcs.util.MojangSkinGenerator",
+                    "generateFromURL", url, false);
+                if (data == null || !(data.get("texture") instanceof JSONObject texture)
+                    || !(texture.get("signature") instanceof String signature) || signature.isBlank()
+                    || !(texture.get("value") instanceof String value) || value.isBlank())
+                    throw new IllegalStateException("Skin service returned no signed texture");
+                return data;
+            }, data -> {
+                // The NPC may have been replaced or assigned another URL while converting.
+                if (invoke(registry(), "getById", invoke(npc, "getId")) != npc) return;
+                Object metadata = invoke(npc, "data");
+                if (!url.equals(invoke(metadata, "get", SKIN_URL_METADATA))) return;
+                JSONObject texture = (JSONObject) data.get("texture");
+                Object skin = invoke(npc, "getOrAddTrait", type("net.citizensnpcs.trait.SkinTrait"));
+                invoke(skin, "setSkinPersistent", String.valueOf(data.get("uuid")),
+                    String.valueOf(texture.get("signature")), String.valueOf(texture.get("value")));
+            });
     }
 
     private static Object registry() {
