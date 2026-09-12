@@ -59,7 +59,7 @@ class BotSessionTest {
             "STEMBot","","{message}","","","",false,
             2.5,8,60,3,0.9,10,6,600,
             new BotScript.ChatSettings(12,6,60,"public {seconds}","private"),speech,
-            List.of("wait"),List.of("stuck"),List.of("farewell"),
+            List.of("wait"),List.of("scanning"),30,List.of("stuck"),List.of("farewell"),
             Map.copyOf(actions),Map.of("world","start"),Map.of()
         );
 
@@ -241,6 +241,72 @@ class BotSessionTest {
         session.tick(here);
         verify(actor).move(argThat(l->l.getX()==10),eq(0.9));
         assertFalse(session.closed());
+    }
+
+    @Test
+    void stalledWalkUsesReachableWaypointThenResumesOriginalDestination() {
+        setUp(0,List.of("walk:10 64 0", "listen:yes -> done"));
+        Location blocked = new Location(world, -2, 64, 0);
+        Location landing = new Location(world, -4, 65, 0);
+        when(actor.recoveryWaypoints(any())).thenReturn(List.of(blocked, landing));
+        when(actor.canNavigateTo(landing)).thenReturn(true);
+        for(int i=0;i<41;i++) session.tick(here);
+        clearInvocations(actor);
+        session.tick(here);
+        verify(actor).canNavigateTo(blocked);
+        verify(actor,never()).canNavigateTo(landing);
+        session.tick(here);
+        verify(actor).move(landing, .9);
+        assertEquals(1, output.stream().filter("scanning"::equals).count());
+        assertFalse(output.contains("stuck"));
+        here=landing;
+        clearInvocations(actor);
+        session.tick(here);
+        verify(actor).move(new Location(world,10,64,0), .9);
+        here=new Location(world,10,64,0);
+        session.tick(here);
+        session.input("yes");
+        session.tick(here);
+        assertTrue(session.closed());
+    }
+
+    @Test
+    void unreachableRecoveryCandidatesFallBackToPromptAndDoNotAdvanceWalk() {
+        setUp(0,List.of("walk:10 64 0", "say:arrived", "listen:yes -> done"));
+        when(actor.recoveryWaypoints(any())).thenReturn(List.of(new Location(world,-4,65,0)));
+        for(int i=0;i<45;i++) session.tick(here);
+        assertTrue(output.contains("stuck"));
+        assertFalse(output.contains("arrived"));
+        verify(actor,times(1)).canNavigateTo(any());
+    }
+
+    @Test
+    void recoveryStopsWhenDismissed() {
+        setUp(0,List.of("walk:10 64 0", "listen:yes -> done"));
+        when(actor.recoveryWaypoints(any())).thenReturn(List.of(new Location(world,-4,65,0)));
+        for(int i=0;i<41;i++) session.tick(here);
+        session.input("bye");
+        clearInvocations(actor);
+        session.tick(here);
+        verify(actor,never()).canNavigateTo(any());
+        verify(actor,never()).move(any(),anyDouble());
+        assertTrue(session.closed());
+    }
+
+    @Test
+    void scanningAnnouncementCooldownSurvivesRetry() {
+        setUp(0,List.of("walk:10 64 0", "listen:yes -> done"));
+        when(actor.recoveryWaypoints(any())).thenReturn(List.of(new Location(world,-4,65,0)));
+        for(int i=0;i<45;i++) session.tick(here);
+        assertEquals(1,output.stream().filter("scanning"::equals).count());
+        session.input("retry");
+        for(int i=0;i<45;i++) session.tick(here);
+        assertEquals(1,output.stream().filter("scanning"::equals).count());
+        // Wait beyond the cooldown before starting another recovery attempt.
+        for(int i=0;i<80;i++) session.tick(here);
+        session.input("retry");
+        for(int i=0;i<45;i++) session.tick(here);
+        assertEquals(2,output.stream().filter("scanning"::equals).count());
     }
 
     @Test

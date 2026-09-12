@@ -127,6 +127,16 @@ public final class CitizensBotActor implements BotActor {
     }
 
     @Override
+    public List<Location> recoveryWaypoints(Location target) {
+        return BotNavigationRecovery.candidates(location(), target);
+    }
+
+    @Override
+    public boolean canNavigateTo(Location target) {
+        return (boolean) invoke(navigator(), "canNavigateTo", target);
+    }
+
+    @Override
     public void pause(boolean paused) {
         invoke(navigator(),"setPaused",paused);
         if(paused&&entity() instanceof Player player)
