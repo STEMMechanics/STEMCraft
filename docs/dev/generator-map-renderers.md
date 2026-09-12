@@ -10,6 +10,8 @@ Deep embeds its policy in `DeepGenerator.mapRenderer()`. It starts beneath the g
 
 After deployment run `pl3xmap fullrender <deep-world-name>` from the console and refresh the web map. Existing tiles retain the old gray roof until rerendered. This changes map pixels only: no terrain regeneration or dimension ceiling flags are needed. Pl3xMap 26.2-554 is the tested integration target.
 
+The world's Pl3xMap `render.renderers` configuration must include `basic: overworld_basic`; a `vintage_story` entry alone does not attach the policy. Pl3xMap 26.2-554 returns an unmodifiable renderer map and provides no public mutation method, so the optional bridge accesses the world's backing renderer map reflectively for attachment and restoration. Recheck this compatibility point when upgrading Pl3xMap. An `UnsupportedOperationException` from `Pl3xMapGeneratorRenders.attach` indicates an older STEMCraft build that attempted to modify the read-only view; deploy the fix and rerender.
+
 ## Public contract
 
 <!-- javadoc:all api/src/main/java/dev/stemcraft/api/service/world/generation/GeneratorMapRenderer.java -->
