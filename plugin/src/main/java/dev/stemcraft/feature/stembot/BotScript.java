@@ -35,7 +35,7 @@ public record BotScript(
                                int awayTimeoutSeconds,String disengaged,String reengaged) {}
 
     public enum Op {
-        SAY,TALK,SLEEP,WALK,SPEED,LOOK,POINT,WAVE,SNEAK,STAND,ACTION,LISTEN,END,CLOSE
+        SAY,TALK,SLEEP,WALK,SPEED,LOOK,POINT,WAVE,SNEAK,STAND,ACTION,LISTEN,AWAIT,END,CLOSE
     }
 
     public record SpeechSettings(
@@ -223,11 +223,27 @@ public record BotScript(
             case "sneak" -> Instruction.simple(Op.SNEAK);
             case "stand" -> Instruction.simple(Op.STAND);
             case "action" -> new Instruction(Op.ACTION,required(argument,"action name"),0,0,0,0,0,List.of());
+            case "await" -> parseAwait(argument);
             case "listen" -> new Instruction(Op.LISTEN,"",0,0,0,0,0,parseListen(argument));
             case "end" -> Instruction.simple(Op.END);
             case "close" -> Instruction.simple(Op.CLOSE);
             default -> throw new IllegalArgumentException("Unknown STEMBot instruction: "+command);
         };
+    }
+
+    private static Instruction parseAwait(String argument) {
+        String[] parts = argument.split("\\s*->\\s*", 2);
+        String[] request = parts[0].trim().split("\\s+");
+        if (parts.length != 2 || request.length != 2 || !request[0].matches("[a-z0-9_.-]+:[a-z0-9_/.-]+"))
+            throw new IllegalArgumentException("await expects namespace:key seconds -> success-action, skip-action");
+        String[] targets = parts[1].split("\\s*,\\s*");
+        if (targets.length != 2 || targets[0].isBlank() || targets[1].isBlank())
+            throw new IllegalArgumentException("await requires success and skip actions");
+        int seconds = parseInt(request[1], "await seconds");
+        if (seconds < 1 || seconds > 300) throw new IllegalArgumentException("await timeout must be 1..300 seconds");
+        return new Instruction(Op.AWAIT, request[0], 0, 0, 0, 0, seconds * 20,
+            List.of(new ListenRoute(List.of(Pattern.compile("(?!)")), targets[0]),
+                new ListenRoute(List.of(wildcard("skip"), wildcard("later"), wildcard("not now")), targets[1])));
     }
 
     private static Instruction parsePointInstruction(Op op,String argument,boolean optionalSpeed) {
@@ -297,10 +313,10 @@ public record BotScript(
                 if(instruction.op()==Op.ACTION)
                     requireTarget(actions,instruction.text(),"actions."+entry.getKey());
 
-                if(instruction.op()==Op.LISTEN)
+                if(instruction.op()==Op.LISTEN || instruction.op()==Op.AWAIT)
                     for(ListenRoute route:instruction.routes())
-                        if(!route.target().equalsIgnoreCase("close")
-                            &&!route.target().equalsIgnoreCase("end"))
+                        if(instruction.op()==Op.AWAIT || (!route.target().equalsIgnoreCase("close")
+                            &&!route.target().equalsIgnoreCase("end")))
                             requireTarget(actions,route.target(),"listen in "+entry.getKey());
             }
         }

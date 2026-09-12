@@ -34,4 +34,25 @@ class BotScriptTest {
         assertTrue(routes.get(2).matches("anything else"));
         assertEquals("hub2",routes.get(0).target());
     }
+    @Test
+    void awaitRequiresBoundedTimeoutAndTwoDestinations() {
+        var step = BotScript.parseInstruction("await:stemcraft:coordbar 60 -> ready, skipped");
+        assertEquals(BotScript.Op.AWAIT, step.op());
+        assertEquals(1200, step.ticks());
+        assertEquals("stemcraft:coordbar", step.text());
+        assertThrows(IllegalArgumentException.class, () -> BotScript.parseInstruction("await:coordbar 60 -> ready, skipped"));
+        assertThrows(IllegalArgumentException.class, () -> BotScript.parseInstruction("await:stemcraft:test 301 -> ready, skipped"));
+        assertThrows(IllegalArgumentException.class, () -> BotScript.parseInstruction("await:stemcraft:test 0 -> ready, skipped"));
+        assertThrows(IllegalArgumentException.class, () -> BotScript.parseInstruction("await:stemcraft:test 10 -> ready"));
+    }
+    @Test
+    void bundledScriptLoadsWithAllPracticeAndHelpTargets() throws Exception {
+        try (var stream = getClass().getResourceAsStream("/stembot.yml")) {
+            assertNotNull(stream);
+            var yaml = org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(new java.io.InputStreamReader(stream, java.nio.charset.StandardCharsets.UTF_8));
+            var script = BotScript.read(new dev.stemcraft.config.ConfigSectionImpl(null, yaml));
+            assertTrue(script.actions().containsKey("creative-merge"));
+            assertTrue(script.actions().containsKey("practice-quest"));
+        }
+    }
 }

@@ -18,3 +18,7 @@ Quest books belong to the player who accepted them. Someone else's book cannot t
 The [coordinate bar](sleeping-and-navigation.md) is useful while exploring. If you get lost, ask `/help` about quests rather than abandoning immediately.
 
 > **Image placeholder — quest loop:** Three screenshots: question-mark NPC, an open objective page, and the exclamation-mark hand-in NPC. Keep names and objective text legible.
+
+## Try a practice quest
+
+Ask [STEMBot](../stembot.md) about `practice` in Survival for an optional introduction. Your private guide gives you a book, asks you to walk a few blocks, and accepts the book when you return. This practice gives no rewards or campaign progress. Say `skip` whenever you want to stop.

@@ -25,14 +25,8 @@ public final class CitizensQuestNpcSupport {
 
     public record ProximityNpc(int id, boolean spawned, Location location, Entity entity) { }
 
-    public static boolean available() {
-        if (!Bukkit.getPluginManager().isPluginEnabled("Citizens")) return false;
-        try {
-            return (boolean) invokeStatic("net.citizensnpcs.api.CitizensAPI", "hasImplementation");
-        } catch (RuntimeException ignored) {
-            return false;
-        }
-    }
+    /** @return whether the shared Citizens integration is ready */
+    public static boolean available() { return dev.stemcraft.integration.CitizensAccess.available(); }
 
     public static Entity spawn(QuestNpcProfile profile, Location location, NamespacedKey profileKey) {
         Object registry = registry();
