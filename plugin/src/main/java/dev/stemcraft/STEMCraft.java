@@ -248,6 +248,8 @@ public final class STEMCraft extends JavaPlugin {
         firstJoin = new FirstJoinService(this, api);
         worlds = new WorldServiceImpl(this, api);
 
+        // Register core completion defaults before services provide overrides.
+        tabComplete.onEnable();
         database.onEnable();
         dialogs.onEnable();
         firstJoin.onEnable();
@@ -275,7 +277,6 @@ public final class STEMCraft extends JavaPlugin {
         regions.onEnable();
         resourcePack.onEnable();
         selections.onEnable();
-        tabComplete.onEnable();
         web.onEnable();
         worlds.onEnable();
 
