@@ -11,6 +11,7 @@ import dev.stemcraft.api.minigame.MiniGamePlayer;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.service.region.RegionListener;
 import dev.stemcraft.api.util.NamespaceId;
+import dev.stemcraft.api.util.PlaceholderUtil;
 import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.minigame.mobarena.MobArenaSpawnerRecord.IncrementType;
 import dev.stemcraft.service.region.RegionLocationSupport;
@@ -39,6 +40,7 @@ import org.jetbrains.annotations.Nullable;
 import org.jspecify.annotations.NonNull;
 
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * <p>The arena handler for Mob Arena arenas.</p>
@@ -60,7 +62,7 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
         return trackedEntityMiniGameArenaMap.values()
                 .stream()
                 .reduce(0, (accumulator, valueArena) ->
-                        valueArena.equals(arena) ? accumulator + 1 : accumulator,
+                                valueArena.equals(arena) ? accumulator + 1 : accumulator,
                         Integer::sum);
     }
 
@@ -76,8 +78,8 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
                 .reduce(0.0, (accumulator, value) ->
                                 value.getValue().equals(arena)
                                         ? (value.getKey() instanceof Damageable
-                                                ? accumulator + ((Damageable) value.getKey()).getHealth()
-                                                : accumulator)
+                                        ? accumulator + ((Damageable) value.getKey()).getHealth()
+                                        : accumulator)
                                         : accumulator,
                         Double::sum);
     }
@@ -272,13 +274,14 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
      * @param arenaToProgress The arena whose boss bar to update.
      */
     private void updateArenaBossBar(@NotNull final MiniGameArena arenaToProgress) {
-         arenaToProgress.set("bossBarProgress", getTrackedMobHealthForMinigame(arenaToProgress) / arenaToProgress.get("totalMobHealthSpawnedThisRound", Double.class, 1.0));
+        arenaToProgress.set("bossBarProgress", getTrackedMobHealthForMinigame(arenaToProgress) / arenaToProgress.get("totalMobHealthSpawnedThisRound", Double.class, 1.0));
     }
 
     /**
      * <p>An enum of possible reasons for a mob to die.</p>
      */
-     enum MobDeathReason {
+    enum MobDeathReason {
+        Generic,
         Exploded,
         Fell,
         LeftRegion
@@ -293,7 +296,7 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
      * @param causingEntity That entity that caused the entity to die (or {@code null} if no entity caused it).
      * @param entityArena The arena that the entity belongs to.
      */
-    private void doDeathMessage(@NotNull final Entity entity, @Nullable final Entity causingEntity, @NotNull final MiniGameArena entityArena) { doDeathMessage(entity, causingEntity, entityArena, null); }
+    private void doDeathMessage(@NotNull final Entity entity, @Nullable final Entity causingEntity, @NotNull final MiniGameArena entityArena) { doDeathMessage(entity, causingEntity, entityArena, MobDeathReason.Generic); }
 
     /**
      * <p>Renders a death message to all participants of the arena informing them that a mob died.</p>
@@ -303,44 +306,22 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
      * @param entityArena The arena that the entity belongs to.
      * @param mobDeathReason The reason that the mob died (maybe null).
      */
-    private void doDeathMessage(@NotNull final Entity entity, @Nullable final Entity causingEntity, @NotNull final MiniGameArena entityArena, @Nullable final MobDeathReason mobDeathReason) {
+    private void doDeathMessage(@NotNull final Entity entity, @Nullable final Entity causingEntity, @NotNull final MiniGameArena entityArena, @Nullable MobDeathReason mobDeathReason) {
         if (entityArena.getStatus() == ArenaStatus.RESETTING) {
             return;
         }
 
-        // TODO: Make customisable? - ProjectHSI
-        // TODO: Better messages and more of them. - ProjectHSI
-        if (mobDeathReason == null) {
-            if (causingEntity != null) {
-                broadcastInfoToOccupants(entityArena, "A <red>" + entity.getName() + "</red> was just killed by <gold>" + causingEntity.getName() + "</gold>.");
-            } else {
-                broadcastInfoToOccupants(entityArena, "A <red>" + entity.getName() + "</red> died.");
-            }
-        } else {
-            switch (mobDeathReason) {
-                case Exploded -> {
-                    if (causingEntity != null) {
-                        broadcastInfoToOccupants(entityArena, "A <red>" + entity.getName() + "</red> was just EXPLODED by <gold>" + causingEntity.getName() + "</gold>!");
-                    } else {
-                        broadcastInfoToOccupants(entityArena, "A <red>" + entity.getName() + "</red> just EXPLODED!");
-                    }
-                }
-                case LeftRegion -> {
-                    if (causingEntity != null) {
-                        broadcastInfoToOccupants(entityArena, "A <red>" + entity.getName() + "</red> was just forced to leave the arena by <gold>" + causingEntity.getName() + "</gold>.");
-                    } else {
-                        broadcastInfoToOccupants(entityArena, "A <red>" + entity.getName() + "</red> just left the arena.");
-                    }
-                }
-                case Fell -> {
-                    if (causingEntity != null) {
-                        broadcastInfoToOccupants(entityArena, "A <red>" + entity.getName() + "</red> was doomed to fall by <gold>" + causingEntity.getName() + "</gold>.");
-                    } else {
-                        broadcastInfoToOccupants(entityArena, "A <red>" + entity.getName() + "</red> fell.");
-                    }
-                }
-            }
-        }
+        mobDeathReason = mobDeathReason == null ? MobDeathReason.Generic : mobDeathReason;
+
+        final List<String> applicableMessages = new ArrayList<>(mobArena.getApplicableGlobalEntityDeathReasons(mobDeathReason));
+        applicableMessages.addAll(entityArena.getList("entity-death-messages." + mobDeathReason.name(), String.class));
+
+        final List<String> filteredMessages = applicableMessages.stream().filter(message -> message.contains("{causer}") == (causingEntity != null)).toList();
+
+        final String chosenMessage = filteredMessages.get(ThreadLocalRandom.current().nextInt(filteredMessages.size()));
+        final String finalMessage = PlaceholderUtil.apply(chosenMessage, "entity", entity, "causer", causingEntity);
+
+        broadcastInfoToOccupants(entityArena, finalMessage);
     }
 
     /**
@@ -570,8 +551,8 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
      * @return The amount of mobs to spawn in.
      */
     public static int determineMobSpawnCount(final int round, final int initialWave,
-                                       final int initialAmount, final double incrementAmount,
-                                       @NotNull final IncrementType incrementType) {
+                                             final int initialAmount, final double incrementAmount,
+                                             @NotNull final IncrementType incrementType) {
         if (round < initialWave) {
             return 0;
         } else if (round == initialWave) {
@@ -804,7 +785,7 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
         api.regions().addListener(listenerPrefix + "boundary", arenaRegion, new RegionListener() {
             @Override
             public void onExit(@NotNull final Player player, @NotNull final SCRegion region, @Nullable final Location from, @Nullable final Location to) {
-                 if (arena.hasPlayer(player) && arena.getStatus() == ArenaStatus.RUNNING) {
+                if (arena.hasPlayer(player) && arena.getStatus() == ArenaStatus.RUNNING) {
                     handleDeath(arena, player, null);
                 } else if (arena.hasOccupant(player) && arena.getStatus() == ArenaStatus.ENDING) {
                     keepOccupantInEndingArea(arena, player);

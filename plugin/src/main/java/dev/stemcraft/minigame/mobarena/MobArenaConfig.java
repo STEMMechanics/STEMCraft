@@ -3,6 +3,7 @@ package dev.stemcraft.minigame.mobarena;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigFile;
 import dev.stemcraft.api.config.ConfigSection;
+import dev.stemcraft.api.config.ConfigSectionView;
 import dev.stemcraft.api.minigame.MiniGame;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.util.LocationUtil;
@@ -86,6 +87,25 @@ final class MobArenaConfig {
 
             configEnabled = true;
         }
+    }
+
+    private static @NotNull Map<MobDeathReason, List<String>> getEntityDeathMessages(@lombok.NonNull final ConfigSection section) {
+        return section.getSectionKeys("entity-death-messages", false).stream().collect(Collectors.toMap(
+                MobDeathReason::valueOf,
+                key -> section.getStringList("entity-death-messages." + key).stream().toList()
+        ));
+    }
+
+    private static @lombok.NonNull List<String> getPlayerDeathMessages(@lombok.NonNull final ConfigSection section) {
+        return section.getStringList("player-death-messages");
+    }
+
+    public @NotNull Map<MobDeathReason, List<String>> getGlobalEntityDeathMessages() {
+        return getEntityDeathMessages(config.getSection("death-messages"));
+    }
+
+    public @NotNull List<String> getGlobalPlayerDeathMessages() {
+        return getPlayerDeathMessages(config.getSection("death-messages"));
     }
 
     /**
@@ -236,12 +256,9 @@ final class MobArenaConfig {
 
         final @NotNull Map<String, SCRegion> zones = loadZonesFromArena(arenaId, arenaSection, world);
 
-        final Map<MobDeathReason, List<String>> entityDeathMessages = arenaSection.getSectionKeys("entity-death-messages", false).stream().collect(Collectors.toMap(
-                MobDeathReason::valueOf,
-                key -> arenaSection.getStringList("entity-death-messages." + key).stream().toList()
-        ));
+        final Map<MobDeathReason, List<String>> entityDeathMessages = getEntityDeathMessages(arenaSection);
         final @NotNull MobArenaDeathMessageMode entityDeathMessagesMode = (MobArenaDeathMessageMode) arenaSection.get("entity-death-messages-mode");
-        final List<String> playerDeathMessages = arenaSection.getStringList("player-death-messages");
+        final List<String> playerDeathMessages = getPlayerDeathMessages(arenaSection);
         final @NotNull MobArenaDeathMessageMode playerDeathMessagesMode = (MobArenaDeathMessageMode) arenaSection.get("player-death-messages-mode");
 
         return new MobArenaArenaRecord(

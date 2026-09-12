@@ -240,6 +240,14 @@ public class MobArenaMiniGame extends BaseMiniGame {
         return true;
     }
 
+    public List<String> getApplicableGlobalEntityDeathReasons(MobArenaArenaHandler.MobDeathReason mobDeathReason) {
+        return config.getGlobalEntityDeathMessages().get(mobDeathReason);
+    }
+
+    public List<String> getGlobalPlayerDeathReasons() {
+        return config.getGlobalPlayerDeathMessages();
+    }
+
     /**
      * <p>Loads all arenas from the config.</p>
      */
