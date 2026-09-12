@@ -32,6 +32,8 @@ public interface TabCompleteService {
 
     /**
      * Register a tab completion provider with a specific name.
+     * Registering an existing name replaces its provider. Core defaults are registered
+     * before feature services so services can override or expand them.
      *
      * @param name The name of the tab completion provider.
      * @param callback The callback to provide tab completions.
