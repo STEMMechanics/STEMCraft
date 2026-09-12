@@ -48,4 +48,4 @@ When `docs/dev/**` changes on the repository default branch, GitHub Actions sync
 
 ## Current extension guides
 
-Start with [STEMBot](stembot.md), [Quests](quests.md), [World generation](world-generation.md), [map renderers](generator-map-renderers.md), [Pl3xMap lifecycle](pl3xmap.md), and [release verification](release-verification.md) for recent additions.
+Start with [STEMBot](stembot.md), [Quests](quests.md), [interactive guide callbacks](guide-callbacks.md), [World generation](world-generation.md), [map renderers](generator-map-renderers.md), [Pl3xMap lifecycle](pl3xmap.md), and [release verification](release-verification.md) for recent additions.
