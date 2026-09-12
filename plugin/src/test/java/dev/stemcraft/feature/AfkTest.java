@@ -26,6 +26,7 @@ class AfkTest {
     @BeforeEach void setup() {
         server = MockBukkit.mock();
         pluginAccess = mockStatic(dev.stemcraft.STEMCraft.class);
+        pluginAccess.when(dev.stemcraft.STEMCraft::getPlugin).thenReturn(mock(dev.stemcraft.STEMCraft.class));
         now = new AtomicLong();
         config = mock(ConfigSection.class);
         when(config.getBoolean("enabled", true)).thenReturn(true);
