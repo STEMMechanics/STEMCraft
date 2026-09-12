@@ -14,6 +14,13 @@ Whether you're joining for the first time, building in Survival, creating someth
 Start with [Getting Started](getting-started.md) to learn how to join and what to do when you first arrive.
 {% endhint %}
 
+### Choose your next step
+
+* **New player:** [Getting Started](getting-started.md) → [Hub](hub.md) → [STEMBot](stembot.md).
+* **Builder:** [Creative plots](creative.md) and [formatted signs](signs.md).
+* **Adventurer:** [Survival](survival/README.md), [quests](survival/quests.md), [skills](survival/progression.md), and [worlds](worlds/README.md).
+* **Quick game:** [Minigames](minigames/README.md).
+
 ### Need help finding something?
 
 Use the menu to explore [Survival](survival/), [Creative](creative.md), [Minigames](minigames/), [Commands](commands/), [Safety & Community](safety-and-community/) and more.

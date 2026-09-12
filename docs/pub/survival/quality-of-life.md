@@ -1,6 +1,6 @@
 # Quality of Life
 
-The current plugin includes these configurable Survival improvements:
+Some conveniences unlock through [profession levels](progression.md); others are available immediately. These are the current configurable Survival improvements:
 
 * Sneak-right-click a mature crop with a hoe to harvest and replant a 3×3 area of that crop.
 * Players and mobs do not trample farmland.
@@ -14,3 +14,5 @@ The current plugin includes these configurable Survival improvements:
 * The End Dragon can respawn automatically after a configured delay in eligible End worlds.
 
 These features are configurable, so the live server may enable them only in selected worlds.
+
+Use `/skills` to check progress toward gated conveniences. Having the right tool and inventory supplies still matters after unlocking a feature.
