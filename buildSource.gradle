@@ -25,3 +25,7 @@ ext {
     getArchiveBuildMetadata = this.&getArchiveBuildMetadata
     getVersionCommandBuildMetadata = this.&getVersionCommandBuildMetadata
 }
+// The wiki include action and JavaDoc share the API's documented @example blocks.
+tasks.withType(Javadoc).configureEach {
+    options.tags('example:a:Example:')
+}

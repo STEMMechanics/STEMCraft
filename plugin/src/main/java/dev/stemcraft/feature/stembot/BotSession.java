@@ -23,7 +23,12 @@ public final class BotSession {
         void say(String text);
         /** Speak a message and return the number of ticks before the next instruction may run. */
         int talk(String text);
-        /** Start a registered optional step and return its idempotent cancellation callback. */
+        /**
+         * Start a registered optional step. The provider may complete synchronously.
+         * @param key namespaced provider key
+         * @param completion receives verified success or provider failure on the server thread
+         * @return non-null, idempotent cancellation callback
+         */
         default Runnable await(String key, java.util.function.Consumer<Boolean> completion) {
             completion.accept(false);
             return () -> { };
@@ -168,7 +173,7 @@ public final class BotSession {
         return List.of();
     }
 
-    /** Advance one server tick using the owner location for proximity and navigation checks. */
+    /** Advance one five-tick scheduler interval using the owner location for proximity and navigation checks. */
     public void tick(Location owner) {
         idle+=5;
 

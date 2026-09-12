@@ -110,3 +110,20 @@ The GitHub wiki is sourced from this directory:
 - `docs/dev`
 
 After changes are merged into the repository default branch, the `wiki-sync` workflow publishes them to the GitHub wiki repository.
+
+## Recent configuration ownership
+
+| Configuration | Owner and purpose |
+| --- | --- |
+| `stembot.yml` | Dialogue, routes, movement, private chat, reply format and signed skin values |
+| `config.yml` → `afk` | Inactivity detection and kick timing (PR #157) |
+| `config.yml` → `generator-maps` | Optional generator-owned map policies |
+| `worlds/portals.yml` | Survival multiblock definitions and bounded exit placement |
+| `worlds/portal-state.yml` | Persisted portal endpoints, charging and links |
+| `quests/quests.yml` | Quest definitions; active attempts live in SQLite |
+| `<minigame>.yml` → `rewards.gifts` | Winner-gift item-spec lists, applied on that game's reload |
+| Existing skin-owner config → `skin-request-retries` | Per-source retry cooldown, not a separate cache file |
+
+Use `stemcraft:animal_crate[animal=chicken]` for a filled Animal Crate. The old `animal_barrel` item key is not its current identifier. Edit BoatRace's gift lists in `boatrace.yml` and use `boatrace reload` between games; its command does not currently edit the gift list directly.
+
+FAWE's `faweregentempworld` is excluded from managed-world configuration and discovery. Stale configuration is removed without deleting FAWE's files.

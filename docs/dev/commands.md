@@ -113,3 +113,7 @@ Common exceptions:
 For exact argument validation and user-facing usage strings, see locale entries in `plugin/src/main/resources/locales/en.yml`.
 
 Notice boards use `/noticeboard post`, `/noticeboard list [page]`, `/noticeboard edit <post-id>`, `/noticeboard expiry <post-id> <duration|-1>`, and `/noticeboard remove <post-id>`. Administrators create displays with `/noticeboard board create <id> [columns] [rows]` while targeting the bottom-left backing block.
+
+## Dynamic command lifecycle
+
+Registered commands own all aliases and namespaced labels pointing to their exact Bukkit command object. Cleanup snapshots matching keys and removes them through Paper's command map, which updates Brigadier. Do not use `entrySet().removeIf`: the current Paper forwarding iterator does not support iterator removal. Re-registration first cleans up the previous registration; failure retains the handle and logs its cause.

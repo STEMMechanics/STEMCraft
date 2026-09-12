@@ -23,8 +23,18 @@ package dev.stemcraft.api.service.world.generation;
 import org.bukkit.NamespacedKey;
 import java.util.Objects;
 
-/** Immutable public metadata with an optional thread-safe map policy.
- * Incompatible terrain changes require a new version. Versions must be positive.
+/**
+ * Immutable metadata for a registered generator version and its optional map policy.
+ * Incompatible terrain changes require a new positive version. Loaded worlds retain the
+ * definition attached to their generator; changing registration does not regenerate terrain.
+ *
+ * @param key owner-namespaced generator identifier
+ * @param displayName nonblank player-facing name
+ * @param description concise description of the terrain
+ * @param category discovery/menu category
+ * @param experimental whether administrators should treat terrain as experimental
+ * @param version positive terrain generation version
+ * @param mapRenderer optional thread-safe map policy; null uses the map's normal renderer
  */
 public record GeneratorDefinition(NamespacedKey key, String displayName, String description,
                                   GeneratorCategory category, boolean experimental, int version, GeneratorMapRenderer mapRenderer) {
