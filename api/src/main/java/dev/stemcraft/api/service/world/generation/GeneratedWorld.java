@@ -23,7 +23,12 @@ package dev.stemcraft.api.service.world.generation;
 import java.util.UUID;
 import java.util.Objects;
 
-/** Snapshot of the generator currently attached to a loaded world, not a pending configuration change. */
+/**
+ * Snapshot of the generator attached to a loaded world, not a pending configuration change.
+ * @param worldId UUID of the currently loaded world
+ * @param generator definition attached to its generator instance
+ * @param seed authoritative world seed
+ */
 public record GeneratedWorld(UUID worldId, GeneratorDefinition generator, long seed) {
     public GeneratedWorld {
         Objects.requireNonNull(worldId);

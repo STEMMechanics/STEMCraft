@@ -23,7 +23,14 @@ package dev.stemcraft.api.service.world.generation;
 import org.bukkit.NamespacedKey;
 import java.util.Objects;
 
-/** Immutable generation inputs. maxHeight is exclusive; no live World is retained. */
+/**
+ * Immutable generation inputs; no live Bukkit World is retained.
+ * @param seed stored Minecraft world seed
+ * @param minHeight inclusive lower build bound
+ * @param maxHeight exclusive upper build bound, greater than minHeight
+ * @param generatorKey namespaced generator identity
+ * @param generatorVersion positive pinned terrain version
+ */
 public record GenerationContext(long seed, int minHeight, int maxHeight, NamespacedKey generatorKey,
                                 int generatorVersion) {
     public GenerationContext {

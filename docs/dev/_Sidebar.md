@@ -3,7 +3,7 @@
 - [Home](https://github.com/STEMMechanics/stemcraft/wiki/Home)
 - [Architecture](https://github.com/STEMMechanics/stemcraft/wiki/Architecture)
 - [Services](https://github.com/STEMMechanics/stemcraft/wiki/Services)
-- [Features](https://github.com/STEMMechanics/stemcraft/wiki/Features)
+- [Features](https://github.com/STEMMechanics/stemcraft/wiki/features)
 - [Build a Custom Tool](https://github.com/STEMMechanics/stemcraft/wiki/build-a-custom-tool)
 - [Agriculture and Cooking](https://github.com/STEMMechanics/stemcraft/wiki/agriculture-and-cooking)
 - [Survival quality of life](https://github.com/STEMMechanics/stemcraft/wiki/survival-qol)
@@ -25,3 +25,19 @@
 - [Configuration](https://github.com/STEMMechanics/stemcraft/wiki/Configuration)
 - [Entitlements and badges](https://github.com/STEMMechanics/stemcraft/wiki/entitlements-and-badges)
 - [Player reset service](https://github.com/STEMMechanics/stemcraft/wiki/player-reset)
+
+## Progression and guidance
+
+- [STEMBot](https://github.com/STEMMechanics/stemcraft/wiki/stembot)
+- [Professions](https://github.com/STEMMechanics/stemcraft/wiki/professions)
+- [Permissions](https://github.com/STEMMechanics/stemcraft/wiki/permissions)
+- [AFK](https://github.com/STEMMechanics/stemcraft/wiki/afk)
+
+## Integrations and operations
+
+- [World generation and portals](https://github.com/STEMMechanics/stemcraft/wiki/world-generation)
+- [Generator map renderers](https://github.com/STEMMechanics/stemcraft/wiki/generator-map-renderers)
+- [Pl3xMap](https://github.com/STEMMechanics/stemcraft/wiki/pl3xmap)
+- [Selection previews](https://github.com/STEMMechanics/stemcraft/wiki/selection-preview)
+- [Skin requests](https://github.com/STEMMechanics/stemcraft/wiki/skin-requests)
+- [Release verification](https://github.com/STEMMechanics/stemcraft/wiki/release-verification)
