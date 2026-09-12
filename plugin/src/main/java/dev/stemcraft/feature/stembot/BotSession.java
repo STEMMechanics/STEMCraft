@@ -17,14 +17,18 @@ import java.util.concurrent.ThreadLocalRandom;
  * - listen: waits for matching private chat input
  */
 public final class BotSession {
+    /** Main-thread output boundary; implementations own speech presentation and actor departure. */
     public interface Output {
+        /** Send an immediate message without delaying the action interpreter. */
         void say(String text);
+        /** Speak a message and return the number of ticks before the next instruction may run. */
         int talk(String text);
         /** Start a registered optional step and return its idempotent cancellation callback. */
         default Runnable await(String key, java.util.function.Consumer<Boolean> completion) {
             completion.accept(false);
             return () -> { };
         }
+        /** Dispose of an actor, optionally after a presentation delay owned by the output. */
         default void depart(BotActor actor) { actor.close(); }
     }
 
@@ -56,6 +60,7 @@ public final class BotSession {
     private long callbackRevision;
     private Runnable cancelCallback = () -> { };
 
+    /** Create a session at a validated action; tick and input must run on the server thread. */
     public BotSession(
         BotScript script,
         BotActor actor,
@@ -71,16 +76,23 @@ public final class BotSession {
         jumpTo(initialAction);
     }
 
+    /** @return the private actor controlled by this session */
     public BotActor actor() { return actor; }
+    /** @return whether the session has terminated and no longer accepts input */
     public boolean closed() { return closed; }
+    /** @return whether nearby ordinary chat should currently route to the guide */
     public boolean chatEngaged() { return chatEngaged&&!closed; }
+    /** @return current script action identifier */
     public String action() { return action; }
+    /** @return revision used to reject speech queued before an interruption */
     public long speechRevision() { return speechRevision; }
 
+    /** Recognise dismissal phrases independently of the current action or wait mode. */
     public static boolean isDismissal(String text) {
         return text.trim().matches("(?i)(?:please\\s+)?(?:bye|goodbye|good bye|close|exit|stop|cancel|go away|leave me alone)(?:\\s+please)?[.!?]*");
     }
 
+    /** Route a private player reply, allowing recognised topics to interrupt an active action. */
     public void input(String text) {
         if(!chatEngaged()) return;
         idle=0;
@@ -156,6 +168,7 @@ public final class BotSession {
         return List.of();
     }
 
+    /** Advance one server tick using the owner location for proximity and navigation checks. */
     public void tick(Location owner) {
         idle+=5;
 
@@ -482,10 +495,12 @@ public final class BotSession {
         listening=List.of();
     }
 
+    /** End the session with its configured farewell. Idempotent. */
     public void close() {
         close(true);
     }
 
+    /** End the session, optionally suppressing farewell when replacing the guide elsewhere. */
     public void close(boolean farewell) {
         if(closed) return;
         closed=true;
