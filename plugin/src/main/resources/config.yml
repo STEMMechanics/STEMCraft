@@ -1321,3 +1321,7 @@ stembot:
 # Use && for a literal ampersand. Unsupported codes such as &m remain text.
 formatted-signs:
   enabled: true
+
+# Generator-owned map policies; Pl3xMap remains optional.
+generator-maps:
+  enabled: true

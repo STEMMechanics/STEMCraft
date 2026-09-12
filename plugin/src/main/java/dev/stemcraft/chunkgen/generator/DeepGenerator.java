@@ -41,6 +41,33 @@ public final class DeepGenerator extends TerrainModel {
         geology = noise(context, "geology", 1.0 / 90, 1);
         warp = new DomainWarp(seed(context, "warp"), 1.0 / 400, 100);
     }
+    /**
+     * Map the first exposed cavern floor below the generated roof. Solid columns without
+     * a cavern are transparent, and lower stacked caves remain hidden by the first floor.
+     * @return a stateless policy suitable for concurrent map workers
+     */
+    public static dev.stemcraft.api.service.world.generation.GeneratorMapRenderer mapRenderer() {
+        return new dev.stemcraft.api.service.world.generation.GeneratorMapRenderer() {
+            @Override public String displayName() { return "The Deep"; }
+            @Override public int surfaceY(Column column) {
+                int roof = (int) (column.minY() + (column.maxY() - column.minY()) * .66) - 8;
+                int y = Math.min(roof - 1, column.maxY() - 1);
+                while (y >= column.minY() && !column.isAir(y)) y--;
+                while (y >= column.minY() && !column.isVisible(y)) y--;
+                return y;
+            }
+            @Override public int color(Column column, int y, int argb) {
+                // Elevation shading uses the selected cavern floor, never the roof heightmap.
+                double brightness = .65 + .35 * Math.clamp(
+                    (y - column.minY()) / ((column.maxY() - column.minY()) * .66), 0, 1);
+                int red = (int) (((argb >>> 16) & 255) * brightness);
+                int green = (int) (((argb >>> 8) & 255) * brightness);
+                int blue = (int) ((argb & 255) * brightness);
+                return (argb & 0xff000000) | (red << 16) | (green << 8) | blue;
+            }
+        };
+    }
+
     private double cavernHeight(double fraction) { return height(.66 * fraction); }
     private double roofStart() { return (int) cavernHeight(1) - 8; }
     private boolean roofBedrock(int y) { return y == context.maxHeight() - 1 || y == (int) roofStart(); }
