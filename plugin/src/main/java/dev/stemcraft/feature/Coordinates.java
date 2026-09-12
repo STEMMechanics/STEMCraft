@@ -71,6 +71,8 @@ public class Coordinates extends BaseFeature {
 
     private NamespacedKey bossBarEnabledKey;
     private NamespacedKey actionBarEnabledKey;
+    private final Map<java.util.UUID, dev.stemcraft.api.event.guide.GuideActionRequestEvent> guideRequests = new HashMap<>();
+    private org.bukkit.event.Listener guideListener;
     private boolean defaultBossBarEnabled;
     private boolean defaultActionBarEnabled;
 
@@ -97,6 +99,15 @@ public class Coordinates extends BaseFeature {
         api.events().register(PlayerQuitEvent.class, event -> removeCoordBars(event.getPlayer()));
 
         Bukkit.getOnlinePlayers().forEach(this::restoreCoordBars);
+        guideListener = api.events().register(dev.stemcraft.api.event.guide.GuideActionRequestEvent.class, request -> {
+            if (!request.action().equals("stemcraft:coordbar") || !request.player().hasPermission("stemcraft.command.coordbar")) return;
+            var id = request.player().getUniqueId();
+            if (!request.claim(() -> guideRequests.remove(id, request))) return;
+            var previous = guideRequests.put(id, request);
+            if (previous != null) previous.cancel();
+            if (coordBars.containsKey(request.player()) && coordBars.get(request.player()).bossBar != null)
+                request.complete(true);
+        });
 
         api.commands().create("coord")
             .usage("/coord")
@@ -245,6 +256,8 @@ public class Coordinates extends BaseFeature {
 
         addBossBar(player);
         setPreference(player, bossBarEnabledKey, true);
+        var request = guideRequests.get(player.getUniqueId());
+        if (request != null) request.complete(true);
     }
 
     /**
@@ -303,4 +316,12 @@ public class Coordinates extends BaseFeature {
             coordBars.remove(player);
         }
     }
+    /** Release optional guide callbacks and visible bars on feature shutdown. */
+    @Override public void onDisable() {
+        if (guideListener != null) org.bukkit.event.HandlerList.unregisterAll(guideListener);
+        for (var request : java.util.List.copyOf(guideRequests.values())) request.complete(false);
+        guideRequests.clear();
+        for (Player player : java.util.List.copyOf(coordBars.keySet())) removeCoordBars(player);
+    }
+
 }

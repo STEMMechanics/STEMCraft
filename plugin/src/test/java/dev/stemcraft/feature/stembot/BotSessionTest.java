@@ -19,6 +19,9 @@ class BotSessionTest {
     private Location here;
     private List<String> output;
     private BotSession session;
+    private java.util.function.Consumer<Boolean> pendingCallback;
+    private int callbackCancels;
+    private Boolean immediateResult;
 
     @BeforeEach
     void setUp() {
@@ -66,10 +69,61 @@ class BotSessionTest {
             "world",
             "start",
             new BotSession.Output() {
+                public Runnable await(String key, java.util.function.Consumer<Boolean> result) {
+                    pendingCallback = result;
+                    if (immediateResult != null) result.accept(immediateResult);
+                    return () -> callbackCancels++;
+                }
                 public void say(String text) { output.add(text); }
                 public int talk(String text) { output.add(text); return 10; }
             }
         );
+    }
+
+    @Test void providerSuccessAdvancesButTypedSuccessCannotFakeIt() {
+        setUp(0, List.of("await:stemcraft:coordbar 60 -> done, menu"));
+        session.tick(here);
+        session.input("success");
+        assertEquals("start", session.action());
+        pendingCallback.accept(true);
+        assertEquals("done", session.action());
+        assertEquals(1, callbackCancels);
+    }
+
+    @Test void skipCancelsPracticeAndIgnoresItsLateCallback() {
+        setUp(0, List.of("await:stemcraft:quest-practice 60 -> done, menu"));
+        session.tick(here);
+        session.input("skip");
+        assertEquals("menu", session.action());
+        pendingCallback.accept(true);
+        assertEquals("menu", session.action());
+        assertEquals(1, callbackCancels);
+    }
+
+    @Test void callbackTimeoutAndDismissalCleanUpWithoutSuccess() {
+        setUp(0, List.of("await:stemcraft:coordbar 1 -> done, menu"));
+        session.tick(here);
+        for (int i = 0; i < 4; i++) session.tick(here);
+        assertEquals("menu", session.action());
+        assertEquals(1, callbackCancels);
+        session.close();
+        pendingCallback.accept(true);
+        assertTrue(session.closed());
+    }
+
+    @Test void synchronousProvidersAndTopicInterruptionsAreSupported() {
+        immediateResult = true;
+        setUp(0, List.of("await:stemcraft:coordbar 60 -> done, menu"));
+        session.tick(here);
+        assertEquals("done", session.action());
+        assertEquals(1, callbackCancels);
+        immediateResult = null;
+        setUp(0, List.of("await:stemcraft:quest-practice 60 -> done, menu", "action:menu"));
+        session.tick(here);
+        session.input("quests");
+        assertEquals("done", session.action());
+        pendingCallback.accept(false);
+        assertEquals("done", session.action());
     }
 
     @Test

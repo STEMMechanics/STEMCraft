@@ -150,6 +150,7 @@ public final class QuestFeature extends BaseFeature {
     private int npcLeavingRandomDelayTicks = 500;
     private int npcLeavingPlayerDistance = 150;
     private int npcLeavingTimeoutTicks = 3600;
+    private dev.stemcraft.feature.quest.PracticeQuestGuide practiceGuide;
     private File questFile;
     private File npcFile;
     private NamespacedKey questIdKey;
@@ -210,10 +211,13 @@ public final class QuestFeature extends BaseFeature {
                 npcMenuEngagements.remove(uuid);
             }
         });
+        practiceGuide = new dev.stemcraft.feature.quest.PracticeQuestGuide(api, STEMCraft.getPlugin());
+        practiceGuide.enable();
     }
 
     @Override
     public void onReload() {
+        if (practiceGuide != null) practiceGuide.clear();
         super.onReload();
         reloadSettings();
         reloadDefinitions();
@@ -238,6 +242,7 @@ public final class QuestFeature extends BaseFeature {
 
     @Override
     public void onDisable() {
+        if (practiceGuide != null) practiceGuide.disable();
         api.tasks().cancel(NPC_TASK);
         api.tasks().cancel(NPC_BEHAVIOUR_TASK);
         api.tasks().cancel(TIMEOUT_TASK);

@@ -94,6 +94,8 @@ messages:
 # say:<text>
 #   Display text immediately. No speech sound or talking gesture.
 #
+# await:namespace:key seconds -> success-action, skip-action
+# Optional provider-verified step; skip/later/bye and topic changes cancel it.
 # talk:<text>
 #   Display text, use randomized robot speech and talking gestures, then wait
 #   until speech finishes, then pause for speech.post-delay-ticks to allow reading.
@@ -260,18 +262,14 @@ actions:
 
   first-survival:
     - 'wave'
-    - 'talk:Welcome to Survival, {player}! Start with wood, tools, food, and a safe shelter before nightfall.'
-    - 'talk:Only you can see me. While you are nearby and our private chat is active, your ordinary chat messages come only to me.'
-    - 'talk:You can interrupt me: open chat and send an example topic without a /, or say bye or go away. Commands such as /hub still start with /.'
-    - 'talk:Say bye, stop, or go away at any time to return to public chat. Use /stembot close at any time. Summon me again with /help.'
-    - 'talk:Explore and build while respecting other players. Leave their builds, chests, animals, and belongings alone unless you have permission.'
-    - 'talk:Look for quest NPCs with yellow question marks. Their books give you goals as you explore, gather resources, and develop your homestead.'
-    - 'talk:Use /quest for active quests, /spawn for an available world spawn, /coord for coordinates, and /hub to return to the hub.'
+    - 'talk:Welcome to Survival, {player}! Gather wood, tools and food, and find a safe shelter. Respect other players and their builds.'
+    - 'talk:Only you can see me. Nearby chat comes privately to me; say bye whenever you want to explore. Commands still start with /.'
+    - 'talk:Look for quest NPCs with yellow question marks. /coordbar helps with navigation. Say practice if you want a short optional introduction to both, or ask a topic below.'
     - 'action:survival-menu'
 
   survival-menu:
-    - 'say::chat_bubble: &eReply: getting started, quests, rules, commands, I died, how do I get back to the hub, or chat, or bye to finish.'
-    - 'listen:bye|bye!|close|exit -> close, *quest* -> survival-quests, *rules* -> survival-rules, *command* -> survival-commands, *died*|*death*|*grave* -> survival-graves, *hub*|*back*|*lost*|*spawn* -> survival-navigation, *start*|*build*|*food*|*shelter* -> survival-start, *chat*|*help* -> survival-chat, * -> survival-confused'
+    - 'say::chat_bubble: &eAsk about quests, practice, coordbar, skills, cooking, animals, mail, portals, graves, rules, or commands. Say bye to finish.'
+    - 'listen:bye|bye!|close|exit -> close, *practice*|*tutorial* -> survival-practice, *coord* -> survival-coordinates, *skill*|*level*|*unlock*|*xp*|*badge* -> survival-skills, *cook*|*rice*|*food*|*recipe*|*item* -> survival-cooking, *animal*|*crate*|*lead* -> survival-animals, *mail*|*gift* -> survival-mail, *portal*|*deep*|*skyland*|*wasteland*|*faraway* -> survival-portals, *sleep*|*night* -> survival-sleep, *quest* -> survival-quests, *rules* -> survival-rules, *command* -> survival-commands, *died*|*death*|*grave* -> survival-graves, *hub*|*back*|*lost*|*spawn* -> survival-navigation, *start*|*build*|*food*|*shelter* -> survival-start, *chat*|*help* -> survival-chat, * -> survival-confused'
 
   survival-confused:
     - 'talk:Beep boop! I recognise a few topics. Try one of the examples below.'
@@ -331,8 +329,8 @@ actions:
     - 'action:creative-menu'
 
   creative-menu:
-    - 'say::chat_bubble: &eReply: how do I claim a plot, commands, rules, building ideas, monthly challenge, quests, hub, or chat, or bye to finish.'
-    - 'listen:bye|bye!|close|exit -> close, *plot*|*claim*|*command* -> creative-plots, *rules* -> creative-rules, *idea*|*build*|*start* -> creative-ideas, *month*|*challenge*|*vot* -> creative-challenge, *quest*|*survival* -> creative-survival, *hub*|*back*|*lost* -> creative-navigation, *chat*|*help* -> creative-chat, * -> creative-confused'
+    - 'say::chat_bubble: &eAsk about claiming plots, merging, deleting, helpers, WorldEdit, signs, rules, building ideas, or hub. Say bye to finish.'
+    - 'listen:bye|bye!|close|exit -> close, *merge*|*join plot* -> creative-merge, *delete*|*clear*|*reset plot* -> creative-delete, *trust*|*friend*|*helper*|*add player*|*remove player* -> creative-helpers, *worldedit*|*selection*|*grid*|*particle* -> creative-selection, *sign*|*colour*|*color*|*glyph* -> creative-signs, *plot*|*claim*|*command* -> creative-plots, *rules* -> creative-rules, *idea*|*build*|*start* -> creative-ideas, *month*|*challenge*|*vot* -> creative-challenge, *quest*|*survival* -> creative-survival, *hub*|*back*|*lost* -> creative-navigation, *chat*|*help* -> creative-chat, * -> creative-confused'
 
   creative-confused:
     - 'talk:Beep boop! I recognise a few topics. Try one of the examples below.'
@@ -393,3 +391,107 @@ first-time:
     hub: first-hub
     survival: first-survival
     creative: first-creative
+
+  creative-merge:
+    - 'talk:To make more building space, first claim adjacent plots you are allowed to own. Stand in one and face the neighbour, then use /plot merge.'
+    - 'talk:Read the confirmation before using /plot confirm if asked. Ownership, adjacency and plot limits still apply; merging cannot take someone else''s land.'
+    - 'talk:Use /plot info to check the plot and /plot home to return. I will explain commands, but I will not merge or delete builds for you.'
+    - 'action:creative-menu'
+
+  creative-delete:
+    - 'talk:/plot clear removes the build but keeps your claim. /plot delete removes the build and releases the claim. Both destroy the current build.'
+    - 'talk:Check /plot info and save anything you need first. Read the prompt carefully, then use /plot confirm only if you still want that exact action.'
+    - 'talk:If you are unsure, stop and ask an admin before confirming. There is no promise of an undo or backup.'
+    - 'action:creative-menu'
+
+  creative-helpers:
+    - 'talk:/plot add <player> lets someone help while you are online. /plot trust <player> also lets them build while you are offline. Only grant access to people you trust.'
+    - 'talk:/plot remove <player> removes their plot access. Use /plot info to check ownership and membership. Rank limits still apply.'
+    - 'talk:Agree on your building plan and ask before changing another person''s work.'
+    - 'action:creative-menu'
+
+  creative-selection:
+    - 'talk:/selpreview off hides our WorldEdit selection particles. /selpreview on shows them again; neither command changes your selected region.'
+    - 'talk:/selpreview grid on or off controls the extra grid. The grid defaults off and hides itself when any side is over 64 blocks with the default settings.'
+    - 'talk:These preferences do not hide minigame highlights or your client''s own display. Keep WorldEdit changes within plots where you have permission.'
+    - 'action:creative-menu'
+
+  creative-signs:
+    - 'talk:Where your rank allows formatted signs, an ampersand followed by b makes text aqua. Use l for bold, n for underline, o for italic, or r to reset.'
+    - 'talk:Double the ampersand to display it literally. For example, two ampersands followed by b displays an ampersand and b. Unsupported codes, such as ampersand-m, stay as text.'
+    - 'talk:You can use registered glyphs such as :stembot:. Accept the resource pack so the icons display correctly.'
+    - 'action:creative-menu'
+
+  survival-coordinates:
+    - 'talk:/coordbar toggles the world, time and direction bar. /coord toggles coordinates above your hotbar. Your choices are saved.'
+    - 'talk:Want to try the bar? Say practice for a short optional step. You can always use /hub to return or /spawn when world-spawn access is allowed.'
+    - 'action:survival-menu'
+
+  survival-skills:
+    - 'talk:/skills shows Mining, Herbalism, Farming, Fishing, Cooking, Engineering, Melee Combat and Ranged Combat. Each starts at level 1 and can reach 100.'
+    - 'talk:Early levels are quick; later ones need more XP. With current defaults, stack refill unlocks at Engineering 10, hoe harvesting at Farming 15, and vein mining or tree felling at level 25 in their matching skill.'
+    - 'talk:Automatic tool selection needs Mining and Engineering 20. The right tools and inventory supplies still matter. Live requirements can differ; /skills shows your progress.'
+    - 'talk:Badges recognise building, playtime, quests and games. Community event awards are granted by staff.'
+    - 'action:survival-menu'
+
+  survival-cooking:
+    - 'talk:Accept the resource pack to recognise custom items. Cooking includes flooded rice, foraged ingredients, prepared meals and buff foods. Read the item descriptions and handbook recipes.'
+    - 'talk:You can cook eggs in a furnace, smoker or campfire. Rotten flesh also has uses such as fertilizer and Dog Treats; it is not just rubbish.'
+    - 'talk:A Chisel rotates supported building blocks. Slime and Magma Buckets help exploration. Ask about animals, mail or portals for those items.'
+    - 'action:survival-menu'
+
+  survival-animals:
+    - 'talk:Animal Crates carry supported small animals; read the crate instructions and respect ownership. The current name is Animal Crate, even if you remember animal barrels.'
+    - 'talk:Stronger leads unlock at Farming 8 with the defaults. They resist distance breaks, but you can still remove a lead normally.'
+    - 'talk:Use a poppy to guide an iron golem where the feature is enabled. Never take or move another player''s animals without permission.'
+    - 'action:survival-menu'
+
+  survival-mail:
+    - 'talk:Mailboxes hold letters and attached items. Watch for a waiting-mail notification or marker, then check your mailbox.'
+    - 'talk:Some minigame wins send a gift after a delay. Open a gift to claim its contents. Delivery timing and prizes depend on the game.'
+    - 'talk:The Hub noticeboard is useful for projects and trades. Keep personal information out of messages and arrange trades politely.'
+    - 'action:survival-menu'
+
+  survival-portals:
+    - 'talk:Exploration portals can lead to Wasteland, Skylands, The Deep and Faraway Lands. They use special frames and activation items; follow the handbook diagram.'
+    - 'talk:The Deep uses a reinforced-deepslate frame and Echo Core. Skylands uses a charged purpur ring and Celestial Eyes. Ordinary echo shards and ender eyes are not substitutes.'
+    - 'talk:New links use an 8-to-1 coordinate scale by default. The exit needs suitable nearby space. Skylands can float its portal above safe terrain, but will not create an island over the void.'
+    - 'talk:Keep your return portal intact, write down its coordinates, and step off the arrival pad before travelling again. /hub is still available when allowed.'
+    - 'action:survival-menu'
+
+  survival-sleep:
+    - 'talk:Sleeping helps the server skip night when the required vote is reached. Follow the on-screen sleep information rather than assuming every player must sleep.'
+    - 'talk:Sleeping bags are for resting while travelling; read the item instructions. Light a safe shelter and remember that AFK does not protect you from mobs.'
+    - 'action:survival-menu'
+
+  survival-practice:
+    - 'talk:Want a short practice? We can turn on your coordinate bar and try a private quest with no rewards or risk to your real quest progress.'
+    - 'say::chat_bubble: &eReply yes, coordinates, quest, or skip. Practice is optional.'
+    - 'listen:yes|start|both -> practice-coordinates, *coordinate*|*coordbar* -> practice-coordinates, *quest* -> practice-quest-offer, * -> survival-menu'
+
+  practice-coordinates:
+    - 'talk:Run /coordbar to turn on your bar. If it is already on, that counts too. Say skip if you would rather do this later.'
+    - 'await:stemcraft:coordbar 60 -> practice-coordinates-done, practice-skipped'
+    - 'action:survival-menu'
+
+  practice-coordinates-done:
+    - 'talk:Your coordinate bar is on. It shows your world, time and direction, and can include contextual guidance. You can toggle it off whenever you like.'
+    - 'action:practice-quest-offer'
+
+  practice-quest-offer:
+    - 'talk:Would you like a private practice quest? A guide will give you a book, ask you to walk a few blocks, then hand it back. No items or XP are awarded.'
+    - 'say::chat_bubble: &eReply yes to start the quest, or skip to keep exploring.'
+    - 'listen:yes|start|practice -> practice-quest, * -> survival-menu'
+
+  practice-quest:
+    - 'talk:Right-click the Practice Guide to accept its book. Follow the book, then return and right-click to hand in. You have three minutes; say skip or bye at any time.'
+    - 'await:stemcraft:quest-practice 180 -> practice-quest-done, practice-skipped'
+    - 'action:survival-menu'
+
+  practice-quest-done:
+    - 'talk:You completed and handed in the practice quest! Real quests use the same book-and-NPC pattern and may also need collected items. Look for a yellow question mark when you are ready.'
+    - 'action:survival-menu'
+
+  practice-skipped:
+    - 'talk:No problem. We can leave practice there. If the step was unavailable, make sure you have space and are in Survival. Ask me about practice any time.'
+    - 'action:survival-menu'

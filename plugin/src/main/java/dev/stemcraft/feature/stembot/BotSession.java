@@ -20,10 +20,15 @@ public final class BotSession {
     public interface Output {
         void say(String text);
         int talk(String text);
+        /** Start a registered optional step and return its idempotent cancellation callback. */
+        default Runnable await(String key, java.util.function.Consumer<Boolean> completion) {
+            completion.accept(false);
+            return () -> { };
+        }
         default void depart(BotActor actor) { actor.close(); }
     }
 
-    private enum WaitMode { NONE,SLEEP,TALK,WAVE,POINT,WALK,LISTEN,STUCK }
+    private enum WaitMode { NONE,SLEEP,TALK,WAVE,POINT,WALK,LISTEN,AWAIT,STUCK }
 
     private final BotScript script;
     private final BotActor actor;
@@ -48,6 +53,8 @@ public final class BotSession {
     private volatile boolean chatEngaged=true;
     private int awayTicks;
     private long speechRevision;
+    private long callbackRevision;
+    private Runnable cancelCallback = () -> { };
 
     public BotSession(
         BotScript script,
@@ -81,6 +88,11 @@ public final class BotSession {
         String input=text.trim();
         if(isDismissal(input)) {
             close();
+            return;
+        }
+
+        if(waitMode==WaitMode.AWAIT && input.matches("(?i)(skip|later|not now)[.!]?")) {
+            jumpTo(listening.get(1).target());
             return;
         }
 
@@ -214,6 +226,10 @@ public final class BotSession {
                 if(!tickWalk(owner)) return;
                 waitMode=WaitMode.NONE;
             }
+            case AWAIT -> {
+                if(age < waitUntil) return;
+                jumpTo(listening.get(1).target());
+            }
             case LISTEN,STUCK -> {
                 return;
             }
@@ -314,6 +330,8 @@ public final class BotSession {
                 case STAND -> actor.sneak(false);
 
                 case ACTION -> jumpTo(instruction.text());
+
+                case AWAIT -> await(instruction);
 
                 case LISTEN -> {
                     listening=instruction.routes();
@@ -431,10 +449,33 @@ public final class BotSession {
         lastProgress=age;
     }
 
+    private void cancelCallback() {
+        callbackRevision++;
+        Runnable cancel = cancelCallback;
+        cancelCallback = () -> { };
+        cancel.run();
+    }
+
+    private void await(BotScript.Instruction instruction) {
+        cancelCallback();
+        long revision = callbackRevision;
+        listening = instruction.routes();
+        waitMode = WaitMode.AWAIT;
+        waitUntil = age + instruction.ticks();
+        Runnable cancellation = output.await(instruction.text(), success -> {
+            if (closed || revision != callbackRevision || waitMode != WaitMode.AWAIT) return;
+            idle = 0;
+            jumpTo(instruction.routes().get(success ? 0 : 1).target());
+        });
+        if (revision == callbackRevision && waitMode == WaitMode.AWAIT) cancelCallback = cancellation;
+        else cancellation.run(); // Includes providers that complete synchronously.
+    }
+
     private void jumpTo(String target) {
         if(!script.actions().containsKey(target))
             throw new IllegalStateException("Unknown STEMBot action: "+target);
 
+        cancelCallback();
         action=target;
         pc=0;
         waitMode=WaitMode.NONE;
@@ -449,6 +490,7 @@ public final class BotSession {
         if(closed) return;
         closed=true;
         speechRevision++;
+        cancelCallback();
 
         try {
             actor.cancel();

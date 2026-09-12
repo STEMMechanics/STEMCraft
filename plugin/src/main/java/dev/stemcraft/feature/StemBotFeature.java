@@ -4,7 +4,7 @@ import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigFile;
 import dev.stemcraft.api.util.TextUtil;
-import dev.stemcraft.feature.quest.CitizensQuestNpcSupport;
+
 import dev.stemcraft.feature.stembot.*;
 import io.papermc.paper.event.player.AsyncChatEvent;
 import net.kyori.adventure.text.Component;
@@ -157,7 +157,7 @@ public final class StemBotFeature extends BaseFeature {
     }
 
     private boolean available() {
-        return enabled&&script!=null&&CitizensQuestNpcSupport.available();
+        return enabled&&script!=null&&dev.stemcraft.integration.CitizensAccess.available();
     }
 
     void chat(AsyncChatEvent event) {
@@ -210,7 +210,7 @@ public final class StemBotFeature extends BaseFeature {
             assert config != null;
             script=BotScript.read(config);
 
-            if(enabled&&CitizensQuestNpcSupport.available()) {
+            if(enabled&&dev.stemcraft.integration.CitizensAccess.available()) {
                 skins.load(
                     api,
                     STEMCraft.getPlugin(),
@@ -390,6 +390,20 @@ public final class StemBotFeature extends BaseFeature {
             );
 
             BotSession.Output output=new BotSession.Output() {
+                @Override public Runnable await(String key, java.util.function.Consumer<Boolean> completion) {
+                    var request = new dev.stemcraft.api.event.guide.GuideActionRequestEvent(player, key, completion);
+                    try {
+                        Bukkit.getPluginManager().callEvent(request);
+                        if (!request.claimed()) completion.accept(false);
+                    } catch (RuntimeException failure) {
+                        request.cancel();
+                        completion.accept(false);
+                        STEMCraft.getPlugin().getLogger().log(java.util.logging.Level.WARNING,
+                            "STEMBot guide callback failed: " + key, failure);
+                    }
+                    return request::cancel;
+                }
+
                 @Override
                 public void depart(BotActor departing) {
                     StemBotFeature.this.depart(id,departing,script.departureDelayTicks());
