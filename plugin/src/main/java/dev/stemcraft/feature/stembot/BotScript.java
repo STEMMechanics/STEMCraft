@@ -25,12 +25,19 @@ public record BotScript(
     ChatSettings chat,
     SpeechSettings speech,
     List<String> waiting,
+    List<String> scanning,
+    int scanningCooldownSeconds,
     List<String> stuck,
     List<String> farewell,
     Map<String,List<Instruction>> actions,
     Map<String,String> commandWorld,
     Map<String,String> firstTimeWorld
 ) {
+    private static final List<String> DEFAULT_SCANNING_MESSAGES = List.of(
+        "Beep boop... scanning terrain for a pathway...",
+        "Bzzzt! Let me scan for another way around.",
+        "Recalculating! Give my navigation circuits a moment."
+    );
     public record ChatSettings(double disengageDistance,double reengageDistance,
                                int awayTimeoutSeconds,String disengaged,String reengaged) {}
 
@@ -157,6 +164,9 @@ public record BotScript(
             chat,
             speech,
             List.copyOf(config.getStringList("messages.waiting")),
+            config.contains("messages.scanning")
+                ? List.copyOf(config.getStringList("messages.scanning")) : DEFAULT_SCANNING_MESSAGES,
+            boundedInt(config.getInt("messages.scanning-cooldown-seconds",10),1,3600),
             List.copyOf(config.getStringList("messages.stuck")),
             List.copyOf(config.getStringList("messages.farewell")),
             Map.copyOf(actions),
@@ -242,7 +252,7 @@ public record BotScript(
         int seconds = parseInt(request[1], "await seconds");
         if (seconds < 1 || seconds > 300) throw new IllegalArgumentException("await timeout must be 1..300 seconds");
         return new Instruction(Op.AWAIT, request[0], 0, 0, 0, 0, seconds * 20,
-            List.of(new ListenRoute(List.of(Pattern.compile("(?!)")), targets[0]),
+            List.of(new ListenRoute(List.of(), targets[0]),
                 new ListenRoute(List.of(wildcard("skip"), wildcard("later"), wildcard("not now")), targets[1])));
     }
 

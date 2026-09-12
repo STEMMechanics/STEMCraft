@@ -9,6 +9,10 @@ public interface BotActor {
     boolean navigating();
 
     void move(Location target,double speed);
+    /** Nearby escape waypoints, ordered by preference; empty when recovery is unsupported. */
+    default java.util.List<Location> recoveryWaypoints(Location target) { return java.util.List.of(); }
+    /** Read-only path probe from the actor's current position. */
+    default boolean canNavigateTo(Location target) { return false; }
     void pause(boolean paused);
     void cancel();
 

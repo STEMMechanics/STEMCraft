@@ -53,6 +53,17 @@ class BotScriptTest {
             var script = BotScript.read(new dev.stemcraft.config.ConfigSectionImpl(null, yaml));
             assertTrue(script.actions().containsKey("creative-merge"));
             assertTrue(script.actions().containsKey("practice-quest"));
+            assertEquals(3, script.scanning().size());
+            assertEquals(10, script.scanningCooldownSeconds());
+            yaml.set("messages.scanning-cooldown-seconds", 60);
+            assertEquals(60, BotScript.read(new dev.stemcraft.config.ConfigSectionImpl(null, yaml)).scanningCooldownSeconds());
+            yaml.set("messages.scanning", java.util.List.of("Custom scan message"));
+            assertEquals(java.util.List.of("Custom scan message"),
+                BotScript.read(new dev.stemcraft.config.ConfigSectionImpl(null, yaml)).scanning());
+            yaml.set("messages.scanning", java.util.List.of());
+            assertTrue(BotScript.read(new dev.stemcraft.config.ConfigSectionImpl(null, yaml)).scanning().isEmpty());
+            yaml.set("messages.scanning", null);
+            assertEquals(script.scanning(), BotScript.read(new dev.stemcraft.config.ConfigSectionImpl(null, yaml)).scanning());
         }
     }
 }

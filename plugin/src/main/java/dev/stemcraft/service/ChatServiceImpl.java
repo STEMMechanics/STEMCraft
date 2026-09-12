@@ -26,7 +26,6 @@ import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.service.profanity.ProfanityFilterResult;
 import dev.stemcraft.api.service.profanity.ProfanitySeverity;
-import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.api.util.TextUtil;
 import dev.stemcraft.api.util.TimeUtil;
 import io.papermc.paper.ban.BanListType;
@@ -52,7 +51,6 @@ import javax.annotation.Nullable;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
@@ -234,9 +232,8 @@ public class ChatServiceImpl extends BaseService {
 
         api.events().register(PlayerJoinEvent.class, event -> {
             Player player = event.getPlayer();
-            if (reportsEnabled && hasReportsAlertPermission(player)) {
-                alertPendingReports(player);
-            }
+            // Let login messages and permission initialization finish before the reminder.
+            api.tasks().runLater(40L, () -> remindPendingReports(player));
         });
 
         api.events().register(SignChangeEvent.class, event -> {
@@ -383,6 +380,8 @@ public class ChatServiceImpl extends BaseService {
         return count > duplicateMessageLimit;
     }
 
+    // Keep test configuration reusable for additional scenarios.
+    @SuppressWarnings("SameParameterValue")
     void configureDuplicateMessageLimitForTest(int limit) {
         duplicateMessageLimit = Math.max(0, limit);
         duplicateMessages.clear();
@@ -403,10 +402,10 @@ public class ChatServiceImpl extends BaseService {
 
         String reasonDetail = String.join(", ", result.matchedWords());
         if (contentFilterAllowFilteredMessage && !Objects.equals(result.cleanedText(), result.originalText())) {
-            return ModerationDecision.filtered(result.cleanedText(), "content_filter_filtered", reasonDetail);
+            return ModerationDecision.filtered(result.cleanedText(), reasonDetail);
         }
 
-        return ModerationDecision.deny(contentFilterBlockedMessage, "content_filter_rejected", reasonDetail, result.severity(), true);
+        return ModerationDecision.deny(contentFilterBlockedMessage, reasonDetail, result.severity());
     }
 
     private void ensureModerationStorage() {
@@ -542,10 +541,10 @@ public class ChatServiceImpl extends BaseService {
 
     private void handleReportList(dev.stemcraft.api.command.CommandContext ctx) {
         ModerationPlayerFilter playerFilter = resolveModerationPlayer(ctx.getOption("player"));
-        String status = normalizeModerationText(ctx.getOption("status", "open"));
+        String status = Objects.requireNonNullElse(normalizeModerationText(ctx.getOption("status", "open")), "open");
         Instant since = parseModerationTime(ctx.getOption("since"), Instant.now().minus(Duration.ofDays(7)));
         int page = parsePositiveInt(ctx.getOption("page"), 1);
-        int limit = clamp(parsePositiveInt(ctx.getOption("limit"), MODERATION_DEFAULT_LIMIT), 1, MODERATION_MAX_LIMIT);
+        int limit = Math.clamp(parsePositiveInt(ctx.getOption("limit"), MODERATION_DEFAULT_LIMIT), 1, MODERATION_MAX_LIMIT);
 
         Boolean resolved = switch (status) {
             case "all" -> null;
@@ -557,7 +556,6 @@ public class ChatServiceImpl extends BaseService {
             playerFilter,
             resolved,
             since,
-            null,
             limit,
             (page - 1) * limit,
             false
@@ -624,9 +622,9 @@ public class ChatServiceImpl extends BaseService {
     private @Nullable PlayerReportRecord createPlayerReport(@NotNull Player reporter, @NotNull String message) {
         Location location = reporter.getLocation();
         String world = location.getWorld() != null ? location.getWorld().getName() : null;
-        Double x = location.getX();
-        Double y = location.getY();
-        Double z = location.getZ();
+        double x = location.getX();
+        double y = location.getY();
+        double z = location.getZ();
         String snapshotJson = buildOnlineSnapshotJson();
 
         PlayerReportRecord report = api.database().querySingleMapped(
@@ -645,7 +643,7 @@ public class ChatServiceImpl extends BaseService {
                 ps.setDouble(8, z);
                 ps.setString(9, snapshotJson);
             },
-            rs -> mapPlayerReport(rs)
+            this::mapPlayerReport
         );
 
         if (report != null) {
@@ -700,15 +698,21 @@ public class ChatServiceImpl extends BaseService {
         return true;
     }
 
+    void remindPendingReports(@NotNull Player player) {
+        if (player.isOnline() && reportsEnabled && hasReportsAlertPermission(player)) {
+            alertPendingReports(player);
+        }
+    }
+
     private void alertPendingReports(@NotNull Player player) {
-        List<PlayerReportRecord> pending = queryPlayerReports(null, false, null, null, MODERATION_MAX_LIMIT, 0, true).stream()
-            .filter(report -> !report.alerted())
-            .toList();
+        // Alert delivery is global, not evidence that this staff member reviewed the report.
+        List<PlayerReportRecord> pending = queryPlayerReports(null, false, null, MODERATION_MAX_LIMIT, 0, true);
         if (pending.isEmpty()) {
             return;
         }
 
-        api.messages().warn(player, "There are " + pending.size() + " unresolved player report(s) needing review.");
+        api.messages().warn(player, "There are " + (pending.size() == MODERATION_MAX_LIMIT ? "at least " : "")
+            + pending.size() + " unresolved player report(s) needing review. Use /reports list to view them.");
         for (PlayerReportRecord report : pending) {
             api.messages().warn(player, formatReportAlert(report));
             markReportAlerted(report.id());
@@ -729,14 +733,13 @@ public class ChatServiceImpl extends BaseService {
             "SELECT id, occurred_at, reporter_uuid, reporter_name, message, world, x, y, z, online_snapshot_json, alerted, resolved, resolved_at, resolved_by_uuid, resolved_by_name, resolution_note " +
                 "FROM player_reports WHERE id = ?",
             ps -> ps.setLong(1, id),
-            rs -> mapPlayerReport(rs)
+            this::mapPlayerReport
         );
     }
 
     private List<PlayerReportRecord> queryPlayerReports(@Nullable ModerationPlayerFilter playerFilter,
                                                         @Nullable Boolean resolved,
                                                         @Nullable Instant since,
-                                                        @Nullable Instant until,
                                                         int limit,
                                                         int offset,
                                                         boolean ascending) {
@@ -770,10 +773,6 @@ public class ChatServiceImpl extends BaseService {
         if (since != null) {
             sql.append(" AND occurred_at >= ?");
             params.add(since.toEpochMilli());
-        }
-        if (until != null) {
-            sql.append(" AND occurred_at <= ?");
-            params.add(until.toEpochMilli());
         }
 
         sql.append(" ORDER BY occurred_at ").append(ascending ? "ASC" : "DESC").append(", id ").append(ascending ? "ASC" : "DESC");
@@ -911,10 +910,10 @@ public class ChatServiceImpl extends BaseService {
         ModerationPlayerFilter playerFilter = resolveModerationPlayer(ctx.getOption("player"));
         String messageType = trimToNull(ctx.getOption("type"));
         String action = trimToNull(ctx.getOption("action"));
-        String status = normalizeModerationText(ctx.getOption("status", "open"));
+        String status = Objects.requireNonNullElse(normalizeModerationText(ctx.getOption("status", "open")), "open");
         Instant since = parseModerationTime(ctx.getOption("since"), Instant.now().minus(Duration.ofDays(7)));
         int page = parsePositiveInt(ctx.getOption("page"), 1);
-        int limit = clamp(parsePositiveInt(ctx.getOption("limit"), MODERATION_DEFAULT_LIMIT), 1, MODERATION_MAX_LIMIT);
+        int limit = Math.clamp(parsePositiveInt(ctx.getOption("limit"), MODERATION_DEFAULT_LIMIT), 1, MODERATION_MAX_LIMIT);
 
         Boolean resolved = switch (status) {
             case "all" -> null;
@@ -928,10 +927,8 @@ public class ChatServiceImpl extends BaseService {
             action,
             resolved,
             since,
-            null,
             limit,
-            (page - 1) * limit,
-            false
+            (page - 1) * limit
         );
 
         if (incidents.isEmpty()) {
@@ -1046,7 +1043,7 @@ public class ChatServiceImpl extends BaseService {
             return;
         }
 
-        String reason = trimToNull(ctx.getArgsAsString(1, "Appeal accepted"));
+        String reason = Objects.requireNonNullElse(trimToNull(ctx.getArgsAsString(1, "Appeal accepted")), "Appeal accepted");
         int clearedStrikes = clearViolations(incident.playerUuid());
         boolean unbanned = false;
         if ("ban".equalsIgnoreCase(incident.actionTaken())) {
@@ -1065,7 +1062,7 @@ public class ChatServiceImpl extends BaseService {
         }
 
         OfflinePlayer target = ctx.getArgAsOfflinePlayer(0);
-        if (target == null || target.getUniqueId() == null) {
+        if (target == null) {
             ctx.returnError("Player was not found.");
             return;
         }
@@ -1095,7 +1092,7 @@ public class ChatServiceImpl extends BaseService {
         }
 
         OfflinePlayer target = ctx.getArgAsOfflinePlayer(0);
-        if (target == null || target.getUniqueId() == null) {
+        if (target == null) {
             ctx.returnError("Player was not found.");
             return;
         }
@@ -1117,7 +1114,7 @@ public class ChatServiceImpl extends BaseService {
         }
 
         OfflinePlayer target = ctx.getArgAsOfflinePlayer(0);
-        if (target == null || target.getUniqueId() == null) {
+        if (target == null) {
             ctx.returnError("Player was not found.");
             return;
         }
@@ -1178,7 +1175,7 @@ public class ChatServiceImpl extends BaseService {
                 }
                 ps.setString(17, contextJson);
             },
-            rs -> mapModerationIncident(rs)
+            this::mapModerationIncident
         );
         if (incident != null) {
             alertStaff(incident);
@@ -1238,7 +1235,7 @@ public class ChatServiceImpl extends BaseService {
                 "reason_code, reason_detail, world, x, y, z, context_json, resolved, resolved_at, resolved_by_uuid, resolved_by_name, resolution_action, resolution_note " +
                 "FROM moderation_incidents WHERE id = ?",
             ps -> ps.setLong(1, id),
-            rs -> mapModerationIncident(rs)
+            this::mapModerationIncident
         );
     }
 
@@ -1247,10 +1244,8 @@ public class ChatServiceImpl extends BaseService {
                                                                     @Nullable String action,
                                                                     @Nullable Boolean resolved,
                                                                     @Nullable Instant since,
-                                                                    @Nullable Instant until,
                                                                     int limit,
-                                                                    int offset,
-                                                                    boolean ascending) {
+                                                                    int offset) {
         StringBuilder sql = new StringBuilder(
             "SELECT id, occurred_at, player_uuid, player_name, message_type, original_text, cleaned_text, matched_words, blocked, action_taken, strike_count, " +
                 "reason_code, reason_detail, world, x, y, z, context_json, resolved, resolved_at, resolved_by_uuid, resolved_by_name, resolution_action, resolution_note " +
@@ -1291,12 +1286,8 @@ public class ChatServiceImpl extends BaseService {
             sql.append(" AND occurred_at >= ?");
             params.add(since.toEpochMilli());
         }
-        if (until != null) {
-            sql.append(" AND occurred_at <= ?");
-            params.add(until.toEpochMilli());
-        }
 
-        sql.append(" ORDER BY occurred_at ").append(ascending ? "ASC" : "DESC").append(", id ").append(ascending ? "ASC" : "DESC");
+        sql.append(" ORDER BY occurred_at DESC, id DESC");
         sql.append(" LIMIT ? OFFSET ?");
         params.add(limit);
         params.add(offset);
@@ -1320,7 +1311,7 @@ public class ChatServiceImpl extends BaseService {
             z = null;
         }
 
-        Long resolvedAt = rs.getLong("resolved_at");
+        long resolvedAt = rs.getLong("resolved_at");
         Instant resolvedInstant = rs.wasNull() ? null : Instant.ofEpochMilli(resolvedAt);
 
         return new ModerationIncidentRecord(
@@ -1373,14 +1364,11 @@ public class ChatServiceImpl extends BaseService {
         for (int i = 0; i < params.size(); i++) {
             Object value = params.get(i);
             int index = i + 1;
-            if (value instanceof String stringValue) {
-                ps.setString(index, stringValue);
-            } else if (value instanceof Integer intValue) {
-                ps.setInt(index, intValue);
-            } else if (value instanceof Long longValue) {
-                ps.setLong(index, longValue);
-            } else {
-                ps.setObject(index, value);
+            switch (value) {
+                case String stringValue -> ps.setString(index, stringValue);
+                case Integer intValue -> ps.setInt(index, intValue);
+                case Long longValue -> ps.setLong(index, longValue);
+                case null, default -> ps.setObject(index, value);
             }
         }
     }
@@ -1392,7 +1380,7 @@ public class ChatServiceImpl extends BaseService {
         }
 
         OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(name);
-        return new ModerationPlayerFilter(offlinePlayer != null ? offlinePlayer.getUniqueId() : null, name);
+        return new ModerationPlayerFilter(offlinePlayer.getUniqueId(), name);
     }
 
     private long parseIncidentId(dev.stemcraft.api.command.CommandContext ctx, @Nullable String raw, String usage) {
@@ -1418,10 +1406,6 @@ public class ChatServiceImpl extends BaseService {
         } catch (NumberFormatException ignored) {
             return defaultValue;
         }
-    }
-
-    private int clamp(int value, int min, int max) {
-        return Math.max(min, Math.min(max, value));
     }
 
     private @Nullable Instant parseModerationTime(@Nullable String raw, @Nullable Instant defaultValue) {
@@ -1487,6 +1471,8 @@ public class ChatServiceImpl extends BaseService {
         }
     }
 
+    // Keep test configuration reusable for additional scenarios.
+    @SuppressWarnings("SameParameterValue")
     void configureContentFilterScoringForTest(@NotNull Map<ProfanitySeverity, Integer> severityPoints, int decayAmount, long decaySeconds) {
         contentFilterSeverityPoints.clear();
         contentFilterSeverityPoints.putAll(severityPoints);
@@ -1744,7 +1730,7 @@ public class ChatServiceImpl extends BaseService {
             state.score = activeScore;
             state.updatedAt = now;
 
-            if (activeScore <= 0) {
+            if (activeScore == 0) {
                 contentFilterViolations.remove(playerUuid, state);
             }
 
@@ -1776,7 +1762,7 @@ public class ChatServiceImpl extends BaseService {
         }
         synchronized (state) {
             int activeScore = decayViolationScore(state, now);
-            if (activeScore <= 0) {
+            if (activeScore == 0) {
                 contentFilterViolations.remove(playerUuid, state);
                 return 0;
             }
@@ -1841,6 +1827,8 @@ public class ChatServiceImpl extends BaseService {
             .trim();
     }
 
+    // Keep test configuration reusable for additional scenarios.
+    @SuppressWarnings("SameParameterValue")
     void configureContentFilterMessagesForTest(String blockedMessage, String warnMessage, String kickReason, String banReason) {
         this.contentFilterBlockedMessage = blockedMessage;
         this.contentFilterWarnMessage = warnMessage;
@@ -1848,12 +1836,16 @@ public class ChatServiceImpl extends BaseService {
         this.contentFilterBanReason = banReason;
     }
 
+    // Keep test configuration reusable for additional scenarios.
+    @SuppressWarnings("SameParameterValue")
     String contentFilterKickReasonForTest(String messageType, @Nullable ProfanitySeverity severity) {
-        return buildContentFilterKickReason(messageType, ModerationDecision.deny("", "content_filter_rejected", "ignored", severity, true));
+        return buildContentFilterKickReason(messageType, ModerationDecision.deny("", "ignored", severity));
     }
 
+    // Keep test configuration reusable for additional scenarios.
+    @SuppressWarnings("SameParameterValue")
     String contentFilterBanReasonForTest(String messageType, @Nullable ProfanitySeverity severity) {
-        return buildContentFilterBanReason(messageType, ModerationDecision.deny("", "content_filter_rejected", "ignored", severity, true));
+        return buildContentFilterBanReason(messageType, ModerationDecision.deny("", "ignored", severity));
     }
 
     private void applyContentFilterKick(Player player, String reason) {
@@ -1978,12 +1970,12 @@ public class ChatServiceImpl extends BaseService {
             return new ModerationDecision(false, null, null, "allowed", null, null, false);
         }
 
-        private static ModerationDecision filtered(String filteredMessage, String reason, String reasonDetail) {
-            return new ModerationDecision(false, filteredMessage, null, reason == null ? "filtered" : reason, reasonDetail, null, false);
+        private static ModerationDecision filtered(String filteredMessage, String reasonDetail) {
+            return new ModerationDecision(false, filteredMessage, null, "content_filter_filtered", reasonDetail, null, false);
         }
 
-        private static ModerationDecision deny(String userMessage, String reason, String reasonDetail, @Nullable ProfanitySeverity severity, boolean enforcePunishment) {
-            return new ModerationDecision(true, null, userMessage, reason, reasonDetail, severity, enforcePunishment);
+        private static ModerationDecision deny(String userMessage, String reasonDetail, @Nullable ProfanitySeverity severity) {
+            return new ModerationDecision(true, null, userMessage, "content_filter_rejected", reasonDetail, severity, true);
         }
     }
 
