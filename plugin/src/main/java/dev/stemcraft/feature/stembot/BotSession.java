@@ -17,12 +17,16 @@ import java.util.concurrent.ThreadLocalRandom;
  * - listen: waits for matching private chat input
  */
 public final class BotSession {
+    private static final int STOPPED_NAVIGATION_TICKS = 10;
+    private static final int STALLED_NAVIGATION_TICKS = 60;
     /** Main-thread output boundary; implementations own speech presentation and actor departure. */
     public interface Output {
         /** Send an immediate message without delaying the action interpreter. */
         void say(String text);
         /** Speak a message and return the number of ticks before the next instruction may run. */
         int talk(String text);
+        /** Bounded recovery diagnostics for the server log, separate from player chat. */
+        default void navigationDiagnostic(String message) { }
         /**
          * Start a registered optional step. The provider may complete synchronously.
          * @param key namespaced provider key
@@ -63,6 +67,7 @@ public final class BotSession {
     private int recoveryAttempts;
     private int nextScanningMessage;
     private int lastProgress;
+    private int navigationStarted = -1;
     private boolean playerBehind;
     private volatile boolean closed;
     private volatile boolean chatEngaged=true;
@@ -425,6 +430,7 @@ public final class BotSession {
         if(routeSearch != null) {
             routeWaypoints = routeSearch.advance();
             if(routeWaypoints == null) return false;
+            navigationDiagnostic("search finished: " + routeWaypoints.size() + " waypoints; " + routeSearch.diagnostics());
             routeSearch = null;
             routeWaypointIndex = 0;
             if(routeWaypoints.isEmpty()) {
@@ -441,10 +447,13 @@ public final class BotSession {
                 if(actor.canNavigateTo(candidate)) {
                     recoveryTarget = candidate;
                     resetWalkProgress();
-                    actor.move(candidate, walkSpeed);
+                    if(routeWaypointIndex == 1) navigationDiagnostic("following first waypoint");
+                    startNavigation(candidate);
                     return false;
                 }
                 recoveryAttempts = 3;
+                navigationDiagnostic("Citizens rejected waypoint " + routeWaypointIndex + "/" + routeWaypoints.size()
+                    + " at " + position(candidate));
                 routeFailed = true;
             }
             routeWaypoints = null;
@@ -455,13 +464,18 @@ public final class BotSession {
             lastProgress=age;
         }
 
-        if(routeFailed || age-lastProgress>=200) {
+        boolean stoppedShort = navigationStarted >= 0 && age-navigationStarted >= STOPPED_NAVIGATION_TICKS
+            && !actor.navigating();
+        if(routeFailed || stoppedShort || age-lastProgress>=STALLED_NAVIGATION_TICKS) {
+            if(!routeFailed) navigationDiagnostic(stoppedShort ? "Citizens stopped short" : "no movement for 3 seconds");
             actor.cancel();
             if(recoveryAttempts < 3) {
                 recoveryTarget = null;
                 routeWaypoints = null;
                 routeSearch = actor.findRoute(walkTarget);
                 recoveryAttempts++;
+                navigationStarted = -1;
+                navigationDiagnostic("starting route search " + recoveryAttempts + "/3");
                 if(age >= nextScanningMessage) {
                     for(String line:script.randomSystemMessage(script.scanning())) output.say(line);
                     nextScanningMessage = age + script.scanningCooldownSeconds() * 20;
@@ -480,11 +494,28 @@ public final class BotSession {
             return false;
         }
 
-        if(!actor.navigating()) {
-            actor.move(recoveryTarget == null ? walkTarget : recoveryTarget,walkSpeed);
+        if(navigationStarted < 0) {
+            startNavigation(recoveryTarget == null ? walkTarget : recoveryTarget);
         }
 
         return false;
+    }
+
+    private void startNavigation(Location target) {
+        navigationStarted = age;
+        actor.move(target, walkSpeed);
+    }
+
+    private void navigationDiagnostic(String reason) {
+        output.navigationDiagnostic("action=" + action + " world=" + world + " " + reason
+            + "; bot=" + position(actor.location()) + "; destination=" + position(walkTarget)
+            + "; waypoint=" + position(recoveryTarget) + " (" + routeWaypointIndex + "/"
+            + (routeWaypoints == null ? 0 : routeWaypoints.size()) + ")");
+    }
+
+    private static String position(Location location) {
+        return location == null ? "none" : String.format(java.util.Locale.ROOT, "%.2f,%.2f,%.2f",
+            location.getX(), location.getY(), location.getZ());
     }
 
     private void animateTalk(Location owner) {
@@ -521,6 +552,7 @@ public final class BotSession {
 
     private void resetWalkProgress() {
         actor.cancel();
+        navigationStarted = -1;
         progress=null;
         lastProgress=age;
     }

@@ -12,6 +12,8 @@ public interface BotActor {
     /** Incremental route search. Null means still searching; empty means no route found. */
     interface RouteSearch {
         java.util.List<Location> advance();
+        /** Summary of the search outcome, when provided by the implementation. */
+        default String diagnostics() { return ""; }
     }
     default RouteSearch findRoute(Location target) { return java.util.List::of; }
     /** Read-only path probe from the actor's current position. */

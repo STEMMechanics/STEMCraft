@@ -32,6 +32,8 @@ final class BotNavigationRecovery {
         private final Map<Point, Point> parents = new HashMap<>();
         private List<Location> result;
         private int visited;
+        private Point highest;
+        private String outcome = "searching";
 
         Search(Location from, Location target) {
             this(from, target, new BlockTerrain(from.getWorld()));
@@ -42,7 +44,9 @@ final class BotNavigationRecovery {
             this.terrain = terrain;
             start = new Point(from.getBlockX(), from.getY(), from.getBlockZ());
             goal = new Point(target.getBlockX(), target.getY(), target.getBlockZ());
+            highest = start;
             if(world == null || !world.equals(target.getWorld())) {
+                outcome = "invalid or different worlds";
                 result = List.of();
                 return;
             }
@@ -55,12 +59,19 @@ final class BotNavigationRecovery {
             if(result != null) return result;
             long deadline = System.nanoTime() + 2_000_000;
             for(int batch = 0; batch < 128 && System.nanoTime() < deadline; batch++) {
-                if(open.isEmpty() || visited++ >= MAX_NODES) return finish(List.of());
+                if(open.isEmpty() || visited >= MAX_NODES) {
+                    outcome = open.isEmpty() ? "no connected route in loaded terrain" : "node budget exhausted";
+                    return finish(List.of());
+                }
+                visited++;
                 Entry entry = open.remove();
                 Point point = entry.point();
                 if(entry.cost() > costs.getOrDefault(point, Double.POSITIVE_INFINITY)) continue;
-                if(point.x() == goal.x() && point.z() == goal.z() && Math.abs(point.y() - goal.y()) <= .6)
+                if(point.y() > highest.y()) highest = point;
+                if(point.x() == goal.x() && point.z() == goal.z() && Math.abs(point.y() - goal.y()) <= .6) {
+                    outcome = "route found";
                     return finish(route(point));
+                }
                 for(int[] direction : DIRECTIONS) {
                     int x = point.x() + direction[0], z = point.z() + direction[1];
                     // Allow detours beyond either endpoint, while keeping an impossible search bounded.
@@ -81,6 +92,11 @@ final class BotNavigationRecovery {
                 }
             }
             return null;
+        }
+
+        @Override
+        public String diagnostics() {
+            return outcome + "; visited=" + visited + "; start=" + start + "; highest=" + highest;
         }
 
         private double heuristic(Point point) {

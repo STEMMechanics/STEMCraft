@@ -390,6 +390,9 @@ public final class StemBotFeature extends BaseFeature {
             );
 
             BotSession.Output output=new BotSession.Output() {
+                @Override public void navigationDiagnostic(String message) {
+                    STEMCraft.getPlugin().getLogger().info("[STEMBot navigation] " + message);
+                }
                 @Override public Runnable await(String key, java.util.function.Consumer<Boolean> completion) {
                     var request = new dev.stemcraft.api.event.guide.GuideActionRequestEvent(player, key, completion);
                     try {
