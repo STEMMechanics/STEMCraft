@@ -378,7 +378,8 @@ class TerrainGenerationTest {
         }
     }
 
-    @SuppressWarnings({"removal"})
+    // ChunkData still requires these legacy methods on test implementations.
+    @SuppressWarnings("removal")
     static final class MemoryChunk implements ChunkGenerator.ChunkData {
         final int min, max;
         final Material[] blocks;
@@ -422,6 +423,7 @@ class TerrainGenerationTest {
         }
 
         @Override
+        @Deprecated
         public void setBlock(
                 int x, int y, int z,
                 @NotNull org.bukkit.material.MaterialData data) {
@@ -448,6 +450,7 @@ class TerrainGenerationTest {
         }
 
         @Override
+        @Deprecated
         public void setRegion(
                 int x0, int y0, int z0,
                 int x1, int y1, int z1,
@@ -466,11 +469,13 @@ class TerrainGenerationTest {
         }
 
         @Override
+        @Deprecated
         public @NotNull org.bukkit.material.MaterialData getTypeAndData(int x, int y, int z) {
             return new org.bukkit.material.MaterialData(getType(x, y, z));
         }
 
         @Override
+        @Deprecated
         public byte getData(int x, int y, int z) {
             return 0;
         }
