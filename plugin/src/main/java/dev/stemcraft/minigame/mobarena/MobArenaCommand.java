@@ -29,7 +29,6 @@ import org.jetbrains.annotations.Nullable;
 import org.jspecify.annotations.NonNull;
 
 import java.util.*;
-import java.util.stream.Stream;
 
 final class MobArenaCommand {
     private static final long PREVIEW_TICKS = 100L;

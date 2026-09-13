@@ -8,7 +8,6 @@ import dev.stemcraft.minigame.mobarena.MobArenaSpawnerRecord.IncrementType;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.EntityType;
-import org.bukkit.entity.Item;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;

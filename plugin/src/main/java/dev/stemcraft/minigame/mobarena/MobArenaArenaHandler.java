@@ -17,7 +17,6 @@ import dev.stemcraft.minigame.mobarena.MobArenaSpawnerRecord.IncrementType;
 import dev.stemcraft.service.region.RegionLocationSupport;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
-import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.attribute.Attributable;
 import org.bukkit.attribute.Attribute;
