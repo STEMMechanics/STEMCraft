@@ -51,7 +51,8 @@ public final class CitizensBotActor implements BotActor {
             invoke(params,"stuckAction",new Object[]{null});
             invoke(params,"range",128F);
             invoke(params,"avoidWater",true);
-            invoke(params,"distanceMargin",.8D);
+            invoke(params,"distanceMargin",.2D);
+            invoke(params,"pathDistanceMargin",.2D);
             invoke(params,"stationaryTicks",100);
 
             if(!(boolean)invoke(npc,"spawn",spawn))
@@ -127,8 +128,8 @@ public final class CitizensBotActor implements BotActor {
     }
 
     @Override
-    public List<Location> recoveryWaypoints(Location target) {
-        return BotNavigationRecovery.candidates(location(), target);
+    public RouteSearch findRoute(Location target) {
+        return new BotNavigationRecovery.Search(location(), target);
     }
 
     @Override

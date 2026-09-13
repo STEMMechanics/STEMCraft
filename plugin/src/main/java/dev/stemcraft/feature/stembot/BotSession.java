@@ -57,11 +57,11 @@ public final class BotSession {
     private Location walkTarget;
     private Location progress;
     private Location recoveryTarget;
-    private List<Location> recoveryCandidates;
-    private int recoveryCandidateIndex;
+    private BotActor.RouteSearch routeSearch;
+    private List<Location> routeWaypoints;
+    private int routeWaypointIndex;
     private int recoveryAttempts;
     private int nextScanningMessage;
-    private final java.util.Set<Location> attemptedRecoveryWaypoints = new HashSet<>();
     private int lastProgress;
     private boolean playerBehind;
     private volatile boolean closed;
@@ -404,7 +404,8 @@ public final class BotSession {
             resetWalkProgress();
         }
 
-        if(here.distanceSquared(walkTarget)<=script.arrivalDistance()*script.arrivalDistance()) {
+        if(Math.abs(here.getY() - walkTarget.getY()) <= .6
+            && here.distanceSquared(walkTarget)<=script.arrivalDistance()*script.arrivalDistance()) {
             actor.cancel();
             resetRecovery();
             walkTarget=null;
@@ -412,27 +413,39 @@ public final class BotSession {
             return true;
         }
 
-        if(recoveryTarget != null && here.distanceSquared(recoveryTarget) <= 1.0) {
+        if(recoveryTarget != null && Math.abs(here.getY() - recoveryTarget.getY()) <= .6
+            && here.distanceSquared(recoveryTarget) <= .64) {
             recoveryTarget = null;
             resetWalkProgress();
         }
 
-        if(recoveryCandidates != null) {
-            // At most one path query per five-tick session interval.
-            if(recoveryCandidateIndex < recoveryCandidates.size()) {
-                Location candidate = recoveryCandidates.get(recoveryCandidateIndex++);
-                if(attemptedRecoveryWaypoints.add(candidate) && here.distanceSquared(candidate) > 1.0
-                    && actor.canNavigateTo(candidate)) {
-                    recoveryTarget = candidate;
-                    recoveryCandidates = null;
-                    recoveryAttempts++;
-                    resetWalkProgress();
-                    actor.move(recoveryTarget, walkSpeed);
-                }
-                return false;
+        boolean routeFailed = false;
+        if(routeSearch != null) {
+            routeWaypoints = routeSearch.advance();
+            if(routeWaypoints == null) return false;
+            routeSearch = null;
+            routeWaypointIndex = 0;
+            if(routeWaypoints.isEmpty()) {
+                routeWaypoints = null;
+                recoveryAttempts = 3;
+                routeFailed = true;
             }
-            recoveryCandidates = null;
-            recoveryAttempts = 3;
+        }
+
+        if(recoveryTarget == null && routeWaypoints != null) {
+            if(routeWaypointIndex < routeWaypoints.size()) {
+                Location candidate = routeWaypoints.get(routeWaypointIndex++);
+                // Never skip an unreachable segment: it may be the only staircase out.
+                if(actor.canNavigateTo(candidate)) {
+                    recoveryTarget = candidate;
+                    resetWalkProgress();
+                    actor.move(candidate, walkSpeed);
+                    return false;
+                }
+                recoveryAttempts = 3;
+                routeFailed = true;
+            }
+            routeWaypoints = null;
         }
 
         if(progress==null||here.distanceSquared(progress)>.5) {
@@ -440,20 +453,18 @@ public final class BotSession {
             lastProgress=age;
         }
 
-        if(age-lastProgress>=200) {
+        if(routeFailed || age-lastProgress>=200) {
             actor.cancel();
             if(recoveryAttempts < 3) {
                 recoveryTarget = null;
-                recoveryCandidates = actor.recoveryWaypoints(walkTarget);
-                recoveryCandidateIndex = 0;
-                if(!recoveryCandidates.isEmpty()) {
-                    if(age >= nextScanningMessage) {
-                        for(String line:script.randomSystemMessage(script.scanning())) output.say(line);
-                        nextScanningMessage = age + script.scanningCooldownSeconds() * 20;
-                    }
-                    return false;
+                routeWaypoints = null;
+                routeSearch = actor.findRoute(walkTarget);
+                recoveryAttempts++;
+                if(age >= nextScanningMessage) {
+                    for(String line:script.randomSystemMessage(script.scanning())) output.say(line);
+                    nextScanningMessage = age + script.scanningCooldownSeconds() * 20;
                 }
-                recoveryCandidates = null;
+                return false;
             }
             waitMode=WaitMode.STUCK;
 
@@ -514,10 +525,10 @@ public final class BotSession {
 
     private void resetRecovery() {
         recoveryTarget = null;
-        recoveryCandidates = null;
-        recoveryCandidateIndex = 0;
+        routeWaypoints = null;
+        routeWaypointIndex = 0;
         recoveryAttempts = 0;
-        attemptedRecoveryWaypoints.clear();
+        routeSearch = null;
     }
 
     private void cancelCallback() {
@@ -562,6 +573,7 @@ public final class BotSession {
     public void close(boolean farewell) {
         if(closed) return;
         closed=true;
+        resetRecovery();
         speechRevision++;
         cancelCallback();
 
