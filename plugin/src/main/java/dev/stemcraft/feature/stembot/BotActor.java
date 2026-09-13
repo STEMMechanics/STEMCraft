@@ -9,6 +9,8 @@ public interface BotActor {
     boolean navigating();
 
     void move(Location target,double speed);
+    /** Walk an already-searched straight segment without planning another route to its endpoint. */
+    default void moveWaypoint(Location target, double speed) { move(target, speed); }
     /** Incremental route search. Null means still searching; empty means no route found. */
     interface RouteSearch {
         java.util.List<Location> advance();
