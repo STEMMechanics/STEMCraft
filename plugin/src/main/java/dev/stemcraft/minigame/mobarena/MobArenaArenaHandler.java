@@ -313,10 +313,25 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
 
         mobDeathReason = mobDeathReason == null ? MobDeathReason.Generic : mobDeathReason;
 
-        final List<String> applicableMessages = new ArrayList<>(mobArena.getApplicableGlobalEntityDeathReasons(mobDeathReason));
-        applicableMessages.addAll(entityArena.getList("entity-death-messages." + mobDeathReason.name(), String.class));
+        final List<String> applicableMessages = new ArrayList<>();
+
+        if (entityArena.get("entity-death-messages-mode", MobArenaDeathMessageMode.class, MobArenaDeathMessageMode.UNION) == MobArenaDeathMessageMode.UNION) {
+            final List<String> globalEntityDeathReasons = mobArena.getApplicableGlobalEntityDeathReasons(mobDeathReason);
+            if (globalEntityDeathReasons != null && !globalEntityDeathReasons.isEmpty()) {
+                applicableMessages.addAll(globalEntityDeathReasons);
+            }
+        }
+
+        final List<String> entityDeathReasons = entityArena.getList("entity-death-messages." + mobDeathReason.name(), String.class);
+        if (entityDeathReasons != null && !entityDeathReasons.isEmpty()) {
+            applicableMessages.addAll(entityDeathReasons);
+        }
 
         final List<String> filteredMessages = applicableMessages.stream().filter(message -> message.contains("{causer}") == (causingEntity != null)).toList();
+
+        if (filteredMessages.isEmpty()) {
+            return;
+        }
 
         final String chosenMessage = filteredMessages.get(ThreadLocalRandom.current().nextInt(filteredMessages.size()));
         final String finalMessage = PlaceholderUtil.apply(chosenMessage, "entity", entity, "causer", causingEntity);
@@ -677,12 +692,14 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
         player.clearActivePotionEffects();
 
         player.getInventory().clear();
-        arena.getMap("loadout.inventory", Integer.class, ItemStack.class).forEach(player.getInventory()::setItem);
-        player.getInventory().setItemInOffHand(arena.get("loadout.off-hand", ItemStack.class));
-        player.getInventory().setItem(EquipmentSlot.HEAD, arena.get("loadout.helmet", ItemStack.class));
-        player.getInventory().setItem(EquipmentSlot.CHEST, arena.get("loadout.chest", ItemStack.class));
-        player.getInventory().setItem(EquipmentSlot.LEGS, arena.get("loadout.legs", ItemStack.class));
-        player.getInventory().setItem(EquipmentSlot.FEET, arena.get("loadout.feet", ItemStack.class));
+        final Map<Integer, ItemStack> inventoryMap = arena.getMap("loadout.inventory", Integer.class, ItemStack.class);
+        if (inventoryMap != null) {
+            inventoryMap.forEach(player.getInventory()::setItem);
+        }
+        final Map<EquipmentSlot, ItemStack> equipmentMap = arena.getMap("loadout.equipment", EquipmentSlot.class, ItemStack.class);
+        if (equipmentMap != null) {
+            equipmentMap.forEach(player.getInventory()::setItem);
+        }
         player.updateInventory();
     }
 

@@ -78,12 +78,12 @@ record MobArenaArenaRecord(
     /// @param playerDeathMessages     The death messages for players.
     /// @param zones                   A map of all zones (String -> [SCRegion]).
     MobArenaArenaRecord {
-        spawnerConfigs = List.copyOf(spawnerConfigs);
+        spawnerConfigs = new ArrayList<>(spawnerConfigs);
         zones = Map.copyOf(zones);
-        entityDeathMessages = Map.copyOf(entityDeathMessages);
-        playerDeathMessages =  List.copyOf(playerDeathMessages);
-        inventoryLoadout = Map.copyOf(inventoryLoadout);
-        equipmentLoadout = Map.copyOf(equipmentLoadout);
+        entityDeathMessages = entityDeathMessages != null ? Map.copyOf(entityDeathMessages) : new EnumMap<>(MobDeathReason.class);
+        playerDeathMessages = playerDeathMessages != null ? List.copyOf(playerDeathMessages) : new ArrayList<>();
+        inventoryLoadout = inventoryLoadout != null ? Map.copyOf(inventoryLoadout) : new HashMap<>();
+        equipmentLoadout = equipmentLoadout != null ? Map.copyOf(equipmentLoadout) : new EnumMap<>(EquipmentSlot.class);
     }
 
     /**
@@ -118,7 +118,7 @@ record MobArenaArenaRecord(
                 arena.getMaxPlayers(),
                 new ArrayList<>(),
                 arena.getMap("loadout.inventory", Integer.class, ItemStack.class, new HashMap<>()),
-                arena.getMap("loadout.equipment", EquipmentSlot.class, ItemStack.class, new HashMap<>()),
+                arena.getMap("loadout.equipment", EquipmentSlot.class, ItemStack.class, new EnumMap<>(EquipmentSlot.class)),
                 arena.get("entity-death-messages-mode", MobArenaDeathMessageMode.class, MobArenaDeathMessageMode.UNION),
                 _entityDeathMessages,
                 arena.get("player-death-messages-mode", MobArenaDeathMessageMode.class, MobArenaDeathMessageMode.UNION),

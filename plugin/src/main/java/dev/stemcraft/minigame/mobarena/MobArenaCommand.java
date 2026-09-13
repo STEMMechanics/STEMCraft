@@ -9,6 +9,7 @@ import dev.stemcraft.api.minigame.MiniGameArena.ArenaStatus;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
 import dev.stemcraft.exception.MiniGameInvalidArenaConfigException;
+import dev.stemcraft.minigame.mobarena.MobArenaArenaHandler.MobDeathReason;
 import dev.stemcraft.minigame.mobarena.MobArenaSpawnerRecord.IncrementType;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
@@ -27,12 +28,8 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jspecify.annotations.NonNull;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
+import java.util.stream.Stream;
 
 final class MobArenaCommand {
     private static final long PREVIEW_TICKS = 100L;
@@ -61,11 +58,6 @@ final class MobArenaCommand {
                 .map(MiniGameArena::id)
                 .sorted()
                 .toList());
-        api.tabComplete().register("mobarena-mobs", (sender, args)-> Arrays.stream(EntityType.values())
-                .filter(EntityType::isAlive)
-                .map(Enum::toString)
-                .sorted()
-                .toList());
         api.tabComplete().register("mobarena-increment-type", (sender, args)-> Arrays.stream(IncrementType.values())
                 .map(Enum::toString)
                 .sorted()
@@ -75,6 +67,14 @@ final class MobArenaCommand {
                 .map(Enum::toString)
                 .sorted()
                 .toList());
+        api.tabComplete().register("mobarena-death-message-set", (sender, args)-> Arrays.stream(MobDeathReason.values()).map(Enum::toString).sorted().toList());
+        api.tabComplete().register("mobarena-death-message", (sender, args)->{
+            final int myIndex = switch (args[2]) { case "add" -> 3; case "set" -> 4; default -> 4; };
+
+            // We just help the user add in the placeholders if the want to.
+            final Stream<String> possiblePlaceholders = Stream.of("{entity}", "{causer}");
+            return possiblePlaceholders.map(suggestion -> args[myIndex] + suggestion).toList();
+        });
 
         api.commands().create("mobarena")
                 .permission("stemcraft.command.mobarena")
@@ -119,7 +119,7 @@ final class MobArenaCommand {
                 .tabCompletion("show", "{mobarena-arenas}", "spectator")
                 .tabCompletion("spawnerconfig", "{mobarena-arenas}", "add")
                 .tabCompletion("spawnerconfig", "{mobarena-arenas}", "remove", "{int}")
-                .tabCompletion("spawnerconfig", "{mobarena-arenas}", "set", "{int}", "entityType", "{mobarena-mobs}")
+                .tabCompletion("spawnerconfig", "{mobarena-arenas}", "set", "{int}", "entityType", "{mob}")
                 .tabCompletion("spawnerconfig", "{mobarena-arenas}", "set", "{int}", "initialAmount", "{int}")
                 .tabCompletion("spawnerconfig", "{mobarena-arenas}", "set", "{int}", "incrementAmount", "{int}")
                 .tabCompletion("spawnerconfig", "{mobarena-arenas}", "set", "{int}", "incrementType", "{mobarena-increment-type}")
@@ -127,6 +127,20 @@ final class MobArenaCommand {
                 .tabCompletion("spawnerconfig", "{mobarena-arenas}", "set", "{int}", "spawnZone", "")
                 .tabCompletion("spawnerconfig", "{mobarena-arenas}", "set", "{int}", "countTowardsMobCount", "true")
                 .tabCompletion("spawnerconfig", "{mobarena-arenas}", "set", "{int}", "countTowardsMobCount", "false")
+                .tabCompletion("deathmessages", "{mobarena-arenas}", "add", "PLAYER", "{mobarena-death-message}")
+                .tabCompletion("deathmessages", "{mobarena-arenas}", "add", "ENTITY", "{mobarena-death-message-set}", "{mobarena-death-message}")
+                .tabCompletion("deathmessages", "{mobarena-arenas}", "set", "PLAYER", "{int}", "{mobarena-death-message}")
+                .tabCompletion("deathmessages", "{mobarena-arenas}", "set", "ENTITY", "{mobarena-death-message-set}", "{int}", "{mobarena-death-message}")
+                .tabCompletion("deathmessages", "{mobarena-arenas}", "remove", "PLAYER", "{int}")
+                .tabCompletion("deathmessages", "{mobarena-arenas}", "remove", "ENTITY", "{mobarena-death-message-set}", "{int}")
+                .tabCompletion("deathmessages", "{mobarena-arenas}", "setmode", "PLAYER", "{mobarena-death-message-mode}")
+                .tabCompletion("deathmessages", "{mobarena-arenas}", "setmode", "ENTITY", "{mobarena-death-message-mode}")
+                .tabCompletion("deathmessagesglobal", "add", "PLAYER", "{mobarena-death-message}")
+                .tabCompletion("deathmessagesglobal", "add", "ENTITY", "{mobarena-death-message-set}", "{mobarena-death-message}")
+                .tabCompletion("deathmessagesglobal", "set", "PLAYER", "{int}", "{mobarena-death-message}")
+                .tabCompletion("deathmessagesglobal", "set", "ENTITY", "{mobarena-death-message-set}", "{int}", "{mobarena-death-message}")
+                .tabCompletion("deathmessagesglobal", "remove", "PLAYER", "{int}")
+                .tabCompletion("deathmessagesglobal", "remove", "ENTITY", "{mobarena-death-message-set}", "{int}")
                 .tabCompletion("zone", "{mobarena-arenas}", "")
                 .tabCompletion("zone", "{mobarena-arenas}", "delete", "")
                 .tabCompletion("zone", "{mobarena-arenas}", "select", "")
@@ -152,11 +166,99 @@ final class MobArenaCommand {
                         case "select", "sel" -> commandSelect(ctx);
                         case "show" -> commandShow(ctx);
                         case "spawnerconfig" -> commandSpawnerConfig(ctx);
+                        case "deathmessages" -> commandDeathMessages(ctx);
                         case "zone" -> commandZone(ctx);
                         default -> ctx.returnUsage();
                     }
                 })
                 .register(STEMCraft.getPlugin());
+    }
+
+    private void commandDeathMessages(final CommandContext ctx) {
+        // TODO: Error-checking ~ ProjectHSI
+
+        final MiniGameArena arena = requireArena(ctx);
+        ctx.checkArgsSizeAtLeast(3);
+        switch (ctx.getArg(2)) {
+            case "add" -> {
+                ctx.checkArgsSizeAtLeast(5);
+                switch (ctx.getArg(3)) {
+                    case "PLAYER" -> {
+                        arena.getList("player-death-messages", String.class).add(ctx.getArg(4));
+                    }
+                    case "ENTITY" -> {
+                        ctx.checkArgsSizeAtLeast(6);
+                        final MobDeathReason reason;
+                        try {
+                            reason = MobDeathReason.valueOf(ctx.getArg(4));
+                        } catch (IllegalArgumentException _) {
+                            ctx.returnError("The reason must be a valid death reason.");
+                            return;
+                        }
+                        arena.getList("entity-death-messages." + reason.name(), String.class).add(ctx.getArg(5));
+                    }
+                    default -> ctx.returnUsage();
+                }
+            }
+            case "set" -> {
+                ctx.checkArgsSizeAtLeast(6);
+                switch (ctx.getArg(3)) {
+                    case "PLAYER" -> {
+                        arena.getList("player-death-messages", String.class).set(ctx.getArgAsInt(4), ctx.getArg(5));
+                    }
+                    case "ENTITY" -> {
+                        ctx.checkArgsSizeAtLeast(7);
+                        final MobDeathReason reason;
+                        try {
+                            reason = MobDeathReason.valueOf(ctx.getArg(4));
+                        } catch (IllegalArgumentException _) {
+                            ctx.returnError("The reason must be a valid death reason.");
+                            return;
+                        }
+                        arena.getList("entity-death-messages." + reason.name(), String.class).set(ctx.getArgAsInt(5), ctx.getArg(6));
+                    }
+                    default -> ctx.returnUsage();
+                }
+            }
+            case "remove" -> {
+                ctx.checkArgsSizeAtLeast(5);
+                switch (ctx.getArg(3)) {
+                    case "PLAYER" -> {
+                        arena.getList("player-death-messages", String.class).remove(ctx.getArgAsInt(4));
+                    }
+                    case "ENTITY" -> {
+                        ctx.checkArgsSizeAtLeast(6);
+                        final MobDeathReason reason;
+                        try {
+                            reason = MobDeathReason.valueOf(ctx.getArg(4));
+                        } catch (IllegalArgumentException _) {
+                            ctx.returnError("The reason must be a valid death reason.");
+                            return;
+                        }
+                        arena.getList("entity-death-messages." + reason.name(), String.class).remove(ctx.getArgAsInt(5));
+                    }
+                    default -> ctx.returnUsage();
+                }
+            }
+            case "setmode" -> {
+                ctx.checkArgsSizeAtLeast(5);
+
+                final MobArenaDeathMessageMode mode;
+                try {
+                    mode = MobArenaDeathMessageMode.valueOf(ctx.getArg(4));
+                } catch (IllegalArgumentException _) {
+                    ctx.returnError("The mode must be a valid mode.");
+                    return;
+                }
+
+                if (!Objects.equals(ctx.getArg(3), "PLAYER") && !Objects.equals(ctx.getArg(3), "ENTITY")) {
+                    ctx.returnUsage();
+                    return;
+                }
+
+                arena.set(ctx.getArg(3).toLowerCase(Locale.ROOT) + "-death-messages-mode", mode);
+            }
+        }
     }
 
     private void commandSpawnerConfig(@NotNull final CommandContext ctx) {
@@ -436,6 +538,8 @@ final class MobArenaCommand {
         ctx.info(" - Spectator: " + formatLocation(arena.getSpectatorSpawn()));
         ctx.info(" - Start countdown: " + mobArena.startCountdownSeconds(arena) + " sec");
         ctx.info(" - Reset countdown: " + mobArena.endingSeconds(arena) + " sec");
+        ctx.info(" - Loadout:");
+        printLoadoutInfo(ctx, arena);
         ctx.info(" - Spawn Records:");
         printSpawnerConfigInfo(ctx, arena);
         ctx.info(" - Zones:");
@@ -448,6 +552,15 @@ final class MobArenaCommand {
         } else {
             ctx.success(" - Validation: ok");
         }
+    }
+
+    private void printLoadoutInfo(@NotNull CommandContext ctx, MiniGameArena arena) {
+        arena.getMap("loadout.inventory", Integer.class, ItemStack.class).entrySet().stream().sorted().forEach(entry -> {
+            ctx.info("   - " + entry.getKey() + ": " + entry.getValue());
+        });
+        arena.getMap("loadout.equipment", EquipmentSlot.class, ItemStack.class).entrySet().stream().sorted().forEach(entry -> {
+            ctx.info("   - " + entry.getKey() + ": " + entry.getValue());
+        });
     }
 
     /**
@@ -786,13 +899,19 @@ final class MobArenaCommand {
 
     private void commandSetLoadout(@NotNull final CommandContext ctx, @NotNull final MiniGameArena arena) {
         ctx.checkArgsSizeAtLeast(5);
-        final String itemSlot = ctx.getArgsAsString(3, "0");
-        final String itemMaterialString = ctx.getArgsAsString(4);
+        final String itemSlot = ctx.getArg(3);
+        final String itemMaterialString = ctx.getArg(4).toUpperCase(Locale.ROOT);
         final int itemAmount = ctx.getArgAsInt(5, 1);
 
-        final Material itemMaterial = Material.valueOf(itemMaterialString);
-        if (itemMaterial.isItem()) {
-            ctx.returnError("Invalid item material '" + itemMaterial + "'.");
+        final Material itemMaterial;
+        try {
+            itemMaterial = Material.valueOf(itemMaterialString);
+        } catch (final IllegalArgumentException _) {
+            ctx.returnError("Invalid item material '" + itemMaterialString + "'.");
+            return;
+        }
+        if (!itemMaterial.isItem()) {
+            ctx.returnError("Invalid item material '" + itemMaterialString + "'.");
             return;
         }
 
@@ -808,9 +927,31 @@ final class MobArenaCommand {
 
         if (isItemSlotInt) {
             final int itemSlotInt = Integer.parseInt(itemSlot);
-            arena.getMap("loadout.inventory", Integer.class, ItemStack.class).put(itemSlotInt, itemStack);
+
+            if (!arena.contains("loadout.inventory")) { arena.set("loadout.inventory", new HashMap<Integer, ItemStack>()); }
+
+            final Map<Integer, ItemStack> inventoryMap = arena.getMap("loadout.inventory", Integer.class, ItemStack.class);
+
+            if (itemMaterial == Material.AIR) {
+                inventoryMap.remove(itemSlotInt);
+                ctx.success("Successfully removed item slot " + itemSlot);
+            } else {
+                inventoryMap.put(itemSlotInt, itemStack);
+                ctx.success("Successfully set item slot " + itemSlot + " to " + itemMaterialString);
+            }
         } else if (Arrays.stream(EquipmentSlot.values()).anyMatch(slot -> MobArenaConfig.isValidArmorSlot(slot) && slot.name().equals(itemSlot))) {
-            arena.getMap("loadout.equipment", EquipmentSlot.class, ItemStack.class).put(EquipmentSlot.valueOf(itemSlot), itemStack);
+            final EquipmentSlot itemSlotEquipmentSlot = EquipmentSlot.valueOf(itemSlot);
+
+            if (!arena.contains("loadout.equipment")) { arena.set("loadout.equipment", new EnumMap<EquipmentSlot, ItemStack>(EquipmentSlot.class)); }
+
+            final Map<EquipmentSlot, ItemStack> equipmentSlotMap = arena.getMap("loadout.equipment", EquipmentSlot.class, ItemStack.class);
+            if (itemMaterial == Material.AIR) {
+                equipmentSlotMap.remove(itemSlotEquipmentSlot);
+                ctx.success("Successfully removed item slot " + itemSlot);
+            } else {
+                equipmentSlotMap.put(itemSlotEquipmentSlot, itemStack);
+                ctx.success("Successfully set item slot " + itemSlot + " to " + itemMaterialString);
+            }
         } else {
             ctx.returnError("Unknown Equipment Slot '" + itemSlot + "'.");
         }
