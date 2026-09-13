@@ -79,6 +79,14 @@ messages:
     - 'I got a little ahead of you. Come closer and I will continue.'
     - 'Beep boop... waiting mode! Come back over when you are ready.'
 
+  # One random line when a recovery scan starts, not for every waypoint checked.
+  # Set to [] to disable scanning announcements.
+  scanning-cooldown-seconds: 10
+  scanning:
+    - 'Beep boop... scanning terrain for a pathway...'
+    - 'Bzzzt! Let me scan for another way around.'
+    - 'Recalculating! Give my navigation circuits a moment.'
+
   stuck:
     # Include these details when reporting a route problem to an admin.
     - 'Beep boop... navigation malfunction! My wheels have run out of ideas. Please tell an admin, or use /report STEMBot stuck in {world} at {target} during {action}.'

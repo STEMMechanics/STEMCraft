@@ -114,7 +114,8 @@ public class ItemServiceImpl extends BaseService implements ItemService {
         });
 
         api.events().register(BlockPlaceEvent.class, event -> {
-            CustomItemDefinition definition = customItemDefinition(getCustomItemId(event.getItemInHand()));
+            String id = getCustomItemId(event.getItemInHand());
+            CustomItemDefinition definition = id == null ? null : customItemDefinition(id);
             if (definition == null) {
                 return;
             }
@@ -190,11 +191,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
                 if (section.contains("glint")) meta.setEnchantmentGlintOverride(section.getBoolean("glint", false));
                 ConfigSection food = section.getSection("food", false);
                 if (food != null) {
-                    var component = meta.getFood();
-                    component.setNutrition(Math.max(0, food.getInt("nutrition", 0)));
-                    component.setSaturation((float) Math.max(0D, food.getDouble("saturation", 0D)));
-                    component.setCanAlwaysEat(food.getBoolean("always-edible", false));
-                    meta.setFood(component);
+                    applyFoodComponent(meta, food);
                     foodBehaviors.put(normaliseCustomItemId(id), parseFoodBehavior(food));
                 }
                 template.setItemMeta(meta);
@@ -217,6 +214,16 @@ public class ItemServiceImpl extends BaseService implements ItemService {
         }
     }
 
+    // Bukkit marks its food component API experimental; keep its use isolated here.
+    @SuppressWarnings("UnstableApiUsage")
+    private static void applyFoodComponent(ItemMeta meta, ConfigSection food) {
+        var component = meta.getFood();
+        component.setNutrition(Math.max(0, food.getInt("nutrition", 0)));
+        component.setSaturation((float) Math.max(0D, food.getDouble("saturation", 0D)));
+        component.setCanAlwaysEat(food.getBoolean("always-edible", false));
+        meta.setFood(component);
+    }
+
     private FoodBehavior parseFoodBehavior(ConfigSection food) {
         List<ConfiguredEffect> effects = new java.util.ArrayList<>();
         for (Object raw : food.getList("effects")) {
@@ -227,7 +234,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
             effects.add(new ConfiguredEffect(type,
                 number(values.get("duration-seconds"), 0D),
                 (int) number(values.get("amplifier"), 0D),
-                clamp(number(values.get("probability"), 1D), 0D, 1D)));
+                Math.clamp(number(values.get("probability"), 1D), 0D, 1D)));
         }
         return new FoodBehavior(food.getDouble("heal", 0D), food.getDouble("damage", 0D),
             food.getString("returns", ""), List.copyOf(effects));
@@ -249,7 +256,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
                 Math.max(1, (int) Math.round(effect.durationSeconds() * 20D)), Math.max(0, effect.amplifier())));
         }
         if (!behavior.returns().isBlank() && !hasVanillaContainerReturn(event.getItem().getType())) api.tasks().runLater(1L, () -> {
-            ItemStack returned = createRecipeResult(behavior.returns(), 1);
+            ItemStack returned = createRecipeResult(behavior.returns());
             if (returned == null) return;
             Map<Integer, ItemStack> excess = player.getInventory().addItem(returned);
             excess.values().forEach(item -> player.getWorld().dropItemNaturally(player.getLocation(), item));
@@ -262,19 +269,15 @@ public class ItemServiceImpl extends BaseService implements ItemService {
             || material == Material.HONEY_BOTTLE || material == Material.MILK_BUCKET;
     }
 
-    private ItemStack createRecipeResult(String configured, int amount) {
-        ItemStack custom = createCustomItem(configured, amount);
+    private ItemStack createRecipeResult(String configured) {
+        ItemStack custom = createCustomItem(configured);
         if (custom != null) return custom;
         Material material = Material.matchMaterial(configured.toUpperCase(Locale.ROOT));
-        return material == null ? null : new ItemStack(material, amount);
+        return material == null ? null : new ItemStack(material);
     }
 
     private static double number(Object value, double fallback) {
         return value instanceof Number number ? number.doubleValue() : fallback;
-    }
-
-    private static double clamp(double value, double minimum, double maximum) {
-        return Math.max(minimum, Math.min(maximum, value));
     }
 
     private record ConfiguredEffect(String type, double durationSeconds, int amplifier, double probability) { }
@@ -287,7 +290,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
             targets.addAll(java.util.List.of("@s", "@p", "@a", "@r", "@e"));
             return targets;
         });
-        api.tabComplete().register("give-item", (player, args) -> {
+        api.tabComplete().register("item", (player, args) -> {
             java.util.List<String> items = new java.util.ArrayList<>();
             for (Material material : Material.values()) {
                 if (material.isItem()) items.add("minecraft:" + material.getKey().getKey());
@@ -301,8 +304,8 @@ public class ItemServiceImpl extends BaseService implements ItemService {
             .permission("minecraft.command.give")
             .ignoreArg(1)
             .executor((unusedApi, unusedCommand, context) -> executeGive(context));
-        builder.tabCompletion("{give-target}", "{give-item}");
-        builder.tabCompletion("{give-target}", "{give-item}", "{number}");
+        builder.tabCompletion("{give-target}", "{item}");
+        builder.tabCompletion("{give-target}", "{item}", "{number}");
         originalGiveCommand = Bukkit.getCommandMap().getCommand("give");
         giveCommand = builder.register(STEMCraft.getPlugin());
         org.bukkit.command.Command registered = Bukkit.getCommandMap().getCommand("stemcraft:give");
@@ -340,7 +343,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
         }
         int amount = 1;
         if (arguments.size() > 2) {
-            try { amount = Math.max(1, Math.min(99 * 36, Integer.parseInt(arguments.get(2)))); }
+            try { amount = Math.clamp(Integer.parseInt(arguments.get(2)), 1, 99 * 36); }
             catch (NumberFormatException exception) {
                 context.error("Invalid item count: {count}", "count", arguments.get(2));
                 return;
@@ -617,9 +620,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
                 throw new IllegalArgumentException("Invalid item model id '" + definition.clients().java().itemModelId() + "'");
             }
             meta.setItemModel(itemModel);
-            CustomModelDataComponent customModelData = meta.getCustomModelDataComponent();
-            customModelData.setFloats(List.of((float) definition.clients().java().customModelData()));
-            meta.setCustomModelDataComponent(customModelData);
+            applyCustomModelData(meta, definition.clients().java().customModelData());
             if (!template.setItemMeta(meta)) {
                 throw new IllegalStateException("Failed to apply item metadata for custom item '" + definition.id() + "'");
             }
@@ -656,15 +657,21 @@ public class ItemServiceImpl extends BaseService implements ItemService {
         return applyClientVisual(item, clients);
     }
 
+    // Bukkit marks its custom model data component API experimental.
+    @SuppressWarnings("UnstableApiUsage")
+    private static void applyCustomModelData(ItemMeta meta, int modelData) {
+        CustomModelDataComponent data = meta.getCustomModelDataComponent();
+        data.setFloats(List.of((float) modelData));
+        meta.setCustomModelDataComponent(data);
+    }
+
     static boolean applyClientVisual(@NotNull ItemStack item, @NotNull CustomItemClientDefinition clients) {
         if (clients.java() == null) return false;
         ItemMeta meta = item.getItemMeta();
         NamespacedKey model = NamespacedKey.fromString(clients.java().itemModelId());
         if (model == null) return false;
         meta.setItemModel(model);
-        CustomModelDataComponent data = meta.getCustomModelDataComponent();
-        data.setFloats(List.of((float) clients.java().customModelData()));
-        meta.setCustomModelDataComponent(data);
+        applyCustomModelData(meta, clients.java().customModelData());
         return item.setItemMeta(meta);
     }
 
@@ -770,8 +777,9 @@ public class ItemServiceImpl extends BaseService implements ItemService {
     @Override
     public @NotNull String getItemName(@NotNull ItemStack item) {
         ItemMeta meta = item.getItemMeta();
-        if (meta != null && meta.hasDisplayName() && meta.displayName() != null) {
-            String displayName = PlainTextComponentSerializer.plainText().serialize(meta.displayName()).trim();
+        var displayNameComponent = meta == null ? null : meta.displayName();
+        if (displayNameComponent != null) {
+            String displayName = PlainTextComponentSerializer.plainText().serialize(displayNameComponent).trim();
             if (!displayName.isBlank()) return displayName;
         }
         String materialName = item.getType().name().toLowerCase(Locale.ROOT).replace('_', ' ');

@@ -56,6 +56,12 @@ public final class BotSession {
     private List<BotScript.ListenRoute> listening=List.of();
     private Location walkTarget;
     private Location progress;
+    private Location recoveryTarget;
+    private List<Location> recoveryCandidates;
+    private int recoveryCandidateIndex;
+    private int recoveryAttempts;
+    private int nextScanningMessage;
+    private final java.util.Set<Location> attemptedRecoveryWaypoints = new HashSet<>();
     private int lastProgress;
     private boolean playerBehind;
     private volatile boolean closed;
@@ -116,6 +122,7 @@ public final class BotSession {
         if(waitMode==WaitMode.STUCK) {
             if(input.matches("(?i)(?:retry|try again)[.!]?")) {
                 waitMode=WaitMode.WALK;
+                resetRecovery();
                 resetWalkProgress();
                 return;
             }
@@ -290,6 +297,7 @@ public final class BotSession {
                 case SPEED -> speed=instruction.number();
 
                 case WALK -> {
+                    resetRecovery();
                     walkTarget=new Location(
                         owner.getWorld(),
                         instruction.x(),
@@ -398,9 +406,33 @@ public final class BotSession {
 
         if(here.distanceSquared(walkTarget)<=script.arrivalDistance()*script.arrivalDistance()) {
             actor.cancel();
+            resetRecovery();
             walkTarget=null;
             progress=null;
             return true;
+        }
+
+        if(recoveryTarget != null && here.distanceSquared(recoveryTarget) <= 1.0) {
+            recoveryTarget = null;
+            resetWalkProgress();
+        }
+
+        if(recoveryCandidates != null) {
+            // At most one path query per five-tick session interval.
+            if(recoveryCandidateIndex < recoveryCandidates.size()) {
+                Location candidate = recoveryCandidates.get(recoveryCandidateIndex++);
+                if(attemptedRecoveryWaypoints.add(candidate) && here.distanceSquared(candidate) > 1.0
+                    && actor.canNavigateTo(candidate)) {
+                    recoveryTarget = candidate;
+                    recoveryCandidates = null;
+                    recoveryAttempts++;
+                    resetWalkProgress();
+                    actor.move(recoveryTarget, walkSpeed);
+                }
+                return false;
+            }
+            recoveryCandidates = null;
+            recoveryAttempts = 3;
         }
 
         if(progress==null||here.distanceSquared(progress)>.5) {
@@ -410,6 +442,19 @@ public final class BotSession {
 
         if(age-lastProgress>=200) {
             actor.cancel();
+            if(recoveryAttempts < 3) {
+                recoveryTarget = null;
+                recoveryCandidates = actor.recoveryWaypoints(walkTarget);
+                recoveryCandidateIndex = 0;
+                if(!recoveryCandidates.isEmpty()) {
+                    if(age >= nextScanningMessage) {
+                        for(String line:script.randomSystemMessage(script.scanning())) output.say(line);
+                        nextScanningMessage = age + script.scanningCooldownSeconds() * 20;
+                    }
+                    return false;
+                }
+                recoveryCandidates = null;
+            }
             waitMode=WaitMode.STUCK;
 
             for(String line:script.randomSystemMessage(script.stuck()))
@@ -423,7 +468,7 @@ public final class BotSession {
         }
 
         if(!actor.navigating()) {
-            actor.move(walkTarget,walkSpeed);
+            actor.move(recoveryTarget == null ? walkTarget : recoveryTarget,walkSpeed);
         }
 
         return false;
@@ -465,6 +510,14 @@ public final class BotSession {
         actor.cancel();
         progress=null;
         lastProgress=age;
+    }
+
+    private void resetRecovery() {
+        recoveryTarget = null;
+        recoveryCandidates = null;
+        recoveryCandidateIndex = 0;
+        recoveryAttempts = 0;
+        attemptedRecoveryWaypoints.clear();
     }
 
     private void cancelCallback() {
