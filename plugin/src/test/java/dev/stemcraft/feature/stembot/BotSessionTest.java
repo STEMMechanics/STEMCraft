@@ -41,6 +41,7 @@ class BotSessionTest {
 
         actor=mock(BotActor.class);
         when(actor.valid()).thenReturn(true);
+        when(actor.findRoute(any())).thenReturn(List::of);
         when(actor.location()).thenAnswer(i->here.clone());
 
         output=new ArrayList<>();
@@ -244,36 +245,73 @@ class BotSessionTest {
     }
 
     @Test
-    void stalledWalkUsesReachableWaypointThenResumesOriginalDestination() {
+    void stalledWalkFollowsWholeRouteIncludingBacktrackingAndElevation() {
+        setUp(0,List.of("walk:10 68 0", "listen:yes -> done"));
+        Location entrance = new Location(world, -4, 64, 0);
+        Location landing = new Location(world, -4, 68, 0);
+        Location exit = new Location(world, 2, 68, 0);
+        when(actor.findRoute(any())).thenReturn(() -> List.of(entrance, landing, exit));
+        when(actor.canNavigateTo(any())).thenReturn(true);
+        for(int i=0;i<42;i++) session.tick(here);
+        verify(actor).move(entrance, .9);
+        here=entrance;
+        clearInvocations(actor);
+        session.tick(here);
+        verify(actor).move(landing, .9);
+        verify(actor,never()).move(new Location(world,10,68,0), .9);
+        here=landing;
+        session.tick(here);
+        verify(actor).move(exit, .9);
+        here=exit;
+        session.tick(here);
+        verify(actor).move(new Location(world,10,68,0), .9);
+        assertFalse(output.contains("stuck"));
+    }
+
+    @Test
+    void blockedSecondSegmentStopsInsteadOfSkippingTheStairs() {
+        setUp(0,List.of("walk:10 68 0", "say:arrived"));
+        Location entrance = new Location(world,-4,64,0);
+        Location landing = new Location(world,-4,68,0);
+        Location exit = new Location(world,2,68,0);
+        when(actor.findRoute(any())).thenReturn(() -> List.of(entrance,landing,exit));
+        when(actor.canNavigateTo(entrance)).thenReturn(true);
+        for(int i=0;i<42;i++) session.tick(here);
+        here=entrance;
+        clearInvocations(actor);
+        session.tick(here);
+        assertTrue(output.contains("stuck"));
+        assertFalse(output.contains("arrived"));
+        verify(actor,never()).canNavigateTo(exit);
+        verify(actor,never()).move(any(),anyDouble());
+    }
+
+    @Test
+    void routeSearchCanYieldWithoutRestartingNavigation() {
         setUp(0,List.of("walk:10 64 0", "listen:yes -> done"));
-        Location blocked = new Location(world, -2, 64, 0);
-        Location landing = new Location(world, -4, 65, 0);
-        when(actor.recoveryWaypoints(any())).thenReturn(List.of(blocked, landing));
-        when(actor.canNavigateTo(landing)).thenReturn(true);
+        BotActor.RouteSearch search = mock(BotActor.RouteSearch.class);
+        when(actor.findRoute(any())).thenReturn(search);
+        when(search.advance()).thenReturn(null).thenReturn(null).thenReturn(List.of());
         for(int i=0;i<41;i++) session.tick(here);
         clearInvocations(actor);
         session.tick(here);
-        verify(actor).canNavigateTo(blocked);
-        verify(actor,never()).canNavigateTo(landing);
         session.tick(here);
-        verify(actor).move(landing, .9);
-        assertEquals(1, output.stream().filter("scanning"::equals).count());
-        assertFalse(output.contains("stuck"));
-        here=landing;
-        clearInvocations(actor);
+        verify(actor,never()).move(any(),anyDouble());
         session.tick(here);
-        verify(actor).move(new Location(world,10,64,0), .9);
-        here=new Location(world,10,64,0);
-        session.tick(here);
-        session.input("yes");
-        session.tick(here);
-        assertTrue(session.closed());
+        assertTrue(output.contains("stuck"));
+    }
+
+    @Test
+    void doesNotArriveOnTheFloorBelowTheDestination() {
+        setUp(0,List.of("walk:0 66 0", "say:arrived"));
+        for(int i=0;i<5;i++) session.tick(here);
+        assertFalse(output.contains("arrived"));
     }
 
     @Test
     void unreachableRecoveryCandidatesFallBackToPromptAndDoNotAdvanceWalk() {
         setUp(0,List.of("walk:10 64 0", "say:arrived", "listen:yes -> done"));
-        when(actor.recoveryWaypoints(any())).thenReturn(List.of(new Location(world,-4,65,0)));
+        when(actor.findRoute(any())).thenReturn(() -> List.of(new Location(world,-4,65,0)));
         for(int i=0;i<45;i++) session.tick(here);
         assertTrue(output.contains("stuck"));
         assertFalse(output.contains("arrived"));
@@ -283,7 +321,7 @@ class BotSessionTest {
     @Test
     void recoveryStopsWhenDismissed() {
         setUp(0,List.of("walk:10 64 0", "listen:yes -> done"));
-        when(actor.recoveryWaypoints(any())).thenReturn(List.of(new Location(world,-4,65,0)));
+        when(actor.findRoute(any())).thenReturn(() -> List.of(new Location(world,-4,65,0)));
         for(int i=0;i<41;i++) session.tick(here);
         session.input("bye");
         clearInvocations(actor);
@@ -296,7 +334,7 @@ class BotSessionTest {
     @Test
     void scanningAnnouncementCooldownSurvivesRetry() {
         setUp(0,List.of("walk:10 64 0", "listen:yes -> done"));
-        when(actor.recoveryWaypoints(any())).thenReturn(List.of(new Location(world,-4,65,0)));
+        when(actor.findRoute(any())).thenReturn(() -> List.of(new Location(world,-4,65,0)));
         for(int i=0;i<45;i++) session.tick(here);
         assertEquals(1,output.stream().filter("scanning"::equals).count());
         session.input("retry");
