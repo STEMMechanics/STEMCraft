@@ -54,6 +54,25 @@ class BotNavigationRecoveryTest {
     }
 
     @Test
+    void keepsTightLandingBetweenTwoPerpendicularStairFlights() {
+        floor(0,0,60);
+        floor(0,1,61);
+        floor(0,2,62);
+        floor(0,3,62);
+        floor(1,3,63);
+        floor(2,3,64);
+        floor(3,3,64);
+        var route = route(new Location(world,.5,60,.5), new Location(world,3.5,64,3.5));
+        assertEquals(List.of(
+            new Location(world,.5,61,1.5),
+            new Location(world,.5,62,2.5),
+            new Location(world,.5,62,3.5),
+            new Location(world,1.5,63,3.5),
+            new Location(world,2.5,64,3.5),
+            new Location(world,3.5,64,3.5)), route);
+    }
+
+    @Test
     void splitsLongRouteIntoShortConnectedSegments() {
         for(int x = 0; x <= 240; x++) floor(x, 0, 64);
         var route = route(new Location(world,.5,64,.5),new Location(world,240,64,0));
