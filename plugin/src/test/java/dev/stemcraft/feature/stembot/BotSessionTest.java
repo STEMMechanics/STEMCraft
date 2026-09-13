@@ -269,6 +269,28 @@ class BotSessionTest {
     }
 
     @Test
+    void finishesLandingBeforeTurningOntoSecondStairFlight() {
+        setUp(0,List.of("walk:10 70 0", "say:arrived"));
+        Location landing = new Location(world, .5, 66, 2.5);
+        Location secondFlight = new Location(world, 1.5, 67, 2.5);
+        when(actor.findRoute(any())).thenReturn(() -> List.of(landing, secondFlight));
+        when(actor.canNavigateTo(landing)).thenReturn(true);
+        // The next flight is reachable from the landing, but not from the lower tread.
+        when(actor.canNavigateTo(secondFlight)).thenAnswer(i -> here.distanceSquared(landing) < .04);
+        for(int i=0;i<42;i++) session.tick(here);
+        verify(actor).move(landing, .9);
+        here = new Location(world, .5, 65.5, 2);
+        clearInvocations(actor);
+        session.tick(here);
+        verify(actor,never()).canNavigateTo(secondFlight);
+        assertFalse(output.contains("stuck"));
+        here = landing.clone().add(0, 0, -.1);
+        session.tick(here);
+        verify(actor).move(secondFlight, .9);
+        assertFalse(output.contains("arrived"));
+    }
+
+    @Test
     void blockedSecondSegmentStopsInsteadOfSkippingTheStairs() {
         setUp(0,List.of("walk:10 68 0", "say:arrived"));
         Location entrance = new Location(world,-4,64,0);

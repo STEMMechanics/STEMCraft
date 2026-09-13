@@ -413,8 +413,10 @@ public final class BotSession {
             return true;
         }
 
-        if(recoveryTarget != null && Math.abs(here.getY() - recoveryTarget.getY()) <= .6
-            && here.distanceSquared(recoveryTarget) <= .64) {
+        // Reach the tread and centre of a corner before handing off to the next flight.
+        // A loose arrival radius can cancel the climb while still on the lower half-step.
+        if(recoveryTarget != null && Math.abs(here.getY() - recoveryTarget.getY()) <= .2
+            && here.distanceSquared(recoveryTarget) <= .09) {
             recoveryTarget = null;
             resetWalkProgress();
         }
