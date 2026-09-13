@@ -39,7 +39,10 @@ import java.util.Map;
 import java.io.File;
 import org.bukkit.Color;
 import org.bukkit.Registry;
+import io.papermc.paper.registry.RegistryAccess;
+import io.papermc.paper.registry.RegistryKey;
 import org.bukkit.inventory.meta.PotionMeta;
+import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.potion.PotionType;
@@ -337,7 +340,6 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
                 plugin.getLogger().warning(type + "." + id + " invalid input or result");
                 continue;
             }
-            if (amount <= 0) amount = 1;
 
             switch (type) {
                 case "furnace" -> Bukkit.addRecipe(new FurnaceRecipe(key(id), result, input, exp, time));
@@ -365,7 +367,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
         if (configured == null || configured.isBlank()) return null;
         String value = configured.trim();
         ItemStack custom = api.items().createCustomItem(value, 1);
-        if (custom != null) return new RecipeChoice.ExactChoice(custom);
+        if (custom != null) return RecipeChoice.exactChoice(custom);
         Material material = Material.matchMaterial(value.toUpperCase(Locale.ROOT));
         return material == null ? null : new RecipeChoice.MaterialChoice(material);
     }
@@ -406,14 +408,23 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
         String value = configured.trim();
         if (value.regionMatches(true, 0, "effect:", 0, 7)) {
             PotionEffectType effect = Registry.MOB_EFFECT.get(NamespacedKey.minecraft(value.substring(7).toLowerCase(Locale.ROOT)));
-            return effect == null ? null : PotionMix.createPredicateChoice(item -> item.getItemMeta() instanceof PotionMeta potion
-                && potion.hasCustomEffect(effect));
+            if (effect == null) return null;
+            ItemStack example = new ItemStack(Material.POTION);
+            PotionMeta meta = (PotionMeta) example.getItemMeta();
+            meta.addCustomEffect(new PotionEffect(effect, 3600, 0), true);
+            example.setItemMeta(meta);
+            return RecipeChoice.predicateChoice(item -> item.getItemMeta() instanceof PotionMeta potion
+                && potion.hasCustomEffect(effect), example);
         }
         PotionType type;
         try { type = PotionType.valueOf(value.toUpperCase(Locale.ROOT)); }
         catch (IllegalArgumentException ignored) { return null; }
-        return PotionMix.createPredicateChoice(item -> item.getItemMeta() instanceof PotionMeta potion
-            && potion.getBasePotionType() == type);
+        ItemStack example = new ItemStack(Material.POTION);
+        PotionMeta meta = (PotionMeta) example.getItemMeta();
+        meta.setBasePotionType(type);
+        example.setItemMeta(meta);
+        return RecipeChoice.predicateChoice(item -> item.getItemMeta() instanceof PotionMeta potion
+            && potion.getBasePotionType() == type, example);
     }
 
     /**
@@ -605,9 +616,23 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
             @NonNull RecipeChoice baseArmor,
             @NonNull RecipeChoice material
     ) {
-        @SuppressWarnings("removal")
         SmithingTrimRecipe recipe =
-                new SmithingTrimRecipe(key(id), template, baseArmor, material);
+                new SmithingTrimRecipe(key(id), template, baseArmor, material, trimPattern(template));
         Bukkit.addRecipe(recipe);
+    }
+
+    /** Preserve the template inference of the former four-argument Paper constructor. */
+    static TrimPattern trimPattern(RecipeChoice template) {
+        Material material = template instanceof RecipeChoice.ExactChoice exact ? exact.getChoices().getFirst().getType()
+            : template instanceof RecipeChoice.MaterialChoice choices ? choices.getChoices().getFirst() : null;
+        if (material != null) {
+            String name = material.name().toLowerCase(Locale.ROOT);
+            String suffix = "_armor_trim_smithing_template";
+            if (name.endsWith(suffix)) {
+                TrimPattern pattern = RegistryAccess.registryAccess().getRegistry(RegistryKey.TRIM_PATTERN).get(NamespacedKey.minecraft(name.substring(0, name.length() - suffix.length())));
+                if (pattern != null) return pattern;
+            }
+        }
+        return TrimPattern.BOLT;
     }
 }

@@ -14,6 +14,7 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.plugin.Plugin;
 import org.junit.jupiter.api.*;
+import org.jetbrains.annotations.NotNull;
 import org.mockbukkit.mockbukkit.MockBukkit;
 
 import java.util.*;
@@ -38,11 +39,15 @@ class PracticeQuestGuideTest {
     public static class SupportedBookMeta extends org.mockbukkit.mockbukkit.inventory.meta.BookMetaMock {
         public SupportedBookMeta() { super(); }
         public SupportedBookMeta(org.bukkit.inventory.meta.ItemMeta source) { super(source); }
-        @Override public org.bukkit.inventory.meta.BookMeta pages(List<net.kyori.adventure.text.Component> pages) {
+        // MockBukkit's component setter is unimplemented; its legacy setter backs this test adapter.
+        @SuppressWarnings("deprecation")
+        @Override public @NotNull org.bukkit.inventory.meta.BookMeta pages(List<net.kyori.adventure.text.Component> pages) {
             setPages(pages.stream().map(net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()::serialize).toList());
             return this;
         }
-        @Override public SupportedBookMeta clone() { return new SupportedBookMeta(this); }
+        // The superclass copy constructor preserves book data; super.clone() loses this adapter subtype.
+        @SuppressWarnings("MethodDoesntCallSuperMethod")
+        @Override public @NotNull SupportedBookMeta clone() { return new SupportedBookMeta(this); }
     }
     private java.lang.reflect.Field metaClassField;
     private Object bookType;
@@ -129,6 +134,8 @@ class PracticeQuestGuideTest {
         assertFalse(request.finished());
         return request;
     }
+    // Test fixtures act as the server that normally constructs these events.
+    @SuppressWarnings("UnstableApiUsage")
     private void click(Player actor) { fire(new PlayerInteractEntityEvent(actor, npc, EquipmentSlot.HAND)); }
 
     @Test void privateQuestRequiresAcceptanceMovementAndHandInAndGivesNoRewards() {
@@ -169,12 +176,17 @@ class PracticeQuestGuideTest {
     @Test void staleBookIsRemovedOnJoinAndWorldChangesFailPractice() {
         begin();
         click(player);
-        var stale = player.getInventory().getItem(0).clone();
+        var book = player.getInventory().getItem(0);
+        assertNotNull(book);
+        var stale = book.clone();
         when(player.getWorld()).thenReturn(mock(World.class));
         tick.run();
         assertEquals(List.of(false), results);
         player.getInventory().addItem(stale);
-        fire(new PlayerJoinEvent(player, (net.kyori.adventure.text.Component) null));
+        // Simulate the server firing a join event.
+        @SuppressWarnings("UnstableApiUsage")
+        var join = new PlayerJoinEvent(player, (net.kyori.adventure.text.Component) null);
+        fire(join);
         assertTrue(player.getInventory().isEmpty());
     }
 }

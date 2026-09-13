@@ -48,12 +48,14 @@ public final class CitizensBotActor implements BotActor {
             if(skin!=null) skin(skin);
 
             Object params=invoke(invoke(npc,"getNavigator"),"getDefaultParameters");
+            // Avoid inheriting Citizens' legacy block-change path visualization.
+            invoke(params,"debug",false);
             invoke(params,"stuckAction",new Object[]{null});
             invoke(params,"range",128F);
             invoke(params,"avoidWater",true);
             invoke(params,"distanceMargin",.2D);
             invoke(params,"pathDistanceMargin",.2D);
-            invoke(params,"stationaryTicks",100);
+            invoke(params,"stationaryTicks",40);
 
             if(!(boolean)invoke(npc,"spawn",spawn))
                 throw new IllegalStateException("Citizens could not spawn STEMBot");
