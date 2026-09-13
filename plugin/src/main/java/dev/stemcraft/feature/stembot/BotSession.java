@@ -447,7 +447,7 @@ public final class BotSession {
                 if(actor.canNavigateTo(candidate)) {
                     recoveryTarget = candidate;
                     resetWalkProgress();
-                    if(routeWaypointIndex == 1) navigationDiagnostic("following first waypoint");
+                    if(routeWaypointIndex == 1) navigationDiagnostic("following first waypoint using direct movement");
                     startNavigation(candidate);
                     return false;
                 }
@@ -503,7 +503,8 @@ public final class BotSession {
 
     private void startNavigation(Location target) {
         navigationStarted = age;
-        actor.move(target, walkSpeed);
+        if(recoveryTarget != null) actor.moveWaypoint(target, walkSpeed);
+        else actor.move(target, walkSpeed);
     }
 
     private void navigationDiagnostic(String reason) {

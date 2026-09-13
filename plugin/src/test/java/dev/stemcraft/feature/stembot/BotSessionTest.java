@@ -260,6 +260,30 @@ class BotSessionTest {
     }
 
     @Test
+    void loggedStairApproachUsesDirectMovementAndKeepsTheRouteUntilTheCornerIsReached() {
+        setUp(0, List.of("walk:-871 85 346", "say:arrived"));
+        here = new Location(world, -817.5, 70, 307.5);
+        Location corner = new Location(world, -817.5, 70, 302.5);
+        Location stair = new Location(world, -816.5, 71, 302.5);
+        when(actor.findRoute(any())).thenReturn(() -> List.of(corner, stair));
+        when(actor.canNavigateTo(any())).thenReturn(true);
+        for(int i=0;i<14;i++) session.tick(here);
+        verify(actor).moveWaypoint(corner, .9);
+        verify(actor, never()).move(corner, .9);
+
+        here.setZ(303.62); // Actual stopping point reported by the server.
+        session.tick(here);
+        verify(actor, never()).moveWaypoint(stair, .9);
+        verify(actor, times(1)).findRoute(any());
+
+        here.setZ(302.6);
+        session.tick(here);
+        verify(actor).moveWaypoint(stair, .9);
+        verify(actor, times(1)).findRoute(any());
+        assertFalse(output.contains("arrived"));
+    }
+
+    @Test
     void stoppedStairWaypointLogsItsPositionBeforeSearchingAgain() {
         setUp(0, List.of("walk:10 70 0", "say:arrived"));
         Location step = new Location(world, 2.5, 65, .5);
@@ -270,7 +294,7 @@ class BotSessionTest {
         session.tick(here);
         session.tick(here);
         verify(actor, times(2)).findRoute(any());
-        verify(actor, times(1)).move(step, .9);
+        verify(actor, times(1)).moveWaypoint(step, .9);
         assertTrue(navigationDiagnostics.stream().anyMatch(line -> line.contains("Citizens stopped short")
             && line.contains("waypoint=2.50,65.00,0.50 (1/1)")));
         assertFalse(output.contains("arrived"));
@@ -310,15 +334,15 @@ class BotSessionTest {
         when(actor.findRoute(any())).thenReturn(() -> List.of(entrance, landing, exit));
         when(actor.canNavigateTo(any())).thenReturn(true);
         for(int i=0;i<14;i++) session.tick(here);
-        verify(actor).move(entrance, .9);
+        verify(actor).moveWaypoint(entrance, .9);
         here=entrance;
         clearInvocations(actor);
         session.tick(here);
-        verify(actor).move(landing, .9);
+        verify(actor).moveWaypoint(landing, .9);
         verify(actor,never()).move(new Location(world,10,68,0), .9);
         here=landing;
         session.tick(here);
-        verify(actor).move(exit, .9);
+        verify(actor).moveWaypoint(exit, .9);
         here=exit;
         session.tick(here);
         verify(actor).move(new Location(world,10,68,0), .9);
@@ -335,7 +359,7 @@ class BotSessionTest {
         // The next flight is reachable from the landing, but not from the lower tread.
         when(actor.canNavigateTo(secondFlight)).thenAnswer(i -> here.distanceSquared(landing) < .04);
         for(int i=0;i<14;i++) session.tick(here);
-        verify(actor).move(landing, .9);
+        verify(actor).moveWaypoint(landing, .9);
         here = new Location(world, .5, 65.5, 2);
         clearInvocations(actor);
         session.tick(here);
@@ -343,7 +367,7 @@ class BotSessionTest {
         assertFalse(output.contains("stuck"));
         here = landing.clone().add(0, 0, -.1);
         session.tick(here);
-        verify(actor).move(secondFlight, .9);
+        verify(actor).moveWaypoint(secondFlight, .9);
         assertFalse(output.contains("arrived"));
     }
 

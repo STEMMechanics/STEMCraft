@@ -118,15 +118,25 @@ public final class CitizensBotActor implements BotActor {
 
     @Override
     public void move(Location target,double speed) {
-        invoke(
-            invoke(navigator(),"getDefaultParameters"),
-            "speedModifier",
-            (float)speed
-        );
-        invoke(navigator(),"setTarget",target);
+        targetNavigator(navigator(), target, speed, false);
 
         if(entity() instanceof Player player)
             player.setSprinting(speed>1);
+    }
+
+    @Override
+    public void moveWaypoint(Location target, double speed) {
+        targetNavigator(navigator(), target, speed, true);
+
+        if(entity() instanceof Player player)
+            player.setSprinting(speed>1);
+    }
+
+    static void targetNavigator(Object navigator, Location target, double speed, boolean waypoint) {
+        invoke(invoke(navigator, "getDefaultParameters"), "speedModifier", (float)speed);
+        // Minecraft pathfinding may return an endpoint in an adjacent block. Our route already
+        // validates each straight segment; use Citizens' movement controller to reach it precisely.
+        invoke(navigator, waypoint ? "setStraightLineTarget" : "setTarget", target);
     }
 
     @Override
