@@ -224,7 +224,7 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
      * @return The {@code damageCause} represented by a {@link MobDeathReason}.
      */
     @Contract(pure = true)
-    private @Nullable MobDeathReason getMobDeathReason(@NotNull final DamageCause damageCause) {
+    private @NotNull MobDeathReason getMobDeathReason(@NotNull final DamageCause damageCause) {
         switch (damageCause) {
             case ENTITY_EXPLOSION -> {
                 return MobDeathReason.Exploded;
@@ -235,9 +235,10 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
             case FALL -> {
                 return MobDeathReason.Fell;
             }
+            default -> {
+                return MobDeathReason.Generic;
+            }
         }
-
-        return null;
     }
 
     /**
@@ -329,12 +330,23 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
 
         final List<String> filteredMessages = applicableMessages.stream().filter(message -> message.contains("{causer}") == (causingEntity != null)).toList();
 
+        final int filteredMessageIndex;
+
         if (filteredMessages.isEmpty()) {
             return;
+        } else if (filteredMessages.size() == 1) {
+            filteredMessageIndex = 0;
+        } else {
+            filteredMessageIndex = ThreadLocalRandom.current().nextInt(filteredMessages.size() - 1);
         }
 
-        final String chosenMessage = filteredMessages.get(ThreadLocalRandom.current().nextInt(filteredMessages.size()));
-        final String finalMessage = PlaceholderUtil.apply(chosenMessage, "entity", entity, "causer", causingEntity);
+        final String chosenMessage = filteredMessages.get(filteredMessageIndex);
+        final String finalMessage;
+        if (causingEntity != null) {
+            finalMessage = PlaceholderUtil.apply(chosenMessage, "entity", entity, "causer", causingEntity.getName());
+        } else {
+            finalMessage = chosenMessage;
+        }
 
         broadcastInfoToOccupants(entityArena, finalMessage);
     }

@@ -100,12 +100,21 @@ final class MobArenaConfig {
         return section.getStringList("player-death-messages");
     }
 
-    public @NotNull Map<MobDeathReason, List<String>> getGlobalEntityDeathMessages() {
+    @NotNull Map<MobDeathReason, List<String>> getGlobalEntityDeathMessages() {
         return getEntityDeathMessages(config.getSection("death-messages"));
     }
 
-    public @NotNull List<String> getGlobalPlayerDeathMessages() {
+    @NotNull List<String> getGlobalPlayerDeathMessages() {
         return getPlayerDeathMessages(config.getSection("death-messages"));
+    }
+
+    void setGlobalEntityDeathMessages(final @NotNull Map<MobDeathReason, List<String>> map) {
+        final ConfigSection section = config.getSection("death-messages.entity-death-messages");
+        map.forEach((key, value) -> section.set(key.name(), value));
+    }
+
+    void setGlobalPlayerDeathMessages(final @NotNull List<String> messages) {
+        config.getSection("death-messages").set("entity-death-messages", messages);
     }
 
     /**
@@ -180,7 +189,7 @@ final class MobArenaConfig {
         return itemStack.getType().getKey().toString() + " " + itemStack.getAmount();
     }
 
-    static boolean isValidArmorSlot(EquipmentSlot slot) {
+    static boolean isValidArmorSlot(final @lombok.NonNull EquipmentSlot slot) {
         return (slot.isArmor() || slot == EquipmentSlot.OFF_HAND) && slot != EquipmentSlot.BODY;
     }
 
@@ -261,9 +270,9 @@ final class MobArenaConfig {
         final @NotNull Map<String, SCRegion> zones = loadZonesFromArena(arenaId, arenaSection, world);
 
         final Map<MobDeathReason, List<String>> entityDeathMessages = getEntityDeathMessages(arenaSection);
-        final @NotNull MobArenaDeathMessageMode entityDeathMessagesMode = (MobArenaDeathMessageMode) arenaSection.get("entity-death-messages-mode");
+        final @NotNull MobArenaDeathMessageMode entityDeathMessagesMode = MobArenaDeathMessageMode.valueOf(arenaSection.getString("entity-death-messages-mode", "UNION"));
         final List<String> playerDeathMessages = getPlayerDeathMessages(arenaSection);
-        final @NotNull MobArenaDeathMessageMode playerDeathMessagesMode = (MobArenaDeathMessageMode) arenaSection.get("player-death-messages-mode");
+        final @NotNull MobArenaDeathMessageMode playerDeathMessagesMode = MobArenaDeathMessageMode.valueOf(arenaSection.getString("player-death-messages-mode", "UNION"));
 
         return new MobArenaArenaRecord(
                 arenaId,
@@ -362,8 +371,8 @@ final class MobArenaConfig {
         toSave.set("spectator", serializeLocation(arenaRecord.spectator(), key,  "Spectator Location"));
         toSave.set("min-players", arenaRecord.minPlayers());
         toSave.set("max-players", arenaRecord.maxPlayers());
-        toSave.set("entity-death-messages-mode", arenaRecord.entityDeathMessagesMode());
-        toSave.set("player-death-messages-mode", arenaRecord.playerDeathMessagesMode());
+        toSave.set("entity-death-messages-mode", arenaRecord.entityDeathMessagesMode().name());
+        toSave.set("player-death-messages-mode", arenaRecord.playerDeathMessagesMode().name());
         toSave.set("player-death-messages", arenaRecord.playerDeathMessages());
         saveEntityDeathMessagesToArena(toSave, arenaRecord);
         saveLoadoutToArena(toSave, arenaRecord);
@@ -380,6 +389,7 @@ final class MobArenaConfig {
     /// @param toSave      The arena record with the loadout.
     /// @param arenaRecord The arena config section to save to.
     private static void saveEntityDeathMessagesToArena(@lombok.NonNull final ConfigSection toSave, @lombok.NonNull final MobArenaArenaRecord arenaRecord) {
+        toSave.createSection("entity-death-messages", false);
         Arrays.stream(MobDeathReason.values())
                 .filter(reason -> arenaRecord.entityDeathMessages().containsKey(reason))
                 .forEach(reason -> toSave.set("entity-death-messages." + reason.name(), arenaRecord.entityDeathMessages().get(reason)));

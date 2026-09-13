@@ -93,7 +93,7 @@ record MobArenaArenaRecord(
      */
     MobArenaArenaRecord(@NotNull final MiniGameArena arena) {
         final Function<MobDeathReason, List<String>> mobDeathReasonListFunction = deathReason -> {
-            final String deathReasonLowerCaseName = deathReason.toString().toLowerCase(Locale.ROOT);
+            final String deathReasonLowerCaseName = deathReason.name();
 
             return arena.getList("entity-death-messages." + deathReasonLowerCaseName, String.class);
         };

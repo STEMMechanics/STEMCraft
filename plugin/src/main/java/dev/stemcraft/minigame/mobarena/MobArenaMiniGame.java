@@ -18,10 +18,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.Unmodifiable;
 
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * <p>The Mob Arena mini-game.</p>
@@ -42,6 +39,10 @@ public class MobArenaMiniGame extends BaseMiniGame {
     @Getter
     @Accessors(fluent = true)
     private static final String namespace = "mobarena";
+
+    MobArenaConfig getMobArenaConfig() {
+        return config;
+    }
 
     private MobArenaConfig config = null;
     private MobArenaCommand command = null;
@@ -294,6 +295,14 @@ public class MobArenaMiniGame extends BaseMiniGame {
             arena.set(spawnerConfigPrefix + "spawnZone", spawnerRecord.spawnZone());
             arena.set(spawnerConfigPrefix + "countTowardsMobCount", spawnerRecord.countTowardsMobCount());
         }
+
+        arenaRecord.entityDeathMessages().forEach((key, value) -> arena.set("entity-death-messages." + key, new ArrayList<>(value)));
+        arena.set("entity-death-messages-mode", arenaRecord.entityDeathMessagesMode());
+        arena.set("player-death-messages", arenaRecord.playerDeathMessages());
+        arena.set("player-death-messages-mode", arenaRecord.playerDeathMessagesMode());
+
+        arena.set("loadout.inventory", arenaRecord.inventoryLoadout());
+        arena.set("loadout.equipment", arenaRecord.equipmentLoadout());
 
         arena.set("zones", arenaRecord.zones());
 
