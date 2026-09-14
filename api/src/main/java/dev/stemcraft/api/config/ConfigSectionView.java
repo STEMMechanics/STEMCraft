@@ -66,6 +66,29 @@ public interface ConfigSectionView {
     default @NotNull String getString(@NotNull String path) { return getString(path, ""); }
 
     /**
+     * Reads an enum name, ignoring case and surrounding whitespace.
+     * Missing values follow the implementation's default-persistence policy;
+     * invalid existing values return the default without being overwritten.
+     *
+     * @param path The configuration path.
+     * @param type The enum class.
+     * @param def The non-null fallback value.
+     * @param <E> The enum type.
+     * @return The matching enum constant, or the default.
+     */
+    default <E extends Enum<E>> @NotNull E getEnum(@NotNull String path, @NotNull Class<E> type, @NotNull E def) {
+        java.util.Objects.requireNonNull(type, "type");
+        java.util.Objects.requireNonNull(def, "def");
+        String raw = getString(path, def.name()).trim();
+        for (E candidate : type.getEnumConstants()) {
+            if (candidate.name().equalsIgnoreCase(raw)) {
+                return candidate;
+            }
+        }
+        return def;
+    }
+
+    /**
      * Gets an integer value from the configuration at the specified path.
      *
      * @param path The path to check.
