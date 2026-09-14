@@ -24,6 +24,7 @@ import dev.stemcraft.api.config.ConfigFile;
 import dev.stemcraft.api.config.ConfigSection;
 import lombok.Setter;
 import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.serialization.ConfigurationSerializable;
 import org.jspecify.annotations.NonNull;
 
 import java.util.*;
@@ -161,7 +162,7 @@ public class ConfigSectionImpl implements ConfigSection {
             return;
         }
 
-        Object storedValue = value instanceof List ? new ArrayList<>((List<?>) value) : value;
+        Object storedValue = prepareValue(absolutePath(path), value);
         section.set(path, storedValue);
         markDirty(path);
     }
@@ -358,8 +359,55 @@ public class ConfigSectionImpl implements ConfigSection {
      */
     public void set(String path, Object value) {
         String resolvedPath = resolvePath(path);
-        section.set(resolvedPath, value);
+        section.set(resolvedPath, prepareValue(absolutePath(resolvedPath), value));
         markDirty(resolvedPath);
+    }
+
+    private Object prepareValue(String path, Object value) {
+        return prepareValue(path, value, Collections.newSetFromMap(new IdentityHashMap<>()));
+    }
+
+    private Object prepareValue(String path, Object value, Set<Object> ancestors) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Enum<?> enumValue) {
+            return enumValue.name();
+        }
+        if (value instanceof String || value instanceof Boolean || value instanceof Character
+            || value instanceof Byte || value instanceof Short || value instanceof Integer
+            || value instanceof Long || value instanceof Float || value instanceof Double
+            || value instanceof java.math.BigInteger || value instanceof java.math.BigDecimal
+            || value instanceof ConfigurationSerializable) {
+            return value;
+        }
+        if (!(value instanceof Collection<?>) && !(value instanceof Map<?, ?>)) {
+            throw new IllegalArgumentException(
+                "Unsupported config value at '" + path + "': " + value.getClass().getName());
+        }
+        if (!ancestors.add(value)) {
+            throw new IllegalArgumentException("Cyclic config value at '" + path + "'");
+        }
+        try {
+            if (value instanceof Collection<?> collection) {
+                List<Object> result = new ArrayList<>(collection.size());
+                int index = 0;
+                for (Object item : collection) {
+                    result.add(prepareValue(path + "[" + index++ + "]", item, ancestors));
+                }
+                return result;
+            }
+            Map<String, Object> result = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> entry : ((Map<?, ?>) value).entrySet()) {
+                if (!(entry.getKey() instanceof String key)) {
+                    throw new IllegalArgumentException("Config map keys must be strings at '" + path + "'");
+                }
+                result.put(key, prepareValue(path + "." + key, entry.getValue(), ancestors));
+            }
+            return result;
+        } finally {
+            ancestors.remove(value);
+        }
     }
 
     /**

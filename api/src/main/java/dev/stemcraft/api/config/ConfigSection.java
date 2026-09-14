@@ -44,6 +44,15 @@ public interface ConfigSection extends ConfigSectionView {
 
     /**
      * Sets a value in the configuration at the specified path.
+     * Enum values are stored as their names, including inside collections and maps.
+     * Collections are copied to lists and maps must have string keys. Supported
+     * values include strings, booleans, characters, primitive numeric wrappers,
+     * BigInteger, BigDecimal, and Bukkit ConfigurationSerializable objects.
+     * Serializable objects are trusted to supply valid serialization themselves.
+     * Null removes the path.
+     *
+     * @throws IllegalArgumentException If a value is unsupported, a map key is not
+     * a string, or a container contains a cycle; the previous value is preserved.
      *
      * @param path The path to set the value at.
      * @param value The value to set.
