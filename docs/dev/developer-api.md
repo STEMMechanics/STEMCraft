@@ -46,14 +46,14 @@ From `STEMCraftAPI`, you can access:
 ## Command Registration Example
 
 ```java
+import dev.stemcraft.api.STEMCraftAPI;
+
 final class ExampleCommands {
     void register(STEMCraftAPI api, org.bukkit.plugin.Plugin yourPlugin) {
         api.commands().create("example")
             .permission("stemcraft.command.example")
             .usage("/example")
-            .executor((plugin, cmd, ctx) -> {
-                ctx.returnInfo("Hello from example.");
-            })
+            .executor((plugin, cmd, ctx) -> ctx.returnInfo("Hello from example."))
             .register(yourPlugin);
     }
 }
@@ -62,11 +62,12 @@ final class ExampleCommands {
 ## Event Registration Example
 
 ```java
+import dev.stemcraft.api.STEMCraftAPI;
+
 final class ExampleEvents {
     void register(STEMCraftAPI api) {
-        api.events().register(org.bukkit.event.player.PlayerJoinEvent.class, event -> {
-            api.messages().info(event.getPlayer(), "Welcome!");
-        });
+        api.events().register(org.bukkit.event.player.PlayerJoinEvent.class,
+            event -> api.messages().info(event.getPlayer(), "Welcome!"));
     }
 }
 ```
@@ -76,11 +77,19 @@ final class ExampleEvents {
 Companion plugins can append live, player-specific information to `/coordbar`. Return `null` when an entry is not currently relevant. Lower priorities render first, and registering the same plugin and ID replaces the previous provider.
 
 ```java
-api.coordinateBar().register(yourPlugin, "home-distance", 200, player -> {
-    Location home = homes.get(player.getUniqueId());
-    if (home == null) return null;
-    return Component.text("Home " + Math.round(player.getLocation().distance(home)) + "m");
-});
+import dev.stemcraft.api.STEMCraftAPI;
+import org.bukkit.Location;
+import net.kyori.adventure.text.Component;
+
+final class ExampleCoordinateBar {
+    void register(STEMCraftAPI api, org.bukkit.plugin.Plugin yourPlugin, java.util.Map<java.util.UUID, Location> homes) {
+        api.coordinateBar().register(yourPlugin, "home-distance", 200, player -> {
+            Location home = homes.get(player.getUniqueId());
+            if (home == null) return null;
+            return Component.text("Home " + Math.round(player.getLocation().distance(home)) + "m");
+        });
+    }
+}
 ```
 
 Call `api.coordinateBar().unregister(yourPlugin, "home-distance")` when removing the integration. Registrations owned by disabled plugins are discarded automatically.
@@ -90,12 +99,23 @@ Call `api.coordinateBar().unregister(yourPlugin, "home-distance")` when removing
 `MailboxService#send(MailSendRequest)` queues a written letter and optional item stacks. Recipients use only their UUID; STEMCraft resolves their current known name internally. Senders use either a player UUID or a system/plugin display string.
 
 ```java
-MailSendResult result = api.mailboxes().send(new MailSendRequest(
-    "Daily Rewards",
-    recipientUuid,
-    "Here is today's reward.",
-    List.of(new ItemStack(Material.EMERALD, 2))
-));
+import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.api.service.mailbox.MailSendRequest;
+import dev.stemcraft.api.service.mailbox.MailSendResult;
+import org.bukkit.Material;
+import org.bukkit.inventory.ItemStack;
+import java.util.List;
+
+final class ExampleMail {
+    MailSendResult send(STEMCraftAPI api, java.util.UUID recipientUuid) {
+        return api.mailboxes().send(new MailSendRequest(
+            "Daily Rewards",
+            recipientUuid,
+            "Here is today's reward.",
+            List.of(new ItemStack(Material.EMERALD, 2))
+        ));
+    }
+}
 ```
 
 Use `result.queued()` and `result.message()` to inspect the outcome. See [Mailboxes](https://github.com/STEMMechanics/stemcraft/wiki/mailboxes) for the complete feature guide.
@@ -103,13 +123,21 @@ Use `result.queued()` and `result.message()` to inspect the outcome. See [Mailbo
 Mail uses the configured delivery delay by default (`-1`). Pass a tick delay as the final constructor argument to override it: `0` delivers on the next queue pass, while a positive value applies that delay. This example delays delivery by 15 seconds:
 
 ```java
-api.mailboxes().send(new MailSendRequest(
-    "Minigame Rewards",
-    recipientUuid,
-    "Congratulations!",
-    List.of(gift),
-    300L
-));
+import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.api.service.mailbox.MailSendRequest;
+import java.util.List;
+
+final class ExampleDelayedMail {
+    void send(STEMCraftAPI api, java.util.UUID recipientUuid, org.bukkit.inventory.ItemStack gift) {
+        api.mailboxes().send(new MailSendRequest(
+            "Minigame Rewards",
+            recipientUuid,
+            "Congratulations!",
+            List.of(gift),
+            300L
+        ));
+    }
+}
 ```
 
 ## Gift API
@@ -121,12 +149,21 @@ api.mailboxes().send(new MailSendRequest(
 `CometService` launches a comet at an exact impact location with either a random or supplied horizontal direction. Optional `CometLoot` entries place randomized reward blocks around the terminal geode.
 
 ```java
-api.comets().launch(
-    impactLocation,
-    new Vector(1, 0, -1),
-    new CometLoot(Material.GOLD_BLOCK, 2, 15),
-    new CometLoot(Material.EMERALD_BLOCK, 1, 4)
-);
+import dev.stemcraft.api.STEMCraftAPI;
+import org.bukkit.util.Vector;
+import org.bukkit.Material;
+import dev.stemcraft.api.service.comet.CometLoot;
+
+final class ExampleComet {
+    void launch(STEMCraftAPI api, org.bukkit.Location impactLocation) {
+        api.comets().launch(
+            impactLocation,
+            new Vector(1, 0, -1),
+            new CometLoot(Material.GOLD_BLOCK, 2, 15),
+            new CometLoot(Material.EMERALD_BLOCK, 1, 4)
+        );
+    }
+}
 ```
 
 See [Comets](https://github.com/STEMMechanics/stemcraft/wiki/comets) for behavior, overloads, validation, and configuration.
@@ -136,21 +173,34 @@ See [Comets](https://github.com/STEMMechanics/stemcraft/wiki/comets) for behavio
 Dynamic holograms are runtime registrations identified by a stable type and context. They can be anchored to a location or an entity UUID and can provide player-specific visibility and content.
 
 ```java
-api.holograms().createDynamic(
-    "quest",
-    questId,
-    npcUuid,
-    2.2D,
-    player -> quest.isAvailableTo(player),
-    player -> Component.text("!")
-);
+import dev.stemcraft.api.STEMCraftAPI;
+import net.kyori.adventure.text.Component;
+
+final class ExampleDynamicHologram {
+    void create(STEMCraftAPI api, String questId, java.util.UUID npcUuid, java.util.function.Predicate<org.bukkit.entity.Player> available) {
+        api.holograms().createDynamic(
+            "quest",
+            questId,
+            npcUuid,
+            2.2D,
+            available,
+            player -> Component.text("!")
+        );
+    }
+}
 ```
 
 State changes should invalidate the affected rendering:
 
 ```java
-api.holograms().refreshDynamic("quest", questId, player);
-api.holograms().deleteDynamic("quest", questId);
+import dev.stemcraft.api.STEMCraftAPI;
+
+final class ExampleHologramRefresh {
+    void refreshAndDelete(STEMCraftAPI api, String questId, org.bukkit.entity.Player player) {
+        api.holograms().refreshDynamic("quest", questId, player);
+        api.holograms().deleteDynamic("quest", questId);
+    }
+}
 ```
 
 The service manages Java/Bedrock rendering, player movement, world and chunk availability, moving entity anchors, range/line-of-sight rules, and resource-pack token refreshes. Dynamic registrations are intentionally not persisted; the owning feature re-registers them from its own stable records during startup.
@@ -160,17 +210,25 @@ The service manages Java/Bedrock rendering, player movement, world and chunk ava
 `DialogService` builds one logical form for both Paper's Java dialog UI and Geyser's Bedrock Cumulus forms.
 
 ```java
-boolean opened = api.dialogs().create("example:feedback")
-    .title(Component.text("Feedback"))
-    .body(Component.text("Tell us what happened."))
-    .textInput("subject", Component.text("Subject"), "", 64)
-    .multilineTextInput("message", Component.text("Message"), "", 256, 4)
-    .submit(Component.text("Send"), response -> {
-        String subject = response.text("subject");
-        String message = response.text("message");
-    })
-    .cancel(Component.text("Cancel"), () -> { })
-    .open(player);
+import dev.stemcraft.api.STEMCraftAPI;
+import net.kyori.adventure.text.Component;
+
+final class ExampleDialog {
+    boolean open(STEMCraftAPI api, org.bukkit.entity.Player player) {
+        return api.dialogs().create("example:feedback")
+            .title(Component.text("Feedback"))
+            .body(Component.text("Tell us what happened."))
+            .textInput("subject", Component.text("Subject"), "", 64)
+            .multilineTextInput("message", Component.text("Message"), "", 256, 4)
+            .submit(Component.text("Send"), response -> {
+                String subject = response.text("subject");
+                String message = response.text("message");
+                player.sendMessage(subject + ": " + message);
+            })
+            .cancel(Component.text("Cancel"), () -> { })
+            .open(player);
+    }
+}
 ```
 
 `open` returns `false` if the appropriate client UI cannot be opened. Callbacks run on the server thread.
@@ -180,7 +238,14 @@ boolean opened = api.dialogs().create("example:feedback")
 Messages can provide an explicit `MessageType` and optional context:
 
 ```java
-api.messages().send(player, MessageType.INFO, "survival", "You have mail");
+import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.api.service.message.MessageType;
+
+final class ExampleMessage {
+    void send(STEMCraftAPI api, org.bukkit.entity.Player player) {
+        api.messages().send(player, MessageType.INFO, "survival", "You have mail");
+    }
+}
 ```
 
 Configured strings can route themselves with leading directives:
@@ -201,6 +266,8 @@ Context prefixes are configured under `logging.contexts`. Optional `show-when` a
 ## Database Example
 
 ```java
+import dev.stemcraft.api.STEMCraftAPI;
+
 final class ExampleDatabase {
     void init(STEMCraftAPI api) {
         api.database().execute(
@@ -260,7 +327,7 @@ final class ExampleMiniGameBootstrap {
             .setTeamSelectionPolicy(new MiniGameTeamSelectionPolicy() {
                 @Override
                 public List<MiniGameTeam> assignableTeams(MiniGameArena arena, Map<Player, String> preferences) {
-                    return new ArrayList<>(arena.getTeams());
+                    return new ArrayList<MiniGameTeam>(arena.getTeams());
                 }
 
                 @Override
@@ -399,10 +466,17 @@ See bundled implementations in:
 `ImageMapService` renders a `BufferedImage` across a wall-mounted mosaic of filled maps. Displays use stable string IDs and can be created, updated, and deleted without callers managing map IDs or item-frame entities.
 
 ```java
-api.imageMaps().create("quests:lobby", backingBlock, BlockFace.NORTH, 4, 3);
-api.imageMaps().render("quests:lobby", image);
-api.imageMaps().onClick("quests:lobby", click -> handleClick(click.player(), click.tileColumn(), click.tileRow()));
-api.imageMaps().delete("quests:lobby");
+import dev.stemcraft.api.STEMCraftAPI;
+import org.bukkit.block.BlockFace;
+
+final class ExampleImageMap {
+    void create(STEMCraftAPI api, org.bukkit.Location backingBlock, java.awt.image.BufferedImage image, java.util.function.Consumer<dev.stemcraft.api.service.imagemap.ImageMapClick> handleClick) {
+        api.imageMaps().create("quests:lobby", backingBlock, BlockFace.NORTH, 4, 3);
+        api.imageMaps().render("quests:lobby", image);
+        api.imageMaps().onClick("quests:lobby", handleClick);
+        api.imageMaps().delete("quests:lobby");
+    }
+}
 ```
 
 The location is the bottom-left backing block when viewing the display from the front. Click callbacks receive the player and selected map tile on both Java and Geyser-translated Bedrock interactions. Map canvases are contextual per viewer and active maps are resent after player join, ensuring reconnecting players receive dynamic pixels as well as the item frames. Runtime registrations and callbacks are recreated by the owning feature after restart.
@@ -410,3 +484,7 @@ The location is the bottom-left backing block when viewing the display from the 
 - Prefer service interfaces from `api/src/main/java/dev/stemcraft/api/service/...`.
 - Keep world/player data in DB for persistent state; keep YAML for static configuration.
 - Use locale keys + `messages()` when possible, rather than hardcoding text.
+
+## STEMBot guide control
+
+Use `api.stemBot()` to acquire an exclusive private guide session, speak, toggle following, check action names, run a specific action, move or teleport the guide, and consume replies through a private chat callback. See [STEMBot API usage and lifecycle](stembot.md#controlling-stembot-through-the-api). Callers retain ownership of their interaction rules and reply handling.

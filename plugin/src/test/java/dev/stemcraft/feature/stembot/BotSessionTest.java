@@ -85,6 +85,71 @@ class BotSessionTest {
         );
     }
 
+    @Test void verificationFollowsWithoutRunningTourOrAcceptingDismissal() throws Exception {
+        var scriptField=BotSession.class.getDeclaredField("script");
+        scriptField.setAccessible(true);
+        var script=(BotScript)scriptField.get(session);
+        session=new BotSession(script,actor,"world",null,new BotSession.Output() {
+            public void say(String text) { output.add(text); }
+            public int talk(String text) { output.add(text); return 1; }
+        });
+        session.follow(true);
+        Location owner=here.clone().add(20,0,0);
+        session.tick(owner);
+        verify(actor).move(owner,0.9);
+        assertTrue(session.chatEngaged(),"Verification stays private outside normal chat distance");
+        session.input("bye");
+        session.input("tour");
+        assertTrue(session.controlled());
+        assertTrue(output.isEmpty());
+        session.releaseControl("start");
+        assertFalse(session.controlled());
+        session.tick(here);
+        assertTrue(output.contains("hello"));
+    }
+
+    private void controlSession() throws Exception {
+        var field=BotSession.class.getDeclaredField("script");
+        field.setAccessible(true);
+        var script=(BotScript)field.get(session);
+        session=new BotSession(script,actor,"world",null,new BotSession.Output() {
+            public void say(String text) { output.add(text); }
+            public int talk(String text) { output.add(text);return 1; }
+        });
+    }
+
+    @Test void controlledMoveCanWaitForPlayerOrProceedIndependently() throws Exception {
+        controlSession();
+        Location target=here.clone().add(30,0,0);
+        Location farOwner=here.clone().add(-20,0,0);
+        assertTrue(session.move(target,true));
+        session.tick(farOwner);
+        verify(actor,never()).move(any(),anyDouble());
+        session.tick(here);
+        verify(actor).move(target,.9);
+        clearInvocations(actor);
+        assertTrue(session.move(target,false));
+        session.tick(farOwner);
+        verify(actor).move(target,.9);
+    }
+
+    @Test void teleportCancelsMovementAndRejectsInvalidWorld() throws Exception {
+        controlSession();
+        Location destination=here.clone().add(5,1,0);
+        when(actor.teleport(destination)).thenReturn(true);
+        assertTrue(session.move(here.clone().add(30,0,0),false));
+        assertTrue(session.teleport(destination));
+        clearInvocations(actor);
+        session.tick(here);
+        verify(actor,never()).move(any(),anyDouble());
+        World elsewhere=mock(World.class);
+        when(elsewhere.getName()).thenReturn("elsewhere");
+        assertFalse(session.teleport(new Location(elsewhere,1,64,1)));
+        assertFalse(session.teleport(new Location(world,Double.NaN,64,0)));
+        assertFalse(session.move(new Location(elsewhere,1,64,1),false));
+        verify(actor,never()).teleport(any());
+    }
+
     @Test void providerSuccessAdvancesButTypedSuccessCannotFakeIt() {
         setUp(0, List.of("await:stemcraft:coordbar 60 -> done, menu"));
         session.tick(here);
