@@ -94,6 +94,7 @@ class STEMCraftAPIImplTest {
         "recipes",
         "saves",
         "selections",
+        "stemBot",
         "regions",
         "tabComplete",
         "tasks",
@@ -187,6 +188,7 @@ class STEMCraftAPIImplTest {
         when(plugin.worlds()).thenReturn(worlds);
 
         expectedDelegates = new LinkedHashMap<>();
+        expectedDelegates.put("stemBot", dev.stemcraft.api.service.stembot.StemBotService.UNAVAILABLE);
         expectedDelegates.put("audit", audit);
         expectedDelegates.put("comets", comets);
         expectedDelegates.put("commands", commands);
@@ -261,7 +263,10 @@ class STEMCraftAPIImplTest {
         assertTrue(STEMCraft.isMinecraftVersionSupported(new int[] {26, 2, 0}));
         assertTrue(STEMCraft.isMinecraftVersionSupported(new int[] {26, 2, 1}));
         assertTrue(STEMCraft.isMinecraftVersionSupported(new int[] {27, 0, 0}));
-        assertFalse(STEMCraft.isMinecraftVersionSupported(null));
+        int[] missingVersion = null;
+        // Exercise the null-input contract despite static analysis knowing its result.
+        //noinspection ConstantValue
+        assertFalse(STEMCraft.isMinecraftVersionSupported(missingVersion));
     }
 
     @Test
@@ -293,6 +298,14 @@ class STEMCraftAPIImplTest {
             .collect(Collectors.toSet());
 
         assertEquals(actualMethodNames, expectedMethodNames);
+    }
+
+    @Test
+    void optionalStemBotServiceUsesAvailableFeature() {
+        assertFalse(api.stemBot().available());
+        var bot=mock(dev.stemcraft.feature.StemBotFeature.class);
+        when(plugin.stemBot()).thenReturn(bot);
+        assertSame(bot,api.stemBot());
     }
 
     @Test
