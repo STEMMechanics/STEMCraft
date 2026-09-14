@@ -6,6 +6,8 @@ import dev.stemcraft.api.config.ConfigFile;
 import dev.stemcraft.api.util.TextUtil;
 
 import dev.stemcraft.feature.stembot.*;
+import dev.stemcraft.api.service.stembot.StemBotService;
+import dev.stemcraft.api.service.stembot.StemBotSession;
 import io.papermc.paper.event.player.AsyncChatEvent;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -23,9 +25,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 
 /** Private scripted STEMBot sessions. */
-public final class StemBotFeature extends BaseFeature {
+public final class StemBotFeature extends BaseFeature implements StemBotService {
     private static final String TASK="feature:stembot";
 
+    private final Map<UUID,ControlledGuide> controls=new ConcurrentHashMap<>();
     private final Map<UUID,BotSession> sessions=new ConcurrentHashMap<>();
     private final Set<AsyncChatEvent> privateChat=
         Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
@@ -64,6 +67,11 @@ public final class StemBotFeature extends BaseFeature {
                 ctx.checkNotConsole();
                 Player player=ctx.asPlayer();
 
+                if(controls.containsKey(player.getUniqueId())) {
+                    ctx.returnError("STEMBot is busy guiding you. Finish the current conversation first.");
+                    return;
+                }
+
                 if(ctx.getArg(0,"").equalsIgnoreCase("close")) {
                     close(player.getUniqueId());
                     return;
@@ -76,12 +84,6 @@ public final class StemBotFeature extends BaseFeature {
 
                 if(!available()) {
                     ctx.returnError("STEMBot is resting right now.");
-                    return;
-                }
-
-                if(verifying(player)) {
-                    ctx.returnError(
-                        "Finish the welcome check first, then ask STEMBot for help.");
                     return;
                 }
 
@@ -151,12 +153,119 @@ public final class StemBotFeature extends BaseFeature {
 
     public boolean isPrivateChat(AsyncChatEvent event) {
         BotSession session=sessions.get(event.getPlayer().getUniqueId());
+        ControlledGuide guide=controls.get(event.getPlayer().getUniqueId());
         return privateChat.contains(event)
-            ||(session!=null&&session.chatEngaged())
+            ||(session!=null&&(session.controlled()
+                ? guide!=null&&guide.listening()
+                : session.chatEngaged()))
             ||pendingSummons.containsKey(event.getPlayer().getUniqueId());
     }
 
-    private boolean available() {
+    @Override
+    public Optional<StemBotSession> open(Player player) {
+        UUID id=player.getUniqueId();
+        if(!available()||controls.containsKey(id)) return Optional.empty();
+        close(id,false);
+        start(player,null,false);
+        ControlledGuide guide=new ControlledGuide(player,sessions.get(id));
+        controls.put(id,guide);
+        return Optional.of(guide);
+    }
+
+    private final class ControlledGuide implements StemBotSession {
+        private final Player player;
+        private final BotSession session;
+        private volatile java.util.function.Consumer<String> replies;
+        private volatile Object replyRevision=new Object();
+        private ControlledGuide(Player player,BotSession session) {
+            this.player=player;
+            this.session=session;
+        }
+        private boolean owns() { return controls.get(player.getUniqueId())==this; }
+        public boolean active() {
+            return owns()&&session!=null&&sessions.get(player.getUniqueId())==session&&session.controlled();
+        }
+        public boolean speak(String message) {
+            if(!active()) return false;
+            talkLine(player,session.actor(),message);
+            return true;
+        }
+        public Optional<Location> location() {
+            return active()?Optional.of(session.actor().location().clone()):Optional.empty();
+        }
+        public boolean teleport(Location destination) {
+            return active()&&session.teleport(destination);
+        }
+        public void follow(boolean enabled) { if(active()) session.follow(enabled); }
+        public boolean startAction(String action) {
+            if(!owns()||!available()||!hasAction(action)) return false;
+            if(!runAction(player,action,false)) return false;
+            controls.remove(player.getUniqueId(),this);
+            return true;
+        }
+        public boolean move(Location destination,boolean waitForPlayer) {
+            return active()&&session.move(destination,waitForPlayer);
+        }
+        public void listen(java.util.function.Consumer<String> listener) {
+            if(active()) {
+                replyRevision=new Object();
+                replies=Objects.requireNonNull(listener);
+            }
+        }
+        public void stopListening() { replyRevision=new Object(); replies=null; }
+        public boolean listening() { return active()&&replies!=null; }
+        public void close() {
+            if(!controls.remove(player.getUniqueId(),this)) return;
+            if(session!=null&&sessions.get(player.getUniqueId())==session)
+                StemBotFeature.this.close(player.getUniqueId(),false);
+        }
+    }
+
+    @Override
+    public boolean hasAction(String action) {
+        return script!=null&&action!=null&&script.actions().containsKey(action);
+    }
+
+    @Override
+    public boolean startAction(Player player,String action) {
+        return !controls.containsKey(player.getUniqueId())&&available()&&hasAction(action)
+            &&runAction(player,action,false);
+    }
+
+    private void startFirstTimeAction(Player player) {
+        String action=unseenFirstTimeAction(player);
+        if(action!=null&&!controls.containsKey(player.getUniqueId())&&available())
+            runAction(player,action,true);
+    }
+
+    private String unseenFirstTimeAction(Player player) {
+        String world=player.getWorld().getName();
+        if(script==null||hasSeenWorld(player,world)) return null;
+        String action=script.firstTimeAction(world);
+        return hasAction(action)?action:null;
+    }
+
+    private boolean runAction(Player player,String action,boolean firstTime) {
+        if(!player.isOnline()) return false;
+        UUID id=player.getUniqueId();
+        BotSession session=sessions.get(id);
+        if(session!=null&&session.controlled()) {
+            session.releaseControl(action);
+            if(firstTime) markSeenWorld(player,player.getWorld().getName());
+        } else {
+            // Preserve a caller's reservation if spawning fails.
+            BotSession previous=sessions.remove(id);
+            if(previous!=null) previous.close(false);
+            start(player,action,firstTime);
+            if(!sessions.containsKey(id)) return false;
+        }
+        pendingFirstTime.remove(id);
+        pendingSummons.remove(id);
+        return true;
+    }
+
+    @Override
+    public boolean available() {
         return enabled&&script!=null&&dev.stemcraft.integration.CitizensAccess.available();
     }
 
@@ -164,6 +273,22 @@ public final class StemBotFeature extends BaseFeature {
         UUID id=event.getPlayer().getUniqueId();
         BotSession session=sessions.get(id);
         if(session==null&&!pendingSummons.containsKey(id)) return;
+        if(session!=null&&session.controlled()) {
+            ControlledGuide guide=controls.get(id);
+            if(guide==null||!guide.listening()) return;
+            Object revision=guide.replyRevision;
+            var receiver=guide.replies;
+            privateChat.add(event);
+            event.setCancelled(true);
+            event.viewers().clear();
+            String text=PlainTextComponentSerializer.plainText().serialize(event.message());
+            api.tasks().nextTick(()->{
+                if(!guide.listening()||guide.replies!=receiver||guide.replyRevision!=revision) return;
+                guide.player.sendMessage(replyLine(guide.player,text));
+                receiver.accept(text);
+            });
+            return;
+        }
         if(session!=null&&!session.chatEngaged()) return;
 
         privateChat.add(event);
@@ -238,7 +363,7 @@ public final class StemBotFeature extends BaseFeature {
     }
 
     private void queueFirstTime(Player player,int ticks) {
-        if(script==null) return;
+        if(script==null||controls.containsKey(player.getUniqueId())) return;
 
         String action=script.firstTimeAction(player.getWorld().getName());
         if(action==null||hasSeenWorld(player,player.getWorld().getName()))
@@ -259,7 +384,7 @@ public final class StemBotFeature extends BaseFeature {
             }
             Player player=Bukkit.getPlayer(entry.getKey());
             try {
-                if(player!=null&&!verifying(player)) start(player,entry.getValue().action(),false);
+                if(player!=null&&!controls.containsKey(player.getUniqueId())) start(player,entry.getValue().action(),false);
             } finally {
                 pendingSummons.remove(entry.getKey());
             }
@@ -273,7 +398,7 @@ public final class StemBotFeature extends BaseFeature {
                 continue;
             }
 
-            if(verifying(player))
+            if(controls.containsKey(player.getUniqueId()))
                 continue;
 
             String world=player.getWorld().getName();
@@ -293,7 +418,7 @@ public final class StemBotFeature extends BaseFeature {
             pendingFirstTime.remove(entry.getKey());
 
             if(!sessions.containsKey(player.getUniqueId())&&!pendingSummons.containsKey(player.getUniqueId()))
-                start(player,action,true);
+                startFirstTimeAction(player);
         }
 
         for(var entry:new ArrayList<>(sessions.entrySet())) {
@@ -319,11 +444,6 @@ public final class StemBotFeature extends BaseFeature {
                 );
             }
         }
-    }
-
-    private boolean verifying(Player player) {
-        var first=STEMCraft.getPlugin().firstJoin();
-        return first!=null&&first.hasActiveSession(player.getUniqueId());
     }
 
     void summon(Player player,String action) {
@@ -358,7 +478,7 @@ public final class StemBotFeature extends BaseFeature {
         }
     }
 
-    private void start(Player player,String action,boolean firstTime) {
+    void start(Player player,String action,boolean firstTime) {
         if(!available()||!player.isOnline()) return;
 
         UUID id=player.getUniqueId();
@@ -651,7 +771,10 @@ public final class StemBotFeature extends BaseFeature {
         close(id,true);
     }
 
+    // The actor is disposed below; the handle only represents ownership across ticks.
+    @SuppressWarnings("resource")
     private void close(UUID id,boolean farewell) {
+        controls.remove(id);
         pendingFirstTime.remove(id);
         pendingSummons.remove(id);
 
@@ -662,6 +785,7 @@ public final class StemBotFeature extends BaseFeature {
 
     private void stop() {
         epoch++;
+        controls.clear();
         pendingFirstTime.clear();
         pendingSummons.clear();
         skins.close();

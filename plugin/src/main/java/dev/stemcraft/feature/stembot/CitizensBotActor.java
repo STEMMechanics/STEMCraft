@@ -105,6 +105,11 @@ public final class CitizensBotActor implements BotActor {
     }
 
     @Override
+    public boolean teleport(Location destination) {
+        return valid()&&entity().teleport(destination,org.bukkit.event.player.PlayerTeleportEvent.TeleportCause.PLUGIN);
+    }
+
+    @Override
     public boolean valid() {
         return (boolean)invoke(npc,"isSpawned")
             &&entity()!=null

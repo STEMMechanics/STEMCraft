@@ -69,6 +69,12 @@ public class STEMCraftAPIImpl extends HasMessagesImpl implements STEMCraftAPI {
         this.plugin = plugin;
     }
 
+    @Override
+    public dev.stemcraft.api.service.stembot.StemBotService stemBot() {
+        var bot=plugin.stemBot();
+        return bot==null?dev.stemcraft.api.service.stembot.StemBotService.UNAVAILABLE:bot;
+    }
+
     /**
      * Get the current version of STEMCraft.
      */

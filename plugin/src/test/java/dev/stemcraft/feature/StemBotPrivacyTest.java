@@ -48,6 +48,115 @@ class StemBotPrivacyTest {
         assertTrue(feature.isPrivateChat(event),"An already-captured reply must remain private after walking away");
     }
 
+    @Test void controlledChatRequiresListenerAndDiscardsQueuedRepliesAfterStop() {
+        feature=spy(feature);
+        doReturn(true).when(feature).available();
+        BotSession session=mock(BotSession.class);
+        when(session.controlled()).thenReturn(true);
+        doAnswer(call->{sessions.put(owner.getUniqueId(),session);return null;})
+            .when(feature).start(owner,null,false);
+        try(var handle=feature.open(owner).orElseThrow()) {
+        AsyncChatEvent event=mock(AsyncChatEvent.class);
+        when(event.getPlayer()).thenReturn(owner);
+        when(event.message()).thenReturn(Component.text("hello"));
+        Set<Audience> viewers=new HashSet<>(List.of(owner,other));
+        when(event.viewers()).thenReturn(viewers);
+        feature.chat(event);
+        verify(event,never()).setCancelled(anyBoolean());
+        assertFalse(feature.isPrivateChat(event));
+        List<String> replies=new ArrayList<>();
+        List<Runnable> queued=new ArrayList<>();
+        doAnswer(call->{queued.add(call.getArgument(0));return null;}).when(tasks).nextTick(any());
+        java.util.function.Consumer<String> listener=replies::add;
+        handle.listen(listener);
+        feature.chat(event);
+        assertTrue(viewers.isEmpty());
+        assertTrue(replies.isEmpty());
+        queued.removeFirst().run();
+        assertEquals(List.of("hello"),replies);
+        feature.chat(event);
+        handle.stopListening();
+        handle.listen(listener); // Even the same callback begins a new listening period.
+        queued.removeFirst().run();
+        assertEquals(1,replies.size());
+        assertTrue(feature.isPrivateChat(event),"Captured events stay private after listening stops");
+        verify(session,never()).input(anyString());
+        }
+    }
+
+    @Test void apiControlIsExclusiveAndStaleHandlesCannotAffectReplacement() {
+        feature=spy(feature);
+        doReturn(true).when(feature).available();
+        BotSession first=mock(BotSession.class);
+        when(first.controlled()).thenReturn(true);
+        doAnswer(call->{sessions.put(owner.getUniqueId(),first);return null;})
+            .when(feature).start(owner,null,false);
+        var handle=feature.open(owner).orElseThrow();
+        assertTrue(handle.active());
+        assertTrue(feature.open(owner).isEmpty(),"A second caller cannot steal control");
+        handle.follow(true);
+        verify(first).follow(true);
+        BotActor actor=mock(BotActor.class);
+        var position=owner.getLocation();
+        when(first.actor()).thenReturn(actor);
+        when(actor.location()).thenReturn(position);
+        var returned=handle.location().orElseThrow();
+        returned.add(10,0,0);
+        assertNotEquals(returned,position);
+        when(first.teleport(position)).thenReturn(true);
+        assertTrue(handle.teleport(position));
+        verify(first).teleport(position);
+        handle.close();
+        handle.close();
+        verify(first,times(1)).close(false);
+        assertFalse(handle.active());
+        assertTrue(handle.location().isEmpty());
+        assertFalse(handle.teleport(position));
+
+        BotSession replacement=mock(BotSession.class);
+        when(replacement.controlled()).thenReturn(true);
+        doAnswer(call->{sessions.put(owner.getUniqueId(),replacement);return null;})
+            .when(feature).start(owner,null,false);
+        var next=feature.open(owner).orElseThrow();
+        handle.close();
+        handle.follow(true);
+        handle.startAction("first-hub");
+        assertTrue(next.active());
+        verify(replacement,never()).close(anyBoolean());
+        verify(replacement,never()).follow(anyBoolean());
+        feature.onDisable();
+        assertFalse(next.active());
+    }
+
+    @Test void namedActionsAreGenericAndMissingActionKeepsControl() throws Exception {
+        feature=spy(feature);
+        doReturn(true).when(feature).available();
+        var script=mock(dev.stemcraft.feature.stembot.BotScript.class);
+        when(script.actions()).thenReturn(Map.of("give-directions",List.of()));
+        var field=StemBotFeature.class.getDeclaredField("script");
+        field.setAccessible(true);field.set(feature,script);
+        BotSession session=mock(BotSession.class);
+        when(session.controlled()).thenReturn(true);
+        doAnswer(call->{sessions.put(owner.getUniqueId(),session);return null;})
+            .when(feature).start(owner,null,false);
+        var handle=feature.open(owner).orElseThrow();
+        assertTrue(feature.hasAction("give-directions"));
+        assertFalse(feature.hasAction("first-hub"));
+        assertFalse(handle.startAction("missing"));
+        assertTrue(handle.active());
+        assertFalse(feature.startAction(owner,"give-directions"),"Only the owner can hand off");
+        assertTrue(handle.startAction("give-directions"));
+        verify(session).releaseControl("give-directions");
+        assertFalse(handle.active());
+        handle.close();
+        verify(session,never()).close(anyBoolean());
+    }
+
+    @Test void unavailableGuideDoesNotReserveControl() {
+        assertTrue(feature.open(owner).isEmpty());
+        assertFalse(feature.available());
+    }
+
     @Test void resummonIsSilentAndWaitsForDepartureWithoutDuplicatingRequests() throws Exception {
         BotSession session=mock(BotSession.class);
         BotActor actor=mock(BotActor.class);

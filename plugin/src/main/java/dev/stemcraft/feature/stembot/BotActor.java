@@ -5,6 +5,7 @@ import org.bukkit.Location;
 /** Small Citizens boundary so the action engine can be tested without a live NPC. */
 public interface BotActor {
     Location location();
+    boolean teleport(Location destination);
     boolean valid();
     boolean navigating();
 

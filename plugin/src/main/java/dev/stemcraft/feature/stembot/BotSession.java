@@ -69,6 +69,10 @@ public final class BotSession {
     private int lastProgress;
     private int navigationStarted = -1;
     private boolean playerBehind;
+    private volatile boolean controlled;
+    private boolean following;
+    private boolean waitForPlayer;
+    private int followTicks;
     private volatile boolean closed;
     private volatile boolean chatEngaged=true;
     private int awayTicks;
@@ -76,7 +80,7 @@ public final class BotSession {
     private long callbackRevision;
     private Runnable cancelCallback = () -> { };
 
-    /** Create a session at a validated action; tick and input must run on the server thread. */
+    /** Create a session at a validated action (null starts external control); tick and input must run on the server thread. */
     public BotSession(
         BotScript script,
         BotActor actor,
@@ -89,7 +93,56 @@ public final class BotSession {
         this.world=world;
         this.output=output;
         this.speed=script.defaultSpeed();
-        jumpTo(initialAction);
+        if(initialAction == null) controlled=true;
+        else jumpTo(initialAction);
+    }
+
+    /** External callers own controlled dialogue; script input cannot interrupt it. */
+    public boolean controlled() { return controlled&&!closed; }
+
+    public void follow(boolean enabled) {
+        if(!controlled()) return;
+        resetRecovery();
+        walkTarget=null;
+        waitMode=WaitMode.NONE;
+        playerBehind=false;
+        following=enabled;
+        actor.cancel();
+    }
+
+    public boolean move(Location destination,boolean waitForPlayer) {
+        if(!controlled()||destination==null||destination.getWorld()==null
+            ||!world.equals(destination.getWorld().getName())
+            ||!Double.isFinite(destination.getX())||!Double.isFinite(destination.getY())
+            ||!Double.isFinite(destination.getZ())) return false;
+        follow(false);
+        this.waitForPlayer=waitForPlayer;
+        walkTarget=destination.clone();
+        walkSpeed=speed;
+        waitMode=WaitMode.WALK;
+        resetWalkProgress();
+        return true;
+    }
+
+    public boolean teleport(Location destination) {
+        if(!controlled()||destination==null||destination.getWorld()==null
+            ||!world.equals(destination.getWorld().getName())
+            ||!Double.isFinite(destination.getX())||!Double.isFinite(destination.getY())
+            ||!Double.isFinite(destination.getZ())||!Float.isFinite(destination.getYaw())
+            ||!Float.isFinite(destination.getPitch())) return false;
+        follow(false);
+        return actor.teleport(destination.clone());
+    }
+
+    public void releaseControl(String actionName) {
+        if(!controlled()) return;
+        follow(false);
+        controlled=false;
+        idle=0;
+        speechRevision++;
+        actor.cancel();
+        if(actionName==null) close(false);
+        else jumpTo(actionName);
     }
 
     /** @return the private actor controlled by this session */
@@ -110,7 +163,7 @@ public final class BotSession {
 
     /** Route a private player reply, allowing recognised topics to interrupt an active action. */
     public void input(String text) {
-        if(!chatEngaged()) return;
+        if(controlled||!chatEngaged()) return;
         idle=0;
 
         String input=text.trim();
@@ -195,6 +248,25 @@ public final class BotSession {
             ||owner.getWorld()==null
             ||!owner.getWorld().getName().equals(world)) {
             close(chatEngaged);
+            return;
+        }
+
+        if(controlled) {
+            idle=0;
+            age+=5;
+            if(waitMode==WaitMode.WALK) {
+                if(tickWalk(owner)) waitMode=WaitMode.NONE;
+                return;
+            }
+            if(waitMode==WaitMode.STUCK) return;
+            actor.lookAt(owner);
+            followTicks-=5;
+            if(following&&actor.location().distanceSquared(owner)>9) {
+                if(followTicks<=0) {
+                    actor.move(owner.clone(),speed);
+                    followTicks=20;
+                }
+            } else if(actor.navigating()) actor.cancel();
             return;
         }
 
@@ -391,7 +463,7 @@ public final class BotSession {
         double waitDistance=script.waitDistance();
         double resumeDistance=script.resumeDistance();
 
-        if(!playerBehind&&playerDistance>waitDistance*waitDistance) {
+        if((!controlled||waitForPlayer)&&!playerBehind&&playerDistance>waitDistance*waitDistance) {
             playerBehind=true;
             actor.cancel();
 
@@ -484,6 +556,10 @@ public final class BotSession {
             }
             waitMode=WaitMode.STUCK;
 
+            if(controlled) {
+                output.say("I could not reach that destination.");
+                return false;
+            }
             for(String line:script.randomSystemMessage(script.stuck()))
                 output.say(line.replace("{action}",action)
                     .replace("{world}",world)
