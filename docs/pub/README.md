@@ -4,7 +4,7 @@ description: The player handbook for the STEMCraft Minecraft server.
 
 # Welcome
 
-<figure><img src=".gitbook/assets/lobby.png" alt=""><figcaption></figcaption></figure>
+<figure><img src=".gitbook/assets/hub.png" alt=""><figcaption></figcaption></figure>
 
 Whether you're joining for the first time, building in Survival, creating something amazing, or jumping into a minigame, you'll find everything you need to get started and make the most of STEMCraft.
 
@@ -18,8 +18,8 @@ Start with [Getting Started](getting-started.md) to learn how to join and what t
 
 * **New player:** [Getting Started](getting-started.md) → [Hub](hub.md) → [STEMBot](stembot.md).
 * **Builder:** [Creative plots](creative.md) and [formatted signs](signs.md).
-* **Adventurer:** [Survival](survival/README.md), [quests](survival/quests.md), [skills](survival/progression.md), and [worlds](worlds/README.md).
-* **Quick game:** [Minigames](minigames/README.md).
+* **Adventurer:** [Survival](survival/), [quests](survival/quests.md), [skills](survival/progression.md), and [worlds](worlds/).
+* **Quick game:** [Minigames](minigames/).
 
 ### Need help finding something?
 
@@ -32,4 +32,3 @@ Can't find what you're looking for? Ask us on [Discord](https://stemmech.com.au/
 
 Visit the [STEMCraft website](https://www.stemmechanics.com.au/stemcraft) for server information, events and workshops.
 {% endhint %}
-
