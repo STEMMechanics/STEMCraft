@@ -1306,6 +1306,8 @@ gifts:
 
 # Availability changes apply on restart. Loaded worlds retain their generator.
 world-generation:
+  underhalls:
+    enabled: true
   deep:
     enabled: true
   wasteland:
@@ -1314,6 +1316,17 @@ world-generation:
     enabled: true
   faraway:
     enabled: true
+
+underhalls:
+  source-world: survival
+  world: survival_underhalls
+  entrances:
+    enabled: true
+    interval-seconds: 900
+    chance: 0.2
+    max-active: 16
+    # Applies to active AND permanently retired entrances.
+    minimum-distance: 256
 
 # Private Citizens guide. Dialogue, skin and routes live in stembot.yml.
 stembot:
