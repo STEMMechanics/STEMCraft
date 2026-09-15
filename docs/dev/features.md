@@ -18,6 +18,56 @@ Features are discovered from `dev.stemcraft.feature` and loaded through `BaseFea
 | `GameModeAliases` | Registers short aliases such as `gms`, `gmc`, `gma`, and `gmsp` |
 | `GameModeInventories` | Keeps inventory state separate across gamemode profiles |
 
+### Shared world inventories
+
+GMI automatically groups worlds by the name before the first underscore:
+`survival`, `survival_nether`, and `survival_deep` share `survival`;
+`bridge_amazon` and `bridge_western` share `bridge`. A world with no underscore
+uses its full name, such as `hub`. Names beginning with an underscore use their
+full name to avoid an empty group.
+
+Override a world's group in `config.yml`:
+
+```yaml
+worlds:
+  survival: {}
+  survival_nether:
+    inventory-group: nether
+  survival_deep: {}
+  hub: {}
+  bridge_amazon: {}
+  bridge_western:
+    inventory-group: nether
+```
+
+This produces four groups:
+
+| Group | Worlds |
+| --- | --- |
+| `survival` | `survival`, `survival_deep` |
+| `hub` | `hub` |
+| `bridge` | `bridge_amazon` |
+| `nether` | `survival_nether`, `bridge_western` |
+
+An explicit nonblank `inventory-group` replaces automatic grouping for that
+world. Group names are literal and case-sensitive; they are not split on
+underscores or resolved through another world's settings. An explicit group can
+also join an automatic group of the same name. Missing or blank values restore
+automatic grouping. To isolate a world, give it a unique group name.
+There is no separate GMI grouping configuration.
+
+Game modes remain separate within each group. Profiles include inventory,
+armour, Ender Chest, XP, health, hunger, and potion effects. GMI skips registered
+minigame participants, whose inventory is managed by the minigame system.
+Visiting a minigame world without joining still uses GMI.
+
+Restart or run `/stemcraft reload` after editing. On reload, online players'
+current profiles are saved before switching groups. Existing profiles are
+retained, not merged: `survival_deep` now uses the existing `survival` profile,
+while its former separate profile remains stored. A new group starts with an
+empty inventory. Set an explicit group to the former group name if you want to
+continue using that old profile.
+
 ## Content and UI
 
 | Feature | Purpose |

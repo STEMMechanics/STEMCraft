@@ -41,6 +41,10 @@ hub:
       as-player: true
 
 worlds:
+  # Inventory groups default to the world-name prefix before the first underscore.
+  # Set inventory-group on a world to override it (same strings share inventories).
+  # Example: survival_nether: {inventory-group: nether}
+  # Game modes remain separate; changing groups does not merge stored profiles.
   world:
     display-name: "World"
 
