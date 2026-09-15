@@ -1318,6 +1318,13 @@ world-generation:
     enabled: true
 
 underhalls:
+  passages:
+    # Chance per eligible internal cell boundary, applied once as chunks load.
+    chance: 0.12
+  mobs:
+    enabled: true
+    interval-seconds: 120
+    max-per-world: 3
   source-world: survival
   world: survival_underhalls
   exits:

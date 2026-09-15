@@ -188,3 +188,44 @@ underhalls:
 
 Run `/stemcraft reload`, then `/underhalls enter`. The previous world is retained;
 changing its generator would not replace already-generated terrain.
+
+## Narrow passages and stalkers
+
+Loaded chunks receive occasional one-block-wide, two-block-high vents through
+closed walls, sometimes at ceiling height with three steps on either side.
+Other connections become short, skinny halls. These details are seeded and
+applied once per chunk, including existing terrain. Door cells are excluded;
+changes touching player construction, unexpected blocks or entities are skipped.
+Generated steps and walls have the same protection as the rest of the maze.
+
+`underhalls.passages.chance` defaults to `0.12` per eligible internal cell
+boundary. Set it to `0` to stop further additions. Changing it affects chunks
+that have not yet received details; existing passages remain.
+
+Stalkers are ordinary skeletons equipped for melee: iron sword, 60 health,
+12 armour, increased damage and knockback resistance. They retain normal
+skeleton sounds and cannot pick up equipment or shoot bows. Their sword does
+not drop. They attempt to appear 18–32 blocks from a survival/adventure player,
+behind walls, outside door rooms and only in already-loaded chunks.
+
+Defaults under `underhalls.mobs`:
+
+```yaml
+enabled: true
+interval-seconds: 120
+max-per-world: 3
+```
+
+There is at most one new stalker per world per interval, and no new spawn within
+64 blocks of an existing stalker near the selected player. The cap counts loaded
+stalkers. Peaceful difficulty disables encounters. Stalkers are removed when their
+chunk unloads or the feature stops; disabling mobs and reloading also removes
+them. Vanilla natural spawns remain disabled, keeping bow skeletons and crowds
+out of the maze. Other plugins' custom mobs and administrator summons are not
+changed.
+
+For live testing, explore in survival on a non-Peaceful difficulty. Temporarily
+set `mobs.interval-seconds: 10` and reload to shorten the wait. The spawn checks
+can still decline an attempt if no concealed site is available. Validate melee
+AI, encounter difficulty and raised-vent movement on the Paper server; automated
+tests cannot simulate client movement or vanilla mob AI.

@@ -30,6 +30,8 @@ import dev.stemcraft.chunkgen.UnderhallsGenerator;
 import dev.stemcraft.feature.underhalls.UnderhallsProtection;
 import dev.stemcraft.feature.underhalls.UnderhallsStore;
 import dev.stemcraft.feature.underhalls.UnderhallsRooms;
+import dev.stemcraft.feature.underhalls.UnderhallsPassages;
+import dev.stemcraft.feature.underhalls.UnderhallsMobs;
 import org.bukkit.event.world.ChunkLoadEvent;
 import dev.stemcraft.feature.underhalls.UnderhallsStore.*;
 import net.kyori.adventure.text.Component;
@@ -66,6 +68,10 @@ public class UnderhallsFeature extends BaseFeature {
     private final Set<Pos> pairing = new HashSet<>();
     private final ArrayDeque<Chunk> roomUpgrades = new ArrayDeque<>();
     private final Random random = new Random();
+    private final UnderhallsMobs mobs = new UnderhallsMobs();
+    private double passageChance;
+    private boolean mobsEnabled;
+    private int mobInterval, mobCap;
     private UnderhallsStore store;
     private UnderhallsProtection protection;
     private Command command;
@@ -95,7 +101,21 @@ public class UnderhallsFeature extends BaseFeature {
         });
         api.tasks().repeating(TASK + "-rooms", 1L, 1L, () -> {
             Chunk chunk = roomUpgrades.poll();
-            if (chunk != null && chunk.getWorld().isChunkLoaded(chunk.getX(), chunk.getZ())) UnderhallsRooms.upgrade(chunk, store);
+            if (chunk != null && chunk.getWorld().isChunkLoaded(chunk.getX(), chunk.getZ())) {
+                UnderhallsRooms.upgrade(chunk, store);
+                UnderhallsPassages.upgrade(chunk, store, passageChance);
+            }
+        });
+        listen(org.bukkit.event.world.ChunkUnloadEvent.class, EventPriority.MONITOR, event -> {
+            if (isMaze(event.getWorld())) UnderhallsMobs.clear(event.getChunk());
+        });
+        listen(org.bukkit.event.entity.EntityShootBowEvent.class, EventPriority.HIGHEST, event -> {
+            if (UnderhallsMobs.isStalker(event.getEntity())) event.setCancelled(true);
+        });
+        listen(org.bukkit.event.entity.CreatureSpawnEvent.class, EventPriority.HIGHEST, event -> {
+            if (isMaze(event.getLocation().getWorld()) &&
+                (event.getSpawnReason() == org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.NATURAL ||
+                 event.getSpawnReason() == org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.CHUNK_GEN)) event.setCancelled(true);
         });
         listen(PlayerMoveEvent.class, EventPriority.MONITOR, this::move);
         listen(PlayerJoinEvent.class, EventPriority.MONITOR, e -> cooldowns.put(e.getPlayer().getUniqueId(), System.currentTimeMillis() + 5000));
@@ -291,6 +311,11 @@ public class UnderhallsFeature extends BaseFeature {
 
     private void readSettings() {
         var config = getConfigSection();
+        passageChance = Math.max(0, Math.min(1, config.getDouble("passages.chance", .12)));
+        mobsEnabled = config.getBoolean("mobs.enabled", true);
+        mobInterval = Math.max(10, config.getInt("mobs.interval-seconds", 120));
+        mobCap = Math.max(1, Math.min(16, config.getInt("mobs.max-per-world", 3)));
+        if (!mobsEnabled) UnderhallsMobs.clearAll();
         sourceName = config.getString("source-world", "survival");
         mazeName = config.getString("world", "survival_underhalls");
         natural = config.getBoolean("entrances.enabled", true);
@@ -303,6 +328,7 @@ public class UnderhallsFeature extends BaseFeature {
     @Override public void onReload() { super.onReload(); readSettings(); }
     @Override public void onDisable() {
         running = false;
+        UnderhallsMobs.clearAll();
         api.tasks().cancel(TASK);
         api.tasks().cancel(TASK + "-rooms");
         roomUpgrades.clear(); pairing.clear();
@@ -346,6 +372,7 @@ public class UnderhallsFeature extends BaseFeature {
         }
     }
     private void tick() {
+        mobs.tick(mobsEnabled, mobInterval, mobCap);
         for (Entrance entrance : store.entrances()) {
             World world = Bukkit.getWorld(entrance.origin().world());
             if (!entrance.retired() && world != null && footprintLoaded(entrance.origin()) && !intact(entrance)) store.save(entrance.retire());
