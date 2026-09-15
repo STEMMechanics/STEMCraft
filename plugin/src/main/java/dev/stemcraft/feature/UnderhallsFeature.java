@@ -68,6 +68,7 @@ public class UnderhallsFeature extends BaseFeature {
     private int spacing;
     private long interval;
     private double chance;
+    private String mazeFailure;
 
     public UnderhallsFeature(STEMCraftAPI api) { super(api); }
     @Override public void onEnable() {
@@ -118,14 +119,17 @@ public class UnderhallsFeature extends BaseFeature {
                 switch (Objects.toString(ctx.getArgLower(0), "")) {
                     case "entrance" -> {
                         if (!player.getWorld().getName().equals(sourceName)) { ctx.error("Create entrances in {world}.", "world", sourceName); return; }
-                        Block ground = player.getTargetBlockExact(8);
-                        if (ground == null || !createEntrance(ground.getRelative(BlockFace.UP), player, false)) {
-                            ctx.error("No suitable doorway site. Aim at clear natural ground, away from existing entrances.");
-                        } else ctx.success("An Underhalls doorway has appeared.");
+                        var hit = player.getWorld().rayTraceBlocks(player.getEyeLocation(), player.getEyeLocation().getDirection(),
+                            8, FluidCollisionMode.NEVER, true);
+                        Block ground = hit == null ? null : hit.getHitBlock();
+                        if (ground == null) { ctx.error("Aim at solid ground within eight blocks; grass and flowers are ignored."); return; }
+                        EntranceResult result = createEntrance(ground.getRelative(BlockFace.UP), player, false);
+                        if (!result.created()) ctx.error(result.reason());
+                        else ctx.success("An Underhalls doorway has appeared.");
                     }
                     case "enter" -> api.tasks().nextTick(() -> {
                         World maze = ensureMaze();
-                        if (maze == null) { tell(player, "The Underhalls could not be loaded."); return; }
+                        if (maze == null) { tell(player, mazeFailure); return; }
                         transfer(player, arrival(maze, 0, 0), null);
                     });
                     default -> ctx.error("Usage: /underhalls <entrance|enter|status>");
@@ -158,14 +162,29 @@ public class UnderhallsFeature extends BaseFeature {
     }
     private boolean isMaze(World world) { return world != null && world.getGenerator() instanceof UnderhallsGenerator; }
     private World ensureMaze() {
+        mazeFailure = "Could not load " + mazeName + ". Check world-generation.underhalls.enabled and the server log.";
         World world = Bukkit.getWorld(mazeName);
-        if (world == null) world = api.worlds().loadWorld(mazeName);
         if (world == null) {
-            World source = Bukkit.getWorld(sourceName);
-            if (source == null || sourceName.equals(mazeName)) return null;
-            world = api.worlds().createWorld(mazeName, "underhalls", "", source.getSeed());
+            if (api.worlds().worldExists(mazeName)) {
+                String generator = api.worlds().getConfigSection(mazeName).getString("generator.key", "").toLowerCase(Locale.ROOT);
+                if (!generator.equals("underhalls") && !generator.equals("stemcraft:underhalls")) {
+                    mazeFailure = wrongGeneratorMessage();
+                    return null;
+                }
+                world = api.worlds().loadWorld(mazeName);
+            } else {
+                World source = Bukkit.getWorld(sourceName);
+                if (source == null) { mazeFailure = "Load the source world " + sourceName + " first."; return null; }
+                if (sourceName.equals(mazeName)) { mazeFailure = "The source and Underhalls world names must be different."; return null; }
+                // loadWorld also creates missing worlds, using normal terrain without saved metadata.
+                world = api.worlds().createWorld(mazeName, "underhalls", "", source.getSeed());
+            }
         }
+        if (world != null && !isMaze(world)) mazeFailure = wrongGeneratorMessage();
         return isMaze(world) ? world : null;
+    }
+    private String wrongGeneratorMessage() {
+        return mazeName + " already exists or is configured without the Underhalls generator. Set underhalls.world to a new unused name and run /stemcraft reload. The existing world has not been changed.";
     }
     private void markBuild(Block block) {
         if (block.getWorld().getName().equals(sourceName)) {
@@ -191,7 +210,7 @@ public class UnderhallsFeature extends BaseFeature {
             if (!untouchedNeighborhood(world, chunk.getX(), chunk.getZ())) continue;
             if (world.getPlayers().stream().anyMatch(p -> Math.hypot(p.getLocation().getX() - x, p.getLocation().getZ() - z) < 96)) continue;
             int y = world.getHighestBlockYAt(x, z, HeightMap.MOTION_BLOCKING_NO_LEAVES) + 1;
-            if (createEntrance(world.getBlockAt(x, y, z), null, true)) break;
+            if (createEntrance(world.getBlockAt(x, y, z), null, true).created()) break;
         }
     }
     private boolean untouchedNeighborhood(World world, int cx, int cz) {
@@ -202,24 +221,39 @@ public class UnderhallsFeature extends BaseFeature {
         }
         return true;
     }
-    private boolean createEntrance(Block origin, Player player, boolean automatic) {
+    record EntranceResult(boolean created, String reason) {
+        static EntranceResult rejected(String reason) { return new EntranceResult(false, reason); }
+    }
+    private EntranceResult createEntrance(Block origin, Player player, boolean automatic) {
         World source = origin.getWorld();
-        if (!source.getName().equals(sourceName) || source.getEnvironment() != World.Environment.NORMAL) return false;
+        if (!source.getName().equals(sourceName)) return EntranceResult.rejected("Create entrances in " + sourceName + ".");
+        if (source.getEnvironment() != World.Environment.NORMAL) return EntranceResult.rejected("The source world must use the NORMAL environment.");
         Pos pos = Pos.of(origin);
-        if (store.entrances().stream().filter(e -> !e.retired()).count() >= maxEntrances) return false;
+        if (store.entrances().stream().filter(e -> !e.retired()).count() >= maxEntrances) return EntranceResult.rejected("The active entrance limit (" + maxEntrances + ") has been reached.");
         if (store.entrances().stream().anyMatch(e -> e.origin().world().equals(pos.world()) &&
-            Math.hypot((double)e.origin().x() - pos.x(), (double)e.origin().z() - pos.z()) < spacing)) return false;
-        if (!siteClear(origin)) return false;
-        if (automatic && !untouchedNeighborhood(source, origin.getX() >> 4, origin.getZ() >> 4)) return false;
+            Math.hypot((double)e.origin().x() - pos.x(), (double)e.origin().z() - pos.z()) < spacing)) return EntranceResult.rejected("Move at least " + spacing + " blocks from existing or permanently closed entrances.");
+        String problem = siteProblem(origin, automatic);
+        if (problem != null) return EntranceResult.rejected(problem);
+        if (automatic && !untouchedNeighborhood(source, origin.getX() >> 4, origin.getZ() >> 4)) {
+            return EntranceResult.rejected("Nearby chunks are unloaded, contain block entities, or have recorded player builds.");
+        }
         // Use the existing portal protection hook, including for automatic entrances.
         SurvivalPortalActivateEvent event = new SurvivalPortalActivateEvent(KEY, origin.getLocation(), player);
         Bukkit.getPluginManager().callEvent(event);
-        if (event.isCancelled()) return false;
+        if (event.isCancelled()) return EntranceResult.rejected("A protection rule prevented this doorway.");
         World maze = ensureMaze();
-        if (maze == null) return false;
+        if (maze == null) return EntranceResult.rejected(mazeFailure);
         Entrance entrance = new Entrance(pos, maze.getUID(), Math.floorDiv(pos.x(), OVERWORLD_TILE), Math.floorDiv(pos.z(), OVERWORLD_TILE), false);
         // Save first: an interrupted construction is permanently retired by the next integrity check.
         store.save(entrance);
+        // Only soft vegetation in the validated footprint is cleared; solid obstacles are never replaced.
+        int radius = automatic ? 2 : 1;
+        for (int dx = -radius; dx <= radius; dx++) for (int dz = -radius; dz <= radius; dz++) {
+            for (int dy = 0; dy <= (automatic ? 3 : 2); dy++) {
+                Block block = origin.getRelative(dx, dy, dz);
+                if (!block.getType().isAir() && replaceable(block)) block.setType(Material.AIR, true);
+            }
+        }
         for (int dx = -1; dx <= 1; dx++) for (int dy = 0; dy <= 2; dy++) {
             Block block = origin.getRelative(dx, dy, 0);
             if (dx == 0 && dy <= 1) {
@@ -229,22 +263,33 @@ public class UnderhallsFeature extends BaseFeature {
                 block.setBlockData(door, false);
             } else block.setType(dx == 0 ? Material.CHISELED_STONE_BRICKS : Material.MOSSY_STONE_BRICKS, false);
         }
-        return true;
+        return new EntranceResult(true, "");
     }
-    private boolean siteClear(Block origin) {
+    private static boolean replaceable(Block block) {
+        Material type = block.getType();
+        return type.isAir() || type == Material.SHORT_GRASS || type == Material.TALL_GRASS ||
+            type == Material.FERN || type == Material.LARGE_FERN || type == Material.DEAD_BUSH || type == Material.SNOW ||
+            (block.isPassable() && Tag.FLOWERS.isTagged(type));
+    }
+    private String siteProblem(Block origin, boolean automatic) {
         World world = origin.getWorld();
-        if (origin.getY() <= world.getMinHeight() || origin.getY() + 4 >= world.getMaxHeight()) return false;
-        for (int dx = -2; dx <= 2; dx++) for (int dz = -2; dz <= 2; dz++) {
-            if (!world.isChunkLoaded((origin.getX() + dx) >> 4, (origin.getZ() + dz) >> 4)) return false;
+        int radius = automatic ? 2 : 1, height = automatic ? 4 : 3;
+        if (origin.getY() <= world.getMinHeight() || origin.getY() + height >= world.getMaxHeight()) return "The doorway is too close to the world's height limit.";
+        for (int dx = -radius; dx <= radius; dx++) for (int dz = -radius; dz <= radius; dz++) {
+            if (!world.isChunkLoaded((origin.getX() + dx) >> 4, (origin.getZ() + dz) >> 4)) return "Part of the doorway site is in an unloaded chunk. Move closer and try again.";
             Block ground = origin.getRelative(dx, -1, dz);
-            if (!GROUND.contains(ground.getType())) return false;
-            for (int dy = 0; dy <= 3; dy++) {
+            boolean supported = automatic ? GROUND.contains(ground.getType()) : ground.getType().isSolid() &&
+                ground.getBoundingBox().getMaxY() == origin.getY() && ground.getType() != Material.MAGMA_BLOCK && ground.getType() != Material.CACTUS;
+            if (!supported) return "The doorway needs level " + (automatic ? "natural" : "solid") + " ground across " + (radius * 2 + 1) + "x" + (radius * 2 + 1) + " blocks; unsuitable ground at " + coordinates(ground) + ".";
+            for (int dy = 0; dy < height; dy++) {
                 Block block = origin.getRelative(dx, dy, dz);
-                if (!block.getType().isAir() || !world.getWorldBorder().isInside(block.getLocation())) return false;
+                if (!world.getWorldBorder().isInside(block.getLocation())) return "The doorway would cross the world border.";
+                if (!replaceable(block)) return "Clear " + block.getType().name().toLowerCase(Locale.ROOT).replace('_', ' ') + " at " + coordinates(block) + "; the doorway needs " + height + " blocks of headroom.";
             }
         }
-        return true;
+        return null;
     }
+    private static String coordinates(Block block) { return block.getX() + ", " + block.getY() + ", " + block.getZ(); }
     private boolean entranceBlock(Block block) {
         Pos pos = Pos.of(block);
         return store.entrances().stream().anyMatch(e -> !e.retired() && inFrame(e.origin(), pos));

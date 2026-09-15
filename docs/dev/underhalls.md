@@ -11,8 +11,8 @@ Build with Java 25 using `./gradlew check :plugin:jar`. Install the generated
 STEMCraft jar on a Paper 26.2 test server and restart. The administrator command
 requires `stemcraft.command.underhalls`.
 
-1. In `survival`, aim at a flat patch of natural ground with a clear 5x5 area
-   and four blocks of headroom. Run `/underhalls entrance`.
+1. In `survival`, aim at a level patch of solid ground with a clear 3x3 area
+   and three blocks of headroom. Run `/underhalls entrance`.
 2. Open the dark oak door in its mossy stone-brick frame and walk through it.
    The destination world, `survival_underhalls`, is created on demand.
 3. Explore until you find a dark oak door inside the maze. Open it and walk to
@@ -23,6 +23,11 @@ requires `stemcraft.command.underhalls`.
    neither player can break the generated walls, lights, floors or doors.
 6. Restart and verify that routes, retired entrances and placed-block ownership
    remain intact.
+
+The manual entrance command ignores grass and flowers when aiming, clears soft
+vegetation in the doorway footprint, and accepts constructed solid floors. It
+reports the specific obstruction, distance, protection or world-loading failure.
+Automatic generation retains its larger 5x5 natural-ground check.
 
 `/underhalls enter` takes an administrator to the maze's starting room for direct
 inspection. `/underhalls status` reports active and retired entrance counts.
@@ -123,3 +128,21 @@ palette and exit geometry, storage round trips, permanently retired entrances,
 fixed exit travel and obstruction, protection cancellation, player placement
 provenance, explosions, and pistons. Visual lighting, door collision, natural
 entrance frequency and multiplayer play need a live Paper client test.
+
+## Recovery from a normal world created by the initial test build
+
+The initial implementation called `loadWorld` for a missing world, which created
+normal terrain before the custom generator could be selected. The corrected
+implementation creates missing worlds explicitly with `underhalls`, and rejects
+existing worlds with the wrong generator without modifying them.
+
+After installing the corrected jar and restarting, select a fresh unused name:
+
+```yaml
+underhalls:
+  source-world: survival
+  world: survival_underhalls_v2
+```
+
+Run `/stemcraft reload`, then `/underhalls enter`. The previous world is retained;
+changing its generator would not replace already-generated terrain.
