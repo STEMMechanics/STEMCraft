@@ -134,7 +134,7 @@ public class TeleportUtils extends BaseFeature {
             if (options.updateWorldLastLocation()) {
                 setWorldLastLocation(player.getUniqueId(), to);
             }
-        });
+        }, EventPriority.MONITOR, true);
 
         api.events().register(PlayerTeleportEvent.class, event -> {
             Location to = event.getTo();
@@ -541,10 +541,14 @@ public class TeleportUtils extends BaseFeature {
                         ctx.returnError("PLAYER_NOT_FOUND", "player", ctx.getArg(1));
                     }
 
+                    if (inWorldSet(targetPlayer.getWorld().getName(), worldBase)) {
+                        ctx.returnInfo("You are already in this world group.");
+                        return;
+                    }
                     Location destination = getLastLocationInWorldSet(targetPlayer.getUniqueId(), worldBase);
                     if (destination == null || destination.getWorld() == null) {
                         World fallbackWorld = Bukkit.getWorld(worldBase);
-                        if (fallbackWorld == null) {
+                        if (fallbackWorld == null && api.worlds().worldExists(worldBase)) {
                             fallbackWorld = api.worlds().loadWorld(worldBase);
                         }
                         if (fallbackWorld == null) {
@@ -889,7 +893,10 @@ public class TeleportUtils extends BaseFeature {
         }
 
         String worldName = loc.getWorld().getName().toLowerCase(Locale.ROOT);
-        long now = System.currentTimeMillis();
+        // Consecutive portal departure/arrival events can occur in the same millisecond.
+        long previous = worldLastLocations.getOrDefault(uuid, Map.of()).values().stream()
+                .mapToLong(WorldLastLocation::updatedAt).max().orElse(0L);
+        long now = Math.max(System.currentTimeMillis(), previous + 1);
 
         WorldLastLocation record = new WorldLastLocation(
                 worldName,
@@ -956,7 +963,7 @@ public class TeleportUtils extends BaseFeature {
     }
 
     /**
-     * Get a player's most recent location across a world-set (overworld/nether/end).
+     * Get a player's most recent location across a base world and all of its underscore-prefixed dimensions.
      *
      * @param uuid Player UUID.
      * @param worldBase Base world name.
@@ -973,12 +980,9 @@ public class TeleportUtils extends BaseFeature {
         }
 
         String base = WorldUtil.baseName(worldBase).toLowerCase(Locale.ROOT);
-        String[] candidates = new String[]{base, base + "_nether", base + "_the_end"};
-
         WorldLastLocation best = null;
-        for (String worldName : candidates) {
-            WorldLastLocation record = byWorld.get(worldName);
-            if (record == null) {
+        for (WorldLastLocation record : byWorld.values()) {
+            if (!inWorldSet(record.worldName(), base)) {
                 continue;
             }
 
@@ -990,13 +994,27 @@ public class TeleportUtils extends BaseFeature {
         return best == null ? null : toLocation(best);
     }
 
+    static boolean inWorldSet(String worldName, String base) {
+        String name = worldName.toLowerCase(Locale.ROOT);
+        String prefix = WorldUtil.baseName(base).toLowerCase(Locale.ROOT);
+        return name.equals(prefix) || name.startsWith(prefix + "_");
+    }
+
+    @Override public void onSave() {
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            setWorldLastLocation(player.getUniqueId(), player.getLocation());
+        }
+    }
+
+    @Override public void onDisable() { onSave(); }
+
     private Location toLocation(WorldLastLocation record) {
         if (record == null) {
             return null;
         }
 
         World world = Bukkit.getWorld(record.worldName());
-        if (world == null) {
+        if (world == null && api.worlds().worldExists(record.worldName())) {
             world = api.worlds().loadWorld(record.worldName());
         }
         if (world == null) {

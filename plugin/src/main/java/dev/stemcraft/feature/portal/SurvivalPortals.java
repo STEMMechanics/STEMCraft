@@ -20,6 +20,7 @@
 
 package dev.stemcraft.feature.portal;
 
+import dev.stemcraft.feature.HeldLightFeature;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigFile;
@@ -349,7 +350,7 @@ public final class SurvivalPortals implements WorldPortalService {
             if (reserved.test(location(world, point))) return false;
             Material actual = block(world, point).getType();
             Material expected = portal.type.pattern().interiorMaterial();
-            if (expected == Material.AIR ? !(actual.isAir() || portal.active && (actual == Material.LIGHT || reactorFire(portal, actual))) : actual != expected) return false;
+            if (expected == Material.AIR ? !(actual.isAir() || actual == Material.LIGHT && HeldLightFeature.isTemporaryLight(block(world, point)) || portal.active && (actual == Material.LIGHT || reactorFire(portal, actual))) : actual != expected) return false;
         }
         return true;
     }
@@ -765,6 +766,7 @@ public final class SurvivalPortals implements WorldPortalService {
             for (Offset cell : portal.type.pattern().interior()) {
                 Block target = block(world, portal.at(cell));
                 if (activating && portal.type.lightLevel() > 0 && (target.getType().isAir() || target.getType() == Material.LIGHT || reactorFire(portal, target.getType()))) {
+                    HeldLightFeature.releaseTemporaryLight(target);
                     var light = (org.bukkit.block.data.type.Light) Material.LIGHT.createBlockData();
                     light.setLevel(portal.type.lightLevel());
                     if (!target.getBlockData().equals(light)) target.setBlockData(light, false);

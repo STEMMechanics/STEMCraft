@@ -42,6 +42,15 @@ public final class BuiltInGenerators {
                 GeneratorCategory.CAVE, DeepGenerator::new, new dev.stemcraft.chunkgen.feature.CavernLightFeature());
         register(owner, api, config, "faraway", "Faraway Lands", "Distorted walls, cavities, spires and folded terrain.",
                 GeneratorCategory.EXPERIMENTAL, FarawayLandsGenerator::new);
+        if (config == null || config.getBoolean("world-generation.underhalls.enabled", true)) {
+            GeneratorDefinition definition = new GeneratorDefinition(new NamespacedKey("stemcraft", "underhalls"),
+                "The Underhalls", "A yellow end-stone maze of warm lights, dark halls and fixed exit chambers.",
+                GeneratorCategory.EXPERIMENTAL, true, 1);
+            api.worlds().generator().registerGenerator(owner, definition, options -> {
+                if (!options.isBlank()) throw new IllegalArgumentException("Generator underhalls accepts no options");
+                return new UnderhallsGenerator();
+            });
+        }
     }
     private static void register(Plugin owner, STEMCraftAPI api, ConfigFile config, String id, String name,
                                  String description, GeneratorCategory category,
