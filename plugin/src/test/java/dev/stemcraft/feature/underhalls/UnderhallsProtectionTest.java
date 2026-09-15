@@ -54,11 +54,11 @@ class UnderhallsProtectionTest {
         if (connection != null) connection.close();
         MockBukkit.unmock();
     }
-    @Test void generatedBlocksAreProtectedButAnotherPlayerCanRemovePlacedBlocksAfterReload() {
+    @Test void generatedAndPlacedBlocksCanBeMinedAndEditsPersist() {
         var builder = server.addPlayer(); var other = server.addPlayer();
         Block generated = world.getBlockAt(8,65,8); generated.setType(Material.END_STONE);
         var denied = new BlockBreakEvent(generated,other); server.getPluginManager().callEvent(denied);
-        assertTrue(denied.isCancelled());
+        assertFalse(denied.isCancelled());
         Block placed = world.getBlockAt(12,65,12);
         var before = placed.getState(); placed.setType(Material.END_STONE);
         var placement = new BlockPlaceEvent(placed,before,placed.getRelative(0,-1,0),new ItemStack(Material.END_STONE),builder,true,EquipmentSlot.HAND);
@@ -68,18 +68,18 @@ class UnderhallsProtectionTest {
         assertTrue(protection.canBreak(placed));
         var broken = new BlockBreakEvent(placed,other); server.getPluginManager().callEvent(broken);
         assertFalse(broken.isCancelled());
-        assertFalse(store.isPlaced(Pos.of(placed)));
-        assertFalse(protection.canBreak(generated));
+        assertTrue(store.isPlaced(Pos.of(placed)));
+        assertTrue(protection.canBreak(generated));
     }
-    @Test void cancelledPlacementsAndReservedRoomsNeverBecomePlayerOwned() {
+    @Test void RoomsAndCeilingAllowBuildingButCancelledPlacementsAreNotRecorded() {
         var player = server.addPlayer();
         for (int[] coords : new int[][]{{68,65,69},{4,65,4},{12,70,12}}) {
             Block block = world.getBlockAt(coords[0],coords[1],coords[2]);
             var before = block.getState(); block.setType(Material.COBBLESTONE);
             var event = new BlockPlaceEvent(block,before,block.getRelative(0,-1,0),new ItemStack(Material.COBBLESTONE),player,true,EquipmentSlot.HAND);
             server.getPluginManager().callEvent(event);
-            assertTrue(event.isCancelled());
-            assertFalse(store.isPlaced(Pos.of(block)));
+            assertFalse(event.isCancelled());
+            assertTrue(store.isPlaced(Pos.of(block)));
         }
         Block block = world.getBlockAt(14,65,14);
         var before = block.getState(); block.setType(Material.STONE);
@@ -101,42 +101,29 @@ class UnderhallsProtectionTest {
         assertTrue(store.isPlaced(Pos.of(block)));
     }
 
-    @Test void generatedDoorOpensAndClosesBothHalvesWithoutTerrainPhysics() {
-        var bottom = world.getBlockAt(68,65,66);
-        var top = bottom.getRelative(0,1,0);
-        var door = (org.bukkit.block.data.type.Door) Material.DARK_OAK_DOOR.createBlockData();
-        door.setHalf(org.bukkit.block.data.Bisected.Half.BOTTOM);
-        bottom.setBlockData(door,false);
-        door.setHalf(org.bukkit.block.data.Bisected.Half.TOP);
-        top.setBlockData(door,false);
-        var player=server.addPlayer();
-        for (Block clicked : List.of(top,bottom)) {
-            boolean opening = !((org.bukkit.block.data.type.Door)bottom.getBlockData()).isOpen();
-            var event = new org.bukkit.event.player.PlayerInteractEvent(player,Action.RIGHT_CLICK_BLOCK,null,clicked,
-                    org.bukkit.block.BlockFace.NORTH,EquipmentSlot.HAND);
-            server.getPluginManager().callEvent(event);
-            assertEquals(opening,((org.bukkit.block.data.type.Door)bottom.getBlockData()).isOpen());
-            assertEquals(opening,((org.bukkit.block.data.type.Door)top.getBlockData()).isOpen());
-            assertEquals(Event.Result.DENY,event.useInteractedBlock());
-            var offhand = new org.bukkit.event.player.PlayerInteractEvent(player,Action.RIGHT_CLICK_BLOCK,null,clicked,
-                    org.bukkit.block.BlockFace.NORTH,EquipmentSlot.OFF_HAND);
-            server.getPluginManager().callEvent(offhand);
-            assertEquals(opening,((org.bukkit.block.data.type.Door)bottom.getBlockData()).isOpen());
-        }
-        assertFalse(protection.canBreak(bottom));
-        assertFalse(protection.canBreak(top));
+    @Test void generatedDoorUsesNormalInteractionAndPhysics() {
+        var block = world.getBlockAt(68,65,66);
+        block.setType(Material.DARK_OAK_DOOR);
+        var event = new org.bukkit.event.player.PlayerInteractEvent(server.addPlayer(), Action.RIGHT_CLICK_BLOCK,
+            new ItemStack(Material.AIR), block, org.bukkit.block.BlockFace.NORTH, EquipmentSlot.HAND);
+        server.getPluginManager().callEvent(event);
+        assertNotEquals(Event.Result.DENY, event.useInteractedBlock());
+        var physics = new BlockPhysicsEvent(block, block.getBlockData());
+        server.getPluginManager().callEvent(physics);
+        assertFalse(physics.isCancelled());
+        assertTrue(protection.canBreak(block));
     }
 
-    @Test void explosionsAndPistonsCannotRemoveOrMoveTheMaze() {
+    @Test void explosionsAndPistonsCanChangeTheMaze() {
         Block wall = world.getBlockAt(8,65,8); wall.setType(Material.END_STONE);
         var entity = mock(org.bukkit.entity.Entity.class);
         when(entity.getWorld()).thenReturn(world);
         var blocks = new ArrayList<>(List.of(wall));
         var explosion = new EntityExplodeEvent(entity,wall.getLocation(),blocks,0,ExplosionResult.DESTROY);
         server.getPluginManager().callEvent(explosion);
-        assertTrue(blocks.isEmpty());
+        assertEquals(List.of(wall), blocks);
         var piston = new BlockPistonExtendEvent(world.getBlockAt(7,65,8),List.of(wall),org.bukkit.block.BlockFace.EAST);
         server.getPluginManager().callEvent(piston);
-        assertTrue(piston.isCancelled());
+        assertFalse(piston.isCancelled());
     }
 }

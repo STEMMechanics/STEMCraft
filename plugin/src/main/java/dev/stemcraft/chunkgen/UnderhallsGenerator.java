@@ -125,9 +125,9 @@ public final class UnderhallsGenerator extends ChunkGenerator {
         int floor = floor(info);
         int tileX = Math.floorDiv(chunkX, TILE / 16), tileZ = Math.floorDiv(chunkZ, TILE / 16);
         Maze maze = cache.computeIfAbsent(new TileKey(info.getSeed(), tileX, tileZ), key -> new Maze(key.seed, key.x, key.z));
-        data.setRegion(0, data.getMinHeight(), 0, 16, floor, 16, Material.BEDROCK);
+        data.setRegion(0, data.getMinHeight(), 0, 16, floor, 16, Material.AIR);
         data.setRegion(0, floor, 0, 16, floor + 1, 16, Material.SMOOTH_SANDSTONE);
-        data.setRegion(0, floor + 7, 0, 16, floor + 8, 16, Material.BEDROCK);
+        data.setRegion(0, floor + 7, 0, 16, floor + 8, 16, Material.SMOOTH_SANDSTONE);
         for (int x = 0; x < 16; x++) for (int z = 0; z < 16; z++) {
             int wx = chunkX * 16 + x, wz = chunkZ * 16 + z;
             int lx = Math.floorMod(wx, TILE), lz = Math.floorMod(wz, TILE);

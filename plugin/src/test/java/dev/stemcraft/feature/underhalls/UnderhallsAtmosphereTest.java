@@ -92,6 +92,26 @@ class UnderhallsAtmosphereTest {
             verify(world, never()).getLivingEntities();
         }
     }
+    @Test void oldBedrockShellBecomesVoidAndMineableRoofWithoutRemovingBuilds() {
+        var world = new org.mockbukkit.mockbukkit.world.WorldMock(Material.AIR, 0, 128, 64);
+        var chunk = world.getChunkAt(0,0);
+        var store = mock(UnderhallsStore.class);
+        for (int y=0;y<64;y++) chunk.getBlock(4,y,4).setType(Material.BEDROCK);
+        chunk.getBlock(4,64,4).setType(Material.SMOOTH_SANDSTONE);
+        chunk.getBlock(4,71,4).setType(Material.BEDROCK);
+        chunk.getBlock(5,12,4).setType(Material.DIAMOND_BLOCK);
+        var placed = chunk.getBlock(6,12,4); placed.setType(Material.BEDROCK);
+        when(store.isPlaced(UnderhallsStore.Pos.of(placed))).thenReturn(true);
+        int passes=1;
+        while (!UnderhallsTerrain.upgrade(chunk,store)) assertTrue(++passes<=8);
+        assertEquals(8,passes);
+        for (int y=0;y<64;y++) assertEquals(Material.AIR,chunk.getBlock(4,y,4).getType());
+        assertEquals(Material.SMOOTH_SANDSTONE,chunk.getBlock(4,64,4).getType());
+        assertEquals(Material.SMOOTH_SANDSTONE,chunk.getBlock(4,71,4).getType());
+        assertEquals(Material.DIAMOND_BLOCK,chunk.getBlock(5,12,4).getType());
+        assertEquals(Material.BEDROCK,placed.getType());
+        assertTrue(UnderhallsTerrain.upgrade(chunk,store));
+    }
     @Test void stalkerHasSwordDurabilityAndNoEquipmentPickup() {
         Skeleton skeleton = mock(Skeleton.class, RETURNS_DEEP_STUBS);
         UnderhallsMobs.configure(skeleton);

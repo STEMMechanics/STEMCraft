@@ -51,7 +51,9 @@ class UnderhallsGeneratorTest {
         assertEquals(Material.AIR, spawn.getType(4,65,4));
         assertEquals(Material.OCHRE_FROGLIGHT, spawn.getType(4,70,4));
         assertEquals(Material.SMOOTH_SANDSTONE, spawn.getType(12,70,4));
-        assertEquals(Material.BEDROCK, spawn.getType(4,71,4));
+        assertEquals(Material.SMOOTH_SANDSTONE, spawn.getType(4,71,4));
+        assertEquals(Material.AIR, spawn.getType(4,63,4));
+        assertEquals(Material.AIR, spawn.getType(4,-64,4));
         var room = new TerrainGenerationTest.MemoryChunk(-64,320);
         generator.generateNoise(world(901), new Random(), 4,4,room);
         assertEquals(Material.AIR, room.getType(4,65,1));

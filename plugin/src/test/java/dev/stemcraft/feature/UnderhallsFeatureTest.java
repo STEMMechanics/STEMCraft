@@ -89,6 +89,54 @@ class UnderhallsFeatureTest {
         feature=new UnderhallsFeature(api) { @Override protected ConfigSection getConfigSection(){ return config; } };
         feature.onEnable();
     }
+    @Test void brokenMazeDoorPermanentlyDisablesBothSidesEvenAfterRepairAndReload() throws Exception {
+        Block origin = source.getBlockAt(10,65,10);
+        source.getChunkAt(0,0);
+        assertTrue(entrance(origin));
+        assertEquals(Material.END_STONE_BRICKS, origin.getRelative(-1,0,0).getType());
+        var door = maze.getBlockAt(68,65,66);
+        door.setType(Material.DARK_OAK_DOOR);
+        var player = server.addPlayer();
+        var broken = new org.bukkit.event.block.BlockBreakEvent(door, player);
+        server.getPluginManager().callEvent(broken);
+        assertFalse(broken.isCancelled());
+        door.setType(Material.AIR);
+        door.setType(Material.DARK_OAK_DOOR);
+        assertTrue(state().roomClosed(new Pos(maze.getUID(),68,65,69)));
+        assertTrue(state().entrance(Pos.of(origin)).retired());
+        feature.onDisable(); feature.onEnable();
+        walk(player,new Location(maze,68.5,65,67.5));
+        assertEquals(maze, player.getWorld());
+        walk(player,Pos.of(origin).location());
+        assertEquals(source, player.getWorld());
+    }
+    @Test void breakingAnUnpairedRoomDoorPreventsItFromEverCreatingAPartner() throws Exception {
+        var door = maze.getBlockAt(68,66,66);
+        door.setType(Material.DARK_OAK_DOOR);
+        var player = server.addPlayer();
+        server.getPluginManager().callEvent(new org.bukkit.event.block.BlockBreakEvent(door, player));
+        door.setType(Material.DARK_OAK_DOOR);
+        feature.onDisable(); feature.onEnable();
+        walk(player,new Location(maze,68.5,65,67.5));
+        assertEquals(maze, player.getWorld());
+        assertTrue(state().entrances().isEmpty());
+    }
+    @Test void intactLegacyOverworldFramesUpgradeWithoutChangingThePair() throws Exception {
+        Block origin = source.getBlockAt(10,65,10);
+        source.getChunkAt(0,0);
+        assertTrue(entrance(origin));
+        var pair = state().entrance(Pos.of(origin));
+        for (int x=-1;x<=1;x++) for(int y=0;y<=2;y++) {
+            if(x==0 && y<2) continue;
+            origin.getRelative(x,y,0).setType(x==0 ? Material.CHISELED_STONE_BRICKS : Material.MOSSY_STONE_BRICKS);
+        }
+        var method = UnderhallsFeature.class.getDeclaredMethod("intact", UnderhallsStore.Entrance.class);
+        method.setAccessible(true);
+        assertEquals(true, method.invoke(feature,pair));
+        assertEquals(Material.END_STONE_BRICKS, origin.getRelative(-1,0,0).getType());
+        assertEquals(Material.END_STONE_BRICKS, origin.getRelative(0,2,0).getType());
+        assertEquals(pair, state().entrance(Pos.of(origin)));
+    }
     @AfterEach void cleanup() throws Exception {
         if(feature!=null)feature.onDisable();
         if(connection!=null)connection.close();

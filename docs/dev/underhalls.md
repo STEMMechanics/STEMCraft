@@ -13,7 +13,7 @@ requires `stemcraft.command.underhalls`.
 
 1. In `survival`, aim at a supporting block with a clear space three blocks wide,
    three high and one deep for the door and frame. Run `/underhalls entrance`.
-2. Open the dark oak door in its mossy stone-brick frame and walk through it.
+2. Open the dark oak door in its end stone brick frame and walk through it.
    The destination world, `survival_underhalls`, is created on demand.
 3. You arrive just outside a dark oak exit door. Open it and step into the
    lit chamber to return to its paired overworld location, or turn around to
@@ -53,7 +53,7 @@ distinct rooms. Players already standing in a formerly shared room should re-ent
 through their overworld entrance to reach its updated room.
 
 The generator is also available as `/world create test_underhalls underhalls seed:12345`.
-Worlds using this generator receive maze protection and exit-room routing to the
+Worlds using this generator receive normal building and exit-room routing to the
 configured source world, regardless of their name.
 
 This branch is based directly on `version/26.2.x`. Inventory sharing follows the
@@ -83,8 +83,8 @@ underhalls:
 
 Generator availability takes effect after restart. Feature settings support
 `/stemcraft reload`. Set `entrances.enabled: false` to stop automatic discovery
-while retaining existing portals and maze protection. Administrator entrance
-creation remains available. Keep the feature enabled to protect existing mazes.
+while retaining existing portals. Administrator entrance
+creation remains available. Keep the feature enabled for portal routing.
 
 Each interval has one chance to attempt an entrance. Up to 16 loaded chunks are
 sampled in the source overworld. Sites must be at least 96 horizontal blocks
@@ -148,17 +148,28 @@ worlds must be loaded by an administrator before using their routes.
 
 ## Protection and persistence
 
-Successful player placements are recorded by world UUID and block coordinates
-in SQLite's `underhalls_state` table. Material and player identity do not control
-ownership: a player-placed end-stone block is removable by anyone. Generated
-blocks cannot be broken, including in Creative. Placement is prevented in exit
-chambers, arrival squares, and outside the maze's usable vertical space.
+The maze is destructible using normal Minecraft rules. Players can mine generated
+walls, doors, floors and ceilings, and build in rooms or outside the original
+maze height. Fluids, buckets, pistons, explosions, fire and door physics work
+normally, subject to other server plugins' rules.
 
-Pistons, flowing liquids, fire, growth and entity block changes cannot alter the
-maze; explosions do not destroy maze blocks. Bucket emptying is disabled there.
-Players can still place and remove ordinary building blocks, signs and lights.
-These are gameplay event protections, not a restriction on administrator tools
-or plugins that directly edit blocks.
+New chunks have air below the sandstone floor and a mineable sandstone roof.
+Existing chunks gradually lose their old bedrock foundation as they load, in
+batches of eight layers per processing pass. Only generated bedrock is removed;
+recorded player builds and other materials remain. Mining the floor can expose
+a lethal fall into the void. No safety platform is added.
+
+Breaking either half of an Underhalls portal door, or its supporting block,
+permanently closes that room and its paired overworld entrance. Explosions and
+piston movement also retire affected doors. These records survive restarts;
+replacing the door or rebuilding the frame cannot create or restore a portal.
+Terrain upgrades skip permanently closed rooms. Ordinary player-built doors do
+not become portals. Existing intact overworld frames upgrade to end stone bricks
+without changing their destinations; broken frames are not rebuilt.
+
+Player placements and mining/explosion/piston edits are recorded so later
+terrain details do not overwrite those edits. Door interactions now use vanilla
+physics, including synchronising the two halves.
 
 SQLite writes persist placement ownership, entrance retirement and fixed exit
 destinations. Grouping, records and terrain are separate from GMI's inventory
@@ -196,7 +207,7 @@ closed walls, sometimes at ceiling height with three steps on either side.
 Other connections become short, skinny halls. These details are seeded and
 applied once per chunk, including existing terrain. Door cells are excluded;
 changes touching player construction, unexpected blocks or entities are skipped.
-Generated steps and walls have the same protection as the rest of the maze.
+Generated steps and walls can be mined like the rest of the maze.
 
 `underhalls.passages.chance` defaults to `0.12` per eligible internal cell
 boundary. Set it to `0` to stop further additions. Changing it affects chunks

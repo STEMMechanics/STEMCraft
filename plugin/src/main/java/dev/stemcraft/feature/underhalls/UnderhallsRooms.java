@@ -21,7 +21,7 @@ public final class UnderhallsRooms {
         int floor = UnderhallsGenerator.floor(world);
         for (int dx = 0; dx < 16; dx += 8) for (int dz = 0; dz < 16; dz += 8) {
             int x = chunk.getX() * 16 + dx, z = chunk.getZ() * 16 + dz;
-            if (!generator.roomAt(world, x, z) || !untouched(world, store, x, floor, z)) continue;
+            if (store.roomClosed(new UnderhallsStore.Pos(world.getUID(), x + 4, floor + 1, z + 5)) || !generator.roomAt(world, x, z) || !untouched(world, store, x, floor, z)) continue;
             for (int rx = 2; rx <= 6; rx++) for (int rz = 2; rz <= 6; rz++) {
                 boolean wall = rx == 2 || rx == 6 || rz == 2 || rz == 6;
                 if (!wall) continue;

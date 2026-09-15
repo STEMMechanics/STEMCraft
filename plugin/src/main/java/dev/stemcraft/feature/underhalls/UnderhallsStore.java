@@ -45,6 +45,7 @@ public final class UnderhallsStore {
         public Entrance retire() { return new Entrance(origin, maze, tileX, tileZ, true, room); }
     }
     private final DatabaseService database;
+    private final Set<Pos> closedRooms = new HashSet<>();
     private final Set<Pos> placed = new HashSet<>();
     private final Map<Pos, Entrance> entrances = new LinkedHashMap<>();
     private final Map<Pos, Pos> exits = new HashMap<>();
@@ -54,11 +55,12 @@ public final class UnderhallsStore {
         if (!database.execute("CREATE TABLE IF NOT EXISTS underhalls_state (kind TEXT NOT NULL, position TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY(kind, position))")) {
             throw new IllegalStateException("Could not initialise Underhalls storage");
         }
-        placed.clear(); entrances.clear(); exits.clear();
+        placed.clear(); entrances.clear(); exits.clear(); closedRooms.clear();
         database.queryEach("SELECT kind, position, value FROM underhalls_state", null, rs -> {
             Pos pos = Pos.decode(rs.getString("position"));
             String value = rs.getString("value");
             switch (rs.getString("kind")) {
+                case "closed-room" -> closedRooms.add(pos);
                 case "placed" -> placed.add(pos);
                 case "exit" -> exits.put(pos, Pos.decode(value));
                 case "entrance" -> {
@@ -76,6 +78,12 @@ public final class UnderhallsStore {
             ps.setString(1, kind); ps.setString(2, pos.encode()); ps.setString(3, value);
         });
         if (updated != 1) throw new IllegalStateException("Could not persist Underhalls state");
+    }
+    public Set<Pos> closedRooms() { return Set.copyOf(closedRooms); }
+    public boolean roomClosed(Pos room) { return closedRooms.contains(room); }
+    public void closeRoom(Pos room) {
+        if (closedRooms.contains(room)) return;
+        write("closed-room", room, ""); closedRooms.add(room);
     }
     public boolean isPlaced(Pos pos) { return placed.contains(pos); }
     public void placed(Pos pos) { write("placed", pos, ""); placed.add(pos); }
