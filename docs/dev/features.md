@@ -105,3 +105,25 @@ Notice boards provide graphical lobby boards containing player-authored headers,
 | `Afk` | Optional inactivity announcements, tab styling and kicks; see [AFK](afk.md), introduced in PR #157 |
 
 See [Permissions](permissions.md) for individual player/admin grants. There is no required `stemcraft.player` bundle. Custom commands enforce a permission only when one is configured; fixed `/survival` and `/creative` shortcuts run their teleport as the server.
+
+## Held lighting
+
+`HeldLightFeature` lights the area around players holding a torch or lantern in
+either hand. Torches emit level 14, lanterns 15, and soul variants 10; the stronger
+hand wins. It is enabled globally by default:
+
+```yaml
+held-light:
+  enabled: true
+```
+
+Every five ticks, an invisible server-side LIGHT block follows the player's head
+(or feet if the head space is occupied). It only borrows air, so it does not work
+while fully submerged or encased in solid blocks. Nearby players see the light
+without a client mod. Overlapping holders share the strongest light.
+
+Moving, changing held items, quitting, chunk unloading and plugin shutdown remove
+unused lights. Chunk metadata restores saved temporary lights after a restart.
+Player placements replace temporary lights normally, including in the Underhalls;
+maze terrain remains protected. Temporary lights use Minecraft's real block
+lighting, so they also affect light-dependent gameplay such as mob spawning.

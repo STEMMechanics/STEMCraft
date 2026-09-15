@@ -117,3 +117,21 @@ Notice boards use `/noticeboard post`, `/noticeboard list [page]`, `/noticeboard
 ## Dynamic command lifecycle
 
 Registered commands own all aliases and namespaced labels pointing to their exact Bukkit command object. Cleanup snapshots matching keys and removes them through Paper's command map, which updates Brigadier. Do not use `entrySet().removeIf`: the current Paper forwarding iterator does not support iterator removal. Re-registration first cleans up the previous registration; failure retains the handle and logs its cause.
+
+### Returning to a dimension group
+
+`/tpworldlast survival [player]` returns to the most recently visited location in
+`survival` or any `survival_*` world, including custom dimensions. If the player
+is already in that group, it leaves them at their current location. A player with
+no saved visit goes to the base world's spawn. Locations persist through logout
+and restart. Cancelled teleports do not update them.
+
+Travel groups use the requested base name and an underscore boundary; they are
+independent of inventory sharing settings. `/tpworld survival` still explicitly
+selects the overworld, and `/tpworldspawn survival` selects its spawn.
+
+For existing installations, change the custom `/survival` command's `run` entry
+in `config.yml` to `server:tpworldlast survival {player}` and reload STEMCraft.
+Also change any survival menu command to `player:tpworldlast survival`; players
+using that direct command need `stemcraft.command.tpworldlast`. Bundled defaults
+use these commands, but existing custom commands are preserved.

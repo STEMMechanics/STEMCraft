@@ -22,6 +22,8 @@ package dev.stemcraft.feature.underhalls;
 
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.chunkgen.UnderhallsGenerator;
+import dev.stemcraft.feature.HeldLightFeature;
+import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.event.*;
@@ -57,7 +59,7 @@ public final class UnderhallsProtection {
             if (!managed.test(event.getBlock().getWorld())) return;
             var replaced = event instanceof BlockMultiPlaceEvent multi ? multi.getReplacedBlockStates() : List.of(event.getBlockReplacedState());
             for (var state : replaced) {
-                if (!canPlace(state.getBlock()) || (!state.getType().isAir() && !store.isPlaced(Pos.of(state.getBlock())))) {
+                if (!canPlace(state.getBlock()) || (!state.getType().isAir() && !(state.getType() == Material.LIGHT && HeldLightFeature.isTemporaryLight(state.getBlock())) && !store.isPlaced(Pos.of(state.getBlock())))) {
                     event.setCancelled(true); return;
                 }
             }

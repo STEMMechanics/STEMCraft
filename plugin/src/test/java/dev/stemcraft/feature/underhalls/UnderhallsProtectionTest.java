@@ -84,6 +84,20 @@ class UnderhallsProtectionTest {
         event.setCancelled(true); server.getPluginManager().callEvent(event);
         assertFalse(store.isPlaced(Pos.of(block)));
     }
+    @Test void temporaryHeldLightDoesNotPreventPlayerPlacement() {
+        var block = world.getBlockAt(12, 66, 12);
+        block.setType(Material.LIGHT);
+        block.getChunk().getPersistentDataContainer().set(new NamespacedKey("stemcraft", "held_light_12_66_12"),
+                org.bukkit.persistence.PersistentDataType.STRING, "AIR");
+        var before = block.getState();
+        block.setType(Material.COBBLESTONE);
+        var event = new BlockPlaceEvent(block, before, block.getRelative(0, -1, 0),
+                new ItemStack(Material.COBBLESTONE), server.addPlayer(), true, EquipmentSlot.HAND);
+        server.getPluginManager().callEvent(event);
+        assertFalse(event.isCancelled());
+        assertTrue(store.isPlaced(Pos.of(block)));
+    }
+
     @Test void explosionsAndPistonsCannotRemoveOrMoveTheMaze() {
         Block wall = world.getBlockAt(8,65,8); wall.setType(Material.END_STONE);
         var entity = mock(org.bukkit.entity.Entity.class);

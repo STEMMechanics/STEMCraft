@@ -267,7 +267,7 @@ public class UnderhallsFeature extends BaseFeature {
     }
     private static boolean replaceable(Block block) {
         Material type = block.getType();
-        return type.isAir() || type == Material.SHORT_GRASS || type == Material.TALL_GRASS ||
+        return type.isAir() || (type == Material.LIGHT && HeldLightFeature.isTemporaryLight(block)) || type == Material.SHORT_GRASS || type == Material.TALL_GRASS ||
             type == Material.FERN || type == Material.LARGE_FERN || type == Material.DEAD_BUSH || type == Material.SNOW ||
             (block.isPassable() && Tag.FLOWERS.isTagged(type));
     }
@@ -391,13 +391,17 @@ public class UnderhallsFeature extends BaseFeature {
         }
         return null;
     }
+    private boolean clearForArrival(Block block) {
+        return block.getType().isAir() || (block.getType() == Material.LIGHT && HeldLightFeature.isTemporaryLight(block));
+    }
+
     private boolean safe(Location target) {
         World world = target.getWorld();
         if (world == null || target.getY() <= world.getMinHeight() || target.getY() + 1 >= world.getMaxHeight() || !world.getWorldBorder().isInside(target)) return false;
         if (isMaze(world) && target.getBlockY() != UnderhallsGenerator.floor(world) + 1) return false;
         Block feet = target.getBlock(), floor = feet.getRelative(BlockFace.DOWN);
         Material ground = floor.getType();
-        return feet.getType().isAir() && feet.getRelative(BlockFace.UP).getType().isAir() && ground.isSolid() &&
+        return clearForArrival(feet) && clearForArrival(feet.getRelative(BlockFace.UP)) && ground.isSolid() &&
             ground != Material.MAGMA_BLOCK && ground != Material.CACTUS && ground != Material.CAMPFIRE && ground != Material.SOUL_CAMPFIRE;
     }
     private void transfer(Player player, Location target, Location from) {
