@@ -11,8 +11,8 @@ Build with Java 25 using `./gradlew check :plugin:jar`. Install the generated
 STEMCraft jar on a Paper 26.2 test server and restart. The administrator command
 requires `stemcraft.command.underhalls`.
 
-1. In `survival`, aim at a level patch of solid ground with a clear 3x3 area
-   and three blocks of headroom. Run `/underhalls entrance`.
+1. In `survival`, aim at a supporting block with a clear space three blocks wide,
+   three high and one deep for the door and frame. Run `/underhalls entrance`.
 2. Open the dark oak door in its mossy stone-brick frame and walk through it.
    The destination world, `survival_underhalls`, is created on demand.
 3. You arrive just outside a dark oak exit door. Open it and step into the
@@ -30,7 +30,8 @@ requires `stemcraft.command.underhalls`.
 The manual entrance command ignores grass and flowers when aiming, clears soft
 vegetation in the doorway footprint, and accepts constructed solid floors. It
 reports the specific obstruction, distance, protection or world-loading failure.
-Automatic generation retains its larger 5x5 natural-ground check.
+Automatic entrances use the same narrow footprint, with natural ground directly
+below the door. Space and ground outside the frame are not required.
 
 `/underhalls enter` takes an administrator to the maze beside an exit doorway for direct
 inspection. `/underhalls status` reports active and retired entrance counts.
@@ -91,16 +92,18 @@ the floor and above the ceiling seals the maze. Vanilla terrain decoration,
 structures and generation-time mob spawning are disabled.
 
 Every tile contains an exit chamber at local X=66..70, Z=66..70. Its north door
-is at X=68, Z=66. Walking to local Z=69 inside the chamber triggers departure.
-Arrival squares are at local X=4, Z=4, away from the exit trigger.
+is at X=68, Z=66. Stepping inside its 3x3 interior triggers departure.
+Arrivals are at local X=68.5, Z=65.5, just outside the door.
 
 An entrance at overworld X/Z maps to maze tile `floor(coordinate / 512)`. Each
-exit room initially searches near overworld X/Z `tile * 512 + 8`, within three
-blocks of that column, for a supported landing with two air blocks. Its first
-successful destination is saved permanently. Later obstruction prevents travel;
-it never silently redirects the room to spawn or another location. A room with
-no safe initial landing remains unusable until there is one. Players can explore
-a different room. World borders are checked before chunk preparation.
+exit room uses overworld X/Z `tile * 512 + 8`, immediately above that column's
+motion-blocking height. Two clear blocks are required for the player's body;
+a supported or harmless landing is not required. Water, hazards below the exit,
+and drops are part of the risk. Underhalls teleports do not grant teleport damage
+protection. The first destination is saved permanently: removing its floor does
+not relocate or disable it, but obstructing the player's body space blocks travel.
+World borders and height limits are still checked. There is no search for safer
+terrain or fallback to spawn.
 
 Entrances and exit rooms are independent one-way routes. Destroying an entrance
 does not strand players by disabling an exit. World UUIDs prevent a portal from

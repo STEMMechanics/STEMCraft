@@ -23,6 +23,8 @@ package dev.stemcraft.feature;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.Command;
+import dev.stemcraft.api.util.TeleportContext;
+import dev.stemcraft.api.util.TeleportOptions;
 import dev.stemcraft.api.event.world.SurvivalPortalActivateEvent;
 import dev.stemcraft.chunkgen.UnderhallsGenerator;
 import dev.stemcraft.feature.underhalls.UnderhallsProtection;
@@ -249,12 +251,9 @@ public class UnderhallsFeature extends BaseFeature {
         // Save first: an interrupted construction is permanently retired by the next integrity check.
         store.save(entrance);
         // Only soft vegetation in the validated footprint is cleared; solid obstacles are never replaced.
-        int radius = automatic ? 2 : 1;
-        for (int dx = -radius; dx <= radius; dx++) for (int dz = -radius; dz <= radius; dz++) {
-            for (int dy = 0; dy <= (automatic ? 3 : 2); dy++) {
-                Block block = origin.getRelative(dx, dy, dz);
-                if (!block.getType().isAir() && replaceable(block)) block.setType(Material.AIR, true);
-            }
+        for (int dx = -1; dx <= 1; dx++) for (int dy = 0; dy <= 2; dy++) {
+            Block block = origin.getRelative(dx, dy, 0);
+            if (!block.getType().isAir() && replaceable(block)) block.setType(Material.AIR, true);
         }
         for (int dx = -1; dx <= 1; dx++) for (int dy = 0; dy <= 2; dy++) {
             Block block = origin.getRelative(dx, dy, 0);
@@ -275,18 +274,22 @@ public class UnderhallsFeature extends BaseFeature {
     }
     private String siteProblem(Block origin, boolean automatic) {
         World world = origin.getWorld();
-        int radius = automatic ? 2 : 1, height = automatic ? 4 : 3;
-        if (origin.getY() <= world.getMinHeight() || origin.getY() + height >= world.getMaxHeight()) return "The doorway is too close to the world's height limit.";
-        for (int dx = -radius; dx <= radius; dx++) for (int dz = -radius; dz <= radius; dz++) {
-            if (!world.isChunkLoaded((origin.getX() + dx) >> 4, (origin.getZ() + dz) >> 4)) return "Part of the doorway site is in an unloaded chunk. Move closer and try again.";
-            Block ground = origin.getRelative(dx, -1, dz);
-            boolean supported = automatic ? GROUND.contains(ground.getType()) : ground.getType().isSolid() &&
-                ground.getBoundingBox().getMaxY() == origin.getY() && ground.getType() != Material.MAGMA_BLOCK && ground.getType() != Material.CACTUS;
-            if (!supported) return "The doorway needs level " + (automatic ? "natural" : "solid") + " ground across " + (radius * 2 + 1) + "x" + (radius * 2 + 1) + " blocks; unsuitable ground at " + coordinates(ground) + ".";
+        int height = 3;
+        if (origin.getY() <= world.getMinHeight() || origin.getY() + height > world.getMaxHeight()) return "The doorway is too close to the world's height limit.";
+        for (int dx = -1; dx <= 1; dx++) {
+            if (!world.isChunkLoaded((origin.getX() + dx) >> 4, origin.getZ() >> 4)) return "Part of the doorway site is in an unloaded chunk. Move closer and try again.";
+            // Only the door itself needs support; the stone frame can overhang a drop.
+            if (dx == 0) {
+                Block ground = origin.getRelative(0, -1, 0);
+                if (!ground.getType().isSolid() || ground.getBoundingBox().getMaxY() != origin.getY() ||
+                    (automatic && !GROUND.contains(ground.getType()))) {
+                    return "The door needs a supporting block directly below it at " + coordinates(ground) + ".";
+                }
+            }
             for (int dy = 0; dy < height; dy++) {
-                Block block = origin.getRelative(dx, dy, dz);
+                Block block = origin.getRelative(dx, dy, 0);
                 if (!world.getWorldBorder().isInside(block.getLocation())) return "The doorway would cross the world border.";
-                if (!replaceable(block)) return "Clear " + block.getType().name().toLowerCase(Locale.ROOT).replace('_', ' ') + " at " + coordinates(block) + "; the doorway needs " + height + " blocks of headroom.";
+                if (!replaceable(block)) return "Clear " + block.getType().name().toLowerCase(Locale.ROOT).replace('_', ' ') + " at " + coordinates(block) + "; the door and frame need a 3-wide, 3-high, 1-deep space.";
             }
         }
         return null;
@@ -382,25 +385,30 @@ public class UnderhallsFeature extends BaseFeature {
         if (!source.getWorldBorder().isInside(column)) { tell(player, "This exit lies beyond the overworld border."); return; }
         prepare(player, column, from, ignored -> {
             Location destination = findLanding(source, (int)x, (int)z);
-            if (destination == null) { tell(player, "The far side has no safe landing. Try another exit room."); return; }
+            if (destination == null) { tell(player, "The exit is obstructed or outside the world's height limits."); return; }
             // First successful use pins the destination forever; later obstruction never moves it.
             Pos pinned = store.pinExit(room, Pos.of(destination.getBlock()));
             Location target = pinned.location();
-            if (!safe(target)) { tell(player, "The destination is blocked. Try another exit room."); return; }
+            if (!exitSpace(target)) { tell(player, "The destination is blocked. Clear it before using this doorway."); return; }
             teleport(player, target);
         });
     }
     private Location findLanding(World world, int x, int z) {
-        for (int radius = 0; radius <= 3; radius++) for (int dx = -radius; dx <= radius; dx++) for (int dz = -radius; dz <= radius; dz++) {
-            if (Math.max(Math.abs(dx), Math.abs(dz)) != radius) continue;
-            int y = world.getHighestBlockYAt(x + dx, z + dz, HeightMap.MOTION_BLOCKING_NO_LEAVES) + 1;
-            Location target = new Location(world, x + dx + .5, y, z + dz + .5);
-            if (safe(target)) return target;
-        }
-        return null;
+        int y = Math.max(world.getMinHeight() + 1, world.getHighestBlockYAt(x, z, HeightMap.MOTION_BLOCKING_NO_LEAVES) + 1);
+        Location target = new Location(world, x + .5, y, z + .5);
+        return exitSpace(target) ? target : null;
+    }
+    private boolean exitSpace(Location target) {
+        World world = target.getWorld();
+        return world != null && target.getY() > world.getMinHeight() && target.getY() + 1 < world.getMaxHeight() &&
+            world.getWorldBorder().isInside(target) && clearForArrival(target.getBlock()) &&
+            clearForArrival(target.getBlock().getRelative(BlockFace.UP));
     }
     private boolean clearForArrival(Block block) {
-        return block.getType().isAir() || (block.getType() == Material.LIGHT && HeldLightFeature.isTemporaryLight(block));
+        Material type = block.getType();
+        return type.isAir() || (type == Material.LIGHT && HeldLightFeature.isTemporaryLight(block)) ||
+            type == Material.SHORT_GRASS || type == Material.TALL_GRASS || type == Material.FERN || type == Material.LARGE_FERN ||
+            (block.isPassable() && Tag.FLOWERS.isTagged(type));
     }
 
     private boolean safe(Location target) {
@@ -414,7 +422,9 @@ public class UnderhallsFeature extends BaseFeature {
     }
     private void transfer(Player player, Location target, Location from) {
         prepare(player, target, from, destination -> {
-            if (!safe(destination)) { tell(player, "The destination is blocked. Clear it before using this doorway."); return; }
+            if (!(isMaze(destination.getWorld()) ? safe(destination) : exitSpace(destination))) {
+                tell(player, "The destination is blocked. Clear it before using this doorway."); return;
+            }
             teleport(player, destination);
         });
     }
@@ -438,7 +448,8 @@ public class UnderhallsFeature extends BaseFeature {
     }
     private void teleport(Player player, Location target) {
         cooldowns.put(player.getUniqueId(), System.currentTimeMillis() + 5000);
-        if (player.teleport(target, PlayerTeleportEvent.TeleportCause.PLUGIN)) {
+        if (TeleportContext.callWithOptions(player.getUniqueId(), new TeleportOptions(true, true, true, false),
+            () -> player.teleport(target, PlayerTeleportEvent.TeleportCause.PLUGIN))) {
             player.setFallDistance(0);
             player.playSound(target, Sound.BLOCK_DEEPSLATE_BRICKS_STEP, .8f, .5f);
         } else {

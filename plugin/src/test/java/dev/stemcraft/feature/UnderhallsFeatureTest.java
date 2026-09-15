@@ -167,6 +167,50 @@ class UnderhallsFeatureTest {
         assertEquals(source,player.getWorld());
     }
 
+    @Test void doorwayOnlyNeedsItsFrameAndOneSupportingBlock() throws Exception {
+        Block origin=source.getBlockAt(104,65,104); source.getChunkAt(6,6);
+        for(int x=-2;x<=2;x++)for(int z=-2;z<=2;z++) {
+            if(x!=0 || z!=0) origin.getRelative(x,-1,z).setType(Material.AIR);
+        }
+        origin.getRelative(0,0,1).setType(Material.STONE);
+        origin.getRelative(0,0,-1).setType(Material.SHORT_GRASS);
+        var site=UnderhallsFeature.class.getDeclaredMethod("siteProblem",Block.class,boolean.class);site.setAccessible(true);
+        assertNull(site.invoke(feature,origin,true));
+        assertTrue(entrance(origin));
+        assertEquals(Material.STONE,origin.getRelative(0,0,1).getType());
+        assertEquals(Material.SHORT_GRASS,origin.getRelative(0,0,-1).getType());
+        assertEquals(Material.AIR,origin.getRelative(1,-1,0).getType());
+    }
+
+    @Test void exitsAllowWaterAndKeepTheirPinnedLocationAboveADrop() throws Exception {
+        source.getBlockAt(8,64,8).setType(Material.WATER);
+        var player=server.addPlayer();
+        Location room=new Location(maze,68.5,65,67.5);
+        walk(player,room);
+        assertEquals(source,player.getWorld());
+        assertEquals(8,player.getLocation().getBlockX());
+        assertEquals(8,player.getLocation().getBlockZ());
+        Location destination=player.getLocation().clone();
+        destination.getBlock().getRelative(0,-1,0).setType(Material.AIR);
+        walk(player,room);
+        assertEquals(destination,player.getLocation());
+        assertEquals(Pos.of(destination.getBlock()),state().exit(new Pos(maze.getUID(),68,65,69)));
+    }
+
+    @Test void underhallsTravelRecordsLocationWithoutGrantingDamageProtection() throws Exception {
+        var captured=new java.util.concurrent.atomic.AtomicReference<dev.stemcraft.api.util.TeleportOptions>();
+        var plugin=MockBukkit.createMockPlugin();
+        server.getPluginManager().registerEvent(org.bukkit.event.player.PlayerTeleportEvent.class,new Listener(){},
+            EventPriority.MONITOR,(ignored,event)-> {
+                var teleport=(org.bukkit.event.player.PlayerTeleportEvent)event;
+                if(teleport.getTo().getWorld().equals(source)) captured.set(dev.stemcraft.api.util.TeleportContext.current(teleport.getPlayer().getUniqueId()));
+            },plugin,true);
+        walk(server.addPlayer(),new Location(maze,68.5,65,67.5));
+        assertNotNull(captured.get());
+        assertFalse(captured.get().grantDamageProtection());
+        assertTrue(captured.get().updateWorldLastLocation());
+    }
+
     @Test void portalProtectionCanVetoEntranceWithoutSavingOrBuildingAnything() throws Exception {
         var plugin=MockBukkit.createMockPlugin();
         server.getPluginManager().registerEvent(dev.stemcraft.api.event.world.SurvivalPortalActivateEvent.class,
