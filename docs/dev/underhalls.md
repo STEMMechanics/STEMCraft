@@ -17,9 +17,9 @@ requires `stemcraft.command.underhalls`.
    The destination world, `survival_underhalls`, is created on demand.
 3. You arrive just outside a dark oak exit door. Open it and step into the
    dark chamber to return to its fixed overworld location, or turn around to
-   explore the maze. Exit destinations remain fixed; they need not be the
-   overworld entrance you used. If you enter during the five-second teleport
-   cooldown, wait inside and the exit retries automatically.
+   explore the maze. This doorway returns to the overworld entrance you used.
+   If you enter during the five-second teleport cooldown, wait inside and the
+   exit retries automatically.
 4. Break an overworld entrance's door, frame or supporting ground. That entrance is permanently
    retired, even if somebody rebuilds it. The maze exit rooms continue working.
 5. Place torches, signs or blocks in the halls. Another player can remove them;
@@ -35,6 +35,23 @@ below the door. Space and ground outside the frame are not required.
 
 `/underhalls enter` takes an administrator to the maze beside an exit doorway for direct
 inspection. `/underhalls status` reports active and retired entrance counts.
+`/underhalls list [page]` shows all registered overworld entrances (including
+retired ones), their maze arrivals, and known exit destinations. Each page has
+six routes, clickable **door**/**destination** links, and page navigation. Door
+links place the administrator just outside the door. Paired returns are marked
+**PAIRED RETURN**; other previously used maze exits are marked **UNPAIRED FIXED
+EXIT**. Other maze rooms enter this list once their exit has been used. Listing does not generate terrain or pin destinations. Unloaded
+worlds are labelled and must be loaded before their teleport links can be used.
+The links use `/underhalls visit ...` and require the same administrator permission.
+These are inspection teleports: inspecting a retired doorway does not reopen it.
+
+Each overworld entrance has a unique paired maze doorway. Returning through it
+places the player just outside their original overworld entrance. Existing shared
+room assignments are split automatically on restart and saved permanently; no
+world reset is required. Several entrances in the same overworld area now receive
+distinct rooms. Players already standing in a formerly shared room should re-enter
+through their overworld entrance to reach its updated room.
+
 The generator is also available as `/world create test_underhalls underhalls seed:12345`.
 Worlds using this generator receive maze protection and exit-room routing to the
 configured source world, regardless of their name.
@@ -95,18 +112,20 @@ Every tile contains an exit chamber at local X=66..70, Z=66..70. Its north door
 is at X=68, Z=66. Stepping inside its 3x3 interior triggers departure.
 Arrivals are at local X=68.5, Z=65.5, just outside the door.
 
-An entrance at overworld X/Z maps to maze tile `floor(coordinate / 512)`. Each
-exit room uses overworld X/Z `tile * 512 + 8`, immediately above that column's
-motion-blocking height. Two clear blocks are required for the player's body;
-a supported or harmless landing is not required. Water, hazards below the exit,
-and drops are part of the risk. Underhalls teleports do not grant teleport damage
-protection. The first destination is saved permanently: removing its floor does
-not relocate or disable it, but obstructing the player's body space blocks travel.
-World borders and height limits are still checked. There is no search for safer
-terrain or fallback to spawn.
+An entrance starts with maze tile `floor(overworld coordinate / 512)` and takes
+an unused tile if that room is occupied. Its return destination is fixed just
+outside the original overworld door. Retired entrances retain their return route
+to that location, so destroying a door does not strand players inside.
 
-Entrances and exit rooms are independent one-way routes. Destroying an entrance
-does not strand players by disabling an exit. World UUIDs prevent a portal from
+Other, unpaired maze exits use overworld X/Z `tile * 512 + 8`, immediately above
+that column's motion-blocking height; their first destination is saved permanently.
+Two clear blocks are required for the player's body; a supported or harmless
+landing is not required. Water, hazards below the exit and drops are part of the
+risk. Underhalls teleports do not grant teleport damage protection. Obstructing
+the player's body space blocks travel; removing the floor does not. World borders
+and height limits still apply. There is no fallback to spawn.
+
+World UUIDs prevent a portal from
 silently targeting a replacement world after regeneration. Unloaded saved exit
 worlds must be loaded by an administrator before using their routes.
 

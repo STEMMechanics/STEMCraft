@@ -91,6 +91,7 @@ public final class UnderhallsStore {
         write("entrance", entrance.origin, entrance.maze + "," + entrance.tileX + "," + entrance.tileZ + "," + entrance.retired);
         entrances.put(entrance.origin, entrance);
     }
+    public Map<Pos, Pos> exits() { return Map.copyOf(exits); }
     public Pos exit(Pos room) { return exits.get(room); }
     public Pos pinExit(Pos room, Pos destination) {
         Pos existing = exits.get(room);

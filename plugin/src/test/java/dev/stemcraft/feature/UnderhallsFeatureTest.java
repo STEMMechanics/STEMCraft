@@ -116,7 +116,7 @@ class UnderhallsFeatureTest {
         walk(player,origin.getLocation().add(.5,0,.5));
         assertEquals(source,player.getWorld());
     }
-    @Test void fixedRoomExitSurvivesEntranceDestructionAndNeverMovesWhenBlocked() throws Exception {
+    @Test void pairedReturnSurvivesEntranceDestructionAndNeverMovesWhenBlocked() throws Exception {
         var player=server.addPlayer();
         Block entrance=source.getBlockAt(104,65,104);
         source.getChunkAt(6,6);
@@ -127,12 +127,13 @@ class UnderhallsFeatureTest {
         walk(player,room);
         assertEquals(source,player.getWorld());
         Location destination=player.getLocation().clone();
-        Pos roomKey=Pos.of(room.getBlock());
-        assertEquals(Pos.of(destination.getBlock()),state().exit(roomKey));
+        assertEquals(new Location(source,104.5,65,103.5),destination);
+        assertEquals(0,state().entrance(Pos.of(entrance)).tileX());
         destination.getBlock().setType(Material.STONE);
         walk(player,room);
         assertEquals(maze,player.getWorld());
-        assertEquals(Pos.of(destination.getBlock()),state().exit(roomKey));
+        assertEquals(new Location(source,104.5,65,103.5),destination);
+        assertEquals(0,state().entrance(Pos.of(entrance)).tileX());
         destination.getBlock().setType(Material.AIR);
         walk(player,room);
         assertEquals(destination,player.getLocation());
@@ -209,6 +210,106 @@ class UnderhallsFeatureTest {
         assertNotNull(captured.get());
         assertFalse(captured.get().grantDamageProtection());
         assertTrue(captured.get().updateWorldLastLocation());
+    }
+
+    List<net.kyori.adventure.text.Component> listing(int page) {
+        var sender=mock(org.bukkit.command.CommandSender.class);
+        feature.listRoutes(sender,page);
+        var messages=org.mockito.ArgumentCaptor.forClass(net.kyori.adventure.text.Component.class);
+        verify(sender,atLeastOnce()).sendMessage(messages.capture());
+        return messages.getAllValues();
+    }
+    String listingText(List<net.kyori.adventure.text.Component> messages) {
+        return messages.stream().map(net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()::serialize)
+            .collect(java.util.stream.Collectors.joining("\n"));
+    }
+    void collectClicks(net.kyori.adventure.text.Component component,List<String> clicks) {
+        if(component.clickEvent()!=null) clicks.add(((net.kyori.adventure.text.event.ClickEvent.Payload.Text)component.clickEvent().payload()).value());
+        component.children().forEach(child->collectClicks(child,clicks));
+    }
+    @Test void routeListShowsRealDirectionsAndClickableEndpoints() throws Exception {
+        Block origin=source.getBlockAt(104,65,104);source.getChunkAt(6,6);assertTrue(entrance(origin));
+        var player=server.addPlayer();
+        walk(player,new Location(maze,68.5,65,67.5));
+        var messages=listing(1);
+        String text=listingText(messages);
+        assertTrue(text.contains("survival 104, 65, 104"));
+        assertTrue(text.contains("survival_underhalls 68, 65, 65"));
+        assertTrue(text.contains("survival 104, 65, 103"));
+        assertTrue(text.contains("Paired doorways"));
+        List<String> clicks=new ArrayList<>();messages.forEach(message->collectClicks(message,clicks));
+        Pos id=Pos.of(origin);
+        assertTrue(clicks.contains("/underhalls visit entrance " + id.encode()));
+        assertTrue(clicks.contains("/underhalls visit entrance-destination " + id.encode()));
+        feature.visitRoute(player,"entrance",id);
+        assertEquals(new Location(source,104.5,65,103.5),player.getLocation());
+        feature.visitRoute(player,"entrance-destination",id);
+        assertEquals(new Location(maze,68.5,65,65.5),player.getLocation());
+        feature.visitRoute(player,"exit-destination",new Pos(maze.getUID(),68,65,69));
+        assertEquals(new Location(source,104.5,65,103.5),player.getLocation());
+        feature.visitRoute(player,"entrance",new Pos(source.getUID(),999,65,999));
+        assertEquals(new Location(source,104.5,65,103.5),player.getLocation());
+    }
+    @Test void pairedAndRetiredRoutesAreExplicitAndListingDoesNotPinExits() throws Exception {
+        Block origin=source.getBlockAt(104,65,104);source.getChunkAt(6,6);assertTrue(entrance(origin));
+        server.getPluginManager().callEvent(new BlockBreakEvent(origin,server.addPlayer()));
+        String text=listingText(listing(1));
+        assertTrue(text.contains("RETIRED"));
+        assertTrue(text.contains("PAIRED RETURN"));
+        assertTrue(state().exits().isEmpty());
+        server.unloadWorld(maze,false);
+        text=listingText(listing(1));
+        assertTrue(text.contains("unloaded"));
+        verify(api.worlds(),never()).loadWorld(anyString());
+    }
+    @Test void routePaginationIncludesEveryPairedDoorway() throws Exception {
+        var field=UnderhallsFeature.class.getDeclaredField("store");field.setAccessible(true);
+        var store=(UnderhallsStore)field.get(feature);
+        for(int x=100;x<107;x++) store.save(new UnderhallsStore.Entrance(new Pos(source.getUID(),x,65,100),maze.getUID(),x-100,0,false));
+        var first=listing(1);var second=listing(2);var third=listing(3);
+        assertTrue(listingText(first).contains("14 known, page 1/3"));
+        assertTrue(listingText(second).contains("14 known, page 2/3"));
+        List<String> clicks=new ArrayList<>();first.forEach(message->collectClicks(message,clicks));
+        assertTrue(clicks.contains("/underhalls list 2"));
+        String text=listingText(first)+listingText(second)+listingText(third);
+        for(int x=100;x<107;x++) assertTrue(text.contains("survival " + x + ", 65, 100"));
+        assertEquals(7,text.split("EXIT ", -1).length-1);
+    }
+
+    @Test void entrancesInSameOverworldTileHaveDistinctPersistentReturnDoors() throws Exception {
+        Block first=source.getBlockAt(104,65,104), second=source.getBlockAt(408,65,104);
+        source.getChunkAt(6,6);source.getChunkAt(25,6);
+        assertTrue(entrance(first));assertTrue(entrance(second));
+        var a=state().entrance(Pos.of(first));var b=state().entrance(Pos.of(second));
+        assertNotEquals(a.tileX(),b.tileX());
+        feature.onDisable();feature.onEnable();
+        var player=server.addPlayer();
+        for(Block original:List.of(first,second)) {
+            walk(player,Pos.of(original).location());
+            assertEquals(maze,player.getWorld());
+            Location doorInterior=player.getLocation().clone().add(0,0,2);
+            walk(player,doorInterior);
+            assertEquals(Pos.of(original).offset(0,0,-1).location(),player.getLocation());
+        }
+    }
+    @Test void legacySharedRoomsAreSplitAndOldRandomExitCannotOverridePair() throws Exception {
+        var field=UnderhallsFeature.class.getDeclaredField("store");field.setAccessible(true);
+        var store=(UnderhallsStore)field.get(feature);
+        Pos a=new Pos(source.getUID(),104,65,104), b=new Pos(source.getUID(),408,65,104);
+        store.save(new UnderhallsStore.Entrance(a,maze.getUID(),0,0,false));
+        store.save(new UnderhallsStore.Entrance(b,maze.getUID(),0,0,false));
+        store.pinExit(new Pos(maze.getUID(),68,65,69),new Pos(source.getUID(),8,65,8));
+        feature.migrateSharedRooms();
+        int assigned=state().entrance(b).tileX();
+        assertNotEquals(0,assigned);
+        feature.migrateSharedRooms();
+        assertEquals(assigned,state().entrance(b).tileX());
+        var player=server.addPlayer();
+        walk(player,new Location(maze,68.5,65,67.5));
+        assertEquals(a.offset(0,0,-1).location(),player.getLocation());
+        walk(player,new Location(maze,assigned*128+68.5,65,67.5));
+        assertEquals(b.offset(0,0,-1).location(),player.getLocation());
+        assertFalse(listingText(listing(1)).contains("survival 8, 65, 8"));
     }
 
     @Test void portalProtectionCanVetoEntranceWithoutSavingOrBuildingAnything() throws Exception {

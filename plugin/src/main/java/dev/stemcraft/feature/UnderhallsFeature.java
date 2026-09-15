@@ -30,6 +30,10 @@ import dev.stemcraft.chunkgen.UnderhallsGenerator;
 import dev.stemcraft.feature.underhalls.UnderhallsProtection;
 import dev.stemcraft.feature.underhalls.UnderhallsStore;
 import dev.stemcraft.feature.underhalls.UnderhallsStore.*;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.command.CommandSender;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
@@ -45,7 +49,7 @@ import org.bukkit.persistence.PersistentDataType;
 import java.util.*;
 import java.util.function.Consumer;
 
-/** Persistent one-way entrances and fixed exit rooms for The Underhalls. */
+/** Persistent paired entrances and fixed exit rooms for The Underhalls. */
 public class UnderhallsFeature extends BaseFeature {
     private static final String TASK = "feature:underhalls";
     private static final NamespacedKey KEY = new NamespacedKey("stemcraft", "underhalls");
@@ -76,6 +80,7 @@ public class UnderhallsFeature extends BaseFeature {
     @Override public void onEnable() {
         store = new UnderhallsStore(api.database());
         store.load();
+        migrateSharedRooms();
         readSettings();
         running = true;
         protection = new UnderhallsProtection(api, store, this::isMaze);
@@ -107,8 +112,8 @@ public class UnderhallsFeature extends BaseFeature {
         });
         api.tasks().repeating(TASK, 20L, 20L, this::tick);
         command = api.commands().create("underhalls").description("Test and manage The Underhalls.")
-            .permission("stemcraft.command.underhalls").usage("/underhalls <entrance|enter|status>")
-            .tabCompletion("entrance").tabCompletion("enter").tabCompletion("status")
+            .permission("stemcraft.command.underhalls").usage("/underhalls <entrance|enter|status|list [page]>")
+            .tabCompletion("entrance").tabCompletion("enter").tabCompletion("status").tabCompletion("list")
             .executor((unused, cmd, ctx) -> {
                 if ("status".equals(ctx.getArgLower(0))) {
                     ctx.info("Underhalls: {active} active entrances, {closed} permanently closed.",
@@ -116,9 +121,20 @@ public class UnderhallsFeature extends BaseFeature {
                         "closed", store.entrances().stream().filter(Entrance::retired).count());
                     return;
                 }
+                if ("list".equals(ctx.getArgLower(0))) {
+                    try {
+                        listRoutes(ctx.getSender(), ctx.args().size() > 1 ? Integer.parseInt(ctx.getArg(1)) : 1);
+                    } catch (NumberFormatException error) { ctx.error("Usage: /underhalls list [page]"); }
+                    return;
+                }
                 Player player = ctx.asPlayer();
                 if (player == null) { ctx.error("Run this command in-game."); return; }
                 switch (Objects.toString(ctx.getArgLower(0), "")) {
+                    case "visit" -> {
+                        if (ctx.args().size() != 3) { ctx.error("Use the teleport links in /underhalls list."); return; }
+                        try { visitRoute(player, ctx.getArgLower(1), Pos.decode(ctx.getArg(2))); }
+                        catch (IllegalArgumentException error) { ctx.error("Invalid portal link. Run /underhalls list again."); }
+                    }
                     case "entrance" -> {
                         if (!player.getWorld().getName().equals(sourceName)) { ctx.error("Create entrances in {world}.", "world", sourceName); return; }
                         var hit = player.getWorld().rayTraceBlocks(player.getEyeLocation(), player.getEyeLocation().getDirection(),
@@ -134,9 +150,127 @@ public class UnderhallsFeature extends BaseFeature {
                         if (maze == null) { tell(player, mazeFailure); return; }
                         transfer(player, arrival(maze, 0, 0), null);
                     });
-                    default -> ctx.error("Usage: /underhalls <entrance|enter|status>");
+                    default -> ctx.error("Usage: /underhalls <entrance|enter|status|list [page]>");
                 }
             }).register(STEMCraft.getPlugin());
+    }
+
+    private record DebugRoute(String kind, Pos origin, Pos destination, String detail) { }
+
+    private List<DebugRoute> debugRoutes() {
+        List<DebugRoute> routes = new ArrayList<>();
+        Map<Pos, Pos> exits = new HashMap<>(store.exits());
+        exits.replaceAll((room, destination) -> {
+            Entrance paired = pairedEntrance(room.world(), Math.floorDiv(room.x(), UnderhallsGenerator.TILE), Math.floorDiv(room.z(), UnderhallsGenerator.TILE));
+            return paired == null ? destination : paired.origin().offset(0, 0, -1);
+        });
+        for (Entrance entrance : store.entrances()) {
+            World maze = Bukkit.getWorld(entrance.maze());
+            Pos destination = maze == null ? null : Pos.of(arrival(maze, entrance.tileX(), entrance.tileZ()).getBlock());
+            routes.add(new DebugRoute("entrance", entrance.origin(), destination,
+                (entrance.retired() ? "RETIRED" : "ACTIVE") + (maze == null ? " -> maze " + entrance.maze() +
+                    " (unloaded), tile " + entrance.tileX() + ", " + entrance.tileZ() : "")));
+            if (destination != null) exits.put(destination.offset(0, 0, 4), entrance.origin().offset(0, 0, -1));
+        }
+        exits.forEach((room, destination) -> {
+            boolean paired = pairedEntrance(room.world(), Math.floorDiv(room.x(), UnderhallsGenerator.TILE),
+                Math.floorDiv(room.z(), UnderhallsGenerator.TILE)) != null;
+            routes.add(new DebugRoute("exit", room, destination, paired ? "PAIRED RETURN" : "UNPAIRED FIXED EXIT"));
+        });
+        routes.sort(Comparator.comparing(DebugRoute::kind).thenComparing(route -> route.origin().encode()));
+        return routes;
+    }
+
+    void listRoutes(CommandSender sender, int page) {
+        List<DebugRoute> routes = debugRoutes();
+        int pageSize = 6, pages = Math.max(1, (routes.size() + pageSize - 1) / pageSize);
+        if (page < 1 || page > pages) { sender.sendMessage("Choose a page from 1 to " + pages + "."); return; }
+        sender.sendMessage(Component.text("Underhalls routes — " + routes.size() + " known, page " + page + "/" + pages, NamedTextColor.GOLD));
+        sender.sendMessage(Component.text("Paired doorways return to their original overworld entrance. Unpaired exits are labelled separately.", NamedTextColor.GRAY));
+        if (routes.isEmpty()) sender.sendMessage("No registered entrances or used exit rooms yet.");
+        for (DebugRoute route : routes.subList((page - 1) * pageSize, Math.min(page * pageSize, routes.size()))) {
+            sender.sendMessage(Component.text(route.kind().toUpperCase(Locale.ROOT) + " [" + route.detail() + "]", NamedTextColor.YELLOW));
+            Pos doorway = route.kind().equals("entrance") ? route.origin() : route.origin().offset(0, 0, -3);
+            Component line = Component.text("  " + positionText(doorway), NamedTextColor.WHITE)
+                .append(routeLink(" [door]", route.kind(), route.origin(), doorway));
+            if (route.destination() != null) {
+                line = line.append(Component.text(" -> " + positionText(route.destination()), NamedTextColor.WHITE))
+                    .append(routeLink(" [destination]", route.kind() + "-destination", route.origin(), route.destination()));
+            }
+            sender.sendMessage(line);
+        }
+        Component navigation = Component.empty();
+        if (page > 1) navigation = navigation.append(Component.text("[Previous] ", NamedTextColor.AQUA)
+            .clickEvent(ClickEvent.runCommand("/underhalls list " + (page - 1))));
+        if (page < pages) navigation = navigation.append(Component.text("[Next]", NamedTextColor.AQUA)
+            .clickEvent(ClickEvent.runCommand("/underhalls list " + (page + 1))));
+        sender.sendMessage(navigation);
+    }
+
+    private String positionText(Pos pos) {
+        World world = Bukkit.getWorld(pos.world());
+        return (world == null ? pos.world() + " (unloaded)" : world.getName()) + " " + pos.x() + ", " + pos.y() + ", " + pos.z();
+    }
+
+    private Component routeLink(String label, String action, Pos id, Pos target) {
+        if (Bukkit.getWorld(target.world()) == null) return Component.text(" [world unloaded]", NamedTextColor.GRAY);
+        return Component.text(label, NamedTextColor.AQUA).clickEvent(ClickEvent.runCommand("/underhalls visit " + action + " " + id.encode()))
+            .hoverEvent(Component.text("Teleport to " + positionText(target) + ". Door links place you just outside the doorway."));
+    }
+
+    void visitRoute(Player player, String action, Pos id) {
+        Pos target = null;
+        if (action.equals("entrance") || action.equals("entrance-destination")) {
+            Entrance entrance = store.entrance(id);
+            if (entrance != null) {
+                World maze = Bukkit.getWorld(entrance.maze());
+                target = action.equals("entrance") ? entrance.origin().offset(0, 0, -1) :
+                    maze == null ? null : Pos.of(arrival(maze, entrance.tileX(), entrance.tileZ()).getBlock());
+            }
+        } else if (action.equals("exit") || action.equals("exit-destination")) {
+            boolean known = debugRoutes().stream().anyMatch(route -> route.kind().equals("exit") && route.origin().equals(id));
+            if (known) {
+                Entrance paired = pairedEntrance(id.world(), Math.floorDiv(id.x(), UnderhallsGenerator.TILE), Math.floorDiv(id.z(), UnderhallsGenerator.TILE));
+                target = action.equals("exit") ? id.offset(0, 0, -4) : paired == null ? store.exit(id) : paired.origin().offset(0, 0, -1);
+            }
+        }
+        if (target == null || Bukkit.getWorld(target.world()) == null) {
+            tell(player, "This route is unavailable or its world is unloaded. Run /underhalls list again."); return;
+        }
+        Location destination = target.location();
+        api.tasks().nextTick(() -> transfer(player, destination, null));
+    }
+
+    private record RoomTile(UUID maze, int x, int z) { }
+
+    private Entrance pairedEntrance(UUID maze, int tileX, int tileZ) {
+        return store.entrances().stream().filter(entrance -> entrance.maze().equals(maze) &&
+            entrance.tileX() == tileX && entrance.tileZ() == tileZ).findFirst().orElse(null);
+    }
+
+    private int freeTileX(UUID maze, int start, int z) {
+        int x = start;
+        Set<RoomTile> occupied = new HashSet<>();
+        for (Entrance entrance : store.entrances()) occupied.add(new RoomTile(entrance.maze(), entrance.tileX(), entrance.tileZ()));
+        for (Pos room : store.exits().keySet()) occupied.add(new RoomTile(room.world(), Math.floorDiv(room.x(), UnderhallsGenerator.TILE), Math.floorDiv(room.z(), UnderhallsGenerator.TILE)));
+        while (occupied.contains(new RoomTile(maze, x, z))) x++;
+        return x;
+    }
+
+    /** Older versions could send multiple overworld doors to one maze room. Persist distinct assignments. */
+    void migrateSharedRooms() {
+        Set<RoomTile> claimed = new HashSet<>();
+        List<Entrance> entrances = new ArrayList<>(store.entrances());
+        entrances.sort(Comparator.comparing(Entrance::retired).thenComparing(entrance -> entrance.origin().encode()));
+        for (Entrance entrance : entrances) {
+            RoomTile tile = new RoomTile(entrance.maze(), entrance.tileX(), entrance.tileZ());
+            if (!claimed.add(tile)) {
+                int x = freeTileX(entrance.maze(), entrance.tileX(), entrance.tileZ());
+                Entrance migrated = new Entrance(entrance.origin(), entrance.maze(), x, entrance.tileZ(), entrance.retired());
+                store.save(migrated);
+                claimed.add(new RoomTile(migrated.maze(), migrated.tileX(), migrated.tileZ()));
+            }
+        }
     }
 
     private void readSettings() {
@@ -247,7 +381,10 @@ public class UnderhallsFeature extends BaseFeature {
         if (event.isCancelled()) return EntranceResult.rejected("A protection rule prevented this doorway.");
         World maze = ensureMaze();
         if (maze == null) return EntranceResult.rejected(mazeFailure);
-        Entrance entrance = new Entrance(pos, maze.getUID(), Math.floorDiv(pos.x(), OVERWORLD_TILE), Math.floorDiv(pos.z(), OVERWORLD_TILE), false);
+        int tileZ = Math.floorDiv(pos.z(), OVERWORLD_TILE);
+        int tileX = freeTileX(maze.getUID(), Math.floorDiv(pos.x(), OVERWORLD_TILE), tileZ);
+        if (!maze.getWorldBorder().isInside(arrival(maze, tileX, tileZ))) return EntranceResult.rejected("No unused paired room is available within the maze border.");
+        Entrance entrance = new Entrance(pos, maze.getUID(), tileX, tileZ, false);
         // Save first: an interrupted construction is permanently retired by the next integrity check.
         store.save(entrance);
         // Only soft vegetation in the validated footprint is cleared; solid obstacles are never replaced.
@@ -370,6 +507,13 @@ public class UnderhallsFeature extends BaseFeature {
         int tileX = Math.floorDiv(from.getBlockX(), UnderhallsGenerator.TILE), tileZ = Math.floorDiv(from.getBlockZ(), UnderhallsGenerator.TILE);
         Pos room = new Pos(from.getWorld().getUID(), tileX * UnderhallsGenerator.TILE + UnderhallsGenerator.ROOM + 4,
             UnderhallsGenerator.floor(from.getWorld()) + 1, tileZ * UnderhallsGenerator.TILE + UnderhallsGenerator.ROOM + 5);
+        Entrance paired = pairedEntrance(from.getWorld().getUID(), tileX, tileZ);
+        if (paired != null) {
+            Location target = paired.origin().offset(0, 0, -1).location();
+            if (target.getWorld() == null) { tell(player, "This doorway's overworld is unavailable."); return; }
+            transfer(player, target, from);
+            return;
+        }
         Pos saved = store.exit(room);
         if (saved != null) {
             Location target = saved.location();
