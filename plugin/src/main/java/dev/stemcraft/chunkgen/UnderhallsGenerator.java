@@ -54,13 +54,13 @@ public final class UnderhallsGenerator extends ChunkGenerator {
 
     public static boolean exitTrigger(int x, int z) {
         int lx = Math.floorMod(x, TILE), lz = Math.floorMod(z, TILE);
-        return lx >= ROOM + 3 && lx <= ROOM + 5 && lz == ROOM + 5;
+        return lx >= ROOM + 3 && lx <= ROOM + 5 && lz >= ROOM + 3 && lz <= ROOM + 5;
     }
 
     /** Keep the arrival square and exit chambers clear of player construction. */
     public static boolean reserved(int x, int z) {
         int lx = Math.floorMod(x, TILE), lz = Math.floorMod(z, TILE);
-        return exitRoom(x, z) || (lx >= 2 && lx <= 5 && lz >= 2 && lz <= 5);
+        return exitRoom(x, z) || (lx >= ROOM + 3 && lx <= ROOM + 5 && lz == ROOM + 1) || (lx >= 2 && lx <= 5 && lz >= 2 && lz <= 5);
     }
 
     public static final class Maze {
@@ -131,7 +131,7 @@ public final class UnderhallsGenerator extends ChunkGenerator {
     }
 
     @Override public Location getFixedSpawnLocation(@NotNull World world, @NotNull Random random) {
-        return new Location(world, 4.5, floor(world) + 1, 4.5);
+        return new Location(world, ROOM + 4.5, floor(world) + 1, ROOM + 1.5);
     }
     @Override public int getBaseHeight(@NotNull WorldInfo world, @NotNull Random random, int x, int z, @NotNull HeightMap map) {
         return floor(world) + 1;

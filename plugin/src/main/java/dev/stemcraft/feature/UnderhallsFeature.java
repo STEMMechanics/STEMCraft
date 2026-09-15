@@ -198,6 +198,8 @@ public class UnderhallsFeature extends BaseFeature {
         }
         long now = System.currentTimeMillis();
         cooldowns.entrySet().removeIf(entry -> entry.getValue() <= now);
+        // A player may enter during cooldown and stop moving, or wait while a chunk loads.
+        for (Player player : Bukkit.getOnlinePlayers()) tryExit(player);
         if (!natural || now < nextAttempt) return;
         nextAttempt = now + interval;
         if (random.nextDouble() >= chance) return;
@@ -322,9 +324,8 @@ public class UnderhallsFeature extends BaseFeature {
         Player player = event.getPlayer();
         if (pending.contains(player.getUniqueId()) || cooldowns.getOrDefault(player.getUniqueId(), 0L) > System.currentTimeMillis()) return;
         if (isMaze(to.getWorld())) {
-            if (to.getBlockY() == UnderhallsGenerator.floor(to.getWorld()) + 1 && UnderhallsGenerator.exitTrigger(to.getBlockX(), to.getBlockZ())) {
-                exit(player, to);
-            }
+            // Finish the movement event before teleporting, including when the target chunk is already loaded.
+            api.tasks().nextTick(() -> { if (stillHere(player, to)) tryExit(player); });
             return;
         }
         Pos pos = Pos.of(to.getBlock());
@@ -352,8 +353,15 @@ public class UnderhallsFeature extends BaseFeature {
         });
     }
     private Location arrival(World maze, int tileX, int tileZ) {
-        return new Location(maze, tileX * (double)UnderhallsGenerator.TILE + 4.5,
-            UnderhallsGenerator.floor(maze) + 1, tileZ * (double)UnderhallsGenerator.TILE + 4.5);
+        return new Location(maze, tileX * (double)UnderhallsGenerator.TILE + UnderhallsGenerator.ROOM + 4.5,
+            UnderhallsGenerator.floor(maze) + 1, tileZ * (double)UnderhallsGenerator.TILE + UnderhallsGenerator.ROOM + 1.5);
+    }
+    private void tryExit(Player player) {
+        Location location = player.getLocation();
+        if (!running || !player.isOnline() || pending.contains(player.getUniqueId()) ||
+            cooldowns.getOrDefault(player.getUniqueId(), 0L) > System.currentTimeMillis()) return;
+        if (isMaze(location.getWorld()) && location.getBlockY() == UnderhallsGenerator.floor(location.getWorld()) + 1 &&
+            UnderhallsGenerator.exitTrigger(location.getBlockX(), location.getBlockZ())) exit(player, location);
     }
     private void exit(Player player, Location from) {
         int tileX = Math.floorDiv(from.getBlockX(), UnderhallsGenerator.TILE), tileZ = Math.floorDiv(from.getBlockZ(), UnderhallsGenerator.TILE);
@@ -433,6 +441,8 @@ public class UnderhallsFeature extends BaseFeature {
         if (player.teleport(target, PlayerTeleportEvent.TeleportCause.PLUGIN)) {
             player.setFallDistance(0);
             player.playSound(target, Sound.BLOCK_DEEPSLATE_BRICKS_STEP, .8f, .5f);
+        } else {
+            tell(player, "The teleport was blocked by another server rule.");
         }
     }
     private void tell(Player player, String message) {

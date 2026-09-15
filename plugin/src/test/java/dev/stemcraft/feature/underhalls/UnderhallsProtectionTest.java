@@ -98,6 +98,32 @@ class UnderhallsProtectionTest {
         assertTrue(store.isPlaced(Pos.of(block)));
     }
 
+    @Test void generatedDoorOpensAndClosesBothHalvesWithoutTerrainPhysics() {
+        var bottom = world.getBlockAt(68,65,66);
+        var top = bottom.getRelative(0,1,0);
+        var door = (org.bukkit.block.data.type.Door) Material.DARK_OAK_DOOR.createBlockData();
+        door.setHalf(org.bukkit.block.data.Bisected.Half.BOTTOM);
+        bottom.setBlockData(door,false);
+        door.setHalf(org.bukkit.block.data.Bisected.Half.TOP);
+        top.setBlockData(door,false);
+        var player=server.addPlayer();
+        for (Block clicked : List.of(top,bottom)) {
+            boolean opening = !((org.bukkit.block.data.type.Door)bottom.getBlockData()).isOpen();
+            var event = new org.bukkit.event.player.PlayerInteractEvent(player,Action.RIGHT_CLICK_BLOCK,null,clicked,
+                    org.bukkit.block.BlockFace.NORTH,EquipmentSlot.HAND);
+            server.getPluginManager().callEvent(event);
+            assertEquals(opening,((org.bukkit.block.data.type.Door)bottom.getBlockData()).isOpen());
+            assertEquals(opening,((org.bukkit.block.data.type.Door)top.getBlockData()).isOpen());
+            assertEquals(Event.Result.DENY,event.useInteractedBlock());
+            var offhand = new org.bukkit.event.player.PlayerInteractEvent(player,Action.RIGHT_CLICK_BLOCK,null,clicked,
+                    org.bukkit.block.BlockFace.NORTH,EquipmentSlot.OFF_HAND);
+            server.getPluginManager().callEvent(offhand);
+            assertEquals(opening,((org.bukkit.block.data.type.Door)bottom.getBlockData()).isOpen());
+        }
+        assertFalse(protection.canBreak(bottom));
+        assertFalse(protection.canBreak(top));
+    }
+
     @Test void explosionsAndPistonsCannotRemoveOrMoveTheMaze() {
         Block wall = world.getBlockAt(8,65,8); wall.setType(Material.END_STONE);
         var entity = mock(org.bukkit.entity.Entity.class);

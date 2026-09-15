@@ -24,6 +24,10 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.chunkgen.UnderhallsGenerator;
 import dev.stemcraft.feature.HeldLightFeature;
 import org.bukkit.Material;
+import org.bukkit.Sound;
+import org.bukkit.block.data.Bisected;
+import org.bukkit.block.data.type.Door;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.event.*;
@@ -101,11 +105,32 @@ public final class UnderhallsProtection {
         // Tools must not transform generated blocks into breakable variants.
         listen(PlayerInteractEvent.class, EventPriority.HIGHEST, e -> {
             Block block = e.getClickedBlock();
-            if (block != null && protectedBlock(block) && !(block.getBlockData() instanceof org.bukkit.block.data.type.Door)) {
+            if (block == null || !protectedBlock(block)) return;
+            if (block.getBlockData() instanceof Door) {
+                if (e.getAction() != Action.RIGHT_CLICK_BLOCK) return;
                 e.setUseInteractedBlock(Event.Result.DENY);
-            }
+                if (e.getPlayer().isSneaking() && (!e.getPlayer().getInventory().getItemInMainHand().getType().isAir() ||
+                    !e.getPlayer().getInventory().getItemInOffHand().getType().isAir())) return;
+                e.setUseItemInHand(Event.Result.DENY);
+                if (e.getHand() == EquipmentSlot.HAND) toggleDoor(block);
+            } else e.setUseInteractedBlock(Event.Result.DENY);
         });
     }
+    private void toggleDoor(Block clicked) {
+        Door clickedData = (Door) clicked.getBlockData();
+        Block bottom = clickedData.getHalf() == Bisected.Half.BOTTOM ? clicked : clicked.getRelative(0, -1, 0);
+        Block top = bottom.getRelative(0, 1, 0);
+        if (!(bottom.getBlockData() instanceof Door lower) || top.getType() != bottom.getType()) return;
+        lower.setHalf(Bisected.Half.BOTTOM);
+        lower.setOpen(!lower.isOpen());
+        Door upper = (Door) lower.clone();
+        upper.setHalf(Bisected.Half.TOP);
+        // Terrain physics stays disabled; synchronize the two generated halves ourselves.
+        bottom.setBlockData(lower, false);
+        top.setBlockData(upper, false);
+        bottom.getWorld().playSound(bottom.getLocation(), lower.isOpen() ? Sound.BLOCK_WOODEN_DOOR_OPEN : Sound.BLOCK_WOODEN_DOOR_CLOSE, 1f, 1f);
+    }
+
     private <T extends Event> void listen(Class<T> type, EventPriority priority, dev.stemcraft.api.service.event.EventHandler<T> handler) {
         listeners.add(api.events().register(type, handler, priority, true));
     }

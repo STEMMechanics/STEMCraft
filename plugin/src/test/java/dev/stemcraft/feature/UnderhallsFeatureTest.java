@@ -106,7 +106,8 @@ class UnderhallsFeatureTest {
         var player=server.addPlayer();
         walk(player,origin.getLocation().add(.5,0,.5));
         assertEquals(maze,player.getWorld());
-        assertEquals(4,player.getLocation().getBlockX());
+        assertEquals(68,player.getLocation().getBlockX());
+        assertEquals(65,player.getLocation().getBlockZ());
         var broken=new BlockBreakEvent(origin,player); server.getPluginManager().callEvent(broken);
         assertFalse(broken.isCancelled());
         assertTrue(state().entrance(Pos.of(origin)).retired());
@@ -135,6 +136,35 @@ class UnderhallsFeatureTest {
         destination.getBlock().setType(Material.AIR);
         walk(player,room);
         assertEquals(destination,player.getLocation());
+    }
+
+    @Test void steppingInsideDoorwayExitsWithoutWalkingToBackWall() throws Exception {
+        var player=server.addPlayer();
+        walk(player,new Location(maze,68.5,65,67.5));
+        assertEquals(source,player.getWorld());
+    }
+
+    @Test void standingInExitAfterCooldownExpiresStillTeleports() throws Exception {
+        var player=server.addPlayer();
+        player.teleport(new Location(maze,68.5,65,67.5));
+        var tick=UnderhallsFeature.class.getDeclaredMethod("tick"); tick.setAccessible(true);
+        tick.invoke(feature);
+        assertEquals(maze,player.getWorld());
+        clearCooldowns();
+        tick.invoke(feature);
+        assertEquals(source,player.getWorld());
+    }
+
+    @Test void exitTeleportWaitsUntilMovementEventHasFinished() throws Exception {
+        List<Runnable> queued = new ArrayList<>();
+        var tasks=api.tasks();
+        doAnswer(call -> { queued.add(call.getArgument(0)); return null; }).when(tasks).nextTick(any());
+        var player=server.addPlayer();
+        walk(player,new Location(maze,68.5,65,67.5));
+        assertEquals(maze,player.getWorld());
+        assertEquals(1,queued.size());
+        queued.getFirst().run();
+        assertEquals(source,player.getWorld());
     }
 
     @Test void portalProtectionCanVetoEntranceWithoutSavingOrBuildingAnything() throws Exception {

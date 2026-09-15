@@ -15,8 +15,11 @@ requires `stemcraft.command.underhalls`.
    and three blocks of headroom. Run `/underhalls entrance`.
 2. Open the dark oak door in its mossy stone-brick frame and walk through it.
    The destination world, `survival_underhalls`, is created on demand.
-3. Explore until you find a dark oak door inside the maze. Open it and walk to
-   the back of the dark chamber to return to a fixed overworld location.
+3. You arrive just outside a dark oak exit door. Open it and step into the
+   dark chamber to return to its fixed overworld location, or turn around to
+   explore the maze. Exit destinations remain fixed; they need not be the
+   overworld entrance you used. If you enter during the five-second teleport
+   cooldown, wait inside and the exit retries automatically.
 4. Break an overworld entrance's door, frame or supporting ground. That entrance is permanently
    retired, even if somebody rebuilds it. The maze exit rooms continue working.
 5. Place torches, signs or blocks in the halls. Another player can remove them;
@@ -29,7 +32,7 @@ vegetation in the doorway footprint, and accepts constructed solid floors. It
 reports the specific obstruction, distance, protection or world-loading failure.
 Automatic generation retains its larger 5x5 natural-ground check.
 
-`/underhalls enter` takes an administrator to the maze's starting room for direct
+`/underhalls enter` takes an administrator to the maze beside an exit doorway for direct
 inspection. `/underhalls status` reports active and retired entrance counts.
 The generator is also available as `/world create test_underhalls underhalls seed:12345`.
 Worlds using this generator receive maze protection and exit-room routing to the

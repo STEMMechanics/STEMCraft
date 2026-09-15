@@ -54,6 +54,9 @@ class UnderhallsGeneratorTest {
         assertEquals(Material.BEDROCK, spawn.getType(4,71,4));
         var room = new TerrainGenerationTest.MemoryChunk(-64,320);
         generator.generateNoise(world(901), new Random(), 4,4,room);
+        assertEquals(Material.AIR, room.getType(4,65,1));
+        assertEquals(Material.AIR, room.getType(4,66,1));
+        assertFalse(UnderhallsGenerator.exitTrigger(68,65));
         assertEquals(Material.DARK_OAK_DOOR, room.getType(4,65,2));
         assertEquals(Material.DARK_OAK_DOOR, room.getType(4,66,2));
         assertEquals(Material.AIR, room.getType(4,65,5));
@@ -62,7 +65,10 @@ class UnderhallsGeneratorTest {
     @Test void negativeTilesKeepFixedExitAndArrivalReservations() {
         assertTrue(UnderhallsGenerator.exitTrigger(-60,-59));
         assertTrue(UnderhallsGenerator.reserved(-124,-124));
-        assertFalse(UnderhallsGenerator.exitTrigger(-60,-60));
+        assertTrue(UnderhallsGenerator.exitTrigger(-60,-60));
+        assertTrue(UnderhallsGenerator.exitTrigger(-60,-61));
+        assertFalse(UnderhallsGenerator.exitTrigger(-60,-62));
+        assertTrue(UnderhallsGenerator.reserved(-60,-63));
         assertFalse(UnderhallsGenerator.reserved(12,12));
     }
 }
