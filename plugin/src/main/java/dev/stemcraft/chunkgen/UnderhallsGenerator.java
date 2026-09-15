@@ -47,20 +47,32 @@ public final class UnderhallsGenerator extends ChunkGenerator {
         return Math.max(world.getMinHeight() + 2, Math.min(64, world.getMaxHeight() - 9));
     }
 
+    public boolean roomAt(WorldInfo world, int x, int z) {
+        int tx = Math.floorDiv(x, TILE), tz = Math.floorDiv(z, TILE);
+        Maze maze = cache.computeIfAbsent(new TileKey(world.getSeed(), tx, tz), key -> new Maze(key.seed, key.x, key.z));
+        return maze.doorCell(Math.floorMod(x, TILE) / CELL, Math.floorMod(z, TILE) / CELL);
+    }
+
+    public static boolean reserved(World world, int x, int z) {
+        boolean room = world.getGenerator() instanceof UnderhallsGenerator generator && generator.roomAt(world, x, z);
+        int lx = Math.floorMod(x, CELL), lz = Math.floorMod(z, CELL);
+        return reserved(x, z) || room && (exitRoom(x, z) || lx >= 3 && lx <= 5 && lz == 1);
+    }
+
     public static boolean exitRoom(int x, int z) {
-        int lx = Math.floorMod(x, TILE), lz = Math.floorMod(z, TILE);
-        return lx >= ROOM + 2 && lx <= ROOM + 6 && lz >= ROOM + 2 && lz <= ROOM + 6;
+        int lx = Math.floorMod(x, CELL), lz = Math.floorMod(z, CELL);
+        return lx >= 2 && lx <= 6 && lz >= 2 && lz <= 6;
     }
 
     public static boolean exitTrigger(int x, int z) {
-        int lx = Math.floorMod(x, TILE), lz = Math.floorMod(z, TILE);
-        return lx >= ROOM + 3 && lx <= ROOM + 5 && lz >= ROOM + 3 && lz <= ROOM + 5;
+        int lx = Math.floorMod(x, CELL), lz = Math.floorMod(z, CELL);
+        return lx >= 3 && lx <= 5 && lz >= 3 && lz <= 5;
     }
 
     /** Keep the arrival square and exit chambers clear of player construction. */
     public static boolean reserved(int x, int z) {
         int lx = Math.floorMod(x, TILE), lz = Math.floorMod(z, TILE);
-        return exitRoom(x, z) || (lx >= ROOM + 3 && lx <= ROOM + 5 && lz == ROOM + 1) || (lx >= 2 && lx <= 5 && lz >= 2 && lz <= 5);
+        return (lx >= ROOM + 2 && lx <= ROOM + 6 && lz >= ROOM + 2 && lz <= ROOM + 6) || (lx >= ROOM + 3 && lx <= ROOM + 5 && lz == ROOM + 1) || (lx >= 2 && lx <= 5 && lz >= 2 && lz <= 5);
     }
 
     public static final class Maze {
@@ -90,6 +102,15 @@ public final class UnderhallsGenerator extends ChunkGenerator {
                 stack[++top] = next;
             }
         }
+        public boolean doorCell(int x, int z) {
+            if (x == SIZE / 2 && z == SIZE / 2) return true; // Preserve existing paired rooms.
+            int count = 0;
+            if (x > 0 ? east[z * SIZE + x - 1] : z == SIZE / 2) count++;
+            if (x < SIZE - 1 ? east[z * SIZE + x] : z == SIZE / 2) count++;
+            if (z > 0 ? south[(z - 1) * SIZE + x] : x == SIZE / 2) count++;
+            if (z < SIZE - 1 ? south[z * SIZE + x] : x == SIZE / 2) count++;
+            return count == 1;
+        }
         public boolean passage(int x, int z) {
             int cx = x / CELL, cz = z / CELL, dx = x % CELL, dz = z % CELL;
             if (dx != 0 && dz != 0) return true;
@@ -110,9 +131,9 @@ public final class UnderhallsGenerator extends ChunkGenerator {
         for (int x = 0; x < 16; x++) for (int z = 0; z < 16; z++) {
             int wx = chunkX * 16 + x, wz = chunkZ * 16 + z;
             int lx = Math.floorMod(wx, TILE), lz = Math.floorMod(wz, TILE);
-            boolean room = exitRoom(wx, wz);
-            boolean roomWall = room && (lx == ROOM + 2 || lx == ROOM + 6 || lz == ROOM + 2 || lz == ROOM + 6);
-            boolean door = lx == ROOM + 4 && lz == ROOM + 2;
+            boolean room = maze.doorCell(lx / CELL, lz / CELL) && exitRoom(wx, wz);
+            boolean roomWall = room && (lx % CELL == 2 || lx % CELL == 6 || lz % CELL == 2 || lz % CELL == 6);
+            boolean door = room && lx % CELL == 4 && lz % CELL == 2;
             boolean wall = !maze.passage(lx, lz) || roomWall;
             Material brick = Math.floorMod(wx * 31 + wz * 17, 9) == 0 ? Material.END_STONE_BRICKS : Material.END_STONE;
             for (int y = 1; y <= 5; y++) {
@@ -124,7 +145,7 @@ public final class UnderhallsGenerator extends ChunkGenerator {
                     data.setBlock(x, floor + y, z, block);
                 }
             }
-            boolean lamp = !room && lx % CELL >= 3 && lx % CELL <= 4 && lz % CELL == 4 &&
+            boolean lamp = room && lx % CELL == 4 && lz % CELL == 4 || !room && lx % CELL >= 3 && lx % CELL <= 4 && lz % CELL == 4 &&
                 ((lx / CELL + lz / CELL) % 3 == 0);
             data.setBlock(x, floor + 6, z, lamp ? Material.OCHRE_FROGLIGHT : Material.SMOOTH_SANDSTONE);
         }

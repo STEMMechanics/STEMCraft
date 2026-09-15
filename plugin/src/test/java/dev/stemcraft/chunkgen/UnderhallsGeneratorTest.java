@@ -37,7 +37,7 @@ class UnderhallsGeneratorTest {
             assertTrue(new UnderhallsGenerator.Maze(seed, tx + 1, -2).passage(0,68));
         }
     }
-    @Test void generationIsDeterministicWithYellowWallsLightStripsAndSealedDarkExit() {
+    @Test void generationIsDeterministicWithYellowWallsAndLitDoorwayRooms() {
         var generator = new UnderhallsGenerator();
         var first = new TerrainGenerationTest.MemoryChunk(-64,320);
         var second = new TerrainGenerationTest.MemoryChunk(-64,320);
@@ -60,8 +60,41 @@ class UnderhallsGeneratorTest {
         assertEquals(Material.DARK_OAK_DOOR, room.getType(4,65,2));
         assertEquals(Material.DARK_OAK_DOOR, room.getType(4,66,2));
         assertEquals(Material.AIR, room.getType(4,65,5));
-        for (int x=2;x<=6;x++) for (int z=2;z<=6;z++) assertEquals(Material.SMOOTH_SANDSTONE,room.getType(x,70,z));
+        for (int x=2;x<=6;x++) for (int z=2;z<=6;z++) assertEquals(x == 4 && z == 4 ? Material.OCHRE_FROGLIGHT : Material.SMOOTH_SANDSTONE,room.getType(x,70,z));
     }
+    @Test void everyDeadEndGetsADoorAndGeneratedRoomRemainsReachable() {
+        for (long seed : new long[]{0,1,901,-2399}) {
+            var maze = new UnderhallsGenerator.Maze(seed,0,0);
+            int doors=0;
+            boolean[][] open=new boolean[128][128];
+            for(int x=0;x<128;x++)for(int z=0;z<128;z++) {
+                int rx=x%8,rz=z%8;
+                boolean wall=maze.doorCell(x/8,z/8) && rx>=2 && rx<=6 && rz>=2 && rz<=6 && (rx==2||rx==6||rz==2||rz==6);
+                open[x][z]=maze.passage(x,z) && (!wall || rx==4 && rz==2);
+            }
+            boolean[][] visited=new boolean[128][128];
+            ArrayDeque<int[]> queue=new ArrayDeque<>();queue.add(new int[]{68,65});visited[68][65]=true;
+            while(!queue.isEmpty()) {
+                var at=queue.remove();
+                for(var step:new int[][]{{1,0},{-1,0},{0,1},{0,-1}}) {
+                    int x=at[0]+step[0],z=at[1]+step[1];
+                    if(x>=0&&x<128&&z>=0&&z<128&&open[x][z]&&!visited[x][z]) {visited[x][z]=true;queue.add(new int[]{x,z});}
+                }
+            }
+            for(int x=0;x<16;x++)for(int z=0;z<16;z++) {
+                int degree=0;
+                if(x>0 && maze.passage(x*8,z*8+4))degree++;
+                if(x<15 && maze.passage((x+1)*8,z*8+4))degree++;
+                if(z>0 && maze.passage(x*8+4,z*8))degree++;
+                if(z<15 && maze.passage(x*8+4,(z+1)*8))degree++;
+                if(x==0&&z==8||x==15&&z==8||z==0&&x==8||z==15&&x==8)degree++;
+                if(degree==1) assertTrue(maze.doorCell(x,z));
+                if(maze.doorCell(x,z)) {doors++;assertTrue(visited[x*8+4][z*8+3]);}
+            }
+            assertTrue(doors>=15,"Expected many doorways, got " + doors);
+        }
+    }
+
     @Test void negativeTilesKeepFixedExitAndArrivalReservations() {
         assertTrue(UnderhallsGenerator.exitTrigger(-60,-59));
         assertTrue(UnderhallsGenerator.reserved(-124,-124));

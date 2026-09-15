@@ -30,6 +30,15 @@ import static org.mockito.Mockito.*;
 class UnderhallsFeatureTest {
     static class TestWorld extends WorldMock {
         private final boolean maze;
+        private final UnderhallsGenerator generator = new UnderhallsGenerator();
+        private final Map<String,org.mockbukkit.mockbukkit.world.ChunkMock> testChunks=new HashMap<>();
+        @Override public org.mockbukkit.mockbukkit.world.ChunkMock getChunkAt(int x,int z) {
+            return testChunks.computeIfAbsent(x + "," + z,key -> {
+                var chunk=spy(super.getChunkAt(x,z));
+                doReturn(new org.bukkit.block.BlockState[0]).when(chunk).getTileEntities();
+                return chunk;
+            });
+        }
         private final Map<String, org.mockbukkit.mockbukkit.block.BlockMock> testBlocks = new HashMap<>();
         TestWorld(String name, boolean maze) { super(Material.DIRT,-64,320,64); setName(name); this.maze=maze; }
         @Override public org.mockbukkit.mockbukkit.block.BlockMock getBlockAt(int x, int y, int z) {
@@ -41,7 +50,7 @@ class UnderhallsFeatureTest {
                 return block;
             });
         }
-        @Override public ChunkGenerator getGenerator() { return maze ? new UnderhallsGenerator() : null; }
+        @Override public ChunkGenerator getGenerator() { return maze ? generator : null; }
         @Override public CompletableFuture<Chunk> getChunkAtAsync(int x,int z,boolean gen,boolean urgent) {
             return CompletableFuture.completedFuture(getChunkAt(x,z));
         }
@@ -164,7 +173,7 @@ class UnderhallsFeatureTest {
         walk(player,new Location(maze,68.5,65,67.5));
         assertEquals(maze,player.getWorld());
         assertEquals(1,queued.size());
-        queued.getFirst().run();
+        while (!queued.isEmpty()) queued.removeFirst().run();
         assertEquals(source,player.getWorld());
     }
 
@@ -185,6 +194,9 @@ class UnderhallsFeatureTest {
 
     @Test void exitsAllowWaterAndKeepTheirPinnedLocationAboveADrop() throws Exception {
         source.getBlockAt(8,64,8).setType(Material.WATER);
+        source.getBlockAt(8,64,9).setType(Material.WATER);
+        var storeField=UnderhallsFeature.class.getDeclaredField("store");storeField.setAccessible(true);
+        ((UnderhallsStore)storeField.get(feature)).pinExit(new Pos(maze.getUID(),68,65,69),new Pos(source.getUID(),8,65,8));
         var player=server.addPlayer();
         Location room=new Location(maze,68.5,65,67.5);
         walk(player,room);
@@ -310,6 +322,66 @@ class UnderhallsFeatureTest {
         walk(player,new Location(maze,assigned*128+68.5,65,67.5));
         assertEquals(b.offset(0,0,-1).location(),player.getLocation());
         assertFalse(listingText(listing(1)).contains("survival 8, 65, 8"));
+    }
+
+    @Test void retrofitsDeadEndsAndLightsExistingRoomsWithoutReplacingPlayerBuilds() throws Exception {
+        var storeField=UnderhallsFeature.class.getDeclaredField("store");storeField.setAccessible(true);
+        var store=(UnderhallsStore)storeField.get(feature);
+        var generator=(UnderhallsGenerator)maze.getGenerator();
+        List<Pos> rooms=new ArrayList<>();
+        for(int x=0;x<128;x+=8)for(int z=0;z<128;z+=8)if(generator.roomAt(maze,x,z)) rooms.add(new Pos(maze.getUID(),x+4,65,z+5));
+        Pos preserved=rooms.getLast();
+        var placed=preserved.offset(0,0,-1);placed.location().getBlock().setType(Material.COBBLESTONE);store.placed(placed);
+        for(Pos room:rooms) dev.stemcraft.feature.underhalls.UnderhallsRooms.upgrade(room.location().getChunk(),store);
+        for(Pos room:rooms) {
+            if(room.equals(preserved))continue;
+            assertEquals(Material.DARK_OAK_DOOR,room.offset(0,0,-3).location().getBlock().getType());
+            assertEquals(Material.OCHRE_FROGLIGHT,room.offset(0,5,-1).location().getBlock().getType());
+        }
+        assertEquals(Material.COBBLESTONE,placed.location().getBlock().getType());
+        assertNotEquals(Material.DARK_OAK_DOOR,preserved.offset(0,0,-3).location().getBlock().getType());
+    }
+
+    @Test void newDeadEndCreatesRandomPairedDoorAndPersistsExactRoom() throws Exception {
+        var randomField=UnderhallsFeature.class.getDeclaredField("random");randomField.setAccessible(true);((Random)randomField.get(feature)).setSeed(12345);
+        var storeField=UnderhallsFeature.class.getDeclaredField("store");storeField.setAccessible(true);
+        var store=(UnderhallsStore)storeField.get(feature);
+        var generator=(UnderhallsGenerator)maze.getGenerator();
+        List<Pos> rooms=new ArrayList<>();
+        for(int x=0;x<128 && rooms.size()<2;x+=8)for(int z=0;z<128 && rooms.size()<2;z+=8) {
+            if(generator.roomAt(maze,x,z))rooms.add(new Pos(maze.getUID(),x+4,65,z+5));
+        }
+        var player=server.addPlayer();
+        for(Pos room:rooms) {
+            dev.stemcraft.feature.underhalls.UnderhallsRooms.upgrade(room.location().getChunk(),store);
+            walk(player,room.offset(0,0,-2).location());
+            assertEquals(source,player.getWorld());
+            var pair=state().entrances().stream().filter(entry->room.equals(entry.room())).findFirst().orElseThrow();
+            assertEquals(pair.origin().offset(0,0,-1).location(),player.getLocation());
+            assertEquals(Material.DARK_OAK_DOOR,pair.origin().location().getBlock().getType());
+            assertTrue(Math.abs(pair.origin().x()-source.getSpawnLocation().getBlockX())<=10016);
+            assertNotEquals(8,pair.origin().x());
+            walk(player,pair.origin().location());
+            assertEquals(room.offset(0,0,-4).location(),player.getLocation());
+        }
+        assertEquals(2,state().entrances().size());
+        feature.onDisable();feature.onEnable();
+        for(Pos room:rooms) {
+            var pair=state().entrances().stream().filter(entry->room.equals(entry.room())).findFirst().orElseThrow();
+            walk(player,room.offset(0,0,-2).location());
+            assertEquals(pair.origin().offset(0,0,-1).location(),player.getLocation());
+        }
+    }
+
+    @Test void protectedRandomSitesDoNotCreatePortalsOrLeavePairingLocked() throws Exception {
+        var plugin=MockBukkit.createMockPlugin();
+        server.getPluginManager().registerEvent(dev.stemcraft.api.event.world.SurvivalPortalActivateEvent.class,new Listener(){},
+            EventPriority.HIGHEST,(listener,event)->((dev.stemcraft.api.event.world.SurvivalPortalActivateEvent)event).setCancelled(true),plugin);
+        var player=server.addPlayer();walk(player,new Location(maze,68.5,65,67.5));
+        assertEquals(maze,player.getWorld());assertTrue(state().entrances().isEmpty());
+        assertTrue(source.testBlocks.values().stream().noneMatch(block->block.getType()==Material.DARK_OAK_DOOR));
+        var field=UnderhallsFeature.class.getDeclaredField("pairing");field.setAccessible(true);
+        assertTrue(((Set<?>)field.get(feature)).isEmpty());
     }
 
     @Test void portalProtectionCanVetoEntranceWithoutSavingOrBuildingAnything() throws Exception {

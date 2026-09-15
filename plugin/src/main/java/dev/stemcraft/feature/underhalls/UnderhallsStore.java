@@ -40,8 +40,9 @@ public final class UnderhallsStore {
             return new Pos(UUID.fromString(parts[0]), Integer.parseInt(parts[1]), Integer.parseInt(parts[2]), Integer.parseInt(parts[3]));
         }
     }
-    public record Entrance(Pos origin, UUID maze, int tileX, int tileZ, boolean retired) {
-        public Entrance retire() { return new Entrance(origin, maze, tileX, tileZ, true); }
+    public record Entrance(Pos origin, UUID maze, int tileX, int tileZ, boolean retired, Pos room) {
+        public Entrance(Pos origin, UUID maze, int tileX, int tileZ, boolean retired) { this(origin, maze, tileX, tileZ, retired, null); }
+        public Entrance retire() { return new Entrance(origin, maze, tileX, tileZ, true, room); }
     }
     private final DatabaseService database;
     private final Set<Pos> placed = new HashSet<>();
@@ -63,7 +64,8 @@ public final class UnderhallsStore {
                 case "entrance" -> {
                     String[] parts = value.split(",");
                     entrances.put(pos, new Entrance(pos, UUID.fromString(parts[0]), Integer.parseInt(parts[1]),
-                        Integer.parseInt(parts[2]), Boolean.parseBoolean(parts[3])));
+                        Integer.parseInt(parts[2]), Boolean.parseBoolean(parts[3]), parts.length == 7 ?
+                            new Pos(UUID.fromString(parts[0]), Integer.parseInt(parts[4]), Integer.parseInt(parts[5]), Integer.parseInt(parts[6])) : null));
                 }
                 default -> throw new IllegalStateException("Unknown Underhalls state kind");
             }
@@ -88,7 +90,7 @@ public final class UnderhallsStore {
     public void save(Entrance entrance) {
         Entrance previous = entrances.get(entrance.origin);
         if (previous != null && previous.retired && !entrance.retired) throw new IllegalStateException("A retired doorway cannot reopen");
-        write("entrance", entrance.origin, entrance.maze + "," + entrance.tileX + "," + entrance.tileZ + "," + entrance.retired);
+        write("entrance", entrance.origin, entrance.maze + "," + entrance.tileX + "," + entrance.tileZ + "," + entrance.retired + (entrance.room == null ? "" : "," + entrance.room.x + "," + entrance.room.y + "," + entrance.room.z));
         entrances.put(entrance.origin, entrance);
     }
     public Map<Pos, Pos> exits() { return Map.copyOf(exits); }

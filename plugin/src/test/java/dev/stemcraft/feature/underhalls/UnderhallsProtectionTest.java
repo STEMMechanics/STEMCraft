@@ -27,7 +27,10 @@ class UnderhallsProtectionTest {
     UnderhallsProtection protection;
     @BeforeEach @SuppressWarnings({"unchecked", "rawtypes"}) void setup() throws Exception {
         server = MockBukkit.mock();
-        world = server.addSimpleWorld("survival_underhalls");
+        var fixture = new org.mockbukkit.mockbukkit.world.WorldMock() {
+            @Override public org.bukkit.generator.ChunkGenerator getGenerator() { return null; }
+        };
+        fixture.setName("survival_underhalls");server.addWorld(fixture);world=fixture;
         api = mock(STEMCraftAPI.class, RETURNS_DEEP_STUBS);
         var plugin = MockBukkit.createMockPlugin();
         var events = api.events();

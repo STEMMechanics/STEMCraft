@@ -55,7 +55,7 @@ public final class UnderhallsProtection {
     public boolean canPlace(Block block) {
         if (!managed.test(block.getWorld())) return true;
         int floor = UnderhallsGenerator.floor(block.getWorld());
-        return block.getY() > floor && block.getY() <= floor + 5 && !UnderhallsGenerator.reserved(block.getX(), block.getZ());
+        return block.getY() > floor && block.getY() <= floor + 5 && !UnderhallsGenerator.reserved(block.getWorld(), block.getX(), block.getZ());
     }
     public boolean canBreak(Block block) { return !protectedBlock(block); }
     public void enable() {

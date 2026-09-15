@@ -3,7 +3,7 @@
 The Underhalls is an experimental persistent maze dimension. Yellow end-stone
 walls and occasional end-stone-brick details surround sandstone floors and
 ceilings. Warm ochre froglight strips alternate with unlit halls. Dark oak doors
-lead into enclosed, unlit exit chambers. No resource pack is required.
+lead into enclosed doorway rooms with warm ceiling lights. No resource pack is required.
 
 ## Quick test
 
@@ -16,7 +16,7 @@ requires `stemcraft.command.underhalls`.
 2. Open the dark oak door in its mossy stone-brick frame and walk through it.
    The destination world, `survival_underhalls`, is created on demand.
 3. You arrive just outside a dark oak exit door. Open it and step into the
-   dark chamber to return to its fixed overworld location, or turn around to
+   lit chamber to return to its paired overworld location, or turn around to
    explore the maze. This doorway returns to the overworld entrance you used.
    If you enter during the five-second teleport cooldown, wait inside and the
    exit retries automatically.
@@ -71,6 +71,8 @@ world-generation:
 underhalls:
   source-world: survival
   world: survival_underhalls
+  exits:
+    random-radius: 10000
   entrances:
     enabled: true
     interval-seconds: 900
@@ -101,29 +103,44 @@ the active cap. Integrity checks only inspect loaded chunks.
 
 ## Maze and routes
 
-The version-1 generator produces deterministic 128x128-block tiles. Each tile
+The generator preserves the original passages in deterministic 128x128-block tiles. Each tile
 contains a seeded connected maze of sixteen by sixteen eight-block cells.
 Fixed openings connect adjacent tiles, including negative coordinates. The
 floor is normally Y=64, adjusted to the world's available height. Bedrock below
 the floor and above the ceiling seals the maze. Vanilla terrain decoration,
 structures and generation-time mob spawning are disabled.
 
-Every tile contains an exit chamber at local X=66..70, Z=66..70. Its north door
-is at X=68, Z=66. Stepping inside its 3x3 interior triggers departure.
-Arrivals are at local X=68.5, Z=65.5, just outside the door.
+Every dead-end cell now contains a doorway room, in addition to the original
+central doorway in each tile. Doorway rooms have an ochre froglight overhead;
+the halls retain their mix of warm lights and dark stretches. There is no
+scripted blackout or blindness effect. Doorways face north within their cells,
+and stepping into the 3x3 interior triggers travel.
 
-An entrance starts with maze tile `floor(overworld coordinate / 512)` and takes
-an unused tile if that room is occupied. Its return destination is fixed just
-outside the original overworld door. Retired entrances retain their return route
-to that location, so destroying a door does not strand players inside.
+Existing chunks upgrade gradually as they load (one chunk per tick). The upgrade
+adds missing dead-end rooms and lights the original exit rooms. It skips any
+room containing recorded player placements or unexpected blocks, so builds are
+not overwritten. No world reset is needed, and the original passages and paired
+central doorways stay in place.
 
-Other, unpaired maze exits use overworld X/Z `tile * 512 + 8`, immediately above
-that column's motion-blocking height; their first destination is saved permanently.
-Two clear blocks are required for the player's body; a supported or harmless
-landing is not required. Water, hazards below the exit and drops are part of the
-risk. Underhalls teleports do not grant teleport damage protection. Obstructing
-the player's body space blocks travel; removing the floor does not. World borders
-and height limits still apply. There is no fallback to spawn.
+A newly discovered maze doorway creates its overworld partner on first use.
+It chooses a random location within `underhalls.exits.random-radius` blocks of
+the overworld spawn (default 10,000), constrained by the world border. There is
+no coordinate ratio. Up to sixteen sites are tried, loading one chunk at a time.
+The frame is three wide, three high and one deep; only a single supporting block
+is added if needed over air or water. Recorded player-build chunks, block
+entities, existing/retired portal spacing and protection vetoes are respected.
+These discovered partners can exceed the surface entrance spawning cap.
+
+The exact maze room and overworld door are persisted as a pair. Walking back
+through either doorway returns to its partner, including after restarting.
+Existing pairs retain their destinations; old unpaired fixed exits try to build
+a partner at their previously saved destination instead of relocating it.
+Destroyed overworld doors stay retired; their maze return route still leads to
+the former door location so players are not trapped inside.
+
+Water, hazards and drops remain part of the risk. Underhalls teleports do not
+grant damage protection. Body space, world borders and height limits still apply;
+there is no safe landing search or fallback to spawn.
 
 World UUIDs prevent a portal from
 silently targeting a replacement world after regeneration. Unloaded saved exit

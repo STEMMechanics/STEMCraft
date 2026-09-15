@@ -29,6 +29,8 @@ import dev.stemcraft.api.event.world.SurvivalPortalActivateEvent;
 import dev.stemcraft.chunkgen.UnderhallsGenerator;
 import dev.stemcraft.feature.underhalls.UnderhallsProtection;
 import dev.stemcraft.feature.underhalls.UnderhallsStore;
+import dev.stemcraft.feature.underhalls.UnderhallsRooms;
+import org.bukkit.event.world.ChunkLoadEvent;
 import dev.stemcraft.feature.underhalls.UnderhallsStore.*;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
@@ -61,6 +63,8 @@ public class UnderhallsFeature extends BaseFeature {
     private final List<Listener> listeners = new ArrayList<>();
     private final Map<UUID, Long> cooldowns = new HashMap<>();
     private final Set<UUID> pending = new HashSet<>();
+    private final Set<Pos> pairing = new HashSet<>();
+    private final ArrayDeque<Chunk> roomUpgrades = new ArrayDeque<>();
     private final Random random = new Random();
     private UnderhallsStore store;
     private UnderhallsProtection protection;
@@ -85,6 +89,14 @@ public class UnderhallsFeature extends BaseFeature {
         running = true;
         protection = new UnderhallsProtection(api, store, this::isMaze);
         protection.enable();
+        for (World world : Bukkit.getWorlds()) if (isMaze(world)) Collections.addAll(roomUpgrades, world.getLoadedChunks());
+        listen(ChunkLoadEvent.class, EventPriority.MONITOR, event -> {
+            if (isMaze(event.getWorld())) roomUpgrades.add(event.getChunk());
+        });
+        api.tasks().repeating(TASK + "-rooms", 1L, 1L, () -> {
+            Chunk chunk = roomUpgrades.poll();
+            if (chunk != null && chunk.getWorld().isChunkLoaded(chunk.getX(), chunk.getZ())) UnderhallsRooms.upgrade(chunk, store);
+        });
         listen(PlayerMoveEvent.class, EventPriority.MONITOR, this::move);
         listen(PlayerJoinEvent.class, EventPriority.MONITOR, e -> cooldowns.put(e.getPlayer().getUniqueId(), System.currentTimeMillis() + 5000));
         listen(PlayerQuitEvent.class, EventPriority.MONITOR, e -> {
@@ -161,20 +173,19 @@ public class UnderhallsFeature extends BaseFeature {
         List<DebugRoute> routes = new ArrayList<>();
         Map<Pos, Pos> exits = new HashMap<>(store.exits());
         exits.replaceAll((room, destination) -> {
-            Entrance paired = pairedEntrance(room.world(), Math.floorDiv(room.x(), UnderhallsGenerator.TILE), Math.floorDiv(room.z(), UnderhallsGenerator.TILE));
+            Entrance paired = pairedEntrance(room);
             return paired == null ? destination : paired.origin().offset(0, 0, -1);
         });
         for (Entrance entrance : store.entrances()) {
             World maze = Bukkit.getWorld(entrance.maze());
-            Pos destination = maze == null ? null : Pos.of(arrival(maze, entrance.tileX(), entrance.tileZ()).getBlock());
+            Pos destination = entrance.room() != null ? entrance.room().offset(0, 0, -4) : maze == null ? null : Pos.of(entranceArrival(maze, entrance).getBlock());
             routes.add(new DebugRoute("entrance", entrance.origin(), destination,
                 (entrance.retired() ? "RETIRED" : "ACTIVE") + (maze == null ? " -> maze " + entrance.maze() +
                     " (unloaded), tile " + entrance.tileX() + ", " + entrance.tileZ() : "")));
             if (destination != null) exits.put(destination.offset(0, 0, 4), entrance.origin().offset(0, 0, -1));
         }
         exits.forEach((room, destination) -> {
-            boolean paired = pairedEntrance(room.world(), Math.floorDiv(room.x(), UnderhallsGenerator.TILE),
-                Math.floorDiv(room.z(), UnderhallsGenerator.TILE)) != null;
+            boolean paired = pairedEntrance(room) != null;
             routes.add(new DebugRoute("exit", room, destination, paired ? "PAIRED RETURN" : "UNPAIRED FIXED EXIT"));
         });
         routes.sort(Comparator.comparing(DebugRoute::kind).thenComparing(route -> route.origin().encode()));
@@ -225,12 +236,12 @@ public class UnderhallsFeature extends BaseFeature {
             if (entrance != null) {
                 World maze = Bukkit.getWorld(entrance.maze());
                 target = action.equals("entrance") ? entrance.origin().offset(0, 0, -1) :
-                    maze == null ? null : Pos.of(arrival(maze, entrance.tileX(), entrance.tileZ()).getBlock());
+                    maze == null ? null : Pos.of(entranceArrival(maze, entrance).getBlock());
             }
         } else if (action.equals("exit") || action.equals("exit-destination")) {
             boolean known = debugRoutes().stream().anyMatch(route -> route.kind().equals("exit") && route.origin().equals(id));
             if (known) {
-                Entrance paired = pairedEntrance(id.world(), Math.floorDiv(id.x(), UnderhallsGenerator.TILE), Math.floorDiv(id.z(), UnderhallsGenerator.TILE));
+                Entrance paired = pairedEntrance(id);
                 target = action.equals("exit") ? id.offset(0, 0, -4) : paired == null ? store.exit(id) : paired.origin().offset(0, 0, -1);
             }
         }
@@ -243,9 +254,13 @@ public class UnderhallsFeature extends BaseFeature {
 
     private record RoomTile(UUID maze, int x, int z) { }
 
-    private Entrance pairedEntrance(UUID maze, int tileX, int tileZ) {
-        return store.entrances().stream().filter(entrance -> entrance.maze().equals(maze) &&
-            entrance.tileX() == tileX && entrance.tileZ() == tileZ).findFirst().orElse(null);
+    private Entrance pairedEntrance(Pos room) {
+        return store.entrances().stream().filter(entrance -> entrance.room() != null ? entrance.room().equals(room) :
+            entrance.maze().equals(room.world()) && room.x() == entrance.tileX() * UnderhallsGenerator.TILE + 68 &&
+            room.z() == entrance.tileZ() * UnderhallsGenerator.TILE + 69).findFirst().orElse(null);
+    }
+    private Location entranceArrival(World maze, Entrance entrance) {
+        return entrance.room() == null ? arrival(maze, entrance.tileX(), entrance.tileZ()) : entrance.room().offset(0, 0, -4).location();
     }
 
     private int freeTileX(UUID maze, int start, int z) {
@@ -263,6 +278,7 @@ public class UnderhallsFeature extends BaseFeature {
         List<Entrance> entrances = new ArrayList<>(store.entrances());
         entrances.sort(Comparator.comparing(Entrance::retired).thenComparing(entrance -> entrance.origin().encode()));
         for (Entrance entrance : entrances) {
+            if (entrance.room() != null) continue;
             RoomTile tile = new RoomTile(entrance.maze(), entrance.tileX(), entrance.tileZ());
             if (!claimed.add(tile)) {
                 int x = freeTileX(entrance.maze(), entrance.tileX(), entrance.tileZ());
@@ -288,6 +304,8 @@ public class UnderhallsFeature extends BaseFeature {
     @Override public void onDisable() {
         running = false;
         api.tasks().cancel(TASK);
+        api.tasks().cancel(TASK + "-rooms");
+        roomUpgrades.clear(); pairing.clear();
         if (protection != null) protection.disable();
         listeners.forEach(HandlerList::unregisterAll); listeners.clear();
         if (command != null) command.unregister();
@@ -387,6 +405,10 @@ public class UnderhallsFeature extends BaseFeature {
         Entrance entrance = new Entrance(pos, maze.getUID(), tileX, tileZ, false);
         // Save first: an interrupted construction is permanently retired by the next integrity check.
         store.save(entrance);
+        buildEntrance(origin);
+        return new EntranceResult(true, "");
+    }
+    private void buildEntrance(Block origin) {
         // Only soft vegetation in the validated footprint is cleared; solid obstacles are never replaced.
         for (int dx = -1; dx <= 1; dx++) for (int dy = 0; dy <= 2; dy++) {
             Block block = origin.getRelative(dx, dy, 0);
@@ -401,7 +423,6 @@ public class UnderhallsFeature extends BaseFeature {
                 block.setBlockData(door, false);
             } else block.setType(dx == 0 ? Material.CHISELED_STONE_BRICKS : Material.MOSSY_STONE_BRICKS, false);
         }
-        return new EntranceResult(true, "");
     }
     private static boolean replaceable(Block block) {
         Material type = block.getType();
@@ -484,7 +505,7 @@ public class UnderhallsFeature extends BaseFeature {
             if (maze == null || !maze.getUID().equals(entrance.maze()) || !isMaze(maze)) {
                 tell(player, "This doorway no longer leads anywhere."); return;
             }
-            prepare(player, arrival(maze, entrance.tileX(), entrance.tileZ()), to, target -> {
+            prepare(player, entranceArrival(maze, entrance), to, target -> {
                 Entrance latest = store.entrance(pos);
                 if (latest == null || latest.retired() || !intact(latest)) return;
                 if (!safe(target)) { tell(player, "The destination is blocked. Clear it before using this doorway."); return; }
@@ -501,46 +522,110 @@ public class UnderhallsFeature extends BaseFeature {
         if (!running || !player.isOnline() || pending.contains(player.getUniqueId()) ||
             cooldowns.getOrDefault(player.getUniqueId(), 0L) > System.currentTimeMillis()) return;
         if (isMaze(location.getWorld()) && location.getBlockY() == UnderhallsGenerator.floor(location.getWorld()) + 1 &&
-            UnderhallsGenerator.exitTrigger(location.getBlockX(), location.getBlockZ())) exit(player, location);
+            ((UnderhallsGenerator) location.getWorld().getGenerator()).roomAt(location.getWorld(), location.getBlockX(), location.getBlockZ()) &&
+            UnderhallsGenerator.exitTrigger(location.getBlockX(), location.getBlockZ())) {
+            int x = Math.floorDiv(location.getBlockX(), 8) * 8 + 4, z = Math.floorDiv(location.getBlockZ(), 8) * 8 + 2;
+            // A retrofit may have skipped this room to preserve player construction.
+            boolean originalRoom = Math.floorMod(x, 128) == 68 && Math.floorMod(z, 128) == 66;
+            if (originalRoom || location.getWorld().getBlockAt(x, location.getBlockY(), z).getType() == Material.DARK_OAK_DOOR) exit(player, location);
+        }
     }
     private void exit(Player player, Location from) {
-        int tileX = Math.floorDiv(from.getBlockX(), UnderhallsGenerator.TILE), tileZ = Math.floorDiv(from.getBlockZ(), UnderhallsGenerator.TILE);
-        Pos room = new Pos(from.getWorld().getUID(), tileX * UnderhallsGenerator.TILE + UnderhallsGenerator.ROOM + 4,
-            UnderhallsGenerator.floor(from.getWorld()) + 1, tileZ * UnderhallsGenerator.TILE + UnderhallsGenerator.ROOM + 5);
-        Entrance paired = pairedEntrance(from.getWorld().getUID(), tileX, tileZ);
+        Pos room = new Pos(from.getWorld().getUID(), Math.floorDiv(from.getBlockX(), 8) * 8 + 4,
+            UnderhallsGenerator.floor(from.getWorld()) + 1, Math.floorDiv(from.getBlockZ(), 8) * 8 + 5);
+        Entrance paired = pairedEntrance(room);
         if (paired != null) {
             Location target = paired.origin().offset(0, 0, -1).location();
             if (target.getWorld() == null) { tell(player, "This doorway's overworld is unavailable."); return; }
             transfer(player, target, from);
             return;
         }
-        Pos saved = store.exit(room);
-        if (saved != null) {
-            Location target = saved.location();
-            if (target.getWorld() == null) { tell(player, "This exit's overworld is unavailable."); return; }
-            transfer(player, target, from);
-            return;
-        }
+        if (!pairing.add(room)) { tell(player, "This doorway is being paired. Wait here a moment."); return; }
+        pending.add(player.getUniqueId());
+        api.messages().send(player, "The doorway is finding its other side...");
+        createRandomPartner(player, from, room, 0);
+    }
+
+    private void createRandomPartner(Player player, Location from, Pos room, int attempt) {
+        if (!stillHere(player, from)) { finishPairing(player, room); return; }
         World source = Bukkit.getWorld(sourceName);
-        if (source == null) { tell(player, "The overworld is unavailable."); return; }
-        long x = (long)tileX * OVERWORLD_TILE + 8, z = (long)tileZ * OVERWORLD_TILE + 8;
-        if (Math.abs(x) > 29_999_000 || Math.abs(z) > 29_999_000) { tell(player, "This exit lies beyond the overworld border."); return; }
-        Location column = new Location(source, x + .5, 0, z + .5);
-        if (!source.getWorldBorder().isInside(column)) { tell(player, "This exit lies beyond the overworld border."); return; }
-        prepare(player, column, from, ignored -> {
-            Location destination = findLanding(source, (int)x, (int)z);
-            if (destination == null) { tell(player, "The exit is obstructed or outside the world's height limits."); return; }
-            // First successful use pins the destination forever; later obstruction never moves it.
-            Pos pinned = store.pinExit(room, Pos.of(destination.getBlock()));
-            Location target = pinned.location();
-            if (!exitSpace(target)) { tell(player, "The destination is blocked. Clear it before using this doorway."); return; }
-            teleport(player, target);
+        if (source == null || attempt >= 16) {
+            finishPairing(player, room); tell(player, "The doorway could not form its other side. Try again."); return;
+        }
+        Pos oldDestination = store.exit(room);
+        Location column;
+        if (oldDestination != null) {
+            column = oldDestination.offset(0, 0, 1).location();
+            if (column.getWorld() == null || attempt > 0) {
+                finishPairing(player, room); tell(player, "Clear space for the door and frame at this exit's saved destination."); return;
+            }
+        } else {
+            Location center = source.getSpawnLocation();
+            int radius = Math.max(64, Math.min(1_000_000, getConfigSection().getInt("exits.random-radius", 10000)));
+            double halfBorder = source.getWorldBorder().getSize() / 2;
+            Location border = source.getWorldBorder().getCenter();
+            int minX = (int)Math.ceil(Math.max(-29_999_000, Math.max(center.getX() - radius, border.getX() - halfBorder + 2)));
+            int maxX = (int)Math.floor(Math.min(29_999_000, Math.min(center.getX() + radius, border.getX() + halfBorder - 2)));
+            int minZ = (int)Math.ceil(Math.max(-29_999_000, Math.max(center.getZ() - radius, border.getZ() - halfBorder + 2)));
+            int maxZ = (int)Math.floor(Math.min(29_999_000, Math.min(center.getZ() + radius, border.getZ() + halfBorder - 2)));
+            if (minX > maxX || minZ > maxZ) { finishPairing(player, room); tell(player, "No doorway space exists inside the overworld border."); return; }
+            int x = random.nextInt(minX, maxX + 1), z = random.nextInt(minZ, maxZ + 1);
+            // Keep the 3-wide frame within the single asynchronously prepared chunk.
+            x = Math.clamp(x, (x >> 4) * 16 + 1, (x >> 4) * 16 + 14);
+            z = Math.clamp(z, (z >> 4) * 16 + 1, (z >> 4) * 16 + 14);
+            column = new Location(source, x + .5, 0, z + .5);
+        }
+        World targetWorld = column.getWorld();
+        targetWorld.getChunkAtAsync(column.getBlockX() >> 4, column.getBlockZ() >> 4, true).whenComplete((chunk, error) -> {
+            if (!running) return;
+            api.tasks().nextTick(() -> {
+                if (!stillHere(player, from)) { finishPairing(player, room); return; }
+                if (error != null || chunk == null) { finishPairing(player, room); tell(player, "The passage could not load its other side."); return; }
+                Location origin = column.clone();
+                if (oldDestination == null) origin.setY(Math.max(targetWorld.getMinHeight() + 1,
+                    targetWorld.getHighestBlockYAt(origin.getBlockX(), origin.getBlockZ(), HeightMap.MOTION_BLOCKING_NO_LEAVES) + 1));
+                try {
+                    if (!buildRandomPartner(origin.getBlock(), player, room)) {
+                        createRandomPartner(player, from, room, attempt + 1); return;
+                    }
+                } catch (RuntimeException failure) {
+                    finishPairing(player, room);
+                    api.messages().error("Could not create an Underhalls partner: " + failure.getMessage());
+                    tell(player, "The doorway could not save its other side. Check the server log.");
+                    return;
+                }
+                finishPairing(player, room);
+                transfer(player, origin.clone().add(0, 0, -1), from);
+            });
         });
     }
-    private Location findLanding(World world, int x, int z) {
-        int y = Math.max(world.getMinHeight() + 1, world.getHighestBlockYAt(x, z, HeightMap.MOTION_BLOCKING_NO_LEAVES) + 1);
-        Location target = new Location(world, x + .5, y, z + .5);
-        return exitSpace(target) ? target : null;
+    private void finishPairing(Player player, Pos room) {
+        pending.remove(player.getUniqueId()); pairing.remove(room);
+    }
+
+    private boolean buildRandomPartner(Block origin, Player player, Pos room) {
+        World world = origin.getWorld();
+        if (origin.getY() <= world.getMinHeight() || origin.getY() + 3 > world.getMaxHeight()) return false;
+        if (pairedEntrance(room) != null) return false;
+        if (origin.getChunk().getPersistentDataContainer().has(TOUCHED, PersistentDataType.BYTE) || origin.getChunk().getTileEntities().length > 0) return false;
+        for (Entrance existing : store.entrances()) if (existing.origin().world().equals(world.getUID()) &&
+            Math.hypot((double)existing.origin().x() - origin.getX(), (double)existing.origin().z() - origin.getZ()) < spacing) return false;
+        for (int x = -1; x <= 1; x++) for (int y = 0; y <= 2; y++) {
+            Block block = origin.getRelative(x, y, 0);
+            if (!world.isChunkLoaded(block.getX() >> 4, block.getZ() >> 4) || !world.getWorldBorder().isInside(block.getLocation()) || !replaceable(block)) return false;
+        }
+        Block support = origin.getRelative(0, -1, 0);
+        boolean foundation = !support.getType().isSolid();
+        if (foundation && !(support.getType().isAir() || support.isLiquid() || replaceable(support))) return false;
+        if (!foundation && support.getBoundingBox().getMaxY() != origin.getY()) return false;
+        SurvivalPortalActivateEvent event = new SurvivalPortalActivateEvent(KEY, origin.getLocation(), player);
+        Bukkit.getPluginManager().callEvent(event);
+        if (event.isCancelled()) return false;
+        store.save(new Entrance(Pos.of(origin), room.world(), Math.floorDiv(room.x(), UnderhallsGenerator.TILE),
+            Math.floorDiv(room.z(), UnderhallsGenerator.TILE), false, room));
+        if (foundation) support.setType(Material.STONE_BRICKS, false);
+        buildEntrance(origin);
+        return true;
     }
     private boolean exitSpace(Location target) {
         World world = target.getWorld();

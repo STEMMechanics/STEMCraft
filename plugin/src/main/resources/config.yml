@@ -1320,6 +1320,9 @@ world-generation:
 underhalls:
   source-world: survival
   world: survival_underhalls
+  exits:
+    # First use creates a permanent paired door at a random location near overworld spawn.
+    random-radius: 10000
   entrances:
     enabled: true
     interval-seconds: 900
