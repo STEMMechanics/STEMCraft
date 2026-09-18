@@ -21,13 +21,20 @@
 package dev.stemcraft.minigame;
 
 import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.api.minigame.ArenaValidationResult;
+import dev.stemcraft.api.minigame.MiniGameArena;
+import org.bukkit.Location;
+
+import java.util.List;
+
 import dev.stemcraft.exception.MiniGameInvalidArenaConfigException;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.jetbrains.annotations.NotNull;
 
 public final class MiniGameConfigSupport {
-    private MiniGameConfigSupport() {}
+    private MiniGameConfigSupport() {
+    }
 
     public static @NotNull World requireWorld(@NotNull STEMCraftAPI api, @NotNull String arenaId, @NotNull String worldName) {
         World world = Bukkit.getWorld(worldName);
@@ -45,5 +52,47 @@ public final class MiniGameConfigSupport {
         }
 
         throw new MiniGameInvalidArenaConfigException("World '" + worldName + "' for arena '" + arenaId + "' does not exist.");
+    }
+
+    /**
+     * Validate common arena geometry and spawn capacity; games validate their own additional rules.
+     */
+    public static void validateArenaSpawns(
+            @NotNull STEMCraftAPI api,
+            @NotNull MiniGameArena arena,
+            @NotNull List<Location> spawns,
+            int maximumSupportedPlayers,
+            @NotNull ArenaValidationResult result
+    ) {
+        if (arena.getRegion() == null || !arena.world().equals(arena.getRegion().getWorld())) {
+            result.addError("Select the full arena region in its world.", "arena");
+        }
+        if (arena.getRegion() != null) {
+            for (var game : api.minigames().list()) {
+                for (MiniGameArena other : game.arenas()) {
+                    if (other != arena && other.getRegion() != null && arena.world().equals(other.world())
+                            && arena.getRegion().intersects(other.getRegion())) {
+                        result.addError("Arena overlaps " + other.namespace() + ":" + other.id() + ". Use separate play areas.", "arena");
+                    }
+                }
+            }
+        }
+        if (arena.getLobbySpawn() == null || !arena.world().equals(arena.getLobbySpawn().getWorld())) {
+            result.addError("Set a lobby in the arena world.", "lobby");
+        }
+        if (arena.getSpectatorSpawn() == null || !arena.world().equals(arena.getSpectatorSpawn().getWorld())) {
+            result.addError("Set a spectator spawn in the arena world.", "spectator");
+        }
+        if (arena.getMinPlayers() < 1 || arena.getMaxPlayers() < arena.getMinPlayers() || arena.getMaxPlayers() > maximumSupportedPlayers) {
+            result.addError("Require 1 <= minplayers <= maxplayers <= " + maximumSupportedPlayers + ".", "players");
+        }
+        if (spawns.size() < arena.getMaxPlayers()) {
+            result.addError("Add at least maxplayers starting spawns.", "spawns");
+        }
+        for (Location spawn : spawns) {
+            if (arena.getRegion() == null || !arena.getRegion().contains(spawn)) {
+                result.addError("Every player spawn must be inside the arena.", "spawns");
+            }
+        }
     }
 }
