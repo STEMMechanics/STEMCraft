@@ -173,7 +173,7 @@ custom-commands:
     permission: stemcraft.command.survival
     command: survival
     run:
-      - "server:tpworld survival {player}"
+      - "server:tpworldlast survival {player}"
   creative:
     permission: stemcraft.command.creative
     command: creative
@@ -1310,6 +1310,8 @@ gifts:
 
 # Availability changes apply on restart. Loaded worlds retain their generator.
 world-generation:
+  underhalls:
+    enabled: true
   deep:
     enabled: true
   wasteland:
@@ -1318,6 +1320,27 @@ world-generation:
     enabled: true
   faraway:
     enabled: true
+
+underhalls:
+  passages:
+    # Chance per eligible internal cell boundary, applied once as chunks load.
+    chance: 0.12
+  mobs:
+    enabled: true
+    interval-seconds: 120
+    max-per-world: 3
+  source-world: survival
+  world: survival_underhalls
+  exits:
+    # First use creates a permanent paired door at a random location near overworld spawn.
+    random-radius: 10000
+  entrances:
+    enabled: true
+    interval-seconds: 900
+    chance: 0.2
+    max-active: 16
+    # Applies to active AND permanently retired entrances.
+    minimum-distance: 256
 
 # Private Citizens guide. Dialogue, skin and routes live in stembot.yml.
 stembot:
@@ -1337,3 +1360,7 @@ afk:
   idle-minutes: 5
   # Minutes AFTER becoming AFK; 0 disables kicking (35 minutes total idle by default).
   kick-after-afk-minutes: 30
+
+# Light follows a torch or lantern held in either hand (including soul variants).
+held-light:
+  enabled: true
