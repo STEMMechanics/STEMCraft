@@ -122,6 +122,24 @@ class CommandContextImplTest {
     }
 
     @Test
+    void resolvesPlayerListsWithWildcardAndExclusions() {
+        var kira = server.addPlayer("Kira");
+        Command command = mock(Command.class);
+        CommandContextImpl ctx = new CommandContextImpl(command, sender, "hub", List.of("*,-Kira"));
+
+        assertEquals(List.of(sender, target), ctx.getPlayers(0));
+        assertFalse(ctx.getPlayers(0).contains(kira));
+    }
+
+    @Test
+    void rejectsUnknownPositivePlayerInPlayerList() {
+        Command command = mock(Command.class);
+        CommandContextImpl ctx = new CommandContextImpl(command, sender, "hub", List.of("Target,missing"));
+
+        assertTrue(ctx.getPlayers(0).isEmpty());
+    }
+
+    @Test
     void combinesQuotedArgumentsAndRemovesQuotesBeforeParsing() {
         Command command = mock(Command.class);
 

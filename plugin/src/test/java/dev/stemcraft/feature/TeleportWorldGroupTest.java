@@ -83,7 +83,8 @@ class TeleportWorldGroupTest {
             verify(builder).executor(executor.capture());
             var ctx = mock(dev.stemcraft.api.command.CommandContext.class);
             when(ctx.getArg(0)).thenReturn("survival");
-            when(ctx.getPlayer(eq(1), any())).thenReturn(player);
+            when(ctx.args()).thenReturn(java.util.List.of("survival", player.getName()));
+            when(ctx.getPlayers(1)).thenReturn(java.util.List.of(player));
             executor.getValue().execute(api, null, ctx);
             verify(ctx).returnInfo("You are already in this world group.");
             assertEquals(new Location(world, 30, 65, 40), player.getLocation());

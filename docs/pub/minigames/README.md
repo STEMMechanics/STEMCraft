@@ -11,6 +11,13 @@ Want a quick race, a team battle, or a survival challenge? Choose a game below t
 | [Nightfall](nightfall.md) | Prepare by day and survive stronger zombie nights. |
 | [Parkour](parkour.md) | Jump through a course as quickly as you can. |
 | [SkyBlock](skyblock.md) | Grow a tiny floating island into a home. |
+| [Minecart Racing](minecart-racing.md) | Ride through every checkpoint and finish all laps. Right-click the feather for a boost every five seconds. |
+| [Horse Racing](horse-racing.md) | Jump obstacles and ride through all checkpoints and laps before the other riders. |
+| [Volcano](volcano.md) | Avoid the flame warnings, magma impacts and holes. Be the last survivor. |
+| [Mob Shooter](mob-shooter.md) | Shoot chickens for 3 points, rabbits for 2 and pigs for 1. Score the most before time runs out. |
+| [Punch the Bat](punch-the-bat.md) | Punch bats with an empty hand. Glowing bats score 5 points; ordinary bats score 1. |
+| [Floor Shuffle](floor-shuffle.md) | Move onto the announced colour before the other tiles disappear. Keep surviving as the warnings get shorter. |
+| [Minecraft Quake](quake.md) | Right-click your railgun hoe to tag opponents. Wait for the reload between shots and reach the kill target first. |
 | [TNT Run](tnt-run.md) | Keep moving while the floor disappears. |
 
 Which games and arenas are open depends on the live server. Use the lobby's menus, signs, or portals. If a game command is available, typing the game command by itself shows its choices.

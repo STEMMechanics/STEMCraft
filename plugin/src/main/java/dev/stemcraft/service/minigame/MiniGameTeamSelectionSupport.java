@@ -465,7 +465,26 @@ public final class MiniGameTeamSelectionSupport {
             return false;
         }
 
-        return new LinkedHashSet<>(assignments.values()).size() >= Math.max(1, requiredActiveTeams(arena));
+        int requiredTeams = Math.max(1, requiredActiveTeams(arena));
+        Set<String> activeTeamIds = new LinkedHashSet<>(assignments.values());
+        if (activeTeamIds.size() < requiredTeams) {
+            return false;
+        }
+
+        MiniGameTeamSelectionPolicy policy = policy(arena);
+        int maximumDifference = policy == null
+            ? Integer.MAX_VALUE
+            : Math.max(0, policy.maxTeamSizeDifference(arena));
+        if (maximumDifference == Integer.MAX_VALUE || activeTeamIds.size() < 2) {
+            return true;
+        }
+
+        List<Integer> activeTeamSizes = activeTeamIds.stream()
+            .map(teamId -> arena.getTeamPlayers(teamId).size())
+            .toList();
+        int smallestTeam = activeTeamSizes.stream().min(Integer::compareTo).orElse(0);
+        int largestTeam = activeTeamSizes.stream().max(Integer::compareTo).orElse(0);
+        return largestTeam - smallestTeam <= maximumDifference;
     }
 
     private void applyAssignments(@NotNull MiniGameArena arena) {
