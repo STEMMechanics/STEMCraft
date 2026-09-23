@@ -27,6 +27,17 @@ public interface MiniGameTeamSelectionPolicy {
         return assignableTeams(arena).size() > 1 ? 2 : 1;
     }
 
+    /**
+     * Maximum allowed difference between the smallest and largest active team
+     * when a team-selection game starts.
+     *
+     * @param arena The arena being evaluated.
+     * @return The allowed difference, or {@link Integer#MAX_VALUE} for no limit.
+     */
+    default int maxTeamSizeDifference(@NotNull MiniGameArena arena) {
+        return Integer.MAX_VALUE;
+    }
+
     default @NotNull Set<MiniGameTeamSelectionInput> supportedInputs(@NotNull MiniGameArena arena) {
         return Set.of(MiniGameTeamSelectionInput.FLOOR, MiniGameTeamSelectionInput.HOTBAR);
     }

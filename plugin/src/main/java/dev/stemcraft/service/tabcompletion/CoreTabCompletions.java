@@ -78,6 +78,17 @@ public class CoreTabCompletions {
                         .map(Player::getName)
                         .toList()
         );
+        api.tabComplete().register("players", (player, args) -> {
+            List<String> names = Bukkit.getOnlinePlayers()
+                    .stream()
+                    .filter(player::canSee)
+                    .map(Player::getName)
+                    .toList();
+            List<String> values = new java.util.ArrayList<>();
+            values.add("*");
+            values.addAll(names);
+            return values;
+        });
 
         // Common durations
         api.tabComplete().register("duration", (player, args) -> List.of(
