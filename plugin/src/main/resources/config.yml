@@ -1364,3 +1364,7 @@ afk:
 # Light follows a torch or lantern held in either hand (including soul variants).
 held-light:
   enabled: true
+
+survival-advancements:
+  # Only Survival mode can earn new advancement criteria. Minigames deny them independently.
+  enabled: true

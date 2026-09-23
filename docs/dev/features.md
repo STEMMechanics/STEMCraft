@@ -177,3 +177,19 @@ unused lights. Chunk metadata restores saved temporary lights after a restart.
 Player placements replace temporary lights normally, including in the Underhalls;
 maze terrain remains protected. Temporary lights use Minecraft's real block
 lighting, so they also affect light-dependent gameplay such as mob spawning.
+
+## Advancement restrictions
+
+The `SurvivalAdvancements` feature blocks new Minecraft advancement criteria in Creative,
+Adventure, and Spectator modes. It is enabled by default; configure
+`survival-advancements.enabled` in `config.yml` and restart to enable or disable it.
+
+Independently, the minigame framework blocks new advancement criteria for registered
+arena occupants, including players waiting in lobbies, active participants, and spectators,
+regardless of their game mode. This ends when the player leaves the arena. Simply visiting
+an arena world without joining a minigame does not trigger this restriction.
+
+Both rules cancel Paper's `PlayerAdvancementCriterionGrantEvent`, so partial progress is
+blocked as well as completion. Existing progress is preserved. The rules apply to all
+advancements, including custom and recipe advancements; they do not change STEMCraft
+quest progress, statistics, or minigame rewards. There is no operator bypass.
