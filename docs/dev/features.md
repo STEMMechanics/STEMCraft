@@ -198,3 +198,15 @@ Both rules cancel Paper's `PlayerAdvancementCriterionGrantEvent`, so partial pro
 blocked as well as completion. Existing progress is preserved. The rules apply to all
 advancements, including custom and recipe advancements; they do not change STEMCraft
 quest progress, statistics, or minigame rewards. There is no operator bypass.
+
+## Creative block drops
+
+`RestrictCreative` suppresses block-break item drops for Creative players without
+`stemcraft.creative.override.drop_items`. This includes jukebox records, chest and other
+container contents, and items released by attached blocks during a player break.
+The block still breaks, but its captured item drops are discarded. Survival players and
+Creative players with the existing drop override retain normal drop behaviour.
+
+This uses `BlockDropItemEvent` independently of the existing `PlayerDropItemEvent`
+restriction. It does not delete existing ground items or change automated container
+behaviour, explosions, or other non-player block removal.
