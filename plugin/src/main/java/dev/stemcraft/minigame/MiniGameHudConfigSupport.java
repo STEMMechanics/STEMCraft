@@ -5,17 +5,35 @@ import dev.stemcraft.api.minigame.MiniGame;
 import dev.stemcraft.api.minigame.MiniGameArena;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
 public final class MiniGameHudConfigSupport {
-    private MiniGameHudConfigSupport() {}
+    private MiniGameHudConfigSupport() {
+    }
+
+    /**
+     * Default HUD for a timed match. Adopters register objective, winner and progress placeholders;
+     * apply() preserves any administrator-provided HUD lines in the game's own config.
+     */
+    public static @NotNull Map<MiniGameArena.ArenaStatus, HudDefinition> timedRoundDefaults(@NotNull String title) {
+        Map<MiniGameArena.ArenaStatus, HudDefinition> definitions = new LinkedHashMap<>();
+        for (MiniGameArena.ArenaStatus status : List.of(MiniGameArena.ArenaStatus.WAITING, MiniGameArena.ArenaStatus.STARTING,
+                MiniGameArena.ArenaStatus.RUNNING, MiniGameArena.ArenaStatus.ENDING)) {
+            definitions.put(status, new HudDefinition(
+                    List.of("<gold>" + title + " <white>{arena:time-remaining}", "<yellow>{arena:objective}"),
+                    List.of("<gold>{arena:name}", "<white>{arena:status}", "Players: {arena:players}",
+                            "Time: {arena:time-remaining}", "Score: {player:score}", "{player:progress}", "Winner: {arena:winner}"), 2, "YELLOW"));
+        }
+        return definitions;
+    }
 
     public static void apply(
-        @NotNull MiniGame minigame,
-        @NotNull ConfigSection config,
-        @NotNull Map<MiniGameArena.ArenaStatus, HudDefinition> defaults
+            @NotNull MiniGame minigame,
+            @NotNull ConfigSection config,
+            @NotNull Map<MiniGameArena.ArenaStatus, HudDefinition> defaults
     ) {
         ConfigSection hudSection = config.getSection("hud");
 
@@ -61,10 +79,10 @@ public final class MiniGameHudConfigSupport {
     }
 
     public record HudDefinition(
-        @NotNull List<String> bossBarLines,
-        @NotNull List<String> scoreboardLines,
-        int bossBarLineHoldUpdates,
-        @NotNull String bossBarColor
+            @NotNull List<String> bossBarLines,
+            @NotNull List<String> scoreboardLines,
+            int bossBarLineHoldUpdates,
+            @NotNull String bossBarColor
     ) {
         public HudDefinition {
             bossBarLines = List.copyOf(bossBarLines);

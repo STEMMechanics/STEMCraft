@@ -47,7 +47,7 @@ RANDOM_FIRST_SPAWN_INVALID_BIOME: "Invalid random first spawn biome '{biome}' fo
 RANDOM_FIRST_SPAWN_INVALID_BLOCK: "Invalid random first spawn block '{block}' for world {world}."
 
 HUB_DESCRIPTION: "Teleports a player to the hub world."
-HUB_USAGE: "/hub [player]"
+HUB_USAGE: "/hub [players]"
 HUB_TELEPORT_OTHER_DENY: "You do not have permission to teleport others to the hub."
 HUB_TELEPORT_SUCCESS: "You have been teleported to the hub."
 HUB_TELEPORT_OTHER_SUCCESS_SENDER: "{player} has been teleported to the hub."
@@ -138,7 +138,7 @@ TPALL_TARGET_NOTIFY: "<green>You were teleported to <yellow>{player}<green>."
 
 # /tpspawn
 TPSPAWN_DESCRIPTION: "Teleport a player to a world's spawn."
-TPSPAWN_USAGE: "/tpspawn [world] [player]"
+TPSPAWN_USAGE: "/tpspawn [world] [players]"
 TPSPAWN_SUCCESS: "<green>Teleported <yellow>{player}<green> to the spawn of <yellow>{world}<green>."
 
 # /back
@@ -167,23 +167,23 @@ DELWARP_SUCCESS: "<green>Warp <yellow>{warp}<green> has been deleted."
 
 # /spawn
 SPAWN_DESCRIPTION: "Teleport a player to a world's spawn."
-SPAWN_USAGE: "/spawn <world> [player]"
+SPAWN_USAGE: "/spawn <world> [players]"
 SPAWN_SUCCESS: "<green>Teleported <yellow>{player}<green> to the spawn of world <yellow>{world}<green>."
 
 # /tpworld
 TPWORLD_DESCRIPTION: "Teleport to your last location in another world (or spawn if no history)."
-TPWORLD_USAGE: "/tpworld <world> [player]"
+TPWORLD_USAGE: "/tpworld <world> [players]"
 TPWORLD_SUCCESS_LAST: "<green>Teleported to your last location in world <yellow>{world}<green>."
 TPWORLD_SUCCESS_SPAWN: "<green>No saved location for <yellow>{world}<green>; teleported to world spawn."
 
 # /tpworldspawn
 TPWORLDSPAWN_DESCRIPTION: "Teleport a player to a world's spawn."
-TPWORLDSPAWN_USAGE: "/tpworldspawn <world> [player]"
+TPWORLDSPAWN_USAGE: "/tpworldspawn <world> [players]"
 TPWORLDSPAWN_SUCCESS: "<green>Teleported to the spawn of world <yellow>{world}<green>."
 
 # /tpworldlast
 TPWORLDLAST_DESCRIPTION: "Teleport to the most recently used dimension in a world-set."
-TPWORLDLAST_USAGE: "/tpworldlast <world-base> [player]"
+TPWORLDLAST_USAGE: "/tpworldlast <world-base> [players]"
 TPWORLDLAST_SUCCESS_LAST: "<green>Teleported to your last location in world <yellow>{world}<green>."
 TPWORLDLAST_SUCCESS_SPAWN: "<green>No saved location found; teleported to the spawn of <yellow>{world}<green>."
 

@@ -75,6 +75,16 @@ The list below reflects the active built-in command roots in source.
 
 ## World Command Highlights
 
+`/world duplicate <source> <destination>` supports both standalone world folders
+and Paper's integrated `world/dimensions/minecraft/<world>` storage. Integrated
+worlds are copied to a sibling dimension folder, preserving terrain, entities,
+generation settings and per-world data. UUID metadata and session locks are omitted
+so Paper assigns a fresh identity when the copy is loaded. The source is saved and
+unloaded before copying; the destination remains unloaded until `/world load`.
+Destinations must be new names using lowercase letters, numbers, dots, underscores
+or hyphens. Existing worlds are never merged or overwritten. Symbolic links are
+rejected, and an incomplete destination is removed if copying fails.
+
 The `/world` command is one of the most important operator surfaces. It covers:
 
 - create, load, unload, duplicate, and delete
@@ -129,6 +139,11 @@ and restart. Cancelled teleports do not update them.
 Travel groups use the requested base name and an underscore boundary; they are
 independent of inventory sharing settings. `/tpworld survival` still explicitly
 selects the overworld, and `/tpworldspawn survival` selects its spawn.
+
+Commands that declare a `{players}` argument accept comma-separated online
+player names, `*` for all online players, and `-name` exclusions. For example,
+`/hub *,-kira` sends everyone except Kira to the hub. The older `{player}`
+placeholder remains a single-player argument.
 
 For existing installations, change the custom `/survival` command's `run` entry
 in `config.yml` to `server:tpworldlast survival {player}` and reload STEMCraft.

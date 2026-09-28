@@ -26,6 +26,8 @@ import dev.stemcraft.api.util.PlayerUtil;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 
+import java.util.List;
+
 /**
  * Command to teleport players to the hub world.
  */
@@ -53,7 +55,7 @@ public class HubCommand {
         api.commands().create("hub")
                 .description("HUB_DESCRIPTION")
                 .usage("HUB_USAGE")
-                .tabCompletion("{player}")
+                .tabCompletion("{players}")
                 .permission(PERMISSION)
                 .executor((unused, cmd, ctx) -> {
                     // check if console called without args
@@ -68,13 +70,6 @@ public class HubCommand {
                         return;
                     }
 
-                    // get target player
-                    Player target = ctx.getPlayer(0, ctx.getSender());
-                    if(target == null) {
-                        cmd.error(ctx.getSender(), "PLAYER_NOT_FOUND", "player", ctx.getArg(0));
-                        return;
-                    }
-
                     org.bukkit.World hubWorld = feature.getHubWorld();
                     if (hubWorld == null) {
                         hubWorld = api.worlds().getDefaultWorld();
@@ -82,18 +77,30 @@ public class HubCommand {
 
                     Location hubLocation = hubWorld.getSpawnLocation().clone();
 
-                    boolean removedFromArena = api.minigames().removePlayerFromArena(target, false);
-                    if (!removedFromArena) {
-                        feature.runExitCommands(target);
+                    List<Player> targets = ctx.args().isEmpty()
+                            ? List.of(ctx.asPlayer())
+                            : ctx.getPlayers(0);
+                    if (targets.isEmpty() || targets.contains(null)) {
+                        cmd.error(ctx.getSender(), "PLAYER_NOT_FOUND", "player", ctx.getArg(0));
+                        return;
                     }
-                    PlayerUtil.teleport(target, hubLocation);
 
-                    if (target.equals(ctx.getSender())) {
+                    for (Player target : targets) {
+                        boolean removedFromArena = api.minigames().removePlayerFromArena(target, false);
+                        if (!removedFromArena) {
+                            feature.runExitCommands(target);
+                        }
+                        PlayerUtil.teleport(target, hubLocation);
+                    }
+
+                    if (targets.size() == 1 && targets.getFirst().equals(ctx.getSender())) {
                         cmd.success(ctx.getSender(), "HUB_TELEPORT_SUCCESS");
                     } else {
                         String senderName = ctx.isConsole() ? api.locales().resolve("CONSOLE_NAME") : ctx.getSender().getName();
-                        cmd.success(ctx.getSender(), "HUB_TELEPORT_OTHER_SUCCESS_SENDER", "player", target.getName());
-                        cmd.success(target, "HUB_TELEPORT_OTHER_SUCCESS_PLAYER", "player", senderName);
+                        for (Player target : targets) {
+                            cmd.success(ctx.getSender(), "HUB_TELEPORT_OTHER_SUCCESS_SENDER", "player", target.getName());
+                            cmd.success(target, "HUB_TELEPORT_OTHER_SUCCESS_PLAYER", "player", senderName);
+                        }
                     }
 
                 })

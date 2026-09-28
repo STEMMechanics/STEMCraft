@@ -13,6 +13,17 @@ Built-in minigames are discovered from `dev.stemcraft.minigame` through `BaseMin
 | Parkour | `/parkour` | `ParkourMiniGame` |
 | SkyBlock | `/skyblock` | `SkyBlockMiniGame` |
 | TNT Run | `/tntrun` | `TntRunMiniGame` |
+| Minecart Racing | `/minecartrace` | `MinecartRaceMiniGame` |
+| Horse Racing | `/horserace` | `HorseRaceMiniGame` |
+| Volcano | `/volcano` | `VolcanoMiniGame` |
+| Mob Shooter | `/mobshooter` | `MobShooterMiniGame` |
+| Punch the Bat | `/punchthebat` | `PunchTheBatMiniGame` |
+| Floor Shuffle | `/floorshuffle` | `FloorShuffleMiniGame` |
+| Minecraft Quake | `/quake` | `QuakeMiniGame` |
+
+See [Arena setup and testing](minigame-arena-setup.md) for the seven new minigames'
+commands, geometry requirements, rules and test checklist. Each has its own package,
+runtime, handler, command and configuration classes.
 
 ## Common Minigame Structure
 
