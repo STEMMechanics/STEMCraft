@@ -40,6 +40,7 @@ import javax.annotation.Nullable;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 
 public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements MiniGameArena {
@@ -979,16 +980,26 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
 
     @Override
     public void spawnSupplyDropCrate(ItemStack item, Location landingLocation) {
-        if (item == null || item.getType().isAir()) {
-            return;
-        }
-        spawnSupplyDropCrate(List.of(item), landingLocation);
+        trySpawnSupplyDropCrate(item, landingLocation);
     }
 
     @Override
     public void spawnSupplyDropCrate(Collection<ItemStack> items, Location landingLocation) {
+        trySpawnSupplyDropCrate(items, landingLocation);
+    }
+
+    @Override
+    public boolean trySpawnSupplyDropCrate(ItemStack item, Location landingLocation) {
+        if (item == null || item.getType().isAir()) {
+            return false;
+        }
+        return trySpawnSupplyDropCrate(List.of(item), landingLocation);
+    }
+
+    @Override
+    public boolean trySpawnSupplyDropCrate(Collection<ItemStack> items, Location landingLocation) {
         if (items == null || landingLocation == null || landingLocation.getWorld() == null) {
-            return;
+            return false;
         }
 
         List<ItemStack> loot = items.stream()
@@ -997,12 +1008,12 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
             .filter(stack -> !stack.getType().isAir())
             .toList();
         if (loot.isEmpty()) {
-            return;
+            return false;
         }
 
         Block chestBlock = resolveSupplyDropChestBlock(landingLocation);
         if (chestBlock == null) {
-            return;
+            return false;
         }
         UUID crateId = UUID.randomUUID();
         clearSupplyDropCrate(crateId);
@@ -1021,6 +1032,7 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         );
         supplyDropCrates.put(crateId, crate);
         startSupplyDropCrateDescent(crate);
+        return true;
     }
 
     @Override
@@ -1040,21 +1052,52 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
 
     @Override
     public Location findRandomSupplyDropLocation(List<Material> allowedSurfaceMaterials, int attempts) {
+        return findRandomSupplyDropLocation(allowedSurfaceMaterials, attempts, List.of(), null);
+    }
+
+    @Override
+    public Location findRandomSupplyDropLocation(
+        List<Material> allowedSurfaceMaterials,
+        int attempts,
+        Collection<SCRegion> excludedRegions,
+        BiPredicate<Location, MiniGameArena> suitability
+    ) {
         if (allowedSurfaceMaterials == null || allowedSurfaceMaterials.isEmpty() || attempts <= 0) {
             return null;
         }
 
         SCRegion arenaRegion = get("arenaRegion", SCRegion.class);
         if (arenaRegion == null) {
+            arenaRegion = getRegion();
+        }
+        if (arenaRegion == null) {
             return null;
         }
+
+        SCRegion lobbyRegion = getLobbyRegion();
+        SCRegion finalArenaRegion = arenaRegion;
+        Predicate<Location> surfaceContains = location -> finalArenaRegion.contains(location)
+            && !isSupplyDropLocationExcluded(location, lobbyRegion, excludedRegions);
+        Predicate<Location> landingSuitable = location -> {
+            if (isSupplyDropLocationExcluded(location, lobbyRegion, excludedRegions)) {
+                return false;
+            }
+
+            Block chestBlock = resolveSupplyDropChestBlock(location);
+            if (chestBlock == null || !finalArenaRegion.contains(chestBlock.getLocation())
+                || isSupplyDropLocationExcluded(chestBlock.getLocation(), lobbyRegion, excludedRegions)) {
+                return false;
+            }
+            return suitability == null || suitability.test(location, this);
+        };
 
         return findRandomSupplyDropLocation(
             arenaRegion.getMinimumLocation(),
             arenaRegion.getMaximumLocation(),
-            arenaRegion::contains,
+            surfaceContains,
             allowedSurfaceMaterials,
-            attempts
+            attempts,
+            landingSuitable
         );
     }
 
@@ -1064,6 +1107,24 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         @NotNull Predicate<Location> contains,
         @NotNull List<Material> allowedSurfaceMaterials,
         int attempts
+    ) {
+        return findRandomSupplyDropLocation(
+            min,
+            max,
+            contains,
+            allowedSurfaceMaterials,
+            attempts,
+            location -> true
+        );
+    }
+
+    @Nullable Location findRandomSupplyDropLocation(
+        @NotNull Location min,
+        @NotNull Location max,
+        @NotNull Predicate<Location> contains,
+        @NotNull List<Material> allowedSurfaceMaterials,
+        int attempts,
+        @NotNull Predicate<Location> suitability
     ) {
         if (allowedSurfaceMaterials.isEmpty() || attempts <= 0) {
             return null;
@@ -1085,7 +1146,16 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         for (int attempt = 0; attempt < attempts; attempt++) {
             int x = min.getBlockX() + random.nextInt(width);
             int z = min.getBlockZ() + random.nextInt(depth);
-            Location dropLocation = highestSupplyDropLocation(regionWorld, min.getBlockY(), max.getBlockY(), x, z, contains, allowedMaterials);
+            Location dropLocation = highestSupplyDropLocation(
+                regionWorld,
+                min.getBlockY(),
+                max.getBlockY(),
+                x,
+                z,
+                contains,
+                allowedMaterials,
+                suitability
+            );
             if (dropLocation != null) {
                 return dropLocation;
             }
@@ -1313,7 +1383,7 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         removeEntity(crate.chestDisplayId());
 
         Block chestBlock = crate.chestBlockLocation().getBlock();
-        if (!chestBlock.isPassable() && chestBlock.getType() != Material.CHEST) {
+        if (!isValidSupplyDropChestLocation(chestBlock)) {
             clearSupplyDropCrate(crateId);
             return;
         }
@@ -1433,22 +1503,17 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         Block origin = landingLocation.getBlock();
         for (int yOffset = 1; yOffset >= -3; yOffset--) {
             Block candidate = origin.getRelative(BlockFace.UP, yOffset);
-            if (!isValidSupplyDropChestSpace(candidate)) {
-                continue;
+            if (isValidSupplyDropChestLocation(candidate)) {
+                return candidate;
             }
-
-            Block support = candidate.getRelative(BlockFace.DOWN);
-            if (!isValidSupplyDropSupport(support)) {
-                continue;
-            }
-
-            Block above = candidate.getRelative(BlockFace.UP);
-            if (!isValidSupplyDropHeadroom(above)) {
-                continue;
-            }
-            return candidate;
         }
         return null;
+    }
+
+    private boolean isValidSupplyDropChestLocation(@NotNull Block block) {
+        return isValidSupplyDropChestSpace(block)
+            && isValidSupplyDropSupport(block.getRelative(BlockFace.DOWN))
+            && isValidSupplyDropHeadroom(block.getRelative(BlockFace.UP));
     }
 
     private boolean isValidSupplyDropChestSpace(@NotNull Block block) {
@@ -1487,7 +1552,8 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         int x,
         int z,
         @NotNull Predicate<Location> contains,
-        @NotNull Set<Material> allowedMaterials
+        @NotNull Set<Material> allowedMaterials,
+        @NotNull Predicate<Location> suitability
     ) {
         for (int y = maxY; y >= minY; y--) {
             Block block = regionWorld.getBlockAt(x, y, z);
@@ -1495,10 +1561,36 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
                 continue;
             }
 
-            return supplyDropSpawnLocation(block, allowedMaterials);
+            Location dropLocation = supplyDropSpawnLocation(block, allowedMaterials);
+            if (dropLocation == null || !suitability.test(dropLocation)) {
+                return null;
+            }
+            return dropLocation;
         }
 
         return null;
+    }
+
+    private boolean isSupplyDropLocationExcluded(
+        @Nullable Location location,
+        @Nullable SCRegion lobbyRegion,
+        @Nullable Collection<SCRegion> excludedRegions
+    ) {
+        if (location == null) {
+            return false;
+        }
+        if (lobbyRegion != null && lobbyRegion.contains(location)) {
+            return true;
+        }
+        if (excludedRegions == null) {
+            return false;
+        }
+        for (SCRegion excludedRegion : excludedRegions) {
+            if (excludedRegion != null && excludedRegion.contains(location)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private @Nullable Location supplyDropSpawnLocation(@NotNull Block block, @NotNull Set<Material> allowedMaterials) {

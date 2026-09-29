@@ -27,17 +27,20 @@ import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
+import org.bukkit.block.BlockFace;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiPredicate;
 
 /**
  * Represents a mini-game arena with players, teams, and game states.
@@ -856,6 +859,47 @@ public interface MiniGameArena extends MessageService, HasMeta<MiniGameArena> {
     void spawnSupplyDropCrate(Collection<ItemStack> items, Location landingLocation);
 
     /**
+     * Attempt to spawn a shared supply-drop crate and report whether the framework accepted it.
+     *
+     * <p>The existing void overload remains available for source and binary compatibility. Custom
+     * arena implementations that support success reporting should override this method; the default
+     * implementation delegates to the legacy method and assumes the request was accepted after
+     * validating the supplied item and location.</p>
+     *
+     * @param item The loot to place into the landed chest.
+     * @param landingLocation The target landing location above the accepted support block.
+     * @return {@code true} if the crate request was accepted, otherwise {@code false}.
+     */
+    default boolean trySpawnSupplyDropCrate(ItemStack item, Location landingLocation) {
+        if (item == null || item.getType().isAir() || landingLocation == null || landingLocation.getWorld() == null) {
+            return false;
+        }
+        spawnSupplyDropCrate(item, landingLocation);
+        return true;
+    }
+
+    /**
+     * Attempt to spawn a shared supply-drop crate and report whether the framework accepted it.
+     *
+     * <p>The existing void overload remains available for source and binary compatibility. Custom
+     * arena implementations that support success reporting should override this method; the default
+     * implementation delegates to the legacy method and assumes the request was accepted after
+     * validating the supplied items and location.</p>
+     *
+     * @param items The loot stacks to place into the landed chest.
+     * @param landingLocation The target landing location above the accepted support block.
+     * @return {@code true} if the crate request was accepted, otherwise {@code false}.
+     */
+    default boolean trySpawnSupplyDropCrate(Collection<ItemStack> items, Location landingLocation) {
+        if (items == null || items.isEmpty() || landingLocation == null || landingLocation.getWorld() == null
+            || items.stream().noneMatch(item -> item != null && !item.getType().isAir())) {
+            return false;
+        }
+        spawnSupplyDropCrate(items, landingLocation);
+        return true;
+    }
+
+    /**
      * Clear all active supply-drop markers in this arena.
      */
     void clearAllSupplyDrops();
@@ -872,15 +916,129 @@ public interface MiniGameArena extends MessageService, HasMeta<MiniGameArena> {
     /**
      * Find a valid supply-drop spawn location inside this arena's configured arena region.
      *
-     * The search uses random columns inside {@code arenaRegion}, chooses the highest non-air block
-     * in that column, and accepts it only when the block material is allowed, the surrounding
-     * support blocks are solid, and there is enough passable space above it for the drop.
+     * The search uses random columns inside this arena's configured region, chooses the highest
+     * non-air block in that column, and accepts it only when the block material is allowed, the
+     * surrounding support blocks are solid, and there is enough passable space above it for the
+     * drop. The framework first uses the arena's {@code arenaRegion} metadata when present and
+     * falls back to {@link #getRegion()}; if a lobby region is configured, it is excluded automatically.
      *
      * @param allowedSurfaceMaterials Allowed surface materials from the minigame config.
      * @param attempts Number of random columns to try before giving up.
      * @return The drop spawn location, or {@code null} if none was found.
      */
     Location findRandomSupplyDropLocation(List<Material> allowedSurfaceMaterials, int attempts);
+
+    /**
+     * Find a supply-drop location while excluding additional regions.
+     *
+     * The configured lobby region remains excluded automatically. The supplied regions are
+     * additional exclusions and may be empty.
+     *
+     * @param allowedSurfaceMaterials Allowed surface materials from the minigame config.
+     * @param attempts Number of random columns to try before giving up.
+     * @param excludedRegions Additional regions that must not contain the candidate surface or landing location.
+     * @return The drop spawn location, or {@code null} if none was found.
+     */
+    default Location findRandomSupplyDropLocation(
+        List<Material> allowedSurfaceMaterials,
+        int attempts,
+        SCRegion... excludedRegions
+    ) {
+        return findRandomSupplyDropLocation(
+            allowedSurfaceMaterials,
+            attempts,
+            excludedRegions == null ? List.of() : Arrays.asList(excludedRegions),
+            null
+        );
+    }
+
+    /**
+     * Find a supply-drop location with additional region and caller-defined suitability filters.
+     *
+     * The configured lobby region remains excluded automatically. The suitability predicate is
+     * passed the candidate landing location and this arena; returning {@code false} rejects the
+     * candidate. A {@code null} predicate accepts every candidate that passes the region checks.
+     *
+     * @param allowedSurfaceMaterials Allowed surface materials from the minigame config.
+     * @param attempts Number of random columns to try before giving up.
+     * @param excludedRegions Additional regions that must not contain the candidate surface or landing location.
+     * @param suitability Optional caller-defined candidate filter.
+     * @return The drop spawn location, or {@code null} if none was found.
+     */
+    default Location findRandomSupplyDropLocation(
+        List<Material> allowedSurfaceMaterials,
+        int attempts,
+        Collection<SCRegion> excludedRegions,
+        BiPredicate<Location, MiniGameArena> suitability
+    ) {
+        if (allowedSurfaceMaterials == null || allowedSurfaceMaterials.isEmpty() || attempts <= 0) {
+            return null;
+        }
+
+        SCRegion lobbyRegion = getLobbyRegion();
+        for (int attempt = 0; attempt < attempts; attempt++) {
+            Location candidate = findRandomSupplyDropLocation(allowedSurfaceMaterials, 1);
+            if (candidate == null || candidate.getWorld() == null) {
+                return null;
+            }
+
+            Location surface = candidate.getBlock().getRelative(BlockFace.DOWN).getLocation();
+            if (isSupplyDropLocationExcluded(candidate, surface, lobbyRegion, excludedRegions)) {
+                continue;
+            }
+            if (suitability == null || suitability.test(candidate, this)) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Find a supply-drop location with a caller-defined suitability filter and optional region exclusions.
+     *
+     * @param allowedSurfaceMaterials Allowed surface materials from the minigame config.
+     * @param attempts Number of random columns to try before giving up.
+     * @param suitability Optional caller-defined candidate filter.
+     * @param excludedRegions Additional regions that must not contain the candidate surface or landing location.
+     * @return The drop spawn location, or {@code null} if none was found.
+     */
+    default Location findRandomSupplyDropLocation(
+        List<Material> allowedSurfaceMaterials,
+        int attempts,
+        BiPredicate<Location, MiniGameArena> suitability,
+        SCRegion... excludedRegions
+    ) {
+        return findRandomSupplyDropLocation(
+            allowedSurfaceMaterials,
+            attempts,
+            excludedRegions == null ? List.of() : Arrays.asList(excludedRegions),
+            suitability
+        );
+    }
+
+    private static boolean isSupplyDropLocationExcluded(
+        Location candidate,
+        Location surface,
+        SCRegion lobbyRegion,
+        Collection<SCRegion> excludedRegions
+    ) {
+        if (containsSupplyDropLocation(lobbyRegion, candidate, surface)) {
+            return true;
+        }
+        if (excludedRegions == null) {
+            return false;
+        }
+        for (SCRegion excludedRegion : excludedRegions) {
+            if (containsSupplyDropLocation(excludedRegion, candidate, surface)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean containsSupplyDropLocation(SCRegion region, Location candidate, Location surface) {
+        return region != null && (region.contains(candidate) || region.contains(surface));
+    }
 
     /**
      * Check if the arena is currently active (waiting, countdown, or running).

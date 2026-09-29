@@ -883,7 +883,9 @@ public class BridgeArenaHandler implements MiniGameArenaHandler {
         }
 
         ItemStack item = new ItemStack(configuredDrops.get(ThreadLocalRandom.current().nextInt(configuredDrops.size())));
-        arena.spawnSupplyDropCrate(item, dropLocation);
+        if (!arena.trySpawnSupplyDropCrate(item, dropLocation)) {
+            return;
+        }
         announceSupplyDrop(arena, dropLocation);
         playSoundToOccupants(arena, Sound.ENTITY_ITEM_PICKUP, 0.6f, 1.35f);
     }

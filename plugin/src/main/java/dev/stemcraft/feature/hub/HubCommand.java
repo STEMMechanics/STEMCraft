@@ -80,7 +80,7 @@ public class HubCommand {
                     List<Player> targets = ctx.args().isEmpty()
                             ? List.of(ctx.asPlayer())
                             : ctx.getPlayers(0);
-                    if (targets.isEmpty() || targets.contains(null)) {
+                    if (targets.isEmpty()) {
                         cmd.error(ctx.getSender(), "PLAYER_NOT_FOUND", "player", ctx.getArg(0));
                         return;
                     }
