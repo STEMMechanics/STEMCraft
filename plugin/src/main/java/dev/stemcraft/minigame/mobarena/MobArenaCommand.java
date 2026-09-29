@@ -29,6 +29,8 @@ import org.jetbrains.annotations.Nullable;
 import org.jspecify.annotations.NonNull;
 
 import java.util.*;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 final class MobArenaCommand {
     private static final long PREVIEW_TICKS = 100L;
@@ -214,13 +216,13 @@ final class MobArenaCommand {
                     case "PLAYER" -> {
                         ctx.checkArgIsInt(3, "Death message index must be a natural number.");
                         final List<String> playerDeathMessages = new ArrayList<>(mobArena.getMobArenaConfig().getGlobalPlayerDeathMessages());
-                        if (playerDeathMessages.size() >= ctx.getArgAsInt(3)) {
+                        if (playerDeathMessages.size() >= ctx.getArgAsInt(3) - 1) {
                             ctx.returnError("That message doesn't exist.");
                             return;
                         }
-                        playerDeathMessages.set(ctx.getArgAsInt(3), ctx.getArg(4));
+                        playerDeathMessages.set(ctx.getArgAsInt(3) - 1, ctx.getArg(4));
                         mobArena.getMobArenaConfig().setGlobalPlayerDeathMessages(playerDeathMessages);
-                        ctx.success("Set player death message " + (ctx.getArgAsInt(3) + 1) + " to \"" + ctx.getArg(4) + "\"");
+                        ctx.success("Set player death message " + ctx.getArgAsInt(3) + " to \"" + ctx.getArg(4) + "\"");
                     }
                     case "ENTITY" -> {
                         ctx.checkArgsSizeAtLeast(6);
@@ -234,13 +236,13 @@ final class MobArenaCommand {
                         } catch (IllegalArgumentException _) {
                             entityDeathMessages = new EnumMap<>(MobDeathReason.class); // Fallback if for whatever reason the entityDeathMessages is empty.
                         }
-                        if (!entityDeathMessages.containsKey(reason) || entityDeathMessages.get(reason).size() >= ctx.getArgAsInt(4)) {
+                        if (!entityDeathMessages.containsKey(reason) || entityDeathMessages.get(reason).size() >= ctx.getArgAsInt(4) - 1) {
                             ctx.returnError("That message doesn't exist.");
                             return;
                         }
-                        entityDeathMessages.get(reason).set(ctx.getArgAsInt(4), ctx.getArg(5));
+                        entityDeathMessages.get(reason).set(ctx.getArgAsInt(4) - 1, ctx.getArg(5));
                         mobArena.getMobArenaConfig().setGlobalEntityDeathMessages(entityDeathMessages);
-                        ctx.success("Set entity " + reason.toString() + " death message " + (ctx.getArgAsInt(4) + 1) + " to \"" + ctx.getArg(5) + "\"");
+                        ctx.success("Set entity " + reason.toString() + " death message " + ctx.getArgAsInt(4) + " to \"" + ctx.getArg(5) + "\"");
                     }
                     default -> ctx.returnUsage();
                 }
@@ -251,13 +253,13 @@ final class MobArenaCommand {
                     case "PLAYER" -> {
                         ctx.checkArgIsInt(3, "Death message index must be a natural number.");
                         final List<String> playerDeathMessages = new ArrayList<>(mobArena.getMobArenaConfig().getGlobalPlayerDeathMessages());
-                        if (playerDeathMessages.size() >= ctx.getArgAsInt(3)) {
+                        if (playerDeathMessages.size() >= ctx.getArgAsInt(3) - 1) {
                             ctx.returnError("That message doesn't exist.");
                             return;
                         }
-                        playerDeathMessages.remove(ctx.getArgAsInt(3));
+                        playerDeathMessages.remove(ctx.getArgAsInt(3) - 1);
                         mobArena.getMobArenaConfig().setGlobalPlayerDeathMessages(playerDeathMessages);
-                        ctx.success("Removed player death message " + (ctx.getArgAsInt(3) + 1));
+                        ctx.success("Removed player death message " + ctx.getArgAsInt(3));
                     }
                     case "ENTITY" -> {
                         ctx.checkArgsSizeAtLeast(5);
@@ -271,13 +273,13 @@ final class MobArenaCommand {
                         } catch (IllegalArgumentException _) {
                             entityDeathMessages = new EnumMap<>(MobDeathReason.class); // Fallback if for whatever reason the entityDeathMessages is empty.
                         }
-                        if (!entityDeathMessages.containsKey(reason) || entityDeathMessages.get(reason).size() >= ctx.getArgAsInt(4)) {
+                        if (!entityDeathMessages.containsKey(reason) || entityDeathMessages.get(reason).size() >= ctx.getArgAsInt(4) - 1) {
                             ctx.returnError("That message doesn't exist.");
                             return;
                         }
-                        entityDeathMessages.get(reason).remove(ctx.getArgAsInt(4));
+                        entityDeathMessages.get(reason).remove(ctx.getArgAsInt(4) - 1);
                         mobArena.getMobArenaConfig().setGlobalEntityDeathMessages(entityDeathMessages);
-                        ctx.success("Removed entity " + reason.toString() + " death message " + (ctx.getArgAsInt(4) + 1));
+                        ctx.success("Removed entity " + reason.toString() + " death message " + ctx.getArgAsInt(4));
                     }
                     default -> ctx.returnUsage();
                 }
@@ -315,12 +317,12 @@ final class MobArenaCommand {
                 switch (ctx.getArg(3)) {
                     case "PLAYER" -> {
                         ctx.checkArgIsInt(4, "Death message index must be a natural number.");
-                        if (!arena.contains("player-death-messages") || arena.getList("player-death-messages", String.class).size() >= ctx.getArgAsInt(4)) {
+                        if (!arena.contains("player-death-messages") || arena.getList("player-death-messages", String.class).size() >= ctx.getArgAsInt(4) - 1) {
                             ctx.returnError("That message doesn't exist.");
                             return;
                         }
-                        arena.getList("player-death-messages", String.class).set(ctx.getArgAsInt(4), ctx.getArg(5));
-                        ctx.success("Set player death message " + (ctx.getArgAsInt(4) + 1) + " to \"" + ctx.getArg(5) + "\"");
+                        arena.getList("player-death-messages", String.class).set(ctx.getArgAsInt(4) - 1, ctx.getArg(5));
+                        ctx.success("Set player death message " + ctx.getArgAsInt(4) + " to \"" + ctx.getArg(5) + "\"");
                     }
                     case "ENTITY" -> {
                         ctx.checkArgsSizeAtLeast(7);
@@ -328,13 +330,13 @@ final class MobArenaCommand {
                         final MobDeathReason reason = getMobDeathReason(ctx, 4);
                         if (reason == null) return;
 
-                        if (!arena.contains("entity-death-messages." + reason.name()) || arena.getList("entity-death-messages." + reason.name(), String.class).size() >= ctx.getArgAsInt(5)) {
+                        if (!arena.contains("entity-death-messages." + reason.name()) || arena.getList("entity-death-messages." + reason.name(), String.class).size() >= ctx.getArgAsInt(5) - 1) {
                             ctx.returnError("That message doesn't exist.");
                             return;
                         }
 
-                        arena.getList("entity-death-messages." + reason.name(), String.class).set(ctx.getArgAsInt(5), ctx.getArg(6));
-                        ctx.success("Set entity " + reason.toString() + " death message " + (ctx.getArgAsInt(5) + 1) + " to \"" + ctx.getArg(6) + "\"");
+                        arena.getList("entity-death-messages." + reason.name(), String.class).set(ctx.getArgAsInt(5) - 1, ctx.getArg(6));
+                        ctx.success("Set entity " + reason.toString() + " death message " + ctx.getArgAsInt(5) + " to \"" + ctx.getArg(6) + "\"");
                     }
                     default -> ctx.returnUsage();
                 }
@@ -344,24 +346,24 @@ final class MobArenaCommand {
                 switch (ctx.getArg(3)) {
                     case "PLAYER" -> {
                         ctx.checkArgIsInt(4, "Death message index must be a natural number.");
-                        if (!arena.contains("player-death-messages") || arena.getList("player-death-messages", String.class).size() >= ctx.getArgAsInt(4)) {
+                        if (!arena.contains("player-death-messages") || arena.getList("player-death-messages", String.class).size() >= ctx.getArgAsInt(4) - 1) {
                             ctx.returnError("That message doesn't exist.");
                             return;
                         }
-                        arena.getList("player-death-messages", String.class).remove(ctx.getArgAsInt(4));
-                        ctx.success("Removed player death message " + (ctx.getArgAsInt(4) + 1));
+                        arena.getList("player-death-messages", String.class).remove(ctx.getArgAsInt(4) - 1);
+                        ctx.success("Removed player death message " + ctx.getArgAsInt(4));
                     }
                     case "ENTITY" -> {
                         ctx.checkArgsSizeAtLeast(6);
                         ctx.checkArgIsInt(5, "Death message index must be a natural number.");
                         final MobDeathReason reason = getMobDeathReason(ctx, 4);
                         if (reason == null) return;
-                        if (!arena.contains("entity-death-messages." + reason.name()) || arena.getList("entity-death-messages." + reason.name(), String.class).size() >= ctx.getArgAsInt(5)) {
+                        if (!arena.contains("entity-death-messages." + reason.name()) || arena.getList("entity-death-messages." + reason.name(), String.class).size() >= ctx.getArgAsInt(5) - 1) {
                             ctx.returnError("That message doesn't exist.");
                             return;
                         }
-                        arena.getList("entity-death-messages." + reason.name(), String.class).remove(ctx.getArgAsInt(5));
-                        ctx.success("Removed entity " + reason.toString() + " death message " + (ctx.getArgAsInt(5) + 1));
+                        arena.getList("entity-death-messages." + reason.name(), String.class).remove(ctx.getArgAsInt(5) - 1);
+                        ctx.success("Removed entity " + reason.toString() + " death message " + ctx.getArgAsInt(5));
                     }
                     default -> ctx.returnUsage();
                 }
@@ -473,7 +475,7 @@ final class MobArenaCommand {
         final String spawnerPropertyKey = ctx.getArg(4);
         final String spawnerPropertyValue = ctx.getArg(5);
 
-        if (spawnerIndex < 0 || spawnerIndex >= arena.get("spawner-configs.max", Integer.class)) {
+        if (spawnerIndex <= 0 || spawnerIndex - 1 >= arena.get("spawner-configs.max", Integer.class)) {
             ctx.returnUsage();
         }
 
@@ -481,8 +483,8 @@ final class MobArenaCommand {
             case "entityType":
                 try {
                     final EntityType newEntityType = EntityType.valueOf(spawnerPropertyValue);
-                    arena.set("spawner-configs." + spawnerIndex + ".entityType", newEntityType);
-                    ctx.returnSuccess("Set spawner " + (spawnerIndex + 1) + "'s entity type to '" + spawnerPropertyValue + "'.");
+                    arena.set("spawner-configs." + (spawnerIndex - 1) + ".entityType", newEntityType);
+                    ctx.returnSuccess("Set spawner " + spawnerIndex + "'s entity type to '" + spawnerPropertyValue + "'.");
                 } catch (final IllegalArgumentException e) {
                     ctx.returnError("'" + spawnerPropertyValue + "' is not a valid entity type.");
                 }
@@ -490,8 +492,8 @@ final class MobArenaCommand {
             case "initialAmount":
                 try {
                     final int newInitialAmount = Integer.parseInt(spawnerPropertyValue);
-                    arena.set("spawner-configs." + spawnerIndex + ".initialAmount", newInitialAmount);
-                    ctx.returnSuccess("Set spawner " + (spawnerIndex + 1) + "'s initial amount to '" + spawnerPropertyValue + "'.");
+                    arena.set("spawner-configs." + (spawnerIndex - 1) + ".initialAmount", newInitialAmount);
+                    ctx.returnSuccess("Set spawner " + spawnerIndex + "'s initial amount to '" + spawnerPropertyValue + "'.");
                 } catch (final NumberFormatException e) {
                     ctx.returnUsage();
                 }
@@ -499,8 +501,8 @@ final class MobArenaCommand {
             case "incrementAmount":
                 try {
                     final double newIncrementAmount = Double.parseDouble(spawnerPropertyValue);
-                    arena.set("spawner-configs." + spawnerIndex + ".incrementAmount", newIncrementAmount);
-                    ctx.returnSuccess("Set spawner " + (spawnerIndex + 1) + "'s increment amount to '" + spawnerPropertyValue + "'.");
+                    arena.set("spawner-configs." + (spawnerIndex - 1) + ".incrementAmount", newIncrementAmount);
+                    ctx.returnSuccess("Set spawner " + spawnerIndex + "'s increment amount to '" + spawnerPropertyValue + "'.");
                 } catch (final NumberFormatException e) {
                     ctx.returnUsage();
                 }
@@ -508,8 +510,8 @@ final class MobArenaCommand {
             case "incrementType":
                 try {
                     final IncrementType newIncrementType = IncrementType.valueOf(spawnerPropertyValue);
-                    arena.set("spawner-configs." + spawnerIndex + ".incrementType", newIncrementType);
-                    ctx.returnSuccess("Set spawner " + (spawnerIndex + 1) + "'s increment type to '" + spawnerPropertyValue + "'.");
+                    arena.set("spawner-configs." + (spawnerIndex - 1) + ".incrementType", newIncrementType);
+                    ctx.returnSuccess("Set spawner " + spawnerIndex + "'s increment type to '" + spawnerPropertyValue + "'.");
                 } catch (final IllegalArgumentException e) {
                     ctx.returnError("'" + spawnerPropertyValue + "' is not a valid increment type.");
                 }
@@ -517,19 +519,19 @@ final class MobArenaCommand {
             case "initialWave":
                 try {
                     final int newWaveAmount = Integer.parseInt(spawnerPropertyValue);
-                    arena.set("spawner-configs." + spawnerIndex + ".initialWave", newWaveAmount);
-                    ctx.returnSuccess("Set spawner " + (spawnerIndex + 1) + "'s initial wave to '" + spawnerPropertyValue + "'.");
+                    arena.set("spawner-configs." + (spawnerIndex - 1) + ".initialWave", newWaveAmount);
+                    ctx.returnSuccess("Set spawner " + spawnerIndex + "'s initial wave to '" + spawnerPropertyValue + "'.");
                 } catch (final NumberFormatException e) {
                     ctx.returnUsage();
                 }
                 break;
             case "spawnZone":
-                arena.set("spawner-configs." + spawnerIndex + ".spawnZone", spawnerPropertyValue);
-                ctx.returnSuccess("Set spawner " + (spawnerIndex + 1) + "'s spawn zone to '" + spawnerPropertyValue + "'.");
+                arena.set("spawner-configs." + (spawnerIndex - 1) + ".spawnZone", spawnerPropertyValue);
+                ctx.returnSuccess("Set spawner " + spawnerIndex + "'s spawn zone to '" + spawnerPropertyValue + "'.");
                 break;
             case "countTowardsMobCount":
-                arena.set("spawner-configs." + spawnerIndex + ".countTowardsMobCount", Boolean.valueOf(spawnerPropertyValue));
-                ctx.returnSuccess("Set spawner " + (spawnerIndex + 1) + "'s counting towards the mob count to '" + spawnerPropertyValue + "'.");
+                arena.set("spawner-configs." + (spawnerIndex - 1) + ".countTowardsMobCount", Boolean.valueOf(spawnerPropertyValue));
+                ctx.returnSuccess("Set spawner " + spawnerIndex + "'s counting towards the mob count to '" + spawnerPropertyValue + "'.");
         }
     }
 
@@ -664,32 +666,72 @@ final class MobArenaCommand {
     }
 
     private void commandInfo(@NotNull final CommandContext ctx) {
-        final MiniGameArena arena = requireArenaForInfo(ctx);
-        final ArenaValidationResult validation = arena.validate();
-        ctx.info("Arena '" + arena.id() + "':");
-        ctx.info(" - Name: " + arena.getName());
-        ctx.info(" - Status: " + arena.getStatus().name());
-        ctx.info(" - Players: " + arena.numPlayers() + "/" + arena.getMaxPlayers());
-        ctx.info(" - Spectators: " + arena.numSpectators());
-        ctx.info(" - Min players: " + arena.getMinPlayers());
-        ctx.info(" - Lobby: " + formatLocation(arena.getLobbySpawn()));
-        ctx.info(" - Spectator: " + formatLocation(arena.getSpectatorSpawn()));
-        ctx.info(" - Start countdown: " + mobArena.startCountdownSeconds(arena) + " sec");
-        ctx.info(" - Reset countdown: " + mobArena.endingSeconds(arena) + " sec");
-        ctx.info(" - Loadout:");
-        printLoadoutInfo(ctx, arena);
-        ctx.info(" - Spawn Records:");
-        printSpawnerConfigInfo(ctx, arena);
-        ctx.info(" - Zones:");
-        printZoneInfo(ctx, arena);
-        if (validation.hasErrors()) {
-            ctx.warn(" - Validation: failed");
-            for (final String error : validation.getErrors()) {
-                ctx.warn("   - " + error);
-            }
+        if (ctx.args().size() < 2) {
+            // No arena
+            ctx.info(" - Global Death Messages:");
+            printGlobalEntityDeathMessages(ctx, mobArena.getMobArenaConfig().getGlobalEntityDeathMessages());
+            ctx.returnInfo(" - Validation: N/A");
         } else {
-            ctx.success(" - Validation: ok");
+            // Arena selected
+            final MiniGameArena arena = requireArenaForInfo(ctx);
+            final ArenaValidationResult validation = arena.validate();
+            ctx.info("Arena '" + arena.id() + "':");
+            ctx.info(" - Name: " + arena.getName());
+            ctx.info(" - Status: " + arena.getStatus().name());
+            ctx.info(" - Players: " + arena.numPlayers() + "/" + arena.getMaxPlayers());
+            ctx.info(" - Spectators: " + arena.numSpectators());
+            ctx.info(" - Min players: " + arena.getMinPlayers());
+            ctx.info(" - Lobby: " + formatLocation(arena.getLobbySpawn()));
+            ctx.info(" - Spectator: " + formatLocation(arena.getSpectatorSpawn()));
+            ctx.info(" - Start countdown: " + mobArena.startCountdownSeconds(arena) + " sec");
+            ctx.info(" - Reset countdown: " + mobArena.endingSeconds(arena) + " sec");
+            ctx.info(" - Loadout:");
+            printLoadoutInfo(ctx, arena);
+            ctx.info(" - Spawn Records:");
+            printSpawnerConfigInfo(ctx, arena);
+            ctx.info(" - Zones:");
+            printZoneInfo(ctx, arena);
+            ctx.info(" - Player Death Messages:");
+            printPlayerDeathMessages(ctx, arena);
+            ctx.info(" - Entity Death Message Mode: " + arena.get("entity-death-messages-mode", MobArenaDeathMessageMode.class).toString());
+            ctx.info(" - Entity Death Messages:");
+            printEntityDeathMessages(ctx, arena);
+            if (validation.hasErrors()) {
+                ctx.warn(" - Validation: failed");
+                for (final String error : validation.getErrors()) {
+                    ctx.warn("   - " + error);
+                }
+            } else {
+                ctx.success(" - Validation: ok");
+            }
         }
+    }
+
+    private void printPlayerDeathMessages(@NotNull CommandContext ctx, @lombok.NonNull final MiniGameArena arena) {
+        final List<String> playerDeathMessages = arena.getList("player-death-messages", String.class);
+        for (int i = 0; i < playerDeathMessages.size(); i++) {
+            ctx.info("    - " + (i + 1) + ": " + playerDeathMessages.get(i));
+        }
+    }
+
+    private void printEntityDeathMessages(@NotNull CommandContext ctx, final MiniGameArena arena) {
+        Arrays.stream(MobDeathReason.values())
+                .collect(Collectors.toMap(Function.identity(), reason -> arena.getList("entity-death-messages." + reason.name(), String.class)))
+                .entrySet().stream().sorted().forEach((messagesSet) -> {
+            ctx.info("    - " + messagesSet.getKey());
+            for (int i = 0; i < messagesSet.getValue().size(); i++) {
+                ctx.info("       - " + (i + 1) + ": " + messagesSet.getValue().get(i));
+            }
+        });
+    }
+
+    private void printGlobalEntityDeathMessages(@NotNull CommandContext ctx, final Map<MobDeathReason, List<String>> deathMessages) {
+                deathMessages.entrySet().stream().sorted().forEach((messagesSet) -> {
+                    ctx.info("    - " + messagesSet.getKey());
+                    for (int i = 0; i < messagesSet.getValue().size(); i++) {
+                        ctx.info("       - " + (i + 1) + ": " + messagesSet.getValue().get(i));
+                    }
+                });
     }
 
     private void printLoadoutInfo(@NotNull CommandContext ctx, @lombok.NonNull MiniGameArena arena) {
