@@ -17,12 +17,16 @@ import java.util.concurrent.ThreadLocalRandom;
  * - listen: waits for matching private chat input
  */
 public final class BotSession {
+    private static final int STOPPED_NAVIGATION_TICKS = 10;
+    private static final int STALLED_NAVIGATION_TICKS = 60;
     /** Main-thread output boundary; implementations own speech presentation and actor departure. */
     public interface Output {
         /** Send an immediate message without delaying the action interpreter. */
         void say(String text);
         /** Speak a message and return the number of ticks before the next instruction may run. */
         int talk(String text);
+        /** Bounded recovery diagnostics for the server log, separate from player chat. */
+        default void navigationDiagnostic(String message) { }
         /**
          * Start a registered optional step. The provider may complete synchronously.
          * @param key namespaced provider key
@@ -57,13 +61,18 @@ public final class BotSession {
     private Location walkTarget;
     private Location progress;
     private Location recoveryTarget;
-    private List<Location> recoveryCandidates;
-    private int recoveryCandidateIndex;
+    private BotActor.RouteSearch routeSearch;
+    private List<Location> routeWaypoints;
+    private int routeWaypointIndex;
     private int recoveryAttempts;
     private int nextScanningMessage;
-    private final java.util.Set<Location> attemptedRecoveryWaypoints = new HashSet<>();
     private int lastProgress;
+    private int navigationStarted = -1;
     private boolean playerBehind;
+    private volatile boolean controlled;
+    private boolean following;
+    private boolean waitForPlayer;
+    private int followTicks;
     private volatile boolean closed;
     private volatile boolean chatEngaged=true;
     private int awayTicks;
@@ -71,7 +80,7 @@ public final class BotSession {
     private long callbackRevision;
     private Runnable cancelCallback = () -> { };
 
-    /** Create a session at a validated action; tick and input must run on the server thread. */
+    /** Create a session at a validated action (null starts external control); tick and input must run on the server thread. */
     public BotSession(
         BotScript script,
         BotActor actor,
@@ -84,7 +93,56 @@ public final class BotSession {
         this.world=world;
         this.output=output;
         this.speed=script.defaultSpeed();
-        jumpTo(initialAction);
+        if(initialAction == null) controlled=true;
+        else jumpTo(initialAction);
+    }
+
+    /** External callers own controlled dialogue; script input cannot interrupt it. */
+    public boolean controlled() { return controlled&&!closed; }
+
+    public void follow(boolean enabled) {
+        if(!controlled()) return;
+        resetRecovery();
+        walkTarget=null;
+        waitMode=WaitMode.NONE;
+        playerBehind=false;
+        following=enabled;
+        actor.cancel();
+    }
+
+    public boolean move(Location destination,boolean waitForPlayer) {
+        if(!controlled()||destination==null||destination.getWorld()==null
+            ||!world.equals(destination.getWorld().getName())
+            ||!Double.isFinite(destination.getX())||!Double.isFinite(destination.getY())
+            ||!Double.isFinite(destination.getZ())) return false;
+        follow(false);
+        this.waitForPlayer=waitForPlayer;
+        walkTarget=destination.clone();
+        walkSpeed=speed;
+        waitMode=WaitMode.WALK;
+        resetWalkProgress();
+        return true;
+    }
+
+    public boolean teleport(Location destination) {
+        if(!controlled()||destination==null||destination.getWorld()==null
+            ||!world.equals(destination.getWorld().getName())
+            ||!Double.isFinite(destination.getX())||!Double.isFinite(destination.getY())
+            ||!Double.isFinite(destination.getZ())||!Float.isFinite(destination.getYaw())
+            ||!Float.isFinite(destination.getPitch())) return false;
+        follow(false);
+        return actor.teleport(destination.clone());
+    }
+
+    public void releaseControl(String actionName) {
+        if(!controlled()) return;
+        follow(false);
+        controlled=false;
+        idle=0;
+        speechRevision++;
+        actor.cancel();
+        if(actionName==null) close(false);
+        else jumpTo(actionName);
     }
 
     /** @return the private actor controlled by this session */
@@ -105,7 +163,7 @@ public final class BotSession {
 
     /** Route a private player reply, allowing recognised topics to interrupt an active action. */
     public void input(String text) {
-        if(!chatEngaged()) return;
+        if(controlled||!chatEngaged()) return;
         idle=0;
 
         String input=text.trim();
@@ -190,6 +248,25 @@ public final class BotSession {
             ||owner.getWorld()==null
             ||!owner.getWorld().getName().equals(world)) {
             close(chatEngaged);
+            return;
+        }
+
+        if(controlled) {
+            idle=0;
+            age+=5;
+            if(waitMode==WaitMode.WALK) {
+                if(tickWalk(owner)) waitMode=WaitMode.NONE;
+                return;
+            }
+            if(waitMode==WaitMode.STUCK) return;
+            actor.lookAt(owner);
+            followTicks-=5;
+            if(following&&actor.location().distanceSquared(owner)>9) {
+                if(followTicks<=0) {
+                    actor.move(owner.clone(),speed);
+                    followTicks=20;
+                }
+            } else if(actor.navigating()) actor.cancel();
             return;
         }
 
@@ -386,7 +463,7 @@ public final class BotSession {
         double waitDistance=script.waitDistance();
         double resumeDistance=script.resumeDistance();
 
-        if(!playerBehind&&playerDistance>waitDistance*waitDistance) {
+        if((!controlled||waitForPlayer)&&!playerBehind&&playerDistance>waitDistance*waitDistance) {
             playerBehind=true;
             actor.cancel();
 
@@ -404,7 +481,8 @@ public final class BotSession {
             resetWalkProgress();
         }
 
-        if(here.distanceSquared(walkTarget)<=script.arrivalDistance()*script.arrivalDistance()) {
+        if(Math.abs(here.getY() - walkTarget.getY()) <= .6
+            && here.distanceSquared(walkTarget)<=script.arrivalDistance()*script.arrivalDistance()) {
             actor.cancel();
             resetRecovery();
             walkTarget=null;
@@ -412,27 +490,45 @@ public final class BotSession {
             return true;
         }
 
-        if(recoveryTarget != null && here.distanceSquared(recoveryTarget) <= 1.0) {
+        // Reach the tread and centre of a corner before handing off to the next flight.
+        // A loose arrival radius can cancel the climb while still on the lower half-step.
+        if(recoveryTarget != null && Math.abs(here.getY() - recoveryTarget.getY()) <= .2
+            && here.distanceSquared(recoveryTarget) <= .09) {
             recoveryTarget = null;
             resetWalkProgress();
         }
 
-        if(recoveryCandidates != null) {
-            // At most one path query per five-tick session interval.
-            if(recoveryCandidateIndex < recoveryCandidates.size()) {
-                Location candidate = recoveryCandidates.get(recoveryCandidateIndex++);
-                if(attemptedRecoveryWaypoints.add(candidate) && here.distanceSquared(candidate) > 1.0
-                    && actor.canNavigateTo(candidate)) {
-                    recoveryTarget = candidate;
-                    recoveryCandidates = null;
-                    recoveryAttempts++;
-                    resetWalkProgress();
-                    actor.move(recoveryTarget, walkSpeed);
-                }
-                return false;
+        boolean routeFailed = false;
+        if(routeSearch != null) {
+            routeWaypoints = routeSearch.advance();
+            if(routeWaypoints == null) return false;
+            navigationDiagnostic("search finished: " + routeWaypoints.size() + " waypoints; " + routeSearch.diagnostics());
+            routeSearch = null;
+            routeWaypointIndex = 0;
+            if(routeWaypoints.isEmpty()) {
+                routeWaypoints = null;
+                recoveryAttempts = 3;
+                routeFailed = true;
             }
-            recoveryCandidates = null;
-            recoveryAttempts = 3;
+        }
+
+        if(recoveryTarget == null && routeWaypoints != null) {
+            if(routeWaypointIndex < routeWaypoints.size()) {
+                Location candidate = routeWaypoints.get(routeWaypointIndex++);
+                // Never skip an unreachable segment: it may be the only staircase out.
+                if(actor.canNavigateTo(candidate)) {
+                    recoveryTarget = candidate;
+                    resetWalkProgress();
+                    if(routeWaypointIndex == 1) navigationDiagnostic("following first waypoint using direct movement");
+                    startNavigation(candidate);
+                    return false;
+                }
+                recoveryAttempts = 3;
+                navigationDiagnostic("Citizens rejected waypoint " + routeWaypointIndex + "/" + routeWaypoints.size()
+                    + " at " + position(candidate));
+                routeFailed = true;
+            }
+            routeWaypoints = null;
         }
 
         if(progress==null||here.distanceSquared(progress)>.5) {
@@ -440,23 +536,30 @@ public final class BotSession {
             lastProgress=age;
         }
 
-        if(age-lastProgress>=200) {
+        boolean stoppedShort = navigationStarted >= 0 && age-navigationStarted >= STOPPED_NAVIGATION_TICKS
+            && !actor.navigating();
+        if(routeFailed || stoppedShort || age-lastProgress>=STALLED_NAVIGATION_TICKS) {
+            if(!routeFailed) navigationDiagnostic(stoppedShort ? "Citizens stopped short" : "no movement for 3 seconds");
             actor.cancel();
             if(recoveryAttempts < 3) {
                 recoveryTarget = null;
-                recoveryCandidates = actor.recoveryWaypoints(walkTarget);
-                recoveryCandidateIndex = 0;
-                if(!recoveryCandidates.isEmpty()) {
-                    if(age >= nextScanningMessage) {
-                        for(String line:script.randomSystemMessage(script.scanning())) output.say(line);
-                        nextScanningMessage = age + script.scanningCooldownSeconds() * 20;
-                    }
-                    return false;
+                routeWaypoints = null;
+                routeSearch = actor.findRoute(walkTarget);
+                recoveryAttempts++;
+                navigationStarted = -1;
+                navigationDiagnostic("starting route search " + recoveryAttempts + "/3");
+                if(age >= nextScanningMessage) {
+                    for(String line:script.randomSystemMessage(script.scanning())) output.say(line);
+                    nextScanningMessage = age + script.scanningCooldownSeconds() * 20;
                 }
-                recoveryCandidates = null;
+                return false;
             }
             waitMode=WaitMode.STUCK;
 
+            if(controlled) {
+                output.say("I could not reach that destination.");
+                return false;
+            }
             for(String line:script.randomSystemMessage(script.stuck()))
                 output.say(line.replace("{action}",action)
                     .replace("{world}",world)
@@ -467,11 +570,29 @@ public final class BotSession {
             return false;
         }
 
-        if(!actor.navigating()) {
-            actor.move(recoveryTarget == null ? walkTarget : recoveryTarget,walkSpeed);
+        if(navigationStarted < 0) {
+            startNavigation(recoveryTarget == null ? walkTarget : recoveryTarget);
         }
 
         return false;
+    }
+
+    private void startNavigation(Location target) {
+        navigationStarted = age;
+        if(recoveryTarget != null) actor.moveWaypoint(target, walkSpeed);
+        else actor.move(target, walkSpeed);
+    }
+
+    private void navigationDiagnostic(String reason) {
+        output.navigationDiagnostic("action=" + action + " world=" + world + " " + reason
+            + "; bot=" + position(actor.location()) + "; destination=" + position(walkTarget)
+            + "; waypoint=" + position(recoveryTarget) + " (" + routeWaypointIndex + "/"
+            + (routeWaypoints == null ? 0 : routeWaypoints.size()) + ")");
+    }
+
+    private static String position(Location location) {
+        return location == null ? "none" : String.format(java.util.Locale.ROOT, "%.2f,%.2f,%.2f",
+            location.getX(), location.getY(), location.getZ());
     }
 
     private void animateTalk(Location owner) {
@@ -508,16 +629,17 @@ public final class BotSession {
 
     private void resetWalkProgress() {
         actor.cancel();
+        navigationStarted = -1;
         progress=null;
         lastProgress=age;
     }
 
     private void resetRecovery() {
         recoveryTarget = null;
-        recoveryCandidates = null;
-        recoveryCandidateIndex = 0;
+        routeWaypoints = null;
+        routeWaypointIndex = 0;
         recoveryAttempts = 0;
-        attemptedRecoveryWaypoints.clear();
+        routeSearch = null;
     }
 
     private void cancelCallback() {
@@ -562,6 +684,7 @@ public final class BotSession {
     public void close(boolean farewell) {
         if(closed) return;
         closed=true;
+        resetRecovery();
         speechRevision++;
         cancelCallback();
 

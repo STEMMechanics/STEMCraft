@@ -20,6 +20,7 @@
 
 package dev.stemcraft.service.minigame;
 
+import com.destroystokyo.paper.event.player.PlayerAdvancementCriterionGrantEvent;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.minigame.MiniGame;
@@ -32,6 +33,7 @@ import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.service.BaseService;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
+import org.bukkit.event.EventPriority;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.AbstractArrow;
@@ -104,6 +106,13 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
         api.protections().registerRule("minigame-teleport-damage", (player, request) ->
             request.type() != ProtectionType.TELEPORT_DAMAGE || findPlayerArena(player) == null
         );
+
+        // Block criterion progress throughout arena membership, including lobbies and spectators.
+        api.events().register(PlayerAdvancementCriterionGrantEvent.class, event -> {
+            if (findPlayerArena(event.getPlayer()) != null) {
+                event.setCancelled(true);
+            }
+        }, EventPriority.HIGHEST, true);
 
         // Countdown Task
         api.tasks().repeating("minigame-countdown", 20, 20, () -> {

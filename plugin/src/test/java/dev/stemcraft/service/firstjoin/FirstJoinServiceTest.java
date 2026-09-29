@@ -19,7 +19,6 @@ import java.lang.reflect.Method;
 import java.time.Instant;
 import java.util.Random;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -152,6 +151,104 @@ class FirstJoinServiceTest {
         assertFalse(service.hasActiveSession(player.getUniqueId()));
     }
 
+    @Test
+    void blockedCommandsRepeatQuestionWithoutConsumingAttempt() throws Exception {
+        FirstJoinService service=createService(new FixedRandom(true,1,1));
+        PlayerMock player=server.addPlayer("NewPlayer");
+        service.handleJoin(player);
+        for(String command:new String[]{"/pl","/plugins","/bukkit:plugins"}) {
+            var event=mock(org.bukkit.event.player.PlayerCommandPreprocessEvent.class);
+            when(event.getPlayer()).thenReturn(player);
+            service.handleCommand(event);
+            verify(event).setCancelled(true);
+        }
+        verify(messages,times(3)).info(player,"FIRST_JOIN_COMMAND_BLOCKED");
+        verify(messages,times(4)).info(player,"FIRST_JOIN_REQUIRED","question","2 + 2 = ?");
+        service.processChatResponse(player,"4");
+        assertFalse(service.hasActiveSession(player.getUniqueId()));
+    }
+
+    @Test
+    void botPresentsWelcomeAndTransitionsOnlyAfterCorrectAnswer() throws Exception {
+        FirstJoinService service=createService(new FixedRandom(true,1,1));
+        PlayerMock player=server.addPlayer("NewPlayer");
+        var bot=mock(dev.stemcraft.api.service.stembot.StemBotService.class);
+        var guide=mock(dev.stemcraft.api.service.stembot.StemBotSession.class);
+        when(bot.open(player)).thenReturn(java.util.Optional.of(guide));
+        when(api.stemBot()).thenReturn(bot);
+        when(messages.text(any(),anyString(),any(Object[].class))).thenReturn("Welcome question");
+        when(guide.speak(any())).thenReturn(true);
+        when(guide.active()).thenReturn(true);
+        when(bot.hasAction("first-hub")).thenReturn(true);
+        when(guide.startAction("first-hub")).thenReturn(true);
+        service.handleJoin(player);
+        verify(bot).open(player);
+        verify(guide).follow(true);
+        verify(guide,times(3)).speak("Welcome question");
+        org.mockito.ArgumentCaptor<java.util.function.Consumer<String>> replies=org.mockito.ArgumentCaptor.captor();
+        verify(guide).listen(replies.capture());
+        java.util.function.Consumer<String> reply=replies.getValue();
+        reply.accept("wrong");
+        verify(guide,org.mockito.Mockito.never()).startAction("first-hub");
+        reply.accept("4");
+        verify(guide).startAction("first-hub");
+        verify(guide,org.mockito.Mockito.never()).close();
+        assertFalse(service.hasActiveSession(player.getUniqueId()));
+    }
+
+    @Test
+    void commandsOutsideVerificationAreUntouched() throws Exception {
+        FirstJoinService service=createService(new Random(1));
+        var event=mock(org.bukkit.event.player.PlayerCommandPreprocessEvent.class);
+        when(event.getPlayer()).thenReturn(server.addPlayer());
+        service.handleCommand(event);
+        verify(event,org.mockito.Mockito.never()).setCancelled(true);
+    }
+
+    @Test
+    void movementRequiresAnActiveVerificationActorAndCleanupClosesIt() throws Exception {
+        FirstJoinService service=createService(new FixedRandom(true,1,1));
+        PlayerMock player=server.addPlayer("NewPlayer");
+        service.handleJoin(player);
+        var from=player.getLocation();
+        var to=from.clone().add(5,0,0);
+        var withoutBot=mock(org.bukkit.event.player.PlayerMoveEvent.class);
+        when(withoutBot.getPlayer()).thenReturn(player);
+        when(withoutBot.getTo()).thenReturn(to);
+        service.handleMove(withoutBot);
+        verify(withoutBot).setTo(from);
+        var bot=mock(dev.stemcraft.api.service.stembot.StemBotService.class);
+        var guide=mock(dev.stemcraft.api.service.stembot.StemBotSession.class);
+        when(bot.open(player)).thenReturn(java.util.Optional.of(guide));
+        when(api.stemBot()).thenReturn(bot);
+        when(guide.active()).thenReturn(true);
+        when(bot.hasAction("first-hub")).thenReturn(true);
+        when(guide.startAction("first-hub")).thenReturn(true);
+        service.resumeWelcome(player);
+        var withBot=mock(org.bukkit.event.player.PlayerMoveEvent.class);
+        when(withBot.getPlayer()).thenReturn(player);
+        when(withBot.getTo()).thenReturn(to);
+        service.handleMove(withBot);
+        verify(withBot,org.mockito.Mockito.never()).setTo(any());
+        service.removeSession(player.getUniqueId());
+        verify(guide).close();
+    }
+
+    @Test
+    void missingCompletionActionClosesGuideWithoutBlockingVerification() throws Exception {
+        FirstJoinService service=createService(new FixedRandom(true,1,1));
+        PlayerMock player=server.addPlayer("NewPlayer");
+        var bot=mock(dev.stemcraft.api.service.stembot.StemBotService.class);
+        var guide=mock(dev.stemcraft.api.service.stembot.StemBotSession.class);
+        when(api.stemBot()).thenReturn(bot);
+        when(bot.open(player)).thenReturn(java.util.Optional.of(guide));
+        service.handleJoin(player);
+        service.processChatResponse(player,"4");
+        assertFalse(service.hasActiveSession(player.getUniqueId()));
+        verify(guide).close();
+        verify(guide,org.mockito.Mockito.never()).startAction(anyString());
+    }
+
     private FirstJoinService createService(Random random) throws Exception {
         FirstJoinService service = new FirstJoinService(plugin, api, random);
         setField(service, "minimumNumber", 1);
@@ -160,8 +257,8 @@ class FirstJoinServiceTest {
         setField(service, "timeoutSeconds", 60);
         setField(service, "movementTolerance", 0.5d);
         setField(service, "bypassPermission", "stemcraft.firstjoin.bypass");
-        setField(service, "verifiedKeyId", "human_verified");
         setField(service, "enabled", true);
+        setField(service, "stemBotAction", "first-hub");
         setField(service, "verifiedKey", new NamespacedKey("stemcraft", "human_verified"));
         return service;
     }
@@ -173,6 +270,7 @@ class FirstJoinServiceTest {
     }
 
     private static final class FixedRandom extends Random {
+        @java.io.Serial
         private static final long serialVersionUID = 1L;
         private final boolean firstBoolean;
         private final int[] ints;

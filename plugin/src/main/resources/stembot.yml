@@ -505,9 +505,10 @@ command:
 
 # Automatically run once per player, per configured world.
 # Completion is stored in the player PersistentDataContainer.
+# The main "world" introduction is started by first-join.stembot-action in config.yml.
+# Do not also map it here if FirstJoin should own that introduction.
 first-time:
   world:
-    world: first-hub
     hub: first-hub
     survival: first-survival
     creative: first-creative

@@ -80,6 +80,11 @@ public interface STEMCraftAPI {
      */
     CommandService commands();
 
+    /** Access the optional private STEMBot guide. */
+    default dev.stemcraft.api.service.stembot.StemBotService stemBot() {
+        return dev.stemcraft.api.service.stembot.StemBotService.UNAVAILABLE;
+    }
+
     /** Get the coordinate boss-bar extension service. */
     CoordinateBarService coordinateBar();
 
@@ -241,10 +246,10 @@ public interface STEMCraftAPI {
      * declare STEMCraft as a dependency or soft dependency before accessing it.</p>
      *
      * @return the active API instance, or {@code null} before STEMCraft enables
-     * @example Getting the API
-     * {@code
+     * <p>Example:</p>
+     * <pre>{@code
      * STEMCraftAPI api = STEMCraftAPI.api();
-     * }
+     * }</pre>
      */
     static STEMCraftAPI api() {
         return InstanceHolder.api();

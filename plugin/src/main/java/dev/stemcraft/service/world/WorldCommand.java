@@ -320,7 +320,7 @@ public class WorldCommand {
      */
     public void handleSubCommandDelete(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2, "WORLD_COMMAND_USAGE_DELETE");
-        String name = resolveRequiredWorldAlias(ctx, 1);
+        String name = resolveRequiredWorldAlias(ctx);
 
         World world = Bukkit.getWorld(name);
 
@@ -398,7 +398,7 @@ public class WorldCommand {
      */
     public void handleSubCommandDisplayName(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3, "WORLD_COMMAND_USAGE_DISPLAY_NAME");
-        String worldName = resolveRequiredWorldAlias(ctx, 1);
+        String worldName = resolveRequiredWorldAlias(ctx);
         if (!api.worlds().worldExists(worldName) && Bukkit.getWorld(worldName) == null) {
             ctx.returnError("WORLD_NOT_FOUND", "world", worldName);
             return;
@@ -434,7 +434,7 @@ public class WorldCommand {
      */
     public void handleSubCommandLoad(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2, "WORLD_COMMAND_USAGE_LOAD");
-        String name = resolveRequiredWorldAlias(ctx, 1);
+        String name = resolveRequiredWorldAlias(ctx);
         if (!api.worlds().worldExists(name)) {
             ctx.returnError("WORLD_NOT_FOUND", "world", name);
         }
@@ -457,7 +457,7 @@ public class WorldCommand {
             ctx.returnError("WORLD_COMMAND_USAGE_SETGENERATOR");
             return;
         }
-        String name = resolveRequiredWorldAlias(ctx, 1);
+        String name = resolveRequiredWorldAlias(ctx);
         if (!api.worlds().worldExists(name)) {
             ctx.returnError("WORLD_NOT_FOUND", "world", name);
         }
@@ -487,7 +487,7 @@ public class WorldCommand {
      */
     public void handleSubCommandUnload(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2, "WORLD_COMMAND_USAGE_UNLOAD");
-        String name = resolveRequiredWorldAlias(ctx, 1);
+        String name = resolveRequiredWorldAlias(ctx);
 
         if (!api.worlds().isWorldLoaded(name)) {
             ctx.returnError("WORLD_NOT_LOADED", "world", name);
@@ -580,7 +580,7 @@ public class WorldCommand {
     public void handleSubCommandDuplicate(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(3, "WORLD_COMMAND_USAGE_DUPLICATE");
 
-        String src = resolveRequiredWorldAlias(ctx, 1);
+        String src = resolveRequiredWorldAlias(ctx);
         String dst = ctx.getArg(2);
 
         try {
@@ -668,7 +668,7 @@ public class WorldCommand {
     }
 
     public void handleTransitionCommandList(CommandContext ctx, WorldService.TransitionCommandPhase phase) {
-        String worldName = resolveWorldName(ctx, 1);
+        String worldName = resolveWorldName(ctx);
         int page = ctx.getArgAsInt(2, 1);
         List<Component> lines = buildTransitionCommandLines(worldName, phase, ctx.isPlayer());
 
@@ -691,7 +691,7 @@ public class WorldCommand {
 
     public void handleAddTransitionCommand(CommandContext ctx, WorldService.TransitionCommandPhase phase) {
         ctx.checkArgsSizeAtLeast(3, usageKeyForTransition(phase, "add"));
-        String worldName = resolveWorldName(ctx, 1);
+        String worldName = resolveWorldName(ctx);
         String configuredCommand = ctx.getArgsAsString(2, "").trim();
         if (configuredCommand.isBlank()) {
             ctx.returnUsage();
@@ -709,7 +709,7 @@ public class WorldCommand {
 
     public void handleSetTransitionCommand(CommandContext ctx, WorldService.TransitionCommandPhase phase) {
         ctx.checkArgsSizeAtLeast(4, usageKeyForTransition(phase, "set"));
-        String worldName = resolveWorldName(ctx, 1);
+        String worldName = resolveWorldName(ctx);
         List<String> commands = new ArrayList<>(worldService.getWorldTransitionCommands(worldName, phase));
         if (commands.isEmpty()) {
             ctx.returnError("WORLD_TRANSITION_COMMAND_NONE_SET", "type", transitionLabel(phase), "world", worldName);
@@ -733,7 +733,7 @@ public class WorldCommand {
 
     public void handleRemoveTransitionCommand(CommandContext ctx, WorldService.TransitionCommandPhase phase) {
         ctx.checkArgsSizeAtLeast(3, usageKeyForTransition(phase, "remove"));
-        String worldName = resolveWorldName(ctx, 1);
+        String worldName = resolveWorldName(ctx);
         List<String> commands = new ArrayList<>(worldService.getWorldTransitionCommands(worldName, phase));
         if (commands.isEmpty()) {
             ctx.returnError("WORLD_TRANSITION_COMMAND_NONE_SET", "type", transitionLabel(phase), "world", worldName);
@@ -1066,8 +1066,8 @@ public class WorldCommand {
         return StringUtil.capitalize(StringUtil.beautify(value));
     }
 
-    private @NotNull String resolveWorldName(@NotNull CommandContext ctx, int argIndex) {
-        String requestedName = resolveCurrentWorldAlias(ctx, ctx.getArg(argIndex, null));
+    private @NotNull String resolveWorldName(@NotNull CommandContext ctx) {
+        String requestedName = resolveCurrentWorldAlias(ctx, ctx.getArg(1, null));
         if (requestedName == null || requestedName.isBlank()) {
             if (ctx.isConsole()) {
                 ctx.returnError("WORLD_COMMAND_CONSOLE_WORLD_REQUIRED");
@@ -1086,8 +1086,8 @@ public class WorldCommand {
         return requestedName == null || requestedName.isBlank() ? null : Bukkit.getWorld(requestedName);
     }
 
-    private @NotNull String resolveRequiredWorldAlias(@NotNull CommandContext ctx, int argIndex) {
-        return Objects.requireNonNull(resolveCurrentWorldAlias(ctx, ctx.getArg(argIndex)));
+    private @NotNull String resolveRequiredWorldAlias(@NotNull CommandContext ctx) {
+        return Objects.requireNonNull(resolveCurrentWorldAlias(ctx, ctx.getArg(1)));
     }
 
     private @Nullable String resolveCurrentWorldAlias(@NotNull CommandContext ctx, @Nullable String requestedName) {
@@ -1145,7 +1145,6 @@ public class WorldCommand {
                     ))
                     .append(Component.text(" "))
                     .append(deleteAction(
-                        "[Del]",
                         "/world remove" + transitionRootLabel(phase) + "command " + worldName + " " + indexedCommand.index(),
                         "Delete command #" + indexedCommand.index()
                     ));
@@ -1217,8 +1216,8 @@ public class WorldCommand {
             .hoverEvent(HoverEvent.showText(Component.text(hover)));
     }
 
-    private Component deleteAction(String label, String command, String hover) {
-        return Component.text(label, NamedTextColor.RED)
+    private Component deleteAction(String command, String hover) {
+        return Component.text("[Del]", NamedTextColor.RED)
             .clickEvent(ClickEvent.runCommand(command))
             .hoverEvent(HoverEvent.showText(Component.text(hover)));
     }
@@ -1233,9 +1232,8 @@ public class WorldCommand {
         return value ? "yes" : "no";
     }
 
-    @SuppressWarnings("deprecation")
     private static boolean isPvpEnabled(@NotNull World world) {
-        return world.getPVP();
+        return world.getGameRuleValue(org.bukkit.GameRules.PVP);
     }
 
     private String formatElapsed(long elapsedNanos) {

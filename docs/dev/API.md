@@ -163,11 +163,15 @@ The minigame arena API also includes shared supply-drop helpers:
 
 - `MiniGameArena#findRandomSupplyDropLocation(...)`
 - `MiniGameArena#spawnSupplyDropCrate(...)`
+- `MiniGameArena#trySpawnSupplyDropCrate(...)`
 - `MiniGameArena#clearAllSupplyDrops()`
 
 These are used by BedWars and Bridge to share the same crate/parachute drop
 presentation while leaving item selection and drop timing in the minigame
-handlers.
+handlers. Location searches exclude a configured lobby region automatically and
+also support caller-supplied excluded regions and suitability predicates. The
+boolean `trySpawnSupplyDropCrate(...)` variants report whether the framework
+accepted the crate, so handlers can announce only successfully created drops.
 
 The minigame arena API also includes shared player-pull helpers:
 

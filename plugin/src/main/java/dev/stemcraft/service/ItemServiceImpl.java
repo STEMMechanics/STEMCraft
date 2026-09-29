@@ -41,7 +41,14 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.EventPriority;
+import org.bukkit.event.inventory.InventoryCloseEvent;
+import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.block.Campfire;
+import org.bukkit.block.Container;
+import org.bukkit.block.DoubleChest;
+import org.bukkit.entity.Vehicle;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.CampfireRecipe;
 import org.bukkit.GameMode;
 import org.bukkit.inventory.ItemStack;
@@ -98,6 +105,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
         registerGiveCommand();
         api.events().register(PlayerInteractEvent.class, this::handleCampfireInput, EventPriority.HIGHEST, false);
         api.events().register(PlayerItemConsumeEvent.class, this::handleConfiguredFood, EventPriority.MONITOR, true);
+        api.events().register(InventoryCloseEvent.class, this::handleInventoryClose, EventPriority.HIGHEST, false);
         api.events().register(PlayerDropItemEvent.class, (event) -> {
             ItemStack item = event.getItemDrop().getItemStack();
             ItemMeta meta = item.getItemMeta();
@@ -123,6 +131,22 @@ public class ItemServiceImpl extends BaseService implements ItemService {
                 event.setCancelled(true);
             }
         });
+    }
+
+    /** Remove disposable items left in storage, including Bedrock transfers without click events. */
+    void handleInventoryClose(InventoryCloseEvent event) {
+        Inventory inventory = event.getInventory(); // Only the upper/container inventory.
+        InventoryHolder holder = inventory.getHolder(false);
+        // Avoid player crafting inventories and virtual plugin menus, which may contain display copies.
+        if (inventory.getType() != InventoryType.ENDER_CHEST && !(holder instanceof Container)
+            && !(holder instanceof DoubleChest) && !(holder instanceof Vehicle)) return;
+
+        for (int slot = 0; slot < inventory.getSize(); slot++) {
+            ItemStack item = inventory.getItem(slot);
+            if (item != null && !item.getType().isAir() && getAttrib(item, "destroy-on-drop", Integer.class, 0) == 1) {
+                inventory.setItem(slot, null);
+            }
+        }
     }
 
     @Override

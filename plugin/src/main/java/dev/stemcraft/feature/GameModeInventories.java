@@ -24,7 +24,6 @@ import dev.stemcraft.api.service.playerreset.*;
 
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.util.PlayerUtil;
-import dev.stemcraft.api.util.WorldUtil;
 import org.bukkit.GameMode;
 import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
@@ -42,8 +41,8 @@ import org.jetbrains.annotations.NotNull;
 
 /**
  * Feature that manages separate inventories for players based on their game mode
- * and the world group they are in. World groups are determined by stripping
- * "_nether" and "_the_end" suffixes from world names.
+ * and the world group they are in. A world's inventory-group overrides the
+ * default grouping by the prefix before the first underscore.
  */
 @SuppressWarnings("unused")
 public class GameModeInventories extends BaseFeature {
@@ -101,6 +100,26 @@ public class GameModeInventories extends BaseFeature {
         saveOnlineProfiles();
     }
 
+    @Override
+    public void onReload() {
+        saveOnlineProfiles();
+        super.onReload();
+        for (Player player : org.bukkit.Bukkit.getOnlinePlayers()) {
+            if (!isInMinigame(player)) {
+                switchProfile(player, worldGroup(player.getWorld()), player.getGameMode());
+            }
+        }
+    }
+
+    String worldGroup(World world) {
+        String configured = getRootConfigSection()
+            .getString("worlds." + world.getName() + ".inventory-group", "").trim();
+        if (!configured.isEmpty()) return configured;
+        String name = world.getName();
+        int separator = name.indexOf('_');
+        return separator > 0 ? name.substring(0, separator) : name;
+    }
+
     /**
      * Handles player join events, applying or creating the appropriate profile.
      *
@@ -111,7 +130,7 @@ public class GameModeInventories extends BaseFeature {
         if (isInMinigame(player)) {
             return;
         }
-        String baseName = WorldUtil.baseName(player.getWorld());
+        String baseName = worldGroup(player.getWorld());
         GameMode gm = player.getGameMode();
         applyOrCreateProfile(player, baseName, gm);
         activeProfiles.put(player.getUniqueId(), new ActiveProfile(baseName, gm));
@@ -143,7 +162,7 @@ public class GameModeInventories extends BaseFeature {
         }
         World to = player.getWorld();
         GameMode gm = player.getGameMode();
-        String toBase = WorldUtil.baseName(to);
+        String toBase = worldGroup(to);
         switchProfile(player, toBase, gm);
     }
 
@@ -162,7 +181,7 @@ public class GameModeInventories extends BaseFeature {
             return;
         }
         GameMode newGm = event.getNewGameMode();
-        String baseName = WorldUtil.baseName(player.getWorld());
+        String baseName = worldGroup(player.getWorld());
         switchProfile(player, baseName, newGm);
     }
 

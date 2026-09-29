@@ -25,7 +25,6 @@ import org.bukkit.event.player.PlayerKickEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerPortalEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.jetbrains.annotations.NotNull;
 
 public final class FirstJoinListener {
     private static final PlainTextComponentSerializer PLAIN = PlainTextComponentSerializer.plainText();
@@ -42,6 +41,12 @@ public final class FirstJoinListener {
 
     public void register() {
         api.events().register(PlayerJoinEvent.class, event -> service.handleJoin(event.getPlayer()));
+        api.events().register(org.bukkit.event.player.PlayerChangedWorldEvent.class, event -> {
+            if(service.hasActiveSession(event.getPlayer().getUniqueId()))
+                event.getPlayer().getScheduler().run(plugin,
+                    task -> service.resumeWelcome(event.getPlayer()),
+                    () -> service.removeSession(event.getPlayer().getUniqueId()));
+        }, EventPriority.MONITOR, false);
         api.events().register(PlayerQuitEvent.class, event -> service.removeSession(event.getPlayer().getUniqueId()));
         api.events().register(PlayerKickEvent.class, event -> service.removeSession(event.getPlayer().getUniqueId()));
 
@@ -52,12 +57,14 @@ public final class FirstJoinListener {
             }
 
             event.setCancelled(true);
+            event.viewers().clear();
+            if(service.guideHandlesChat(player.getUniqueId())) return;
             String input = PLAIN.serialize(event.message()).trim();
             player.getScheduler().run(plugin, task -> service.processChatResponse(player, input), () -> service.removeSession(player.getUniqueId()));
         }, EventPriority.LOWEST, false);
 
         api.events().register(PlayerMoveEvent.class, service::handleMove, EventPriority.HIGHEST, false);
-        api.events().register(PlayerCommandPreprocessEvent.class, event -> service.cancelIfActive(event.getPlayer(), event), EventPriority.HIGHEST, false);
+        api.events().register(PlayerCommandPreprocessEvent.class, service::handleCommand, EventPriority.HIGHEST, false);
         api.events().register(BlockBreakEvent.class, event -> service.cancelIfActive(event.getPlayer(), event), EventPriority.HIGHEST, false);
         api.events().register(BlockPlaceEvent.class, event -> service.cancelIfActive(event.getPlayer(), event), EventPriority.HIGHEST, false);
         api.events().register(PlayerInteractEvent.class, event -> service.cancelIfActive(event.getPlayer(), event), EventPriority.HIGHEST, false);

@@ -1,6 +1,8 @@
 # Custom dimensions and Survival portals
 
-STEMCraft includes four experimental generators, each with one current implementation for `stemcraft:deep`, `stemcraft:wasteland`, `stemcraft:skylands`, and `stemcraft:faraway`. Short IDs also work. They use the existing world service, command permissions, configuration storage, and plugin lifecycle. No separate plugin, NMS, external noise library, or resource pack is required.
+STEMCraft includes five experimental generators, each with one current implementation for `stemcraft:deep`, `stemcraft:wasteland`, `stemcraft:skylands`, `stemcraft:faraway`, and `stemcraft:underhalls`. Short IDs also work. They use the existing world service, command permissions, configuration storage, and plugin lifecycle. No separate plugin, NMS, external noise library, or resource pack is required.
+
+The Underhalls uses a separate yellow end-stone maze generator and one-way doorway routes; see [The Underhalls](underhalls.md) for setup, protection and exit-room behavior.
 
 ## Test worlds
 

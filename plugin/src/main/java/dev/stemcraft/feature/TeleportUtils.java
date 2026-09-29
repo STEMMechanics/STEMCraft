@@ -134,7 +134,7 @@ public class TeleportUtils extends BaseFeature {
             if (options.updateWorldLastLocation()) {
                 setWorldLastLocation(player.getUniqueId(), to);
             }
-        });
+        }, EventPriority.MONITOR, true);
 
         api.events().register(PlayerTeleportEvent.class, event -> {
             Location to = event.getTo();
@@ -214,7 +214,7 @@ public class TeleportUtils extends BaseFeature {
                 .usage("TPHERE_USAGE")
                 .permission("stemcraft.command.tphere")
                 .description("TPHERE_DESCRIPTION")
-                .tabCompletion("{player}")
+                .tabCompletion("{players}")
                 .executor((plugin, cmd, ctx) -> {
                     if (!(ctx.getSender() instanceof Player sender)) {
                         cmd.error(ctx.getSender(), "COMMAND_PLAYER_ONLY");
@@ -226,15 +226,17 @@ public class TeleportUtils extends BaseFeature {
                         return;
                     }
 
-                    Player target = ctx.getPlayer(0);
-                    if (target == null) {
+                    List<Player> targets = ctx.getPlayers(0);
+                    if (targets.isEmpty()) {
                         cmd.error("PLAYER_NOT_FOUND", "player", ctx.args().getFirst());
                         return;
                     }
 
-                    setBackLocation(target.getUniqueId(), target.getLocation());
-                    target.teleport(sender.getLocation());
-                    cmd.info(ctx.getSender(), "TPHERE_SUCCESS", "player", target.getName());
+                    for (Player target : targets) {
+                        setBackLocation(target.getUniqueId(), target.getLocation());
+                        target.teleport(sender.getLocation());
+                        cmd.info(ctx.getSender(), "TPHERE_SUCCESS", "player", target.getName());
+                    }
                 })
                 .register(STEMCraft.getPlugin());
 
@@ -242,13 +244,14 @@ public class TeleportUtils extends BaseFeature {
                 .usage("TPSPAWN_USAGE")
                 .permission("stemcraft.command.tpspawn")
                 .description("TPSPAWN_DESCRIPTION")
+                .tabCompletion("{world}", "{players}")
                 .executor((plugin, cmd, ctx) -> {
                     if (ctx.isConsole() && ctx.args().size() < 2) {
                         ctx.returnError("CONSOLE_PLAYER_REQUIRED");
                         return;
                     }
 
-                    Player target;
+                    List<Player> targets;
                     World world;
 
                     if (ctx.args().isEmpty()) {
@@ -257,7 +260,7 @@ public class TeleportUtils extends BaseFeature {
                             return;
                         }
 
-                        target = sender;
+                        targets = List.of(sender);
                         world = sender.getWorld();
                     } else {
                         String worldName = ctx.getArg(0);
@@ -267,10 +270,10 @@ public class TeleportUtils extends BaseFeature {
                             return;
                         }
 
-                        target = ctx.isConsole()
-                                ? ctx.getPlayer(1)
-                                : ctx.getPlayer(1, ctx.getSender());
-                        if (target == null) {
+                        targets = ctx.args().size() >= 2
+                                ? ctx.getPlayers(1)
+                                : (ctx.getSender() instanceof Player player ? List.of(player) : List.of());
+                        if (targets.isEmpty()) {
                             ctx.returnError("PLAYER_NOT_FOUND", "player", ctx.getArg(1));
                             return;
                         }
@@ -278,9 +281,11 @@ public class TeleportUtils extends BaseFeature {
                         world = requestedWorld;
                     }
 
-                    setBackLocation(target.getUniqueId(), target.getLocation());
-                    PlayerUtil.teleport(target, world.getSpawnLocation());
-                    cmd.info(ctx.getSender(), "TPSPAWN_SUCCESS", "player", target.getName(), "world", world.getName());
+                    for (Player target : targets) {
+                        setBackLocation(target.getUniqueId(), target.getLocation());
+                        PlayerUtil.teleport(target, world.getSpawnLocation());
+                        cmd.info(ctx.getSender(), "TPSPAWN_SUCCESS", "player", target.getName(), "world", world.getName());
+                    }
                 })
                 .register(STEMCraft.getPlugin());
 
@@ -417,6 +422,7 @@ public class TeleportUtils extends BaseFeature {
                 .permission("stemcraft.command.spawn")
                 .access(dev.stemcraft.permission.PlayerCommandAccess::spawn)
                 .description("SPAWN_DESCRIPTION")
+                .tabCompletion("{world}", "{players}")
                 .executor((plugin, cmd, ctx) -> {
                     if (ctx.args().isEmpty()) {
                         if (!(ctx.getSender() instanceof Player sender)) {
@@ -436,23 +442,24 @@ public class TeleportUtils extends BaseFeature {
                         return;
                     }
 
-                    Player target;
+                    List<Player> targets;
                     if (ctx.args().size() >= 2) {
-                        OfflinePlayer off = ctx.getArgAsOfflinePlayer(1);
-                        if (off == null || !off.isOnline()) {
+                        targets = ctx.getPlayers(1);
+                        if (targets.isEmpty()) {
                             cmd.error("PLAYER_NOT_FOUND", "player", ctx.getArg(1));
                             return;
                         }
-                        target = off.getPlayer();
                     } else {
                         if (!(ctx.getSender() instanceof Player sender)) {
                             cmd.error(ctx.getSender(), "COMMAND_PLAYER_ONLY");
                             return;
                         }
-                        target = sender;
+                        targets = List.of(sender);
                     }
 
-                    teleportToWorldSpawn(cmd, ctx.getSender(), world, target);
+                    for (Player target : targets) {
+                        teleportToWorldSpawn(cmd, ctx.getSender(), world, target);
+                    }
                 })
                 .register(STEMCraft.getPlugin());
 
@@ -461,7 +468,7 @@ public class TeleportUtils extends BaseFeature {
                 .usage("TPWORLD_USAGE")
                 .permission("stemcraft.command.tpworld")
                 .description("TPWORLD_DESCRIPTION")
-                .tabCompletion("{world}", "{player}")
+                .tabCompletion("{world}", "{players}")
                 .executor((plugin, cmd, ctx) -> {
                     ctx.checkArgsSizeAtLeast(1);
 
@@ -475,21 +482,24 @@ public class TeleportUtils extends BaseFeature {
                         ctx.returnError("WORLD_NOT_FOUND", "world", worldName);
                     }
 
-                    Player targetPlayer = ctx.getPlayer(1, ctx.getSender());
-                    if (targetPlayer == null) {
+                    List<Player> targets = ctx.args().size() >= 2
+                            ? ctx.getPlayers(1)
+                            : (ctx.getSender() instanceof Player player ? List.of(player) : List.of());
+                    if (targets.isEmpty()) {
                         ctx.returnError("PLAYER_NOT_FOUND", "player", ctx.getArg(1));
                     }
 
-                    Location destination = getWorldLastLocation(targetPlayer.getUniqueId(), world.getName());
-                    if (destination == null) {
-                        destination = world.getSpawnLocation();
-                        PlayerUtil.teleport(targetPlayer, destination);
-                        ctx.returnInfo("TPWORLD_SUCCESS_SPAWN", "world", worldName);
-                        return;
+                    for (Player targetPlayer : targets) {
+                        Location destination = getWorldLastLocation(targetPlayer.getUniqueId(), world.getName());
+                        if (destination == null) {
+                            destination = world.getSpawnLocation();
+                            PlayerUtil.teleport(targetPlayer, destination);
+                            cmd.info(ctx.getSender(), "TPWORLD_SUCCESS_SPAWN", "world", worldName);
+                        } else {
+                            PlayerUtil.teleport(targetPlayer, destination);
+                            cmd.info(ctx.getSender(), "TPWORLD_SUCCESS_LAST", "world", worldName);
+                        }
                     }
-
-                    PlayerUtil.teleport(targetPlayer, destination);
-                    ctx.returnInfo("TPWORLD_SUCCESS_LAST", "world", worldName);
                 })
                 .register(STEMCraft.getPlugin());
 
@@ -498,7 +508,7 @@ public class TeleportUtils extends BaseFeature {
                 .usage("TPWORLDSPAWN_USAGE")
                 .permission("stemcraft.command.tpworldspawn")
                 .description("TPWORLDSPAWN_DESCRIPTION")
-                .tabCompletion("{world}", "{player}")
+                .tabCompletion("{world}", "{players}")
                 .executor((plugin, cmd, ctx) -> {
                     ctx.checkArgsSizeAtLeast(1);
 
@@ -512,13 +522,17 @@ public class TeleportUtils extends BaseFeature {
                         ctx.returnError("WORLD_NOT_FOUND", "world", worldName);
                     }
 
-                    Player targetPlayer = ctx.getPlayer(1, ctx.getSender());
-                    if (targetPlayer == null) {
+                    List<Player> targets = ctx.args().size() >= 2
+                            ? ctx.getPlayers(1)
+                            : (ctx.getSender() instanceof Player player ? List.of(player) : List.of());
+                    if (targets.isEmpty()) {
                         ctx.returnError("PLAYER_NOT_FOUND", "player", ctx.getArg(1));
                     }
 
-                    PlayerUtil.teleport(targetPlayer, world.getSpawnLocation());
-                    ctx.returnInfo("TPWORLDSPAWN_SUCCESS", "world", worldName);
+                    for (Player targetPlayer : targets) {
+                        PlayerUtil.teleport(targetPlayer, world.getSpawnLocation());
+                        cmd.info(ctx.getSender(), "TPWORLDSPAWN_SUCCESS", "world", worldName);
+                    }
                 })
                 .register(STEMCraft.getPlugin());
 
@@ -527,7 +541,7 @@ public class TeleportUtils extends BaseFeature {
                 .usage("TPWORLDLAST_USAGE")
                 .permission("stemcraft.command.tpworldlast")
                 .description("TPWORLDLAST_DESCRIPTION")
-                .tabCompletion("{world}", "{player}")
+                .tabCompletion("{world}", "{players}")
                 .executor((plugin, cmd, ctx) -> {
                     ctx.checkArgsSizeAtLeast(1);
 
@@ -536,28 +550,41 @@ public class TeleportUtils extends BaseFeature {
                     }
 
                     String worldBase = WorldUtil.baseName(ctx.getArg(0));
-                    Player targetPlayer = ctx.getPlayer(1, ctx.getSender());
-                    if (targetPlayer == null) {
+                    List<Player> targets = ctx.args().size() >= 2
+                            ? ctx.getPlayers(1)
+                            : (ctx.getSender() instanceof Player player ? List.of(player) : List.of());
+                    if (targets.isEmpty()) {
                         ctx.returnError("PLAYER_NOT_FOUND", "player", ctx.getArg(1));
                     }
 
-                    Location destination = getLastLocationInWorldSet(targetPlayer.getUniqueId(), worldBase);
-                    if (destination == null || destination.getWorld() == null) {
-                        World fallbackWorld = Bukkit.getWorld(worldBase);
-                        if (fallbackWorld == null) {
-                            fallbackWorld = api.worlds().loadWorld(worldBase);
-                        }
-                        if (fallbackWorld == null) {
-                            ctx.returnError("WORLD_NOT_FOUND", "world", worldBase);
+                    for (Player targetPlayer : targets) {
+                        if (inWorldSet(targetPlayer.getWorld().getName(), worldBase)) {
+                            if (targets.size() == 1) {
+                                ctx.returnInfo("You are already in this world group.");
+                                return;
+                            }
+                            cmd.info(targetPlayer, "You are already in this world group.");
+                            continue;
                         }
 
-                        PlayerUtil.teleport(targetPlayer, fallbackWorld.getSpawnLocation());
-                        ctx.returnInfo("TPWORLDLAST_SUCCESS_SPAWN", "world", fallbackWorld.getName());
-                        return;
+                        Location destination = getLastLocationInWorldSet(targetPlayer.getUniqueId(), worldBase);
+                        if (destination == null || destination.getWorld() == null) {
+                            World fallbackWorld = Bukkit.getWorld(worldBase);
+                            if (fallbackWorld == null && api.worlds().worldExists(worldBase)) {
+                                fallbackWorld = api.worlds().loadWorld(worldBase);
+                            }
+                            if (fallbackWorld == null) {
+                                ctx.returnError("WORLD_NOT_FOUND", "world", worldBase);
+                            }
+
+                            PlayerUtil.teleport(targetPlayer, fallbackWorld.getSpawnLocation());
+                            cmd.info(ctx.getSender(), "TPWORLDLAST_SUCCESS_SPAWN", "world", fallbackWorld.getName());
+                            continue;
+                        }
+
+                        PlayerUtil.teleport(targetPlayer, destination);
+                        cmd.info(ctx.getSender(), "TPWORLDLAST_SUCCESS_LAST", "world", destination.getWorld().getName());
                     }
-
-                    PlayerUtil.teleport(targetPlayer, destination);
-                    ctx.returnInfo("TPWORLDLAST_SUCCESS_LAST", "world", destination.getWorld().getName());
                 })
                 .register(STEMCraft.getPlugin());
 
@@ -889,7 +916,10 @@ public class TeleportUtils extends BaseFeature {
         }
 
         String worldName = loc.getWorld().getName().toLowerCase(Locale.ROOT);
-        long now = System.currentTimeMillis();
+        // Consecutive portal departure/arrival events can occur in the same millisecond.
+        long previous = worldLastLocations.getOrDefault(uuid, Map.of()).values().stream()
+                .mapToLong(WorldLastLocation::updatedAt).max().orElse(0L);
+        long now = Math.max(System.currentTimeMillis(), previous + 1);
 
         WorldLastLocation record = new WorldLastLocation(
                 worldName,
@@ -956,7 +986,7 @@ public class TeleportUtils extends BaseFeature {
     }
 
     /**
-     * Get a player's most recent location across a world-set (overworld/nether/end).
+     * Get a player's most recent location across a base world and all of its underscore-prefixed dimensions.
      *
      * @param uuid Player UUID.
      * @param worldBase Base world name.
@@ -973,12 +1003,9 @@ public class TeleportUtils extends BaseFeature {
         }
 
         String base = WorldUtil.baseName(worldBase).toLowerCase(Locale.ROOT);
-        String[] candidates = new String[]{base, base + "_nether", base + "_the_end"};
-
         WorldLastLocation best = null;
-        for (String worldName : candidates) {
-            WorldLastLocation record = byWorld.get(worldName);
-            if (record == null) {
+        for (WorldLastLocation record : byWorld.values()) {
+            if (!inWorldSet(record.worldName(), base)) {
                 continue;
             }
 
@@ -990,13 +1017,27 @@ public class TeleportUtils extends BaseFeature {
         return best == null ? null : toLocation(best);
     }
 
+    static boolean inWorldSet(String worldName, String base) {
+        String name = worldName.toLowerCase(Locale.ROOT);
+        String prefix = WorldUtil.baseName(base).toLowerCase(Locale.ROOT);
+        return name.equals(prefix) || name.startsWith(prefix + "_");
+    }
+
+    @Override public void onSave() {
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            setWorldLastLocation(player.getUniqueId(), player.getLocation());
+        }
+    }
+
+    @Override public void onDisable() { onSave(); }
+
     private Location toLocation(WorldLastLocation record) {
         if (record == null) {
             return null;
         }
 
         World world = Bukkit.getWorld(record.worldName());
-        if (world == null) {
+        if (world == null && api.worlds().worldExists(record.worldName())) {
             world = api.worlds().loadWorld(record.worldName());
         }
         if (world == null) {

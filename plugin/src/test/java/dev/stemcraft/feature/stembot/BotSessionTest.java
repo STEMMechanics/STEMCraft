@@ -18,6 +18,7 @@ class BotSessionTest {
     private World world;
     private Location here;
     private List<String> output;
+    private List<String> navigationDiagnostics;
     private BotSession session;
     private java.util.function.Consumer<Boolean> pendingCallback;
     private int callbackCancels;
@@ -41,9 +42,12 @@ class BotSessionTest {
 
         actor=mock(BotActor.class);
         when(actor.valid()).thenReturn(true);
+        when(actor.navigating()).thenReturn(true);
+        when(actor.findRoute(any())).thenReturn(List::of);
         when(actor.location()).thenAnswer(i->here.clone());
 
         output=new ArrayList<>();
+        navigationDiagnostics=new ArrayList<>();
 
         var speech=new BotScript.SpeechSettings(
             true,"block.note_block.bit",.2f,1.2f,1.5f,
@@ -69,6 +73,7 @@ class BotSessionTest {
             "world",
             "start",
             new BotSession.Output() {
+                public void navigationDiagnostic(String message) { navigationDiagnostics.add(message); }
                 public Runnable await(String key, java.util.function.Consumer<Boolean> result) {
                     pendingCallback = result;
                     if (immediateResult != null) result.accept(immediateResult);
@@ -78,6 +83,71 @@ class BotSessionTest {
                 public int talk(String text) { output.add(text); return 10; }
             }
         );
+    }
+
+    @Test void verificationFollowsWithoutRunningTourOrAcceptingDismissal() throws Exception {
+        var scriptField=BotSession.class.getDeclaredField("script");
+        scriptField.setAccessible(true);
+        var script=(BotScript)scriptField.get(session);
+        session=new BotSession(script,actor,"world",null,new BotSession.Output() {
+            public void say(String text) { output.add(text); }
+            public int talk(String text) { output.add(text); return 1; }
+        });
+        session.follow(true);
+        Location owner=here.clone().add(20,0,0);
+        session.tick(owner);
+        verify(actor).move(owner,0.9);
+        assertTrue(session.chatEngaged(),"Verification stays private outside normal chat distance");
+        session.input("bye");
+        session.input("tour");
+        assertTrue(session.controlled());
+        assertTrue(output.isEmpty());
+        session.releaseControl("start");
+        assertFalse(session.controlled());
+        session.tick(here);
+        assertTrue(output.contains("hello"));
+    }
+
+    private void controlSession() throws Exception {
+        var field=BotSession.class.getDeclaredField("script");
+        field.setAccessible(true);
+        var script=(BotScript)field.get(session);
+        session=new BotSession(script,actor,"world",null,new BotSession.Output() {
+            public void say(String text) { output.add(text); }
+            public int talk(String text) { output.add(text);return 1; }
+        });
+    }
+
+    @Test void controlledMoveCanWaitForPlayerOrProceedIndependently() throws Exception {
+        controlSession();
+        Location target=here.clone().add(30,0,0);
+        Location farOwner=here.clone().add(-20,0,0);
+        assertTrue(session.move(target,true));
+        session.tick(farOwner);
+        verify(actor,never()).move(any(),anyDouble());
+        session.tick(here);
+        verify(actor).move(target,.9);
+        clearInvocations(actor);
+        assertTrue(session.move(target,false));
+        session.tick(farOwner);
+        verify(actor).move(target,.9);
+    }
+
+    @Test void teleportCancelsMovementAndRejectsInvalidWorld() throws Exception {
+        controlSession();
+        Location destination=here.clone().add(5,1,0);
+        when(actor.teleport(destination)).thenReturn(true);
+        assertTrue(session.move(here.clone().add(30,0,0),false));
+        assertTrue(session.teleport(destination));
+        clearInvocations(actor);
+        session.tick(here);
+        verify(actor,never()).move(any(),anyDouble());
+        World elsewhere=mock(World.class);
+        when(elsewhere.getName()).thenReturn("elsewhere");
+        assertFalse(session.teleport(new Location(elsewhere,1,64,1)));
+        assertFalse(session.teleport(new Location(world,Double.NaN,64,0)));
+        assertFalse(session.move(new Location(elsewhere,1,64,1),false));
+        verify(actor,never()).teleport(any());
     }
 
     @Test void providerSuccessAdvancesButTypedSuccessCannotFakeIt() {
@@ -219,6 +289,83 @@ class BotSessionTest {
     }
 
     @Test
+    void stoppedNavigationStartsRecoveryWithinHalfASecondWithoutRestarting() {
+        setUp(0, List.of("walk:10 64 0", "say:arrived"));
+        when(actor.navigating()).thenReturn(false);
+        session.tick(here);
+        session.tick(here);
+        verify(actor, never()).findRoute(any());
+        session.tick(here);
+        verify(actor).findRoute(new Location(world,10,64,0));
+        verify(actor, times(1)).move(any(), anyDouble());
+        assertFalse(output.contains("arrived"));
+    }
+
+    @Test
+    void activeButStationaryNavigationStartsRecoveryWithinThreeSeconds() {
+        setUp(0, List.of("walk:10 64 0", "say:arrived"));
+        when(actor.navigating()).thenReturn(true);
+        session.tick(here);
+        for(int i=0;i<11;i++) session.tick(here);
+        verify(actor, never()).findRoute(any());
+        session.tick(here);
+        verify(actor).findRoute(any());
+    }
+
+    @Test
+    void movingAwayFromTheDestinationOnADetourDoesNotTriggerRecovery() {
+        setUp(0, List.of("walk:10 64 0", "say:arrived"));
+        session.tick(here);
+        for(int i=0;i<20;i++) {
+            here.add(-1, 0, 0);
+            session.tick(here);
+        }
+        verify(actor, never()).findRoute(any());
+        verify(actor, times(1)).move(any(), anyDouble());
+    }
+
+    @Test
+    void loggedStairApproachUsesDirectMovementAndKeepsTheRouteUntilTheCornerIsReached() {
+        setUp(0, List.of("walk:-871 85 346", "say:arrived"));
+        here = new Location(world, -817.5, 70, 307.5);
+        Location corner = new Location(world, -817.5, 70, 302.5);
+        Location stair = new Location(world, -816.5, 71, 302.5);
+        when(actor.findRoute(any())).thenReturn(() -> List.of(corner, stair));
+        when(actor.canNavigateTo(any())).thenReturn(true);
+        for(int i=0;i<14;i++) session.tick(here);
+        verify(actor).moveWaypoint(corner, .9);
+        verify(actor, never()).move(corner, .9);
+
+        here.setZ(303.62); // Actual stopping point reported by the server.
+        session.tick(here);
+        verify(actor, never()).moveWaypoint(stair, .9);
+        verify(actor, times(1)).findRoute(any());
+
+        here.setZ(302.6);
+        session.tick(here);
+        verify(actor).moveWaypoint(stair, .9);
+        verify(actor, times(1)).findRoute(any());
+        assertFalse(output.contains("arrived"));
+    }
+
+    @Test
+    void stoppedStairWaypointLogsItsPositionBeforeSearchingAgain() {
+        setUp(0, List.of("walk:10 70 0", "say:arrived"));
+        Location step = new Location(world, 2.5, 65, .5);
+        when(actor.findRoute(any())).thenReturn(() -> List.of(step));
+        when(actor.canNavigateTo(step)).thenReturn(true);
+        for(int i=0;i<14;i++) session.tick(here);
+        when(actor.navigating()).thenReturn(false);
+        session.tick(here);
+        session.tick(here);
+        verify(actor, times(2)).findRoute(any());
+        verify(actor, times(1)).moveWaypoint(step, .9);
+        assertTrue(navigationDiagnostics.stream().anyMatch(line -> line.contains("Citizens stopped short")
+            && line.contains("waypoint=2.50,65.00,0.50 (1/1)")));
+        assertFalse(output.contains("arrived"));
+    }
+
+    @Test
     void stalledWalkCanBeSkippedWithoutRepeatingIt() {
         for(int i=0;i<45;i++) session.tick(here);
         assertTrue(output.contains("stuck"));
@@ -244,36 +391,95 @@ class BotSessionTest {
     }
 
     @Test
-    void stalledWalkUsesReachableWaypointThenResumesOriginalDestination() {
-        setUp(0,List.of("walk:10 64 0", "listen:yes -> done"));
-        Location blocked = new Location(world, -2, 64, 0);
-        Location landing = new Location(world, -4, 65, 0);
-        when(actor.recoveryWaypoints(any())).thenReturn(List.of(blocked, landing));
-        when(actor.canNavigateTo(landing)).thenReturn(true);
-        for(int i=0;i<41;i++) session.tick(here);
+    void stalledWalkFollowsWholeRouteIncludingBacktrackingAndElevation() {
+        setUp(0,List.of("walk:10 68 0", "listen:yes -> done"));
+        Location entrance = new Location(world, -4, 64, 0);
+        Location landing = new Location(world, -4, 68, 0);
+        Location exit = new Location(world, 2, 68, 0);
+        when(actor.findRoute(any())).thenReturn(() -> List.of(entrance, landing, exit));
+        when(actor.canNavigateTo(any())).thenReturn(true);
+        for(int i=0;i<14;i++) session.tick(here);
+        verify(actor).moveWaypoint(entrance, .9);
+        here=entrance;
         clearInvocations(actor);
         session.tick(here);
-        verify(actor).canNavigateTo(blocked);
-        verify(actor,never()).canNavigateTo(landing);
-        session.tick(here);
-        verify(actor).move(landing, .9);
-        assertEquals(1, output.stream().filter("scanning"::equals).count());
-        assertFalse(output.contains("stuck"));
+        verify(actor).moveWaypoint(landing, .9);
+        verify(actor,never()).move(new Location(world,10,68,0), .9);
         here=landing;
+        session.tick(here);
+        verify(actor).moveWaypoint(exit, .9);
+        here=exit;
+        session.tick(here);
+        verify(actor).move(new Location(world,10,68,0), .9);
+        assertFalse(output.contains("stuck"));
+    }
+
+    @Test
+    void finishesLandingBeforeTurningOntoSecondStairFlight() {
+        setUp(0,List.of("walk:10 70 0", "say:arrived"));
+        Location landing = new Location(world, .5, 66, 2.5);
+        Location secondFlight = new Location(world, 1.5, 67, 2.5);
+        when(actor.findRoute(any())).thenReturn(() -> List.of(landing, secondFlight));
+        when(actor.canNavigateTo(landing)).thenReturn(true);
+        // The next flight is reachable from the landing, but not from the lower tread.
+        when(actor.canNavigateTo(secondFlight)).thenAnswer(i -> here.distanceSquared(landing) < .04);
+        for(int i=0;i<14;i++) session.tick(here);
+        verify(actor).moveWaypoint(landing, .9);
+        here = new Location(world, .5, 65.5, 2);
         clearInvocations(actor);
         session.tick(here);
-        verify(actor).move(new Location(world,10,64,0), .9);
-        here=new Location(world,10,64,0);
+        verify(actor,never()).canNavigateTo(secondFlight);
+        assertFalse(output.contains("stuck"));
+        here = landing.clone().add(0, 0, -.1);
         session.tick(here);
-        session.input("yes");
+        verify(actor).moveWaypoint(secondFlight, .9);
+        assertFalse(output.contains("arrived"));
+    }
+
+    @Test
+    void blockedSecondSegmentStopsInsteadOfSkippingTheStairs() {
+        setUp(0,List.of("walk:10 68 0", "say:arrived"));
+        Location entrance = new Location(world,-4,64,0);
+        Location landing = new Location(world,-4,68,0);
+        Location exit = new Location(world,2,68,0);
+        when(actor.findRoute(any())).thenReturn(() -> List.of(entrance,landing,exit));
+        when(actor.canNavigateTo(entrance)).thenReturn(true);
+        for(int i=0;i<14;i++) session.tick(here);
+        here=entrance;
+        clearInvocations(actor);
         session.tick(here);
-        assertTrue(session.closed());
+        assertTrue(output.contains("stuck"));
+        assertFalse(output.contains("arrived"));
+        verify(actor,never()).canNavigateTo(exit);
+        verify(actor,never()).move(any(),anyDouble());
+    }
+
+    @Test
+    void routeSearchCanYieldWithoutRestartingNavigation() {
+        setUp(0,List.of("walk:10 64 0", "listen:yes -> done"));
+        BotActor.RouteSearch search = mock(BotActor.RouteSearch.class);
+        when(actor.findRoute(any())).thenReturn(search);
+        when(search.advance()).thenReturn(null).thenReturn(null).thenReturn(List.of());
+        for(int i=0;i<13;i++) session.tick(here);
+        clearInvocations(actor);
+        session.tick(here);
+        session.tick(here);
+        verify(actor,never()).move(any(),anyDouble());
+        session.tick(here);
+        assertTrue(output.contains("stuck"));
+    }
+
+    @Test
+    void doesNotArriveOnTheFloorBelowTheDestination() {
+        setUp(0,List.of("walk:0 66 0", "say:arrived"));
+        for(int i=0;i<5;i++) session.tick(here);
+        assertFalse(output.contains("arrived"));
     }
 
     @Test
     void unreachableRecoveryCandidatesFallBackToPromptAndDoNotAdvanceWalk() {
         setUp(0,List.of("walk:10 64 0", "say:arrived", "listen:yes -> done"));
-        when(actor.recoveryWaypoints(any())).thenReturn(List.of(new Location(world,-4,65,0)));
+        when(actor.findRoute(any())).thenReturn(() -> List.of(new Location(world,-4,65,0)));
         for(int i=0;i<45;i++) session.tick(here);
         assertTrue(output.contains("stuck"));
         assertFalse(output.contains("arrived"));
@@ -283,8 +489,8 @@ class BotSessionTest {
     @Test
     void recoveryStopsWhenDismissed() {
         setUp(0,List.of("walk:10 64 0", "listen:yes -> done"));
-        when(actor.recoveryWaypoints(any())).thenReturn(List.of(new Location(world,-4,65,0)));
-        for(int i=0;i<41;i++) session.tick(here);
+        when(actor.findRoute(any())).thenReturn(() -> List.of(new Location(world,-4,65,0)));
+        for(int i=0;i<13;i++) session.tick(here);
         session.input("bye");
         clearInvocations(actor);
         session.tick(here);
@@ -296,7 +502,7 @@ class BotSessionTest {
     @Test
     void scanningAnnouncementCooldownSurvivesRetry() {
         setUp(0,List.of("walk:10 64 0", "listen:yes -> done"));
-        when(actor.recoveryWaypoints(any())).thenReturn(List.of(new Location(world,-4,65,0)));
+        when(actor.findRoute(any())).thenReturn(() -> List.of(new Location(world,-4,65,0)));
         for(int i=0;i<45;i++) session.tick(here);
         assertEquals(1,output.stream().filter("scanning"::equals).count());
         session.input("retry");

@@ -2,7 +2,7 @@
 
 Ready to join STEMCraft? You can play using **Minecraft Java Edition** or **Minecraft Bedrock Edition**.
 
-<figure><img src=".gitbook/assets/hub-high-view.png" alt=""><figcaption></figcaption></figure>
+<figure><img src=".gitbook/assets/hub.png" alt=""><figcaption></figcaption></figure>
 
 ### Before You Join
 

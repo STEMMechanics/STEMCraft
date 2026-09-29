@@ -32,6 +32,8 @@ import java.util.Collection;
 public interface ItemService {
     /**
      * Adds an attribute to the ItemStack with the given key and value.
+     * The integer attribute {@code destroy-on-drop=1} removes the item on manual drop
+     * or when left in a storage container when its inventory closes.
      *
      * @param <T> The type of the attribute value.
      * @param <Z> A placeholder type parameter (not used).

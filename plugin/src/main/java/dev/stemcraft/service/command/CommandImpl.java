@@ -493,7 +493,8 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
                 }
 
                 List<String> values = parseValue(tabCompletionItem, player, args);
-                if (values.contains(arg)) {
+                if (isPlayerList(tabCompletionItem) && matchesPlayerList(arg, values)
+                        || values.contains(arg)) {
                     argIndex++;
                     return MatchResult.MATCHED;
                 }
@@ -503,6 +504,24 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
 
             // To get here we are out of args to parse
             return MatchResult.EXHAUSTED;
+        }
+
+        private static boolean isPlayerList(String value) {
+            return "{players}".equals(value);
+        }
+
+        private static boolean matchesPlayerList(String value, List<String> completions) {
+            for (String raw : value.split(",", -1)) {
+                String item = raw.trim();
+                if (item.isEmpty()) return false;
+                if (item.equals("*") || item.startsWith("-")) {
+                    if (item.startsWith("-") && item.length() == 1) return false;
+                    if (item.startsWith("-") && !completions.contains(item.substring(1))) return false;
+                    continue;
+                }
+                if (!completions.contains(item)) return false;
+            }
+            return true;
         }
 
         public void processRemainingArgs() {
@@ -598,9 +617,30 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
             }
         });
 
-        // remove non-matching items from the results based on what the player has already entered
+        // Comma-separated player lists use the already-entered prefix as part of
+        // every suggestion: "*,-k" becomes "*,-kira", for example.
         if (!args[args.length - 1].isEmpty()) {
             String arg = args[args.length - 1];
+
+            if (arg.contains(",") && tabCompletions.stream().anyMatch(track ->
+                    Arrays.asList(track).contains("{players}"))) {
+                int separator = arg.lastIndexOf(',');
+                String prefix = arg.substring(0, separator + 1);
+                String partial = arg.substring(separator + 1);
+                if (partial.startsWith("-")) {
+                    prefix += "-";
+                    partial = partial.substring(1);
+                }
+                List<String> listResults = new ArrayList<>();
+                for (String item : tabCompletionResults) {
+                    if (item.regionMatches(true, 0, partial, 0, partial.length())) {
+                        listResults.add(prefix + item);
+                    }
+                }
+                tabCompletionResults.clear();
+                tabCompletionResults.addAll(listResults);
+                arg = partial;
+            }
 
             // if the player has only a dash in the arg, only show dash arguments
             if (arg.equals("-")) {
@@ -622,7 +662,8 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
 
             // remove items in tabCompletionResults that do not contain the current arg text
 
-            tabCompletionResults.removeIf(item -> !item.contains(arg));
+            String filterArg = arg;
+            tabCompletionResults.removeIf(item -> !item.contains(filterArg));
         }
 
         tabCompletionResults.removeIf(candidate -> {

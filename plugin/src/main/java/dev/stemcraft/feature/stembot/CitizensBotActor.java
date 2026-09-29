@@ -48,11 +48,14 @@ public final class CitizensBotActor implements BotActor {
             if(skin!=null) skin(skin);
 
             Object params=invoke(invoke(npc,"getNavigator"),"getDefaultParameters");
+            // Avoid inheriting Citizens' legacy block-change path visualization.
+            invoke(params,"debug",false);
             invoke(params,"stuckAction",new Object[]{null});
             invoke(params,"range",128F);
             invoke(params,"avoidWater",true);
-            invoke(params,"distanceMargin",.8D);
-            invoke(params,"stationaryTicks",100);
+            invoke(params,"distanceMargin",.2D);
+            invoke(params,"pathDistanceMargin",.2D);
+            invoke(params,"stationaryTicks",40);
 
             if(!(boolean)invoke(npc,"spawn",spawn))
                 throw new IllegalStateException("Citizens could not spawn STEMBot");
@@ -102,6 +105,11 @@ public final class CitizensBotActor implements BotActor {
     }
 
     @Override
+    public boolean teleport(Location destination) {
+        return valid()&&entity().teleport(destination,org.bukkit.event.player.PlayerTeleportEvent.TeleportCause.PLUGIN);
+    }
+
+    @Override
     public boolean valid() {
         return (boolean)invoke(npc,"isSpawned")
             &&entity()!=null
@@ -115,20 +123,30 @@ public final class CitizensBotActor implements BotActor {
 
     @Override
     public void move(Location target,double speed) {
-        invoke(
-            invoke(navigator(),"getDefaultParameters"),
-            "speedModifier",
-            (float)speed
-        );
-        invoke(navigator(),"setTarget",target);
+        targetNavigator(navigator(), target, speed, false);
 
         if(entity() instanceof Player player)
             player.setSprinting(speed>1);
     }
 
     @Override
-    public List<Location> recoveryWaypoints(Location target) {
-        return BotNavigationRecovery.candidates(location(), target);
+    public void moveWaypoint(Location target, double speed) {
+        targetNavigator(navigator(), target, speed, true);
+
+        if(entity() instanceof Player player)
+            player.setSprinting(speed>1);
+    }
+
+    static void targetNavigator(Object navigator, Location target, double speed, boolean waypoint) {
+        invoke(invoke(navigator, "getDefaultParameters"), "speedModifier", (float)speed);
+        // Minecraft pathfinding may return an endpoint in an adjacent block. Our route already
+        // validates each straight segment; use Citizens' movement controller to reach it precisely.
+        invoke(navigator, waypoint ? "setStraightLineTarget" : "setTarget", target);
+    }
+
+    @Override
+    public RouteSearch findRoute(Location target) {
+        return new BotNavigationRecovery.Search(location(), target);
     }
 
     @Override

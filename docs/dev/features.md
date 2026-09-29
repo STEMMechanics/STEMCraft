@@ -16,7 +16,58 @@ Features are discovered from `dev.stemcraft.feature` and loaded through `BaseFea
 | `Coordinates` | Action bar and boss bar coordinate displays through `/coord` and `/coordbar` |
 | `NamedRegions` | Permanently names discovered biome territories and structures, with coordinate-bar and optional Pl3xMap presentation; see [Named Regions](https://github.com/STEMMechanics/stemcraft/wiki/named-regions) |
 | `GameModeAliases` | Registers short aliases such as `gms`, `gmc`, `gma`, and `gmsp` |
+| `UnderhallsFeature` | Persistent end-stone maze, discoverable doorways and fixed exit rooms; see [The Underhalls](underhalls.md) |
 | `GameModeInventories` | Keeps inventory state separate across gamemode profiles |
+
+### Shared world inventories
+
+GMI automatically groups worlds by the name before the first underscore:
+`survival`, `survival_nether`, and `survival_deep` share `survival`;
+`bridge_amazon` and `bridge_western` share `bridge`. A world with no underscore
+uses its full name, such as `hub`. Names beginning with an underscore use their
+full name to avoid an empty group.
+
+Override a world's group in `config.yml`:
+
+```yaml
+worlds:
+  survival: {}
+  survival_nether:
+    inventory-group: nether
+  survival_deep: {}
+  hub: {}
+  bridge_amazon: {}
+  bridge_western:
+    inventory-group: nether
+```
+
+This produces four groups:
+
+| Group | Worlds |
+| --- | --- |
+| `survival` | `survival`, `survival_deep` |
+| `hub` | `hub` |
+| `bridge` | `bridge_amazon` |
+| `nether` | `survival_nether`, `bridge_western` |
+
+An explicit nonblank `inventory-group` replaces automatic grouping for that
+world. Group names are literal and case-sensitive; they are not split on
+underscores or resolved through another world's settings. An explicit group can
+also join an automatic group of the same name. Missing or blank values restore
+automatic grouping. To isolate a world, give it a unique group name.
+There is no separate GMI grouping configuration.
+
+Game modes remain separate within each group. Profiles include inventory,
+armour, Ender Chest, XP, health, hunger, and potion effects. GMI skips registered
+minigame participants, whose inventory is managed by the minigame system.
+Visiting a minigame world without joining still uses GMI.
+
+Restart or run `/stemcraft reload` after editing. On reload, online players'
+current profiles are saved before switching groups. Existing profiles are
+retained, not merged: `survival_deep` now uses the existing `survival` profile,
+while its former separate profile remains stored. A new group starts with an
+empty inventory. Set an explicit group to the former group name if you want to
+continue using that old profile.
 
 ## Content and UI
 
@@ -104,3 +155,41 @@ Notice boards provide graphical lobby boards containing player-authored headers,
 | `Afk` | Optional inactivity announcements, tab styling and kicks; see [AFK](afk.md), introduced in PR #157 |
 
 See [Permissions](permissions.md) for individual player/admin grants. There is no required `stemcraft.player` bundle. Custom commands enforce a permission only when one is configured; fixed `/survival` and `/creative` shortcuts run their teleport as the server.
+
+## Held lighting
+
+`HeldLightFeature` lights the area around players holding a torch or lantern in
+either hand. Torches emit level 14, lanterns 15, and soul variants 10; the stronger
+hand wins. It is enabled globally by default:
+
+```yaml
+held-light:
+  enabled: true
+```
+
+Every five ticks, an invisible server-side LIGHT block follows the player's head
+(or feet if the head space is occupied). It only borrows air, so it does not work
+while fully submerged or encased in solid blocks. Nearby players see the light
+without a client mod. Overlapping holders share the strongest light.
+
+Moving, changing held items, quitting, chunk unloading and plugin shutdown remove
+unused lights. Chunk metadata restores saved temporary lights after a restart.
+Player placements replace temporary lights normally, including in the Underhalls;
+maze terrain remains protected. Temporary lights use Minecraft's real block
+lighting, so they also affect light-dependent gameplay such as mob spawning.
+
+## Advancement restrictions
+
+The `SurvivalAdvancements` feature blocks new Minecraft advancement criteria in Creative,
+Adventure, and Spectator modes. It is enabled by default; configure
+`survival-advancements.enabled` in `config.yml` and restart to enable or disable it.
+
+Independently, the minigame framework blocks new advancement criteria for registered
+arena occupants, including players waiting in lobbies, active participants, and spectators,
+regardless of their game mode. This ends when the player leaves the arena. Simply visiting
+an arena world without joining a minigame does not trigger this restriction.
+
+Both rules cancel Paper's `PlayerAdvancementCriterionGrantEvent`, so partial progress is
+blocked as well as completion. Existing progress is preserved. The rules apply to all
+advancements, including custom and recipe advancements; they do not change STEMCraft
+quest progress, statistics, or minigame rewards. There is no operator bypass.

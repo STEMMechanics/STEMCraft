@@ -2,6 +2,12 @@
 
 Use `/help` to summon your private guide. Only you can see STEMBot. The first visit introduces the Hub; you can return whenever you want a reminder.
 
+## Your first welcome
+
+When STEMBot is available, it welcomes you and asks the first-join question. Type the answer in ordinary chat. The answer stays private, and STEMBot follows you while you answer. Commands remain blocked until you pass; trying one repeats the question without using an attempt. After you pass, STEMBot starts the welcome action configured by the server.
+
+If STEMBot is unavailable, the server presents the welcome question directly. Answer it before moving or using commands.
+
 ## Talking to the bot
 
 While you are nearby and the bot's private chat is active, ordinary chat goes to STEMBot. Type a topic **without a slash**, such as `quests` or `how do I claim a plot`. The chat-bubble reply line helps distinguish your answer from public chat. Minecraft commands still start with `/`.

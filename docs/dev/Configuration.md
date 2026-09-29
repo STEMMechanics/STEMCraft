@@ -127,3 +127,32 @@ After changes are merged into the repository default branch, the `wiki-sync` wor
 Use `stemcraft:animal_crate[animal=chicken]` for a filled Animal Crate. The old `animal_barrel` item key is not its current identifier. Edit BoatRace's gift lists in `boatrace.yml` and use `boatrace reload` between games; its command does not currently edit the gift list directly.
 
 FAWE's `faweregentempworld` is excluded from managed-world configuration and discovery. Stale configuration is removed without deleting FAWE's files.
+
+## Saving values and reading enums
+
+`ConfigSection.set(path, value)` stores enum constants as `Enum.name()` strings,
+including enums nested in collections and maps. For example:
+
+```java
+config.set("gamemode", GameMode.SURVIVAL);
+GameMode mode = config.getEnum("gamemode", GameMode.class, GameMode.SURVIVAL);
+```
+
+The YAML contains `gamemode: SURVIVAL`. `getEnum` ignores case and surrounding
+whitespace. Missing values return the non-null default and persist its name when
+`saveDefaults` is enabled. Invalid existing values return the default without
+rewriting the configuration. `getEnum` is also available on `ConfigSectionView`.
+
+Supported values are strings, booleans, characters, primitive numeric wrappers,
+`BigInteger`, `BigDecimal`, and Bukkit `ConfigurationSerializable` objects.
+Collections are recursively copied into lists; maps are recursively copied and
+must have string keys. Passing `null` to `set` removes the path. Default values
+persisted by getters use the same validation and enum conversion.
+
+Unsupported objects, non-string map keys and cyclic containers throw
+`IllegalArgumentException` before changing the stored value or dirty state. Error
+messages identify the configuration path. Arrays and arbitrary Java objects must
+be converted to supported values first. This validation does not guarantee the
+correctness of a custom `ConfigurationSerializable.serialize()` implementation;
+those objects must provide valid supported values and register their class with
+Bukkit before loading. Java's `Serializable` alone is insufficient.

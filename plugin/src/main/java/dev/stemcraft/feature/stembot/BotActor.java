@@ -5,12 +5,20 @@ import org.bukkit.Location;
 /** Small Citizens boundary so the action engine can be tested without a live NPC. */
 public interface BotActor {
     Location location();
+    boolean teleport(Location destination);
     boolean valid();
     boolean navigating();
 
     void move(Location target,double speed);
-    /** Nearby escape waypoints, ordered by preference; empty when recovery is unsupported. */
-    default java.util.List<Location> recoveryWaypoints(Location target) { return java.util.List.of(); }
+    /** Walk an already-searched straight segment without planning another route to its endpoint. */
+    default void moveWaypoint(Location target, double speed) { move(target, speed); }
+    /** Incremental route search. Null means still searching; empty means no route found. */
+    interface RouteSearch {
+        java.util.List<Location> advance();
+        /** Summary of the search outcome, when provided by the implementation. */
+        default String diagnostics() { return ""; }
+    }
+    default RouteSearch findRoute(Location target) { return java.util.List::of; }
     /** Read-only path probe from the actor's current position. */
     default boolean canNavigateTo(Location target) { return false; }
     void pause(boolean paused);

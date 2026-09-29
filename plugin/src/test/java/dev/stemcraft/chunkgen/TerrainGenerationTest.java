@@ -358,18 +358,19 @@ class TerrainGenerationTest {
         var api = mock(dev.stemcraft.api.STEMCraftAPI.class, RETURNS_DEEP_STUBS);
         when(api.config().load("config.yml")).thenReturn(null);
         var generation = api.worlds().generator();
-        Map<String, StemChunkGenerator> registered = new HashMap<>();
+        Map<String, org.bukkit.generator.ChunkGenerator> registered = new HashMap<>();
         doAnswer(call -> {
             GeneratorDefinition definition = call.getArgument(1);
             ChunkGeneratorFactory factory = call.getArgument(2);
-            registered.put(definition.key().getKey() + ":" + definition.version(), (StemChunkGenerator) factory.create(""));
+            registered.put(definition.key().getKey() + ":" + definition.version(), factory.create(""));
             return null;
         }).when(generation).registerGenerator(any(), any(), any());
         BuiltInGenerators.register(mock(org.bukkit.plugin.Plugin.class), api);
-        assertEquals(Set.of("deep:1", "skylands:1", "wasteland:1", "faraway:1"), registered.keySet());
+        assertEquals(Set.of("deep:1", "skylands:1", "wasteland:1", "faraway:1", "underhalls:1"), registered.keySet());
+        assertInstanceOf(UnderhallsGenerator.class, registered.get("underhalls:1"));
         World world = world(83423, -64, 320);
         for (String id : MODELS.keySet()) {
-            var actual = registered.get(id + ":1").model(world);
+            var actual = ((StemChunkGenerator) registered.get(id + ":1")).model(world);
             var expected = MODELS.get(id).apply(new GenerationContext(83423, -64, 320, new NamespacedKey("stemcraft", id), 1));
             assertEquals(expected.getClass(), actual.getClass());
             for (int y = -64; y < 320; y += 8)
@@ -378,7 +379,8 @@ class TerrainGenerationTest {
         }
     }
 
-    @SuppressWarnings({"removal"})
+    // ChunkData still requires these legacy methods on test implementations.
+    @SuppressWarnings("removal")
     static final class MemoryChunk implements ChunkGenerator.ChunkData {
         final int min, max;
         final Material[] blocks;
@@ -422,6 +424,7 @@ class TerrainGenerationTest {
         }
 
         @Override
+        @Deprecated
         public void setBlock(
                 int x, int y, int z,
                 @NotNull org.bukkit.material.MaterialData data) {
@@ -448,6 +451,7 @@ class TerrainGenerationTest {
         }
 
         @Override
+        @Deprecated
         public void setRegion(
                 int x0, int y0, int z0,
                 int x1, int y1, int z1,
@@ -466,11 +470,13 @@ class TerrainGenerationTest {
         }
 
         @Override
+        @Deprecated
         public @NotNull org.bukkit.material.MaterialData getTypeAndData(int x, int y, int z) {
             return new org.bukkit.material.MaterialData(getType(x, y, z));
         }
 
         @Override
+        @Deprecated
         public byte getData(int x, int y, int z) {
             return 0;
         }

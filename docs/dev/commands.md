@@ -75,6 +75,16 @@ The list below reflects the active built-in command roots in source.
 
 ## World Command Highlights
 
+`/world duplicate <source> <destination>` supports both standalone world folders
+and Paper's integrated `world/dimensions/minecraft/<world>` storage. Integrated
+worlds are copied to a sibling dimension folder, preserving terrain, entities,
+generation settings and per-world data. UUID metadata and session locks are omitted
+so Paper assigns a fresh identity when the copy is loaded. The source is saved and
+unloaded before copying; the destination remains unloaded until `/world load`.
+Destinations must be new names using lowercase letters, numbers, dots, underscores
+or hyphens. Existing worlds are never merged or overwritten. Symbolic links are
+rejected, and an incomplete destination is removed if copying fails.
+
 The `/world` command is one of the most important operator surfaces. It covers:
 
 - create, load, unload, duplicate, and delete
@@ -117,3 +127,26 @@ Notice boards use `/noticeboard post`, `/noticeboard list [page]`, `/noticeboard
 ## Dynamic command lifecycle
 
 Registered commands own all aliases and namespaced labels pointing to their exact Bukkit command object. Cleanup snapshots matching keys and removes them through Paper's command map, which updates Brigadier. Do not use `entrySet().removeIf`: the current Paper forwarding iterator does not support iterator removal. Re-registration first cleans up the previous registration; failure retains the handle and logs its cause.
+
+### Returning to a dimension group
+
+`/tpworldlast survival [player]` returns to the most recently visited location in
+`survival` or any `survival_*` world, including custom dimensions. If the player
+is already in that group, it leaves them at their current location. A player with
+no saved visit goes to the base world's spawn. Locations persist through logout
+and restart. Cancelled teleports do not update them.
+
+Travel groups use the requested base name and an underscore boundary; they are
+independent of inventory sharing settings. `/tpworld survival` still explicitly
+selects the overworld, and `/tpworldspawn survival` selects its spawn.
+
+Commands that declare a `{players}` argument accept comma-separated online
+player names, `*` for all online players, and `-name` exclusions. For example,
+`/hub *,-kira` sends everyone except Kira to the hub. The older `{player}`
+placeholder remains a single-player argument.
+
+For existing installations, change the custom `/survival` command's `run` entry
+in `config.yml` to `server:tpworldlast survival {player}` and reload STEMCraft.
+Also change any survival menu command to `player:tpworldlast survival`; players
+using that direct command need `stemcraft.command.tpworldlast`. Bundled defaults
+use these commands, but existing custom commands are preserved.

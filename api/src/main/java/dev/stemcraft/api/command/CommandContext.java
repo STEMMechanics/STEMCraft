@@ -21,6 +21,7 @@
 package dev.stemcraft.api.command;
 
 import org.bukkit.OfflinePlayer;
+import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -28,6 +29,9 @@ import org.jetbrains.annotations.Contract;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.Locale;
 
 /**
@@ -324,6 +328,52 @@ public interface CommandContext {
      */
     Player getPlayer(int index, CommandSender def);
     default Player getPlayer(int index) { return getPlayer(index, null); }
+
+    /**
+     * Resolves a comma-separated online-player target expression.
+     *
+     * <p>The expression supports exact player names, {@code *} for all online
+     * players, and {@code -name} exclusions. An empty list is returned when
+     * the argument is missing or contains an unknown positive player name.</p>
+     *
+     * @param index The argument index.
+     * @return The resolved players, preserving order and removing duplicates.
+     */
+    default List<Player> getPlayers(int index) {
+        String value = getArg(index, null);
+        if (value == null || value.isBlank()) {
+            return List.of();
+        }
+
+        Set<Player> players = new LinkedHashSet<>();
+        for (String raw : value.split(",", -1)) {
+            String name = raw.trim();
+            if (name.isEmpty()) {
+                return List.of();
+            }
+
+            if (name.equals("*")) {
+                players.addAll(Bukkit.getOnlinePlayers());
+                continue;
+            }
+
+            if (name.startsWith("-") && name.length() > 1) {
+                Player excluded = Bukkit.getPlayerExact(name.substring(1));
+                if (excluded != null) {
+                    players.remove(excluded);
+                }
+                continue;
+            }
+
+            Player player = Bukkit.getPlayerExact(name);
+            if (player == null) {
+                return List.of();
+            }
+            players.add(player);
+        }
+
+        return new ArrayList<>(players);
+    }
 
     default Player getArgAsPlayerOrSender(int index) {
         Player player = getPlayer(index, null);

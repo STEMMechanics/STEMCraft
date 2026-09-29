@@ -14,4 +14,4 @@ menus:
         title: "<green>Survival</green>"
         description: "Teleport to survival."
         commands:
-          - "player:tpworld survival"
+          - "player:tpworldlast survival"

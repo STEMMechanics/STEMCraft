@@ -5,6 +5,7 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.service.playerreset.*;
 import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.service.BaseService;
+import dev.stemcraft.api.service.stembot.StemBotSession;
 import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
@@ -29,6 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class FirstJoinService extends BaseService {
     private static final String TABLE_NAME = "first_join_players";
     private final Map<UUID, FirstJoinSession> sessions = new ConcurrentHashMap<>();
+    private final Map<UUID,StemBotSession> guides = new ConcurrentHashMap<>();
     private final Random random;
     private ScheduledTask timeoutTask;
 
@@ -38,8 +40,8 @@ public class FirstJoinService extends BaseService {
     private int minimumNumber;
     private int maximumNumber;
     private double movementTolerance;
-    private String verifiedKeyId;
     private String bypassPermission;
+    private String stemBotAction;
     private NamespacedKey verifiedKey;
 
     public FirstJoinService(STEMCraft plugin, STEMCraftAPI api) {
@@ -74,13 +76,14 @@ public class FirstJoinService extends BaseService {
             timeoutTask.cancel();
             timeoutTask = null;
         }
-        sessions.clear();
+        for(UUID id:Set.copyOf(sessions.keySet())) removeSession(id);
     }
 
     @Override
     public void onReload() {
         super.onReload();
         reloadSettings();
+        if(!enabled) for(UUID id:Set.copyOf(sessions.keySet())) removeSession(id);
     }
 
     private void reloadSettings() {
@@ -90,8 +93,9 @@ public class FirstJoinService extends BaseService {
         minimumNumber = getConfigSection().getInt("minimum-number", 1);
         maximumNumber = getConfigSection().getInt("maximum-number", 20);
         movementTolerance = getConfigSection().getDouble("movement-tolerance", 0.5d);
-        verifiedKeyId = getConfigSection().getString("verified-key", "human_verified");
+        String verifiedKeyId = getConfigSection().getString("verified-key", "human_verified");
         bypassPermission = getConfigSection().getString("bypass-permission", "stemcraft.firstjoin.bypass");
+        stemBotAction = getConfigSection().getString("stembot-action", "").trim();
         verifiedKey = new NamespacedKey(plugin, verifiedKeyId.toLowerCase());
     }
 
@@ -134,7 +138,27 @@ public class FirstJoinService extends BaseService {
 
         FirstJoinSession session = createSession(player);
         sessions.put(player.getUniqueId(), session);
-        sendFirstJoinPrompt(player, session);
+        resumeWelcome(player);
+    }
+
+    /** Reattach the guide after a world transition, retaining the question and deadline. */
+    public void resumeWelcome(@NotNull Player player) {
+        FirstJoinSession session=sessions.get(player.getUniqueId());
+        if(!hasActiveSession(player.getUniqueId())||session==null) return;
+        StemBotSession previous=guides.remove(player.getUniqueId());
+        if(previous!=null) previous.close();
+        var bot=api.stemBot();
+        if(bot!=null) bot.open(player).ifPresent(guide->{
+            guides.put(player.getUniqueId(),guide);
+            guide.follow(true);
+            guide.listen(input -> processChatResponse(player,input));
+        });
+        sendFirstJoinPrompt(player,session);
+    }
+
+    public boolean guideHandlesChat(UUID playerId) {
+        StemBotSession guide=guides.get(playerId);
+        return guide!=null&&guide.listening();
     }
 
     public void processChatResponse(@NotNull Player player, @NotNull String input) {
@@ -152,8 +176,8 @@ public class FirstJoinService extends BaseService {
         switch (result.outcome()) {
             case success -> completeFirstJoinCheck(player);
             case incorrect -> {
-                api.messages().warn(player, "FIRST_JOIN_INCORRECT", "question", session.prompt());
-                api.messages().info(player, "FIRST_JOIN_ATTEMPTS_LEFT", "attempts", session.attemptsRemaining());
+                sendVerificationMessage(player, "FIRST_JOIN_INCORRECT", "question", session.prompt());
+                sendVerificationMessage(player, "FIRST_JOIN_ATTEMPTS_LEFT", "attempts", session.attemptsRemaining());
             }
             case failure -> failPlayer(player);
             case expired -> timeoutPlayer(player);
@@ -167,10 +191,14 @@ public class FirstJoinService extends BaseService {
             return;
         }
 
-        Location to = event.getTo();
-        if (to == null) {
+        StemBotSession guide=guides.get(player.getUniqueId());
+        if(guide!=null&&guide.active()) {
+            // If the guide disappears, freeze at the latest location rather than the join point.
+            session.updateInitialLocation(event.getTo());
             return;
         }
+
+        Location to = event.getTo();
 
         Location initial = session.initialLocation();
         if (!Objects.equals(initial.getWorld(), to.getWorld())) {
@@ -194,6 +222,21 @@ public class FirstJoinService extends BaseService {
             return;
         }
         event.setCancelled(true);
+    }
+
+    public void handleCommand(org.bukkit.event.player.PlayerCommandPreprocessEvent event) {
+        Player player=event.getPlayer();
+        FirstJoinSession session=sessions.get(player.getUniqueId());
+        if(!hasActiveSession(player.getUniqueId())||session==null) return;
+        event.setCancelled(true);
+        sendVerificationMessage(player,"FIRST_JOIN_COMMAND_BLOCKED");
+        sendVerificationMessage(player,"FIRST_JOIN_REQUIRED","question",session.prompt());
+    }
+
+    private void sendVerificationMessage(Player player,String key,Object... placeholders) {
+        StemBotSession guide=guides.get(player.getUniqueId());
+        if(guide!=null&&guide.speak(api.messages().text(player,key,placeholders))) return;
+        api.messages().info(player,key,placeholders);
     }
 
     public void handleTeleport(@NotNull Player player, @Nullable Location to) {
@@ -225,10 +268,12 @@ public class FirstJoinService extends BaseService {
 
     public void removeSession(@NotNull UUID playerId) {
         sessions.remove(playerId);
+        StemBotSession guide=guides.remove(playerId);
+        if(guide!=null) guide.close();
     }
 
     public void handleAdminStatus(@NotNull CommandContext ctx) {
-        OfflinePlayer player = resolveOfflinePlayer(ctx, 2);
+        OfflinePlayer player = resolveOfflinePlayer(ctx);
         if (player == null) {
             ctx.returnError("Player was not found.");
             return;
@@ -241,7 +286,7 @@ public class FirstJoinService extends BaseService {
     }
 
     public void handleAdminReset(@NotNull CommandContext ctx) {
-        OfflinePlayer player = resolveOfflinePlayer(ctx, 2);
+        OfflinePlayer player = resolveOfflinePlayer(ctx);
         if (player == null) {
             ctx.returnError("Player was not found.");
             return;
@@ -251,13 +296,13 @@ public class FirstJoinService extends BaseService {
         ctx.returnSuccess("Reset first-join status for " + displayName(player) + ".");
     }
 
-    private @Nullable OfflinePlayer resolveOfflinePlayer(@NotNull CommandContext ctx, int index) {
-        if (ctx.args().size() <= index) {
+    private @Nullable OfflinePlayer resolveOfflinePlayer(@NotNull CommandContext ctx) {
+        if (ctx.args().size() <= 2) {
             ctx.returnError("Usage: /stemcraft firstjoin <status|reset> <player>");
             return null;
         }
-        OfflinePlayer player = ctx.getArgAsOfflinePlayer(index);
-        if (player == null || player.getUniqueId() == null) {
+        OfflinePlayer player = ctx.getArgAsOfflinePlayer(2);
+        if (player == null) {
             return null;
         }
         if (!player.isOnline() && !player.hasPlayedBefore()) {
@@ -279,7 +324,7 @@ public class FirstJoinService extends BaseService {
         int min = Math.max(1, minimumNumber);
         int max = Math.max(min, maximumNumber);
 
-        boolean useAddition = random.nextBoolean() || max <= 1;
+        boolean useAddition = random.nextBoolean() || max == 1;
         if (useAddition) {
             int left = nextBetween(min, max);
             int right = nextBetween(min, max);
@@ -287,7 +332,7 @@ public class FirstJoinService extends BaseService {
         }
 
         int left = nextBetween(Math.max(2, min), max);
-        int rightUpper = Math.max(min, Math.min(max, left - 1));
+        int rightUpper = Math.clamp(left - 1, min, max);
         int right = nextBetween(min, rightUpper);
         if (left <= right) {
             left = Math.min(max, right + 1);
@@ -316,8 +361,20 @@ public class FirstJoinService extends BaseService {
 
     private void completeFirstJoinCheck(@NotNull Player player) {
         markVerified(player.getUniqueId(), player.getName(), player);
-        removeSession(player.getUniqueId());
-        api.messages().success(player, "FIRST_JOIN_SUCCESS");
+        sendVerificationMessage(player, "FIRST_JOIN_SUCCESS");
+        sessions.remove(player.getUniqueId());
+        StemBotSession guide=guides.remove(player.getUniqueId());
+        var bot=api.stemBot();
+        if(stemBotAction==null||stemBotAction.isBlank()) {
+            if(guide!=null) guide.close();
+        } else if(bot!=null&&bot.hasAction(stemBotAction)) {
+            if(guide!=null) {
+                if(!guide.startAction(stemBotAction)) guide.close();
+            } else bot.startAction(player,stemBotAction);
+        } else {
+            if(guide!=null) guide.close();
+            plugin.getLogger().warning("First-join STEMBot action is unavailable: " + stemBotAction);
+        }
         plugin.getLogger().info("First-join check passed for " + player.getName() + " [" + player.getUniqueId() + "]");
     }
 
@@ -334,9 +391,9 @@ public class FirstJoinService extends BaseService {
     }
 
     private void sendFirstJoinPrompt(@NotNull Player player, @NotNull FirstJoinSession session) {
-        api.messages().info(player, "FIRST_JOIN_WELCOME");
-        api.messages().info(player, "FIRST_JOIN_REQUIRED", "question", session.prompt());
-        api.messages().info(player, "FIRST_JOIN_PRIVATE");
+        sendVerificationMessage(player, "FIRST_JOIN_WELCOME");
+        sendVerificationMessage(player, "FIRST_JOIN_REQUIRED", "question", session.prompt());
+        sendVerificationMessage(player, "FIRST_JOIN_PRIVATE");
     }
 
     private FirstJoinSession createSession(@NotNull Player player) {

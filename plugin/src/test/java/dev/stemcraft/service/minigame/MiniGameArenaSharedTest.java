@@ -1,16 +1,21 @@
 package dev.stemcraft.service.minigame;
 
+import com.sk89q.worldedit.math.BlockVector3;
+import com.sk89q.worldedit.regions.CuboidRegion;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.minigame.MiniGameArena;
+import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.service.task.TaskService;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.entity.Item;
+import org.bukkit.inventory.ItemStack;
 import org.junit.jupiter.api.Test;
 import org.mockbukkit.mockbukkit.MockBukkit;
 import org.mockbukkit.mockbukkit.ServerMock;
 import org.mockbukkit.mockbukkit.world.WorldMock;
+import org.mockito.ArgumentCaptor;
 
 import java.time.Duration;
 import java.util.List;
@@ -18,8 +23,10 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.contains;
@@ -89,6 +96,64 @@ class MiniGameArenaSharedTest {
             () -> verify(tasks, times(4)).cancel(contains(firstTaskToken)),
             () -> verify(tasks, times(4)).cancel(contains(secondTaskToken))
         );
+    }
+
+    @Test
+    void trySpawnSupplyDropCrateRejectsAnInvalidFinalChestLocation() {
+        ServerMock server = MockBukkit.mock();
+        try {
+            WorldMock world = server.addSimpleWorld("shared-drop-invalid-crate-test");
+            for (int y = 70; y <= 76; y++) {
+                world.getBlockAt(0, y, 0).setType(Material.AIR);
+            }
+
+            MiniGameArenaImpl arena = createArena(world);
+
+            assertFalse(arena.trySpawnSupplyDropCrate(
+                new ItemStack(Material.DIAMOND),
+                new Location(world, 0.5d, 74.15d, 0.5d)
+            ));
+            assertEquals(0, arena.countActiveSupplyDrops());
+        } finally {
+            MockBukkit.unmock();
+        }
+    }
+
+    @Test
+    void trySpawnSupplyDropCrateCancelsWhenSupportChangesBeforeLanding() {
+        ServerMock server = MockBukkit.mock();
+        try {
+            WorldMock world = server.addSimpleWorld("shared-drop-revalidation-test");
+            createSupportedSurface(world, 0, 73, 0);
+
+            STEMCraftAPI api = mock(STEMCraftAPI.class);
+            TaskService tasks = mock(TaskService.class);
+            when(api.tasks()).thenReturn(tasks);
+            MiniGameArenaImpl arena = new MiniGameArenaImpl(
+                mock(MiniGameServiceImpl.class),
+                api,
+                "bedwars",
+                "test",
+                world
+            );
+
+            Location landingLocation = new Location(world, 0.5d, 74.15d, 0.5d);
+            assertTrue(arena.trySpawnSupplyDropCrate(new ItemStack(Material.DIAMOND), landingLocation));
+
+            ArgumentCaptor<Runnable> descentTask = ArgumentCaptor.forClass(Runnable.class);
+            verify(tasks).repeating(any(), eq(0L), eq(1L), descentTask.capture());
+            for (int tick = 0; tick < 415; tick++) {
+                descentTask.getValue().run();
+            }
+
+            world.getBlockAt(0, 73, 0).setType(Material.AIR);
+            descentTask.getValue().run();
+
+            assertEquals(0, arena.countActiveSupplyDrops());
+            assertEquals(Material.AIR, world.getBlockAt(0, 74, 0).getType());
+        } finally {
+            MockBukkit.unmock();
+        }
     }
 
     @Test
@@ -183,6 +248,81 @@ class MiniGameArenaSharedTest {
         } finally {
             MockBukkit.unmock();
         }
+    }
+
+    @Test
+    void findRandomSupplyDropLocationFallsBackToCoreRegionAndExcludesLobbyRegion() {
+        ServerMock server = MockBukkit.mock();
+        try {
+            WorldMock world = server.addSimpleWorld("shared-drop-region-fallback-test");
+            createSupportedSurface(world, 0, 73, 0);
+
+            MiniGameArenaImpl arena = createArena(world);
+            arena.setRegion(region(world, 0, 70, 0, 0, 75, 0));
+
+            assertNotNull(arena.findRandomSupplyDropLocation(
+                List.of(Material.GRASS_BLOCK),
+                1
+            ));
+
+            arena.setLobbyRegion(region(world, 0, 73, 0, 0, 74, 0));
+
+            assertNull(arena.findRandomSupplyDropLocation(
+                List.of(Material.GRASS_BLOCK),
+                1
+            ));
+        } finally {
+            MockBukkit.unmock();
+        }
+    }
+
+    @Test
+    void findRandomSupplyDropLocationAppliesAdditionalRegionsAndSuitabilityPredicate() {
+        ServerMock server = MockBukkit.mock();
+        try {
+            WorldMock world = server.addSimpleWorld("shared-drop-filter-test");
+            createSupportedSurface(world, 0, 73, 0);
+
+            MiniGameArenaImpl arena = createArena(world);
+            arena.setRegion(region(world, 0, 70, 0, 0, 75, 0));
+            SCRegion excludedRegion = region(world, 0, 73, 0, 0, 74, 0);
+
+            assertNull(arena.findRandomSupplyDropLocation(
+                List.of(Material.GRASS_BLOCK),
+                1,
+                excludedRegion
+            ));
+
+            Location filteredLocation = arena.findRandomSupplyDropLocation(
+                List.of(Material.GRASS_BLOCK),
+                1,
+                (location, currentArena) -> currentArena == arena && location.getBlockY() == 74
+            );
+            assertNotNull(filteredLocation);
+        } finally {
+            MockBukkit.unmock();
+        }
+    }
+
+    private static void createSupportedSurface(WorldMock world, int x, int y, int z) {
+        world.getBlockAt(x, y, z).setType(Material.GRASS_BLOCK);
+        for (int offsetX = -1; offsetX <= 1; offsetX++) {
+            for (int offsetZ = -1; offsetZ <= 1; offsetZ++) {
+                if (offsetX == 0 && offsetZ == 0) {
+                    continue;
+                }
+                world.getBlockAt(x + offsetX, y, z + offsetZ).setType(Material.STONE);
+            }
+        }
+        world.getBlockAt(x, y + 1, z).setType(Material.AIR);
+        world.getBlockAt(x, y + 2, z).setType(Material.AIR);
+    }
+
+    private static SCRegion region(WorldMock world, int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
+        return new SCRegion(
+            new CuboidRegion(BlockVector3.at(minX, minY, minZ), BlockVector3.at(maxX, maxY, maxZ)),
+            world
+        );
     }
 
     private MiniGameArenaImpl createArena(World world) {

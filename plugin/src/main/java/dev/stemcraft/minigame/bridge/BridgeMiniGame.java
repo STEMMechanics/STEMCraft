@@ -505,6 +505,11 @@ public class BridgeMiniGame extends BaseMiniGame {
             }
 
             @Override
+            public int maxTeamSizeDifference(@NotNull MiniGameArena arena) {
+                return 1;
+            }
+
+            @Override
             public @NotNull Set<MiniGameTeamSelectionInput> supportedInputs(@NotNull MiniGameArena arena) {
                 return Set.of(MiniGameTeamSelectionInput.FLOOR, MiniGameTeamSelectionInput.HOTBAR);
             }
