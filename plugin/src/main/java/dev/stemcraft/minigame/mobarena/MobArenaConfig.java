@@ -3,7 +3,6 @@ package dev.stemcraft.minigame.mobarena;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigFile;
 import dev.stemcraft.api.config.ConfigSection;
-import dev.stemcraft.api.config.ConfigSectionView;
 import dev.stemcraft.api.minigame.MiniGame;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.util.LocationUtil;
@@ -14,7 +13,12 @@ import dev.stemcraft.minigame.mobarena.MobArenaArenaHandler.MobDeathReason;
 import dev.stemcraft.minigame.mobarena.MobArenaSpawnerRecord.IncrementType;
 import lombok.Getter;
 import lombok.experimental.Accessors;
-import org.bukkit.*;
+import org.bukkit.Bukkit;
+import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
+import org.bukkit.Registry;
+import org.bukkit.World;
 import org.bukkit.entity.EntityType;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
@@ -24,7 +28,13 @@ import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.Unmodifiable;
 import org.jspecify.annotations.NonNull;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -186,7 +196,7 @@ final class MobArenaConfig {
     /// @return The `ItemStack` as an `ItemStack` string description.
     @Contract(pure = true)
     private static @NotNull String serialiseItemStackDescription(@NotNull final ItemStack itemStack) {
-        return itemStack.getType().getKey().toString() + " " + itemStack.getAmount();
+        return itemStack.getType().getKey() + " " + itemStack.getAmount();
     }
 
     static boolean isValidArmorSlot(final @lombok.NonNull EquipmentSlot slot) {
@@ -234,7 +244,7 @@ final class MobArenaConfig {
 
         final Map<String, @NotNull ItemStack> loadoutItemStackMap = loadoutStringMap.entrySet().stream().collect(
                 Collectors.toMap(
-                        Map.Entry::getKey,
+                        Entry::getKey,
                         entry -> deserialiseItemStackDescription((String) entry.getValue())
                 ));
 
@@ -247,7 +257,7 @@ final class MobArenaConfig {
                 Collectors.toMap(
                         entry -> Arrays.stream(EquipmentSlot.values())
                                 .filter(slot -> (isValidArmorSlot(slot)) && slot.name().equals(entry.getKey())).findFirst().orElseThrow(),
-                        Map.Entry::getValue
+                        Entry::getValue
                 ));
 
         final @NotNull Map<Integer, @NotNull ItemStack> inventoryLoadout =
@@ -262,7 +272,7 @@ final class MobArenaConfig {
                         }).collect(
                                 Collectors.toMap(
                                         entry -> Integer.parseInt(entry.getKey()),
-                                        Map.Entry::getValue
+                                        Entry::getValue
                                 ));
 
         final @NotNull List<MobArenaSpawnerRecord> spawnerRecords = loadSpawnerRecordsFromArena(arenaSection);
@@ -382,7 +392,7 @@ final class MobArenaConfig {
         config.save();
     }
 
-    /// Saves an arena's entity death messages to an arena section..
+    /// Saves an arena's entity death messages to an arena section.
     ///
     /// These death messages stored nested.
     ///

@@ -28,7 +28,16 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jspecify.annotations.NonNull;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -708,14 +717,14 @@ final class MobArenaCommand {
         }
     }
 
-    private void printPlayerDeathMessages(@NotNull CommandContext ctx, @lombok.NonNull final MiniGameArena arena) {
+    private void printPlayerDeathMessages(@NotNull final CommandContext ctx, @lombok.NonNull final MiniGameArena arena) {
         final List<String> playerDeathMessages = arena.getList("player-death-messages", String.class);
         for (int i = 0; i < playerDeathMessages.size(); i++) {
             ctx.info("    - " + (i + 1) + ": " + playerDeathMessages.get(i));
         }
     }
 
-    private void printEntityDeathMessages(@NotNull CommandContext ctx, final MiniGameArena arena) {
+    private void printEntityDeathMessages(@NotNull final CommandContext ctx, final MiniGameArena arena) {
         Arrays.stream(MobDeathReason.values())
                 .filter(reason -> arena.contains("entity-death-messages." + reason.name()))
                 .collect(Collectors.toMap(Function.identity(), reason -> arena.getList("entity-death-messages." + reason.name(), String.class)))
@@ -727,7 +736,7 @@ final class MobArenaCommand {
         });
     }
 
-    private void printGlobalEntityDeathMessages(@NotNull CommandContext ctx, @NonNull final Map<MobDeathReason, ? extends List<String>> deathMessages) {
+    private void printGlobalEntityDeathMessages(@NotNull final CommandContext ctx, @NonNull final Map<MobDeathReason, ? extends List<String>> deathMessages) {
                 deathMessages.entrySet().stream().sorted(Comparator.comparing(s -> s.getKey().name())).forEach((messagesSet) -> {
                     ctx.info("    - " + messagesSet.getKey());
                     for (int i = 0; i < messagesSet.getValue().size(); i++) {
@@ -739,11 +748,11 @@ final class MobArenaCommand {
     private void printLoadoutInfo(@NotNull final CommandContext ctx, @NonNull final MiniGameArena arena) {
         final Map<Integer, ItemStack> inventoryMap = arena.getMap("loadout.inventory", Integer.class, ItemStack.class);
         if (inventoryMap != null && !inventoryMap.isEmpty()) {
-            inventoryMap.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> ctx.info("   - " + entry.getKey() + ": " + entry.getValue()));
+            inventoryMap.entrySet().stream().sorted(Entry.comparingByKey()).forEach(entry -> ctx.info("   - " + entry.getKey() + ": " + entry.getValue()));
         }
         final Map<EquipmentSlot, ItemStack> equipmentMap = arena.getMap("loadout.equipment", EquipmentSlot.class, ItemStack.class);
         if (equipmentMap != null && !equipmentMap.isEmpty()) {
-            equipmentMap.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> ctx.info("   - " + entry.getKey() + ": " + entry.getValue()));
+            equipmentMap.entrySet().stream().sorted(Entry.comparingByKey()).forEach(entry -> ctx.info("   - " + entry.getKey() + ": " + entry.getValue()));
         }
     }
 

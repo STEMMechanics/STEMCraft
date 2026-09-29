@@ -38,7 +38,14 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jspecify.annotations.NonNull;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -469,7 +476,7 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
     }
 
     /**
-     * <p>Untracks all mobs tied to a given arena..</p>
+     * <p>Untracks all mobs tied to a given arena.</p>
      *
      * @param arena The Mob Arena arena to untrack all the entities tracked for it.
      */

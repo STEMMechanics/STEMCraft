@@ -11,6 +11,7 @@ import dev.stemcraft.api.util.StringUtil;
 import dev.stemcraft.minigame.BaseMiniGame;
 import dev.stemcraft.minigame.MiniGameHudConfigSupport;
 import dev.stemcraft.minigame.MiniGameHudConfigSupport.HudDefinition;
+import dev.stemcraft.minigame.mobarena.MobArenaArenaHandler.MobDeathReason;
 import lombok.Getter;
 import lombok.experimental.Accessors;
 import org.bukkit.World;
@@ -18,7 +19,11 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.Unmodifiable;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * <p>The Mob Arena mini-game.</p>
@@ -241,11 +246,11 @@ public class MobArenaMiniGame extends BaseMiniGame {
         return true;
     }
 
-    public List<String> getApplicableGlobalEntityDeathReasons(MobArenaArenaHandler.MobDeathReason mobDeathReason) {
+    List<String> getApplicableGlobalEntityDeathReasons(final MobDeathReason mobDeathReason) {
         return config.getGlobalEntityDeathMessages().get(mobDeathReason);
     }
 
-    public List<String> getGlobalPlayerDeathReasons() {
+    List<String> getGlobalPlayerDeathReasons() {
         return config.getGlobalPlayerDeathMessages();
     }
 
@@ -259,7 +264,7 @@ public class MobArenaMiniGame extends BaseMiniGame {
     }
 
     /**
-     * <p>Loads an arena via it's ID.</p>
+     * <p>Loads an arena via its ID.</p>
      *
      * @param arenaId The Arena ID to load in.
      */
