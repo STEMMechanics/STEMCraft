@@ -126,6 +126,7 @@ Arena API:
 
 - `MiniGameArena#findRandomSupplyDropLocation(...)`
 - `MiniGameArena#spawnSupplyDropCrate(...)`
+- `MiniGameArena#trySpawnSupplyDropCrate(...)`
 - `MiniGameArena#clearAllSupplyDrops()`
 - `MiniGameArena#pullPlayer(...)`
 - `MiniGameArena#pullPlayers(...)`

@@ -2,6 +2,7 @@ package dev.stemcraft.feature;
 
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.api.internal.InstanceHolder;
 import dev.stemcraft.service.DatabaseServiceImpl;
 import org.bukkit.*;
 import org.junit.jupiter.api.*;
@@ -24,11 +25,13 @@ class TeleportWorldGroupTest {
         var field = DatabaseServiceImpl.class.getDeclaredField("connection");
         field.setAccessible(true); field.set(db, connection);
         when(api.database()).thenReturn(db);
+        InstanceHolder.set(api, mock(org.bukkit.plugin.Plugin.class));
         feature = new TeleportUtils(api);
         invoke("ensureBackLocationStorage", new Class<?>[]{});
     }
     @AfterEach void cleanup() throws Exception {
         connection.close();
+        InstanceHolder.set(null, null);
         MockBukkit.unmock();
     }
     Object invoke(String name, Class<?>[] types, Object... args) throws Exception {
@@ -88,6 +91,33 @@ class TeleportWorldGroupTest {
             executor.getValue().execute(api, null, ctx);
             verify(ctx).returnInfo("You are already in this world group.");
             assertEquals(new Location(world, 30, 65, 40), player.getLocation());
+        }
+    }
+
+    @Test void tpspawnUsesTheSenderWhenAPlayerOmitsTheTarget() {
+        var world = server.addSimpleWorld("spawn-target");
+        var player = server.addPlayer();
+        var builder = mock(dev.stemcraft.api.command.CommandBuilder.class, RETURNS_SELF);
+        when(api.commands().create("tpspawn")).thenReturn(builder);
+
+        try (var pluginAccess = mockStatic(STEMCraft.class)) {
+            pluginAccess.when(STEMCraft::getPlugin).thenReturn(mock(STEMCraft.class));
+            feature.onEnable();
+
+            var executor = org.mockito.ArgumentCaptor.forClass(dev.stemcraft.api.command.CommandExecutor.class);
+            verify(builder).executor(executor.capture());
+
+            var command = mock(dev.stemcraft.api.command.Command.class);
+            var ctx = mock(dev.stemcraft.api.command.CommandContext.class);
+            when(ctx.args()).thenReturn(java.util.List.of(world.getName()));
+            when(ctx.getArg(0)).thenReturn(world.getName());
+            when(ctx.getSender()).thenReturn(player);
+            when(ctx.isConsole()).thenReturn(false);
+
+            executor.getValue().execute(api, command, ctx);
+
+            assertEquals(world, player.getWorld());
+            verify(ctx, never()).getPlayers(1);
         }
     }
 

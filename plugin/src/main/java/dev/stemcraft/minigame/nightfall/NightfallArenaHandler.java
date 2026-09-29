@@ -1806,8 +1806,7 @@ public class NightfallArenaHandler implements MiniGameArenaHandler {
         if (loot.isEmpty()) {
             return false;
         }
-        arena.spawnSupplyDropCrate(loot, target);
-        return true;
+        return arena.trySpawnSupplyDropCrate(loot, target);
     }
 
     private void announceSupplyDrop(@NotNull MiniGameArena arena, @NotNull Location dropLocation) {
