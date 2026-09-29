@@ -176,8 +176,6 @@ final class MobArenaCommand {
     }
 
     private void commandGlobalDeathMessages(final CommandContext ctx) {
-        // TODO: Error-checking ~ ProjectHSI
-
         ctx.checkArgsSizeAtLeast(4);
         switch (ctx.getArg(1)) {
             case "add" -> {
@@ -190,13 +188,8 @@ final class MobArenaCommand {
                     }
                     case "ENTITY" -> {
                         ctx.checkArgsSizeAtLeast(5);
-                        final MobDeathReason reason;
-                        try {
-                            reason = MobDeathReason.valueOf(ctx.getArg(3));
-                        } catch (IllegalArgumentException _) {
-                            ctx.returnError("The reason must be a valid death reason.");
-                            return;
-                        }
+                        final MobDeathReason reason = getMobDeathReason(ctx, 3);
+                        if (reason == null) return;
 
                         Map<MobDeathReason, List<String>> entityDeathMessages;
                         try {
@@ -227,13 +220,8 @@ final class MobArenaCommand {
                     }
                     case "ENTITY" -> {
                         ctx.checkArgsSizeAtLeast(6);
-                        final MobDeathReason reason;
-                        try {
-                            reason = MobDeathReason.valueOf(ctx.getArg(3));
-                        } catch (IllegalArgumentException _) {
-                            ctx.returnError("The reason must be a valid death reason.");
-                            return;
-                        }
+                        final MobDeathReason reason = getMobDeathReason(ctx, 3);
+                        if (reason == null) return;
 
                         Map<MobDeathReason, List<String>> entityDeathMessages;
                         try {
@@ -265,13 +253,8 @@ final class MobArenaCommand {
                     }
                     case "ENTITY" -> {
                         ctx.checkArgsSizeAtLeast(5);
-                        final MobDeathReason reason;
-                        try {
-                            reason = MobDeathReason.valueOf(ctx.getArg(3));
-                        } catch (IllegalArgumentException _) {
-                            ctx.returnError("The reason must be a valid death reason.");
-                            return;
-                        }
+                        final MobDeathReason reason = getMobDeathReason(ctx, 3);
+                        if (reason == null) return;
 
                         Map<MobDeathReason, List<String>> entityDeathMessages;
                         try {
@@ -292,9 +275,18 @@ final class MobArenaCommand {
         }
     }
 
-    private void commandDeathMessages(final CommandContext ctx) {
-        // TODO: Error-checking ~ ProjectHSI
+    private static @org.jspecify.annotations.Nullable MobDeathReason getMobDeathReason(@lombok.NonNull final CommandContext ctx, final int index) {
+        final MobDeathReason reason;
+        try {
+            reason = MobDeathReason.valueOf(ctx.getArg(index));
+        } catch (IllegalArgumentException _) {
+            ctx.returnError("The reason must be a valid death reason.");
+            return null;
+        }
+        return reason;
+    }
 
+    private void commandDeathMessages(final CommandContext ctx) {
         final MiniGameArena arena = requireArena(ctx);
         ctx.checkArgsSizeAtLeast(3);
         switch (ctx.getArg(2)) {
@@ -307,13 +299,8 @@ final class MobArenaCommand {
                     }
                     case "ENTITY" -> {
                         ctx.checkArgsSizeAtLeast(6);
-                        final MobDeathReason reason;
-                        try {
-                            reason = MobDeathReason.valueOf(ctx.getArg(4));
-                        } catch (IllegalArgumentException _) {
-                            ctx.returnError("The reason must be a valid death reason.");
-                            return;
-                        }
+                        final MobDeathReason reason = getMobDeathReason(ctx, 4);
+                        if (reason == null) return;
 
                         if (!arena.contains("entity-death-messages." + reason.name())) { arena.set("entity-death-messages." + reason.name(), new ArrayList<String>()); }
 
@@ -334,13 +321,8 @@ final class MobArenaCommand {
                     }
                     case "ENTITY" -> {
                         ctx.checkArgsSizeAtLeast(7);
-                        final MobDeathReason reason;
-                        try {
-                            reason = MobDeathReason.valueOf(ctx.getArg(4));
-                        } catch (IllegalArgumentException _) {
-                            ctx.returnError("The reason must be a valid death reason.");
-                            return;
-                        }
+                        final MobDeathReason reason = getMobDeathReason(ctx, 4);
+                        if (reason == null) return;
 
                         if (!arena.contains("entity-death-messages." + reason.name()) || arena.getList("entity-death-messages." + reason.name(), String.class).size() >= ctx.getArgAsInt(5)) {
                             ctx.returnError("That message doesn't exist.");
@@ -364,13 +346,8 @@ final class MobArenaCommand {
                     }
                     case "ENTITY" -> {
                         ctx.checkArgsSizeAtLeast(6);
-                        final MobDeathReason reason;
-                        try {
-                            reason = MobDeathReason.valueOf(ctx.getArg(4));
-                        } catch (IllegalArgumentException _) {
-                            ctx.returnError("The reason must be a valid death reason.");
-                            return;
-                        }
+                        final MobDeathReason reason = getMobDeathReason(ctx, 4);
+                        if (reason == null) return;
                         if (!arena.contains("entity-death-messages." + reason.name()) || arena.getList("entity-death-messages." + reason.name(), String.class).size() >= ctx.getArgAsInt(5)) {
                             ctx.returnError("That message doesn't exist.");
                             return;
