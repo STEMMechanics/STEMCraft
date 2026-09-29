@@ -841,6 +841,7 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
     @Override
     public void onArenaUnload(@NotNull final MiniGameArena arena) {
         arena.stopWinnerCelebration();
+        killAllTrackedMobs(arena);
         resetAllTrackedMobsForArena(arena);
         @NotNull final String listenerPrefix = regionListenerPrefix(arena.id());
         api.regions().removeListener(listenerPrefix + "boundary");
