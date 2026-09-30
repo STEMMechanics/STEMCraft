@@ -8,13 +8,16 @@ import dev.stemcraft.api.util.TextUtil;
 import dev.stemcraft.feature.stembot.*;
 import dev.stemcraft.api.service.stembot.StemBotService;
 import dev.stemcraft.api.service.stembot.StemBotSession;
+import dev.stemcraft.api.service.stembot.StemBotTrigger;
 import io.papermc.paper.event.player.AsyncChatEvent;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.*;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Projectile;
 import org.bukkit.event.EventPriority;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.player.*;
 import org.bukkit.event.server.PluginDisableEvent;
 import org.bukkit.persistence.PersistentDataType;
@@ -32,17 +35,25 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
     private final Map<UUID,BotSession> sessions=new ConcurrentHashMap<>();
     private final Set<AsyncChatEvent> privateChat=
         Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
-    private final Map<UUID,Integer> pendingFirstTime=new HashMap<>();
+    private final Map<UUID,Integer> pendingArrivals=new HashMap<>();
     private final Map<UUID,PendingSummon> pendingSummons=new ConcurrentHashMap<>();
+    private final Map<String,Integer> triggerRegistrations=new HashMap<>();
+    private final Map<UUID,LinkedHashSet<String>> pendingBotRequests=new HashMap<>();
+    private final Map<UUID,String> activeBotRequests=new HashMap<>();
     private final Map<BotActor,Departure> departures=new HashMap<>();
     private record Departure(UUID owner,int ticks) {}
     private record PendingSummon(String action,int ticks) {}
+    private record ResolvedBotRequest(String action,String triggerId,boolean once) {}
     private final BotSkinCache skins=new BotSkinCache();
 
     private BotScript script;
+    private dev.stemcraft.api.command.Command botCommand;
     private boolean enabled;
     private long epoch;
     private NamespacedKey firstWorldsKey;
+    private NamespacedKey seenTriggersKey;
+    private NamespacedKey pendingTriggersKey;
+    private NamespacedKey lastCombatKey;
 
     public StemBotFeature(STEMCraftAPI api) {
         super(api);
@@ -56,29 +67,46 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
     @Override
     public void onEnable() {
         firstWorldsKey=new NamespacedKey(STEMCraft.getPlugin(),"stembot-first-worlds");
+        seenTriggersKey=new NamespacedKey(STEMCraft.getPlugin(),"stembot-seen-triggers");
+        pendingTriggersKey=new NamespacedKey(STEMCraft.getPlugin(),"stembot-pending-triggers");
+        lastCombatKey=new NamespacedKey(STEMCraft.getPlugin(),"stembot-last-combat");
         load();
 
-        api.commands().create("stembot")
+        var command=api.commands().create("stembot")
             .aliases("help")
             .description("Talk privately to your STEMBot guide.")
-            .usage("/stembot [close]")
-            .tabCompletion("close")
-            .executor((unused,command,ctx)->{
+            .usage("/stembot [close|help-topic]")
+            .tabCompletion("close");
+        if(script!=null) script.helpTopics().keySet().stream().sorted().forEach(command::tabCompletion);
+        command.executor((unused,registeredCommand,ctx)->{
                 ctx.checkNotConsole();
                 Player player=ctx.asPlayer();
 
-                if(controls.containsKey(player.getUniqueId())) {
-                    ctx.returnError("STEMBot is busy guiding you. Finish the current conversation first.");
-                    return;
-                }
-
-                if(ctx.getArg(0,"").equalsIgnoreCase("close")) {
+                String argument=ctx.getArg(0,"").trim();
+                if(argument.equalsIgnoreCase("close")) {
                     close(player.getUniqueId());
                     return;
                 }
 
-                if(!ctx.getArg(0,"").isBlank()) {
-                    ctx.returnUsage();
+                if(!argument.isBlank()) {
+                    if(!available()) {
+                        ctx.returnError("STEMBot is resting right now.");
+                        return;
+                    }
+                    String action=script.helpTopicAction(argument);
+                    if(action==null) {
+                        List<String> topics=script.helpTopics().keySet().stream().sorted().toList();
+                        ctx.returnInfo(topics.isEmpty()?"I do not have any help topics right now."
+                            :"I can help with: "+String.join(", ",topics)+".");
+                        return;
+                    }
+                    if(!queueHelpAction(player,action)) ctx.returnError("I could not queue that help topic right now.");
+                    else ctx.returnInfo("I will help with "+argument+" when I am free and you are out of combat.");
+                    return;
+                }
+
+                if(controls.containsKey(player.getUniqueId())) {
+                    ctx.returnError("STEMBot is busy guiding you. Finish the current conversation first.");
                     return;
                 }
 
@@ -89,30 +117,52 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
 
                 String action=script.commandAction(player.getWorld().getName());
                 if(action==null) {
-                    ctx.returnError("STEMBot has no script for this world yet.");
+                    ctx.returnInfo("STEMBot is not available right now.");
                     return;
                 }
 
                 summon(player,action);
-            })
-            .register(STEMCraft.getPlugin());
+            });
+        botCommand=command.register(STEMCraft.getPlugin());
+        updateCommandTabCompletions();
+
+        // Bukkit already owns /help, so the alias may be rejected by the command map.
+        // Forward it here to keep /help and /help <topic> mapped to STEMBot.
+        api.events().register(PlayerCommandPreprocessEvent.class,event->{
+            String message=event.getMessage().trim();
+            if(!message.equalsIgnoreCase("/help")
+                &&!message.regionMatches(true,0,"/help ",0,6)) return;
+            event.setCancelled(true);
+            String arguments=message.length()<=5?"":message.substring(5).trim();
+            String forwarded=arguments.isBlank()?"stembot":"stembot "+arguments;
+            Player player=event.getPlayer();
+            api.tasks().nextTick(()->{
+                if(player.isOnline()) Bukkit.dispatchCommand(player,forwarded);
+            });
+        },EventPriority.HIGHEST,true);
 
         api.events().register(
             PlayerJoinEvent.class,
-            event->queueFirstTime(event.getPlayer(),40),
+            event->{
+                restorePendingBotRequests(event.getPlayer());
+                queueArrival(event.getPlayer(),40);
+            },
             EventPriority.MONITOR,
             true
         );
 
         api.events().register(PlayerChangedWorldEvent.class,event->{
             close(event.getPlayer().getUniqueId(),false);
-            queueFirstTime(event.getPlayer(),20);
+            queueArrival(event.getPlayer(),20);
         });
 
         api.events().register(PlayerQuitEvent.class,event->{
-            pendingFirstTime.remove(event.getPlayer().getUniqueId());
+            pendingArrivals.remove(event.getPlayer().getUniqueId());
+            pendingBotRequests.remove(event.getPlayer().getUniqueId());
             close(event.getPlayer().getUniqueId(),false);
         });
+
+        api.events().register(EntityDamageByEntityEvent.class,this::onCombatDamage,EventPriority.MONITOR,true);
 
         api.events().register(
             org.bukkit.event.entity.PlayerDeathEvent.class,
@@ -227,22 +277,88 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
     }
 
     @Override
+    public StemBotTrigger registerTrigger(String id) {
+        String normalized=normalizeTriggerId(id);
+        if(!normalized.matches("[a-z0-9][a-z0-9_-]{0,63}"))
+            throw new IllegalArgumentException("Invalid STEMBot trigger id: "+id);
+        triggerRegistrations.merge(normalized,1,Integer::sum);
+        return new RegisteredTrigger(normalized);
+    }
+
+    private final class RegisteredTrigger implements StemBotTrigger {
+        private final String id;
+        private boolean closed;
+
+        private RegisteredTrigger(String id) {
+            this.id=id;
+        }
+
+        @Override
+        public boolean fire(Player player) {
+            return !closed&&requestTrigger(player,id);
+        }
+
+        @Override
+        public void close() {
+            if(closed) return;
+            closed=true;
+            triggerRegistrations.computeIfPresent(id,(ignored,count)->count<=1?null:count-1);
+        }
+    }
+
+    private boolean requestTrigger(Player player,String triggerId) {
+        if(!available()||!player.isOnline()||!triggerRegistrations.containsKey(triggerId)) return false;
+        UUID playerId=player.getUniqueId();
+        String requestKey="trigger:"+triggerId;
+        if(isBotRequestActiveOrPending(playerId,requestKey)) return true;
+        if(script.triggerAction(triggerId,hasSeenTrigger(player,triggerId))==null) return false;
+        enqueueBotRequest(player,requestKey);
+        return true;
+    }
+
+    private boolean queueHelpAction(Player player,String action) {
+        if(!available()||!player.isOnline()) return false;
+        UUID playerId=player.getUniqueId();
+        String requestKey="help:"+action;
+        if(isBotRequestActiveOrPending(playerId,requestKey)) return true;
+        enqueueBotRequest(player,requestKey);
+        return true;
+    }
+
+    private boolean isBotRequestActiveOrPending(UUID playerId,String requestKey) {
+        if(requestKey.equals(activeBotRequests.get(playerId))) return true;
+        return pendingBotRequests.getOrDefault(playerId,new LinkedHashSet<>()).contains(requestKey);
+    }
+
+    private void enqueueBotRequest(Player player,String requestKey) {
+        UUID playerId=player.getUniqueId();
+        pendingBotRequests.computeIfAbsent(playerId,ignored->new LinkedHashSet<>()).add(requestKey);
+        LinkedHashSet<String> stored=readPersistentValues(player,pendingTriggersKey);
+        stored.add(requestKey);
+        writePersistentValues(player,pendingTriggersKey,stored);
+    }
+
+    private void restorePendingBotRequests(Player player) {
+        LinkedHashSet<String> stored=readPersistentValues(player,pendingTriggersKey);
+        if(!stored.isEmpty()) pendingBotRequests.put(player.getUniqueId(),stored);
+    }
+
+    @Override
     public boolean startAction(Player player,String action) {
         return !controls.containsKey(player.getUniqueId())&&available()&&hasAction(action)
             &&runAction(player,action,false);
     }
 
-    private void startFirstTimeAction(Player player) {
-        String action=unseenFirstTimeAction(player);
-        if(action!=null&&!controls.containsKey(player.getUniqueId())&&available())
-            runAction(player,action,true);
-    }
-
-    private String unseenFirstTimeAction(Player player) {
+    private void startArrivalAction(Player player) {
         String world=player.getWorld().getName();
-        if(script==null||hasSeenWorld(player,world)) return null;
-        String action=script.firstTimeAction(world);
-        return hasAction(action)?action:null;
+        String action=script.arrivalAction(world,hasSeenWorld(player,world));
+        if(action==null||controls.containsKey(player.getUniqueId())||!available()) return;
+        boolean firstTime=!hasSeenWorld(player,world)&&script.firstTimeAction(world)!=null;
+        if(firstTime) runAction(player,action,true);
+        else {
+            BotScript.SpawnPoint spawn=script.alwaysActionSpawn(world);
+            start(player,action,false,spawn==null?null:spawn.location(player.getWorld()));
+        }
     }
 
     private boolean runAction(Player player,String action,boolean firstTime) {
@@ -259,7 +375,7 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
             start(player,action,firstTime);
             if(!sessions.containsKey(id)) return false;
         }
-        pendingFirstTime.remove(id);
+        pendingArrivals.remove(id);
         pendingSummons.remove(id);
         return true;
     }
@@ -334,6 +450,7 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
         try {
             assert config != null;
             script=BotScript.read(config);
+            if(BotScript.migrateWorldRoutes(config)) config.save();
 
             if(enabled&&dev.stemcraft.integration.CitizensAccess.available()) {
                 skins.load(
@@ -360,16 +477,25 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
                 error
             );
         }
+        updateCommandTabCompletions();
     }
 
-    private void queueFirstTime(Player player,int ticks) {
+    private void updateCommandTabCompletions() {
+        if(botCommand==null) return;
+        botCommand.clearTabCompletions();
+        botCommand.addTabCompletion("close");
+        if(script!=null) script.helpTopics().keySet().stream().sorted()
+            .forEach(topic->botCommand.addTabCompletion(topic));
+    }
+
+    private void queueArrival(Player player,int ticks) {
         if(script==null||controls.containsKey(player.getUniqueId())) return;
 
-        String action=script.firstTimeAction(player.getWorld().getName());
-        if(action==null||hasSeenWorld(player,player.getWorld().getName()))
+        String action=script.arrivalAction(player.getWorld().getName(),hasSeenWorld(player,player.getWorld().getName()));
+        if(action==null)
             return;
 
-        pendingFirstTime.put(player.getUniqueId(),ticks);
+        pendingArrivals.put(player.getUniqueId(),ticks);
     }
 
     private void tick() {
@@ -390,35 +516,38 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
             }
         }
 
-        for(var entry:new ArrayList<>(pendingFirstTime.entrySet())) {
+        for(var entry:new ArrayList<>(pendingArrivals.entrySet())) {
             Player player=Bukkit.getPlayer(entry.getKey());
 
             if(player==null) {
-                pendingFirstTime.remove(entry.getKey());
+                pendingArrivals.remove(entry.getKey());
                 continue;
             }
 
             if(controls.containsKey(player.getUniqueId()))
                 continue;
 
-            String world=player.getWorld().getName();
-            String action=script.firstTimeAction(world);
+            if(shouldDeferForCombat(player))
+                continue;
 
-            if(action==null||hasSeenWorld(player,world)) {
-                pendingFirstTime.remove(entry.getKey());
+            String world=player.getWorld().getName();
+            String action=script.arrivalAction(world,hasSeenWorld(player,world));
+
+            if(action==null) {
+                pendingArrivals.remove(entry.getKey());
                 continue;
             }
 
             int remaining=entry.getValue()-5;
             if(remaining>0) {
-                pendingFirstTime.put(entry.getKey(),remaining);
+                pendingArrivals.put(entry.getKey(),remaining);
                 continue;
             }
 
-            pendingFirstTime.remove(entry.getKey());
+            pendingArrivals.remove(entry.getKey());
 
             if(!sessions.containsKey(player.getUniqueId())&&!pendingSummons.containsKey(player.getUniqueId()))
-                startFirstTimeAction(player);
+                startArrivalAction(player);
         }
 
         for(var entry:new ArrayList<>(sessions.entrySet())) {
@@ -432,8 +561,10 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
             try {
                 entry.getValue().tick(player.getLocation());
 
-                if(entry.getValue().closed())
+                if(entry.getValue().closed()) {
                     sessions.remove(entry.getKey(),entry.getValue());
+                    activeBotRequests.remove(entry.getKey());
+                }
             } catch(RuntimeException error) {
                 close(entry.getKey());
 
@@ -444,6 +575,68 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
                 );
             }
         }
+
+        processPendingBotRequests();
+    }
+
+    private void processPendingBotRequests() {
+        for(var entry:new ArrayList<>(pendingBotRequests.entrySet())) {
+            UUID playerId=entry.getKey();
+            Player player=Bukkit.getPlayer(playerId);
+            if(player==null) {
+                pendingBotRequests.remove(playerId);
+                continue;
+            }
+            if(controls.containsKey(playerId)||sessions.containsKey(playerId)
+                ||pendingSummons.containsKey(playerId)||pendingArrivals.containsKey(playerId)
+                ||shouldDeferForCombat(player)
+                ||departures.values().stream().anyMatch(value->value.owner().equals(playerId)))
+                continue;
+
+            LinkedHashSet<String> requests=pendingBotRequests.get(playerId);
+            if(requests==null) continue;
+            for(String requestKey:List.copyOf(requests)) {
+                ResolvedBotRequest resolved=resolveBotRequest(player,requestKey);
+                if(resolved==null) {
+                    removeBotRequest(player,requestKey);
+                    continue;
+                }
+
+                boolean started=runAction(player,resolved.action(),false);
+                if(started) {
+                    activeBotRequests.put(playerId,requestKey);
+                    if(resolved.once()) markSeenTrigger(player,resolved.triggerId());
+                }
+                removeBotRequest(player,requestKey);
+                break;
+            }
+        }
+    }
+
+    private ResolvedBotRequest resolveBotRequest(Player player,String requestKey) {
+        if(requestKey.startsWith("trigger:")) {
+            String id=requestKey.substring("trigger:".length());
+            if(!triggerRegistrations.containsKey(id)) return null;
+            BotScript.TriggerAction route=script.triggerAction(id,hasSeenTrigger(player,id));
+            return route==null?null:new ResolvedBotRequest(route.action(),id,route.once());
+        }
+        if(requestKey.startsWith("help:")) {
+            String action=requestKey.substring("help:".length());
+            if(!script.helpTopics().containsValue(action)) return null;
+            return new ResolvedBotRequest(action,null,false);
+        }
+        return null;
+    }
+
+    private void removeBotRequest(Player player,String requestKey) {
+        UUID playerId=player.getUniqueId();
+        LinkedHashSet<String> requests=pendingBotRequests.get(playerId);
+        if(requests!=null) {
+            requests.remove(requestKey);
+            if(requests.isEmpty()) pendingBotRequests.remove(playerId);
+        }
+        LinkedHashSet<String> stored=readPersistentValues(player,pendingTriggersKey);
+        if(stored.remove(requestKey)) writePersistentValues(player,pendingTriggersKey,stored);
     }
 
     void summon(Player player,String action) {
@@ -479,24 +672,31 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
     }
 
     void start(Player player,String action,boolean firstTime) {
+        start(player,action,firstTime,null);
+    }
+
+    void start(Player player,String action,boolean firstTime,Location fixedSpawn) {
         if(!available()||!player.isOnline()) return;
 
         UUID id=player.getUniqueId();
         World world=player.getWorld();
         Location playerLocation=player.getLocation();
 
-        Location actorSpawn=findSpawn(playerLocation,script.spawnDistance(),script.spawnSearchRadius());
+        Location actorSpawn=fixedSpawn==null
+            ?findSpawn(playerLocation,script.spawnDistance(),script.spawnSearchRadius())
+            :(safe(fixedSpawn)?fixedSpawn.clone():null);
         if(actorSpawn==null) {
             player.sendMessage(
                 Component.text(
-                    "Give me a little clear ground nearby, then summon STEMBot again.",
+                    fixedSpawn==null?"Give me a little clear ground nearby, then summon STEMBot again."
+                        :"STEMBot’s usual spot is not available right now.",
                     NamedTextColor.YELLOW
                 )
             );
             return;
         }
 
-        actorSpawn.setDirection(
+        if(fixedSpawn==null) actorSpawn.setDirection(
             playerLocation.toVector().subtract(actorSpawn.toVector())
         );
 
@@ -735,6 +935,58 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
         return raw.replace("{player}",player.getName());
     }
 
+    private void onCombatDamage(EntityDamageByEntityEvent event) {
+        if(event.isCancelled()||event.getFinalDamage()<=0) return;
+        long now=System.currentTimeMillis();
+        if(event.getEntity() instanceof Player victim) markCombat(victim,now);
+        Player attacker=resolvePlayerDamager(event.getDamager());
+        if(attacker!=null) markCombat(attacker,now);
+    }
+
+    private Player resolvePlayerDamager(org.bukkit.entity.Entity damager) {
+        if(damager instanceof Player player) return player;
+        if(damager instanceof Projectile projectile&&projectile.getShooter() instanceof Player player) return player;
+        return null;
+    }
+
+    private void markCombat(Player player,long timestamp) {
+        player.getPersistentDataContainer().set(lastCombatKey,PersistentDataType.LONG,timestamp);
+    }
+
+    private boolean shouldDeferForCombat(Player player) {
+        if(script==null||!script.deferDuringCombat()||script.combatCooldownSeconds()<=0) return false;
+        Long lastCombat=player.getPersistentDataContainer().get(lastCombatKey,PersistentDataType.LONG);
+        return lastCombat!=null&&System.currentTimeMillis()-lastCombat<script.combatCooldownSeconds()*1000L;
+    }
+
+    private boolean hasSeenTrigger(Player player,String triggerId) {
+        return readPersistentValues(player,seenTriggersKey).contains(triggerId);
+    }
+
+    private void markSeenTrigger(Player player,String triggerId) {
+        LinkedHashSet<String> seen=readPersistentValues(player,seenTriggersKey);
+        if(seen.add(triggerId)) writePersistentValues(player,seenTriggersKey,seen);
+    }
+
+    private LinkedHashSet<String> readPersistentValues(Player player,NamespacedKey key) {
+        String raw=player.getPersistentDataContainer().get(key,PersistentDataType.STRING);
+        LinkedHashSet<String> values=new LinkedHashSet<>();
+        if(raw!=null&&!raw.isBlank()) values.addAll(Arrays.asList(raw.split("\\n")));
+        return values;
+    }
+
+    private void writePersistentValues(Player player,NamespacedKey key,Collection<String> values) {
+        if(values.isEmpty()) {
+            player.getPersistentDataContainer().remove(key);
+            return;
+        }
+        player.getPersistentDataContainer().set(key,PersistentDataType.STRING,String.join("\n",values));
+    }
+
+    private static String normalizeTriggerId(String id) {
+        return id==null?"":id.trim().toLowerCase(Locale.ROOT);
+    }
+
     private boolean hasSeenWorld(Player player,String world) {
         String raw=player.getPersistentDataContainer().get(
             firstWorldsKey,
@@ -775,7 +1027,8 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
     @SuppressWarnings("resource")
     private void close(UUID id,boolean farewell) {
         controls.remove(id);
-        pendingFirstTime.remove(id);
+        activeBotRequests.remove(id);
+        pendingArrivals.remove(id);
         pendingSummons.remove(id);
 
         BotSession session=sessions.remove(id);
@@ -786,7 +1039,7 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
     private void stop() {
         epoch++;
         controls.clear();
-        pendingFirstTime.clear();
+        pendingArrivals.clear();
         pendingSummons.clear();
         skins.close();
 

@@ -494,4 +494,4 @@ The location is the bottom-left backing block when viewing the display from the 
 
 ## STEMBot guide control
 
-Use `api.stemBot()` to acquire an exclusive private guide session, speak, toggle following, check action names, run a specific action, move or teleport the guide, and consume replies through a private chat callback. See [STEMBot API usage and lifecycle](stembot.md#controlling-stembot-through-the-api). Callers retain ownership of their interaction rules and reply handling.
+Use `api.stemBot()` to acquire an exclusive private guide session, speak, toggle following, check action names, run a specific action, move or teleport the guide, consume replies through a private chat callback, and register event triggers for scripted actions. See [STEMBot API usage and lifecycle](stembot.md#controlling-stembot-through-the-api) and [trigger and help-topic configuration](stembot.md#event-triggers-and-help-topics). Callers retain ownership of their interaction rules and reply handling.

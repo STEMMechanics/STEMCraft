@@ -43,13 +43,15 @@ final class ExampleGuide {
 
 The handle provides `active()`, `speak(text)`, `follow(enabled)`, `startAction(name)` and `close()`. It reserves the guide even if terrain prevents spawning; an inactive handle still needs closing. It suspends automatic introductions and manual summons. `speak(text)` uses bot text and sounds without enabling chat capture. `listen(callback)` consumes ordinary chat privately until `stopListening()`, replacement, close or action handoff. Callbacks run on the server thread; stale queued replies are discarded. Without a listener, ordinary chat stays public. Callers own gameplay restrictions. Stale handles cannot speak through, dismiss or redirect a replacement session. World changes, disconnects, reload and disable invalidate handles; callers may acquire another as needed.
 
+Features can register an event trigger with `api.stemBot().registerTrigger("mailbox-received")`, retain the returned `StemBotTrigger`, call `fire(player)` on the server thread when the event occurs, and close the registration when disabled. `fire` returns whether STEMBot accepted the request. Routes are configured in `stembot.yml`; an absent route leaves the owning feature's normal behavior intact. The handle can be used with try-with-resources when its lifetime is lexical.
+
 `move(destination, waitForPlayer)` replaces the current movement order and uses the scripted walk navigation/recovery. With `waitForPlayer=true`, the bot pauses and resumes using the configured distance thresholds. False means it proceeds independently. The return value acknowledges an accepted order, not arrival. If navigation cannot recover, it stops; callers may issue a new move or teleport. `follow(enabled)` tracks the moving player instead of a fixed destination. `location()` returns an optional defensive copy. `teleport(destination)` cancels navigation and returns whether teleporting succeeded. Both move and teleport require finite coordinates in the owner's current world. These operations run on the server thread.
 
 `FirstJoinService` is a client of this API. It owns questions, attempts, deadlines, command restrictions and persistence. It passes localized presentation text to its guide handle, asks it to follow, and starts its configured action after a correct answer. The bot has no verification-specific state or dependency on FirstJoin. Without an active actor, FirstJoin uses ordinary messages and its movement restriction. World transitions reacquire a guide without resetting the question or deadline. Success explicitly requests `first-join.stembot-action` from `config.yml`; a blank value closes the guide, and a missing action closes it with an administrator log message. The bundled value is `first-hub`. The main `world` has no automatic `first-time` mapping, so FirstJoin owns that introduction. Other configured worlds retain automatic introductions.
 
 `StemBotService.hasAction(name)` checks the loaded script. `startAction(player, name)` runs a named action without marking any automatic introduction as seen. `startAction(name)` also exists on a controlled handle, preserving the actor when possible. First-time world mappings are internal automation and have no public start/pause API. Invalid requests return false and retain control so the caller can retry or close. There is no implicit command-action fallback.
 
-Automatic introductions use their per-world seen marker. Controlled sessions suspend automatic triggers. Avoid configuring both a FirstJoin completion action and an automatic first-time action for the same starting world. On an existing server, remove `first-time.world.world` from its deployed `stembot.yml` and set `first-join.stembot-action` in its deployed `config.yml`; bundled files do not overwrite an existing script.
+Automatic introductions use their per-world seen marker. Controlled sessions suspend automatic triggers. Avoid configuring both a FirstJoin completion action and an automatic first-time action for the same starting world. On an existing server, remove `worlds.world.first-time-action` from its deployed `stembot.yml` and set `first-join.stembot-action` in its deployed `config.yml`; bundled files do not overwrite an existing script.
 
 ## Script and timing
 
@@ -72,3 +74,72 @@ Reload/disable must close actors, cancel speech and movement work, and stop chat
 ## Keeping the introduction optional
 
 The bundled Survival introduction offers practice without starting it automatically. Detailed plot, quest and navigation guidance belongs behind topic routes. Practice requires explicit acceptance, supports skip and recognised-topic interruption, and has bounded waits. Do not turn every command into a tutorial requirement. Providers must observe successful state changes rather than treating typed chat as proof that a command ran.
+
+
+## World action configuration
+
+All world routes live together in `stembot.yml`:
+
+```yaml
+worlds:
+  hub:
+    command-action: hub
+    first-time-action: first-hub
+  floorshuffle:
+    always-action: floorshuffle-greeting
+    always-action-spawn: [20.5, 65, 20.5, 90, 0]
+```
+
+Action names must exist under `actions`. `command-action` selects the action for
+`/stembot` and `/help`; when absent or blank, the command tells the player
+“STEMBot is not available right now.” It does not summon the automatic action.
+
+`first-time-action` runs once per player/world. `always-action` runs on login
+and on each world change. When both exist, the first-time action takes priority
+on the first visit; later visits use the always action. Teleports within the same
+world do not trigger arrival actions. Controlled sessions retain priority.
+
+`always-action-spawn` optionally supplies `[x, y, z]` or
+`[x, y, z, yaw, pitch]` in that world, with zero rotation by default.
+Only the always action uses this position; command and first-time actions retain
+the near-player spawn search. The fixed spot must have safe ground, clear space,
+be inside the world border and in a loaded chunk. An unavailable fixed spot does
+not fall back to spawning beside the player.
+
+Existing `command.world` and `first-time.world` entries migrate after successful
+script validation. Explicit new values, including blank opt-outs, take precedence.
+Reload or restart to apply edited scripts. These routes do not add click actions,
+region-based triggers or selective chat capture.
+
+## Event triggers and help topics
+
+Trigger IDs are registered by the feature that owns the event. A regular route
+runs on later events; an optional `<trigger-id>-once` route runs the first time
+for each player. The once marker is saved in player data after STEMBot starts
+the action. Pending requests survive reconnects, wait behind world-arrival and
+active guide actions, and are coalesced by trigger ID. With combat deferral
+enabled, arrival, trigger and help-topic actions wait until the configured quiet
+period after the player's last dealt or received entity damage.
+
+```yaml
+trigger-policy:
+  defer-during-combat: true
+  combat-cooldown-seconds: 10
+
+triggers:
+  mailbox-received-once: mailbox-first-received
+
+help-topics:
+  mail: mailbox-help
+  mailbox: mailbox-help
+```
+
+With no `mailbox-received` route, the mailbox explanation runs only on the
+player's first mail notification. Adding `mailbox-received: mailbox-reminder`
+also runs `mailbox-reminder` on later notifications. `/help mail` and
+`/help mailbox` use the configured help topic actions; `/stembot <topic>` has
+tab completion for the configured topics.
+All automatic arrival, trigger and help-topic actions pause during combat until
+the configured quiet period has elapsed. The bundled mailbox explanation says
+to craft the mailbox in the Survival world. `/help` and `/help <topic>` forward
+to STEMBot, while `/stembot` and `/stembot <topic>` remain available directly.
