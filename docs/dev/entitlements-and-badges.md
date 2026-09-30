@@ -30,7 +30,7 @@ entitlements:
 
 `{badge}` displays every applied badge in descending priority order. `{badge-3}` displays at most the three highest-priority badges. Badge placeholders work in the STEMCraft TAB name format. PlaceholderAPI exposes `%stemcraft_badge%` and `%stemcraft_badge:3%`. Bundled badges render directly beside one another; `entitlements.badge-display.separator` can add a custom separator.
 
-`/badges [player]` displays only badges currently applied to that player and their descriptions. It does not reveal locked or potentially earnable badges.
+`/badges [player]` displays only badges currently applied to that player and their descriptions. It accepts online or offline players known to the server and does not reveal locked or potentially earnable badges.
 Bundled badge displays use resource-pack glyph tokens such as `:trophy:` rather than Unicode emoji. Custom badge
 displays may use any registered glyph token; legacy bundled symbols are translated at runtime without replacing
 administrator-customized displays.
@@ -40,7 +40,10 @@ administrator-customized displays.
 The administrative command requires `stemcraft.entitlements.admin`.
 
 ```text
-/entitlements list
+/entitlements menu
+/entitlements list [page]
+/entitlements badges [page]
+/entitlements player <player> [page]
 /entitlements reload
 /entitlements recalculate <player>
 /entitlements grant <player> <entitlement>
@@ -54,6 +57,8 @@ The administrative command requires `stemcraft.entitlements.admin`.
 /entitlements badge delete <id>
 /entitlements badge set <id> <field> <value>
 ```
+
+`/entitlements menu` and `/entitlements list` open the paginated ChatMenu for entitlement definitions. Select an ability to edit it; the menu also links to badge definitions and player awards. `/entitlements badges` (also `/entitlements badge list`) opens the badge definition menu. `/entitlements player` opens a paginated award list with Grant/Revoke buttons and a Recalculate action. Award commands and menus accept offline players known to the server; player tab completion includes cached offline names. `/badges <player>` also accepts an offline player.
 
 Convenience entitlement fields are `stat`, `at-least`, `duration`, `quest`, `quests-at-least`, `badges`, `permissions`, and `manual`. Use `manual true` to remove the complete `when` block, `-` to remove an individual field, or `none` to clear a badges/permissions list. Badge fields correspond directly to configuration keys: `display`, `description`, `permission`, and `priority`.
 

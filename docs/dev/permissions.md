@@ -69,7 +69,7 @@ authorize deleting another island. An administrator must confirm resets too.
 
 | Player access | Additional privileged access |
 | --- | --- |
-| `stemcraft.mailbox.send` | `stemcraft.mailbox.admin` for all queue inspection/release/hold/delete/item edits |
+| `stemcraft.mailbox.send` | `stemcraft.mailbox.admin` for queue management and `/mail` item drafts |
 | `stemcraft.namedregion.read` | `stemcraft.namedregion.teleport` for travel; `stemcraft.namedregion.admin` for all management |
 | `stemcraft.noticeboard.read` and `.post` | `stemcraft.noticeboard.admin` for other users' posts, arbitrary expiry and board management |
 | `stemcraft.book` for get/list/show self | `stemcraft.book.others` for showing another player a book; `stemcraft.book.edit` for authoring/editing |

@@ -27,6 +27,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Difficulty;
 import org.bukkit.Keyed;
 import org.bukkit.Material;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.World;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Enemy;
@@ -35,7 +36,9 @@ import org.bukkit.entity.Player;
 
 import java.util.List;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.Locale;
+import java.util.TreeMap;
 import java.util.function.Predicate;
 
 /**
@@ -74,14 +77,28 @@ public class CoreTabCompletions {
         api.tabComplete().register("player", (player, args) ->
                 Bukkit.getOnlinePlayers()
                         .stream()
-                        .filter(player::canSee)
+                        .filter(online -> player == null || player.canSee(online))
                         .map(Player::getName)
                         .toList()
         );
+        api.tabComplete().register("offline-player", (viewer, args) -> {
+            Map<String, String> names = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+            for (Player online : Bukkit.getOnlinePlayers()) {
+                if (viewer == null || viewer.canSee(online)) names.putIfAbsent(online.getName(), online.getName());
+            }
+            for (OfflinePlayer offline : Bukkit.getOfflinePlayers()) {
+                String name = offline.getName();
+                if (name == null || name.isBlank()) continue;
+                Player online = offline.getPlayer();
+                if (online != null && viewer != null && !viewer.canSee(online)) continue;
+                names.putIfAbsent(name, name);
+            }
+            return List.copyOf(names.values());
+        });
         api.tabComplete().register("players", (player, args) -> {
             List<String> names = Bukkit.getOnlinePlayers()
                     .stream()
-                    .filter(player::canSee)
+                    .filter(online -> player == null || player.canSee(online))
                     .map(Player::getName)
                     .toList();
             List<String> values = new java.util.ArrayList<>();

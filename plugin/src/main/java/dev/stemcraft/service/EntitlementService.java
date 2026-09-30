@@ -580,15 +580,28 @@ public final class EntitlementService extends BaseService {
     }
 
     private void registerCommands() {
+        api.tabComplete().register("entitlement-id", (player, args) -> entitlements.keySet().stream().sorted().toList());
+        api.tabComplete().register("badge-id", (player, args) -> badges.keySet().stream().sorted().toList());
         api.commands().create("badges").description("View applied player badges.").usage("/badges [player]")
-            .tabCompletion("{player}").executor((unused, command, ctx) -> showBadges(ctx)).register(plugin);
+            .tabCompletion("{offline-player}").tabCompletion("{offline-player}", "{number}")
+            .executor((unused, command, ctx) -> showBadges(ctx)).register(plugin);
         api.commands().create("entitlements").description("Manage entitlements and badges.")
-            .usage("/entitlements <menu|edit|condition|list|reload|recalculate|grant|revoke|badge|create|delete|set>")
-            .permission(ADMIN_PERMISSION).tabCompletion("menu").tabCompletion("edit").tabCompletion("condition")
-            .tabCompletion("list").tabCompletion("reload").tabCompletion("recalculate", "{player}")
-            .tabCompletion("grant", "{player}").tabCompletion("revoke", "{player}")
-            .tabCompletion("badge", "grant", "{player}").tabCompletion("badge", "revoke", "{player}")
-            .tabCompletion("create").tabCompletion("delete").tabCompletion("set")
+            .usage("/entitlements <menu|list|badges|player|edit|condition|reload|recalculate|grant|revoke|badge|create|delete|set>")
+            .permission(ADMIN_PERMISSION).tabCompletion("menu").tabCompletion("menu", "{number}")
+            .tabCompletion("edit").tabCompletion("condition")
+            .tabCompletion("list").tabCompletion("list", "{number}")
+            .tabCompletion("badges").tabCompletion("badges", "{number}")
+            .tabCompletion("player", "{offline-player}").tabCompletion("player", "{offline-player}", "{number}")
+            .tabCompletion("reload").tabCompletion("recalculate", "{offline-player}")
+            .tabCompletion("grant", "{offline-player}").tabCompletion("grant", "{offline-player}", "{entitlement-id}")
+            .tabCompletion("revoke", "{offline-player}").tabCompletion("revoke", "{offline-player}", "{entitlement-id}")
+            .tabCompletion("edit", "{entitlement-id}").tabCompletion("condition", "{entitlement-id}")
+            .tabCompletion("badge", "list").tabCompletion("badge", "list", "{number}")
+            .tabCompletion("badge", "grant", "{offline-player}").tabCompletion("badge", "grant", "{offline-player}", "{badge-id}")
+            .tabCompletion("badge", "revoke", "{offline-player}").tabCompletion("badge", "revoke", "{offline-player}", "{badge-id}")
+            .tabCompletion("badge", "create").tabCompletion("badge", "delete", "{badge-id}")
+            .tabCompletion("badge", "set", "{badge-id}").tabCompletion("badge", "set", "{badge-id}", "display")
+            .tabCompletion("create").tabCompletion("delete", "{entitlement-id}").tabCompletion("set", "{entitlement-id}")
             .executor((unused, command, ctx) -> manage(ctx)).register(plugin);
     }
 
@@ -605,15 +618,13 @@ public final class EntitlementService extends BaseService {
             }
         }
         List<BadgeDefinition> visible = appliedBadges(target.uuid());
-        ctx.getSender().sendMessage(Component.text("Badges for " + target.name(), NamedTextColor.GOLD));
-        if (visible.isEmpty()) {
-            ctx.getSender().sendMessage(Component.text("  No badges applied.", NamedTextColor.GRAY));
-            return;
-        }
-        for (BadgeDefinition badge : visible) {
-            ctx.getSender().sendMessage(Component.text("  ").append(miniMessage.deserialize(renderBadgeDisplay(badge)))
-                .append(Component.text(" " + badge.description(), NamedTextColor.GRAY)));
-        }
+        String targetArg = commandPlayerArgument(target.name());
+        int page = boundedPage(ChatMenuUtil.getPageFromArgs(ctx.args(), ctx.args().size() > 1 ? 1 : -1, 1), visible.size());
+        ChatMenuUtil.render(ctx.getSender(), "Badges for " + target.name(), "badges " + targetArg, page, visible.size(),
+            (start, count, interactive) -> visible.subList(start, start + count).stream().map(badge ->
+                Component.text("  ").append(miniMessage.deserialize(renderBadgeDisplay(badge)))
+                    .append(Component.text(" " + badge.description(), NamedTextColor.GRAY))).toList(),
+            "No badges applied.");
     }
 
     private String renderBadgeDisplay(BadgeDefinition badge) {
@@ -654,20 +665,26 @@ public final class EntitlementService extends BaseService {
         if ("menu".equals(action)) { showEntitlementMenu(ctx); return; }
         if ("edit".equals(action)) { showEntitlementEditor(ctx); return; }
         if ("condition".equals(action)) { editCondition(ctx); return; }
-        if ("list".equals(action)) {
-            ctx.info("Entitlements: " + String.join(", ", entitlements.keySet()));
-            ctx.info("Badges: " + String.join(", ", badges.keySet()));
+        if ("list".equals(action)) { showEntitlementMenu(ctx); return; }
+        if ("badges".equals(action)) { showBadgeMenu(ctx, ChatMenuUtil.getPageFromArgs(ctx.args(), 1, 1)); return; }
+        if ("player".equals(action)) {
+            ResolvedPlayer player = requirePlayer(ctx, 1);
+            showPlayerManagementMenu(ctx, player, ChatMenuUtil.getPageFromArgs(ctx.args(), 2, 1));
             return;
         }
         if ("reload".equals(action)) { onReload(); ctx.returnSuccess("Entitlements reloaded and recalculated."); }
         if ("recalculate".equals(action)) {
-            ResolvedPlayer player = requirePlayer(ctx, 1); recalculate(player.uuid()); ctx.returnSuccess("Recalculated " + player.name() + ".");
+            ResolvedPlayer player = requirePlayer(ctx, 1); recalculate(player.uuid()); ctx.success("Recalculated " + player.name() + ".");
+            showPlayerManagementMenu(ctx, player, 1);
+            return;
         }
         if ("grant".equals(action) || "revoke".equals(action)) {
             ResolvedPlayer player = requirePlayer(ctx, 1); requireArgs(ctx, 3); String id = ctx.getArgLower(2);
             boolean ok = "grant".equals(action) ? grantEntitlement(player.uuid(), id, "manual") : revokeEntitlement(player.uuid(), id);
             if (!ok) ctx.returnError("Unknown entitlement '" + id + "'.");
-            ctx.returnSuccess(("grant".equals(action) ? "Granted " : "Revoked ") + id + " for " + player.name() + ".");
+            ctx.success(("grant".equals(action) ? "Granted " : "Revoked ") + id + " for " + player.name() + ".");
+            showPlayerManagementMenu(ctx, player, 1);
+            return;
         }
         if ("badge".equals(action)) { manageBadge(ctx); return; }
         if ("create".equals(action) || "delete".equals(action) || "set".equals(action)) { editEntitlement(ctx, action); return; }
@@ -677,6 +694,7 @@ public final class EntitlementService extends BaseService {
     private void showEntitlementMenu(CommandContext ctx) {
         List<EntitlementDefinition> values = new ArrayList<>(entitlements.values());
         int page = ChatMenuUtil.getPageFromArgs(ctx.args(), 1, 1);
+        page = boundedPage(page, values.size());
         ChatMenuUtil.render(ctx.getSender(), "Ability administration", "entitlements menu", page, values.size(),
             (start, count, interactive) -> values.subList(start, start + count).stream().map(definition -> {
                 Component line = Component.text(definition.manual() ? "○ " : "● ",
@@ -688,7 +706,77 @@ public final class EntitlementService extends BaseService {
             }).toList(), "No abilities are configured.");
         ctx.getSender().sendMessage(suggestButton("[＋ Create]", "/entitlements create new-ability",
             "Click, replace the ID, then send").append(Component.space())
+            .append(button("[Badges]", "/entitlements badges", "Browse badge definitions")).append(Component.space())
+            .append(suggestButton("[Manage player]", "/entitlements player ", "Enter an online or offline player name")).append(Component.space())
             .append(button("[↻ Reload]", "/entitlements reload", "Reload and recalculate")));
+    }
+
+    private void showBadgeMenu(CommandContext ctx, int requestedPage) {
+        List<BadgeDefinition> values = badges.values().stream()
+            .sorted(Comparator.comparingInt(BadgeDefinition::priority).reversed().thenComparing(BadgeDefinition::id))
+            .toList();
+        int page = boundedPage(requestedPage, values.size());
+        ChatMenuUtil.render(ctx.getSender(), "Badge administration", "entitlements badges", page, values.size(),
+            (start, count, interactive) -> values.subList(start, start + count).stream().map(badge -> {
+                Component line = Component.text(badge.id(), NamedTextColor.YELLOW)
+                    .append(Component.text(" — ", NamedTextColor.DARK_GRAY))
+                    .append(miniMessage.deserialize(renderBadgeDisplay(badge)))
+                    .append(Component.text(" " + badge.description(), NamedTextColor.GRAY));
+                if (interactive) line = line.append(Component.space())
+                    .append(suggestButton("[Edit]", "/entitlements badge set " + badge.id() + " display " + badge.display(),
+                        "Edit this badge's display token"))
+                    .append(Component.space()).append(suggestButton("[Delete]", "/entitlements badge delete " + badge.id(),
+                        "Delete this badge definition"));
+                return line;
+            }).toList(), "No badges are configured.");
+        ctx.getSender().sendMessage(suggestButton("[＋ Create badge]", "/entitlements badge create new-badge",
+            "Click, replace the ID, then send").append(Component.space())
+            .append(suggestButton("[Manage player]", "/entitlements player ", "Enter an online or offline player name")).append(Component.space())
+            .append(button("[Abilities]", "/entitlements menu", "Browse entitlement definitions")));
+    }
+
+    private void showPlayerManagementMenu(CommandContext ctx, ResolvedPlayer target, int requestedPage) {
+        Set<String> ownedEntitlements = applied.getOrDefault(target.uuid(), Set.of());
+        Set<String> ownedBadges = appliedBadges(target.uuid()).stream().map(BadgeDefinition::id).collect(java.util.stream.Collectors.toSet());
+        List<PlayerAwardEntry> values = new ArrayList<>();
+        entitlements.values().stream().sorted(Comparator.comparing(EntitlementDefinition::name, String.CASE_INSENSITIVE_ORDER))
+            .forEach(definition -> values.add(new PlayerAwardEntry(false, definition.id(), definition.name(), definition.description(),
+                ownedEntitlements.contains(definition.id()))));
+        badges.values().stream().sorted(Comparator.comparing(BadgeDefinition::id, String.CASE_INSENSITIVE_ORDER))
+            .forEach(badge -> values.add(new PlayerAwardEntry(true, badge.id(), badge.id(), badge.description(), ownedBadges.contains(badge.id()))));
+
+        int page = boundedPage(requestedPage, values.size());
+        String targetArg = commandPlayerArgument(target.name());
+        ChatMenuUtil.render(ctx.getSender(), "Awards for " + target.name(), "entitlements player " + targetArg,
+            page, values.size(), (start, count, interactive) -> values.subList(start, start + count).stream().map(entry -> {
+                String label = entry.badge() ? "Badge " + entry.name() : entry.name();
+                Component line = Component.text(entry.granted() ? "● " : "○ ",
+                        entry.granted() ? NamedTextColor.GREEN : NamedTextColor.GRAY)
+                    .append(Component.text(label, NamedTextColor.WHITE))
+                    .append(Component.text(" — " + entry.description(), NamedTextColor.GRAY));
+                if (interactive) {
+                    String verb = entry.granted() ? "revoke" : "grant";
+                    String command = entry.badge()
+                        ? "/entitlements badge " + verb + " " + targetArg + " " + entry.id()
+                        : "/entitlements " + verb + " " + targetArg + " " + entry.id();
+                    line = line.append(Component.space()).append(button(entry.granted() ? "[Revoke]" : "[Grant]", command,
+                        (entry.granted() ? "Revoke " : "Grant ") + entry.name() + " for " + target.name()));
+                }
+                return line;
+            }).toList(), "No entitlements or badges are configured.");
+        ctx.getSender().sendMessage(button("[Recalculate]", "/entitlements recalculate " + targetArg,
+            "Recalculate this player's automatic entitlements").append(Component.space())
+            .append(button("[Definitions]", "/entitlements menu", "Back to entitlement definitions")));
+    }
+
+    private static int boundedPage(int requestedPage, int count) {
+        int pageCount = Math.max(1, (int) Math.ceil(count / 8.0));
+        return Math.max(1, Math.min(requestedPage, pageCount));
+    }
+
+    private static String commandPlayerArgument(String name) {
+        if (name.matches("[A-Za-z0-9_]{1,16}")) return name;
+        return "\"" + name.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
     }
 
     private void showEntitlementEditor(CommandContext ctx) {
@@ -931,13 +1019,24 @@ public final class EntitlementService extends BaseService {
     }
 
     private void manageBadge(CommandContext ctx) {
-        requireArgs(ctx, 3); String sub = ctx.getArgLower(1);
+        if (ctx.args().size() < 2) {
+            showBadgeMenu(ctx, 1);
+            return;
+        }
+        String sub = ctx.getArgLower(1);
+        if ("list".equals(sub)) {
+            showBadgeMenu(ctx, ChatMenuUtil.getPageFromArgs(ctx.args(), 2, 1));
+            return;
+        }
         if ("grant".equals(sub) || "revoke".equals(sub)) {
             requireArgs(ctx, 4); ResolvedPlayer player = requirePlayer(ctx, 2); String id = ctx.getArgLower(3);
             boolean ok = "grant".equals(sub) ? grantBadge(player.uuid(), id) : revokeBadge(player.uuid(), id);
             if (!ok) ctx.returnError("Unknown badge '" + id + "'.");
-            ctx.returnSuccess(("grant".equals(sub) ? "Granted " : "Revoked ") + id + " for " + player.name() + ".");
+            ctx.success(("grant".equals(sub) ? "Granted " : "Revoked ") + id + " for " + player.name() + ".");
+            showPlayerManagementMenu(ctx, player, 1);
+            return;
         }
+        requireArgs(ctx, 3);
         String id = ctx.getArgLower(2); if (!valid(id)) ctx.returnError("Invalid badge id.");
         ConfigSection root = getConfigSection();
         if ("create".equals(sub)) {
@@ -1113,6 +1212,7 @@ public final class EntitlementService extends BaseService {
         syncPermissions(uuid, Set.of(badge.permission()));
     }
 
+    private record PlayerAwardEntry(boolean badge, String id, String name, String description, boolean granted) {}
     public record BadgeDefinition(String id, String display, String description, String permission, int priority) {}
     private interface Condition {}
     private record ConditionGroup(boolean all, List<Condition> conditions) implements Condition {}

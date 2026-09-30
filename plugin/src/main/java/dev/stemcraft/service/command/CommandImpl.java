@@ -365,9 +365,12 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
         final String[] args;
         final Player player;
 
-        public TabCompleteArgParser(String[] args, Player player) {
+        final Set<Integer> ignoredArgs;
+
+        public TabCompleteArgParser(String[] args, Player player, Set<Integer> ignoredArgs) {
             this.args = args;
             this.player = player;
+            this.ignoredArgs = ignoredArgs;
         }
 
         public static String getStringAsOption(String arg) {
@@ -468,18 +471,18 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
             for (; argIndex < args.length; argIndex++) {
                 String arg = args[argIndex];
 
-                String option = getStringAsOption(arg);
-                if (option != null) {
-//                    optionArgsUsed.add(option);
-                    optionArgsAvailable.remove(option);
-                    continue;
-                }
+                if (!ignoredArgs.contains(argIndex)) {
+                    String option = getStringAsOption(arg);
+                    if (option != null) {
+                        optionArgsAvailable.remove(option);
+                        continue;
+                    }
 
-                TabCompleteValueOption valueOption = getStringAsValueOption(arg);
-                if (valueOption != null) {
-//                    valueOptionArgsUsed.add(valueOption.option);
-                    valueOptionArgsAvailable.remove(valueOption.option);
-                    continue;
+                    TabCompleteValueOption valueOption = getStringAsValueOption(arg);
+                    if (valueOption != null) {
+                        valueOptionArgsAvailable.remove(valueOption.option);
+                        continue;
+                    }
                 }
 
                 if (tabCompletionItem == null) {
@@ -558,7 +561,7 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
             int listIndex;
 
             // Copy the elements except the last one
-            TabCompleteArgParser argParser = new TabCompleteArgParser(fullArgs, player);
+            TabCompleteArgParser argParser = new TabCompleteArgParser(fullArgs, player, ignoredArgs);
 
             // iterate each tab completion list item
             for (listIndex = 0; listIndex < list.length; listIndex++) {
