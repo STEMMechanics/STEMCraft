@@ -16,7 +16,36 @@ When delivery completes, the recipient receives the configured notification. Not
 
 This queues a letter-only delivery. Player command senders are identified by UUID; console mail uses `STEMCraft` as its sender label. The other `/mailbox` subcommands inspect and administer the delivery queue.
 
-Permission: `stemcraft.mailbox`.
+## Admin mail drafts
+
+Use `/mail` to build a delivery containing a message and items:
+
+```text
+/mail compose <player>
+/mail message
+/mail item add <item-id> <qty>
+/mail item list
+/mail item remove <item-id> <qty>
+/mail send
+/mail cancel
+```
+
+`/mail message` opens the message editor for an in-game sender. Add text directly with `/mail message <text>` instead, which also works from console. Recipients can be online or offline players known to the server. Item IDs accept vanilla names such as `minecraft:diamond`, `minecraft:firework_rocket`, and `minecraft:golden_apple`, or registered custom item IDs. The draft checks mailbox capacity before adding items; every sent delivery includes its letter.
+
+For example, to reward a challenge winner:
+
+```text
+/mail compose WinnerName
+/mail message Congratulations on winning the Space Station Challenge!
+/mail item add minecraft:diamond 1
+/mail item add minecraft:firework_rocket 8
+/mail item add minecraft:golden_apple 1
+/mail send
+```
+
+Each command sender can have one draft at a time. Use `/mail item list` to review it, `/mail send` to queue it, or `/mail cancel` to discard it. Player senders are identified by UUID; console drafts use `STEMCraft` as their sender label.
+
+`/mailbox send` requires `stemcraft.mailbox.send` or an administrative mailbox permission. The `/mail` item draft command requires `stemcraft.mailbox.admin` or the legacy administrative permission `stemcraft.mailbox`.
 
 ## Configuration
 

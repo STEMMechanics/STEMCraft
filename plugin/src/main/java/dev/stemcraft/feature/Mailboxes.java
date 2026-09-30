@@ -4,6 +4,7 @@ import dev.stemcraft.api.service.playerreset.*;
 
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.service.item.BedrockItemVisualDefinition;
 import dev.stemcraft.api.service.item.CustomItemClientDefinition;
 import dev.stemcraft.api.service.item.CustomItemDefinition;
@@ -23,6 +24,7 @@ import dev.stemcraft.api.util.PlaceholderUtil;
 import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.api.util.TextUtil;
 import dev.stemcraft.api.util.TimeUtil;
+import dev.stemcraft.permission.PlayerCommandAccess;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
@@ -31,6 +33,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Sound;
+import org.bukkit.command.CommandSender;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.entity.BlockDisplay;
@@ -119,6 +122,7 @@ public class Mailboxes extends BaseFeature implements MailboxService {
     private static final String DEFAULT_DIALOG_CANCELLED = "<gray>Mail cancelled. Your items remain in your mailbox.</gray>";
     private final Map<UUID, Inventory> openMailboxInventories = new HashMap<>();
     private final Map<UUID, PendingMailDraft> pendingMailDrafts = new HashMap<>();
+    private final Map<String, CommandMailDraft> commandMailDrafts = new HashMap<>();
     private final Map<UUID, Long> mailboxFullNoticeCooldowns = new HashMap<>();
     private final Map<UUID, Boolean> mailIndicatorVisibility = new HashMap<>();
     private long deliveryBaseDelayTicks = DEFAULT_DELIVERY_BASE_DELAY_TICKS;
@@ -319,6 +323,27 @@ public class Mailboxes extends BaseFeature implements MailboxService {
     }
 
     private void registerCommands() {
+        api.tabComplete().register("mail-quantity", (_, _) -> List.of("1", "2", "4", "8", "16", "32", "64"));
+        api.commands().create("mail")
+            .description("Compose and send server mail")
+            .usage("/mail compose <player> | /mail message [text] | /mail item <add|remove|list> ... | /mail send | /mail cancel")
+            .tabCompletion("compose", "{offline-player}")
+            .tabCompletion("message")
+            .tabCompletion("item", "add")
+            .tabCompletion("item", "add", "{item}")
+            .tabCompletion("item", "add", "{item}", "{mail-quantity}")
+            .tabCompletion("item", "remove")
+            .tabCompletion("item", "remove", "{item}")
+            .tabCompletion("item", "remove", "{item}", "{mail-quantity}")
+            .tabCompletion("item", "list")
+            .tabCompletion("send")
+            .tabCompletion("cancel")
+            .ignoreArg(2)
+            .access((sender, args) -> PlayerCommandAccess.has(sender, "stemcraft.mailbox.admin")
+                || PlayerCommandAccess.has(sender, "stemcraft.mailbox"))
+            .executor((unused, command, ctx) -> handleCommandMail(ctx))
+            .register(STEMCraft.getPlugin());
+
         api.commands().create("mailbox")
             .tabCompletion("queue")
             .tabCompletion("queue", "{number}")
@@ -352,6 +377,329 @@ public class Mailboxes extends BaseFeature implements MailboxService {
                 }
             })
             .register(STEMCraft.getPlugin());
+    }
+
+    private void handleCommandMail(@NotNull CommandContext ctx) {
+        if (ctx.args().isEmpty()) {
+            ctx.returnUsage();
+            return;
+        }
+
+        String action = ctx.getArgLower(0);
+        switch (action) {
+            case "compose" -> startCommandMailDraft(ctx);
+            case "message" -> editCommandMailMessage(ctx);
+            case "item" -> editCommandMailItems(ctx);
+            case "send" -> sendCommandMailDraft(ctx);
+            case "cancel" -> cancelCommandMailDraft(ctx);
+            default -> ctx.returnUsage();
+        }
+    }
+
+    private void startCommandMailDraft(@NotNull CommandContext ctx) {
+        if (ctx.args().size() < 2) {
+            ctx.returnError("Usage: /mail compose <player>");
+            return;
+        }
+
+        CommandSender sender = ctx.getSender();
+        Player player = ctx.asPlayer();
+        Recipient recipient = resolveRecipient(ctx.getArg(1));
+        if (recipient == null) {
+            ctx.returnError("Could not find a player named '{recipient}'.", "recipient", ctx.getArg(1));
+            return;
+        }
+        if (player != null && player.getUniqueId().equals(recipient.uuid())) {
+            ctx.returnError("You cannot send mail to yourself.");
+            return;
+        }
+
+        String key = commandMailDraftKey(sender);
+        if (commandMailDrafts.containsKey(key)) {
+            ctx.returnError("You already have a mail draft. Use /mail send or /mail cancel first.");
+            return;
+        }
+
+        CommandMailDraft draft = new CommandMailDraft(
+            player == null ? null : player.getUniqueId(),
+            player == null ? "STEMCraft" : player.getName(),
+            recipient.uuid(),
+            recipient.name(),
+            "",
+            new ItemStack[MAILBOX_INVENTORY_SIZE],
+            player == null ? null : player.getLocation()
+        );
+        commandMailDrafts.put(key, draft);
+        ctx.success("Started a mail draft for {recipient}. Use /mail message, /mail item add, then /mail send.",
+            "recipient", recipient.name());
+    }
+
+    private void editCommandMailMessage(@NotNull CommandContext ctx) {
+        String key = commandMailDraftKey(ctx.getSender());
+        CommandMailDraft draft = commandMailDrafts.get(key);
+        if (draft == null) {
+            ctx.returnError("Start a draft first with /mail compose <player>.");
+            return;
+        }
+
+        if (ctx.rawArgs().size() >= 2) {
+            String message = TextUtil.stripColour(String.join(" ", ctx.rawArgs().subList(1, ctx.rawArgs().size()))).trim();
+            commandMailDrafts.put(key, draft.withMessage(message));
+            ctx.success("Mail message updated.");
+            return;
+        }
+
+        Player player = ctx.asPlayer();
+        if (player == null) {
+            ctx.returnError("Console must provide the message: /mail message <text>.");
+            return;
+        }
+        openCommandMailMessageDialog(player, key, draft);
+    }
+
+    private void openCommandMailMessageDialog(@NotNull Player player,
+                                             @NotNull String key,
+                                             @NotNull CommandMailDraft draft) {
+        boolean opened = api.dialogs().create("mail:command-message")
+            .title(Component.text("Mail message", NamedTextColor.GOLD))
+            .body(Component.text("Write the note for mail to " + draft.recipientName() + "."))
+            .multilineTextInput("message", Component.text("Message"), draft.message(), 256, 4)
+            .submit(Component.text("Save message"), response -> {
+                CommandMailDraft active = commandMailDrafts.get(key);
+                if (active == null) return;
+                String message = TextUtil.stripColour(response.text("message")).trim();
+                commandMailDrafts.put(key, active.withMessage(message));
+                api.messages().send(player, "<green>Mail message updated.");
+            })
+            .cancel(Component.text("Close"), () -> api.messages().send(player, "<gray>Mail draft kept."))
+            .open(player);
+        if (!opened) {
+            api.messages().error(player, "Could not open the mail message editor.");
+        }
+    }
+
+    private void editCommandMailItems(@NotNull CommandContext ctx) {
+        if (ctx.args().size() < 2) {
+            ctx.returnError("Usage: /mail item <add|remove|list> ...");
+            return;
+        }
+        String key = commandMailDraftKey(ctx.getSender());
+        CommandMailDraft draft = commandMailDrafts.get(key);
+        if (draft == null) {
+            ctx.returnError("Start a draft first with /mail compose <player>.");
+            return;
+        }
+
+        switch (ctx.getArgLower(1)) {
+            case "add" -> addCommandMailItem(ctx, key, draft);
+            case "remove" -> removeCommandMailItem(ctx, key, draft);
+            case "list" -> listCommandMailItems(ctx, draft);
+            default -> ctx.returnError("Usage: /mail item <add|remove|list> ...");
+        }
+    }
+
+    private void addCommandMailItem(@NotNull CommandContext ctx,
+                                    @NotNull String key,
+                                    @NotNull CommandMailDraft draft) {
+        if (ctx.args().size() != 4) {
+            ctx.returnError("Usage: /mail item add <item-id> <qty>");
+            return;
+        }
+        ItemStack template = commandMailItemTemplate(ctx.getArg(2), ctx);
+        int amount = commandMailQuantity(ctx.getArg(3), ctx);
+        if (template == null || amount <= 0) return;
+        long maxAmount = (long) Math.max(1, template.getMaxStackSize()) * MAILBOX_INVENTORY_SIZE;
+        if (amount > maxAmount) {
+            ctx.returnError("That quantity is too large to fit in a mail delivery.");
+            return;
+        }
+
+        List<ItemStack> additions = splitItem(template, amount);
+        ItemStack[] current = draft.items();
+        if (!canFitAll(current, additions.toArray(ItemStack[]::new))) {
+            ctx.returnError("Those items do not fit in the mail draft.");
+            return;
+        }
+        ItemStack[] merged = mergeContents(current, additions.toArray(ItemStack[]::new));
+        if (!canFitAll(merged, new ItemStack[] { createMailLetter(draft.senderName(), draft.message(), inventoryItems(merged)) })) {
+            ctx.returnError("The items and accompanying letter do not fit in a mailbox.");
+            return;
+        }
+
+        commandMailDrafts.put(key, draft.withItems(merged));
+        ctx.success("Added {amount} {item} to the mail draft.", "amount", amount,
+            "item", api.items().getItemName(template));
+    }
+
+    private void removeCommandMailItem(@NotNull CommandContext ctx,
+                                       @NotNull String key,
+                                       @NotNull CommandMailDraft draft) {
+        if (ctx.args().size() != 4) {
+            ctx.returnError("Usage: /mail item remove <item-id> <qty>");
+            return;
+        }
+        ItemStack template = commandMailItemTemplate(ctx.getArg(2), ctx);
+        int amount = commandMailQuantity(ctx.getArg(3), ctx);
+        if (template == null || amount <= 0) return;
+
+        ItemStack[] updated = draft.items();
+        int remaining = amount;
+        for (int i = 0; i < updated.length && remaining > 0; i++) {
+            ItemStack item = updated[i];
+            if (item == null || !item.isSimilar(template)) continue;
+            int removed = Math.min(item.getAmount(), remaining);
+            item.setAmount(item.getAmount() - removed);
+            remaining -= removed;
+            if (item.getAmount() <= 0) updated[i] = null;
+        }
+        if (remaining > 0) {
+            ctx.returnError("The draft does not contain that many {item}.", "item", api.items().getItemName(template));
+            return;
+        }
+        commandMailDrafts.put(key, draft.withItems(updated));
+        ctx.success("Removed {amount} {item} from the mail draft.", "amount", amount,
+            "item", api.items().getItemName(template));
+    }
+
+    private void listCommandMailItems(@NotNull CommandContext ctx, @NotNull CommandMailDraft draft) {
+        if (ctx.args().size() != 2) {
+            ctx.returnError("Usage: /mail item list");
+            return;
+        }
+        ctx.getSender().sendMessage(Component.text("Mail draft for " + draft.recipientName(), NamedTextColor.GOLD));
+        List<ItemStack> items = inventoryItems(draft.items());
+        if (items.isEmpty()) {
+            ctx.getSender().sendMessage(Component.text("  No items added.", NamedTextColor.GRAY));
+        } else {
+            for (ItemStack item : items) {
+                ctx.getSender().sendMessage(Component.text("  " + item.getAmount() + " × " + api.items().getItemName(item), NamedTextColor.WHITE));
+            }
+        }
+        ctx.getSender().sendMessage(Component.text("  Message: " + (draft.message().isBlank() ? "(none)" : draft.message()), NamedTextColor.GRAY));
+    }
+
+    private @Nullable ItemStack commandMailItemTemplate(@NotNull String itemId, @NotNull CommandContext ctx) {
+        try {
+            ItemStack custom = api.items().createCustomItem(itemId, 1);
+            if (custom != null) return custom;
+        } catch (IllegalArgumentException exception) {
+            ctx.returnError(exception.getMessage() == null ? "Invalid custom item." : exception.getMessage());
+            return null;
+        }
+
+        String materialId = itemId.trim();
+        if (materialId.regionMatches(true, 0, "minecraft:", 0, "minecraft:".length())) {
+            materialId = materialId.substring("minecraft:".length());
+        }
+        Material material = Material.matchMaterial(materialId.toUpperCase(Locale.ROOT));
+        if (material == null || !material.isItem()) {
+            ctx.returnError("Unknown mail item '{item}'.", "item", itemId);
+            return null;
+        }
+        return new ItemStack(material);
+    }
+
+    private int commandMailQuantity(@NotNull String raw, @NotNull CommandContext ctx) {
+        try {
+            int amount = Integer.parseInt(raw);
+            if (amount > 0) return amount;
+        } catch (NumberFormatException ignored) { }
+        ctx.returnError("Quantity must be a positive whole number.");
+        return -1;
+    }
+
+    private List<ItemStack> splitItem(@NotNull ItemStack template, int amount) {
+        List<ItemStack> items = new ArrayList<>();
+        int maxStack = Math.max(1, template.getMaxStackSize());
+        int remaining = amount;
+        while (remaining > 0) {
+            int stackSize = Math.min(maxStack, remaining);
+            ItemStack stack = template.clone();
+            stack.setAmount(stackSize);
+            items.add(stack);
+            remaining -= stackSize;
+        }
+        return items;
+    }
+
+    private List<ItemStack> inventoryItems(ItemStack @Nullable [] contents) {
+        if (contents == null) return List.of();
+        return java.util.Arrays.stream(contents).filter(Objects::nonNull)
+            .filter(item -> !item.getType().isAir() && item.getAmount() > 0)
+            .map(ItemStack::clone).toList();
+    }
+
+    private void sendCommandMailDraft(@NotNull CommandContext ctx) {
+        if (ctx.args().size() != 1) {
+            ctx.returnError("Usage: /mail send");
+            return;
+        }
+        String key = commandMailDraftKey(ctx.getSender());
+        CommandMailDraft draft = commandMailDrafts.get(key);
+        if (draft == null) {
+            ctx.returnError("There is no mail draft to send.");
+            return;
+        }
+        MailSendRequest request = new MailSendRequest(draft.senderUuid(), draft.senderName(), draft.recipientUuid(),
+            draft.message(), inventoryItems(draft.items()), draft.sourceLocation(), -1L);
+        MailSendResult result = send(request);
+        if (!result.queued()) {
+            ctx.returnError("Could not send mail: {error}", "error", result.message());
+            return;
+        }
+        commandMailDrafts.remove(key);
+        ctx.success("Mail sent to {recipient}.", "recipient", draft.recipientName());
+    }
+
+    private void cancelCommandMailDraft(@NotNull CommandContext ctx) {
+        if (ctx.args().size() != 1) {
+            ctx.returnError("Usage: /mail cancel");
+            return;
+        }
+        CommandMailDraft removed = commandMailDrafts.remove(commandMailDraftKey(ctx.getSender()));
+        if (removed == null) {
+            ctx.returnError("There is no mail draft to cancel.");
+            return;
+        }
+        ctx.success("Mail draft for {recipient} cancelled.", "recipient", removed.recipientName());
+    }
+
+    private String commandMailDraftKey(@NotNull CommandSender sender) {
+        return sender instanceof Player player ? player.getUniqueId().toString() : "console:" + sender.getName();
+    }
+
+    private record CommandMailDraft(@Nullable UUID senderUuid,
+                                    @NotNull String senderName,
+                                    @NotNull UUID recipientUuid,
+                                    @NotNull String recipientName,
+                                    @NotNull String message,
+                                    ItemStack @NotNull [] items,
+                                    @Nullable Location sourceLocation) {
+        private CommandMailDraft {
+            senderName = Objects.requireNonNullElse(senderName, "STEMCraft");
+            recipientName = Objects.requireNonNullElse(recipientName, "");
+            message = Objects.requireNonNullElse(message, "");
+            items = MailboxInventoryHolder.copyContents(items, MAILBOX_INVENTORY_SIZE);
+            sourceLocation = sourceLocation == null ? null : sourceLocation.clone();
+        }
+
+        private CommandMailDraft withMessage(String value) {
+            return new CommandMailDraft(senderUuid, senderName, recipientUuid, recipientName, value, items, sourceLocation);
+        }
+
+        private CommandMailDraft withItems(ItemStack @NotNull [] value) {
+            return new CommandMailDraft(senderUuid, senderName, recipientUuid, recipientName, message, value, sourceLocation);
+        }
+
+        @Override
+        public ItemStack @NotNull [] items() {
+            return MailboxInventoryHolder.copyContents(items, MAILBOX_INVENTORY_SIZE);
+        }
+
+        @Override
+        public Location sourceLocation() {
+            return sourceLocation == null ? null : sourceLocation.clone();
+        }
     }
 
     private void handleSendCommand(@NotNull dev.stemcraft.api.command.CommandContext ctx) {
