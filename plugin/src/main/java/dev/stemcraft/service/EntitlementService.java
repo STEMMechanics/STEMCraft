@@ -621,7 +621,7 @@ public final class EntitlementService extends BaseService {
         String targetArg = commandPlayerArgument(target.name());
         int page = boundedPage(ChatMenuUtil.getPageFromArgs(ctx.args(), ctx.args().size() > 1 ? 1 : -1, 1), visible.size());
         ChatMenuUtil.render(ctx.getSender(), "Badges for " + target.name(), "badges " + targetArg, page, visible.size(),
-            (start, count, interactive) -> visible.subList(start, start + count).<Component>map(badge ->
+            (start, count, interactive) -> visible.subList(start, start + count).stream().<Component>map(badge ->
                 Component.text("  ").append(miniMessage.deserialize(renderBadgeDisplay(badge)))
                     .append(Component.text(" " + badge.description(), NamedTextColor.GRAY))).toList(),
             "No badges applied.");
