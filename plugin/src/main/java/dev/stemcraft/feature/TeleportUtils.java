@@ -270,7 +270,9 @@ public class TeleportUtils extends BaseFeature {
                             return;
                         }
 
-                        targets = ctx.getPlayers(1);
+                        targets = ctx.args().size() >= 2
+                                ? ctx.getPlayers(1)
+                                : (ctx.getSender() instanceof Player player ? List.of(player) : List.of());
                         if (targets.isEmpty()) {
                             ctx.returnError("PLAYER_NOT_FOUND", "player", ctx.getArg(1));
                             return;

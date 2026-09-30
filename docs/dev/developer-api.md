@@ -378,9 +378,16 @@ Framework-owned behavior:
 Shared supply-drop helpers on `MiniGameArena`:
 
 - `findRandomSupplyDropLocation(List<Material> allowedSurfaceMaterials, int attempts)`
-  searches the arena region for a valid landing column
+  searches the configured arena region (or the core arena region when no
+  `arenaRegion` metadata is present) for a valid landing column, excluding the
+  configured lobby region when present
+- the overloaded `findRandomSupplyDropLocation(...)` variants accept additional
+  excluded regions and an optional `(location, arena) -> boolean` suitability filter
 - `spawnSupplyDropCrate(ItemStack item, Location landingLocation)`
   spawns the shared descending crate/parachute presentation and lands it as a loot chest
+- `trySpawnSupplyDropCrate(...)`
+  reports whether the shared crate was accepted; use this when a minigame should
+  announce a drop only after its final chest position passes validation
 - `clearAllSupplyDrops()`
   removes active drop visuals and landed framework-managed drop chests
 
