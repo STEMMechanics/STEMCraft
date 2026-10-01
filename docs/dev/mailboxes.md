@@ -23,6 +23,7 @@ Use `/mail` to build a delivery containing a message and items:
 ```text
 /mail compose <player>
 /mail message
+/mail message save
 /mail item add <item-id> <qty>
 /mail item list
 /mail item remove <item-id> <qty>
@@ -31,13 +32,15 @@ Use `/mail` to build a delivery containing a message and items:
 /mail cancel
 ```
 
-`/mail message` opens the message editor for an in-game sender. The editor accepts up to 2048 characters, and long messages are paginated in the generated letter. Add or replace text directly with `/mail message <text>`, which also works from console. Use `/mail message -a <text>` to append a new paragraph to the existing message. In either command form, literal `\n` sequences become line breaks. `/mail preview` opens the draft's actual written-book letter, including the sender, message and item list, without sending it; preview is available to in-game senders. Recipients can be online or offline players known to the server. Item IDs accept vanilla names such as `minecraft:diamond`, `minecraft:firework_rocket`, and `minecraft:golden_apple`, or registered custom item IDs. The draft checks mailbox capacity before adding items; every sent delivery includes its letter.
+`/mail message` gives an in-game sender a writable book prefilled with the current draft message. Edit its pages, including blank lines, choose Done, then run `/mail message save` while the book is in your inventory. Saving copies the pages into the draft and removes the temporary book. `/mail message <text>` still replaces the message directly and works from console. Use `/mail message -a <text>` to append a new paragraph; literal `\n` sequences become line breaks. `/mail preview` opens the draft's actual written-book letter, including the sender, message and item list, without sending it; preview is available to in-game senders. Long messages are paginated in the generated letter. Recipients can be online or offline players known to the server. Item IDs accept vanilla names such as `minecraft:diamond`, `minecraft:firework_rocket`, and `minecraft:golden_apple`, or registered custom item IDs. The draft checks mailbox capacity before adding items; every sent delivery includes its letter.
 
 For example, to reward a challenge winner:
 
 ```text
 /mail compose WinnerName
-/mail message Congratulations on winning the Space Station Challenge!
+/mail message
+# Edit the book, choose Done, then save its pages to the draft
+/mail message save
 /mail message -a Thanks for building such a great space station!
 /mail item add minecraft:diamond 1
 /mail item add minecraft:firework_rocket 8
