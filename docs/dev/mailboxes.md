@@ -26,11 +26,12 @@ Use `/mail` to build a delivery containing a message and items:
 /mail item add <item-id> <qty>
 /mail item list
 /mail item remove <item-id> <qty>
+/mail preview
 /mail send
 /mail cancel
 ```
 
-`/mail message` opens the message editor for an in-game sender. Add text directly with `/mail message <text>` instead, which also works from console. Recipients can be online or offline players known to the server. Item IDs accept vanilla names such as `minecraft:diamond`, `minecraft:firework_rocket`, and `minecraft:golden_apple`, or registered custom item IDs. The draft checks mailbox capacity before adding items; every sent delivery includes its letter.
+`/mail message` opens the message editor for an in-game sender. Add text directly with `/mail message <text>` instead, which also works from console. `/mail preview` opens the draft's actual written-book letter, including the sender, message and item list, without sending it; preview is available to in-game senders. Recipients can be online or offline players known to the server. Item IDs accept vanilla names such as `minecraft:diamond`, `minecraft:firework_rocket`, and `minecraft:golden_apple`, or registered custom item IDs. The draft checks mailbox capacity before adding items; every sent delivery includes its letter.
 
 For example, to reward a challenge winner:
 
