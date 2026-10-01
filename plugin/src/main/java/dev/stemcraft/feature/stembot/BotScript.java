@@ -31,7 +31,13 @@ public record BotScript(
     List<String> farewell,
     Map<String,List<Instruction>> actions,
     Map<String,String> commandWorld,
-    Map<String,String> firstTimeWorld
+    Map<String,String> firstTimeWorld,
+    Map<String,String> alwaysWorld,
+    Map<String,SpawnPoint> alwaysWorldSpawns,
+    Map<String,String> triggerActions,
+    Map<String,String> helpTopics,
+    boolean deferDuringCombat,
+    int combatCooldownSeconds
 ) {
     private static final List<String> DEFAULT_SCANNING_MESSAGES = List.of(
         "Beep boop... scanning terrain for a pathway...",
@@ -82,12 +88,108 @@ public record BotScript(
         }
     }
 
+    public record TriggerAction(String action,boolean once) {}
+
     public String commandAction(String world) {
         return commandWorld.get(world.toLowerCase(Locale.ROOT));
     }
 
     public String firstTimeAction(String world) {
         return firstTimeWorld.get(world.toLowerCase(Locale.ROOT));
+    }
+
+    public record SpawnPoint(double x,double y,double z,float yaw,float pitch) {
+        public org.bukkit.Location location(org.bukkit.World world) {
+            return new org.bukkit.Location(world,x,y,z,yaw,pitch);
+        }
+    }
+
+    public String alwaysAction(String world) {
+        return alwaysWorld.get(world.toLowerCase(Locale.ROOT));
+    }
+
+    public SpawnPoint alwaysActionSpawn(String world) {
+        return alwaysWorldSpawns.get(world.toLowerCase(Locale.ROOT));
+    }
+
+    /** A first-visit introduction replaces the regular arrival action on that visit. */
+    public String arrivalAction(String world,boolean seen) {
+        String first=firstTimeAction(world);
+        return !seen&&first!=null?first:alwaysAction(world);
+    }
+
+    public TriggerAction triggerAction(String id,boolean seen) {
+        String trigger=id.toLowerCase(Locale.ROOT);
+        if(!seen) {
+            String once=triggerActions.get(trigger+"-once");
+            if(once!=null) return new TriggerAction(once,true);
+        }
+        String always=triggerActions.get(trigger);
+        return always==null?null:new TriggerAction(always,false);
+    }
+
+    public String helpTopicAction(String topic) {
+        return helpTopics.get(topic.toLowerCase(Locale.ROOT));
+    }
+
+    /** Run after successful parsing, so invalid scripts are never migrated on disk. */
+    public static boolean migrateWorldRoutes(ConfigSection config) {
+        boolean changed=false;
+        for(String legacy:List.of("command","first-time")) {
+            ConfigSection routes=config.getSection(legacy+".world",false);
+            if(routes==null) continue;
+            for(var entry:readRoutes(routes).entrySet()) {
+                String path="worlds."+entry.getKey()+"."+legacy+"-action";
+                if(!config.contains(path)) config.set(path,entry.getValue());
+            }
+            config.remove(legacy+".world");
+            if(config.getSection(legacy,false).getKeys(false).isEmpty()) config.remove(legacy);
+            changed=true;
+        }
+        return changed;
+    }
+
+    private static Map<String,String> worldActions(ConfigSection config,String key,String legacy) {
+        Map<String,String> result=new LinkedHashMap<>();
+        if(legacy!=null) result.putAll(readRoutes(config.getSection(legacy+".world",false)));
+        ConfigSection worlds=config.getSection("worlds",false);
+        if(worlds!=null) for(String world:worlds.getKeys(false)) {
+            ConfigSection entry=worlds.getSection(world,false);
+            if(entry!=null&&entry.contains(key)) {
+                String name=world.toLowerCase(Locale.ROOT);
+                result.remove(name);
+                String action=entry.getString(key,"").trim();
+                if(!action.isEmpty()) result.put(name,action);
+            }
+        }
+        return result;
+    }
+
+    private static Map<String,SpawnPoint> worldSpawns(ConfigSection config) {
+        Map<String,SpawnPoint> result=new LinkedHashMap<>();
+        ConfigSection worlds=config.getSection("worlds",false);
+        if(worlds==null) return result;
+        for(String world:worlds.getKeys(false)) {
+            ConfigSection entry=worlds.getSection(world,false);
+            if(entry==null||!entry.contains("always-action-spawn")) continue;
+            Object raw=entry.get("always-action-spawn");
+            if(!(raw instanceof List<?> values)||(values.size()!=3&&values.size()!=5))
+                throw new IllegalArgumentException("worlds."+world+".always-action-spawn must be [x, y, z] or [x, y, z, yaw, pitch]");
+            double[] numbers=new double[5];
+            for(int i=0;i<values.size();i++) {
+                if(!(values.get(i) instanceof Number n)||!Double.isFinite(n.doubleValue()))
+                    throw new IllegalArgumentException("worlds."+world+".always-action-spawn requires finite numbers");
+                numbers[i]=n.doubleValue();
+            }
+            if(Math.abs(numbers[0])>30_000_000||Math.abs(numbers[2])>30_000_000
+                    ||Math.abs(numbers[1])>20_000_000||Math.abs(numbers[3])>Float.MAX_VALUE
+                    ||Math.abs(numbers[4])>90)
+                throw new IllegalArgumentException("worlds."+world+".always-action-spawn is outside coordinate or rotation bounds");
+            if(entry.getString("always-action","").isBlank())
+                throw new IllegalArgumentException("worlds."+world+".always-action-spawn requires always-action");
+            result.put(world.toLowerCase(Locale.ROOT),new SpawnPoint(numbers[0],numbers[1],numbers[2],(float)numbers[3],(float)numbers[4]));
+        }
+        return result;
     }
 
     public List<String> randomSystemMessage(List<String> choices) {
@@ -140,10 +242,28 @@ public record BotScript(
             throw new IllegalArgumentException("speech.max-beeps must be >= speech.min-beeps");
 
         Map<String,List<Instruction>> actions=readActions(config.getSection("actions",false));
-        Map<String,String> commandWorld=readRoutes(config.getSection("command.world",false));
-        Map<String,String> firstTimeWorld=readRoutes(config.getSection("first-time.world",false));
+        Map<String,String> commandWorld=worldActions(config,"command-action","command");
+        Map<String,String> firstTimeWorld=worldActions(config,"first-time-action","first-time");
+        Map<String,String> alwaysWorld=worldActions(config,"always-action",null);
+        Map<String,SpawnPoint> alwaysWorldSpawns=worldSpawns(config);
+        Map<String,String> triggerActions=readRoutes(config.getSection("triggers",false));
+        Map<String,String> helpTopics=readRoutes(config.getSection("help-topics",false));
 
         validateTargets(actions,commandWorld,firstTimeWorld);
+        alwaysWorld.forEach((world,target)->requireTarget(actions,target,"worlds."+world+".always-action"));
+        triggerActions.forEach((trigger,target)->{
+            String base=trigger.endsWith("-once")?trigger.substring(0,trigger.length()-5):trigger;
+            if(!base.matches("[a-z0-9][a-z0-9_-]{0,63}"))
+                throw new IllegalArgumentException("triggers."+trigger+" has an invalid trigger id");
+            requireTarget(actions,target,"triggers."+trigger);
+        });
+        helpTopics.forEach((topic,target)->{
+            if(!topic.matches("[a-z0-9][a-z0-9_-]{0,31}"))
+                throw new IllegalArgumentException("help-topics."+topic+" has an invalid topic");
+            requireTarget(actions,target,"help-topics."+topic);
+        });
+        boolean deferDuringCombat=config.getBoolean("trigger-policy.defer-during-combat",true);
+        int combatCooldownSeconds=boundedInt(config.getInt("trigger-policy.combat-cooldown-seconds",10),0,3600);
 
         return new BotScript(
             config.getString("name","STEMBot"),
@@ -171,7 +291,13 @@ public record BotScript(
             List.copyOf(config.getStringList("messages.farewell")),
             Map.copyOf(actions),
             Map.copyOf(commandWorld),
-            Map.copyOf(firstTimeWorld)
+            Map.copyOf(firstTimeWorld),
+            Map.copyOf(alwaysWorld),
+            Map.copyOf(alwaysWorldSpawns),
+            Map.copyOf(triggerActions),
+            Map.copyOf(helpTopics),
+            deferDuringCombat,
+            combatCooldownSeconds
         );
     }
 
@@ -331,8 +457,8 @@ public record BotScript(
             }
         }
 
-        commandWorld.forEach((world,target)->requireTarget(actions,target,"command.world."+world));
-        firstTimeWorld.forEach((world,target)->requireTarget(actions,target,"first-time.world."+world));
+        commandWorld.forEach((world,target)->requireTarget(actions,target,"worlds."+world+".command-action"));
+        firstTimeWorld.forEach((world,target)->requireTarget(actions,target,"worlds."+world+".first-time-action"));
     }
 
     private static void requireTarget(Map<String,List<Instruction>> actions,String target,String source) {

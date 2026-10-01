@@ -26,6 +26,17 @@ public interface StemBotService {
     /** Whether the loaded script defines this exact action name. */
     boolean hasAction(String action);
 
+    /**
+     * Register an event trigger whose routes are configured in stembot.yml.
+     * The returned handle must be closed when the owning feature is disabled.
+     *
+     * @param id stable lowercase trigger id, for example {@code mailbox-received}
+     * @return a handle that can fire the trigger; unavailable services return a no-op handle
+     */
+    default StemBotTrigger registerTrigger(String id) {
+        return StemBotTrigger.UNAVAILABLE;
+    }
+
     /** Start a named action. False if unavailable, unknown, owned by another caller, or unable to spawn. */
     boolean startAction(Player player,String action);
 

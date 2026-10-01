@@ -14,6 +14,7 @@ import dev.stemcraft.api.service.dialog.DialogResponse;
 import dev.stemcraft.api.service.mailbox.MailSendRequest;
 import dev.stemcraft.api.service.mailbox.MailSendResult;
 import dev.stemcraft.api.service.mailbox.MailboxService;
+import dev.stemcraft.api.service.stembot.StemBotTrigger;
 import dev.stemcraft.api.service.placedobject.PlacedBlockRef;
 import dev.stemcraft.api.service.placedobject.PlacedObject;
 import dev.stemcraft.api.service.placedobject.PlacedObjectBlockLink;
@@ -125,6 +126,8 @@ public class Mailboxes extends BaseFeature implements MailboxService {
     private final Map<String, CommandMailDraft> commandMailDrafts = new HashMap<>();
     private final Map<UUID, Long> mailboxFullNoticeCooldowns = new HashMap<>();
     private final Map<UUID, Boolean> mailIndicatorVisibility = new HashMap<>();
+    private StemBotTrigger receivedMailTrigger;
+    private long triggerRegistrationEpoch;
     private long deliveryBaseDelayTicks = DEFAULT_DELIVERY_BASE_DELAY_TICKS;
     private long queueProcessPeriodTicks = DEFAULT_QUEUE_PROCESS_PERIOD_TICKS;
     private long mailboxFullNoticeCooldownTicks = DEFAULT_FULL_NOTICE_COOLDOWN_TICKS;
@@ -144,6 +147,11 @@ public class Mailboxes extends BaseFeature implements MailboxService {
         registerMailboxRecipe();
         registerEvents();
         registerCommands();
+        long registrationEpoch = ++triggerRegistrationEpoch;
+        api.tasks().nextTick(() -> {
+            if (registrationEpoch != triggerRegistrationEpoch) return;
+            receivedMailTrigger = api.stemBot().registerTrigger("mailbox-received");
+        });
         api.playerResets().register(new PlayerResetHandler() {
             public @NotNull String id() { return "mailbox-runtime"; }
             public @NotNull Set<PlayerResetScope> scopes() { return Set.of(PlayerResetScope.GAMEPLAY, PlayerResetScope.COMPLETE); }
@@ -171,6 +179,9 @@ public class Mailboxes extends BaseFeature implements MailboxService {
     public void onDisable() {
         persistOpenMailboxInventories();
         persistPendingMailDrafts();
+        triggerRegistrationEpoch++;
+        if (receivedMailTrigger != null) receivedMailTrigger.close();
+        receivedMailTrigger = null;
         mailIndicatorVisibility.clear();
         api.tasks().cancel(QUEUE_TASK_ID);
     }
@@ -1599,6 +1610,7 @@ public class Mailboxes extends BaseFeature implements MailboxService {
         Player player = Bukkit.getPlayer(queuedMail.recipientUuid());
         if (player != null && player.isOnline()) {
             sendConfiguredMessage(player, "received", DEFAULT_RECEIVED_MESSAGE, "sender", senderName);
+            if (receivedMailTrigger != null) receivedMailTrigger.fire(player);
             return;
         }
 
@@ -1629,6 +1641,7 @@ public class Mailboxes extends BaseFeature implements MailboxService {
             api.messages().send(player, Objects.requireNonNullElse(notification.message(), ""));
             api.database().update("DELETE FROM mailbox_notifications WHERE id = ?", ps -> ps.setLong(1, notification.id()));
         }
+        if (!notifications.isEmpty() && receivedMailTrigger != null) receivedMailTrigger.fire(player);
     }
 
     private boolean containsAnyItems(ItemStack @Nullable [] contents) {

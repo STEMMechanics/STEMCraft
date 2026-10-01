@@ -28,6 +28,36 @@ class StemBotPrivacyTest {
         sessions=(Map<UUID,BotSession>)field.get(feature);
     }
     @AfterEach void cleanup() { MockBukkit.unmock(); }
+    @Test void alwaysActionRunsOnEachQueuedArrivalAndUsesOnlyItsFixedSpawn() throws Exception {
+        feature=spy(feature);
+        doReturn(true).when(feature).available();
+        var yaml=new org.bukkit.configuration.file.YamlConfiguration();
+        yaml.set("actions.greeting",List.of("say:Hello"));
+        String world=owner.getWorld().getName();
+        yaml.set("worlds."+world+".always-action","greeting");
+        yaml.set("worlds."+world+".always-action-spawn",List.of(4.5,65,8.5,90,0));
+        var script=dev.stemcraft.feature.stembot.BotScript.read(new dev.stemcraft.config.ConfigSectionImpl(null,yaml));
+        var field=StemBotFeature.class.getDeclaredField("script");
+        field.setAccessible(true);
+        field.set(feature,script);
+        doNothing().when(feature).start(eq(owner),eq("greeting"),eq(false),any());
+        var queue=StemBotFeature.class.getDeclaredMethod("queueArrival",org.bukkit.entity.Player.class,int.class);
+        queue.setAccessible(true);
+        var tick=StemBotFeature.class.getDeclaredMethod("tick");
+        tick.setAccessible(true);
+        for(int visit=0;visit<2;visit++) {
+            queue.invoke(feature,owner,5);
+            tick.invoke(feature);
+        }
+        var fixed=new org.bukkit.Location(owner.getWorld(),4.5,65,8.5,90,0);
+        verify(feature,times(2)).start(owner,"greeting",false,fixed);
+        tick.invoke(feature);
+        verify(feature,times(2)).start(owner,"greeting",false,fixed);
+        // Explicit action starts, including commands, never inherit the automatic spawn.
+        feature.start(owner,"greeting",false);
+        verify(feature).start(owner,"greeting",false,null);
+    }
+
     @Test void disengagedSessionsLeavePublicChatUntouchedAndReengagedSessionsCaptureIt() {
         BotSession session=mock(BotSession.class);
         sessions.put(owner.getUniqueId(),session);

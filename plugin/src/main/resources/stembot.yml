@@ -493,22 +493,52 @@ actions:
     - 'talk:No problem. We can leave practice there. If the step was unavailable, make sure you have space and are in Survival. Ask me about practice any time.'
     - 'action:survival-menu'
 
+  mailbox-first-received:
+    - 'wave'
+    - 'talk:{player}, you received Survival mail. Your letter and items are waiting in your mailbox.'
+    - 'action:mailbox-help'
 
-# /help (alias of /stembot) routes by the current Bukkit world name.
-# The existing hub uses "world".
-command:
-  world:
-    world: hub
-    hub: hub
-    survival: survival
-    creative: creative
+  mailbox-help:
+    - 'talk:You need to craft the mailbox in the Survival world. Use one barrel above one cobblestone wall in the crafting grid.'
+    - 'talk:Place the mailbox in Survival, then interact with it to collect your mail.'
+    - 'talk:Use /help mail or /help mailbox whenever you need these instructions again.'
 
-# Automatically run once per player, per configured world.
-# Completion is stored in the player PersistentDataContainer.
-# The main "world" introduction is started by first-join.stembot-action in config.yml.
-# Do not also map it here if FirstJoin should own that introduction.
-first-time:
+
+# Actions are selected by Bukkit world name.
+# command-action: /help or /stembot; absent means STEMBot is unavailable there.
+# first-time-action: once per player/world, taking priority on the first visit.
+# always-action: on each subsequent arrival, or every arrival without first-time-action.
+# Arrival includes login and changing worlds, not teleporting within the same world.
+# always-action-spawn: optional [x, y, z] or [x, y, z, yaw, pitch].
+# Without it, always-action spawns near the player. Fixed spots must be safe and loaded.
+worlds:
   world:
-    hub: first-hub
-    survival: first-survival
-    creative: first-creative
+    command-action: hub
+    # FirstJoin owns this world's introduction.
+  hub:
+    command-action: hub
+    first-time-action: first-hub
+  survival:
+    command-action: survival
+    first-time-action: first-survival
+  creative:
+    command-action: creative
+    first-time-action: first-creative
+  # floorshuffle:
+  #   always-action: floorshuffle-greeting # Define this action above before enabling.
+  #   always-action-spawn: [20.5, 65, 20.5, 90, 0]
+
+# Event triggers use a regular route on later events and an optional -once route first.
+# Once markers are stored per player after STEMBot successfully starts the action.
+trigger-policy:
+  defer-during-combat: true
+  combat-cooldown-seconds: 10
+
+triggers:
+  mailbox-received-once: mailbox-first-received
+  # Add mailbox-received: some-action to run an action on later mail receipts.
+
+# /help <topic> and /stembot <topic> run these actions.
+help-topics:
+  mail: mailbox-help
+  mailbox: mailbox-help
