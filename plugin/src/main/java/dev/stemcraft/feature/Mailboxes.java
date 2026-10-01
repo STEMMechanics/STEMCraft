@@ -337,9 +337,10 @@ public class Mailboxes extends BaseFeature implements MailboxService {
         api.tabComplete().register("mail-quantity", (_, _) -> List.of("1", "2", "4", "8", "16", "32", "64"));
         api.commands().create("mail")
             .description("Compose and send server mail")
-            .usage("/mail compose <player> | /mail message [text] | /mail item <add|remove|list> ... | /mail preview | /mail send | /mail cancel")
+            .usage("/mail compose <player> | /mail message [text] | /mail message -a <text> | /mail item <add|remove|list> ... | /mail preview | /mail send | /mail cancel")
             .tabCompletion("compose", "{offline-player}")
             .tabCompletion("message")
+            .tabCompletion("message", "-a")
             .tabCompletion("item", "add")
             .tabCompletion("item", "add", "{item}")
             .tabCompletion("item", "add", "{item}", "{mail-quantity}")
@@ -455,8 +456,24 @@ public class Mailboxes extends BaseFeature implements MailboxService {
             return;
         }
 
-        if (ctx.rawArgs().size() >= 2) {
-            String message = TextUtil.stripColour(String.join(" ", ctx.rawArgs().subList(1, ctx.rawArgs().size()))).trim();
+        List<String> rawArgs = ctx.rawArgs();
+        if (rawArgs.size() >= 2) {
+            boolean append = rawArgs.get(1).equalsIgnoreCase("-a");
+            int messageStart = append ? 2 : 1;
+            if (messageStart >= rawArgs.size()) {
+                ctx.returnError("Usage: /mail message [text] | /mail message -a <text>");
+                return;
+            }
+
+            String message = normalizeCommandMailMessage(String.join(" ", rawArgs.subList(messageStart, rawArgs.size())));
+            if (append) {
+                String existingMessage = draft.message().stripTrailing();
+                if (!existingMessage.isEmpty() && !message.isEmpty()) {
+                    message = existingMessage + "\n" + message;
+                } else if (!existingMessage.isEmpty()) {
+                    message = existingMessage;
+                }
+            }
             commandMailDrafts.put(key, draft.withMessage(message));
             ctx.success("Mail message updated.");
             return;
@@ -480,7 +497,7 @@ public class Mailboxes extends BaseFeature implements MailboxService {
             .submit(Component.text("Save message"), response -> {
                 CommandMailDraft active = commandMailDrafts.get(key);
                 if (active == null) return;
-                String message = TextUtil.stripColour(response.text("message")).trim();
+                String message = normalizeCommandMailMessage(response.text("message"));
                 commandMailDrafts.put(key, active.withMessage(message));
                 api.messages().send(player, "<green>Mail message updated.");
             })
@@ -489,6 +506,10 @@ public class Mailboxes extends BaseFeature implements MailboxService {
         if (!opened) {
             api.messages().error(player, "Could not open the mail message editor.");
         }
+    }
+
+    private String normalizeCommandMailMessage(@Nullable String message) {
+        return TextUtil.stripColour(Objects.requireNonNullElse(message, "")).replace("\\n", "\n").trim();
     }
 
     private void editCommandMailItems(@NotNull CommandContext ctx) {
