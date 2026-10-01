@@ -98,6 +98,9 @@ public class Mailboxes extends BaseFeature implements MailboxService {
     private static final Material MAILBOX_SUPPORT_MATERIAL = Material.COBBLESTONE_WALL;
     private static final int MAILBOX_MODEL_DATA = 46002;
     private static final int MAILBOX_INVENTORY_SIZE = 27;
+    private static final int MAIL_MESSAGE_MAX_LENGTH = 2048;
+    private static final int MAIL_BOOK_FIRST_MESSAGE_PAGE_LENGTH = 180;
+    private static final int MAIL_BOOK_MESSAGE_PAGE_LENGTH = 200;
     private static final float MAILBOX_DISPLAY_SCALE = 0.5f;
     private static final float MAILBOX_INTERACTION_WIDTH = 0.75f;
     private static final float MAILBOX_INTERACTION_HEIGHT = 0.5f;
@@ -493,7 +496,7 @@ public class Mailboxes extends BaseFeature implements MailboxService {
         boolean opened = api.dialogs().create("mail:command-message")
             .title(Component.text("Mail message", NamedTextColor.GOLD))
             .body(Component.text("Write the note for mail to " + draft.recipientName() + "."))
-            .multilineTextInput("message", Component.text("Message"), draft.message(), 256, 4)
+            .multilineTextInput("message", Component.text("Message"), draft.message(), MAIL_MESSAGE_MAX_LENGTH, 4)
             .submit(Component.text("Save message"), response -> {
                 CommandMailDraft active = commandMailDrafts.get(key);
                 if (active == null) return;
@@ -1492,10 +1495,16 @@ public class Mailboxes extends BaseFeature implements MailboxService {
         Component firstPage = Component.text("From: ", NamedTextColor.GRAY)
             .append(Component.text(senderName, NamedTextColor.GOLD));
         if (!message.isBlank()) {
+            List<String> messagePages = splitMailMessagePages(message);
             firstPage = firstPage.append(Component.newline()).append(Component.newline())
-                .append(Component.text(message, NamedTextColor.DARK_GRAY));
+                .append(Component.text(messagePages.getFirst(), NamedTextColor.DARK_GRAY));
+            pages.add(firstPage);
+            for (int index = 1; index < messagePages.size(); index++) {
+                pages.add(Component.text(messagePages.get(index), NamedTextColor.DARK_GRAY));
+            }
+        } else {
+            pages.add(firstPage);
         }
-        pages.add(firstPage);
 
         Component itemPage = Component.text("Included items", NamedTextColor.GOLD)
             .append(Component.newline()).append(Component.newline());
@@ -1514,6 +1523,32 @@ public class Mailboxes extends BaseFeature implements MailboxService {
             lines++;
         }
         pages.add(itemPage);
+        return pages;
+    }
+
+    private @NotNull List<String> splitMailMessagePages(@NotNull String message) {
+        List<String> pages = new ArrayList<>();
+        String remaining = message;
+        while (!remaining.isEmpty()) {
+            int pageLimit = pages.isEmpty()
+                ? MAIL_BOOK_FIRST_MESSAGE_PAGE_LENGTH
+                : MAIL_BOOK_MESSAGE_PAGE_LENGTH;
+            int codePointCount = remaining.codePointCount(0, remaining.length());
+            int end = remaining.offsetByCodePoints(0, Math.min(pageLimit, codePointCount));
+
+            if (end < remaining.length()) {
+                int space = remaining.lastIndexOf(' ', end - 1);
+                int newline = remaining.lastIndexOf('\n', end - 1);
+                int breakAt = Math.max(space, newline);
+                int minimumBreak = remaining.offsetByCodePoints(0, Math.min(pageLimit / 2, codePointCount));
+                if (breakAt >= minimumBreak) {
+                    end = breakAt + 1;
+                }
+            }
+
+            pages.add(remaining.substring(0, end));
+            remaining = remaining.substring(end);
+        }
         return pages;
     }
 
@@ -1803,7 +1838,7 @@ public class Mailboxes extends BaseFeature implements MailboxService {
             .title(TextUtil.colourise(configuredDialogText("title", DEFAULT_DIALOG_TITLE)))
             .body(notice)
             .textInput("recipient", TextUtil.colourise(configuredDialogText("recipient-label", DEFAULT_DIALOG_RECIPIENT_LABEL)), draft.recipient(), 64)
-            .multilineTextInput("message", TextUtil.colourise(configuredDialogText("message-label", DEFAULT_DIALOG_MESSAGE_LABEL)), draft.message(), 256, 4)
+            .multilineTextInput("message", TextUtil.colourise(configuredDialogText("message-label", DEFAULT_DIALOG_MESSAGE_LABEL)), draft.message(), MAIL_MESSAGE_MAX_LENGTH, 4)
             .submit(TextUtil.colourise(configuredDialogText("send-label", DEFAULT_DIALOG_SEND_LABEL)), response -> submitMailDraft(player, draft, response))
             .cancel(TextUtil.colourise(configuredDialogText("cancel-label", DEFAULT_DIALOG_CANCEL_LABEL)), () -> cancelMailDraft(player, draft))
             .open(player);
