@@ -337,7 +337,7 @@ public class Mailboxes extends BaseFeature implements MailboxService {
         api.tabComplete().register("mail-quantity", (_, _) -> List.of("1", "2", "4", "8", "16", "32", "64"));
         api.commands().create("mail")
             .description("Compose and send server mail")
-            .usage("/mail compose <player> | /mail message [text] | /mail item <add|remove|list> ... | /mail send | /mail cancel")
+            .usage("/mail compose <player> | /mail message [text] | /mail item <add|remove|list> ... | /mail preview | /mail send | /mail cancel")
             .tabCompletion("compose", "{offline-player}")
             .tabCompletion("message")
             .tabCompletion("item", "add")
@@ -347,6 +347,7 @@ public class Mailboxes extends BaseFeature implements MailboxService {
             .tabCompletion("item", "remove", "{item}")
             .tabCompletion("item", "remove", "{item}", "{mail-quantity}")
             .tabCompletion("item", "list")
+            .tabCompletion("preview")
             .tabCompletion("send")
             .tabCompletion("cancel")
             .ignoreArg(2)
@@ -401,6 +402,7 @@ public class Mailboxes extends BaseFeature implements MailboxService {
             case "compose" -> startCommandMailDraft(ctx);
             case "message" -> editCommandMailMessage(ctx);
             case "item" -> editCommandMailItems(ctx);
+            case "preview" -> previewCommandMailDraft(ctx);
             case "send" -> sendCommandMailDraft(ctx);
             case "cancel" -> cancelCommandMailDraft(ctx);
             default -> ctx.returnUsage();
@@ -673,6 +675,34 @@ public class Mailboxes extends BaseFeature implements MailboxService {
             return;
         }
         ctx.success("Mail draft for {recipient} cancelled.", "recipient", removed.recipientName());
+    }
+
+    private void previewCommandMailDraft(@NotNull CommandContext ctx) {
+        if (ctx.args().size() != 1) {
+            ctx.returnError("Usage: /mail preview");
+            return;
+        }
+        Player player = ctx.asPlayer();
+        if (player == null) {
+            ctx.returnError("Only an in-game sender can preview a mail letter.");
+            return;
+        }
+        CommandMailDraft draft = commandMailDrafts.get(commandMailDraftKey(player));
+        if (draft == null) {
+            ctx.returnError("Start a draft first with /mail compose <player>.");
+            return;
+        }
+
+        String senderName = draft.senderName();
+        if (draft.senderUuid() != null) {
+            var sender = api.players().resolveIdentityByUuid(draft.senderUuid());
+            if (sender != null) senderName = sender.name();
+        }
+        senderName = TextUtil.stripColour(Objects.requireNonNullElse(senderName, "STEMCraft")).trim();
+        if (senderName.isBlank()) senderName = "STEMCraft";
+        String message = TextUtil.stripColour(draft.message()).trim();
+        ItemStack letter = createMailLetter(senderName, message, inventoryItems(draft.items()));
+        player.openBook(letter);
     }
 
     private String commandMailDraftKey(@NotNull CommandSender sender) {
