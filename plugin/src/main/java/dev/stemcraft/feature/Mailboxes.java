@@ -784,8 +784,10 @@ public class Mailboxes extends BaseFeature implements MailboxService {
             ctx.returnError("Save your edited message book first with /mail message save.");
             return;
         }
-        MailSendRequest request = new MailSendRequest(draft.senderUuid(), draft.senderName(), draft.recipientUuid(),
-            draft.message(), inventoryItems(draft.items()), draft.sourceLocation(), -1L);
+        List<ItemStack> items = inventoryItems(draft.items());
+        MailSendRequest request = draft.senderUuid() == null
+            ? new MailSendRequest(draft.senderName(), draft.recipientUuid(), draft.message(), items, draft.sourceLocation())
+            : new MailSendRequest(draft.senderUuid(), draft.recipientUuid(), draft.message(), items, draft.sourceLocation());
         MailSendResult result = send(request);
         if (!result.queued()) {
             ctx.returnError("Could not send mail: {error}", "error", result.message());
