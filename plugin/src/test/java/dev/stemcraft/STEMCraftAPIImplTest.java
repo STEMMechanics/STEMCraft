@@ -257,11 +257,11 @@ class STEMCraftAPIImplTest {
     }
 
     @Test
-    void minecraftVersionSupportStartsAt26_2() {
+    void minecraftVersionSupportStartsAt26_3() {
         assertFalse(STEMCraft.isMinecraftVersionSupported(new int[] {1, 21, 11}));
-        assertFalse(STEMCraft.isMinecraftVersionSupported(new int[] {26, 1, 9}));
-        assertTrue(STEMCraft.isMinecraftVersionSupported(new int[] {26, 2, 0}));
-        assertTrue(STEMCraft.isMinecraftVersionSupported(new int[] {26, 2, 1}));
+        assertFalse(STEMCraft.isMinecraftVersionSupported(new int[] {26, 2, 9}));
+        assertTrue(STEMCraft.isMinecraftVersionSupported(new int[] {26, 3, 0}));
+        assertTrue(STEMCraft.isMinecraftVersionSupported(new int[] {26, 3, 1}));
         assertTrue(STEMCraft.isMinecraftVersionSupported(new int[] {27, 0, 0}));
         int[] missingVersion = null;
         // Exercise the null-input contract despite static analysis knowing its result.

@@ -54,7 +54,7 @@ body:
     attributes:
       label: STEMCraft version
       description: Plugin version, build number, or commit if testing a branch build.
-      placeholder: build-31 / 26.2.x / commit abc1234
+      placeholder: build-31 / 26.3.x / commit abc1234
     validations:
       required: true
 
@@ -63,7 +63,7 @@ body:
     attributes:
       label: Server software and version
       description: Include Paper and Minecraft version.
-      placeholder: Paper 26.2 build 60 on Minecraft 1.21.x
+      placeholder: Paper 26.3 build 142 on Minecraft 26.3
     validations:
       required: true
 

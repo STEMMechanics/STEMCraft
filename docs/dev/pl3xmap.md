@@ -1,6 +1,6 @@
 # Pl3xMap integration
 
-Pl3xMap is a soft dependency, currently built against 26.2-554. Keep external types inside optional integration classes; core services and generator APIs should remain loadable when Pl3xMap is absent.
+Pl3xMap is a soft dependency. The 26.3 branch is currently built and tested against Pl3xMap 26.2-554 because no 26.3 artifact is published yet. Keep external types inside optional integration classes; core services and generator APIs should remain loadable when Pl3xMap is absent.
 
 ## Named regions and structures
 

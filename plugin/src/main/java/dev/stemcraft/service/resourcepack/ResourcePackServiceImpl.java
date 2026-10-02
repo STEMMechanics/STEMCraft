@@ -56,6 +56,7 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.*;
+import java.math.BigDecimal;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
@@ -75,9 +76,9 @@ import java.util.zip.ZipOutputStream;
  * sending to players.
  */
 public class ResourcePackServiceImpl extends BaseService implements ResourcePackService {
-    private int minSupportedVersion;
-    private int maxSupportedVersion;
-    private final int currentMinecraftFormatVersion;
+    private double minSupportedVersion;
+    private double maxSupportedVersion;
+    private final double currentMinecraftFormatVersion;
     private PackFormatRange baseSupportedRange;
     private List<PlannedBuildSegment> plannedBuildSegments = List.of();
     private record BedrockGlyphAsset(Path image, int javaHeight, int bedrockHeight, boolean autoScale, double scale, int yOffset) {}
@@ -89,7 +90,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
         @NotNull String displayName,
         @NotNull Path textureSource
     ) {}
-    private record ResourcePackFormatVersion(int[] minecraftVersion, int formatVersion) {}
+    private record ResourcePackFormatVersion(int[] minecraftVersion, double formatVersion) {}
     public record OverlayBuildPlanEntry(@NotNull String directory, @NotNull PackFormatRange supportedRange) {}
     private record PlannedBuildSegment(
         @NotNull ResourcePackBuildTarget target,
@@ -113,7 +114,8 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
         new ResourcePackFormatVersion(new int[] {1, 21, 9}, 69),
         new ResourcePackFormatVersion(new int[] {1, 21, 11}, 75),
         new ResourcePackFormatVersion(new int[] {26, 1, 0}, 84),
-        new ResourcePackFormatVersion(new int[] {26, 2, 0}, 88)
+        new ResourcePackFormatVersion(new int[] {26, 2, 0}, 88),
+        new ResourcePackFormatVersion(new int[] {26, 3, 0}, 97.1)
     );
 
     private File dataPacksDir;
@@ -139,7 +141,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
         super(plugin, api);
 
         currentMinecraftFormatVersion = resolveResourcePackFormat(STEMCraft.getMinecraftVersion());
-        int[] supportedRange = resolveSupportedVersionRange(STEMCraft.getMinecraftVersion());
+        double[] supportedRange = resolveSupportedVersionRange(STEMCraft.getMinecraftVersion());
         minSupportedVersion = supportedRange[0];
         maxSupportedVersion = supportedRange[1];
         baseSupportedRange = new PackFormatRange(minSupportedVersion, maxSupportedVersion);
@@ -579,11 +581,13 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
 
     private @NotNull String segmentLabel(@NotNull PlannedBuildSegment segment) {
         if (!segment.overlay()) {
-            return "base:" + segment.supportedRange().minFormat() + "-" + segment.supportedRange().maxFormat();
+            return "base:" + formatPackFormat(segment.supportedRange().minFormat()) + "-"
+                + formatPackFormat(segment.supportedRange().maxFormat());
         }
 
         return Objects.requireNonNull(segment.overlayDirectory()) + ":"
-            + segment.supportedRange().minFormat() + "-" + segment.supportedRange().maxFormat();
+            + formatPackFormat(segment.supportedRange().minFormat()) + "-"
+            + formatPackFormat(segment.supportedRange().maxFormat());
     }
 
     /**
@@ -596,8 +600,8 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
      * @return The min and max supported pack formats for the current service state.
      */
     @Override
-    public int[] supportedVersion() {
-        return new int[] { minSupportedVersion, maxSupportedVersion };
+    public double[] supportedVersion() {
+        return new double[] { minSupportedVersion, maxSupportedVersion };
     }
 
     @Override
@@ -612,8 +616,8 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
             .toList();
     }
 
-    static int resolveResourcePackFormat(@Nullable int[] minecraftVersion) {
-        int resolvedFormat = RESOURCE_PACK_FORMAT_VERSIONS.getFirst().formatVersion();
+    static double resolveResourcePackFormat(@Nullable int[] minecraftVersion) {
+        double resolvedFormat = RESOURCE_PACK_FORMAT_VERSIONS.getFirst().formatVersion();
         if (minecraftVersion == null || minecraftVersion.length == 0) {
             return resolvedFormat;
         }
@@ -629,25 +633,25 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
         return resolvedFormat;
     }
 
-    static int[] resolveSupportedVersionRange(@Nullable int[] minecraftVersion) {
-        return new int[] {
+    static double[] resolveSupportedVersionRange(@Nullable int[] minecraftVersion) {
+        return new double[] {
             RESOURCE_PACK_FORMAT_VERSIONS.getFirst().formatVersion(),
             resolveResourcePackFormat(minecraftVersion)
         };
     }
 
-    static int[] resolveSupportedVersionRange(@Nullable int[] minecraftVersion,
-                                              @Nullable ConfigSectionView config,
-                                              @Nullable Consumer<String> warningCallback) {
-        int[] defaultRange = resolveSupportedVersionRange(minecraftVersion);
-        int minSupportedVersion = defaultRange[0];
-        int maxSupportedVersion = defaultRange[1];
+    static double[] resolveSupportedVersionRange(@Nullable int[] minecraftVersion,
+                                                 @Nullable ConfigSectionView config,
+                                                 @Nullable Consumer<String> warningCallback) {
+        double[] defaultRange = resolveSupportedVersionRange(minecraftVersion);
+        double minSupportedVersion = defaultRange[0];
+        double maxSupportedVersion = defaultRange[1];
 
         if (config == null) {
             return defaultRange;
         }
 
-        int configuredMinSupportedVersion = config.getInt("min_pack_format", minSupportedVersion);
+        double configuredMinSupportedVersion = config.getDouble("min_pack_format", minSupportedVersion);
         if (configuredMinSupportedVersion < RESOURCE_PACK_FORMAT_VERSIONS.getFirst().formatVersion()) {
             if (warningCallback != null) {
                 warningCallback.accept(
@@ -674,7 +678,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
             configuredMinSupportedVersion = maxSupportedVersion;
         }
 
-        return new int[] { configuredMinSupportedVersion, maxSupportedVersion };
+        return new double[] { configuredMinSupportedVersion, maxSupportedVersion };
     }
 
     private static boolean isMinecraftVersionBeyondKnownRange(@Nullable int[] minecraftVersion) {
@@ -755,7 +759,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
     }
 
     private void recalculateSupportedVersionRange() {
-        int[] supportedRange = resolveSupportedVersionRange(
+        double[] supportedRange = resolveSupportedVersionRange(
             STEMCraft.getMinecraftVersion(),
             getConfig(),
             this::logSupportedRangeWarning
@@ -823,34 +827,35 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
         return List.copyOf(segments);
     }
 
-    static @NotNull List<PackFormatRange> planFutureSegments(int currentFormat,
+    static @NotNull List<PackFormatRange> planFutureSegments(double currentFormat,
                                                              @NotNull List<PackFormatRange> generatorRanges) {
-        SortedSet<Integer> boundaries = new TreeSet<>();
+        double formatStep = packFormatStep(currentFormat, generatorRanges);
+        SortedSet<Double> boundaries = new TreeSet<>();
 
         for (PackFormatRange range : generatorRanges) {
-            if (range.maxFormat() == Integer.MAX_VALUE) {
+            if (Double.isInfinite(range.maxFormat())) {
                 continue;
             }
 
-            int futureMin = Math.max(range.minFormat(), currentFormat + 1);
+            double futureMin = Math.max(range.minFormat(), nextPackFormat(currentFormat, formatStep));
             if (futureMin > range.maxFormat()) {
                 continue;
             }
 
             boundaries.add(futureMin);
-            boundaries.add(range.maxFormat() + 1);
+            boundaries.add(nextPackFormat(range.maxFormat(), formatStep));
         }
 
         if (boundaries.size() < 2) {
             return List.of();
         }
 
-        List<Integer> sortedBoundaries = new ArrayList<>(boundaries);
+        List<Double> sortedBoundaries = new ArrayList<>(boundaries);
         List<PackFormatRange> ranges = new ArrayList<>();
 
         for (int i = 0; i < sortedBoundaries.size() - 1; i++) {
-            int minFormat = sortedBoundaries.get(i);
-            int maxFormat = sortedBoundaries.get(i + 1) - 1;
+            double minFormat = sortedBoundaries.get(i);
+            double maxFormat = previousPackFormat(sortedBoundaries.get(i + 1), formatStep);
             if (minFormat > maxFormat) {
                 continue;
             }
@@ -914,29 +919,57 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
     }
 
     private static @NotNull String overlayDirectoryName(@NotNull PackFormatRange range) {
-        return "overlay_" + range.minFormat() + "_" + range.maxFormat();
+        return "overlay_" + formatPackFormat(range.minFormat()) + "_" + formatPackFormat(range.maxFormat());
     }
 
     private @NotNull ResourcePackBuildTarget currentBuildTarget() {
         String minecraftVersion = Bukkit.getMinecraftVersion();
         if (minecraftVersion.isBlank()) {
-            minecraftVersion = "pack-format-" + currentMinecraftFormatVersion;
+            minecraftVersion = "pack-format-" + formatPackFormat(currentMinecraftFormatVersion);
         }
         return new ResourcePackBuildTarget(minecraftVersion, currentMinecraftFormatVersion);
     }
 
-    private @NotNull ResourcePackBuildTarget buildTarget(int packFormat) {
+    private @NotNull ResourcePackBuildTarget buildTarget(double packFormat) {
         return new ResourcePackBuildTarget(resolveMinecraftVersionLabel(packFormat), packFormat);
     }
 
-    private @NotNull String resolveMinecraftVersionLabel(int packFormat) {
+    private @NotNull String resolveMinecraftVersionLabel(double packFormat) {
         for (ResourcePackFormatVersion version : RESOURCE_PACK_FORMAT_VERSIONS) {
-            if (version.formatVersion() == packFormat) {
+            if (Double.compare(version.formatVersion(), packFormat) == 0) {
                 return formatMinecraftVersion(version.minecraftVersion());
             }
         }
 
-        return "pack-format-" + packFormat;
+        return "pack-format-" + formatPackFormat(packFormat);
+    }
+
+    private static double packFormatStep(double currentFormat, List<PackFormatRange> ranges) {
+        int scale = decimalScale(currentFormat);
+        for (PackFormatRange range : ranges) {
+            if (!Double.isInfinite(range.minFormat())) scale = Math.max(scale, decimalScale(range.minFormat()));
+            if (!Double.isInfinite(range.maxFormat())) scale = Math.max(scale, decimalScale(range.maxFormat()));
+        }
+        return BigDecimal.ONE.movePointLeft(scale).doubleValue();
+    }
+
+    private static int decimalScale(double format) {
+        return Math.max(0, BigDecimal.valueOf(format).stripTrailingZeros().scale());
+    }
+
+    private static double nextPackFormat(double format, double step) {
+        return BigDecimal.valueOf(format).add(BigDecimal.valueOf(step)).doubleValue();
+    }
+
+    private static double previousPackFormat(double format, double step) {
+        return BigDecimal.valueOf(format).subtract(BigDecimal.valueOf(step)).doubleValue();
+    }
+
+    private static @NotNull String formatPackFormat(double format) {
+        if (Double.isInfinite(format)) {
+            return "infinite";
+        }
+        return BigDecimal.valueOf(format).stripTrailingZeros().toPlainString();
     }
 
     private static @NotNull String formatMinecraftVersion(int @NotNull [] version) {

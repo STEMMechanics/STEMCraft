@@ -92,8 +92,8 @@ import java.util.regex.Pattern;
 @Getter
 @Accessors(fluent = true)
 public final class STEMCraft extends JavaPlugin {
-    public static final String MINIMUM_MINECRAFT_VERSION = "26.2";
-    private static final int[] MINIMUM_MINECRAFT_VERSION_COMPONENTS = {26, 2, 0};
+    public static final String MINIMUM_MINECRAFT_VERSION = "26.3";
+    private static final int[] MINIMUM_MINECRAFT_VERSION_COMPONENTS = {26, 3, 0};
     private static final Pattern VERSION_COMPONENT_PATTERN = Pattern.compile("\\d+");
     private static final String BOOTSTRAP_ERROR_LOAD_CONFIG = "Could not load config.yml.";
     private static STEMCraftAPI api;

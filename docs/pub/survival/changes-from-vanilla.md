@@ -14,4 +14,4 @@ The current default keeps Minecraft's repair-cost behavior and warns before the 
 
 ## Other changes awaiting deployment confirmation
 
-The old handbook described altered villager currencies and cobblestone-to-gravel-to-sand stonecutter recipes. The plugin supports configurable stonecutter recipes, but the bundled version/26.2.x defaults do not establish those old player-facing values. Confirm the live Survival configuration before documenting them as active.
+The old handbook described altered villager currencies and cobblestone-to-gravel-to-sand stonecutter recipes. The plugin supports configurable stonecutter recipes, but the bundled version/26.3.x defaults do not establish those old player-facing values. Confirm the live Survival configuration before documenting them as active.

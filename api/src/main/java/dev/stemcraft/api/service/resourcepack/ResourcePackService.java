@@ -103,7 +103,7 @@ public interface ResourcePackService {
      *
      * @return The min and max supported pack formats for the current service state.
      */
-    int[] supportedVersion();
+    double[] supportedVersion();
 
     /**
      * Gets the supported format range for the base build target generated for

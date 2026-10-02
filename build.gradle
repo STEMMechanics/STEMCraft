@@ -8,8 +8,13 @@ plugins {
 }
 
 ext {
-    paperApiVersion = "26.2.build.123-stable"
-    paperRuntimeVersion = "26.2"
+    // Paper 26.3 is currently published on the BETA channel. Keep this pinned
+    // so a later Paper build cannot silently change the compatibility surface.
+    paperApiVersion = "26.3.build.142-beta"
+    paperRuntimeVersion = "26.3"
+    // MockBukkit has not released a 26.3 implementation yet. Keep its test
+    // runtime on the last compatible Paper API until that artifact exists.
+    paperTestRuntimeVersion = "26.2.build.123-stable"
     javaToolchainVersion = 25
 }
 

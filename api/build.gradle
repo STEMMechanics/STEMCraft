@@ -37,9 +37,16 @@ dependencies {
 
     testImplementation "org.junit.jupiter:junit-jupiter:5.11.0"
     testImplementation "org.mockito:mockito-core:5.23.0"
+    // Compile API tests against the new target, but run MockBukkit with the
+    // Paper API it actually implements until a v26.3 artifact is published.
     //noinspection VulnerableLibrariesLocal
-    testImplementation "io.papermc.paper:paper-api:${rootProject.ext.paperApiVersion}"
+    testCompileOnly "io.papermc.paper:paper-api:${rootProject.ext.paperApiVersion}"
     //noinspection VulnerableLibrariesLocal
+    testRuntimeOnly "io.papermc.paper:paper-api:${rootProject.ext.paperTestRuntimeVersion}"
+    //noinspection VulnerableLibrariesLocal
+    // MockBukkit does not publish a v26.3 artifact yet. Keep its 26.2
+    // implementation for unit-test scaffolding while compiling the API
+    // against the 26.3 Paper API.
     testImplementation("org.mockbukkit.mockbukkit:mockbukkit-v26.2:4.116.1") {
         exclude group: "org.junit"
         exclude group: "org.junit.jupiter"

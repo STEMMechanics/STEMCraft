@@ -57,11 +57,11 @@ public class PackMetaGenerator extends AbstractResourcePackGenerator {
     }
 
     private void addPackVersionToMetadata(@NotNull PackFormatRange supportedRange, @NotNull JsonObject packJson) {
-        int minPackFormat = supportedRange.minFormat();
-        int maxPackFormat = supportedRange.maxFormat();
+        double minPackFormat = supportedRange.minFormat();
+        double maxPackFormat = supportedRange.maxFormat();
         if (maxPackFormat >= MIN_MAX_PACK_METADATA_FORMAT) {
-            packJson.addProperty("min_format", minPackFormat);
-            packJson.addProperty("max_format", maxPackFormat);
+            addFormat(packJson, "min_format", minPackFormat);
+            addFormat(packJson, "max_format", maxPackFormat);
 
             if (minPackFormat < MIN_MAX_PACK_METADATA_FORMAT) {
                 addLegacyPackVersionToMetadata(packJson, minPackFormat, LEGACY_PACK_METADATA_MAX_FORMAT);
@@ -72,13 +72,13 @@ public class PackMetaGenerator extends AbstractResourcePackGenerator {
     }
 
     private void addLegacyPackVersionToMetadata(@NotNull JsonObject packJson,
-                                                int minPackFormat,
-                                                int maxPackFormat) {
-        packJson.addProperty("pack_format", maxPackFormat);
+                                                double minPackFormat,
+                                                double maxPackFormat) {
+        addFormat(packJson, "pack_format", maxPackFormat);
 
         JsonArray supportedFormats = new JsonArray();
-        supportedFormats.add(minPackFormat);
-        supportedFormats.add(maxPackFormat);
+        addFormat(supportedFormats, minPackFormat);
+        addFormat(supportedFormats, maxPackFormat);
         packJson.add("supported_formats", supportedFormats);
     }
 
@@ -102,12 +102,12 @@ public class PackMetaGenerator extends AbstractResourcePackGenerator {
     }
 
     private void addOverlayVersionMetadata(@NotNull PackFormatRange supportedRange, @NotNull JsonObject overlayJson) {
-        int minPackFormat = supportedRange.minFormat();
-        int maxPackFormat = supportedRange.maxFormat();
+        double minPackFormat = supportedRange.minFormat();
+        double maxPackFormat = supportedRange.maxFormat();
 
         if (maxPackFormat >= MIN_MAX_PACK_METADATA_FORMAT) {
-            overlayJson.addProperty("min_format", minPackFormat);
-            overlayJson.addProperty("max_format", maxPackFormat);
+            addFormat(overlayJson, "min_format", minPackFormat);
+            addFormat(overlayJson, "max_format", maxPackFormat);
 
             if (minPackFormat < MIN_MAX_PACK_METADATA_FORMAT) {
                 addLegacyOverlayFormats(overlayJson, minPackFormat, LEGACY_PACK_METADATA_MAX_FORMAT);
@@ -119,11 +119,27 @@ public class PackMetaGenerator extends AbstractResourcePackGenerator {
     }
 
     private void addLegacyOverlayFormats(@NotNull JsonObject overlayJson,
-                                         int minPackFormat,
-                                         int maxPackFormat) {
+                                         double minPackFormat,
+                                         double maxPackFormat) {
         JsonArray legacyFormats = new JsonArray();
-        legacyFormats.add(minPackFormat);
-        legacyFormats.add(maxPackFormat);
+        addFormat(legacyFormats, minPackFormat);
+        addFormat(legacyFormats, maxPackFormat);
         overlayJson.add("formats", legacyFormats);
+    }
+
+    private static void addFormat(@NotNull JsonObject object, @NotNull String name, double format) {
+        if (format == Math.rint(format) && format <= Long.MAX_VALUE) {
+            object.addProperty(name, (long) format);
+        } else {
+            object.addProperty(name, format);
+        }
+    }
+
+    private static void addFormat(@NotNull JsonArray array, double format) {
+        if (format == Math.rint(format) && format <= Long.MAX_VALUE) {
+            array.add((long) format);
+        } else {
+            array.add(format);
+        }
     }
 }
