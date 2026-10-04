@@ -64,7 +64,7 @@ class BotSessionTest {
             2.5,8,60,3,0.9,10,6,600,
             new BotScript.ChatSettings(12,6,60,"public {seconds}","private"),speech,
             List.of("wait"),List.of("scanning"),30,List.of("stuck"),List.of("farewell"),
-            Map.copyOf(actions),Map.of("world","start"),Map.of()
+            Map.copyOf(actions),Map.of("world","start"),Map.of(),Map.of(),Map.of(),Map.of(),Map.of(),false,10
         );
 
         session=new BotSession(

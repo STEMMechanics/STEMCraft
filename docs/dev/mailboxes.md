@@ -16,7 +16,41 @@ When delivery completes, the recipient receives the configured notification. Not
 
 This queues a letter-only delivery. Player command senders are identified by UUID; console mail uses `STEMCraft` as its sender label. The other `/mailbox` subcommands inspect and administer the delivery queue.
 
-Permission: `stemcraft.mailbox`.
+## Admin mail drafts
+
+Use `/mail` to build a delivery containing a message and items:
+
+```text
+/mail compose <player>
+/mail message
+/mail message save
+/mail item add <item-id> <qty>
+/mail item list
+/mail item remove <item-id> <qty>
+/mail preview
+/mail send
+/mail cancel
+```
+
+`/mail message` gives an in-game sender a writable book prefilled with the current draft message. Edit its pages, including blank lines, choose Done, then run `/mail message save` while the book is in your inventory. Saving copies the pages into the draft and removes the temporary book. `/mail message <text>` still replaces the message directly and works from console. Use `/mail message -a <text>` to append a new paragraph; literal `\n` sequences become line breaks. `/mail preview` opens the draft's actual written-book letter, including the sender, message and item list, without sending it; preview is available to in-game senders. Long messages are paginated in the generated letter. Recipients can be online or offline players known to the server. Item IDs accept vanilla names such as `minecraft:diamond`, `minecraft:firework_rocket`, and `minecraft:golden_apple`, or registered custom item IDs. The draft checks mailbox capacity before adding items; every sent delivery includes its letter.
+
+For example, to reward a challenge winner:
+
+```text
+/mail compose WinnerName
+/mail message
+# Edit the book, choose Done, then save its pages to the draft
+/mail message save
+/mail message -a Thanks for building such a great space station!
+/mail item add minecraft:diamond 1
+/mail item add minecraft:firework_rocket 8
+/mail item add minecraft:golden_apple 1
+/mail send
+```
+
+Each command sender can have one draft at a time. Use `/mail item list` to review it, `/mail send` to queue it, or `/mail cancel` to discard it. Player senders are identified by UUID; console drafts use `STEMCraft` as their sender label.
+
+`/mailbox send` requires `stemcraft.mailbox.send` or an administrative mailbox permission. The `/mail` item draft command requires `stemcraft.mailbox.admin` or the legacy administrative permission `stemcraft.mailbox`.
 
 ## Configuration
 
