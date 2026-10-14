@@ -1,6 +1,7 @@
 package dev.stemcraft.minigame.volcano;
 
 import dev.stemcraft.STEMCraft;
+import dev.stemcraft.minigame.MiniGameArenaInfoSupport;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.minigame.MiniGameArena;
@@ -27,7 +28,7 @@ final class VolcanoCommand {
                 "validate", "enable", "disable", "delete", "addspawn", "removespawn")) {
             command.tabCompletion(action, "{" + id + "-arenas}");
         }
-        for (String key : List.of("arena", "floor", "lobby", "spectator", "minplayers", "maxplayers", "roundseconds", "countdown")) {
+        for (String key : List.of("arena", "floor", "lobby", "spectator", "minplayers", "maxplayers", "roundseconds", "countdown", "startdelay")) {
             command.tabCompletion("set", "{" + id + "-arenas}", key);
         }
         command.executor((_, _, ctx) -> execute(ctx)).register(STEMCraft.getPlugin());
@@ -73,8 +74,11 @@ final class VolcanoCommand {
             return;
         }
         switch (action) {
-            case "info", "validate" -> {
-                ctx.info(a.id() + ": " + a.getStatus() + "; spawns=" + owner.settings(a).spawns.size());
+            case "info" -> {
+                showInfo(ctx, a);
+                return;
+            }
+            case "validate" -> {
                 var result = a.validate();
                 if (!result.hasErrors()) ctx.success("Arena setup is valid.");
                 else result.getErrors().forEach(ctx::warn);
@@ -165,6 +169,16 @@ final class VolcanoCommand {
                     case "floor" -> d.floor = selection(ctx, a);
                     case "lobby" -> a.setLobbySpawn(location(ctx, a));
                     case "spectator" -> a.setSpectatorSpawn(location(ctx, a));
+                    case "startdelay" -> {
+                        ctx.checkArgsSizeAtLeast(4);
+                        ctx.checkArgIsInt(3, "Start delay must be a whole number.");
+                        int seconds = ctx.getArgAsInt(3);
+                        if (seconds < 0 || seconds > 60) {
+                            ctx.returnError("Start delay must be between 0 and 60 seconds.");
+                            return;
+                        }
+                        d.startDelaySeconds = seconds;
+                    }
                     default -> {
                         ctx.checkArgsSizeAtLeast(4);
                         int n = ctx.getArgAsInt(3, 1, 1, 3600);
@@ -188,6 +202,16 @@ final class VolcanoCommand {
         }
         owner.save(a);
         ctx.success("Setup saved. Use validate to check remaining steps.");
+    }
+
+    private void showInfo(CommandContext ctx, MiniGameArena a) {
+        VolcanoArenaSettings d = owner.settings(a);
+        MiniGameArenaInfoSupport.common(ctx, a, d.countdown, d.roundSeconds);
+        ctx.info(" - Floor start delay: " + d.startDelaySeconds + " sec");
+        MiniGameArenaInfoSupport.locations(ctx, "Starting spawns", d.spawns);
+        ctx.info(" - Floor region: " + MiniGameArenaInfoSupport.formatRegion(d.floor));
+        ctx.info(" - Spawn mode: " + (d.spawns.isEmpty()
+                ? "random floor blocks, one block above the floor" : "configured starting spawns"));
     }
 
     private Player player(CommandContext ctx) {

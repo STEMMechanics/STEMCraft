@@ -32,12 +32,32 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class MiniGameArenaSharedTest {
+    @Test
+    void preparationJoiningIsOptInAndDoesNotAllowRunningJoins() {
+        ServerMock server = MockBukkit.mock();
+        try {
+            WorldMock world = server.addSimpleWorld("preparation-join-test");
+            MiniGameArena arena = new MiniGameArenaImpl(mock(MiniGameServiceImpl.class, RETURNS_DEEP_STUBS),
+                mock(STEMCraftAPI.class), "test", "preparation", world);
+            arena.setStatus(MiniGameArena.ArenaStatus.PREPARATION, 15);
+            assertFalse(arena.isJoinable());
+            assertEquals(15, arena.getCountdown());
+            arena.set("allowPreparationJoin", true);
+            assertTrue(arena.isJoinable());
+            arena.setStatus(MiniGameArena.ArenaStatus.RUNNING, 180);
+            assertFalse(arena.isJoinable());
+        } finally {
+            MockBukkit.unmock();
+        }
+    }
+
     @Test
     void startingCountdownTitleUsesSharedArenaFormatting() {
         MiniGameServiceImpl service = mock(MiniGameServiceImpl.class);

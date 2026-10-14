@@ -14,7 +14,6 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
-import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.util.RayTraceResult;
@@ -90,15 +89,6 @@ final class QuakeArenaHandler implements MiniGameArenaHandler {
             if (a.getStatus() == WAITING && a.numPlayers() >= a.getMinPlayers())
                 a.setStatus(STARTING, settings(a).countdown);
         });
-        if (a.getStatus() == STARTING) {
-            Round r = rounds.get(a);
-            if (r != null) {
-                Location spawn = r.respawns.computeIfAbsent(p.getUniqueId(), ignored -> settings(a).spawns.stream()
-                        .filter(l -> !r.respawns.containsValue(l)).findFirst().orElse(settings(a).spawns.getFirst()).clone());
-                r.scores.put(p.getUniqueId(), 0);
-                return spawn;
-            }
-        }
         return a.getLobbySpawn();
     }
 
@@ -138,6 +128,12 @@ final class QuakeArenaHandler implements MiniGameArenaHandler {
             rounds.put(a, r);
             a.set("winner", "-");
             r.objective = QuakeMiniGame.INSTRUCTIONS;
+        } else if (status == RUNNING) {
+            Round r = rounds.get(a);
+            if (r == null) {
+                a.setStatus(DISABLED, 0);
+                return;
+            }
             int i = 0;
             for (Player p : a.getPlayers()) {
                 Location spawn = settings(a).spawns.get(i++).clone();
@@ -148,12 +144,6 @@ final class QuakeArenaHandler implements MiniGameArenaHandler {
                 a.getPlayer(p).setDeaths(0);
                 p.teleport(spawn);
                 p.getInventory().clear();
-            }
-        } else if (status == RUNNING) {
-            Round r = rounds.get(a);
-            if (r == null) {
-                a.setStatus(DISABLED, 0);
-                return;
             }
             r.initialPlayers = a.numPlayers();
             for (Player p : a.getPlayers()) equip(p);
@@ -262,7 +252,7 @@ final class QuakeArenaHandler implements MiniGameArenaHandler {
         announce(a, names.isEmpty() ? "Round over — no winner." : "Winner" + (winners.size() > 1 ? "s: " : ": ") + names);
         // Solo practice does not grant rewards.
         if (r.initialPlayers > 1 && !winners.isEmpty()) owner.game.rewardWinners(a, winners);
-        a.setStatus(ENDING, 8);
+        a.setStatus(ENDING, 20);
     }
 
     private void announce(MiniGameArena a, String message) {
@@ -296,15 +286,6 @@ final class QuakeArenaHandler implements MiniGameArenaHandler {
     }
 
     void registerListeners() {
-        api.events().register(PlayerMoveEvent.class, e -> {
-            MiniGameArena a = owner.game.findPlayer(e.getPlayer());
-            if (a != null && a.hasPlayer(e.getPlayer()) && a.getStatus() == STARTING) {
-                Location to = e.getFrom().clone();
-                to.setYaw(e.getTo().getYaw());
-                to.setPitch(e.getTo().getPitch());
-                e.setTo(to);
-            }
-        });
         api.events().register(PlayerInteractEvent.class, this::interact);
         api.events().register(PlayerInteractEntityEvent.class, e -> {
             MiniGameArena a = owner.game.findPlayer(e.getPlayer());

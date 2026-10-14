@@ -48,6 +48,24 @@ class BedWarsArenaHandlerTest {
     }
 
     @Test
+    void onArenaCountdownEndUsesConfiguredRoundDuration() {
+        STEMCraftAPI api = mock(STEMCraftAPI.class);
+        EventService events = mock(EventService.class);
+        BedWarsMiniGame game = mock(BedWarsMiniGame.class);
+        MiniGameArena arena = mock(MiniGameArena.class);
+
+        when(api.events()).thenReturn(events);
+        when(events.register(any(), any())).thenReturn(mock(Listener.class));
+        when(arena.getStatus()).thenReturn(MiniGameArena.ArenaStatus.STARTING);
+        when(game.roundSeconds(arena)).thenReturn(900);
+
+        BedWarsArenaHandler handler = new BedWarsArenaHandler(api, game);
+        handler.onArenaCountdownEnd(arena);
+
+        verify(arena).setStatus(MiniGameArena.ArenaStatus.RUNNING, 900);
+    }
+
+    @Test
     void onArenaCountdownEndUsesConfiguredEndingCountdown() {
         STEMCraftAPI api = mock(STEMCraftAPI.class);
         EventService events = mock(EventService.class);

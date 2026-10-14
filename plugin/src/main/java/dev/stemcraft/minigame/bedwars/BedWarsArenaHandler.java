@@ -53,7 +53,6 @@ import java.util.UUID;
 
 public class BedWarsArenaHandler implements MiniGameArenaHandler {
     private static final int STARTING_COUNTDOWN_SECONDS = 30;
-    private static final int RUNNING_COUNTDOWN_SECONDS = 1800;
     private static final int ENDING_COUNTDOWN_SECONDS = 15;
     private static final int DROP_INTERVAL_SECONDS = 30;
     private static final int TNT_FUSE_TICKS = 80;
@@ -291,7 +290,7 @@ public class BedWarsArenaHandler implements MiniGameArenaHandler {
     @Override
     public void onArenaCountdownEnd(MiniGameArena arena) {
         if (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING) {
-            arena.setStatus(MiniGameArena.ArenaStatus.RUNNING, RUNNING_COUNTDOWN_SECONDS);
+            arena.setStatus(MiniGameArena.ArenaStatus.RUNNING, bedWars.roundSeconds(arena));
         } else if (arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING) {
             arena.setStatus(MiniGameArena.ArenaStatus.ENDING, bedWars.endingSeconds(arena));
         } else if (arena.getStatus() == MiniGameArena.ArenaStatus.ENDING) {

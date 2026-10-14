@@ -36,6 +36,9 @@ final class FloorShuffleConfig {
         s.set("max-players", a.getMaxPlayers());
         s.set("round-seconds", d.roundSeconds);
         s.set("countdown", d.countdown);
+        s.set("start-delay-seconds", d.startDelaySeconds);
+        s.set("lobby-shuffle-seconds", d.lobbyShuffleSeconds);
+        s.set("timing-version", 1);
         config.save();
     }
 
@@ -63,7 +66,9 @@ final class FloorShuffleConfig {
                 if (!floor.isBlank()) d.floor = SCRegion.fromString(floor, world);
                 for (String value : s.getStringList("spawns")) d.spawns.add(LocationUtil.deserialize(value, world));
                 d.roundSeconds = s.getInt("round-seconds", 180);
-                d.countdown = s.getInt("countdown", 10);
+                d.countdown = MiniGameConfigSupport.timedRoundCountdown(s);
+                d.startDelaySeconds = MiniGameConfigSupport.startDelaySeconds(s);
+                d.lobbyShuffleSeconds = s.getInt("lobby-shuffle-seconds", 3);
                 var validation = a.validate();
                 if (validation.hasErrors())
                     api.messages().warn(FloorShuffleMiniGame.NAMESPACE + ": " + id + ": " + String.join("; ", validation.getErrors()));
@@ -74,6 +79,7 @@ final class FloorShuffleConfig {
                 api.messages().warn("Cannot load " + FloorShuffleMiniGame.NAMESPACE + " arena " + id + ": " + ex.getMessage());
             }
         }
+        config.save();
     }
 
     void delete(String id) {

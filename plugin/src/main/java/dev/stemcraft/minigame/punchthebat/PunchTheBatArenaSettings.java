@@ -12,6 +12,6 @@ final class PunchTheBatArenaSettings {
     final List<Location> spawns = new ArrayList<>();
     final List<Location> targets = new ArrayList<>();
     int roundSeconds = 180;
-    int countdown = 10;
+    int countdown = 30;
     int targetCount = 12;
 }

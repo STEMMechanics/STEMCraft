@@ -36,6 +36,8 @@ final class VolcanoConfig {
         s.set("max-players", a.getMaxPlayers());
         s.set("round-seconds", d.roundSeconds);
         s.set("countdown", d.countdown);
+        s.set("start-delay-seconds", d.startDelaySeconds);
+        s.set("timing-version", 1);
         config.save();
     }
 
@@ -63,7 +65,8 @@ final class VolcanoConfig {
                 if (!floor.isBlank()) d.floor = SCRegion.fromString(floor, world);
                 for (String value : s.getStringList("spawns")) d.spawns.add(LocationUtil.deserialize(value, world));
                 d.roundSeconds = s.getInt("round-seconds", 180);
-                d.countdown = s.getInt("countdown", 10);
+                d.countdown = MiniGameConfigSupport.timedRoundCountdown(s);
+                d.startDelaySeconds = MiniGameConfigSupport.startDelaySeconds(s);
                 var validation = a.validate();
                 if (validation.hasErrors())
                     api.messages().warn(VolcanoMiniGame.NAMESPACE + ": " + id + ": " + String.join("; ", validation.getErrors()));
