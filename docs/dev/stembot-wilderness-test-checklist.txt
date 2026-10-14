@@ -1,0 +1,62 @@
+STEMBOT WILDERNESS DIRECTIONS - SERVER TEST CHECKLIST
+
+Build: __________________  Date: ______________  Tester: _________________
+Tick each item after testing it in-game.
+
+SETUP
+Use a test world with Citizens and STEMBot enabled. Keep its other settings.
+Add these settings under that world's entry in the deployed stembot.yml:
+
+  wilderness:
+    old-generation-bounds: "0,0;7999,7999"
+    old-version: "26.2"
+    new-version: "26.3"
+
+Reload STEMCraft. Pick safe ground Y values for the X/Z positions below.
+These test coordinates must not replace the real Survival boundary.
+
+[ ] W01 - Commands and ordinary private chat
+    Run /help wilderness and /stembot wilderness. During a private
+    conversation, ask "Where are the new chunks?" or "Where is the new
+    forest?". All should reach the wilderness guidance.
+
+[ ] W02 - Closest edge, direction, distance and pointing
+    At X/Z 4000.5,100.5: north, about 101 blocks, target Z -1.
+    At X/Z 7900.5,4000.5: east, about 100 blocks, target X 8000.
+    At X/Z 4000.5,7900.5: south, about 100 blocks, target Z 8000.
+    At X/Z 100.5,4000.5: west, about 101 blocks, target X -1.
+    Check that STEMBot faces/gestures towards the stated target.
+
+[ ] W03 - Recalculate after moving
+    Ask near one edge, move near another, and ask again. The second reply
+    must use the new position. The player travels; no teleport is offered.
+
+[ ] W04 - Already outside
+    Cross to X -1 or X 8000 and ask again. STEMBot should explain that you
+    are beyond the old area instead of sending you to another edge.
+
+[ ] W05 - Chunk alignment and negative corners
+    In the test config, use "-1,-1;8000,8000" and reload.
+    X 8015 is still in an old edge chunk; the east target must be X 8016.
+    The west target must be X -17. Restore the previous test bounds.
+
+[ ] W06 - World border and unmapped worlds
+    On the test world, block one exit with the world border. Check that an
+    accessible exit is chosen. If the border encloses the entire accessible
+    area inside the old footprint, expect a blocked-border explanation.
+    In an unmapped world, expect an unmapped-boundary explanation.
+
+[ ] W07 - Privacy and existing behaviour
+    Check with a second player: only the owner sees/hears the guide reply.
+    Outside conversation range, chat stays public and does not route topics.
+    Existing tours, topic changes, bye/close and controlled first-join
+    questions must still work. Check Java and Bedrock clients if available.
+
+[ ] W08 - Existing custom scripts and final configuration
+    Confirm that the mapped boundary enables wilderness help without
+    replacing custom dialogue or explicit help-topic overrides.
+    Restore test-world settings and configure the real Survival corners
+    before enabling this for players. No example coordinates should remain.
+
+Notes: _________________________________________________________________
+________________________________________________________________________

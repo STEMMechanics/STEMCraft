@@ -59,6 +59,7 @@ public final class BotSession {
     private WaitMode waitMode=WaitMode.NONE;
     private List<BotScript.ListenRoute> listening=List.of();
     private Location walkTarget;
+    private Location talkTarget;
     private Location progress;
     private Location recoveryTarget;
     private BotActor.RouteSearch routeSearch;
@@ -196,26 +197,29 @@ public final class BotSession {
             if(closed) return;
         }
 
+        String wildernessAction=script.helpTopicAction("wilderness");
+        if(wildernessAction!=null&&script.wildernessGuide().recognises(world,input)) {
+            replyTo(wildernessAction);
+            return;
+        }
         for(BotScript.ListenRoute route:replyRoutes()) {
             if(!route.matches(input)) continue;
-
-            speechRevision++;
-            actor.cancel();
-            walkTarget=null;
-            progress=null;
-            playerBehind=false;
-            listening=List.of();
-            waitMode=WaitMode.NONE;
-
-            if(route.target().equalsIgnoreCase("close")
-                ||route.target().equalsIgnoreCase("end")) {
-                close();
-            } else {
-                jumpTo(route.target());
-            }
+            replyTo(route.target());
             return;
         }
         if(waitMode==WaitMode.STUCK) stuckPrompt();
+    }
+
+    private void replyTo(String target) {
+        speechRevision++;
+        actor.cancel();
+        walkTarget=null;
+        progress=null;
+        playerBehind=false;
+        listening=List.of();
+        waitMode=WaitMode.NONE;
+        if(target.equalsIgnoreCase("close")||target.equalsIgnoreCase("end")) close();
+        else jumpTo(target);
     }
 
     /** Find the upcoming reply prompt without executing its intervening actions. */
@@ -360,10 +364,22 @@ public final class BotSession {
                 case SAY -> output.say(instruction.text());
 
                 case TALK -> {
+                    talkTarget=null;
                     int duration=Math.max(1,output.talk(instruction.text()));
                     waitMode=WaitMode.TALK;
                     waitUntil=age+duration;
                     nextGesture=age;
+                }
+
+                case WILDERNESS -> {
+                    var advice=script.wildernessGuide().advise(owner);
+                    var route=advice.route();
+                    talkTarget=route==null?null:new Location(owner.getWorld(),route.x(),owner.getY()+1.4,route.z());
+                    int duration=Math.max(1,output.talk(advice.message()));
+                    waitMode=WaitMode.TALK;
+                    waitUntil=age+duration;
+                    nextGesture=age;
+                    animateTalk(owner);
                 }
 
                 case SLEEP -> {
@@ -598,7 +614,7 @@ public final class BotSession {
     private void animateTalk(Location owner) {
         if(age<nextGesture) return;
 
-        actor.lookAt(owner.clone().add(0,1.4,0));
+        actor.lookAt(talkTarget==null?owner.clone().add(0,1.4,0):talkTarget.clone());
 
         // Mostly main-hand movement, occasionally off-hand, to avoid a rigid repeated wave.
         actor.animate(ThreadLocalRandom.current().nextInt(4)==0
@@ -671,6 +687,7 @@ public final class BotSession {
         cancelCallback();
         action=target;
         pc=0;
+        talkTarget=null;
         waitMode=WaitMode.NONE;
         listening=List.of();
     }

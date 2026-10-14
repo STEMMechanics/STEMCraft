@@ -31,6 +31,15 @@ The list below reflects the active built-in command roots in source.
 | `/ban`, `/unban`, `/kick`, `/warn` | `PunishmentServiceImpl` | Punishment management |
 | `/report` | `ChatServiceImpl` | Player report submission |
 
+### STEMBot wilderness directions
+
+With the old generation boundary configured in `stembot.yml`, `/stembot wilderness`
+or `/help wilderness` gives the closest direction out of that area from the player's
+current position. STEMBot points towards the first new chunk and reports distance
+and target coordinates. It explains when the player is already outside, when the
+world is unmapped, or when the world border prevents an exit. See [STEMBot](stembot.md)
+for the boundary format and custom-script setup.
+
 ### Web server diagnostics
 
 Use `/webserver` or `/webserver status` to see whether the embedded server is

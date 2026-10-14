@@ -29,6 +29,60 @@ class BotSessionTest {
         setUp(0);
     }
 
+    @Test
+    void wildernessPointsToTheClosestExitAndRecalculatesWhenAskedAgain() throws Exception {
+        var border=mock(org.bukkit.WorldBorder.class);
+        when(world.getWorldBorder()).thenReturn(border);
+        when(border.isInside(any(Location.class))).thenReturn(true);
+        here=new Location(world,100.5,64,4000.5);
+        session=wildernessSession("start");
+
+        session.tick(here);
+        assertTrue(output.getFirst().contains("west about 101 blocks"));
+        verify(actor).lookAt(new Location(world,-0.5,65.4,4000.5));
+        verify(actor,never()).move(any(),anyDouble());
+        verify(actor,never()).teleport(any());
+
+        session.tick(here);
+        session.tick(here);
+        here=new Location(world,4000.5,64,7900.5);
+        session.input("Where are the new chunks?");
+        session.tick(here);
+
+        assertTrue(output.getLast().contains("south about 100 blocks"));
+        verify(actor).lookAt(new Location(world,4000.5,65.4,8000.5));
+    }
+
+    @Test
+    void wildernessQuestionCannotInterruptAnExternallyControlledSession() throws Exception {
+        session=wildernessSession(null);
+
+        session.input("Where is the new forest?");
+
+        assertTrue(session.controlled());
+        assertTrue(output.isEmpty());
+        assertNull(session.action());
+    }
+
+    private BotSession wildernessSession(String action) throws Exception {
+        var yaml=new org.bukkit.configuration.file.YamlConfiguration();
+        yaml.loadFromString("""
+            speech:
+              post-delay-ticks: 0
+            actions:
+              start: ['wilderness', 'listen:* -> start']
+            worlds:
+              world:
+                wilderness:
+                  old-generation-bounds: '0,0;7999,7999'
+            """);
+        var script=BotScript.read(new dev.stemcraft.config.ConfigSectionImpl(null,yaml));
+        return new BotSession(script,actor,"world",action,new BotSession.Output() {
+            public void say(String text) { output.add(text); }
+            public int talk(String text) { output.add(text); return 10; }
+        });
+    }
+
     private void setUp(int postDelayTicks) {
         setUp(postDelayTicks,List.of("say:hello","talk:talking","walk:10 64 0",
             "listen:yes|tour -> done, * -> start"));
@@ -64,7 +118,7 @@ class BotSessionTest {
             2.5,8,60,3,0.9,10,6,600,
             new BotScript.ChatSettings(12,6,60,"public {seconds}","private"),speech,
             List.of("wait"),List.of("scanning"),30,List.of("stuck"),List.of("farewell"),
-            Map.copyOf(actions),Map.of("world","start"),Map.of(),Map.of(),Map.of(),Map.of(),Map.of(),false,10
+            Map.copyOf(actions),Map.of("world","start"),Map.of(),Map.of(),Map.of(),Map.of(),Map.of(),BotWildernessGuide.empty(),false,10
         );
 
         session=new BotSession(

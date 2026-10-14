@@ -36,6 +36,7 @@ public record BotScript(
     Map<String,SpawnPoint> alwaysWorldSpawns,
     Map<String,String> triggerActions,
     Map<String,String> helpTopics,
+    BotWildernessGuide wildernessGuide,
     boolean deferDuringCombat,
     int combatCooldownSeconds
 ) {
@@ -48,7 +49,7 @@ public record BotScript(
                                int awayTimeoutSeconds,String disengaged,String reengaged) {}
 
     public enum Op {
-        SAY,TALK,SLEEP,WALK,SPEED,LOOK,POINT,WAVE,SNEAK,STAND,ACTION,LISTEN,AWAIT,END,CLOSE
+        SAY,TALK,SLEEP,WALK,SPEED,LOOK,POINT,WILDERNESS,WAVE,SNEAK,STAND,ACTION,LISTEN,AWAIT,END,CLOSE
     }
 
     public record SpeechSettings(
@@ -241,13 +242,23 @@ public record BotScript(
         if(speech.maxBeeps()<speech.minBeeps())
             throw new IllegalArgumentException("speech.max-beeps must be >= speech.min-beeps");
 
-        Map<String,List<Instruction>> actions=readActions(config.getSection("actions",false));
+        Map<String,List<Instruction>> actions=new LinkedHashMap<>(readActions(config.getSection("actions",false)));
         Map<String,String> commandWorld=worldActions(config,"command-action","command");
         Map<String,String> firstTimeWorld=worldActions(config,"first-time-action","first-time");
         Map<String,String> alwaysWorld=worldActions(config,"always-action",null);
         Map<String,SpawnPoint> alwaysWorldSpawns=worldSpawns(config);
         Map<String,String> triggerActions=readRoutes(config.getSection("triggers",false));
-        Map<String,String> helpTopics=readRoutes(config.getSection("help-topics",false));
+        Map<String,String> helpTopics=new LinkedHashMap<>(readRoutes(config.getSection("help-topics",false)));
+        BotWildernessGuide wildernessGuide=BotWildernessGuide.read(config);
+        if(!wildernessGuide.worlds().isEmpty()) {
+            Instruction returnStep=actions.containsKey("survival-menu")
+                ?new Instruction(Op.ACTION,"survival-menu",0,0,0,0,0,List.of())
+                :Instruction.simple(Op.END);
+            actions.putIfAbsent("survival-wilderness",List.of(Instruction.simple(Op.WILDERNESS),returnStep));
+            for(String topic:List.of("wilderness","newterrain")) {
+                if(!config.contains("help-topics."+topic)) helpTopics.put(topic,"survival-wilderness");
+            }
+        }
 
         validateTargets(actions,commandWorld,firstTimeWorld);
         alwaysWorld.forEach((world,target)->requireTarget(actions,target,"worlds."+world+".always-action"));
@@ -296,6 +307,7 @@ public record BotScript(
             Map.copyOf(alwaysWorldSpawns),
             Map.copyOf(triggerActions),
             Map.copyOf(helpTopics),
+            wildernessGuide,
             deferDuringCombat,
             combatCooldownSeconds
         );
@@ -353,6 +365,10 @@ public record BotScript(
             case "point" -> argument.equalsIgnoreCase("player")
                 ?new Instruction(Op.POINT,"player",0,0,0,0,0,List.of())
                 :parsePointInstruction(Op.POINT,argument,false);
+            case "wilderness" -> {
+                if (!argument.isEmpty()) throw new IllegalArgumentException("wilderness takes no arguments");
+                yield Instruction.simple(Op.WILDERNESS);
+            }
             case "speed" -> new Instruction(Op.SPEED,"",0,0,0,
                 bounded(parseDouble(argument,"speed"),0.2,2.5),0,List.of());
             case "wave" -> Instruction.simple(Op.WAVE);
