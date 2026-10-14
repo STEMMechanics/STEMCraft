@@ -69,6 +69,7 @@ class StemBotHelpTest {
         config.set("actions.mail-help",List.of("say:Mail","end"));
         config.set("help-topics.wilderness","directions");
         config.set("help-topics.mail","mail-help");
+        when(api.messages().tokens().apply(anyString())).thenAnswer(call->call.getArgument(0));
         when(api.config().load(tempDir.resolve("stembot.yml").toFile())).thenReturn(config);
 
         var builder=mock(CommandBuilder.class,RETURNS_SELF);
@@ -176,6 +177,85 @@ class StemBotHelpTest {
         verify(current).close(true);
         tick.run();
         verify(feature).start(player,"directions",false);
+    }
+
+    @Test void noSpawnWildernessWorksWithoutCitizensAndRecalculatesOnEveryRequest() {
+        configureNoSpawnWilderness();
+        doReturn(false).when(feature).available();
+        var survival=server.addSimpleWorld("survival");
+        player.teleport(new org.bukkit.Location(survival,0,64,0));
+        var context=request("wilderness");
+        assertTrue(player.nextMessage().contains("south about 7985 blocks"));
+        assertNull(player.nextMessage(),"Directions must not append a menu or farewell");
+        verify(context,never()).returnInfo(anyString());
+        verify(context,never()).returnError(anyString());
+        verify(feature,never()).start(eq(player),anyString(),anyBoolean());
+        assertFalse(feature.hasActiveSession(player.getUniqueId()));
+
+        player.teleport(new org.bukkit.Location(survival,8031.5,64,0));
+        request("wilderness");
+        assertTrue(player.nextMessage().contains("east about 1 blocks"));
+        assertNull(player.nextMessage());
+    }
+
+    @Test void noSpawnHelpLeavesCurrentGuideControlAndCombatStateAlone() {
+        configureNoSpawnWilderness();
+        player.teleport(new org.bukkit.Location(server.addSimpleWorld("survival"),0,64,0));
+        var current=mock(BotSession.class);
+        sessions.put(player.getUniqueId(),current);
+        var combatKey=new NamespacedKey("stemcraft","stembot-last-combat");
+        player.getPersistentDataContainer().set(combatKey,PersistentDataType.LONG,System.currentTimeMillis());
+        var context=request("wilderness");
+        assertTrue(player.nextMessage().contains("Head south"));
+        assertSame(current,sessions.get(player.getUniqueId()));
+        verify(current,never()).close(anyBoolean());
+        verify(context,never()).returnInfo(anyString());
+        assertNotNull(player.getPersistentDataContainer().get(combatKey,PersistentDataType.LONG));
+    }
+
+    @Test void noSpawnWrongWorldReplyDoesNotSummonAnActor() {
+        configureNoSpawnWilderness();
+        request("wilderness");
+        assertEquals("Go to Survival",player.nextMessage());
+        assertNull(player.nextMessage());
+        verify(feature,never()).start(eq(player),anyString(),anyBoolean());
+    }
+
+    @Test void noSpawnDelayedRepliesKeepChatPublicAndReloadCancelsPendingText() {
+        config.set("messages.prefix","");
+        config.set("actions.directions",List.of("say:First","sleep:10","talk:Last","end"));
+        config.set("help-topics.wilderness","no-spawn:directions");
+        feature.onReload();
+        doReturn(false).when(feature).available();
+        request("wilderness");
+        assertEquals("First",player.nextMessage());
+        var chat=mock(io.papermc.paper.event.player.AsyncChatEvent.class);
+        when(chat.getPlayer()).thenReturn(player);
+        feature.chat(chat);
+        verify(chat,never()).setCancelled(anyBoolean());
+        assertFalse(feature.isPrivateChat(chat));
+        tick.run();
+        assertNull(player.nextMessage());
+        tick.run();
+        assertEquals("Last",player.nextMessage());
+
+        request("wilderness");
+        assertEquals("First",player.nextMessage());
+        feature.onReload();
+        tick.run();
+        tick.run();
+        assertNull(player.nextMessage());
+    }
+
+    private void configureNoSpawnWilderness() {
+        config.set("messages.prefix","");
+        config.set("actions.directions",List.of(
+            "require-world:survival* normal -> wrong-world","exit-region:old-terrain"));
+        config.set("actions.wrong-world",List.of("talk:Go to Survival","end"));
+        config.set("regions.old-terrain.bounds","-7985,-8025;8023,7975");
+        config.set("regions.old-terrain.align-to-chunks",true);
+        config.set("help-topics.wilderness","no-spawn:directions");
+        feature.onReload();
     }
 
     private List<String> complete(CommandSender sender,String buffer,boolean isCommand) {

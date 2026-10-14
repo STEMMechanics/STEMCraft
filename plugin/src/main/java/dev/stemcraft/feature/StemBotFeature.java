@@ -34,6 +34,7 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
 
     private final Map<UUID,ControlledGuide> controls=new ConcurrentHashMap<>();
     private final Map<UUID,BotSession> sessions=new ConcurrentHashMap<>();
+    private final Map<UUID,BotSession> noSpawnSessions=new HashMap<>();
     private final Set<AsyncChatEvent> privateChat=
         Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
     private final Map<UUID,Integer> pendingArrivals=new HashMap<>();
@@ -90,11 +91,17 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
                 }
 
                 if(!argument.isBlank()) {
+                    BotScript.HelpTopic topic=script==null?null:script.helpTopic(argument);
+                    if(enabled&&topic!=null&&topic.noSpawn()) {
+                        if(!runNoSpawnAction(player,topic.action()))
+                            ctx.returnError("I could not give you that help right now.");
+                        return;
+                    }
                     if(!available()) {
                         ctx.returnError("STEMBot is resting right now.");
                         return;
                     }
-                    String action=script.helpTopicAction(argument);
+                    String action=topic==null?null:topic.action();
                     if(action==null) {
                         List<String> topics=script.helpTopics().keySet().stream().sorted().toList();
                         ctx.returnInfo(topics.isEmpty()?"I do not have any help topics right now."
@@ -351,6 +358,50 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
         if(!stored.isEmpty()) pendingBotRequests.put(player.getUniqueId(),stored);
     }
 
+    private boolean runNoSpawnAction(Player player,String action) {
+        if(!enabled||script==null||!player.isOnline()) return false;
+        UUID id=player.getUniqueId();
+        closeNoSpawnSession(id);
+        try {
+            BotSession session=BotSession.noSpawn(script,player.getWorld().getName(),action,new BotSession.Output() {
+                @Override public void say(String text) { sayLine(player,text); }
+                @Override public int talk(String text) { sayLine(player,text); return 1; }
+            });
+            noSpawnSessions.put(id,session);
+            session.tick(player.getLocation());
+            if(session.closed()) noSpawnSessions.remove(id,session);
+            return true;
+        } catch(RuntimeException error) {
+            closeNoSpawnSession(id);
+            STEMCraft.getPlugin().getLogger().log(java.util.logging.Level.WARNING,
+                "STEMBot no-spawn help failed: "+action,error);
+            return false;
+        }
+    }
+
+    private void closeNoSpawnSession(UUID id) {
+        BotSession session=noSpawnSessions.remove(id);
+        if(session!=null) session.close(false);
+    }
+
+    private void tickNoSpawnSessions() {
+        for(var entry:new ArrayList<>(noSpawnSessions.entrySet())) {
+            Player player=Bukkit.getPlayer(entry.getKey());
+            if(player==null) {
+                closeNoSpawnSession(entry.getKey());
+                continue;
+            }
+            try {
+                entry.getValue().tick(player.getLocation());
+                if(entry.getValue().closed()) noSpawnSessions.remove(entry.getKey(),entry.getValue());
+            } catch(RuntimeException error) {
+                closeNoSpawnSession(entry.getKey());
+                STEMCraft.getPlugin().getLogger().log(java.util.logging.Level.WARNING,
+                    "STEMBot no-spawn help stopped",error);
+            }
+        }
+    }
+
     @Override
     public boolean startAction(Player player,String action) {
         return !controls.containsKey(player.getUniqueId())&&available()&&hasAction(action)
@@ -522,6 +573,7 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
     }
 
     private void tick() {
+        tickNoSpawnSessions();
         if(!available()) return;
 
         tickDepartures();
@@ -1052,6 +1104,7 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
     // The actor is disposed below; the handle only represents ownership across ticks.
     @SuppressWarnings("resource")
     private void close(UUID id,boolean farewell) {
+        closeNoSpawnSession(id);
         controls.remove(id);
         activeBotRequests.remove(id);
         pendingArrivals.remove(id);
@@ -1071,6 +1124,8 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
 
         for(UUID id:List.copyOf(sessions.keySet()))
             close(id,false);
+        for(UUID id:List.copyOf(noSpawnSessions.keySet()))
+            closeNoSpawnSession(id);
         for(BotActor actor:List.copyOf(departures.keySet())) actor.close();
         departures.clear();
     }

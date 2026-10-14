@@ -4,6 +4,7 @@ import org.bukkit.Location;
 
 import java.util.List;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -89,11 +90,22 @@ public final class BotSession {
         String initialAction,
         Output output
     ) {
+        this(script,Objects.requireNonNull(actor),world,initialAction,output,false);
+    }
+
+    /** Run text, world checks and region advice without an NPC or private reply capture. */
+    public static BotSession noSpawn(BotScript script,String world,String action,Output output) {
+        script.validateNoSpawnAction(action);
+        return new BotSession(script,null,world,action,output,true);
+    }
+
+    private BotSession(BotScript script,BotActor actor,String world,String initialAction,Output output,boolean noSpawn) {
         this.script=script;
         this.actor=actor;
         this.world=world;
         this.output=output;
         this.speed=script.defaultSpeed();
+        chatEngaged=!noSpawn;
         if(initialAction == null) controlled=true;
         else jumpTo(initialAction);
     }
@@ -146,7 +158,7 @@ public final class BotSession {
         else jumpTo(actionName);
     }
 
-    /** @return the private actor controlled by this session */
+    /** @return the private actor, or null for a no-spawn help topic */
     public BotActor actor() { return actor; }
     /** @return whether the session has terminated and no longer accepts input */
     public boolean closed() { return closed; }
@@ -249,6 +261,19 @@ public final class BotSession {
         idle+=5;
 
         if(closed) return;
+
+        if(actor==null) {
+            if(owner.getWorld()==null||!owner.getWorld().getName().equals(world)
+                ||idle>=script.idleSeconds()*20) {
+                close(false);
+                return;
+            }
+            age+=5;
+            if(waitMode==WaitMode.SLEEP&&age<waitUntil) return;
+            waitMode=WaitMode.NONE;
+            run(owner);
+            return;
+        }
 
         if(!actor.valid()
             ||owner.getWorld()==null
@@ -362,6 +387,11 @@ public final class BotSession {
 
             BotScript.Instruction instruction=program.get(pc++);
 
+            if(actor==null) {
+                runNoSpawn(instruction,owner);
+                continue;
+            }
+
             switch(instruction.op()) {
                 case SAY -> output.say(instruction.text());
 
@@ -474,6 +504,27 @@ public final class BotSession {
         if(guard>=64)
             throw new IllegalStateException(
                 "STEMBot action loop exceeded 64 immediate instructions; check action:"+action);
+    }
+
+    private void runNoSpawn(BotScript.Instruction instruction,Location owner) {
+        switch(instruction.op()) {
+            case SAY,TALK -> output.say(instruction.text());
+            case EXIT_REGION -> output.say(script.regionGuide().advise(instruction.text(),owner).message());
+            case REQUIRE_WORLD -> {
+                if(!instruction.matchesWorld(owner.getWorld())) {
+                    String fallback=instruction.routes().getFirst().target();
+                    if(fallback.equalsIgnoreCase("end")||fallback.equalsIgnoreCase("close")) close(false);
+                    else jumpTo(fallback);
+                }
+            }
+            case ACTION -> jumpTo(instruction.text());
+            case SLEEP -> {
+                waitMode=WaitMode.SLEEP;
+                waitUntil=age+instruction.ticks();
+            }
+            case END,CLOSE -> close(false);
+            default -> throw new IllegalStateException("STEMBot no-spawn topic cannot use "+instruction.op());
+        }
     }
 
     /**
@@ -714,6 +765,8 @@ public final class BotSession {
         resetRecovery();
         speechRevision++;
         cancelCallback();
+
+        if(actor==null) return;
 
         try {
             actor.cancel();

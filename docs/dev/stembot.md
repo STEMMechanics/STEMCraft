@@ -141,13 +141,36 @@ also runs `mailbox-reminder` on later notifications. `/help mail` and
 `/stembot <topic>` complete the configured topics and `close`, with prefix
 filtering and refreshed suggestions after reload. Player `/help` completions
 are replaced through `TabCompleteEvent` when Bukkit owns the command alias.
-An idle help request starts on the next scheduler tick without a waiting
+An idle topic that spawns a guide starts on the next scheduler tick without a waiting
 message. Requests blocked by combat or another guide task explain the actual
 reason for waiting.
-All automatic arrival, trigger and help-topic actions pause during combat until
+Automatic arrival, trigger and help-topic actions that spawn a guide pause during combat until
 the configured quiet period has elapsed. The bundled mailbox explanation says
 to craft the mailbox in the Survival world. `/help` and `/help <topic>` forward
 to STEMBot, while `/stembot` and `/stembot <topic>` remain available directly.
+
+Prefix a help topic's target with `no-spawn:` to run it as private text:
+
+```yaml
+help-topics:
+  mail: mailbox-help
+  wilderness: no-spawn:survival-wilderness
+```
+
+The prefix is a route option; the action name remains `survival-wilderness`.
+No-spawn topics answer immediately, including during combat or another guide
+conversation. They do not need Citizens, safe NPC ground or a skin. They do not
+start private reply capture, robot sounds, gestures, particles or farewells,
+and leave an existing guide session untouched. Each command request runs the
+action again from the player's current position. Feature disabling still
+disables these topics.
+
+These actions support `say`, `talk` (text only), `sleep`, `require-world`,
+`exit-region`, `action`, `end` and `close`. Reaching the end of the list closes
+silently too. All reachable action jumps and world-check fallbacks are validated;
+NPC movement/gestures, `listen` and `await` require a normal topic. Delayed text
+is cancelled on world changes, disconnect, `/stembot close`, reload or disable.
+World routes and event triggers retain their existing guide spawning behaviour.
 
 ## Reusable region directions and world requirements
 
@@ -170,13 +193,13 @@ The bundled `/help wilderness` topic uses these reusable instructions:
 
 ```yaml
 help-topics:
-  wilderness: survival-wilderness
+  wilderness: no-spawn:survival-wilderness
 
 actions:
   survival-wilderness:
     - 'require-world:survival* normal -> survival-wilderness-world-required'
     - 'exit-region:survival-old-terrain'
-    - 'action:survival-menu'
+    - 'end'
   survival-wilderness-world-required:
     - 'talk:Ask me for these directions when you are in a Survival overworld.'
     - 'end'
@@ -223,8 +246,9 @@ disengaged/public chat retain their existing behaviour.
 
 STEMBot compares the four cardinal exits from the player's current X/Z and picks
 the shortest accessible one within the world border. Equal distances prefer
-north, east, south, then west. It speaks the direction, rounded-up horizontal
-distance and target block coordinates, and points that way while speaking.
+north, east, south, then west. The reply gives the direction, rounded-up horizontal
+distance and target block coordinates. A spawned guide also points that way;
+the bundled no-spawn command sends only text and ends without a menu.
 Ask again after moving to recalculate. The guidance reports when the player is
 already outside, bounds are missing or the border blocks all exits.
 

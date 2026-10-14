@@ -30,13 +30,14 @@ If STEMBot cannot walk to a stop, follow its retry/continue prompt. Tell an admi
 
 ## Finding new wilderness
 
-Use `/help wilderness` or `/stembot wilderness`, or ask "Where are the new chunks?"
-while talking privately to STEMBot in a Survival overworld. The wilderness topic
-requires a Survival overworld; ask there so STEMBot can use your position.
-When the server has mapped its old
-terrain boundary, the bot gives the closest compass direction, approximate distance
-and target coordinates, and points that way. You travel there yourself; asking again
-after moving recalculates the directions.
+Use `/help wilderness` or `/stembot wilderness` in a Survival overworld. With the
+default settings, the command gives a private text reply immediately without
+summoning STEMBot or starting a conversation. You can also ask "Where are the new
+chunks?" while talking privately to a spawned guide.
+When the server has mapped its old terrain boundary, the reply gives the closest
+compass direction, approximate distance and target coordinates. A spawned guide
+also points that way. You travel there yourself; asking again after moving
+recalculates the directions.
 
 STEMBot tells you when you are already beyond the old terrain area or when the world
 border blocks the exit. The distance is horizontal and straight-line, so choose a
