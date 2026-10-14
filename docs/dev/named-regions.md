@@ -6,7 +6,7 @@
 
 The feature runs only in worlds listed under `named-regions.worlds`.
 
-Biome territories are sampled on a four-by-four-block grid. Orthogonally adjacent cells in the same biome family join the same region. If a newly sampled cell connects multiple regions, unlocked regions are merged; a locked, administratively renamed region takes precedence. The implementation groups Minecraft biomes into the configured families such as `plains`, `forest`, `ocean`, `mountains`, and `snow`.
+Biome territories are sampled on a four-by-four-block grid. Orthogonally adjacent cells in the same biome family join the same region. If a newly sampled cell connects multiple regions, unlocked regions are merged; a locked, administratively renamed region takes precedence. The implementation groups Minecraft biomes into the configured families such as `plains`, `forest`, `ocean`, `mountains`, and `snow`. Minecraft 26.3's `dappled_forest` automatically belongs to the existing `forest` family and uses its name sources, forms, and map style; it needs no extra configuration.
 
 Generated structures are stored separately using their structure bounding box. Structure variants are grouped into common families where appropriate, for example all village variants use `village` and all ruined portal variants use `ruined-portal`. Buried treasure and nether fossils are disabled by default because they are small and easily discovered; other structure families default to enabled unless explicitly disabled.
 
