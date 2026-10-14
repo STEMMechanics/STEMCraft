@@ -47,6 +47,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -60,7 +61,7 @@ public class WebServiceImpl extends BaseService implements WebService {
     private static final String MAINTENANCE_MESSAGE = "Server is under maintenance. Please try again later.";
     private File wwwRoot;
     private HttpServer httpServer;
-    private final Map<String, WebServiceEndpointHandler> endpointHandlers = new LinkedHashMap<>();
+    private volatile Map<String, WebServiceEndpointHandler> endpointHandlers = Map.of();
     private String ip;
     private int port;
 
@@ -88,28 +89,30 @@ public class WebServiceImpl extends BaseService implements WebService {
                 .description("WEB_SERVER_DESCRIPTION")
                 .permission("stemcraft.command.webserver")
                 .tabCompletion("start")
+                .tabCompletion("stop")
                 .tabCompletion("enable")
                 .tabCompletion("disable")
-                .tabCompletion("enable")
                 .tabCompletion("status")
                 .usage("WEB_SERVER_USAGE")
                 .executor((api, cmd, ctx) -> {
-                    if (ctx.args().isEmpty()) {
-                        api.messages().info(ctx.getSender(), cmd.getUsage());
-                        return;
-                    }
-
-                switch (ctx.args().getFirst().toLowerCase(Locale.ROOT)) {
+                String action = ctx.args().isEmpty() ? "status" : ctx.args().getFirst().toLowerCase(Locale.ROOT);
+                switch (action) {
                     case "start" -> {
                         if(isRunning()) {
                             api.messages().error(ctx.getSender(), "WEB_SERVER_ALREADY_RUNNING");
                         } else {
                             start();
+                            if (isRunning()) {
+                                api.messages().success(ctx.getSender(), "WEB_SERVER_STARTED", "url", getPublicUrl());
+                            } else {
+                                api.messages().error(ctx.getSender(), "WEB_SERVER_START_FAILED_PLAYER");
+                            }
                         }
                     }
                     case "stop" -> {
                         if(isRunning()) {
                             stop();
+                            api.messages().success(ctx.getSender(), "WEB_SERVER_STOPPED");
                         } else {
                             api.messages().error(ctx.getSender(), "WEB_SERVER_NOT_RUNNING");
                         }
@@ -118,19 +121,25 @@ public class WebServiceImpl extends BaseService implements WebService {
                         getConfigSection().set("enabled", true);
                         saveConfig();
 
-                        api.messages().info(ctx.getSender(), "WEB_SERVER_ENABLED", "state", isRunning() ? "WEB_SERVER_STATE_RUNNING" : "WEB_SERVER_STATE_NOT_RUNNING");
+                        api.messages().info(ctx.getSender(), "WEB_SERVER_ENABLED", "state", isRunning() ? "{WEB_SERVER_STATE_RUNNING}" : "{WEB_SERVER_STATE_NOT_RUNNING}");
                     }
                     case "disable" -> {
                         getConfigSection().set("enabled", false);
                         saveConfig();
 
-                        api.messages().info(ctx.getSender(), "WEB_SERVER_DISABLED", "state", isRunning() ? "WEB_SERVER_STATE_RUNNING" : "WEB_SERVER_STATE_NOT_RUNNING");
+                        api.messages().info(ctx.getSender(), "WEB_SERVER_DISABLED", "state", isRunning() ? "{WEB_SERVER_STATE_RUNNING}" : "{WEB_SERVER_STATE_NOT_RUNNING}");
                     }
-                    case "", "status" -> api.messages().info(ctx.getSender(), "WEB_SERVER_STATUS",
+                    case "", "status" -> {
+                        String publicUrl = getPublicUrl();
+                        api.messages().info(ctx.getSender(), "WEB_SERVER_STATUS",
                             "enabled_disabled",
-                            getConfigSection().getBoolean("enabled", false) ? "WEB_SERVER_STATE_ENABLED" : "WEB_SERVER_STATE_DISABLED",
+                            getConfigSection().getBoolean("enabled", false) ? "{WEB_SERVER_STATE_ENABLED}" : "{WEB_SERVER_STATE_DISABLED}",
                             "running_not",
-                            isRunning() ? "WEB_SERVER_STATE_RUNNING" : "WEB_SERVER_STATE_NOT_RUNNING");
+                            isRunning() ? "{WEB_SERVER_STATE_RUNNING}" : "{WEB_SERVER_STATE_NOT_RUNNING}",
+                            "ip", isRunning() ? httpServer.getAddress().getHostString() : ip,
+                            "port", isRunning() ? httpServer.getAddress().getPort() : port,
+                            "url", publicUrl);
+                    }
                     default -> api.messages().info(ctx.getSender(), cmd.getUsage());
                 }
             })
@@ -173,11 +182,12 @@ public class WebServiceImpl extends BaseService implements WebService {
                 return;
             }
 
-            if(!wwwRoot.isDirectory()) {
-                api.messages().error("WEB_SERVER_PATH_NOT_DIR");
-                wwwRoot = null;
-                return;
-            }
+        }
+
+        if(!wwwRoot.isDirectory()) {
+            api.messages().error("WEB_SERVER_PATH_NOT_DIR");
+            wwwRoot = null;
+            return;
         }
 
         port = getConfigSection().getInt("port", 8950);
@@ -187,13 +197,15 @@ public class WebServiceImpl extends BaseService implements WebService {
             httpServer = HttpServer.create(new InetSocketAddress(ip, port), 0);
             httpServer.createContext("/", new WebServiceHandler());
             httpServer.setExecutor(null);
-            httpServer.start();
-            api.messages().info("WEB_SERVER_STARTED_ON", "ip", ip, "port", String.valueOf(port));
-
             registerEndpointHandler("/status", this::handleStatusEndpoint);
-        } catch (IOException e) {
-            api.messages().error("WEB_SERVER_START_FAILED", "error", e.getMessage());
+            httpServer.start();
+            api.messages().info("WEB_SERVER_STARTED_ON", "ip", ip, "port", String.valueOf(httpServer.getAddress().getPort()));
+        } catch (IOException | IllegalArgumentException e) {
+            if (httpServer != null) {
+                httpServer.stop(0);
+            }
             httpServer = null;
+            api.messages().error("WEB_SERVER_START_FAILED", e, "error", e.getMessage());
         }
     }
 
@@ -208,11 +220,18 @@ public class WebServiceImpl extends BaseService implements WebService {
         }
     }
 
+    @Override
+    public void onDisable() {
+        stop();
+    }
+
     /**
      * Register a custom endpoint handler.
      */
-    public void registerEndpointHandler(@NotNull String path, @NotNull WebServiceEndpointHandler handler) {
-        this.endpointHandlers.put(path, handler);
+    public synchronized void registerEndpointHandler(@NotNull String path, @NotNull WebServiceEndpointHandler handler) {
+        Map<String, WebServiceEndpointHandler> updated = new LinkedHashMap<>(endpointHandlers);
+        updated.put(path, handler);
+        endpointHandlers = Collections.unmodifiableMap(updated);
         api.messages().debug("WEB_SERVER_REGISTERED_ENDPOINT", "path", path);
     }
 
@@ -257,13 +276,15 @@ public class WebServiceImpl extends BaseService implements WebService {
             return publicUrl;
         }
 
-        String host = ip;
+        String host = isRunning() ? httpServer.getAddress().getHostString() : ip;
 
         if ("0.0.0.0".equals(host) || "::".equals(host)) {
             host = findBestLocalAddress();
         }
 
-        return "http://" + host + ":" + port;
+        if (host.contains(":")) host = "[" + host + "]";
+        int listeningPort = isRunning() ? httpServer.getAddress().getPort() : port;
+        return "http://" + host + ":" + listeningPort;
     }
 
     private void loadSettings() {
@@ -279,15 +300,41 @@ public class WebServiceImpl extends BaseService implements WebService {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             String path = exchange.getRequestURI().getPath();
+            try {
+                // Log before parsing so a bad request cannot fail silently.
+                api.messages().info("WEB_SERVER_REQUEST",
+                    "method", exchange.getRequestMethod(),
+                    "path", redactSensitivePath(path),
+                    "ip", exchange.getRemoteAddress().toString());
+                handleRequest(exchange, path);
+            } catch (IOException | RuntimeException | LinkageError failure) {
+                api.messages().error("WEB_SERVER_REQUEST_FAILED", failure,
+                    "method", exchange.getRequestMethod(),
+                    "path", redactSensitivePath(path),
+                    "ip", exchange.getRemoteAddress().toString());
+                if (exchange.getResponseCode() < 0) {
+                    sendErrorResponse(exchange, 500, "Internal server error");
+                }
+            } finally {
+                exchange.close();
+            }
+        }
+
+        private void handleRequest(HttpExchange exchange, String path) throws IOException {
             String uri = exchange.getRequestURI().toString();
 
-            // Decode once so %2e%2e etc can’t bypass checks
-            String decodedUri = URLDecoder.decode(path, StandardCharsets.UTF_8);
-
+            // URI.getPath() has already decoded percent escapes. A second decode
+            // corrupts literal '%' and '+' characters and can throw before logging.
             // Strip leading "/" so resolve treats it as relative
-            String rel = decodedUri.startsWith("/") ? decodedUri.substring(1) : decodedUri;
+            String rel = path.startsWith("/") ? path.substring(1) : path;
 
-            Map<String, String> queryParams = getQueryParams(exchange);
+            Map<String, String> queryParams;
+            try {
+                queryParams = getQueryParams(exchange);
+            } catch (IllegalArgumentException malformedQuery) {
+                sendErrorResponse(exchange, 400, "Invalid query parameters");
+                return;
+            }
             Map<String, List<String>> headers = new LinkedHashMap<>();
             exchange.getRequestHeaders().forEach((key, values) -> headers.put(key, new ArrayList<>(values)));
             byte[] requestBody = exchange.getRequestBody().readAllBytes();
@@ -299,12 +346,6 @@ public class WebServiceImpl extends BaseService implements WebService {
                     headers,
                     requestBody,
                     exchange.getRemoteAddress().toString()
-            );
-
-            api.messages().info("WEB_SERVER_REQUEST",
-                    "method", request.method(),
-                    "path", redactSensitivePath(request.path()),
-                    "ip", exchange.getRemoteAddress().toString()
             );
 
             // Use canonical/real paths + normalization to prevent traversal
@@ -319,6 +360,7 @@ public class WebServiceImpl extends BaseService implements WebService {
             for (var e : endpointHandlers.entrySet()) {
                 if (request.path().startsWith(e.getKey())) {
                     Object result = e.getValue().handle(request);
+                    if (result == null) continue;
                     writeEndpointResponse(exchange, result);
                     return;
                 }
@@ -340,7 +382,7 @@ public class WebServiceImpl extends BaseService implements WebService {
 
             exchange.getResponseHeaders().set("Content-Type", contentType);
             long size = Files.size(requested);
-            exchange.sendResponseHeaders(200, size);
+            if (!beginResponse(exchange, 200, size)) return;
 
             try (OutputStream os = exchange.getResponseBody()) {
                 Files.copy(requested, os);
@@ -397,7 +439,7 @@ public class WebServiceImpl extends BaseService implements WebService {
 
             if (responseFile != null) {
                 exchange.getResponseHeaders().add("Content-Type", contentType);
-                exchange.sendResponseHeaders(responseCode, responseFile.length());
+                if (!beginResponse(exchange, responseCode, responseFile.length())) return;
                 try (OutputStream os = exchange.getResponseBody();
                      FileInputStream fis = new FileInputStream(responseFile)) {
                     fis.transferTo(os);
@@ -406,7 +448,7 @@ public class WebServiceImpl extends BaseService implements WebService {
             }
 
             exchange.getResponseHeaders().add("Content-Type", contentType);
-            exchange.sendResponseHeaders(responseCode, bodyBytes.length);
+            if (!beginResponse(exchange, responseCode, bodyBytes.length)) return;
             try (OutputStream os = exchange.getResponseBody()) {
                 os.write(bodyBytes);
             }
@@ -414,7 +456,7 @@ public class WebServiceImpl extends BaseService implements WebService {
 
         private static @NonNull Map<String, String> getQueryParams(HttpExchange exchange) {
             Map<String, String> queryParams = new LinkedHashMap<>();
-            String query = exchange.getRequestURI().getQuery();
+            String query = exchange.getRequestURI().getRawQuery();
             if (query != null) {
                 String[] pairs = query.split("&");
                 for (String pair : pairs) {
@@ -433,10 +475,20 @@ public class WebServiceImpl extends BaseService implements WebService {
         private void sendErrorResponse(HttpExchange exchange, int statusCode, String errorMessage) throws IOException {
             byte[] errorBytes = errorMessage.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "text/plain; charset=utf-8");
-            exchange.sendResponseHeaders(statusCode, errorBytes.length);
+            if (!beginResponse(exchange, statusCode, errorBytes.length)) return;
             try (OutputStream os = exchange.getResponseBody()) {
                 os.write(errorBytes);
             }
+        }
+
+        private boolean beginResponse(HttpExchange exchange, int statusCode, long length) throws IOException {
+            if ("HEAD".equalsIgnoreCase(exchange.getRequestMethod())) {
+                exchange.getResponseHeaders().set("Content-Length", Long.toString(length));
+                exchange.sendResponseHeaders(statusCode, -1);
+                return false;
+            }
+            exchange.sendResponseHeaders(statusCode, length == 0 ? -1 : length);
+            return length > 0;
         }
     }
 
