@@ -137,8 +137,13 @@ help-topics:
 With no `mailbox-received` route, the mailbox explanation runs only on the
 player's first mail notification. Adding `mailbox-received: mailbox-reminder`
 also runs `mailbox-reminder` on later notifications. `/help mail` and
-`/help mailbox` use the configured help topic actions; `/stembot <topic>` has
-tab completion for the configured topics.
+`/help mailbox` use the configured help topic actions. `/help <topic>` and
+`/stembot <topic>` complete the configured topics and `close`, with prefix
+filtering and refreshed suggestions after reload. Player `/help` completions
+are replaced through `TabCompleteEvent` when Bukkit owns the command alias.
+An idle help request starts on the next scheduler tick without a waiting
+message. Requests blocked by combat or another guide task explain the actual
+reason for waiting.
 All automatic arrival, trigger and help-topic actions pause during combat until
 the configured quiet period has elapsed. The bundled mailbox explanation says
 to craft the mailbox in the Survival world. `/help` and `/help <topic>` forward

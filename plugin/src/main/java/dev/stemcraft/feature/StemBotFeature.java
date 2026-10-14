@@ -20,6 +20,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.player.*;
 import org.bukkit.event.server.PluginDisableEvent;
+import org.bukkit.event.server.TabCompleteEvent;
 import org.bukkit.persistence.PersistentDataType;
 
 import java.io.File;
@@ -101,7 +102,10 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
                         return;
                     }
                     if(!queueHelpAction(player,action)) ctx.returnError("I could not queue that help topic right now.");
-                    else ctx.returnInfo("I will help with "+argument+" when I am free and you are out of combat.");
+                    else if(shouldDeferForCombat(player))
+                        ctx.returnInfo("I will help with "+argument+" once you are out of combat.");
+                    else if(isBotRequestBusy(player.getUniqueId()))
+                        ctx.returnInfo("I will help with "+argument+" when I finish what I am doing.");
                     return;
                 }
 
@@ -140,6 +144,10 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
                 if(player.isOnline()) Bukkit.dispatchCommand(player,forwarded);
             });
         },EventPriority.HIGHEST,true);
+
+        // Execution is forwarded above, but Bukkit's /help command still owns
+        // completion when the alias cannot be registered.
+        api.events().register(TabCompleteEvent.class,this::completeHelp,EventPriority.HIGHEST,true);
 
         api.events().register(
             PlayerJoinEvent.class,
@@ -483,9 +491,24 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
     private void updateCommandTabCompletions() {
         if(botCommand==null) return;
         botCommand.clearTabCompletions();
-        botCommand.addTabCompletion("close");
-        if(script!=null) script.helpTopics().keySet().stream().sorted()
-            .forEach(topic->botCommand.addTabCompletion(topic));
+        helpCompletions().forEach(topic->botCommand.addTabCompletion(topic));
+    }
+
+    private List<String> helpCompletions() {
+        var completions=new TreeSet<String>();
+        completions.add("close");
+        if(script!=null) completions.addAll(script.helpTopics().keySet());
+        return List.copyOf(completions);
+    }
+
+    private void completeHelp(TabCompleteEvent event) {
+        if(!event.isCommand()||!(event.getSender() instanceof Player)) return;
+        String buffer=event.getBuffer();
+        if(buffer.startsWith("/")) buffer=buffer.substring(1);
+        if(!buffer.regionMatches(true,0,"help ",0,5)) return;
+        String prefix=buffer.substring(5).toLowerCase(Locale.ROOT);
+        event.setCompletions(helpCompletions().stream()
+            .filter(topic->topic.startsWith(prefix)).toList());
     }
 
     private void queueArrival(Player player,int ticks) {
@@ -587,10 +610,7 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
                 pendingBotRequests.remove(playerId);
                 continue;
             }
-            if(controls.containsKey(playerId)||sessions.containsKey(playerId)
-                ||pendingSummons.containsKey(playerId)||pendingArrivals.containsKey(playerId)
-                ||shouldDeferForCombat(player)
-                ||departures.values().stream().anyMatch(value->value.owner().equals(playerId)))
+            if(isBotRequestBusy(playerId)||shouldDeferForCombat(player))
                 continue;
 
             LinkedHashSet<String> requests=pendingBotRequests.get(playerId);
@@ -611,6 +631,12 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
                 break;
             }
         }
+    }
+
+    private boolean isBotRequestBusy(UUID playerId) {
+        return controls.containsKey(playerId)||sessions.containsKey(playerId)
+            ||pendingSummons.containsKey(playerId)||pendingArrivals.containsKey(playerId)
+            ||departures.values().stream().anyMatch(value->value.owner().equals(playerId));
     }
 
     private ResolvedBotRequest resolveBotRequest(Player player,String requestKey) {
