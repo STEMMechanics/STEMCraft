@@ -20,27 +20,40 @@
 
 package dev.stemcraft.service.world.setting;
 
+import com.destroystokyo.paper.event.player.PlayerSetSpawnEvent;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.service.world.WorldBaseSetting;
 import dev.stemcraft.api.service.world.WorldService;
+import dev.stemcraft.api.util.LocationUtil;
 import dev.stemcraft.api.util.WorldUtil;
 import org.bukkit.Location;
+import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventPriority;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
+import org.bukkit.persistence.PersistentDataContainer;
+import org.bukkit.persistence.PersistentDataType;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
+import java.util.UUID;
 
 /**
  * World setting to force players to respawn at the world spawn on death.
  */
 public class WorldForceSpawnSetting implements WorldBaseSetting {
+    private static final NamespacedKey WORLD_RESPAWNS_KEY = new NamespacedKey("stemcraft", "world-respawns");
     WorldService worldService;
+    private final Set<UUID> switchingRespawn = new HashSet<>();
 
     /**
      * Returns the unique key for this setting.
@@ -62,37 +75,110 @@ public class WorldForceSpawnSetting implements WorldBaseSetting {
     public void onEnable(@NotNull STEMCraftAPI api, @NotNull WorldService service) {
         this.worldService = service;
 
-        // Respawn rules:
-        // - Default: let Minecraft handle bed/anchor respawns.
-        // - If no bed/anchor and Minecraft would respawn the player in a different world,
-        //   respawn them at the death world's own spawn.
-        // - Optional per-world override: force respawn at that world's spawn even if bed/anchor exists.
-        api.events().register(PlayerRespawnEvent.class, event -> {
+        api.events().register(PlayerSetSpawnEvent.class, event -> {
+            if (switchingRespawn.contains(event.getPlayer().getUniqueId())) {
+                return;
+            }
+
+            Location spawn = event.getLocation();
+            World world = spawn == null ? event.getPlayer().getWorld() : spawn.getWorld();
+            if (world == null) {
+                return;
+            }
+            storeWorldRespawn(event.getPlayer(), world, spawn, event.isForced());
+        }, EventPriority.MONITOR, true);
+
+        api.events().register(PlayerChangedWorldEvent.class, event -> {
             Player player = event.getPlayer();
+            importExistingRespawn(player);
+            activateWorldRespawn(player, player.getWorld());
+        });
 
-            World deathWorld = player.getWorld();
-            if (isEnabledForWorld(deathWorld)) {
-                // Force respawn at world spawn
-                event.setRespawnLocation(resolveWorldSpawn(deathWorld));
-                return;
-            }
+        api.events().register(PlayerJoinEvent.class, event -> {
+            Player player = event.getPlayer();
+            importExistingRespawn(player);
+            activateWorldRespawn(player, player.getWorld());
+        });
 
-            // Default behavior: keep bed/anchor respawns. If Minecraft chooses a different
-            // world fallback (typically server main world), keep the player in the death world.
-            if (event.isBedSpawn() || event.isAnchorSpawn()) {
-                return;
-            }
-
-            Location respawn = event.getRespawnLocation();
-            World respawnWorld = respawn.getWorld();
-            if (respawnWorld == null) {
-                return;
-            }
-            if (!respawnWorld.equals(deathWorld)) {
-                event.setRespawnLocation(resolveWorldSpawn(deathWorld));
-            }
-        }, EventPriority.HIGHEST, true);
+        // Respawn rules:
+        // - Each world has an independent bed/anchor respawn, activated on world entry.
+        // - Never allow Minecraft to respawn a player outside the world where they died.
+        // - Optional per-world override: force respawn at that world's spawn even if bed/anchor exists.
+        api.events().register(PlayerRespawnEvent.class, this::handleRespawn, EventPriority.HIGHEST, true);
     }
+
+    private void importExistingRespawn(@NotNull Player player) {
+        // Keep the bed/anchor block coordinates, rather than its validated landing
+        // position, so Minecraft can still validate the point after world switching.
+        Location current = player.getRespawnLocation(false);
+        World respawnWorld = current == null ? null : current.getWorld();
+        if (respawnWorld != null && loadWorldRespawn(player, respawnWorld) == null) {
+            storeWorldRespawn(player, respawnWorld, current, false);
+        }
+    }
+
+    void handleRespawn(@NotNull PlayerRespawnEvent event) {
+        World deathWorld = event.getPlayer().getWorld();
+        if (isEnabledForWorld(deathWorld)) {
+            event.setRespawnLocation(resolveWorldSpawn(deathWorld));
+            return;
+        }
+
+        World respawnWorld = event.getRespawnLocation().getWorld();
+        if (respawnWorld != null && !respawnWorld.equals(deathWorld)) {
+            event.setRespawnLocation(resolveWorldSpawn(deathWorld));
+        }
+    }
+
+    void activateWorldRespawn(@NotNull Player player, @NotNull World currentWorld) {
+        StoredRespawn stored = loadWorldRespawn(player, currentWorld);
+        switchingRespawn.add(player.getUniqueId());
+        try {
+            player.setRespawnLocation(stored == null ? null : stored.location(), stored != null && stored.forced());
+        } finally {
+            switchingRespawn.remove(player.getUniqueId());
+        }
+    }
+
+    void storeWorldRespawn(@NotNull Player player, @NotNull World world,
+                           @Nullable Location location, boolean forced) {
+        PersistentDataContainer playerData = player.getPersistentDataContainer();
+        PersistentDataContainer respawns = playerData.get(WORLD_RESPAWNS_KEY, PersistentDataType.TAG_CONTAINER);
+        if (respawns == null) {
+            respawns = playerData.getAdapterContext().newPersistentDataContainer();
+        }
+
+        NamespacedKey worldKey = worldKey(world);
+        if (location == null) {
+            respawns.remove(worldKey);
+        } else {
+            String serialized = (forced ? "1|" : "0|") + LocationUtil.serialize(location, false, true);
+            respawns.set(worldKey, PersistentDataType.STRING, serialized);
+        }
+        playerData.set(WORLD_RESPAWNS_KEY, PersistentDataType.TAG_CONTAINER, respawns);
+    }
+
+    private @Nullable StoredRespawn loadWorldRespawn(@NotNull Player player, @NotNull World world) {
+        PersistentDataContainer respawns = player.getPersistentDataContainer()
+            .get(WORLD_RESPAWNS_KEY, PersistentDataType.TAG_CONTAINER);
+        if (respawns == null) {
+            return null;
+        }
+
+        String stored = respawns.get(worldKey(world), PersistentDataType.STRING);
+        if (stored == null || stored.length() < 3 || stored.charAt(1) != '|') {
+            return null;
+        }
+
+        Location location = LocationUtil.deserialize(stored.substring(2), world);
+        return location == null ? null : new StoredRespawn(location, stored.charAt(0) == '1');
+    }
+
+    private @NotNull NamespacedKey worldKey(@NotNull World world) {
+        return new NamespacedKey("stemcraft", "world_" + world.getUID().toString().replace("-", ""));
+    }
+
+    private record StoredRespawn(@NotNull Location location, boolean forced) { }
 
     private boolean isEnabledForWorld(@NotNull World world) {
         return get(world, worldService.getConfigSection(world)).equals("true");
