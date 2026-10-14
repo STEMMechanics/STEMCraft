@@ -20,11 +20,27 @@ STEMBot recognises configured topics rather than answering every possible senten
 | --- | --- |
 | Hub | `tour`, `survival`, `creative`, `minigames`, `noticeboard`, `voting` |
 | Creative | `plots`, `merge`, `delete`, `clear`, `helpers`, `selection`, `signs`, `rules` |
-| Survival | `getting started`, `quests`, `practice`, `coordbar`, `skills`, `vein mining`, `harvesting`, `tools`, `cooking`, `animals`, `mail`, `portals`, `graves`, `sleep`, `rules` |
+| Survival | `wilderness`, `getting started`, `quests`, `practice`, `coordbar`, `skills`, `vein mining`, `harvesting`, `tools`, `cooking`, `animals`, `mail`, `portals`, `graves`, `sleep`, `rules` |
 
 If STEMBot cannot walk to a stop, follow its retry/continue prompt. Tell an administrator where it happened and what you asked. You can still use `/hub` and other commands yourself.
 
 > **Image placeholder — private conversation:** Show STEMBot, one example topic and the chat-bubble player reply. Add labels explaining “type a topic” and “commands use /”.
+
+## Finding new wilderness
+
+Use `/help wilderness` or `/stembot wilderness`, or ask "Where are the new chunks?"
+while talking privately to STEMBot in a Survival overworld. The wilderness topic
+requires a Survival overworld; ask there so STEMBot can use your position.
+When the server has mapped its old
+terrain boundary, the bot gives the closest compass direction, approximate distance
+and target coordinates, and points that way. You travel there yourself; asking again
+after moving recalculates the directions.
+
+STEMBot tells you when you are already beyond the old terrain area or when the world
+border blocks the exit. The distance is horizontal and straight-line, so choose a
+walking route that suits the terrain. Reaching new-generation chunks gives you an
+area to explore; it does not guarantee a particular biome immediately or that
+another player has not already generated those chunks.
 
 ## Optional practice
 
