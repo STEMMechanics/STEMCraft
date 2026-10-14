@@ -1,9 +1,13 @@
 package dev.stemcraft.service.world.setting;
 
+import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigSection;
+import dev.stemcraft.api.service.event.EventHandler;
+import dev.stemcraft.api.service.event.EventService;
 import dev.stemcraft.api.service.world.WorldService;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -12,10 +16,13 @@ import org.mockbukkit.mockbukkit.MockBukkit;
 import org.mockbukkit.mockbukkit.ServerMock;
 import org.mockbukkit.mockbukkit.entity.PlayerMock;
 import org.mockbukkit.mockbukkit.world.WorldMock;
+import org.mockito.ArgumentCaptor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class WorldForceSpawnSettingTest {
@@ -65,6 +72,31 @@ class WorldForceSpawnSettingTest {
         setting.activateWorldRespawn(player, cactus);
 
         assertNull(player.getRespawnLocation());
+    }
+
+    @Test
+    void importsExistingBedCoordinatesBeforeSwitchingWorlds() {
+        STEMCraftAPI api = mock(STEMCraftAPI.class);
+        EventService events = mock(EventService.class);
+        when(api.events()).thenReturn(events);
+        setting.onEnable(api, mock(WorldService.class));
+        ArgumentCaptor<EventHandler<PlayerChangedWorldEvent>> callback = ArgumentCaptor.captor();
+        verify(events).register(eq(PlayerChangedWorldEvent.class), callback.capture());
+
+        Player eventPlayer = mock(Player.class);
+        Location bedBlock = new Location(survival, 10.0d, 65.0d, 20.0d);
+        Location landing = new Location(survival, 11.5d, 65.1d, 20.5d);
+        when(eventPlayer.getUniqueId()).thenReturn(player.getUniqueId());
+        when(eventPlayer.getWorld()).thenReturn(cactus);
+        when(eventPlayer.getPersistentDataContainer()).thenReturn(player.getPersistentDataContainer());
+        when(eventPlayer.getRespawnLocation(false)).thenReturn(bedBlock);
+        when(eventPlayer.getRespawnLocation()).thenReturn(landing);
+
+        callback.getValue().handle(new PlayerChangedWorldEvent(eventPlayer, survival));
+        verify(eventPlayer).setRespawnLocation(null, false);
+
+        setting.activateWorldRespawn(eventPlayer, survival);
+        verify(eventPlayer).setRespawnLocation(bedBlock, false);
     }
 
     @Test

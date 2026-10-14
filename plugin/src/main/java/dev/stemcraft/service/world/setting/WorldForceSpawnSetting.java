@@ -88,17 +88,15 @@ public class WorldForceSpawnSetting implements WorldBaseSetting {
             storeWorldRespawn(event.getPlayer(), world, spawn, event.isForced());
         }, EventPriority.MONITOR, true);
 
-        api.events().register(PlayerChangedWorldEvent.class, event ->
-            activateWorldRespawn(event.getPlayer(), event.getPlayer().getWorld())
-        );
+        api.events().register(PlayerChangedWorldEvent.class, event -> {
+            Player player = event.getPlayer();
+            importExistingRespawn(player);
+            activateWorldRespawn(player, player.getWorld());
+        });
 
         api.events().register(PlayerJoinEvent.class, event -> {
             Player player = event.getPlayer();
-            Location current = player.getRespawnLocation();
-            World respawnWorld = current == null ? null : current.getWorld();
-            if (respawnWorld != null && loadWorldRespawn(player, respawnWorld) == null) {
-                storeWorldRespawn(player, respawnWorld, current, false);
-            }
+            importExistingRespawn(player);
             activateWorldRespawn(player, player.getWorld());
         });
 
@@ -107,6 +105,16 @@ public class WorldForceSpawnSetting implements WorldBaseSetting {
         // - Never allow Minecraft to respawn a player outside the world where they died.
         // - Optional per-world override: force respawn at that world's spawn even if bed/anchor exists.
         api.events().register(PlayerRespawnEvent.class, this::handleRespawn, EventPriority.HIGHEST, true);
+    }
+
+    private void importExistingRespawn(@NotNull Player player) {
+        // Keep the bed/anchor block coordinates, rather than its validated landing
+        // position, so Minecraft can still validate the point after world switching.
+        Location current = player.getRespawnLocation(false);
+        World respawnWorld = current == null ? null : current.getWorld();
+        if (respawnWorld != null && loadWorldRespawn(player, respawnWorld) == null) {
+            storeWorldRespawn(player, respawnWorld, current, false);
+        }
     }
 
     void handleRespawn(@NotNull PlayerRespawnEvent event) {
