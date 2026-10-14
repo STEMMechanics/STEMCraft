@@ -31,6 +31,15 @@ The list below reflects the active built-in command roots in source.
 | `/ban`, `/unban`, `/kick`, `/warn` | `PunishmentServiceImpl` | Punishment management |
 | `/report` | `ChatServiceImpl` | Player report submission |
 
+### STEMBot wilderness directions
+
+The configured `/help wilderness` and `/stembot wilderness` topic checks that the
+player is in a Survival overworld, then uses `exit-region:survival-old-terrain` to
+give the closest direction out of the supplied area, distance and coordinates.
+Topics, world restrictions and dialogue live in `stembot.yml`. The same
+`require-world` and `exit-region` instructions can serve other topics and regions.
+See [STEMBot](stembot.md) for bounds and custom-script setup.
+
 ### Web server diagnostics
 
 Use `/webserver` or `/webserver status` to see whether the embedded server is

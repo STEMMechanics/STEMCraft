@@ -5,6 +5,7 @@ import org.bukkit.World;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.*;
@@ -29,6 +30,113 @@ class BotSessionTest {
         setUp(0);
     }
 
+    @Test
+    void suppliedRegionPointsToTheClosestExitAndRecalculatesWhenAskedAgain() throws Exception {
+        var border=mock(org.bukkit.WorldBorder.class);
+        when(world.getWorldBorder()).thenReturn(border);
+        when(border.isInside(any(Location.class))).thenReturn(true);
+        here=new Location(world,100.5,64,4000.5);
+        session=regionSession("start");
+
+        session.tick(here);
+        assertTrue(output.getFirst().contains("west about 101 blocks"));
+        verify(actor).lookAt(new Location(world,-0.5,65.4,4000.5));
+        verify(actor,never()).move(any(),anyDouble());
+        verify(actor,never()).teleport(any());
+
+        session.tick(here);
+        session.tick(here);
+        here=new Location(world,4000.5,64,7900.5);
+        session.input("Where are the new chunks?");
+        session.tick(here);
+
+        assertTrue(output.getLast().contains("south about 100 blocks"));
+        verify(actor).lookAt(new Location(world,4000.5,65.4,8000.5));
+    }
+
+    @Test
+    void configuredTopicCannotInterruptAnExternallyControlledSession() throws Exception {
+        session=regionSession(null);
+
+        session.input("Where is the new forest?");
+
+        assertTrue(session.controlled());
+        assertTrue(output.isEmpty());
+        assertNull(session.action());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"world,NORMAL,true", "survival,NORMAL,true", "Survival_North,NORMAL,true",
+        "survival_nether,NETHER,false", "survival_the_end,THE_END,false", "creative,NORMAL,false"})
+    void worldRequirementGatesTheDirectionStep(String name, World.Environment environment, boolean allowed) throws Exception {
+        when(world.getName()).thenReturn(name);
+        when(world.getEnvironment()).thenReturn(environment);
+        var border=mock(org.bukkit.WorldBorder.class);
+        when(world.getWorldBorder()).thenReturn(border);
+        when(border.isInside(any(Location.class))).thenReturn(true);
+        session=regionSession("start");
+
+        session.tick(here);
+        session.tick(here);
+        session.tick(here);
+
+        if(allowed) {
+            assertTrue(output.getFirst().contains("Head north"));
+            assertFalse(session.closed());
+        } else {
+            assertEquals(List.of("Wrong world"),output);
+            assertTrue(session.closed());
+            verify(world,never()).getWorldBorder();
+        }
+    }
+
+    @Test
+    void wildernessWordsDoNotOverrideTheConfiguredChatRoutes() throws Exception {
+        session=regionSession("menu");
+
+        session.input("I want a quest in the new forest 26.3 wilderness");
+
+        assertEquals("done",session.action());
+        assertTrue(output.isEmpty());
+    }
+
+    @Test
+    void replyLookaheadUsesTheWrongWorldFallbackMenu() throws Exception {
+        when(world.getName()).thenReturn("creative");
+        session=regionSession("start");
+
+        session.input("Where are the new chunks?");
+        assertEquals("start",session.action(),"A rejected world's end action has no reply menu");
+        session.tick(here);
+        session.tick(here);
+        session.tick(here);
+        assertEquals(List.of("Wrong world"),output);
+        assertTrue(session.closed());
+    }
+
+    private BotSession regionSession(String action) throws Exception {
+        var yaml=new org.bukkit.configuration.file.YamlConfiguration();
+        yaml.loadFromString("""
+            speech:
+              post-delay-ticks: 0
+            actions:
+              start: ['require-world:world|survival* normal -> wrong-world', 'exit-region:test-area', 'listen:* -> start']
+              wrong-world: ['talk:Wrong world', 'end']
+              menu: ['listen:*quest* -> done, * -> start']
+              done: ['end']
+            regions:
+              test-area:
+                bounds: '0,0;7999,7999'
+            help-topics:
+              wilderness: start
+            """);
+        var script=BotScript.read(new dev.stemcraft.config.ConfigSectionImpl(null,yaml));
+        return new BotSession(script,actor,world.getName(),action,new BotSession.Output() {
+            public void say(String text) { output.add(text); }
+            public int talk(String text) { output.add(text); return 10; }
+        });
+    }
+
     private void setUp(int postDelayTicks) {
         setUp(postDelayTicks,List.of("say:hello","talk:talking","walk:10 64 0",
             "listen:yes|tour -> done, * -> start"));
@@ -37,6 +145,7 @@ class BotSessionTest {
     private void setUp(int postDelayTicks,List<String> instructions) {
         world=mock(World.class);
         when(world.getName()).thenReturn("world");
+        when(world.getEnvironment()).thenReturn(World.Environment.NORMAL);
 
         here=new Location(world,0,64,0);
 
@@ -64,7 +173,7 @@ class BotSessionTest {
             2.5,8,60,3,0.9,10,6,600,
             new BotScript.ChatSettings(12,6,60,"public {seconds}","private"),speech,
             List.of("wait"),List.of("scanning"),30,List.of("stuck"),List.of("farewell"),
-            Map.copyOf(actions),Map.of("world","start"),Map.of(),Map.of(),Map.of(),Map.of(),Map.of(),false,10
+            Map.copyOf(actions),Map.of("world","start"),Map.of(),Map.of(),Map.of(),Map.of(),Map.of(),BotRegionGuide.empty(),false,10
         );
 
         session=new BotSession(

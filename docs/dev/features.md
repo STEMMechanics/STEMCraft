@@ -198,3 +198,27 @@ Both rules cancel Paper's `PlayerAdvancementCriterionGrantEvent`, so partial pro
 blocked as well as completion. Existing progress is preserved. The rules apply to all
 advancements, including custom and recipe advancements; they do not change STEMCraft
 quest progress, statistics, or minigame rewards. There is no operator bypass.
+
+## World respawn points
+
+Players keep an independent bed or respawn anchor point for each world. Entering
+a world activates its saved point; a world without one uses its own spawn on death.
+Returning from a minigame restores the destination world's saved point. These points
+persist in player data across reconnects and server restarts.
+
+The existing `force-spawn-on-death` world flag still overrides beds and anchors when
+enabled. A fallback respawn in another world is redirected to the death world's spawn.
+Registered minigame occupants, including lobby players and spectators, cannot sleep
+or set a bed/anchor respawn point. Internal plugin respawn changes remain allowed.
+
+## Creative block drops
+
+`RestrictCreative` suppresses block-break item drops for Creative players without
+`stemcraft.creative.override.drop_items`. This includes jukebox records, chest and other
+container contents, and items released by attached blocks during a player break.
+The block still breaks, but its captured item drops are discarded. Survival players and
+Creative players with the existing drop override retain normal drop behaviour.
+
+This uses `BlockDropItemEvent` independently of the existing `PlayerDropItemEvent`
+restriction. It does not delete existing ground items or change automated container
+behaviour, explosions, or other non-player block removal.
