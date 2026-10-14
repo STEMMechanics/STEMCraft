@@ -15,7 +15,7 @@ The list below reflects the active built-in command roots in source.
 | --- | --- | --- |
 | `/stemcraft` | `STEMCraftCommand` | Status, version, explicit STEMCraft/extension saves, reload, and first-join administration |
 | `/maintenance` | `STEMCraft.java` | Toggles server maintenance mode |
-| `/webserver` | `WebServiceImpl` | Embedded web server control |
+| `/webserver` | `WebServiceImpl` | Embedded web server control, status and a clickable HTTP diagnostic URL |
 | `/world` | `WorldCommand` | World lifecycle, inspection, settings, and join/leave command editing |
 | `/resourcepack` | `ResourcePackCommand` | Pack delivery, pack builds and a clickable download URL |
 | `/namedregion` | `NamedRegions` | Inspect, find, teleport to, rename, retire, release, and regenerate named areas; see [Named Regions](https://github.com/STEMMechanics/stemcraft/wiki/named-regions) |
@@ -30,6 +30,27 @@ The list below reflects the active built-in command roots in source.
 | `/muteall` | `ChatServiceImpl` | Global chat mute control |
 | `/ban`, `/unban`, `/kick`, `/warn` | `PunishmentServiceImpl` | Punishment management |
 | `/report` | `ChatServiceImpl` | Player report submission |
+
+### Web server diagnostics
+
+Use `/webserver` or `/webserver status` to see whether the embedded server is
+running, its listening address, and a clickable `/status` URL. Successful
+`/webserver start` and `/webserver stop` commands confirm their outcome to the
+player. A failed start reports failure to the player and logs the cause.
+
+Direct connections to the embedded server use **HTTP**. An HTTPS public URL
+requires a reverse proxy that terminates TLS and forwards HTTP to this server.
+`web_server.ip: "127.0.0.1"` accepts local connections, such as a local reverse
+proxy. For direct connections from other computers, bind to `"0.0.0.0"` and
+forward/allow the configured port, then set `web_server.public-url` to the
+address clients can reach.
+
+Open the `/status` link from the affected computer first, then use
+`/resourcepack url` to test the pack download. If no request appears in the log,
+the request did not reach the HTTP handler: check the protocol, address, port,
+proxy, and firewall. Handler failures log their exception and return HTTP 500
+when a response has not already started. Quest editor access codes stay redacted
+from request log paths.
 
 ### Resource pack download diagnostics
 
