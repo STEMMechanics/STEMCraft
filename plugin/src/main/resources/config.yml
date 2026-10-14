@@ -147,6 +147,28 @@ named-regions:
       shipwreck: [Maribel, Stormcrow, Sea Wraith, Golden Gull, North Star, Wayfarer, Tide Runner, Blue Finch, Argent Dawn, Red Sail, Albatross, Black Pearl, Corsair, Fair Wind, Flying Fish, Grey Petrel, Ocean Rose, Sea Drake, Silver Spray, Wanderer, Lost Fleet, Shipwreck Shore, Faldir's Cove, Steamwheedle Port, Menethil Harbor, Stormwind Harbor]
       ruined-portal: [Fallen, Shattered, Ashen, Silent, Lost, Crimson, Broken, Forgotten, Ancient, Withered, Blighted, Charred, Ember, Fractured, Hollow, Obsidian, Riven, Scorched, Smouldering, Sundered, Dark Portal, Emerald Dream, Darkmoon Faire]
       default: [Ratta, Ancient, Hidden, Forgotten, Silent, Ember, Stone, Shadow, Golden, Lost, Broken, Cinder, Deep, Echo, Fallen, Hollow, Iron, Moon, Old, Veiled, Hallowfall, Azj-Kahet, Shadowlands, Dragon Isles, Broken Isles, Argus, Outland, Northrend, Pandaria, Draenor, Kalimdor, Khaz Algar, Undermine, Revendreth, Bastion, The Maw, Forbidden Reach, Emerald Dream]
+    # Extra themed roots add at least 800 distinct possibilities per type with the bundled forms.
+    # A missing section is installed on startup without replacing existing sources/forms/pools.
+    # Other structure types use default. Set a type to [] to disable its additional roots.
+    # Saved names stay unchanged until /namedregion regenerate <id|*> is run.
+    additional-sources:
+      desert: [Duneglass, Suncinder, Sandwhisper, Miragecrest, Scorpionveil, Amberdune, Cactusreach, Dustglimmer, Sunbrass, Siroccowind]
+      forest: [Briarshade, Oakveil, Fernhollow, Maplewhisper, Dewgrove, Mossbloom, Willowglade, Birchhaven, Beechshadow, Aspenleaf]
+      jungle: [Orchidshade, Vinesong, Jaguarcrest, Rainhollow, Canopyglow, Bambooveil, Parrotwing, Pythonleaf, Monsoonheart, Toucanrise]
+      ocean: [Tidewhisper, Reefglow, Saltbloom, Gullcrest, Dolphinwake, Coralhaven, Brinewatch, Seaglass, Kelpveil, Wavehollow]
+      mountains: [Cragspire, Granitewind, Eaglesummit, Slatehorn, Thundercrag, Basaltcrest, Skyforge, Falconridge, Stoneglacier, Cloudriven]
+      snow: [Rimehaven, Frostgleam, Icethorn, Snowmantle, Glaciersong, Winterveil, Hailwatch, Sleetbloom, Polarcrest, Frostlark]
+      swamp: [Reedhollow, Bogwhisper, Fenveil, Cypressmere, Lilysedge, Toadglimmer, Peatshadow, Heronmire, Sedgehaven, Marshsong]
+      badlands: [Claycrest, Canyonglass, Vermilionrise, Rustcrown, Mesaflame, Coppergulch, Shalewatch, Ochrespire, Redstrata, Firedust]
+      savanna: [Acaciavale, Lionglade, Baobabwind, Sunthatch, Zebracrest, Tallveld, Marulahaven, Antelopewatch, Goldthistle, Thornsun]
+      taiga: [Sprucehollow, Pineglimmer, Firwatch, Lynxshade, Elkbough, Cedarfrost, Needlehaven, Timberveil, Moosecrest, Larchsong]
+      mushroom-fields: [Sporehaven, Mycoglow, Capwhisper, Fungalveil, Puffcrest, Violetstem, Shroomhollow, Toadcap, Gillsong, Hyphabloom]
+      plains: [Larkmead, Cloverdown, Honeyfield, Wheatcrest, Barleyvale, Meadowbrook, Windgrass, Buttercup, Fieldstone, Goldenacre]
+      mineshaft: [Coalspire, Flintvein, Pickstone, Copperdrift, Silverlode, Ironhollow, Quartzdeep, Garnetdelve, Rustridge, Lanternfall]
+      village: [Hearthford, Thistlewick, Brambleton, Ciderbrook, Millbridge, Appleby, Honeyham, Wattleford, Bellhaven, Turnipstead]
+      shipwreck: [Swiftwing, Wavewalker, Moonrider, Seasilk, Starling, Windwhisper, Saltrose, Tideborne, Brightfin, Sunsail]
+      ruined-portal: [Riftscar, Voidglass, Ashbound, Runefall, Emberveil, Cindergate, Shatterwind, Duskseal, Fatesunder, Vesperflame]
+      default: [Runeward, Oathstone, Duskmantle, Echoward, Grimspire, Starvault, Gloomcrest, Cinderwatch, Fatehollow, Vesper]
     # Templates applied to one-word source entries. Multi-word source entries bypass these forms.
     forms:
       desert: ["{root} Desert", "{root} Sands", "{root} Expanse", "Dunes of {root}", "{root} Wastes", "{root} Dunes", "{root} Barrens", "The {root}"]

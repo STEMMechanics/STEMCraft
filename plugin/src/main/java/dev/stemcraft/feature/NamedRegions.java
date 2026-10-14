@@ -4,6 +4,7 @@ package dev.stemcraft.feature;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.CommandContext;
+import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.service.coordinatebar.CoordinateBarSection;
 import dev.stemcraft.api.util.TextUtil;
 import dev.stemcraft.config.BundledConfigDefaults;
@@ -181,17 +182,18 @@ public final class NamedRegions extends BaseFeature {
         startBackfill();
     }
 
-    private void restoreMissingNameConfiguration() {
+    void restoreMissingNameConfiguration() {
         getConfigSection();
         String base=getResolvedConfigPath()+".names.";
 
-        for(String section:List.of("sources","forms")) {
+        for(String section:List.of("sources","forms","additional-sources")) {
             String path=base+section;
             if(!getRootConfigSection().isSection(path))
                 BundledConfigDefaults.restoreMissingSection(
                     STEMCraft.getPlugin(),
                     getRootConfigSection(),
-                    List.of(path)
+                    List.of("named-regions.names."+section),
+                    path
                 );
         }
     }
@@ -988,20 +990,30 @@ public final class NamedRegions extends BaseFeature {
     }
 
     private List<String> generatedNames(String type) {
-        List<String> configured=getConfigSection().getStringList("names.sources."+type);
+        return generatedNames(getConfigSection(),type);
+    }
+
+    static List<String> generatedNames(ConfigSection config,String type) {
+        List<String> configured=config.getStringList("names.sources."+type);
         if(configured.isEmpty())
-            configured=getConfigSection().getStringList("names.sources.default");
+            configured=config.getStringList("names.sources.default");
         if(configured.isEmpty())
             throw new IllegalStateException("No named-region sources configured for "+type);
 
-        List<String> configuredForms=getConfigSection().getStringList("names.forms."+type);
+        String additionalPath="names.additional-sources."+type;
+        List<String> additional=config.getStringList(config.contains(additionalPath)
+            ?additionalPath:"names.additional-sources.default");
+        List<String> sources=new ArrayList<>(configured);
+        sources.addAll(additional);
+
+        List<String> configuredForms=config.getStringList("names.forms."+type);
         if(configuredForms.isEmpty())
-            configuredForms=getConfigSection().getStringList("names.forms.default");
+            configuredForms=config.getStringList("names.forms.default");
         if(configuredForms.isEmpty())
             throw new IllegalStateException("No named-region forms configured for "+type);
 
         return generateNames(
-            configured,
+            sources,
             configuredForms,
             List.of(expansionPrefixes()),
             nameWordLimit(type)
