@@ -1,6 +1,7 @@
 package dev.stemcraft.minigame.mobshooter;
 
 import dev.stemcraft.STEMCraft;
+import dev.stemcraft.minigame.MiniGameArenaInfoSupport;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.minigame.MiniGameArena;
@@ -73,9 +74,11 @@ final class MobShooterCommand {
             return;
         }
         switch (action) {
-            case "info", "validate" -> {
-                ctx.info(a.id() + ": " + a.getStatus() + "; spawns=" + owner.settings(a).spawns.size()
-                        + "; targets=" + owner.settings(a).targets.size());
+            case "info" -> {
+                showInfo(ctx, a);
+                return;
+            }
+            case "validate" -> {
                 var result = a.validate();
                 if (!result.hasErrors()) ctx.success("Arena setup is valid.");
                 else result.getErrors().forEach(ctx::warn);
@@ -190,6 +193,14 @@ final class MobShooterCommand {
         }
         owner.save(a);
         ctx.success("Setup saved. Use validate to check remaining steps.");
+    }
+
+    private void showInfo(CommandContext ctx, MiniGameArena a) {
+        MobShooterArenaSettings d = owner.settings(a);
+        MiniGameArenaInfoSupport.common(ctx, a, d.countdown, d.roundSeconds);
+        MiniGameArenaInfoSupport.locations(ctx, "Starting spawns", d.spawns);
+        ctx.info(" - Target count: " + d.targetCount);
+        MiniGameArenaInfoSupport.locations(ctx, "Target spawns", d.targets);
     }
 
     private Player player(CommandContext ctx) {

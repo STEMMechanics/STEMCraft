@@ -35,6 +35,7 @@ final class QuakeConfig {
         s.set("max-players", a.getMaxPlayers());
         s.set("round-seconds", d.roundSeconds);
         s.set("countdown", d.countdown);
+        s.set("timing-version", 1);
         s.set("kill-target", d.killTarget);
         s.set("reload-ticks", d.reloadTicks);
         config.save();
@@ -62,7 +63,7 @@ final class QuakeConfig {
                 QuakeArenaSettings d = owner.settings(a);
                 for (String value : s.getStringList("spawns")) d.spawns.add(LocationUtil.deserialize(value, world));
                 d.roundSeconds = s.getInt("round-seconds", 180);
-                d.countdown = s.getInt("countdown", 10);
+                d.countdown = MiniGameConfigSupport.timedRoundCountdown(s);
                 d.killTarget = s.getInt("kill-target", 20);
                 d.reloadTicks = s.getInt("reload-ticks", 30);
                 var validation = a.validate();

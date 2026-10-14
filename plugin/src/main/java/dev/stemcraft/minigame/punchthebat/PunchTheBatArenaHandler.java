@@ -13,7 +13,6 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
-import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.ItemStack;
 
@@ -34,6 +33,7 @@ final class PunchTheBatArenaHandler implements MiniGameArenaHandler {
         final Map<UUID, Location> respawns = new HashMap<>();
         final Set<Entity> entities = new HashSet<>();
         final Set<UUID> targets = new HashSet<>();
+        final List<Location> randomSpawns = new ArrayList<>();
         long tick;
         int initialPlayers;
         String objective = "";
@@ -66,18 +66,55 @@ final class PunchTheBatArenaHandler implements MiniGameArenaHandler {
     @Override
     public void validate(@NotNull MiniGameArena a, ArenaValidationResult result) {
         PunchTheBatArenaSettings d = settings(a);
-        MiniGameConfigSupport.validateArenaSpawns(api, a, d.spawns, 64, result);
+        MiniGameConfigSupport.validateArenaSpawns(api, a, d.spawns, 64, true, result);
         for (Location l : d.targets)
             if (outside(a, l)) result.addError("Every target spawn must be inside the arena.", "targets");
         if (d.roundSeconds < 1 || d.roundSeconds > 3600 || d.countdown < 1 || d.countdown > 60 || d.targetCount < 1 || d.targetCount > 64) {
             result.addError("Settings: roundseconds 1-3600, countdown 1-60, targetcount 1-64.", "settings");
         }
 
-        if (d.targets.isEmpty()) result.addError("Add target spawn locations.", "targets");
+        if (d.spawns.isEmpty() || d.targets.isEmpty()) {
+            if (randomRegionTooLarge(a)) {
+                result.addError("Random spawns require an arena bounding box of at most 100,000 blocks.", "arena");
+            } else if (safeRandomSpawns(a).size() < (d.spawns.isEmpty() ? a.getMaxPlayers() : 1)) {
+                result.addError("Random spawns need clear two-block spaces above safe solid ground inside the arena"
+                        + (d.spawns.isEmpty() ? ", at least one per max player." : "."), "arena");
+            }
+        }
     }
 
     private boolean outside(MiniGameArena a, Location l) {
         return a.getRegion() == null || !a.getRegion().contains(l);
+    }
+
+    private boolean randomRegionTooLarge(MiniGameArena a) {
+        if (a.getRegion() == null) return false;
+        Location min = a.getRegion().getMinimumLocation();
+        Location max = a.getRegion().getMaximumLocation();
+        double volume = ((double) max.getBlockX() - min.getBlockX() + 1)
+                * ((double) max.getBlockY() - min.getBlockY() + 1)
+                * ((double) max.getBlockZ() - min.getBlockZ() + 1);
+        return volume > 100_000;
+    }
+
+    private boolean safeRandomSpawn(MiniGameArena a, Location feet) {
+        if (feet.getBlockY() <= a.world().getMinHeight()
+                || feet.getBlockY() + 1 >= a.world().getMaxHeight()
+                || outside(a, feet) || outside(a, feet.clone().add(0, 1, 0))) return false;
+        Material ground = feet.clone().subtract(0, 1, 0).getBlock().getType();
+        return ground.isOccluding() && ground != Material.MAGMA_BLOCK
+                && feet.getBlock().getType().isAir()
+                && feet.clone().add(0, 1, 0).getBlock().getType().isAir();
+    }
+
+    private List<Location> safeRandomSpawns(MiniGameArena a) {
+        List<Location> points = new ArrayList<>();
+        if (a.getRegion() == null || randomRegionTooLarge(a)) return points;
+        for (var block : a.getRegion().getRegion()) {
+            Location feet = new Location(a.world(), block.x() + 0.5, block.y(), block.z() + 0.5);
+            if (safeRandomSpawn(a, feet)) points.add(feet);
+        }
+        return points;
     }
 
     @Override
@@ -91,15 +128,6 @@ final class PunchTheBatArenaHandler implements MiniGameArenaHandler {
             if (a.getStatus() == WAITING && a.numPlayers() >= a.getMinPlayers())
                 a.setStatus(STARTING, settings(a).countdown);
         });
-        if (a.getStatus() == STARTING) {
-            Round r = rounds.get(a);
-            if (r != null) {
-                Location spawn = r.respawns.computeIfAbsent(p.getUniqueId(), ignored -> settings(a).spawns.stream()
-                        .filter(l -> !r.respawns.containsValue(l)).findFirst().orElse(settings(a).spawns.getFirst()).clone());
-                r.scores.put(p.getUniqueId(), 0);
-                return spawn;
-            }
-        }
         return a.getLobbySpawn();
     }
 
@@ -139,9 +167,24 @@ final class PunchTheBatArenaHandler implements MiniGameArenaHandler {
             rounds.put(a, r);
             a.set("winner", "-");
             r.objective = PunchTheBatMiniGame.INSTRUCTIONS;
+        } else if (status == RUNNING) {
+            Round r = rounds.get(a);
+            if (r == null) {
+                a.setStatus(DISABLED, 0);
+                return;
+            }
+            if (settings(a).spawns.isEmpty() || settings(a).targets.isEmpty()) {
+                r.randomSpawns.addAll(safeRandomSpawns(a));
+                Collections.shuffle(r.randomSpawns);
+                if (r.randomSpawns.size() < (settings(a).spawns.isEmpty() ? a.numPlayers() : 1)) {
+                    announce(a, "Cannot start: the arena has insufficient safe random spawn positions.");
+                    a.setStatus(DISABLED, 0);
+                    return;
+                }
+            }
             int i = 0;
             for (Player p : a.getPlayers()) {
-                Location spawn = settings(a).spawns.get(i++).clone();
+                Location spawn = (settings(a).spawns.isEmpty() ? r.randomSpawns : settings(a).spawns).get(i++).clone();
                 r.respawns.put(p.getUniqueId(), spawn);
                 r.scores.put(p.getUniqueId(), 0);
                 a.getPlayer(p).setScore(0);
@@ -149,12 +192,6 @@ final class PunchTheBatArenaHandler implements MiniGameArenaHandler {
                 a.getPlayer(p).setDeaths(0);
                 p.teleport(spawn);
                 p.getInventory().clear();
-            }
-        } else if (status == RUNNING) {
-            Round r = rounds.get(a);
-            if (r == null) {
-                a.setStatus(DISABLED, 0);
-                return;
             }
             r.initialPlayers = a.numPlayers();
             for (Player p : a.getPlayers()) equip(p);
@@ -244,9 +281,13 @@ final class PunchTheBatArenaHandler implements MiniGameArenaHandler {
             }
         }
         if (r.tick % 10 != 0) return;
+        List<Location> points = settings(a).targets;
+        boolean random = points.isEmpty();
+        if (random) points = r.randomSpawns.stream().filter(l -> safeRandomSpawn(a, l)).toList();
+        if (points.isEmpty()) return;
         while (r.targets.size() < settings(a).targetCount) {
-            List<Location> points = settings(a).targets;
-            Location l = points.get(ThreadLocalRandom.current().nextInt(points.size()));
+            Location l = points.get(ThreadLocalRandom.current().nextInt(points.size())).clone();
+            if (random) l.add(0, 0.5, 0);
             LivingEntity target;
             Bat bat = a.world().spawn(l, Bat.class);
             bat.setAwake(true);
@@ -290,7 +331,7 @@ final class PunchTheBatArenaHandler implements MiniGameArenaHandler {
         announce(a, names.isEmpty() ? "Round over — no winner." : "Winner" + (winners.size() > 1 ? "s: " : ": ") + names);
         // Solo practice does not grant rewards.
         if (r.initialPlayers > 1 && !winners.isEmpty()) owner.game.rewardWinners(a, winners);
-        a.setStatus(ENDING, 8);
+        a.setStatus(ENDING, 20);
     }
 
     private void announce(MiniGameArena a, String message) {
@@ -324,15 +365,6 @@ final class PunchTheBatArenaHandler implements MiniGameArenaHandler {
     }
 
     void registerListeners() {
-        api.events().register(PlayerMoveEvent.class, e -> {
-            MiniGameArena a = owner.game.findPlayer(e.getPlayer());
-            if (a != null && a.hasPlayer(e.getPlayer()) && a.getStatus() == STARTING) {
-                Location to = e.getFrom().clone();
-                to.setYaw(e.getTo().getYaw());
-                to.setPitch(e.getTo().getPitch());
-                e.setTo(to);
-            }
-        });
         api.events().register(PlayerInteractEvent.class, this::interact);
         api.events().register(PlayerInteractEntityEvent.class, e -> {
             MiniGameArena a = owner.game.findPlayer(e.getPlayer());

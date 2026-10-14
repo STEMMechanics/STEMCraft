@@ -327,8 +327,6 @@ public class TntRunCommand {
         if (!spectateOnly && tntRun.minigame().handler() instanceof TntRunArenaHandler handler) {
             if (arena.getStatus() == MiniGameArena.ArenaStatus.WAITING) {
                 api.tasks().runLater(2L, () -> handler.queueAutoStartIfReady(arena));
-            } else if (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING) {
-                handler.scheduleStartingGridRefresh(arena, 2L);
             }
         }
 

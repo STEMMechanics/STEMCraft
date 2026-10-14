@@ -36,6 +36,7 @@ final class MobShooterConfig {
         s.set("max-players", a.getMaxPlayers());
         s.set("round-seconds", d.roundSeconds);
         s.set("countdown", d.countdown);
+        s.set("timing-version", 1);
         s.set("target-count", d.targetCount);
         config.save();
     }
@@ -63,7 +64,7 @@ final class MobShooterConfig {
                 for (String value : s.getStringList("spawns")) d.spawns.add(LocationUtil.deserialize(value, world));
                 for (String value : s.getStringList("targets")) d.targets.add(LocationUtil.deserialize(value, world));
                 d.roundSeconds = s.getInt("round-seconds", 180);
-                d.countdown = s.getInt("countdown", 10);
+                d.countdown = MiniGameConfigSupport.timedRoundCountdown(s);
                 d.targetCount = s.getInt("target-count", 12);
                 var validation = a.validate();
                 if (validation.hasErrors())

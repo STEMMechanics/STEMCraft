@@ -752,7 +752,7 @@ public final class STEMCraft extends JavaPlugin {
 
                     callback.accept(instance);
 
-                } catch (ReflectiveOperationException | RuntimeException ex) {
+                } catch (ReflectiveOperationException | RuntimeException | LinkageError ex) {
                     recordLoadFailure(className, ex.getClass().getSimpleName() + ": " + ex.getMessage());
                     error("STEMCRAFT_ERROR_LOAD_CLASS", ex,
                             "class", className,

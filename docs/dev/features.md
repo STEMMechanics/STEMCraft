@@ -80,6 +80,11 @@ continue using that old profile.
 | `PlayerTabList` | Header/footer tab list rendering and update loop |
 | `PlayerGameMessages` | Join, quit, death, and related configurable player messages |
 
+Geyser-Spigot and Floodgate are optional. Java players can use interactive menu
+books without either plugin. Bedrock menu forms use the dialog service, which loads
+Cumulus through the active Geyser connection when a form is opened. If the form
+cannot open, the menu falls back to chat choices.
+
 `PlayerTabList` treats its header, footer, and `name_format` as MiniMessage. Both `gray` and `grey` tag spellings
 are accepted. `{world}` uses the shared player-facing world name, while `{world-raw}` exposes the underlying
 world folder name. By default, underscores become words and multi-part map names treat their first word as a

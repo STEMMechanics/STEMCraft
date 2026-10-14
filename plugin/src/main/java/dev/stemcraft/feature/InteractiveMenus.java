@@ -26,6 +26,7 @@ import dev.stemcraft.api.command.Command;
 import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.config.ConfigFile;
 import dev.stemcraft.api.config.ConfigSection;
+import dev.stemcraft.api.service.dialog.DialogBuilder;
 import dev.stemcraft.api.util.PlaceholderUtil;
 import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.api.util.TextUtil;
@@ -40,8 +41,6 @@ import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.BookMeta;
-import org.geysermc.cumulus.form.SimpleForm;
-import org.geysermc.geyser.api.GeyserApi;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -605,30 +604,20 @@ public class InteractiveMenus extends BaseFeature {
 
     private boolean sendBedrockForm(Player player, MenuDefinition menu, boolean testMode) {
         try {
-            SimpleForm.Builder form = SimpleForm.builder()
-                .title(TextUtil.stripColour(menu.title()))
-                .content(TextUtil.stripColour(menu.body()));
+            // Keep optional Geyser/Cumulus types out of the feature's class loading path.
+            DialogBuilder form = api.dialogs().create("imenu:" + menu.id())
+                .title(TextUtil.colourise(menu.title()))
+                .body(TextUtil.colourise(menu.body()));
 
-            List<MenuItem> items = new ArrayList<>(menu.items().values());
-            for (MenuItem item : items) {
-                String button = TextUtil.stripColour(item.title());
-                String description = TextUtil.stripColour(item.description());
-                if (!description.isBlank()) {
-                    button += "\n" + description;
+            for (MenuItem item : menu.items().values()) {
+                Component button = TextUtil.colourise(item.title());
+                if (!item.description().isBlank()) {
+                    button = button.append(Component.newline()).append(TextUtil.colourise(item.description()));
                 }
-                form.button(button);
+                form.action(button, () -> selectItem(player, menu, item, testMode));
             }
 
-            form.validResultHandler(response -> {
-                int selected = response.clickedButtonId();
-                if (selected >= 0 && selected < items.size()) {
-                    Bukkit.getScheduler().runTask(STEMCraft.getPlugin(), () ->
-                        selectItem(player, menu, items.get(selected), testMode)
-                    );
-                }
-            });
-
-            return GeyserApi.api().sendForm(player.getUniqueId(), form);
+            return form.open(player);
         } catch (LinkageError | RuntimeException exception) {
             return false;
         }

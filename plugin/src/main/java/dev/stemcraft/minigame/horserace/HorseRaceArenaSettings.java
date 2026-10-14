@@ -13,6 +13,6 @@ final class HorseRaceArenaSettings {
     final List<Location> spawns = new ArrayList<>();
     final List<SCRegion> checkpoints = new ArrayList<>();
     int roundSeconds = 180;
-    int countdown = 10;
+    int countdown = 30;
     int laps = 3;
 }

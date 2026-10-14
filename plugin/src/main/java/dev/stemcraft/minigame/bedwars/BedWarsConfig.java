@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Set;
 
 public class BedWarsConfig {
+    static final int DEFAULT_ROUND_SECONDS = 1800;
     static final int DEFAULT_START_COUNTDOWN_SECONDS = 30;
     static final int DEFAULT_ENDING_SECONDS = 20;
     static final MiniGameTeamSelectionInput DEFAULT_TEAM_SELECTION_INPUT = null;
@@ -66,6 +67,7 @@ public class BedWarsConfig {
         SCRegion arenaRegion = loadRegion(section, world, arenaId, "arena", "Arena");
         int minPlayers = section.getInt("min-players", 2);
         int maxPlayers = section.getInt("max-players", 8);
+        int roundSeconds = Math.max(1, section.getInt("round-seconds", DEFAULT_ROUND_SECONDS));
         int startCountdownSeconds = section.getInt("start-countdown-seconds", DEFAULT_START_COUNTDOWN_SECONDS);
         int endingSeconds = section.getInt("ending-seconds", DEFAULT_ENDING_SECONDS);
         int teamSize = section.getInt("team-size", 1);
@@ -122,6 +124,7 @@ public class BedWarsConfig {
             arenaRegion,
             minPlayers,
             maxPlayers,
+            roundSeconds,
             startCountdownSeconds,
             endingSeconds,
             teamSize,
@@ -146,6 +149,7 @@ public class BedWarsConfig {
         arenaConfig.set("arena", serializeRegion(arena.get("arenaRegion", SCRegion.class), arena.id(), "arena"));
         arenaConfig.set("min-players", arena.getMinPlayers());
         arenaConfig.set("max-players", arena.getMaxPlayers());
+        arenaConfig.set("round-seconds", Math.max(1, arena.get("roundSeconds", Integer.class, DEFAULT_ROUND_SECONDS)));
         arenaConfig.set("start-countdown-seconds", arena.get("startCountdownSeconds", Integer.class, DEFAULT_START_COUNTDOWN_SECONDS));
         arenaConfig.set("ending-seconds", arena.get("endingSeconds", Integer.class, DEFAULT_ENDING_SECONDS));
         arenaConfig.set("team-size", arena.get("teamSize", Integer.class, 1));

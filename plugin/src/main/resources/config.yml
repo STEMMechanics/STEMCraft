@@ -1354,6 +1354,13 @@ formatted-signs:
 # Generator-owned map policies; Pl3xMap remains optional.
 generator-maps:
   enabled: true
+
+graves:
+  map:
+    enabled: true
+    # Avoid rebuilding/writing unchanged grave markers every second (1-3600).
+    update-seconds: 10
+
 # AFK is session-only and clears when a player returns or reconnects.
 afk:
   enabled: true

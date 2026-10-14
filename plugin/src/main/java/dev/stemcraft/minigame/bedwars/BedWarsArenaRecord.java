@@ -20,6 +20,7 @@ public record BedWarsArenaRecord(
         SCRegion arenaRegion,
         int minPlayers,
         int maxPlayers,
+        int roundSeconds,
         int startCountdownSeconds,
         int endingSeconds,
         int teamSize,
