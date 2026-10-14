@@ -101,6 +101,29 @@ class BotScriptTest {
     }
 
     @Test
+    void worldRequirementSupportsPatternsDimensionsAndValidatedFallbacks() throws Exception {
+        var step=BotScript.parseInstruction("require-world:survival*|adventure normal -> wrong-world");
+        assertEquals(BotScript.Op.REQUIRE_WORLD,step.op());
+        assertEquals("normal",step.text());
+        assertEquals("wrong-world",step.routes().getFirst().target());
+        assertTrue(step.routes().getFirst().matches("SURVIVAL_NORTH"));
+        assertTrue(step.routes().getFirst().matches("adventure"));
+        assertFalse(step.routes().getFirst().matches("creative"));
+        assertEquals("",BotScript.parseInstruction("require-world:creative -> end").text());
+        for(String invalid:java.util.List.of("", "survival*",
+            "survival* overworld -> fallback", "survival* normal extra -> fallback", "survival*| normal -> fallback")) {
+            assertThrows(IllegalArgumentException.class,()->BotScript.parseInstruction("require-world:"+invalid));
+        }
+        var config=config("""
+            actions:
+              help: ['require-world:survival* normal -> missing', 'end']
+            """);
+        assertThrows(IllegalArgumentException.class,()->BotScript.read(config));
+        config.set("actions.help",java.util.List.of("require-world:survival* normal -> close", "end"));
+        assertDoesNotThrow(()->BotScript.read(config));
+    }
+
+    @Test
     void parsesWalkWithOptionalOneShotSpeed() {
         var normal=BotScript.parseInstruction("walk:-864 85 245");
         assertEquals(BotScript.Op.WALK,normal.op());
@@ -141,6 +164,14 @@ class BotScriptTest {
             var script = BotScript.read(new dev.stemcraft.config.ConfigSectionImpl(null, yaml));
             assertTrue(script.actions().containsKey("creative-merge"));
             assertTrue(script.actions().containsKey("practice-quest"));
+            assertEquals("survival-wilderness",script.helpTopicAction("wilderness"));
+            var directions=script.actions().get("survival-wilderness");
+            assertEquals(BotScript.Op.REQUIRE_WORLD,directions.getFirst().op());
+            assertEquals("normal",directions.getFirst().text());
+            assertTrue(directions.getFirst().routes().getFirst().matches("survival_north"));
+            assertEquals(BotScript.Op.EXIT_REGION,directions.get(1).op());
+            assertEquals("survival-old-terrain",directions.get(1).text());
+            assertNull(script.regionGuide().regions().get("survival-old-terrain").bounds());
             assertEquals(3, script.scanning().size());
             assertEquals(10, script.scanningCooldownSeconds());
             yaml.set("messages.scanning-cooldown-seconds", 60);

@@ -55,7 +55,7 @@ Automatic introductions use their per-world seen marker. Controlled sessions sus
 
 ## Script and timing
 
-Actions are lists of instructions: `say`, `talk`, `sleep`, `walk`, `speed`, `look`, `point`, `wilderness`, `wave`, `sneak`, `stand`, `action`, `listen`, `await`, `end` and `close`. World mappings select command and first-visit actions. Route targets and instruction syntax are validated before sessions start. `talk` includes speech and the configured post-delay; `say` does not wait. Avoid long sequences of `say` for player guidance.
+Actions are lists of instructions: `say`, `talk`, `sleep`, `walk`, `speed`, `look`, `point`, `require-world`, `exit-region`, `wave`, `sneak`, `stand`, `action`, `listen`, `await`, `end` and `close`. World mappings select command and first-visit actions. Route targets, region references and instruction syntax are validated before sessions start. `talk` includes speech and the configured post-delay; `say` does not wait. Avoid long sequences of `say` for player guidance.
 
 `listen` routes recognise configured wildcard phrases. They are not an unrestricted language model. Sessions look ahead to the next listen menu so known feedback can interrupt talking and walking. Dismissal phrases work throughout the action sequence. Speech revisions prevent old queued speech from continuing after a route change.
 
@@ -144,54 +144,87 @@ the configured quiet period has elapsed. The bundled mailbox explanation says
 to craft the mailbox in the Survival world. `/help` and `/help <topic>` forward
 to STEMBot, while `/stembot` and `/stembot <topic>` remain available directly.
 
-## Wilderness generation directions
+## Reusable region directions and world requirements
 
-Map the old generation footprint in the deployed `stembot.yml` to give players
-directions to the closest chunks beyond it. Use the world's actual internal name:
+`exit-region:<region-id>` gives directions from the player's current position to
+the closest exit from a supplied rectangular X/Z region. `require-world` guards
+an action by Bukkit world-name patterns and, optionally, its dimension:
 
-```yaml
-worlds:
-  survival:
-    # Keep this world's existing action mappings and other settings.
-    wilderness:
-      old-generation-bounds: "0,0;8000,8000" # Example only: use the real corners.
-      old-version: "26.2"
-      new-version: "26.3"
+```text
+require-world:pattern[|pattern] [environment] -> fallback-action
 ```
 
-The bounds accept `"x1,z1;x2,z2"` or `[x1, z1, x2, z2]`. Corners can be in either
-order and may be negative. They are **inclusive block coordinates** and expand
-to complete Minecraft chunks. For example, a maximum coordinate of 8000 includes
-its chunk through block 8015; the first new block starts at 8016. If the last old
-block is 7999, use 7999 as the maximum. A missing/empty value leaves the world
-unmapped; the bundled Survival bounds are empty.
+Patterns support `*`, alternatives use `|`, and matching ignores case. Environment
+is `normal`, `nether`, `the_end` or `custom`; omit it to allow any dimension.
+A match continues with the next instruction. A mismatch jumps to the configured
+fallback action (`end` or `close` also works). The reply-menu lookahead follows
+the same world check. Actions own their world restrictions: a region is an X/Z
+rectangle interpreted in the player's current world.
 
-Reload STEMCraft after editing. Configuring a boundary makes `/stembot wilderness`,
-`/help wilderness`, and the `newterrain` topic available even with an older custom
-script. Default actions/topics are added in memory, preserving explicit custom
-routes and blank topic opt-outs. During nearby private scripted conversations,
-questions mentioning wilderness, new terrain/chunks/forest, Dappled Forest or 26.3
-can request directions. Controlled API sessions and disengaged/public chat retain
-their existing behaviour.
+The bundled `/help wilderness` topic uses these reusable instructions:
+
+```yaml
+help-topics:
+  wilderness: survival-wilderness
+
+actions:
+  survival-wilderness:
+    - 'require-world:survival* normal -> survival-wilderness-world-required'
+    - 'exit-region:survival-old-terrain'
+    - 'action:survival-menu'
+  survival-wilderness-world-required:
+    - 'talk:Ask me for these directions when you are in a Survival overworld.'
+    - 'end'
+
+regions:
+  survival-old-terrain:
+    bounds: [] # Set the actual old terrain corners before enabling directions.
+    align-to-chunks: true
+    messages:
+      inside: 'Head {direction} about {distance} blocks to X {x}, Z {z}. Newly generated chunks beyond the old 26.2 area use 26.3.'
+      outside: 'You are already beyond the old 26.2 generation boundary.'
+      unconfigured: 'I do not have the old terrain boundary mapped yet.'
+      blocked: 'The world border blocks the way out of the old terrain.'
+```
+
+Merge these sections with the existing deployed script; keep its other actions
+and routes. Bundled scripts do not overwrite existing files. Reload STEMCraft
+after editing. Adjust `survival*` to the server's actual Survival overworld names;
+multiple explicit names can use `survival|survival_north`. `normal` excludes their
+Nether and End dimensions.
+
+Bounds accept `"x1,z1;x2,z2"` or `[x1, z1, x2, z2]`. Corners can be in either order
+and may be negative. They are **inclusive block coordinates**. For example,
+`"0,0;8000,8000"` is a format example, not a confirmed boundary for this server.
+Missing/empty bounds leave that region unmapped; the bundled bounds are empty.
+
+Exact block bounds are the default. `align-to-chunks: true` expands to complete
+Minecraft chunks for a generation footprint. A maximum of 8000 then includes its
+chunk through block 8015; the first block outside starts at 8016. If the last old
+block is 7999, use 7999 as the maximum.
+
+Each region may override `messages.inside`, `outside`, `unconfigured` and `blocked`.
+The inside reply supports `{direction}`, `{distance}`, `{x}` and `{z}`. Defaults
+describe a generic region; generation versions and wilderness dialogue are
+ordinary YAML text. Define another region and reference it from another action
+to reuse the same instruction for a training area, spawn footprint or other map.
+
+Defining regions does not add topics, actions or chat preferences. `/help` and
+`/stembot` topics come solely from `help-topics`; ordinary chat routes come solely
+from each action's `listen` instructions. The bundled Survival menu includes
+explicit wilderness/new-terrain phrases. Custom scripts must add the routes they
+want; deleting the topic or route removes it. Controlled API sessions and
+disengaged/public chat retain their existing behaviour.
 
 STEMBot compares the four cardinal exits from the player's current X/Z and picks
 the shortest accessible one within the world border. Equal distances prefer
 north, east, south, then west. It speaks the direction, rounded-up horizontal
-distance and target block coordinates, and points that way while speaking. This
-is a direction and straight-line distance; terrain still determines the walking
-route. Ask again after moving to recalculate.
+distance and target block coordinates, and points that way while speaking.
+Ask again after moving to recalculate. The guidance reports when the player is
+already outside, bounds are missing or the border blocks all exits.
 
-Players already beyond the old footprint receive an explanation that newly
-generated chunks there use the configured new version. A blocked world border
-or unmapped world receives an explanatory reply. The guidance offers no teleport
-or `/spawn` shortcut and does not promise a particular biome at the boundary.
+This is a straight-line horizontal direction, not a terrain-aware walking route
+or teleport. Leaving the old footprint does not guarantee a particular biome or
+that nobody has previously generated those chunks.
 
-The `wilderness` action instruction runs this query dynamically. Messages are
-editable under `messages.wilderness`: `inside`, `outside`, `unconfigured`, and
-`blocked`. Version replies support `{old-version}` and `{new-version}`; the inside
-reply also supports `{direction}`, `{distance}`, `{x}`, and `{z}`.
-
-Server checks: ask near each old area's edge and at its centre, cross the chosen
-chunk boundary and ask again, check another world, and repeat with an exit blocked
-by the world border. Verify pointing with Java and Bedrock clients, private chat
-with a second player, and that the optional help respects combat deferral.
+Server checks: [printable checklist](stembot-wilderness-test-checklist.txt).

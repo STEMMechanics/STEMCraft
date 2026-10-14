@@ -36,7 +36,7 @@ public record BotScript(
     Map<String,SpawnPoint> alwaysWorldSpawns,
     Map<String,String> triggerActions,
     Map<String,String> helpTopics,
-    BotWildernessGuide wildernessGuide,
+    BotRegionGuide regionGuide,
     boolean deferDuringCombat,
     int combatCooldownSeconds
 ) {
@@ -49,7 +49,7 @@ public record BotScript(
                                int awayTimeoutSeconds,String disengaged,String reengaged) {}
 
     public enum Op {
-        SAY,TALK,SLEEP,WALK,SPEED,LOOK,POINT,WILDERNESS,WAVE,SNEAK,STAND,ACTION,LISTEN,AWAIT,END,CLOSE
+        SAY,TALK,SLEEP,WALK,SPEED,LOOK,POINT,REQUIRE_WORLD,EXIT_REGION,WAVE,SNEAK,STAND,ACTION,LISTEN,AWAIT,END,CLOSE
     }
 
     public record SpeechSettings(
@@ -80,6 +80,12 @@ public record BotScript(
     ) {
         static Instruction simple(Op op) {
             return new Instruction(op,"",0,0,0,0,0,List.of());
+        }
+
+        boolean matchesWorld(org.bukkit.World world) {
+            return world!=null && (text.isEmpty() || world.getEnvironment()!=null
+                && world.getEnvironment().name().equalsIgnoreCase(text))
+                && routes.getFirst().matches(world.getName());
         }
     }
 
@@ -249,18 +255,13 @@ public record BotScript(
         Map<String,SpawnPoint> alwaysWorldSpawns=worldSpawns(config);
         Map<String,String> triggerActions=readRoutes(config.getSection("triggers",false));
         Map<String,String> helpTopics=new LinkedHashMap<>(readRoutes(config.getSection("help-topics",false)));
-        BotWildernessGuide wildernessGuide=BotWildernessGuide.read(config);
-        if(!wildernessGuide.worlds().isEmpty()) {
-            Instruction returnStep=actions.containsKey("survival-menu")
-                ?new Instruction(Op.ACTION,"survival-menu",0,0,0,0,0,List.of())
-                :Instruction.simple(Op.END);
-            actions.putIfAbsent("survival-wilderness",List.of(Instruction.simple(Op.WILDERNESS),returnStep));
-            for(String topic:List.of("wilderness","newterrain")) {
-                if(!config.contains("help-topics."+topic)) helpTopics.put(topic,"survival-wilderness");
-            }
-        }
+        BotRegionGuide regionGuide=BotRegionGuide.read(config);
 
         validateTargets(actions,commandWorld,firstTimeWorld);
+        actions.forEach((action,program)->program.forEach(instruction->{
+            if(instruction.op()==Op.EXIT_REGION && !regionGuide.regions().containsKey(instruction.text()))
+                throw new IllegalArgumentException("actions."+action+" references unknown region '"+instruction.text()+"'");
+        }));
         alwaysWorld.forEach((world,target)->requireTarget(actions,target,"worlds."+world+".always-action"));
         triggerActions.forEach((trigger,target)->{
             String base=trigger.endsWith("-once")?trigger.substring(0,trigger.length()-5):trigger;
@@ -307,7 +308,7 @@ public record BotScript(
             Map.copyOf(alwaysWorldSpawns),
             Map.copyOf(triggerActions),
             Map.copyOf(helpTopics),
-            wildernessGuide,
+            regionGuide,
             deferDuringCombat,
             combatCooldownSeconds
         );
@@ -365,10 +366,8 @@ public record BotScript(
             case "point" -> argument.equalsIgnoreCase("player")
                 ?new Instruction(Op.POINT,"player",0,0,0,0,0,List.of())
                 :parsePointInstruction(Op.POINT,argument,false);
-            case "wilderness" -> {
-                if (!argument.isEmpty()) throw new IllegalArgumentException("wilderness takes no arguments");
-                yield Instruction.simple(Op.WILDERNESS);
-            }
+            case "require-world" -> parseWorldRequirement(argument);
+            case "exit-region" -> new Instruction(Op.EXIT_REGION,required(argument,"region id"),0,0,0,0,0,List.of());
             case "speed" -> new Instruction(Op.SPEED,"",0,0,0,
                 bounded(parseDouble(argument,"speed"),0.2,2.5),0,List.of());
             case "wave" -> Instruction.simple(Op.WAVE);
@@ -381,6 +380,27 @@ public record BotScript(
             case "close" -> Instruction.simple(Op.CLOSE);
             default -> throw new IllegalArgumentException("Unknown STEMBot instruction: "+command);
         };
+    }
+
+    private static Instruction parseWorldRequirement(String argument) {
+        String[] parts=argument.split("\\s*->\\s*",2);
+        String[] request=parts[0].trim().split("\\s+");
+        if(parts.length!=2 || request.length<1 || request.length>2 || request[0].isBlank()
+            || parts[1].isBlank() || parts[1].matches(".*\\s.*"))
+            throw new IllegalArgumentException("require-world expects pattern[|pattern] [environment] -> fallback-action");
+        String environment=request.length==2?request[1].toLowerCase(Locale.ROOT):"";
+        if(!environment.isEmpty()) {
+            try {
+                org.bukkit.World.Environment.valueOf(environment.toUpperCase(Locale.ROOT));
+            } catch(IllegalArgumentException invalid) {
+                throw new IllegalArgumentException("require-world environment must be normal, nether, the_end or custom",invalid);
+            }
+        }
+        List<Pattern> patterns=new ArrayList<>();
+        for(String pattern:request[0].split("\\|",-1))
+            patterns.add(wildcard(required(pattern,"world pattern")));
+        return new Instruction(Op.REQUIRE_WORLD,environment,0,0,0,0,0,
+            List.of(new ListenRoute(List.copyOf(patterns),parts[1].trim())));
     }
 
     private static Instruction parseAwait(String argument) {
@@ -465,11 +485,11 @@ public record BotScript(
                 if(instruction.op()==Op.ACTION)
                     requireTarget(actions,instruction.text(),"actions."+entry.getKey());
 
-                if(instruction.op()==Op.LISTEN || instruction.op()==Op.AWAIT)
+                if(instruction.op()==Op.LISTEN || instruction.op()==Op.AWAIT || instruction.op()==Op.REQUIRE_WORLD)
                     for(ListenRoute route:instruction.routes())
                         if(instruction.op()==Op.AWAIT || (!route.target().equalsIgnoreCase("close")
                             &&!route.target().equalsIgnoreCase("end")))
-                            requireTarget(actions,route.target(),"listen in "+entry.getKey());
+                            requireTarget(actions,route.target(),instruction.op().name().toLowerCase(Locale.ROOT)+" in "+entry.getKey());
             }
         }
 

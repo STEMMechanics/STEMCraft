@@ -197,11 +197,6 @@ public final class BotSession {
             if(closed) return;
         }
 
-        String wildernessAction=script.helpTopicAction("wilderness");
-        if(wildernessAction!=null&&script.wildernessGuide().recognises(world,input)) {
-            replyTo(wildernessAction);
-            return;
-        }
         for(BotScript.ListenRoute route:replyRoutes()) {
             if(!route.matches(input)) continue;
             replyTo(route.target());
@@ -235,6 +230,13 @@ public final class BotSession {
             switch(instruction.op()) {
                 case LISTEN -> { return instruction.routes(); }
                 case ACTION -> { nextAction=instruction.text(); nextPc=0; }
+                case REQUIRE_WORLD -> {
+                    if(!instruction.matchesWorld(actor.location().getWorld())) {
+                        nextAction=instruction.routes().getFirst().target();
+                        if(nextAction.equalsIgnoreCase("close")||nextAction.equalsIgnoreCase("end")) return List.of();
+                        nextPc=0;
+                    }
+                }
                 case END,CLOSE -> { return List.of(); }
                 default -> { }
             }
@@ -371,8 +373,16 @@ public final class BotSession {
                     nextGesture=age;
                 }
 
-                case WILDERNESS -> {
-                    var advice=script.wildernessGuide().advise(owner);
+                case REQUIRE_WORLD -> {
+                    if(!instruction.matchesWorld(owner.getWorld())) {
+                        String fallback=instruction.routes().getFirst().target();
+                        if(fallback.equalsIgnoreCase("close")||fallback.equalsIgnoreCase("end")) close();
+                        else jumpTo(fallback);
+                    }
+                }
+
+                case EXIT_REGION -> {
+                    var advice=script.regionGuide().advise(instruction.text(),owner);
                     var route=advice.route();
                     talkTarget=route==null?null:new Location(owner.getWorld(),route.x(),owner.getY()+1.4,route.z());
                     int duration=Math.max(1,output.talk(advice.message()));
