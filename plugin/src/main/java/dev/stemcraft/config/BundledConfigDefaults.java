@@ -30,6 +30,21 @@ public final class BundledConfigDefaults {
      * @return The restored path, or null if no bundled default section matched.
      */
     public static String restoreMissingSection(STEMCraft plugin, ConfigFile configFile, List<String> candidatePaths) {
+        return restoreMissingSection(plugin, configFile, candidatePaths, null);
+    }
+
+    /**
+     * Restores bundled defaults into a missing section at the supplied live path.
+     * This retains legacy feature aliases rather than creating a competing canonical section.
+     *
+     * @param plugin The plugin owning the bundled config.
+     * @param configFile The live config file to restore into.
+     * @param candidatePaths Bundled section paths in priority order.
+     * @param targetPath The live destination path, or null to retain the bundled path.
+     * @return The restored live path, or null if no bundled default section matched.
+     */
+    public static String restoreMissingSection(STEMCraft plugin, ConfigFile configFile,
+                                               List<String> candidatePaths, String targetPath) {
         if (plugin == null || configFile == null || candidatePaths == null || candidatePaths.isEmpty()) {
             return null;
         }
@@ -49,13 +64,14 @@ public final class BundledConfigDefaults {
                 continue;
             }
 
-            if (!copySection(configFile, defaults, sourcePath)) {
+            String restoredPath = targetPath == null ? sourcePath : targetPath;
+            if (restoredPath.isBlank() || !copySection(configFile, defaults, sourcePath, restoredPath)) {
                 continue;
             }
 
             configFile.save();
-            plugin.getLogger().info("Restored missing config section '" + sourcePath + "' from bundled defaults.");
-            return sourcePath;
+            plugin.getLogger().info("Restored missing config section '" + restoredPath + "' from bundled defaults.");
+            return restoredPath;
         }
 
         return null;
@@ -75,18 +91,19 @@ public final class BundledConfigDefaults {
         }
     }
 
-    private static boolean copySection(ConfigFile configFile, YamlConfiguration defaults, String sourcePath) {
+    private static boolean copySection(ConfigFile configFile, YamlConfiguration defaults,
+                                       String sourcePath, String targetPath) {
         ConfigurationSection source = defaults.getConfigurationSection(sourcePath);
         if (source == null) {
             return false;
         }
 
-        if (configFile.contains(sourcePath) && !configFile.isSection(sourcePath)) {
-            configFile.remove(sourcePath);
+        if (configFile.contains(targetPath) && !configFile.isSection(targetPath)) {
+            configFile.remove(targetPath);
         }
 
-        if (!configFile.isSection(sourcePath)) {
-            configFile.createSection(sourcePath);
+        if (!configFile.isSection(targetPath)) {
+            configFile.createSection(targetPath);
         }
 
         for (Map.Entry<String, Object> entry : source.getValues(true).entrySet()) {
@@ -100,7 +117,7 @@ public final class BundledConfigDefaults {
                 value = new ArrayList<>(list);
             }
 
-            configFile.set(sourcePath + "." + relativePath, value);
+            configFile.set(targetPath + "." + relativePath, value);
         }
 
         return true;

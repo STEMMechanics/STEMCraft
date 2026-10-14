@@ -1,0 +1,48 @@
+NAMED REGION NAME EXPANSION - SERVER TEST CHECKLIST
+
+Build: __________________  Date: ______________  Tester: _________________
+Tick each item after testing it on a test server.
+
+SETUP
+Use a copy of the server's config.yml and database. Install the updated JAR.
+Record an ordinary named region and one fallback region before restarting.
+Fallback names include Plains juwprfu and Forest followed by letters.
+
+[ ] N01 - Existing config gets the additional naming data
+    Restart the test server. Confirm config.yml now has:
+      named-regions.names.additional-sources
+    An older named_regions or features.* path keeps its current location.
+    Check forest, plains, the other biome types, mineshaft, village,
+    shipwreck, ruined-portal and default. Existing custom sources, forms,
+    pools and retirement-days must retain their previous values.
+
+[ ] N02 - Saved region names remain stable
+    Visit the ordinary and fallback regions recorded above. Their saved
+    names should be unchanged. Updating naming data does not rename them.
+
+[ ] N03 - Regenerate one existing fallback
+    Run /namedregion fallbacks plains or /namedregion fallbacks forest.
+    Pick a listed region ID and run /namedregion regenerate <id>.
+    Expect an ordinary name when a candidate is available. Confirm it in
+    /namedregion info, the coordinate bar and the map if enabled.
+
+[ ] N04 - Regenerate the remaining fallbacks
+    Run /namedregion regenerate * and wait for the completion message.
+    Confirm ordinary saved names were not changed. If fallbacks remain,
+    inspect /namedregion retired. To release reservations on the test
+    server, run /namedregion release *, then regenerate again.
+    Active names remain reserved; more regions than available candidates
+    can still leave fallbacks.
+
+[ ] N05 - Custom additional roots and opt-outs survive restarting
+    Save a copy of the new additional-sources section. Set forest to []
+    and give another type a custom list. Restart. Confirm neither entry
+    was replaced. Restore the saved section afterwards.
+
+[ ] N06 - Final live-server setup
+    Install the verified build and restart the live server. Confirm the
+    additional-sources section was installed. Regenerate fallback names
+    when ready. Restore any test-specific settings before doing this.
+
+Notes: _________________________________________________________________
+________________________________________________________________________
