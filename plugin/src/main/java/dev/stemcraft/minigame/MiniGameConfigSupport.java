@@ -21,6 +21,7 @@
 package dev.stemcraft.minigame;
 
 import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.minigame.ArenaValidationResult;
 import dev.stemcraft.api.minigame.MiniGameArena;
 import org.bukkit.Location;
@@ -33,7 +34,31 @@ import org.bukkit.World;
 import org.jetbrains.annotations.NotNull;
 
 public final class MiniGameConfigSupport {
+    public static final int DEFAULT_START_DELAY_SECONDS = 15;
     private MiniGameConfigSupport() {
+    }
+
+    /** Upgrade the original ten-second default to the standard thirty-second countdown. */
+    public static int timedRoundCountdown(ConfigSection section) {
+        int seconds = section.getInt("countdown", 30);
+        if (section.getInt("timing-version", 0) < 1) {
+            if (seconds == 10) {
+                seconds = 30;
+                section.set("countdown", seconds);
+            }
+            section.set("timing-version", 1);
+            section.save();
+        }
+        return seconds;
+    }
+
+    /** Preparation time on the playing floor, after the lobby countdown. */
+    public static int startDelaySeconds(ConfigSection section) {
+        if (!section.contains("start-delay-seconds")) {
+            section.set("start-delay-seconds", DEFAULT_START_DELAY_SECONDS);
+            section.save();
+        }
+        return section.getInt("start-delay-seconds", DEFAULT_START_DELAY_SECONDS);
     }
 
     public static @NotNull World requireWorld(@NotNull STEMCraftAPI api, @NotNull String arenaId, @NotNull String worldName) {
@@ -64,6 +89,18 @@ public final class MiniGameConfigSupport {
             int maximumSupportedPlayers,
             @NotNull ArenaValidationResult result
     ) {
+        validateArenaSpawns(api, arena, spawns, maximumSupportedPlayers, false, result);
+    }
+
+    /** Allow an empty spawn list for games that generate their own starting positions. */
+    public static void validateArenaSpawns(
+            @NotNull STEMCraftAPI api,
+            @NotNull MiniGameArena arena,
+            @NotNull List<Location> spawns,
+            int maximumSupportedPlayers,
+            boolean allowEmptySpawns,
+            @NotNull ArenaValidationResult result
+    ) {
         if (arena.getRegion() == null || !arena.world().equals(arena.getRegion().getWorld())) {
             result.addError("Select the full arena region in its world.", "arena");
         }
@@ -86,7 +123,7 @@ public final class MiniGameConfigSupport {
         if (arena.getMinPlayers() < 1 || arena.getMaxPlayers() < arena.getMinPlayers() || arena.getMaxPlayers() > maximumSupportedPlayers) {
             result.addError("Require 1 <= minplayers <= maxplayers <= " + maximumSupportedPlayers + ".", "players");
         }
-        if (spawns.size() < arena.getMaxPlayers()) {
+        if ((!allowEmptySpawns || !spawns.isEmpty()) && spawns.size() < arena.getMaxPlayers()) {
             result.addError("Add at least maxplayers starting spawns.", "spawns");
         }
         for (Location spawn : spawns) {

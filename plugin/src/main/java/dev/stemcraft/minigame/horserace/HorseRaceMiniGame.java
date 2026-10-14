@@ -9,6 +9,8 @@ import dev.stemcraft.minigame.BaseMiniGame;
 import dev.stemcraft.minigame.MiniGameHudConfigSupport;
 import org.bukkit.World;
 
+import java.util.List;
+
 
 public final class HorseRaceMiniGame extends BaseMiniGame {
     public static final String NAMESPACE = "horserace";
@@ -30,10 +32,13 @@ public final class HorseRaceMiniGame extends BaseMiniGame {
         game.registerArenaPlaceholder("objective", (a, _, _) -> handler.objective(a));
         game.registerArenaPlaceholder("winner", (a, _, _) -> a == null ? "-" : a.get("winner", String.class, "-"));
         game.registerPlayerPlaceholder("progress", (_, _, p) -> p == null ? "-" : handler.progress(p.arena(), p.getPlayer()));
+        game.registerArenaPlaceholder("laps", (a, _, _) -> a == null ? "-" : Integer.toString(settings(a).laps));
         configFile = api.config().load(NAMESPACE + ".yml");
         if (configFile == null) throw new IllegalStateException("Cannot load " + NAMESPACE + ".yml");
         configureRewards(game, configFile);
-        MiniGameHudConfigSupport.apply(game, configFile, MiniGameHudConfigSupport.timedRoundDefaults(TITLE));
+        MiniGameHudConfigSupport.applyTimedRound(game, configFile, TITLE, List.of(
+                ":location: <white>{player:progress}</white>",
+                ":info_blue: <white>Laps</white> <aqua>{arena:laps}</aqua>"));
         handler.registerListeners();
         new HorseRaceCommand(api, this).register();
         config = new HorseRaceConfig(api, this, configFile);

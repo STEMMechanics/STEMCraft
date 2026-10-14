@@ -74,7 +74,7 @@ class PunchTheBatArenaHandlerTest {
     }
 
     private SCRegion region() {
-        return new SCRegion(new CuboidRegion(BlockVector3.at(-10, 40, -10), BlockVector3.at(20, 80, 20)), world);
+        return new SCRegion(new CuboidRegion(BlockVector3.at(-1, 63, -1), BlockVector3.at(6, 67, 6)), world);
     }
 
     private void game() {
@@ -100,15 +100,22 @@ class PunchTheBatArenaHandlerTest {
     }
 
     @Test
-    void countdownJoinReturnsAssignedSpawnInsteadOfLobby() {
+    void countdownKeepsInitialAndLateJoiningPlayersInLobby() {
         game();
         Player first = join();
+        first.teleport(arena.getLobbySpawn());
         status = STARTING;
         handler.onArenaStatusChanged(arena, WAITING, STARTING);
-        assertEquals(settings.spawns.getFirst(), handler.onPlayerJoinArena(arena, first));
+        assertEquals(arena.getLobbySpawn(), first.getLocation());
+        assertEquals(arena.getLobbySpawn(), handler.onPlayerJoinArena(arena, first));
         settings.spawns.add(new Location(world, 3, 64, 3));
         Player second = join();
-        assertEquals(settings.spawns.get(1), handler.onPlayerJoinArena(arena, second));
+        second.teleport(handler.onPlayerJoinArena(arena, second));
+        assertEquals(arena.getLobbySpawn(), second.getLocation());
+        handler.onArenaCountdownEnd(arena);
+        assertEquals(RUNNING, status);
+        assertEquals(settings.spawns.getFirst(), first.getLocation());
+        assertEquals(settings.spawns.get(1), second.getLocation());
     }
 
     @Test
@@ -143,6 +150,95 @@ class PunchTheBatArenaHandlerTest {
         verify(arena.getPlayer(player), times(1)).setScore(5);
         verify(bat, times(1)).remove();
         verify(hit, atLeastOnce()).setCancelled(true);
+    }
+
+    @Test
+    void emptyListsAllowRandomSpawnsButConfiguredPlayersStillRequireCapacity() {
+        game();
+        settings.spawns.clear();
+        when(arena.getMaxPlayers()).thenReturn(2);
+        var result = ArenaValidationResult.success();
+        handler.validate(arena, result);
+        assertFalse(result.hasErrors(), result.getErrors().toString());
+        settings.spawns.add(new Location(world, 1.5, 64, 1.5));
+        result = ArenaValidationResult.success();
+        handler.validate(arena, result);
+        assertTrue(result.hasErrors());
+        settings.spawns.add(new Location(world, 2.5, 64, 2.5));
+        result = ArenaValidationResult.success();
+        handler.validate(arena, result);
+        assertFalse(result.hasErrors(), result.getErrors().toString());
+    }
+
+    @Test
+    void randomSpawnsRequireSafeGroundAndHeadroom() {
+        game();
+        settings.spawns.clear();
+        when(arena.getRegion()).thenReturn(new SCRegion(
+                new CuboidRegion(BlockVector3.at(0, 64, 0), BlockVector3.at(0, 65, 0)), world));
+        world.getBlockAt(0, 63, 0).setType(Material.MAGMA_BLOCK);
+        var result = ArenaValidationResult.success();
+        handler.validate(arena, result);
+        assertTrue(result.hasErrors());
+        world.getBlockAt(0, 63, 0).setType(Material.STONE);
+        world.getBlockAt(0, 65, 0).setType(Material.STONE);
+        result = ArenaValidationResult.success();
+        handler.validate(arena, result);
+        assertTrue(result.hasErrors());
+        world.getBlockAt(0, 65, 0).setType(Material.AIR);
+        result = ArenaValidationResult.success();
+        handler.validate(arena, result);
+        assertFalse(result.hasErrors(), result.getErrors().toString());
+    }
+
+    @Test
+    void randomPlayersWaitInLobbyThenUseDistinctSafePositions() {
+        game();
+        settings.spawns.clear();
+        Player first = join();
+        first.teleport(arena.getLobbySpawn());
+        status = STARTING;
+        handler.onArenaStatusChanged(arena, WAITING, STARTING);
+        Player second = join();
+        second.teleport(handler.onPlayerJoinArena(arena, second));
+        assertEquals(arena.getLobbySpawn(), first.getLocation());
+        assertEquals(arena.getLobbySpawn(), second.getLocation());
+        handler.onArenaCountdownEnd(arena);
+        for (Player p : players) {
+            assertEquals(64, p.getLocation().getY());
+            assertTrue(arena.getRegion().contains(p.getLocation()));
+            assertEquals(Material.STONE, p.getLocation().subtract(0, 1, 0).getBlock().getType());
+        }
+        assertNotEquals(first.getLocation(), second.getLocation());
+        assertTrue(settings.spawns.isEmpty());
+    }
+
+    @Test
+    void emptyTargetListSpawnsAndReplacesBatsAtReachableLocations() {
+        game();
+        join();
+        settings.targetCount = 2;
+        org.bukkit.World spawnWorld = spy(world);
+        List<org.bukkit.entity.Bat> bats = new ArrayList<>();
+        doAnswer(invocation -> {
+            Location at = invocation.getArgument(0);
+            assertEquals(64.5, at.getY());
+            assertTrue(arena.getRegion().contains(at));
+            var bat = mock(org.bukkit.entity.Bat.class);
+            when(bat.getUniqueId()).thenReturn(UUID.randomUUID());
+            when(bat.isValid()).thenReturn(true);
+            when(bat.getLocation()).thenReturn(at);
+            bats.add(bat);
+            return bat;
+        }).when(spawnWorld).spawn(any(Location.class), eq(org.bukkit.entity.Bat.class));
+        Runnable tick = start();
+        when(arena.world()).thenReturn(spawnWorld);
+        for (int i = 0; i < 5; i++) tick.run();
+        assertEquals(2, bats.size());
+        when(bats.getFirst().isValid()).thenReturn(false);
+        for (int i = 0; i < 5; i++) tick.run();
+        assertEquals(3, bats.size());
+        assertTrue(settings.targets.isEmpty());
     }
 
     @Test

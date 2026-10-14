@@ -1,5 +1,6 @@
 package dev.stemcraft.minigame;
 
+import dev.stemcraft.hologram.LeaderboardLayout;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -41,13 +42,14 @@ public final class TimedRecordLeaderboard {
             return lines;
         }
 
+        List<String> rows = new ArrayList<>();
         int rank = 1;
         for (Entry entry : sorted) {
             String template = rank == 1
                 ? Objects.requireNonNullElse(options.firstLine(), options.line())
                 : options.line();
             String formattedTime = formatMillis(entry.timeMillis());
-            lines.add(template
+            rows.add(template
                 .replace("{rank}", Integer.toString(rank))
                 .replace("{player}", entry.playerName())
                 .replace("{time}", formattedTime)
@@ -55,6 +57,7 @@ public final class TimedRecordLeaderboard {
             rank++;
         }
 
+        lines.addAll(LeaderboardLayout.align(rows));
         return lines;
     }
 
@@ -81,8 +84,8 @@ public final class TimedRecordLeaderboard {
     private static @NotNull Options parseOptions(@NotNull String defaultTitle, @NotNull List<String> data) {
         String title = defaultTitle;
         int limit = DEFAULT_LIMIT;
-        String line = "<yellow>{rank}.</yellow> <aqua>{player}</aqua> <dark_gray>-</dark_gray> <gold>{time}</gold>";
-        String firstLine = "<gold>{rank}.</gold> <yellow>{player}</yellow> <dark_gray>-</dark_gray> <gold>{time}</gold>";
+        String line = "<yellow>{rank}.</yellow>{rank-gap}<aqua>{player}</aqua>{gap}<gold>{time}</gold>";
+        String firstLine = "<gold>{rank}.</gold>{rank-gap}<yellow>{player}</yellow>{gap}<gold>{time}</gold>";
 
         for (String rawLine : data) {
             int separator = rawLine.indexOf('=');

@@ -116,8 +116,7 @@ public class UnderhallsFeature extends BaseFeature {
         });
         listen(org.bukkit.event.entity.CreatureSpawnEvent.class, EventPriority.HIGHEST, event -> {
             if (isMaze(event.getLocation().getWorld()) &&
-                (event.getSpawnReason() == org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.NATURAL ||
-                 event.getSpawnReason() == org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.CHUNK_GEN)) event.setCancelled(true);
+                event.getSpawnReason() == org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.NATURAL) event.setCancelled(true);
         });
         listen(PlayerMoveEvent.class, EventPriority.MONITOR, this::move);
         listen(PlayerJoinEvent.class, EventPriority.MONITOR, e -> cooldowns.put(e.getPlayer().getUniqueId(), System.currentTimeMillis() + 5000));

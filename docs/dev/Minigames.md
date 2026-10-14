@@ -298,3 +298,18 @@ For plugin developers, the important API types are:
 - `MiniGameTeam`
 
 This lets new minigames follow the same runtime contract as the built-in ones.
+
+## BedWars timing
+
+Each arena supports `round-seconds` in `bedwars.yml` under `arenas.<arena>`.
+It defaults to `1800` (30 minutes); a match can finish earlier when only one team remains.
+Durations are in seconds, with a minimum of 1.
+
+- `/bedwars set <arena> roundseconds 900` — set a 15-minute match limit.
+- `/bedwars set <arena> startcountdown 30` — set the starting countdown (`start-countdown-seconds`).
+- `/bedwars set <arena> endingseconds 20` — set the ending countdown (`ending-seconds`).
+- `/bedwars info <arena>` — view the configured durations.
+- `/bedwars save <arena>` — persist changes to the arena configuration.
+
+Changes apply when the corresponding countdown next starts; an active countdown is unchanged.
+After editing the YAML directly, use `/bedwars reload` to load it.

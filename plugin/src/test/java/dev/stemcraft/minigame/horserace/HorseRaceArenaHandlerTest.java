@@ -100,15 +100,22 @@ class HorseRaceArenaHandlerTest {
     }
 
     @Test
-    void countdownJoinReturnsAssignedSpawnInsteadOfLobby() {
+    void countdownKeepsInitialAndLateJoiningPlayersInLobby() {
         game();
         Player first = join();
+        first.teleport(arena.getLobbySpawn());
         status = STARTING;
         handler.onArenaStatusChanged(arena, WAITING, STARTING);
-        assertEquals(settings.spawns.getFirst(), handler.onPlayerJoinArena(arena, first));
+        assertEquals(arena.getLobbySpawn(), first.getLocation());
+        assertEquals(arena.getLobbySpawn(), handler.onPlayerJoinArena(arena, first));
         settings.spawns.add(new Location(world, 3, 64, 3));
         Player second = join();
-        assertEquals(settings.spawns.get(1), handler.onPlayerJoinArena(arena, second));
+        second.teleport(handler.onPlayerJoinArena(arena, second));
+        assertEquals(arena.getLobbySpawn(), second.getLocation());
+        handler.onArenaCountdownEnd(arena);
+        assertEquals(RUNNING, status);
+        assertEquals(settings.spawns.getFirst(), first.getLocation());
+        assertEquals(settings.spawns.get(1), second.getLocation());
     }
 
     @Test

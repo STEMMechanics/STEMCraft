@@ -1,6 +1,7 @@
 package dev.stemcraft.minigame.quake;
 
 import dev.stemcraft.STEMCraft;
+import dev.stemcraft.minigame.MiniGameArenaInfoSupport;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.minigame.MiniGameArena;
@@ -73,8 +74,11 @@ final class QuakeCommand {
             return;
         }
         switch (action) {
-            case "info", "validate" -> {
-                ctx.info(a.id() + ": " + a.getStatus() + "; spawns=" + owner.settings(a).spawns.size());
+            case "info" -> {
+                showInfo(ctx, a);
+                return;
+            }
+            case "validate" -> {
                 var result = a.validate();
                 if (!result.hasErrors()) ctx.success("Arena setup is valid.");
                 else result.getErrors().forEach(ctx::warn);
@@ -189,6 +193,14 @@ final class QuakeCommand {
         }
         owner.save(a);
         ctx.success("Setup saved. Use validate to check remaining steps.");
+    }
+
+    private void showInfo(CommandContext ctx, MiniGameArena a) {
+        QuakeArenaSettings d = owner.settings(a);
+        MiniGameArenaInfoSupport.common(ctx, a, d.countdown, d.roundSeconds);
+        MiniGameArenaInfoSupport.locations(ctx, "Starting spawns", d.spawns);
+        ctx.info(" - Kill target: " + d.killTarget);
+        ctx.info(" - Reload: " + d.reloadTicks + " ticks");
     }
 
     private Player player(CommandContext ctx) {

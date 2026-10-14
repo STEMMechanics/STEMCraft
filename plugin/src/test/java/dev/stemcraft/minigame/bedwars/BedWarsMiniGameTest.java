@@ -19,6 +19,18 @@ import static org.mockito.Mockito.when;
 
 class BedWarsMiniGameTest {
     @Test
+    void roundDurationDefaultsToThirtyMinutesAndSupportsOverrides() {
+        BedWarsMiniGame game = new BedWarsMiniGame(null);
+        MiniGameArena arena = mock(MiniGameArena.class);
+        when(arena.get("roundSeconds", Integer.class, 1800)).thenReturn(1800, 900, 0, -10);
+
+        assertEquals(1800, game.roundSeconds(arena));
+        assertEquals(900, game.roundSeconds(arena));
+        assertEquals(1, game.roundSeconds(arena));
+        assertEquals(1, game.roundSeconds(arena));
+    }
+
+    @Test
     void scoreboardTeamsHideUnusedTeamsButKeepEliminatedTeamsVisible() {
         BedWarsMiniGame game = new BedWarsMiniGame(null);
         MiniGameArena arena = mock(MiniGameArena.class);

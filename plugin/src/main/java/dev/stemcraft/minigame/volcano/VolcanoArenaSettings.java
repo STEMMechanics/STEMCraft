@@ -1,6 +1,7 @@
 package dev.stemcraft.minigame.volcano;
 
 import dev.stemcraft.api.model.SCRegion;
+import dev.stemcraft.minigame.MiniGameConfigSupport;
 import org.bukkit.Location;
 
 import java.util.ArrayList;
@@ -13,5 +14,6 @@ final class VolcanoArenaSettings {
     final List<Location> spawns = new ArrayList<>();
     SCRegion floor;
     int roundSeconds = 180;
-    int countdown = 10;
+    int countdown = 30;
+    int startDelaySeconds = MiniGameConfigSupport.DEFAULT_START_DELAY_SECONDS;
 }

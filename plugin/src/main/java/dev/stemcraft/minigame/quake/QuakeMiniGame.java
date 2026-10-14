@@ -9,6 +9,8 @@ import dev.stemcraft.minigame.BaseMiniGame;
 import dev.stemcraft.minigame.MiniGameHudConfigSupport;
 import org.bukkit.World;
 
+import java.util.List;
+
 
 public final class QuakeMiniGame extends BaseMiniGame {
     public static final String NAMESPACE = "quake";
@@ -30,10 +32,13 @@ public final class QuakeMiniGame extends BaseMiniGame {
         game.registerArenaPlaceholder("objective", (a, _, _) -> handler.objective(a));
         game.registerArenaPlaceholder("winner", (a, _, _) -> a == null ? "-" : a.get("winner", String.class, "-"));
         game.registerPlayerPlaceholder("progress", (_, _, p) -> p == null ? "-" : handler.progress(p.arena(), p.getPlayer()));
+        game.registerArenaPlaceholder("kill-target", (a, _, _) -> a == null ? "-" : Integer.toString(settings(a).killTarget));
         configFile = api.config().load(NAMESPACE + ".yml");
         if (configFile == null) throw new IllegalStateException("Cannot load " + NAMESPACE + ".yml");
         configureRewards(game, configFile);
-        MiniGameHudConfigSupport.apply(game, configFile, MiniGameHudConfigSupport.timedRoundDefaults(TITLE));
+        MiniGameHudConfigSupport.applyTimedRound(game, configFile, TITLE, List.of(
+                ":swords: <white>Kills</white> <red>{player:kills}</red><white> / </white><yellow>{arena:kill-target}</yellow>",
+                ":skeleton_head_front: <white>Deaths</white> <red>{player:deaths}</red>"));
         handler.registerListeners();
         new QuakeCommand(api, this).register();
         config = new QuakeConfig(api, this, configFile);

@@ -85,6 +85,9 @@ public class BedWarsCommand {
             .tabCompletion("set", "{bedwars-arenas}", "lobbyregion")
             .tabCompletion("set", "{bedwars-arenas}", "teamspawn", "{bedwars-arena-teams:$1}")
             .tabCompletion("set", "{bedwars-arenas}", "teambed", "{bedwars-arena-teams:$1}")
+            .tabCompletion("set", "{bedwars-arenas}", "roundseconds")
+            .tabCompletion("set", "{bedwars-arenas}", "startcountdown")
+            .tabCompletion("set", "{bedwars-arenas}", "endingseconds")
             .tabCompletion("set", "{bedwars-arenas}", "teamsize")
             .tabCompletion("set", "{bedwars-arenas}", "teamselection")
             .tabCompletion("set", "{bedwars-arenas}", "teamselection", "none")
@@ -195,6 +198,7 @@ public class BedWarsCommand {
         ctx.info(" - Players: " + arena.numPlayers() + "/" + arena.getMaxPlayers());
         ctx.info(" - Spectators: " + arena.numSpectators());
         ctx.info(" - Teams: " + arena.getTeams().size());
+        ctx.info(" - Round seconds: " + bedWars.roundSeconds(arena));
         ctx.info(" - Start countdown: " + bedWars.startCountdownSeconds(arena) + " sec");
         ctx.info(" - Reset countdown: " + bedWars.endingSeconds(arena) + " sec");
         ctx.info(" - Team size: " + arena.get("teamSize", Integer.class, 1));
@@ -536,6 +540,24 @@ public class BedWarsCommand {
                 team.set("bedRegion", selection.copy());
                 showRegionPreview(player, "teambed-" + team.getName(), selection);
                 ctx.success("Bed region updated for team '" + team.getName() + "' in arena '" + arena.id() + "'.");
+            }
+            case "roundseconds" -> {
+                ctx.checkArgsSizeAtLeast(4);
+                int seconds = ctx.getArgAsInt(3, BedWarsConfig.DEFAULT_ROUND_SECONDS, 1, null);
+                arena.set("roundSeconds", seconds);
+                ctx.success("Round duration set to " + seconds + " seconds for arena '" + arena.id() + "'.");
+            }
+            case "startcountdown" -> {
+                ctx.checkArgsSizeAtLeast(4);
+                int seconds = ctx.getArgAsInt(3, BedWarsConfig.DEFAULT_START_COUNTDOWN_SECONDS, 1, null);
+                arena.set("startCountdownSeconds", seconds);
+                ctx.success("Start countdown set to " + seconds + " seconds for arena '" + arena.id() + "'.");
+            }
+            case "endingseconds" -> {
+                ctx.checkArgsSizeAtLeast(4);
+                int seconds = ctx.getArgAsInt(3, BedWarsConfig.DEFAULT_ENDING_SECONDS, 1, null);
+                arena.set("endingSeconds", seconds);
+                ctx.success("Ending countdown set to " + seconds + " seconds for arena '" + arena.id() + "'.");
             }
             case "teamsize" -> {
                 ctx.checkArgsSizeAtLeast(4);
