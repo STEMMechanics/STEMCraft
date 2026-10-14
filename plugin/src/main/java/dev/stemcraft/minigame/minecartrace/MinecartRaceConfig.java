@@ -36,6 +36,7 @@ final class MinecartRaceConfig {
         s.set("max-players", a.getMaxPlayers());
         s.set("round-seconds", d.roundSeconds);
         s.set("countdown", d.countdown);
+        s.set("timing-version", 1);
         s.set("laps", d.laps);
         config.save();
     }
@@ -64,7 +65,7 @@ final class MinecartRaceConfig {
                 for (String value : s.getStringList("checkpoints"))
                     d.checkpoints.add(SCRegion.fromString(value, world));
                 d.roundSeconds = s.getInt("round-seconds", 180);
-                d.countdown = s.getInt("countdown", 10);
+                d.countdown = MiniGameConfigSupport.timedRoundCountdown(s);
                 d.laps = s.getInt("laps", 3);
                 var validation = a.validate();
                 if (validation.hasErrors())

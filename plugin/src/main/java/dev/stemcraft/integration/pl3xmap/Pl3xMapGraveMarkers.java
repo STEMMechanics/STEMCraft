@@ -28,10 +28,17 @@ public final class Pl3xMapGraveMarkers {
     private static final String ICON_KEY = "stemcraft_gravestone";
     private final STEMCraft plugin;
     private final Supplier<Collection<GraveMapMarker>> graves;
+    private final int updateIntervalSeconds;
 
+    /** The supplier publishes an immutable snapshot, replacing it only when graves change. */
     public Pl3xMapGraveMarkers(STEMCraft plugin, Supplier<Collection<GraveMapMarker>> graves) {
+        this(plugin, graves, 10);
+    }
+
+    public Pl3xMapGraveMarkers(STEMCraft plugin, Supplier<Collection<GraveMapMarker>> graves, int updateIntervalSeconds) {
         this.plugin = plugin;
         this.graves = graves;
+        this.updateIntervalSeconds = Math.clamp(updateIntervalSeconds, 1, 3600);
     }
 
     public void enable() {
@@ -58,9 +65,12 @@ public final class Pl3xMapGraveMarkers {
     }
 
     private final class GraveLayer extends WorldLayer {
+        private Collection<GraveMapMarker> snapshot;
+        private List<Marker<?>> markers = List.of();
+
         private GraveLayer(World world) {
             super(LAYER_KEY, world, () -> "Graves");
-            setUpdateInterval(1);
+            setUpdateInterval(updateIntervalSeconds);
             setLiveUpdate(true);
             setShowControls(true);
             setDefaultHidden(false);
@@ -69,16 +79,20 @@ public final class Pl3xMapGraveMarkers {
         }
 
         @Override
-        public Collection<Marker<?>> getMarkers() {
-            List<Marker<?>> markers = new ArrayList<>();
-            graves.get().stream()
+        public synchronized Collection<Marker<?>> getMarkers() {
+            Collection<GraveMapMarker> current = graves.get();
+            if (current == snapshot) return markers;
+            List<Marker<?>> updated = new ArrayList<>();
+            current.stream()
                 .filter(grave -> grave.world().equals(getWorld().getName()))
-                .forEach(grave -> markers.add(Marker.icon(grave.id().toString(), grave.x(), grave.z(), ICON_KEY, 24)
+                .forEach(grave -> updated.add(Marker.icon(grave.id().toString(), grave.x(), grave.z(), ICON_KEY, 24)
                     .setOptions(Options.builder()
                         .tooltipContent(escapeHtml(grave.ownerName()) + "'s grave<br>"
                             + grave.x() + ", " + grave.y() + ", " + grave.z())
                         .tooltipDirection(Tooltip.Direction.RIGHT)
                         .build())));
+            markers = List.copyOf(updated);
+            snapshot = current;
             return markers;
         }
     }

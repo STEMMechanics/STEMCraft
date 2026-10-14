@@ -205,6 +205,7 @@ public class BedWarsMiniGame extends BaseMiniGame {
             .setSpectatorSpawn(world.getSpawnLocation())
             .setMinPlayers(2)
             .setMaxPlayers(8)
+            .set("roundSeconds", BedWarsConfig.DEFAULT_ROUND_SECONDS)
             .set("startCountdownSeconds", BedWarsConfig.DEFAULT_START_COUNTDOWN_SECONDS)
             .set("endingSeconds", BedWarsConfig.DEFAULT_ENDING_SECONDS)
             .set("teamSize", 1)
@@ -276,6 +277,7 @@ public class BedWarsMiniGame extends BaseMiniGame {
                     .setMinPlayers(arenaDef.minPlayers())
                     .setMaxPlayers(arenaDef.maxPlayers())
                     .set("arenaRegion", arenaDef.arenaRegion())
+                    .set("roundSeconds", arenaDef.roundSeconds())
                     .set("startCountdownSeconds", arenaDef.startCountdownSeconds())
                     .set("endingSeconds", arenaDef.endingSeconds())
                     .set("teamSize", arenaDef.teamSize())
@@ -328,6 +330,10 @@ public class BedWarsMiniGame extends BaseMiniGame {
     public String arenaStatKey(@NotNull String suffix, @NotNull String arenaId) {
         String normalized = arenaId.trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_.-]", "_");
         return namespace + "_" + suffix + "_" + normalized;
+    }
+
+    public int roundSeconds(@NotNull MiniGameArena arena) {
+        return Math.max(1, arena.get("roundSeconds", Integer.class, BedWarsConfig.DEFAULT_ROUND_SECONDS));
     }
 
     public int startCountdownSeconds(@NotNull MiniGameArena arena) {

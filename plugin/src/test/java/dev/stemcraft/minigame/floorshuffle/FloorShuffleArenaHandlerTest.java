@@ -7,6 +7,7 @@ import dev.stemcraft.api.minigame.*;
 import dev.stemcraft.api.model.SCRegion;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.junit.jupiter.api.*;
 import org.mockbukkit.mockbukkit.MockBukkit;
@@ -15,6 +16,7 @@ import org.mockbukkit.mockbukkit.world.WorldMock;
 import org.mockito.ArgumentCaptor;
 
 import java.util.*;
+import java.time.Duration;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -101,15 +103,262 @@ class FloorShuffleArenaHandlerTest {
     }
 
     @Test
-    void countdownJoinReturnsAssignedSpawnInsteadOfLobby() {
+    void soloJoinStaysInLobbyUntilCountdownEnds() {
         game();
         Player first = join();
-        status = STARTING;
-        handler.onArenaStatusChanged(arena, WAITING, STARTING);
-        assertEquals(settings.spawns.getFirst(), handler.onPlayerJoinArena(arena, first));
+        status = WAITING;
+        first.teleport(handler.onPlayerJoinArena(arena, first));
+        ArgumentCaptor<Runnable> callback = ArgumentCaptor.forClass(Runnable.class);
+        verify(api.tasks()).runLater(eq(1L), callback.capture());
+        callback.getValue().run();
+        assertEquals(STARTING, status);
+        verify(arena).setCountdown(30);
+        assertEquals(arena.getLobbySpawn(), first.getLocation());
+
         settings.spawns.add(new Location(world, 3, 64, 3));
         Player second = join();
-        assertEquals(settings.spawns.get(1), handler.onPlayerJoinArena(arena, second));
+        second.teleport(handler.onPlayerJoinArena(arena, second));
+        assertEquals(arena.getLobbySpawn(), second.getLocation());
+        handler.onArenaCountdownEnd(arena);
+        assertEquals(PREPARATION, status);
+        assertEquals(settings.spawns.getFirst(), first.getLocation());
+        assertEquals(settings.spawns.get(1), second.getLocation());
+        verify(arena).setStatus(PREPARATION, 15);
+        verify(api.tasks(), never()).repeating(eq("minigame:floorshuffle:test"), eq(2L), any(Runnable.class));
+        assertEquals("Get ready!", handler.objective(arena));
+        Location readyPosition = new Location(world, 2.5, 64, 2.5, 120, 20);
+        first.teleport(readyPosition);
+        settings.spawns.add(new Location(world, 4.5, 64, 4.5));
+        Player third = join();
+        third.teleport(handler.onPlayerJoinArena(arena, third));
+        assertEquals(settings.spawns.get(2), third.getLocation());
+        handler.onArenaCountdownEnd(arena);
+        assertEquals(RUNNING, status);
+        assertEquals(readyPosition, first.getLocation());
+        verify(arena).setStatus(RUNNING, settings.roundSeconds);
+    }
+
+    @Test
+    void unconfiguredSpawnsPlaceAllPlayersAboveFloorAfterLobbyCountdown() {
+        game();
+        settings.spawns.clear();
+        Player first = join();
+        first.teleport(arena.getLobbySpawn());
+        status = STARTING;
+        handler.onArenaStatusChanged(arena, WAITING, STARTING);
+        assertEquals(arena.getLobbySpawn(), first.getLocation());
+        Player second = join();
+        second.teleport(handler.onPlayerJoinArena(arena, second));
+        assertEquals(arena.getLobbySpawn(), second.getLocation());
+
+        handler.onArenaCountdownEnd(arena);
+        assertAboveFloor(first.getLocation());
+        assertAboveFloor(second.getLocation());
+        assertTrue(settings.spawns.isEmpty());
+    }
+
+    @Test
+    void zeroStartDelaySkipsPreparation() {
+        game();
+        join();
+        settings.startDelaySeconds = 0;
+        status = STARTING;
+        handler.onArenaStatusChanged(arena, WAITING, STARTING);
+        handler.onArenaCountdownEnd(arena);
+        assertEquals(RUNNING, status);
+        verify(arena, never()).setStatus(eq(PREPARATION), anyInt());
+    }
+
+    @Test
+    void leavingDuringPreparationCancelsTheRoundAndRestoresTheFloor() {
+        game();
+        Player player = join();
+        status = STARTING;
+        handler.onArenaStatusChanged(arena, WAITING, STARTING);
+        handler.onArenaCountdownEnd(arena);
+        assertEquals(PREPARATION, status);
+        players.remove(player);
+        handler.onPlayerLeaveArena(arena, player);
+        assertEquals(WAITING, status);
+        handler.onArenaCountdownEnd(arena);
+        assertEquals(WAITING, status);
+        verify(api.tasks(), never()).repeating(eq("minigame:floorshuffle:test"), eq(2L), any(Runnable.class));
+    }
+
+    @Test
+    void reusedRandomFloorTilesDoNotShiftSpawnPositions() {
+        game();
+        settings.spawns.clear();
+        settings.floor = region(0, 63, 0, 5, 63, 0);
+        when(arena.getMaxPlayers()).thenReturn(7);
+        // Seven players on six tiles guarantees that a random tile is reused.
+        for (int i = 0; i < 7; i++) join();
+
+        start();
+
+        for (Player player : players) assertAboveFloor(player.getLocation());
+        for (int x = 0; x < 6; x++) {
+            assertEquals(new Location(world, x, 63, 0), world.getBlockAt(x, 63, 0).getLocation());
+        }
+    }
+
+    private void assertAboveFloor(Location spawn) {
+        assertEquals(world, spawn.getWorld());
+        assertEquals(64, spawn.getY());
+        assertEquals(spawn.getBlockX() + 0.5, spawn.getX());
+        assertEquals(spawn.getBlockZ() + 0.5, spawn.getZ());
+        assertTrue(settings.floor.contains(spawn.clone().subtract(0, 1, 0)));
+    }
+
+    @Test
+    void validationAllowsNoSpawnsButRequiresFullCapacityWhenConfigured() {
+        game();
+        when(arena.getMaxPlayers()).thenReturn(2);
+        settings.spawns.clear();
+        var result = ArenaValidationResult.success();
+        handler.validate(arena, result);
+        assertFalse(result.hasErrors(), result.getErrors().toString());
+
+        settings.spawns.add(new Location(world, 1.5, 64, 1.5));
+        result = ArenaValidationResult.success();
+        handler.validate(arena, result);
+        assertTrue(result.getErrors().contains("Add at least maxplayers starting spawns."));
+
+        settings.spawns.add(new Location(world, 3.5, 64, 3.5));
+        result = ArenaValidationResult.success();
+        handler.validate(arena, result);
+        assertFalse(result.hasErrors(), result.getErrors().toString());
+    }
+
+    @Test
+    void fallingBelowFloorOnlyEliminatesAfterLeavingArena() {
+        game();
+        Player player = join();
+        Runnable tick = start();
+        player.teleport(new Location(world, 2, 60, 2));
+        tick.run();
+        verify(arena, never()).addSpectator(player);
+        assertEquals(RUNNING, status);
+
+        player.teleport(new Location(world, 2, 39, 2));
+        tick.run();
+        verify(arena).addSpectator(player);
+        verify(arena).setStatus(ENDING, 20);
+    }
+
+    @Test
+    void colourAnnouncementUsesConfiguredChatAndTwoSecondTitle() {
+        game();
+        game.textFormat = new FloorShuffleTextFormat(
+                "<{colour-tag}>Go to {colour}</{colour-tag}>",
+                "<{colour-tag}>{colour} NOW</{colour-tag}>", "Stay safe", "Target: {colour}");
+        Player player = join();
+        start();
+        ArgumentCaptor<String> title = ArgumentCaptor.forClass(String.class);
+        verify(arena).showTitle(title.capture(), eq("Stay safe"), eq(Duration.ZERO), eq(Duration.ofSeconds(2)), eq(Duration.ZERO));
+        Material colour = List.of(Material.RED_CONCRETE, Material.BLUE_CONCRETE, Material.YELLOW_CONCRETE,
+                        Material.LIME_CONCRETE, Material.ORANGE_CONCRETE, Material.PURPLE_CONCRETE).stream()
+                .filter(m -> title.getValue().equals(FloorShuffleTextFormat.render(game.textFormat.title(), m)))
+                .findFirst().orElseThrow();
+        verify(api.messages()).info(player, FloorShuffleTextFormat.render(game.textFormat.chat(), colour));
+        assertEquals(FloorShuffleTextFormat.render(game.textFormat.objective(), colour), handler.objective(arena));
+    }
+
+    @Test
+    void unsafeTilesFlashTwiceBeforeDisappearingWhileSafeTilesStaySolid() {
+        game();
+        join();
+        Runnable tick = start();
+        Map<Block, Material> tiles = floorMaterials();
+        Material safe = tiles.values().stream()
+                .filter(m -> handler.objective(arena).contains(m.name().replace("_CONCRETE", "")))
+                .findFirst().orElseThrow();
+        for (int i = 0; i < 45; i++) tick.run(); // Tick 90, before the first flash.
+        assertEquals(tiles, floorMaterials());
+        tick.run(); // Tick 92: first flash.
+        assertFlashingTiles(tiles, safe);
+        for (int i = 0; i < 3; i++) tick.run(); // Tick 98: original colours.
+        assertEquals(tiles, floorMaterials());
+        for (int i = 0; i < 3; i++) tick.run(); // Tick 104: second flash.
+        assertFlashingTiles(tiles, safe);
+        for (int i = 0; i < 3; i++) tick.run(); // Tick 110: original colours.
+        assertEquals(tiles, floorMaterials());
+        for (int i = 0; i < 3; i++) tick.run(); // Tick 116: disappear.
+        tiles.forEach((block, material) -> assertEquals(material == safe ? safe : Material.AIR, block.getType()));
+        for (int i = 0; i < 25; i++) tick.run(); // Next challenge restores all tiles.
+        assertTrue(floorMaterials().values().stream().allMatch(m -> m.isSolid() && m != Material.WHITE_CONCRETE));
+    }
+
+    private void assertFlashingTiles(Map<Block, Material> tiles, Material safe) {
+        tiles.forEach((block, material) -> assertEquals(material == safe ? safe : Material.WHITE_CONCRETE, block.getType()));
+    }
+
+    private Map<Block, Material> floorMaterials() {
+        Map<Block, Material> materials = new LinkedHashMap<>();
+        for (int x = 0; x < 6; x++) for (int z = 0; z < 6; z++) {
+            Block block = world.getBlockAt(x, 63, z);
+            materials.put(block, block.getType());
+        }
+        return materials;
+    }
+
+    @Test
+    void lobbyShuffleUsesConfiguredIntervalAndCannotOverwriteRunningOrStoppedFloor() {
+        game();
+        settings.lobbyShuffleSeconds = 7;
+        status = WAITING;
+        handler.onArenaStatusChanged(arena, DISABLED, WAITING);
+        ArgumentCaptor<Runnable> callback = ArgumentCaptor.forClass(Runnable.class);
+        verify(api.tasks()).repeating(eq("minigame:floorshuffle:test:lobby"), eq(140L), callback.capture());
+        assertTrue(floorMaterials().values().stream().noneMatch(m -> m == Material.STONE));
+        world.getBlockAt(0, 63, 0).setType(Material.STONE);
+        callback.getValue().run();
+        assertNotEquals(Material.STONE, world.getBlockAt(0, 63, 0).getType());
+
+        join();
+        Runnable gameTick = start();
+        Map<Block, Material> runningTiles = floorMaterials();
+        callback.getValue().run(); // Stale waiting callback must not change the running floor.
+        assertEquals(runningTiles, floorMaterials());
+        for (int i = 0; i < 46; i++) gameTick.run(); // Stop during the first warning flash.
+        handler.onArenaUnload(arena);
+        callback.getValue().run();
+        gameTick.run();
+        assertTrue(floorMaterials().values().stream().allMatch(m -> m == Material.STONE));
+        verify(api.tasks(), atLeastOnce()).cancel("minigame:floorshuffle:test:lobby");
+    }
+
+    @Test
+    void countdownLobbyAnimationRestoresFloorOnDisable() {
+        game();
+        status = STARTING;
+        handler.onArenaStatusChanged(arena, WAITING, STARTING);
+        ArgumentCaptor<Runnable> callback = ArgumentCaptor.forClass(Runnable.class);
+        verify(api.tasks()).repeating(eq("minigame:floorshuffle:test:lobby"), eq(60L), callback.capture());
+        world.getBlockAt(0, 63, 0).setType(Material.STONE);
+        callback.getValue().run();
+        assertNotEquals(Material.STONE, world.getBlockAt(0, 63, 0).getType());
+        status = DISABLED;
+        handler.onArenaStatusChanged(arena, STARTING, DISABLED);
+        callback.getValue().run();
+        assertTrue(floorMaterials().values().stream().allMatch(m -> m == Material.STONE));
+    }
+
+    @Test
+    void zeroLobbyIntervalDisablesAnimationAndInvalidIntervalsFailValidation() {
+        game();
+        settings.lobbyShuffleSeconds = 0;
+        status = WAITING;
+        handler.onArenaStatusChanged(arena, DISABLED, WAITING);
+        verify(api.tasks(), never()).repeating(anyString(), anyLong(), any());
+        assertTrue(floorMaterials().values().stream().allMatch(m -> m == Material.STONE));
+        var result = ArenaValidationResult.success();
+        handler.validate(arena, result);
+        assertFalse(result.hasErrors());
+        settings.lobbyShuffleSeconds = -1;
+        result = ArenaValidationResult.success();
+        handler.validate(arena, result);
+        assertTrue(result.hasErrors());
     }
 
     @Test
@@ -157,6 +406,7 @@ class FloorShuffleArenaHandlerTest {
         verify(section).set("world", world.getName());
         verify(section).set(eq("spawns"), any());
         verify(section).set("round-seconds", 180);
+        verify(section).set("lobby-shuffle-seconds", 3);
         verify(section).set(eq("floor"), any());
         verify(section, never()).set(eq("kill-target"), any());
         verify(section, never()).set(eq("laps"), any());

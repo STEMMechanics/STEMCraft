@@ -1,0 +1,940 @@
+STEMCRAFT - PRE-COMMIT TEST CHECKLIST
+Updated: 14 October 2026
+Scope: minigame, resource pack, STEMBot, hologram, maps and world copies.
+
+Tester: __________________________  Date: _______________________________
+Plugin build / commit: _________________________________________________
+Paper version: ___________________  Java version: ______________________
+Player A (admin): _________________  Player B: __________________________
+
+HOW TO USE THIS SHEET
+---------------------
+Write P in a box for PASS, F for FAIL, or S for SKIPPED. Leave untested
+boxes empty. Record failures by test ID in the notes at the end.
+Each checkbox represents one test scenario; check every expected result
+before marking it passed. Tests that need an unavailable fixture may be
+skipped, with the reason recorded.
+Print in portrait using a monospace font at 10 pt; lines fit 76 columns.
+
+Commands beginning with / run in Minecraft. Gradle commands run from the
+repository folder. Replace <arena>, <root>, <world>, <source> and <copy>
+with your actual IDs. Do not type the angle brackets.
+Replace <menu> with an existing menu ID from /imenu list.
+
+Use a test server and copies of its configs/worlds. For YAML edits, stop
+the server, edit plugins/STEMCraft/<file>.yml, then start it again. Do not
+edit the same file with setup commands at the same time.
+
+Prepare valid arenas with a lobby separate from their playing area,
+spectator locations, and capacity for at least two players. Configured
+spawns/grids must cover maxplayers; the random modes are tested later.
+WorldEdit is needed for geometry changes. Citizens is needed for STEMBot.
+Load the normal resource pack when checking HUD icons.
+
+ARENAS / WORLDS USED
+--------------------
+Floor Shuffle: __________________  Volcano: ____________________________
+Horse Race: _____________________  Minecart Race: _______________________
+Mob Shooter: ____________________  Punch the Bat: _______________________
+Quake: __________________________  Boat Race: ___________________________
+TNT Run: ________________________  BedWars: _____________________________
+STEMBot test world: ______________  Fixed spot X/Y/Z: ___________________
+Legacy world source/copy: ______________________________________________
+Integrated world source/copy: __________________________________________
+Hologram IDs created: __________________________________________________
+
+
+A. BUILD AND STARTUP
+====================
+
+[ ] A01 - Automated regression tests
+    Do: Run ./gradlew :plugin:test from the repository folder.
+    Pass: The task succeeds with no failing tests. Check the report at
+    plugin/build/reports/tests/test/index.html if anything fails.
+
+[ ] A02 - Build and install the version being tested
+    Do: Run ./gradlew :plugin:jar and install the resulting STEMCraft jar
+    from plugin/build/libs on the test server. Record its build above.
+    Pass: The server starts with this build and loads the expected arenas
+    and features. No new startup exception appears in the console.
+
+[ ] A03 - Capture the starting state
+    Do: Keep config/world copies, and record or photograph the original
+    Floor Shuffle floor plus the Volcano floor and space above it. Give
+    A and B identifiable inventory items and note their game modes and
+    locations before joining games.
+    Pass: You can compare restored blocks and player state after tests.
+
+[ ] A04 - Resource pack download URL
+    Do: Run /resourcepack url and open the displayed link in a browser
+    on the affected player's computer. Also try /respack url and run
+    resourcepack url from the server console.
+    Pass: Chat shows a clickable, underlined download address including
+    its version parameter. Console shows the same address. The browser
+    downloads the current ZIP; the command itself does not resend or
+    rebuild the pack. Record any browser/network error if download fails.
+
+[ ] A05 - Resource pack tab completion
+    Do: As an admin, press Tab after /resourcepack and after
+    /resourcepack send. Try a partial player name after send too.
+    Pass: The first slot offers info, send, sendall, url and zip, without
+    player names. The send argument offers matching online player names.
+
+[ ] A06 - Startup and Java menus without Geyser
+    Do: On the test server, stop and temporarily move the Geyser-Spigot
+    and Floodgate jars out of plugins, then start again. As a Java player,
+    run /imenu list and /imenu open <menu> -test. Join a minigame too.
+    Pass: No missing Geyser/Cumulus class error or ServerLoadEvent error
+    occurs. Features, commands and minigames finish loading. The menu
+    opens as a book; test selections show the intended item/commands.
+
+[ ] A07 - Bedrock interactive menu forms
+    Do: Restore Geyser-Spigot/Floodgate on the test server and restart.
+    Join with Bedrock and run /imenu open <menu> -test. Choose each item
+    in turn, reopening as needed. Close a form without selecting an item.
+    Pass: Titles, descriptions and item order are correct. Each selection
+    identifies its own item and previews commands without executing them.
+    Closing cancels the menu. Java players still receive book menus.
+
+
+B. EXISTING CONFIG UPGRADES
+===========================
+
+These tests apply to floorshuffle.yml, volcano.yml, horserace.yml,
+minecartrace.yml, mobshooter.yml, punchthebat.yml and quake.yml.
+Use Floor Shuffle as the migration fixture; check the same version keys
+in the other six files when they load. Restore normal HUDs before section C.
+
+[ ] B01 - Old 10-second countdown migrates once
+    Do: In a copied arena config, set countdown: 10 and remove its
+    timing-version key. In another arena, set countdown: 45 and remove
+    timing-version. Start the server and run /<root> info <arena>.
+    Pass: The old 10 becomes 30, the 45 stays 45, and both persist
+    timing-version: 1. Starting a round uses the reported duration.
+
+[ ] B02 - A deliberate 10-second countdown survives later loads
+    Do: After B01, stop the arena and run:
+        /<root> set <arena> countdown 10
+    Restart the server without deleting timing-version.
+    Pass: The arena still reports and uses 10 seconds. It is not changed
+    back to 30. Restore countdown to 30 after this test.
+
+[ ] B03 - Fresh HUD settings are generated
+    Do: Remove the hud section from a copied Floor Shuffle config and
+    start the server. Join, start and finish a round.
+    Pass: The four main states receive bossbar and scoreboard lines.
+    Floor Shuffle and Volcano also get a preparation countdown display.
+    Bossbars default to PURPLE with hold-updates: 5. Waiting shows players;
+    starting shows countdown; running shows colour/survivors/time;
+    ending shows winner/reset time. No display is unexpectedly empty.
+
+[ ] B04 - Old generic HUD lines upgrade
+    Do: Use an older config containing its original generic HUD lines.
+    If creating the fixture manually, set all four states as described
+    in fixture B04 below. Start the server.
+    Pass: Generic lines become the new state-specific defaults. Generated
+    YELLOW/two-update bossbars become PURPLE/five-update bossbars.
+    hud.timed-round-version is 1. Restart again; the upgrade persists.
+
+    Fixture B04: Repeat these values under hud.waiting, hud.starting,
+    hud.running and hud.ending in floorshuffle.yml:
+      bossbar:
+        lines:
+          - '<gold>Floor Shuffle <white>{arena:time-remaining}'
+          - '<yellow>{arena:objective}'
+        hold-updates: 2
+        color: YELLOW
+      scoreboard:
+        lines:
+          - '<gold>{arena:name}'
+          - '<white>{arena:status}'
+          - 'Players: {arena:players}'
+          - 'Time: {arena:time-remaining}'
+          - 'Score: {player:score}'
+          - '{player:progress}'
+          - 'Winner: {arena:winner}'
+
+[ ] B05 - Custom and intentionally disabled displays are preserved
+    Do: Set hud.running.bossbar.lines to ['QA CUSTOM HUD'], color to BLUE,
+    and hold-updates to 7. Set hud.running.scoreboard.lines to [].
+    Restart twice and play a round each time.
+    Pass: The custom blue bossbar remains; the running scoreboard stays
+    disabled. Other states retain their own displays. Custom config
+    values are not replaced by generated defaults.
+
+[ ] B06 - Broken empty HUD is repaired only once
+    Do: Remove hud.timed-round-version. For all four states set both
+    bossbar.lines and scoreboard.lines to [], bossbar.hold-updates to 5,
+    and bossbar.color to PURPLE. Start the server.
+    Pass: The eight empty lists are populated and the version becomes 1.
+    Then stop the server, empty those lists again, KEEP the version key,
+    and restart. The lists now stay empty as a deliberate opt-out.
+    Restore the normal HUD config when finished.
+
+
+C. COUNTDOWN, START POSITIONS AND HUD - TEST EVERY GAME
+======================================================
+
+Run the following procedure separately for every checkbox C01-C09.
+For C01-C07, <root> is the command named in the test row.
+
+1. Stop the arena, then set minplayers to 1 and countdown to 30:
+     /<root> stop <arena>
+     /<root> set <arena> minplayers 1
+     /<root> set <arena> countdown 30
+     /<root> set <arena> roundseconds 45
+     /<root> enable <arena>
+   Keep maxplayers at least 2 and provide enough configured spawns.
+   Boat Race/TNT Run preparation is listed in their own rows instead.
+2. B runs /<root> spectate <arena> while it is waiting, observes its HUD,
+   then runs /<root> leave. A runs /<root> join <arena>.
+3. A alone must trigger a countdown, remain in the lobby for its full
+   duration, and be able to walk/look around. No game hazards or mounts
+   should start during that countdown.
+4. B joins with about 15 seconds remaining. B must also stay in the lobby
+   and be able to walk/look around. A must not be moved early.
+5. At zero, both players move to their correct starting positions and
+   receive the correct equipment/mounts. No delayed lobby teleport pulls
+   either player back. No duplicate mount or repeated spawn is created.
+   Floor Shuffle and Volcano now have an additional 15-second delay on
+   the floor. Check the 'Starts in' HUD, walk and look around, and confirm
+   no colour challenge or eruption starts until that delay reaches zero.
+   The round timer starts at its full 45 seconds after preparation.
+6. For C01-C07, run /<root> info <arena> during play. Check world, status,
+   player/spectator counts, capacities, timers, lobby/spectator locations,
+   numbered spawns and the game-specific fields listed below. It should
+   report information without validating temporarily altered game tiles.
+7. For C01-C07, play until the round ends. Check the HUD in every state:
+   waiting = joined/needed players; starting = countdown/player counts;
+   running = details listed below/time; ending = winner or '-' and reset.
+   Check gold headings, purple rotating bossbar, icons and spacing. No
+   raw placeholders or MiniMessage tags should appear on screen.
+8. For C01-C07, results remain visible for 20 seconds, then reset removes
+   occupants, restores their inventories/game modes/locations and allows
+   another round. For C08-C09, stop after checking the start transition;
+   those games retain their own configured round/reset timing.
+
+[ ] C01 - Floor Shuffle: /floorshuffle
+    Pass: Both start on configured floor spawns. HUD shows announced
+    colour and survivors. Info includes floor region, lobby-shuffle
+    interval, floor start delay and configured spawn mode. Preparation
+    has solid tiles, and safe positions/look directions survive its end.
+
+[ ] C02 - Volcano: /volcano
+    Pass: Both start on configured floor spawns. HUD shows hazard
+    instructions, personal survival time and survivors. Info includes
+    floor region/spawn mode and floor start delay. Survival time stays
+    00:00 during preparation; safe positions/look directions are kept.
+
+[ ] C03 - Horse Race: /horserace
+    Pass: Horses/riders start at the configured positions only at zero.
+    Riders can cross the first checkpoint normally. HUD shows checkpoint
+    progress/laps. Info lists laps and numbered checkpoint regions.
+
+[ ] C04 - Minecart Race: /minecartrace
+    Pass: Carts/riders start on configured rails only at zero. The carts
+    move through the first checkpoint normally. HUD shows progress/laps.
+    Info lists laps and numbered checkpoint regions.
+
+[ ] C05 - Mob Shooter: /mobshooter
+    Pass: Players move to their shooting spawns and receive their kit at
+    zero. Targets appear and shots score normally. HUD shows score and
+    player count. Info includes target count/numbered target locations.
+
+[ ] C06 - Punch the Bat: /punchthebat
+    Pass: Players move to their configured spawns at zero. Bats appear
+    and punches score normally. HUD shows score/player count. Info shows
+    target count, target locations and player/target spawn modes.
+
+[ ] C07 - Quake: /quake
+    Pass: Players move to configured spawns and receive railguns at zero.
+    Shots and respawns work. HUD shows kills, kill target and deaths.
+    Info includes kill target and reload ticks.
+
+[ ] C08 - Boat Race: /boatrace
+    Preparation: Disable the arena, set minplayers to 1, save and enable.
+    Use its configured start countdown from /boatrace info <arena>.
+    Follow steps 2-5 above; do not use the countdown/roundseconds setup.
+    Pass: Countdown takes place in the lobby with normal walking. No boat
+    or grid placement occurs early. At zero both players receive one
+    boat at their grid slot and can race; neither is pulled back to lobby.
+
+[ ] C09 - TNT Run: /tntrun
+    Preparation: Disable the arena, set minplayers to 1, then run:
+        /tntrun set <arena> startcountdown 30
+        /tntrun save <arena>
+        /tntrun enable <arena>
+    Follow steps 2-5 above; do not use the countdown/roundseconds setup.
+    Pass: Both wait and move freely in the lobby. No floor decay starts
+    there. Grid placement and the decay game begin when countdown ends.
+
+[ ] C10 - Change or disable the floor start delay
+    Do: Repeat for Floor Shuffle and Volcano. Stop the arena, then run:
+        /<root> set <arena> startdelay 5
+    Restart the server, check info, enable the arena and start a round.
+    Have B join during the floor delay. Then stop, set startdelay to 0,
+    enable and play again. Restore startdelay to 15 when finished.
+    Pass: The 5-second setting persists. B joins directly onto the floor
+    with no countdown restart. Hazards and scoring wait until zero.
+    With startdelay 0, play begins immediately after the lobby countdown.
+    The lobby countdown setting stays unchanged in both cases.
+
+
+D. COUNTDOWN CANCELLATION AND PLAYER CLEANUP
+===========================================
+
+[ ] D01 - Last player leaves during countdown
+    Do: Start a Floor Shuffle countdown with A only, then /floorshuffle
+    leave before zero. Wait longer than the remaining countdown.
+    Pass: A is restored and is not teleported back later. Arena returns
+    to waiting; no active colour challenge starts. Join again and verify
+    a fresh countdown works. Lobby colour animation may continue.
+
+[ ] D02 - Disconnect during play
+    Do: Play a Horse Race with A and B, disconnect B during play, then
+    reconnect. Repeat in one score game (Mob Shooter, Punch the Bat or
+    Quake). Record which score game: _________________________________
+    Pass: No ghost participant remains. Reconnected B has restored player
+    state and no orphaned mount/game kit. A's game finishes cleanly.
+
+[ ] D03 - Changed occupancy before grid placement
+    Do: In Boat Race, have B join during A's countdown, leave, and join
+    again before zero. Repeat in TNT Run.
+    Pass: Remaining participants get valid grid positions when play
+    starts. No stale callback teleports a departed player, creates a
+    duplicate boat, freezes a lobby player or starts a second round.
+
+[ ] D04 - Cancel during the floor preparation delay
+    Do: Repeat for Floor Shuffle and Volcano with startdelay 15. Start
+    alone, leave during preparation, and wait longer than 15 seconds.
+    Rejoin and confirm a fresh countdown works. Start again and stop the
+    arena during preparation; wait longer than 15 seconds again.
+    Pass: Leaving the last player returns the arena to waiting. Stop
+    disables it. Neither case starts gameplay later or teleports a
+    departed player back. Inventories, game modes and blocks are restored.
+
+
+E. FLOOR SHUFFLE SPECIFIC CHANGES
+================================
+
+[ ] E01 - Default lobby floor animation
+    Do: Stop the arena, set lobbyshuffle to 3, and enable it:
+        /floorshuffle stop <arena>
+        /floorshuffle set <arena> lobbyshuffle 3
+        /floorshuffle enable <arena>
+    Watch while waiting, then join and watch during countdown.
+    Pass: A random colour pattern appears and changes about every three
+    seconds. Every tile stays solid. No target-colour announcement or
+    gameplay title is emitted by the lobby animation.
+
+[ ] E02 - Custom lobby interval and disable setting
+    Do: Stop, set lobbyshuffle to 1, enable and observe. Then stop, set
+    lobbyshuffle to 0, enable and observe for at least ten seconds.
+    Pass: Interval 1 changes patterns about every second. Interval 0
+    leaves the original floor unchanged. Info reports the chosen setting;
+    it survives restart. Restore the preferred interval afterward.
+
+[ ] E03 - Random floor spawns
+    Do: Stop the arena. Remove every configured spawn using:
+        /floorshuffle removespawn <arena> 1
+    Repeat until info shows zero spawns; validate, enable and repeat C01.
+    Pass: Empty spawns validate. A and late-joining B remain in lobby
+    until zero, then start centred on selected floor blocks, one block
+    above them. Info reports random mode. No generated spawn is saved
+    into the configured spawns list.
+
+[ ] E04 - Partial configured spawn list still fails validation
+    Do: With maxplayers 2 and no spawns, add just one safe floor spawn
+    using /floorshuffle addspawn <arena>, then validate. Add a second
+    distinct floor spawn and validate again.
+    Pass: One configured spawn fails capacity validation. Two pass.
+    Configured spawns take precedence over random mode when nonempty.
+
+[ ] E05 - Matching colour announcements
+    Do: Play enough rounds to observe all six colours; tick them below.
+    Pass: Chat, the HUD objective, title and subtitle name the same
+    target. Their text matches that colour, including distinct orange,
+    purple and lime. The centre title lasts about two seconds, no fade.
+    Colours seen: [ ] Red  [ ] Blue  [ ] Yellow
+                  [ ] Lime [ ] Orange [ ] Purple
+
+[ ] E06 - Two white flashes before unsafe tiles disappear
+    Do: Watch unsafe tiles during the final warning time of a phase.
+    Pass: Unsafe tiles flash white twice and return to their assigned
+    colour between flashes. Each white/colour stage is about 0.3 seconds.
+    Safe tiles never flash or disappear. Unsafe tiles then disappear and
+    the floor returns for the next challenge; warnings become shorter.
+
+[ ] E07 - Custom announcement text
+    Do: Change strings.colour.chat, title, subtitle and objective in
+    floorshuffle.yml to distinct QA text using {colour}/{colour-tag}.
+    Example title: '<{colour-tag}>QA {colour}</{colour-tag}>'
+    Restart and play; then restore the original strings and restart.
+    Pass: Each display uses its own configured text. Colour substitutions
+    render correctly. Defaults do not overwrite the custom strings.
+
+[ ] E08 - Elimination follows arena bounds
+    Do: Use an arena with falling space inside its bounds. Fall below
+    the floor while still inside the region, then below the region's
+    bottom (or outside its side boundary).
+    Pass: Falling below the floor alone does not eliminate the player.
+    Leaving the arena region does; the player becomes a spectator.
+
+[ ] E09 - Restore exact original floor when stopped
+    Do: Stop separately while waiting with lobby animation, during
+    countdown, and while unsafe tiles are missing during play.
+    Pass: Every original floor block/state is restored each time. No
+    animation or delayed gameplay task changes it again after stopping.
+    Re-enable and finish a round; lobby animation resumes after reset.
+    Stop again before comparing exact blocks, since waiting recolours it.
+
+[ ] E10 - Normal shutdown cancels lobby animation
+    Do: While an enabled arena is animating its lobby floor, shut the
+    server down normally. Inspect the saved floor, then restart and stop
+    the arena again before comparing with the original.
+    Pass: Original blocks survive shutdown/restart. No stale animation
+    from the previous run overwrites the floor after restart or stop.
+
+
+F. VOLCANO SPECIFIC CHANGES
+==========================
+
+[ ] F01 - Random floor spawns and configured capacity
+    Do: Stop and remove every spawn with /volcano removespawn <arena> 1.
+    Validate, enable and repeat C02 with a late joiner. Then stop, add
+    just one spawn with maxplayers 2 and validate; add a second and retry.
+    Pass: Empty spawns are allowed and spawn both players centred one
+    block above the selected floor. A nonempty list needs maxplayers
+    entries. Info correctly reports random versus configured mode.
+
+[ ] F02 - Magma damages health without immediate elimination
+    Do: During a live round, find exposed magma and stand on it with
+    plenty of health. Avoid the actual lava above other hot tiles.
+    Use ordinary survival/adventure hazard behaviour, not creative mode.
+    Pass: Health takes normal magma damage. The player stays in the game
+    after a nonlethal hit and can move away to survive.
+
+[ ] F03 - Flame markers damage about once per second
+    Do: Stand on a smoking vent with small flames before it erupts.
+    Pass: The marker deals about half a heart per second while touched,
+    rather than damage every tick. Moving away stops marker damage.
+
+[ ] F04 - Lethal hazard damage becomes spectator elimination
+    Do: Stay in hazards until the next damage would be lethal.
+    Pass: The player becomes a spectator without a normal death/respawn
+    screen or item drops. The death count increments once. No lingering
+    fire keeps hurting the eliminated player. Survivor/winner HUD updates.
+
+[ ] F05 - Falling, PvP and lobby protection
+    Do: Fall below the platform during play. In another round try to
+    punch another player. Check hazards while waiting/counting down.
+    Pass: Falling eliminates. PvP cannot damage players. Live-round
+    hazard damage is not applied to players waiting in the lobby.
+
+[ ] F06 - Hazard cleanup and floor restoration
+    Do: Stop during an eruption with active lava, magma and holes.
+    Compare the floor AND the air/blocks above it with the A03 baseline.
+    Re-enable and finish another round normally. Repeat with a normal
+    server shutdown while lava is active, then restart and inspect.
+    Pass: Original block types/data return, lava disappears and eruption
+    work stops. Players return without lingering fire damage. The next
+    round starts cleanly, including after normal shutdown/restart.
+
+[ ] F07 - Upward spurts and varied eruption shapes
+    Do: Watch at least six eruptions from spectator mode. Use particles
+    set to All, and leave several blocks of clear space over the floor.
+    Pass: Warning smoke/flames rise from vents. Main flames/lava jets
+    shoot upward. Scattered spurts, clusters and line fissures appear at
+    different places, with varied heights and pauses. Craters do not all
+    open on the east side of vents. Record any repetitive-looking runs.
+
+[ ] F08 - Actual lava flow, cooling and containment
+    Do: Watch lava spread outward from a vent. With plenty of health,
+    step into a flow and retreat. Watch hot tiles cool. Check the floor
+    edges, space beneath it and nearby flammable map decorations.
+    Pass: Actual lava spreads across neighbouring tiles at different
+    depths and hurts more than magma. It later recedes, leaving basalt
+    or blackstone. Safe ground remains available. No lava runs beyond
+    the selected floor or down through holes, and decorations stay intact.
+
+[ ] F09 - Survival time and winner rules
+    Do: Install the current JAR and fully restart the server; a plugin
+    config reload does not load new Java code. Start a new round.
+    Play with A, B and a third player. Eliminate A while B and the
+    third player remain. Check A's timer, then finish the match. Repeat
+    solo practice. Check objective text during countdown and play.
+    Restart with existing generated Volcano HUD settings; also check
+    a custom HUD and a deliberately disabled scoreboard.
+    Pass: Survived time increases while alive, freezes on elimination,
+    and is reported at round end. HUD focuses on time and survivors,
+    without an eruption counter. Short objectives fit without clipping.
+    Countdown objective is 'Get ready!'; during play it is
+    'Dodge lava & holes'; at the end it is 'Round over'.
+    Last survivor wins; survivors share a timeout win. Solo lasts until
+    elimination/timeout and grants no
+    rewards. Generated HUD gains the timer; custom/disabled HUD is kept.
+
+
+G. PUNCH THE BAT RANDOM PLAYER/TARGET POSITIONS
+==============================================
+
+For G01-G04, stop before changing lists, keep maxplayers at least 2,
+validate, enable, then play with A and B. Remove entries repeatedly using
+/punchthebat removespawn <arena> 1 or removetarget <arena> 1.
+Add entries by standing at a safe point and running addspawn/addtarget.
+Random positions need solid non-magma ground and two clear air blocks
+inside the selected arena. Keep its bounding box at most 100,000 blocks.
+
+[ ] G01 - Configured players and configured bats
+    Do: Keep both lists nonempty and provide enough player spawns.
+    Pass: Players use configured positions; bats use configured targets.
+    Info labels both modes correctly. Existing scoring still works.
+
+[ ] G02 - Random players and configured bats
+    Do: Empty only the player spawn list; keep configured targets.
+    Pass: Validation succeeds on a safe arena. Players receive distinct
+    safe positions at round start; bats keep using configured targets.
+
+[ ] G03 - Configured players and random bats
+    Do: Keep enough configured player spawns; empty only target spawns.
+    Pass: Players keep their configured positions. Bats spawn at random
+    safe positions half a block above the ground spawn points and remain
+    within punching reach. Targets replenish after hits.
+
+[ ] G04 - Both lists empty
+    Do: Remove all player spawns and target spawns, then play a round.
+    Pass: Both modes work together. Players are distinct, inside the
+    region, on safe ground with clear headroom. Bats spawn within reach.
+    Normal bats score 1, glowing bats score 5; info reports both modes.
+
+[ ] G05 - Unsafe or oversized random arena fails validation
+    Do: On a spare arena, empty player spawns and leave fewer safe
+    positions than maxplayers. Also try an arena bounding box larger
+    than 100,000 blocks. Run /punchthebat validate <arena> in each case.
+    Pass: Both setups fail with useful messages and cannot be enabled.
+    A nonempty configured player list with too few entries also fails.
+
+[ ] G06 - Safe positions disappear during countdown
+    Do: On a spare random-mode arena, start a countdown, then have an
+    outside admin remove the safe ground before zero.
+    Pass: The start reports insufficient safe random spawn positions and
+    disables cleanly. It does not crash or put players in unsafe spaces.
+    Stop the arena to remove any occupants, then restore the test map.
+
+
+H. BEDWARS CONFIGURABLE TIMERS
+==============================
+
+[ ] H01 - Existing arena default remains 30 minutes
+    Do: In a copied bedwars.yml arena, remove round-seconds. Load it and
+    run /bedwars info <arena>.
+    Pass: Round duration reports 1800 seconds. Existing start/reset
+    duration settings are preserved.
+
+[ ] H02 - Set, save and reload all three timers
+    Do: Run the following on the test arena:
+        /bedwars set <arena> roundseconds 45
+        /bedwars set <arena> startcountdown 10
+        /bedwars set <arena> endingseconds 12
+        /bedwars save <arena>
+        /bedwars reload
+        /bedwars info <arena>
+    Pass: Info reports 45/10/12. YAML persists round-seconds,
+    start-countdown-seconds and ending-seconds with those values.
+
+[ ] H03 - Runtime follows the configured durations
+    Do: Join two opposing teams and start a round. Keep both teams alive
+    so a victory does not end it early. Let the time limit expire.
+    Pass: Start countdown is 10 seconds, the running limit is 45 seconds,
+    and results/reset countdown lasts 12 seconds.
+
+[ ] H04 - Changing a timer does not reset an active countdown
+    Do: During RUNNING, set roundseconds to 90. Observe the existing
+    running timer, finish the match and start the next one.
+    Pass: The current running countdown continues without jumping. The
+    next RUNNING period uses 90. Tab completion offers roundseconds,
+    startcountdown and endingseconds. Restore/save normal values.
+
+
+I. ROTATING MINIGAME LEADERBOARD HOLOGRAM
+========================================
+
+Prepare at least two arenas with arena-scoped stats, preferably in
+different minigames. Give A/B recorded scores or wins through gameplay.
+For I06, arrange two ranked players in the same selected arena stat.
+Create boards away from existing displays and record their numeric IDs.
+
+[ ] I01 - Create and discover arena rankings
+    Do: Run /hologram create minigame_leaderboard, then:
+        /hologram cycle delay
+    Pass: A board appears above your position showing one arena's stat
+    ranking. The fresh default delay is 20 seconds. It chooses wins when
+    available, otherwise goals, scores, then another stat by key.
+
+[ ] I02 - Timed cycle and multiple boards
+    Do: Set /hologram cycle delay 5. Create a second minigame_leaderboard.
+    Watch enough cycles to visit every eligible arena and wrap around.
+    Pass: Both boards show the same selected arena, advance about every
+    five seconds, wrap cleanly, and show the correct ranking/title.
+
+[ ] I03 - Manual button works for ordinary players exactly once
+    Do: Look at a nearby button and /hologram cycle button set. As B,
+    without hologram admin permission, right-click it. Try again while
+    holding something in the off hand. Right-click another button too.
+    Pass: Each configured-button click advances once. Other buttons do
+    not advance it. A click restarts the automatic cycle's delay.
+
+[ ] I04 - Disable automatic rotation and clear the button
+    Do: /hologram cycle delay 0; wait at least ten seconds, then click
+    the configured button. Run /hologram cycle button clear and click it
+    again. Restore delay to 5 for the next tests.
+    Pass: Delay 0 stops timed advances, but the configured button still
+    works. Clearing the button stops its manual advances.
+
+[ ] I05 - Invalid settings produce useful errors
+    Do: Try cycle delay -1, cycle delay 3601 and cycle delay abc.
+    Look at a wall and run /hologram cycle button set. Query cycle delay.
+    Pass: Invalid commands show errors without changing the valid delay
+    or button setting. No literal locale key or exception reaches chat.
+
+[ ] I06 - Limit, period and custom ranking lines
+    Do: Create separate boards with the following commands:
+        /hologram create minigame_leaderboard limit=1|period=day
+        /hologram create minigame_leaderboard line=QA:{rank}|first=TOP
+    Pass: The first has at most one result from today's values. On the
+    second, first place says TOP and later ranks use QA:<rank>. Options
+    keep applying as each board cycles to other arenas.
+
+[ ] I07 - Reload/restart preserves settings and templates
+    Do: Set a button again and delay 5. Restart the server, query delay,
+    and test the button/boards. Run /stemcraft reload and observe again.
+    Pass: Delay, button location and raw board options persist. Rotation
+    runs once per interval, with no duplicate tasks/displays. The selected
+    arena may reset; preserving the cycle index is not required.
+
+[ ] I08 - Existing stat holograms still update
+    Do: Create /hologram create stat_leaderboard <stat-key> limit=3 using
+    an arena stat key offered by tab completion. Change its stats through
+    gameplay, leave the area so the board's chunk unloads, and return.
+    Restart and check again. If available, set a new Boat Race/Parkour
+    record and check its existing record hologram's automatic update.
+    Pass: Refreshed values are correct. The saved data retains limit=3
+    rather than being replaced by a rendered snapshot of player names.
+    Other existing dynamic hologram types continue to render normally.
+
+[ ] I09 - No eligible arena stats
+    Do: On a server/config copy with no minigame arena definitions loaded,
+    create a minigame_leaderboard and try cycling it.
+    Pass: It displays 'No arena-specific minigame rankings are available.'
+    No crash occurs. Restoring eligible arenas makes rankings available.
+
+[ ] I10 - Permissions, completion and cleanup
+    Do: As a non-admin, try a hologram cycle configuration command. As an
+    admin, check create/type/context and cycle/button tab completion.
+    Delete each test board with /hologram delete <id>.
+    Pass: Configuration requires stemcraft.command.hologram. Type/context
+    completion uses the selected type. Deletion removes the displays;
+    later cycle ticks or button presses do not bring them back.
+
+[ ] I11 - Leaderboard name and score/time columns
+    Do: Check default stat and rotating minigame boards with long and
+    short player names, different scores and at least ten ranks. Check
+    Parkour/Boat Race record boards too. Try a custom line with {gap}
+    between {player} and {value}, or {time} on a time board.
+    Put {rank-gap} after the rank in custom lines to align names too.
+    Pass: Ranks/names align on the left, scores/times on the right, and
+    titles stay centered. Row widths account for thin and wide letters,
+    with at most one normal space's rounding. Custom templates without
+    gap markers keep their formatting. Check Java and Bedrock if used.
+
+[ ] I12 - Rotation leaves no stale duplicate board
+    Do: Choose arenas with different result counts, including no results.
+    Manually clear any known old leftover rows before starting this test.
+    Set /hologram cycle delay 5 and watch one board for five minutes.
+    Leave far enough for its chunk to unload, wait at least 30 seconds,
+    then return. Repeat twice. Run /stemcraft reload beside the board.
+    Pass: Exactly one set of rows appears for each board ID. Every row
+    belongs to the current page. After a long ranking changes to a short
+    one, no old title or extra rows remain behind.
+    Reload rebuilds the tracked board. Unlinked rows, other plugins'
+    entities and per-player displays are not deleted automatically.
+
+[ ] I13 - Delete nearby registered boards, closest first
+    Do: Place two boards within four blocks of your position and one
+    outside it. Record their IDs; distances use the saved board position.
+    Put a Citizens/other-plugin display nearby if available. Run:
+        /hologram delete -range 4 -limit 1
+    Then /hologram delete -range 4. Try an empty range, invalid range,
+    and limit 0. Test reversed flags on a new board:
+        /hologram delete -limit 1 -range 4
+    Pass: Limit 1 removes the closest registered board. Without a limit,
+    all remaining boards in range are deleted; outside boards remain.
+    Feedback reports the count/range. No matches and invalid arguments
+    delete nothing. Other plugins' and unlinked nameplates remain.
+    Tab completion offers board IDs, -range and the unused -limit flag.
+    Deleted boards stay absent after later cycles and chunk reloads.
+
+
+J. STEMBOT WORLD ROUTES AND ARRIVAL ACTIONS
+==========================================
+
+Use Citizens and an enabled STEMBot. Use a test world separate from the
+world whose introduction is owned by FirstJoin. For first-visit tests,
+use a player who has not previously received an introduction there,
+or a new test world name; reconnecting does not clear the seen marker.
+
+Merge these actions into the existing actions map in stembot.yml:
+  qa-command: ['talk:COMMAND ROUTE', 'sleep:100', 'close']
+  qa-first: ['talk:FIRST VISIT', 'sleep:100', 'close']
+  qa-arrival: ['talk:ARRIVAL ROUTE', 'sleep:100', 'close']
+
+Merge this entry into worlds, replacing the world name and coordinates:
+  <bot-world>:
+    command-action: qa-command
+    first-time-action: qa-first
+    always-action: qa-arrival
+    always-action-spawn: [<x>, <y>, <z>, 90, 0]
+
+The fixed coordinates are the bot's feet, on safe ground with clear
+headroom, inside the border and in a loaded chunk. Keep that spot far
+enough from the player to distinguish it from a near-player summon.
+Restart after script edits. /stembot close dismisses a normal session.
+
+[ ] J01 - First visit takes priority over always-action
+    Do: Have a fresh test player arrive in the configured world.
+    Pass: FIRST VISIT runs once, near the player. ARRIVAL ROUTE does not
+    also run on that visit. The fixed always-action spot is not used.
+
+[ ] J02 - Later world arrivals and logins use always-action
+    Do: Finish the first introduction, leave the world and return.
+    Finish/close the greeting, disconnect there and reconnect.
+    Pass: Each arrival runs ARRIVAL ROUTE once at the configured fixed
+    spot. FIRST VISIT does not repeat. Wait a few seconds for join/world
+    arrival scheduling before deciding whether an action is missing.
+
+[ ] J03 - Same-world teleport does not trigger an arrival
+    Do: Finish or close the current action, then teleport elsewhere
+    inside the same world and wait at least three seconds.
+    Pass: No new ARRIVAL ROUTE starts just because of that teleport.
+
+[ ] J04 - Command route stays separate
+    Do: Close the arrival action. Run /stembot, close it, then run /help.
+    Pass: Both commands run COMMAND ROUTE near the player. Neither uses
+    the fixed always-action spawn nor chooses the automatic action.
+
+[ ] J05 - Always-action without a first-time route
+    Do: Remove first-time-action in the test world's entry and restart.
+    Have an unseen player arrive, then leave and return.
+    Pass: ARRIVAL ROUTE runs on both arrivals. It does not need a
+    first-time route or a previously seen marker.
+
+[ ] J06 - Missing/blank command route
+    Do: Leave always-action configured but remove command-action.
+    Restart, arrive, close the greeting and run /stembot and /help.
+    Repeat with command-action: '' explicitly configured.
+    Pass: Arrival still works. Commands say 'STEMBot is not available
+    right now.' and do not summon the automatic action instead.
+
+[ ] J07 - Optional spawn and rotation formats
+    Do: Test always-action-spawn as [x, y, z] without rotations. Then
+    remove the spawn setting entirely; restart for each variant.
+    Pass: The three-number form uses the fixed spot with zero rotation.
+    Without the setting, always-action uses the normal near-player safe
+    spawn search. Restore the five-number form when done.
+
+[ ] J08 - Unavailable fixed spot does not fall back
+    Do: Obstruct the fixed spot's headroom, arrive again and observe.
+    Restore it. Also try a fixed spot outside the world border or in an
+    unloaded distant chunk on the server copy.
+    Pass: The bot reports its usual spot is unavailable and does not
+    spawn beside the player instead. Restoring a safe loaded spot makes
+    the next arrival work normally.
+
+[ ] J09 - Legacy route migration preserves new overrides
+    Do: Add legacy command.world and first-time.world entries for the
+    test world. Set worlds.<bot-world>.command-action to qa-arrival and
+    first-time-action to ''. Restart and inspect the saved script.
+    Pass: Legacy routes migrate to worlds. Explicit new action and blank
+    opt-out remain unchanged. Legacy world route maps are removed; the
+    other migrated worlds retain their routes. A second restart does
+    not alter the result. Manual summons still use near-player spawns.
+
+[ ] J10 - Invalid script is rejected without migration
+    Do: On a copied script with legacy route entries still present, set
+    always-action to a missing action and restart. Repeat with an invalid
+    fixed spawn list such as [1, 2] or [1, 'oops', 3]. Restore the script.
+    Pass: STEMBot reports a config error in the console and is disabled;
+    other plugin features continue to load. The invalid script's legacy
+    routes are not migrated on disk. Restoring valid data enables it.
+
+[ ] J11 - Controlled guide keeps priority
+    Do: Use a fresh player in the FirstJoin guided world while its guide
+    owns a controlled session. Test an always-action there on a config
+    copy without adding a duplicate first-time introduction. Try /help.
+    Pass: Automatic arrivals do not replace the controlled guide. Manual
+    summon reports the guide is busy. Finishing verification still runs
+    its intended introduction. Restore the world's normal routes.
+
+[ ] J12 - Privacy and session cleanup regression
+    Do: With A using an existing interactive STEMBot route and B nearby,
+    check actor visibility and private replies. Then close, change worlds
+    or disconnect A, and send normal chat again.
+    Pass: Only A sees A's actor/private conversation. Closing/changing
+    worlds/disconnecting removes the old actor and restores normal chat.
+    No delayed speech or duplicate old-world actor appears afterward.
+
+
+K. WORLD DUPLICATION
+====================
+
+Use disposable source worlds and unused lowercase copy names. Move
+players to another world before copying. A loaded source may be saved
+and unloaded by duplication; an existing destination must stay untouched.
+Inspect skipped identity files BEFORE loading a copy, since loading
+creates a new identity/session lock. Record UUIDs using /world id <world>.
+
+[ ] K01 - Legacy standalone world copy and success message
+    Do: /world duplicate <legacy-source> <legacy-copy>
+    Inspect the destination folder, then /world load <legacy-copy>.
+    Reload the source if needed; compare /world id for both worlds.
+    Pass: Exactly one duplication success message, no false failure.
+    Terrain, entities and stored settings are copied. uid.dat,
+    session.lock and Paper metadata.dat/metadata.dat_old were omitted
+    from the initial copy. Source/copy load with different UUIDs.
+
+[ ] K02 - Integrated Paper custom dimension copy
+    Do: Duplicate a custom dimension stored under a base world's
+    dimensions/minecraft directory. Inspect its destination, list worlds
+    and /world load <copy>; compare landmarks/settings and UUIDs.
+    Pass: The copy is a sibling dimension folder, not a new root folder
+    or a copy of every dimension. Region/entity/POI data, generator data,
+    Paper overrides/PDC and paper-world.yml are retained when present.
+    Shared base level.dat and original identity files are not copied.
+    The new world is listed, loads independently and has a new UUID.
+
+[ ] K03 - Existing destinations are never merged or unloaded
+    Do: Duplicate to an existing root world name, an existing integrated
+    dimension name, and a destination that is currently loaded.
+    Pass: Each attempt fails without success output. Existing terrain
+    and contents are unchanged; the loaded destination stays loaded.
+
+[ ] K04 - Same source/destination and invalid names
+    Do: Try /world duplicate <source> <source>. Try destination names
+    '.', '..', '../outside', 'BadName' and 'bad/name' separately.
+    Pass: Each attempt fails, with no new/overwritten destination and
+    no success message. The source world is unchanged.
+
+[ ] K05 - Missing source and failure messaging
+    Do: /world duplicate qa_missing_source qa_missing_copy
+    Confirm qa_missing_source does not exist before this test.
+    Pass: The command reports failure only, creates no destination, and
+    does not emit a misleading 'world duplicated' message.
+
+[ ] K06 - Dimension with environment suffix is discoverable
+    Do: On the server copy, duplicate a Nether dimension to a new name
+    ending in _nether, then use /world list, /world info <copy> and
+    /world load <copy>.
+    Pass: The sibling custom dimension is found despite the suffix. It
+    loads as the intended dimension, with copied terrain/settings and a
+    different UUID; the original Nether is unaffected.
+
+[ ] K07 - Copies remain independent after use/restart
+    Do: Change a distinctive block in a loaded copy. Save/restart, load
+    source and copy again, and inspect the same coordinate in each.
+    Pass: Only the copy has the edit. Both still load with distinct
+    identities and retain their own data after restart.
+
+
+L. ARENA REGRESSION AND CLEANUP
+==============================
+
+[ ] L01 - Two active arenas do not interfere
+    Do: Run two Floor Shuffle arenas, or Floor Shuffle and Volcano, at
+    the same time. Stop one while both have active floor effects.
+    Pass: Only that arena is stopped/restored. The other continues with
+    correct blocks, HUD, participants and scheduled effects.
+
+[ ] L02 - Restore temporary settings and review failures
+    Do: Restore test-only timer/HUD/text/STEMBot configs, remove temporary
+    buttons/boards and retain or remove disposable worlds as intended.
+    Start the server once more and review the console/failure notes.
+    Pass: Normal configs load, expected arenas/features are available,
+    and every failed or skipped test has a recorded reason or follow-up.
+
+
+M. PL3XMAP UPDATES AND CPU DIAGNOSTICS
+=====================================
+
+These are live-server checks; local tests cannot identify production CPU
+load. Record the world, active games/backfill/renders and profiler links.
+Keep the workload the same when comparing a temporary setting change.
+Restore each changed setting and restart afterward.
+
+[ ] M01 - Grave markers update without constant rebuilding
+    Do: With graves.map.enabled true and map.update-seconds 10 in the
+    graves section, create a grave, wait 10-20 seconds and check the web
+    map. Open/remove it and wait again. Create/remove several graves.
+    Pass: Grave markers appear/disappear correctly. No concurrent map
+    iteration exceptions occur. Other map layers remain available.
+
+[ ] M02 - Capture idle versus active arena rendering
+    Do: Capture an idle profile, then another while Floor Shuffle or
+    Volcano runs in a mapped world. Use this command for each capture:
+        /spark profiler start --thread * --timeout 60
+    Record both links and whether terrain render work/CPU increases.
+    Pass: All-thread profiles are available for comparison. Marker
+    updates are distinguished from terrain scans; changing arena blocks
+    can cause saved-region updates without a full-world render request.
+
+[ ] M03 - Isolate named-region backfill
+    Do: If backfill is active, compare its idle CPU/region updates with
+    named-regions.map.backfill-existing-chunks false after a restart.
+    Check backfill-only-when-empty: true pauses it when a player joins.
+    Pass: Discovery still works in visited chunks. Record any change in
+    Pl3xMap terrain activity. Turning off map.enabled alone does not
+    isolate backfill. Skip with a reason if backfill already completed.
+
+[ ] M04 - Isolate Deep's per-region render cost
+    Do: If Deep is being rendered, capture a profile. Temporarily set
+    generator-maps.enabled false, restart and compare the same rendering
+    workload. Restore the setting/restart. Avoid a full render solely
+    for this test; use a small affected area or existing render work.
+    Pass: Record any render-worker CPU difference. The bridge changes
+    how queued regions are drawn, not how many regions are requested.
+    The ordinary comparison renderer shows Deep's roof on new tiles.
+
+
+FAILURE / SKIP NOTES
+====================
+
+ID: ________  Result: ________  Player/arena/world: ______________________
+Step/action: ___________________________________________________________
+Expected: ______________________________________________________________
+Observed: ______________________________________________________________
+Console message / screenshot reference: ________________________________
+Retest result and build: _______________________________________________
+
+ID: ________  Result: ________  Player/arena/world: ______________________
+Step/action: ___________________________________________________________
+Expected: ______________________________________________________________
+Observed: ______________________________________________________________
+Console message / screenshot reference: ________________________________
+Retest result and build: _______________________________________________
+
+ID: ________  Result: ________  Player/arena/world: ______________________
+Step/action: ___________________________________________________________
+Expected: ______________________________________________________________
+Observed: ______________________________________________________________
+Console message / screenshot reference: ________________________________
+Retest result and build: _______________________________________________
+
+Additional notes: ______________________________________________________
+_______________________________________________________________________
+_______________________________________________________________________
+_______________________________________________________________________
+_______________________________________________________________________
+
+Passed: ______  Failed: ______  Skipped: ______  Not tested: _____________
+Outstanding issues / decision: ________________________________________
+_______________________________________________________________________
+Signed: _________________________________  Date: _______________________

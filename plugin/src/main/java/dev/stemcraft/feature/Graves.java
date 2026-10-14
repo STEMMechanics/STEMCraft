@@ -77,6 +77,7 @@ public class Graves extends BaseFeature {
     private final Map<UUID, GraveRecord> activeGraves = new HashMap<>();
     private final Map<BlockKey, UUID> graveBlocks = new HashMap<>();
     private final Map<UUID, PendingRespawn> pendingRespawns = new HashMap<>();
+    private volatile Collection<GraveMapMarker> mapSnapshot = List.of();
     private @Nullable Pl3xMapGraveMarkers mapMarkers;
 
     /**
@@ -117,6 +118,7 @@ public class Graves extends BaseFeature {
                     activeGraves.remove(grave.id());
                     graveBlocks.entrySet().removeIf(entry -> entry.getValue().equals(grave.id()));
                 }
+                publishMapGraves();
                 pendingRespawns.remove(context.playerUuid());
             }
         });
@@ -172,6 +174,7 @@ public class Graves extends BaseFeature {
         if (mapMarkers != null) mapMarkers.disable();
         mapMarkers = null;
         activeGraves.clear();
+        mapSnapshot = List.of();
         graveBlocks.clear();
         pendingRespawns.clear();
     }
@@ -382,6 +385,7 @@ public class Graves extends BaseFeature {
                 (Integer) result.getObject("second_chest_z"), result.getLong("created_at"));
             indexGrave(grave);
         });
+        publishMapGraves();
     }
 
     private GraveRecord registerGrave(Player player, GravePlacement placement) {
@@ -394,6 +398,7 @@ public class Graves extends BaseFeature {
             second == null ? null : second.getBlockX(), second == null ? null : second.getBlockY(),
             second == null ? null : second.getBlockZ(), System.currentTimeMillis());
         indexGrave(grave);
+        publishMapGraves();
         api.database().update("""
             INSERT INTO active_graves(grave_id,owner_uuid,owner_name,world,marker_x,marker_y,marker_z,
               chest_x,chest_y,chest_z,second_chest_x,second_chest_y,second_chest_z,created_at)
@@ -434,6 +439,7 @@ public class Graves extends BaseFeature {
         GraveRecord grave = activeGraves.remove(graveId);
         if (grave == null) return;
         graveBlocks.entrySet().removeIf(entry -> entry.getValue().equals(graveId));
+        publishMapGraves();
         api.database().update("DELETE FROM active_graves WHERE grave_id=?",
             statement -> statement.setString(1, graveId.toString()));
     }
@@ -464,10 +470,12 @@ public class Graves extends BaseFeature {
     }
 
     private void enableMapMarkers() {
+        if (!getConfigSection().getBoolean("map.enabled", true)) return;
         Plugin pl3xMap = Bukkit.getPluginManager().getPlugin("Pl3xMap");
         if (pl3xMap == null || !pl3xMap.isEnabled()) return;
         try {
-            mapMarkers = new Pl3xMapGraveMarkers(STEMCraft.getPlugin(), this::mapGraves);
+            mapMarkers = new Pl3xMapGraveMarkers(STEMCraft.getPlugin(), this::mapGraves,
+                getConfigSection().getInt("map.update-seconds", 10));
             mapMarkers.enable();
         } catch (RuntimeException | LinkageError exception) {
             mapMarkers = null;
@@ -476,7 +484,12 @@ public class Graves extends BaseFeature {
     }
 
     private Collection<GraveMapMarker> mapGraves() {
-        return activeGraves.values().stream().map(grave -> new GraveMapMarker(grave.id(), grave.owner(),
+        return mapSnapshot;
+    }
+
+    /** Publish on the server thread so map workers never iterate the mutable grave index. */
+    private void publishMapGraves() {
+        mapSnapshot = activeGraves.values().stream().map(grave -> new GraveMapMarker(grave.id(), grave.owner(),
             grave.ownerName(), grave.world(), grave.markerX(), grave.markerY(), grave.markerZ())).toList();
     }
 

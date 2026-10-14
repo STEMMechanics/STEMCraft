@@ -198,6 +198,9 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
 
     @Override
     public boolean isJoinable() {
+        if (status == ArenaStatus.PREPARATION && get("allowPreparationJoin", Boolean.class, false)) {
+            return true;
+        }
         if (get("allowLateJoin", Boolean.class, false)
             && (status == ArenaStatus.PREPARATION || status == ArenaStatus.RUNNING)) {
             return true;

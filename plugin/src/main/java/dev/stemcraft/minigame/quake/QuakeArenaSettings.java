@@ -11,7 +11,7 @@ import java.util.List;
 final class QuakeArenaSettings {
     final List<Location> spawns = new ArrayList<>();
     int roundSeconds = 180;
-    int countdown = 10;
+    int countdown = 30;
     int killTarget = 20;
     int reloadTicks = 30;
 }

@@ -9,6 +9,8 @@ import dev.stemcraft.minigame.BaseMiniGame;
 import dev.stemcraft.minigame.MiniGameHudConfigSupport;
 import org.bukkit.World;
 
+import java.util.List;
+
 
 public final class FloorShuffleMiniGame extends BaseMiniGame {
     public static final String NAMESPACE = "floorshuffle";
@@ -18,6 +20,7 @@ public final class FloorShuffleMiniGame extends BaseMiniGame {
     FloorShuffleArenaHandler handler;
     private ConfigFile configFile;
     private FloorShuffleConfig config;
+    FloorShuffleTextFormat textFormat = FloorShuffleTextFormat.defaults();
 
     public FloorShuffleMiniGame(STEMCraftAPI api) {
         super(api);
@@ -32,8 +35,12 @@ public final class FloorShuffleMiniGame extends BaseMiniGame {
         game.registerPlayerPlaceholder("progress", (_, _, p) -> p == null ? "-" : handler.progress(p.arena()));
         configFile = api.config().load(NAMESPACE + ".yml");
         if (configFile == null) throw new IllegalStateException("Cannot load " + NAMESPACE + ".yml");
+        textFormat = FloorShuffleTextFormat.load(configFile);
         configureRewards(game, configFile);
-        MiniGameHudConfigSupport.apply(game, configFile, MiniGameHudConfigSupport.timedRoundDefaults(TITLE));
+        MiniGameHudConfigSupport.applyTimedRound(game, configFile, TITLE, List.of(
+                ":warning_yellow: <yellow>{arena:objective}</yellow>",
+                ":steve: <white>Survivors</white> <green>{arena:players}</green>"));
+        MiniGameHudConfigSupport.applyPreparation(game, configFile, TITLE);
         handler.registerListeners();
         new FloorShuffleCommand(api, this).register();
         config = new FloorShuffleConfig(api, this, configFile);
@@ -53,6 +60,7 @@ public final class FloorShuffleMiniGame extends BaseMiniGame {
         MiniGameArena arena = game.createArena(id, world).setName(id).setMinPlayers(2).setMaxPlayers(8)
                 .setLobbySpawn(world.getSpawnLocation()).setSpectatorSpawn(world.getSpawnLocation());
         settings(arena);
+        arena.set("allowPreparationJoin", true);
         return arena;
     }
 

@@ -175,13 +175,12 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
             cancelDecayTracker(arena);
             clearOccupiedSupportTracking(arena);
             captureArenaSnapshot(arena);
-            prepareStartingGrid(arena);
-            scheduleStartingGridRefresh(arena, 1L);
             broadcastToOccupants(arena, "<gold>TNT Run is starting.</gold>");
             return;
         }
 
         if (newStatus == MiniGameArena.ArenaStatus.RUNNING) {
+            prepareStartingGrid(arena);
             prepareRunningPlayers(arena);
             startDecayTracker(arena);
             broadcastToOccupants(arena, "<red>Run!</red> <gray>The arena is collapsing.</gray>");
@@ -262,8 +261,6 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
 
         if (arena.getStatus() == MiniGameArena.ArenaStatus.WAITING) {
             queueAutoStartIfReady(arena);
-        } else if (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING) {
-            api.tasks().runLater(1L, () -> prepareStartingGrid(arena));
         }
 
         return arena.getLobbySpawn();
@@ -318,11 +315,6 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
                 return;
             }
 
-            if (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING) {
-                keepPlayerOnAssignedSpawn(arena, player, event.getFrom());
-                return;
-            }
-
             if (arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
                 return;
             }
@@ -343,24 +335,6 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
         return from.getBlockX() != to.getBlockX()
             || from.getBlockY() != to.getBlockY()
             || from.getBlockZ() != to.getBlockZ();
-    }
-
-    private void keepPlayerOnAssignedSpawn(@NotNull MiniGameArena arena, @NotNull Player player, @NotNull Location fallback) {
-        Integer slot = tntRun.assignedSpawnSlots(arena).get(player.getUniqueId());
-        if (slot == null || slot < 0 || slot >= tntRun.startingGrid(arena).size()) {
-            return;
-        }
-
-        Location spawn = tntRun.startingGrid(arena).get(slot);
-        if (spawn == null || spawn.getWorld() == null) {
-            return;
-        }
-
-        if (player.getLocation().distanceSquared(spawn) > 0.16d) {
-            player.teleport(spawn);
-        } else if (fallback.distanceSquared(spawn) > 0.16d) {
-            player.teleport(spawn);
-        }
     }
 
     private void scheduleDecayUnderLocation(@NotNull MiniGameArena arena, @NotNull Location location) {
@@ -684,14 +658,6 @@ public class TntRunArenaHandler implements MiniGameArenaHandler {
 
     void cancelDecayTracker(@NotNull MiniGameArena arena) {
         api.tasks().cancel(decayScanTaskId(arena));
-    }
-
-    void scheduleStartingGridRefresh(@NotNull MiniGameArena arena, long delayTicks) {
-        api.tasks().runLater(delayTicks, () -> {
-            if (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING) {
-                prepareStartingGrid(arena);
-            }
-        });
     }
 
     void queueAutoStartIfReady(@NotNull MiniGameArena arena) {

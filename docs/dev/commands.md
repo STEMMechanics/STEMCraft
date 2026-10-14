@@ -17,7 +17,7 @@ The list below reflects the active built-in command roots in source.
 | `/maintenance` | `STEMCraft.java` | Toggles server maintenance mode |
 | `/webserver` | `WebServiceImpl` | Embedded web server control |
 | `/world` | `WorldCommand` | World lifecycle, inspection, settings, and join/leave command editing |
-| `/resourcepack` | `ResourcePackCommand` | Pack delivery and pack build operations |
+| `/resourcepack` | `ResourcePackCommand` | Pack delivery, pack builds and a clickable download URL |
 | `/namedregion` | `NamedRegions` | Inspect, find, teleport to, rename, retire, release, and regenerate named areas; see [Named Regions](https://github.com/STEMMechanics/stemcraft/wiki/named-regions) |
 | `/hologram` | `HologramServiceImpl` | Hologram creation and editing |
 | `/mail` | `Mailboxes` | Compose item and message deliveries (mailbox admin) |
@@ -30,6 +30,76 @@ The list below reflects the active built-in command roots in source.
 | `/muteall` | `ChatServiceImpl` | Global chat mute control |
 | `/ban`, `/unban`, `/kick`, `/warn` | `PunishmentServiceImpl` | Punishment management |
 | `/report` | `ChatServiceImpl` | Player report submission |
+
+### Resource pack download diagnostics
+
+Use `/resourcepack url` (or `/respack url`) to print the current download address
+as a clickable link. Open it in a browser on the affected player's computer to
+check whether that computer can download the pack. The address includes the same
+version parameter used when sending the pack to Minecraft. This command displays
+the URL without requesting an in-game download or rebuilding the pack.
+It requires `stemcraft.command.resourcepack`, like the other resource pack commands.
+Tab completion offers `info`, `send`, `sendall`, `url` and `zip`; player names are
+offered after `send`.
+
+### Hologram cycleboard
+
+Create one rotating arena-stat board with `/hologram create minigame_leaderboard`.
+
+Boards render only while their chunks are loaded; automatic rotation does not
+load unattended chunks. Returning renders the current page once. Reloading
+STEMCraft rebuilds tracked boards. Unlinked nameplates remain for manual cleanup.
+
+Default leaderboard rows use columns: ranks and names align left, and scores or
+times align right. This also applies to `stat_leaderboard` and Parkour/Boat Race
+record boards. Rows fit the longest entry with a minimum two-space gap between
+the name and score/time, measured in the default Minecraft font. Spaces leave at most
+three pixels of rounding. Titles remain centered. Custom `line=` and `first=`
+templates retain their formatting; add `{gap}` between the name and score/time
+to align the right column, and `{rank-gap}` after the rank to align names.
+
+It discovers arena-scoped minigame stats and shows one arena at a time. Wins are
+used when available; otherwise it prefers goals, scores, then a stat by key.
+The default rotation delay is 20 seconds. Configure or disable timed rotation
+with `/hologram cycle delay <seconds>` (`0` disables timed rotation), then set a
+single manual advance button with `/hologram cycle button set` while looking at
+it, or remove it with `/hologram cycle button clear`. Setting these options
+requires `stemcraft.command.hologram`; any player can press the configured
+button. The board accepts the stat leaderboard options `limit`, `period`, `line`,
+and `first` as pipe-separated data after the type.
+
+### Hologram deletion
+
+Use `/hologram delete -range 4` to delete all registered STEMCraft holograms
+within four blocks of your position in the current world. Add `-limit 1` to
+delete only the nearest one. The limit is optional; candidates are ordered from
+closest to furthest, with the lower hologram ID first when distances tie.
+Distance is measured to the saved board position, as with `/hologram closest`.
+Positive decimal ranges are accepted, and the two flags can appear in either order.
+Deleting by ID still works, including from the console. Range deletion requires
+a player and the existing `stemcraft.command.hologram` permission.
+
+Deletion removes registered boards and their tracked rows. It does not remove
+unlinked nameplates, Citizens displays, or other plugins' entities. Reload and
+shutdown likewise leave untracked entities alone.
+
+For explicit cleanup of old STEMCraft-tagged static rows, stand nearby and run:
+
+```text
+/minecraft:kill @e[type=minecraft:armor_stand,distance=..4,nbt={Tags:["stemcraft:hologram"]},nbt=!{Tags:["stemcraft:dynamic-hologram"]}]
+```
+
+This also removes any active STEMCraft rows in that radius. It requires the
+`minecraft.command.kill` and `minecraft.command.selector` permissions; see
+[Paper's permissions reference](https://docs.papermc.io/paper/reference/permissions/).
+Use NBT filters for these colon-containing tag names. Minecraft's `tag=` selector
+reads an unquoted word and does not accept these names, even with quotes. The
+selector above was verified with Mojang's Minecraft 26.2 parser.
+From the server console, use the player's location instead:
+
+```text
+minecraft:execute at <player> run minecraft:kill @e[type=minecraft:armor_stand,distance=..4,nbt={Tags:["stemcraft:hologram"]},nbt=!{Tags:["stemcraft:dynamic-hologram"]}]
+```
 
 ## Travel and Utility
 

@@ -9,6 +9,8 @@ import dev.stemcraft.minigame.BaseMiniGame;
 import dev.stemcraft.minigame.MiniGameHudConfigSupport;
 import org.bukkit.World;
 
+import java.util.List;
+
 
 public final class PunchTheBatMiniGame extends BaseMiniGame {
     public static final String NAMESPACE = "punchthebat";
@@ -33,7 +35,9 @@ public final class PunchTheBatMiniGame extends BaseMiniGame {
         configFile = api.config().load(NAMESPACE + ".yml");
         if (configFile == null) throw new IllegalStateException("Cannot load " + NAMESPACE + ".yml");
         configureRewards(game, configFile);
-        MiniGameHudConfigSupport.apply(game, configFile, MiniGameHudConfigSupport.timedRoundDefaults(TITLE));
+        MiniGameHudConfigSupport.applyTimedRound(game, configFile, TITLE, List.of(
+                ":info_green: <white>Score</white> <green>{player:score}</green>",
+                ":steve: <white>Players</white> <aqua>{arena:players}</aqua>"));
         handler.registerListeners();
         new PunchTheBatCommand(api, this).register();
         config = new PunchTheBatConfig(api, this, configFile);
