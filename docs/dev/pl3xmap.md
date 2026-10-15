@@ -4,7 +4,35 @@ Pl3xMap is a soft dependency. The 26.3 branch is currently built and tested agai
 
 ## Named regions and structures
 
-`NamedRegions` publishes immutable map-area snapshots from compact named-region storage. Biome areas become polygons; discovered structures use bundled icons. Refreshes are throttled by `map.update-minutes`, with dirty-state invalidation after region changes. The layer keys are `stemcraft_named_regions` and `stemcraft_named_structures`.
+Discovered structures use bundled icons from immutable snapshots. Biome geometry
+defaults to the original full-region polygons through Pl3xMap's marker files and
+live updates. `named-regions.map.biomes.viewport-tiles: false` preserves that
+behavior, including when the setting is absent from an existing configuration.
+Set it to `true` to opt into
+[static region tiles](../../tools/pl3xmap-regions/README.md): the client loads only
+visible vector tiles, with detail reduced at distant zooms. In this mode the
+`stemcraft_named_regions` marker file is `[]`, its live marker updates are
+disabled, and SSE carries only small revision notifications for biome changes,
+throttled by `map.update-minutes`. The layer keys remain
+`stemcraft_named_regions` and `stemcraft_named_structures`.
+
+In tiled mode STEMCraft automatically copies the bundled browser script into
+Pl3xMap's configured web directory and updates its existing index on attachment and map
+enable/reload. It preserves theme changes and backs up the original index;
+Pl3xMap's read-only setting is not required for this extension. A background
+publisher generates bounded JSON tiles and small metadata files under each
+world's existing `tiles/<world>/stemcraft-regions/` directory. Pl3xMap's existing
+web server serves them, with no separate API, port or proxy route. This also
+works when another web server serves the same generated files. Independently
+hosted copies can opt out with `named-regions.map.biomes.auto-install: false`
+and include the script/index/region tiles in their existing map-file deployment.
+Returning `viewport-tiles` to `false` removes STEMCraft's script tag from the
+managed index and restores live polygons. Restart and refresh the map page after
+changing modes; independently managed websites must remove their script tag too.
+`named-regions.map.biomes.enabled: false` removes only the biome overlay and
+stops its tile publication; it retains structure icons and in-game names. Set
+`named-regions.map.enabled: false` to remove both named overlays. Hiding a legacy
+marker layer in the browser does not prevent Pl3xMap from fetching its data.
 
 STEMCraft loads at STARTUP and Pl3xMap at POSTWORLD. Register when Pl3xMap enables as well as when it is already available; watch map-world loads and map reloads. The lifecycle fix in PR #158 also unregisters event handlers on shutdown. If layers are absent entirely, check startup registration and `named-regions.map.enabled`; if present but empty, check configured world names, discovery data and refresh timing. Existing player web sessions may need a refresh.
 
@@ -57,8 +85,15 @@ for comparison; Deep's next rendered tiles will show the roof.
 The grave overlay previously requested marker rebuilding/serialization/file
 writes at a one-second interval. That avoidable background work is now throttled
 and cached, but marker work is separate from terrain-render scheduling. Named
-overlays default to five-minute updates, with a 60-second minimum; their area
-geometry is rebuilt only when dirty and the refresh interval has elapsed.
+overlays default to five-minute updates, with a 60-second minimum. Structure
+snapshots rebuild only when dirty and the refresh interval has elapsed. In the
+default mode these snapshots include full biome boundaries. With viewport tiles
+enabled, snapshots contain only structures; biome tiles are generated from cached
+discovery data off the server thread, and unchanged files are left untouched.
+The publisher enumerates occupied chunks to
+avoid generating gaps between distant discoveries. Metadata is published last;
+SSE then announces only its revision. See the extension instructions for
+generation detail, bounds and a browser/network verification checklist.
 
 To attribute a live CPU spike, capture all threads during the same workload:
 

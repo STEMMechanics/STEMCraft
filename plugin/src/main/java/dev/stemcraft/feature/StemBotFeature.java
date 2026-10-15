@@ -20,6 +20,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.player.*;
 import org.bukkit.event.server.PluginDisableEvent;
+import org.bukkit.event.server.TabCompleteEvent;
 import org.bukkit.persistence.PersistentDataType;
 
 import java.io.File;
@@ -33,6 +34,7 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
 
     private final Map<UUID,ControlledGuide> controls=new ConcurrentHashMap<>();
     private final Map<UUID,BotSession> sessions=new ConcurrentHashMap<>();
+    private final Map<UUID,BotSession> noSpawnSessions=new HashMap<>();
     private final Set<AsyncChatEvent> privateChat=
         Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
     private final Map<UUID,Integer> pendingArrivals=new HashMap<>();
@@ -89,11 +91,17 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
                 }
 
                 if(!argument.isBlank()) {
+                    BotScript.HelpTopic topic=script==null?null:script.helpTopic(argument);
+                    if(enabled&&topic!=null&&topic.noSpawn()) {
+                        if(!runNoSpawnAction(player,topic.action()))
+                            ctx.returnError("I could not give you that help right now.");
+                        return;
+                    }
                     if(!available()) {
                         ctx.returnError("STEMBot is resting right now.");
                         return;
                     }
-                    String action=script.helpTopicAction(argument);
+                    String action=topic==null?null:topic.action();
                     if(action==null) {
                         List<String> topics=script.helpTopics().keySet().stream().sorted().toList();
                         ctx.returnInfo(topics.isEmpty()?"I do not have any help topics right now."
@@ -101,7 +109,10 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
                         return;
                     }
                     if(!queueHelpAction(player,action)) ctx.returnError("I could not queue that help topic right now.");
-                    else ctx.returnInfo("I will help with "+argument+" when I am free and you are out of combat.");
+                    else if(shouldDeferForCombat(player))
+                        ctx.returnInfo("I will help with "+argument+" once you are out of combat.");
+                    else if(isBotRequestBusy(player.getUniqueId()))
+                        ctx.returnInfo("I will help with "+argument+" when I finish what I am doing.");
                     return;
                 }
 
@@ -140,6 +151,10 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
                 if(player.isOnline()) Bukkit.dispatchCommand(player,forwarded);
             });
         },EventPriority.HIGHEST,true);
+
+        // Execution is forwarded above, but Bukkit's /help command still owns
+        // completion when the alias cannot be registered.
+        api.events().register(TabCompleteEvent.class,this::completeHelp,EventPriority.HIGHEST,true);
 
         api.events().register(
             PlayerJoinEvent.class,
@@ -343,6 +358,47 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
         if(!stored.isEmpty()) pendingBotRequests.put(player.getUniqueId(),stored);
     }
 
+    private boolean runNoSpawnAction(Player player,String action) {
+        if(!enabled||script==null||!player.isOnline()) return false;
+        UUID id=player.getUniqueId();
+        closeNoSpawnSession(id);
+        try {
+            BotSession session=BotSession.noSpawn(script,player.getWorld().getName(),action,sessionOutput(player,null));
+            noSpawnSessions.put(id,session);
+            session.tick(player.getLocation());
+            if(session.closed()) noSpawnSessions.remove(id,session);
+            return true;
+        } catch(RuntimeException error) {
+            closeNoSpawnSession(id);
+            STEMCraft.getPlugin().getLogger().log(java.util.logging.Level.WARNING,
+                "STEMBot no-spawn help failed: "+action,error);
+            return false;
+        }
+    }
+
+    private void closeNoSpawnSession(UUID id) {
+        BotSession session=noSpawnSessions.remove(id);
+        if(session!=null) session.close(false);
+    }
+
+    private void tickNoSpawnSessions() {
+        for(var entry:new ArrayList<>(noSpawnSessions.entrySet())) {
+            Player player=Bukkit.getPlayer(entry.getKey());
+            if(player==null) {
+                closeNoSpawnSession(entry.getKey());
+                continue;
+            }
+            try {
+                entry.getValue().tick(player.getLocation());
+                if(entry.getValue().closed()) noSpawnSessions.remove(entry.getKey(),entry.getValue());
+            } catch(RuntimeException error) {
+                closeNoSpawnSession(entry.getKey());
+                STEMCraft.getPlugin().getLogger().log(java.util.logging.Level.WARNING,
+                    "STEMBot no-spawn help stopped",error);
+            }
+        }
+    }
+
     @Override
     public boolean startAction(Player player,String action) {
         return !controls.containsKey(player.getUniqueId())&&available()&&hasAction(action)
@@ -483,9 +539,24 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
     private void updateCommandTabCompletions() {
         if(botCommand==null) return;
         botCommand.clearTabCompletions();
-        botCommand.addTabCompletion("close");
-        if(script!=null) script.helpTopics().keySet().stream().sorted()
-            .forEach(topic->botCommand.addTabCompletion(topic));
+        helpCompletions().forEach(topic->botCommand.addTabCompletion(topic));
+    }
+
+    private List<String> helpCompletions() {
+        var completions=new TreeSet<String>();
+        completions.add("close");
+        if(script!=null) completions.addAll(script.helpTopics().keySet());
+        return List.copyOf(completions);
+    }
+
+    private void completeHelp(TabCompleteEvent event) {
+        if(!event.isCommand()||!(event.getSender() instanceof Player)) return;
+        String buffer=event.getBuffer();
+        if(buffer.startsWith("/")) buffer=buffer.substring(1);
+        if(!buffer.regionMatches(true,0,"help ",0,5)) return;
+        String prefix=buffer.substring(5).toLowerCase(Locale.ROOT);
+        event.setCompletions(helpCompletions().stream()
+            .filter(topic->topic.startsWith(prefix)).toList());
     }
 
     private void queueArrival(Player player,int ticks) {
@@ -499,7 +570,10 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
     }
 
     private void tick() {
-        if(!available()) return;
+        if(!available()) {
+            tickNoSpawnSessions();
+            return;
+        }
 
         tickDepartures();
         for(var entry:new ArrayList<>(pendingSummons.entrySet())) {
@@ -577,6 +651,8 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
         }
 
         processPendingBotRequests();
+        // A newly attached actor starts ticking with the regular sessions next time.
+        tickNoSpawnSessions();
     }
 
     private void processPendingBotRequests() {
@@ -587,10 +663,7 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
                 pendingBotRequests.remove(playerId);
                 continue;
             }
-            if(controls.containsKey(playerId)||sessions.containsKey(playerId)
-                ||pendingSummons.containsKey(playerId)||pendingArrivals.containsKey(playerId)
-                ||shouldDeferForCombat(player)
-                ||departures.values().stream().anyMatch(value->value.owner().equals(playerId)))
+            if(isBotRequestBusy(playerId)||shouldDeferForCombat(player))
                 continue;
 
             LinkedHashSet<String> requests=pendingBotRequests.get(playerId);
@@ -611,6 +684,12 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
                 break;
             }
         }
+    }
+
+    private boolean isBotRequestBusy(UUID playerId) {
+        return controls.containsKey(playerId)||sessions.containsKey(playerId)
+            ||pendingSummons.containsKey(playerId)||pendingArrivals.containsKey(playerId)
+            ||departures.values().stream().anyMatch(value->value.owner().equals(playerId));
     }
 
     private ResolvedBotRequest resolveBotRequest(Player player,String requestKey) {
@@ -680,6 +759,90 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
 
         UUID id=player.getUniqueId();
         World world=player.getWorld();
+        BotActor actor=createActor(player,fixedSpawn);
+        if(actor==null) return;
+
+        BotSession session=null;
+        try {
+            session=new BotSession(script,actor,world.getName(),action,sessionOutput(player,actor));
+            sessions.put(id,session);
+            actor.puff();
+            if(firstTime) markSeenWorld(player,world.getName());
+        } catch(RuntimeException failure) {
+            if(session!=null) sessions.remove(id,session);
+            actor.close();
+            reportSpawnFailure(player,failure);
+        }
+    }
+
+    private BotSession.Output sessionOutput(Player player,BotActor initialActor) {
+        UUID id=player.getUniqueId();
+        BotScript program=script;
+        return new BotSession.Output() {
+            private BotActor speakingActor=initialActor;
+            private String waitMessage;
+
+            @Override public BotActor spawn() {
+                if(!available()) {
+                    sayLine(player,"The next step needs STEMBot to appear, but I am not available right now. Ask staff for help.");
+                    closeNoSpawnSession(id);
+                    return null;
+                }
+                String message=shouldDeferForCombat(player)
+                    ?"I need to appear for the next step. I will join you once you are out of combat."
+                    :isBotRequestBusy(id)?"I will appear for the next step after my current task finishes.":null;
+                if(message!=null) {
+                    if(!message.equals(waitMessage)) sayLine(player,message);
+                    waitMessage=message;
+                    return null;
+                }
+                waitMessage=null;
+                BotActor appearing=createActor(player,null);
+                if(appearing==null) closeNoSpawnSession(id);
+                return appearing;
+            }
+
+            @Override public void spawned(BotSession session) {
+                speakingActor=Objects.requireNonNull(session.actor());
+                noSpawnSessions.remove(id,session);
+                sessions.put(id,session);
+                speakingActor.puff();
+            }
+
+            @Override public void navigationDiagnostic(String message) {
+                STEMCraft.getPlugin().getLogger().info("[STEMBot navigation] " + message);
+            }
+
+            @Override public Runnable await(String key,java.util.function.Consumer<Boolean> completion) {
+                var request=new dev.stemcraft.api.event.guide.GuideActionRequestEvent(player,key,completion);
+                try {
+                    Bukkit.getPluginManager().callEvent(request);
+                    if(!request.claimed()) completion.accept(false);
+                } catch(RuntimeException failure) {
+                    request.cancel();
+                    completion.accept(false);
+                    STEMCraft.getPlugin().getLogger().log(java.util.logging.Level.WARNING,
+                        "STEMBot guide callback failed: "+key,failure);
+                }
+                return request::cancel;
+            }
+
+            @Override public void depart(BotActor departing) {
+                StemBotFeature.this.depart(id,departing,program.departureDelayTicks());
+            }
+
+            @Override public void say(String text) { sayLine(player,text); }
+
+            @Override public int talk(String text) {
+                if(speakingActor==null) { sayLine(player,text); return 1; }
+                return talkLine(player,speakingActor,text);
+            }
+        };
+    }
+
+    BotActor createActor(Player player,Location fixedSpawn) {
+        UUID id=player.getUniqueId();
+        World world=player.getWorld();
         Location playerLocation=player.getLocation();
 
         Location actorSpawn=fixedSpawn==null
@@ -693,7 +856,7 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
                     NamedTextColor.YELLOW
                 )
             );
-            return;
+            return null;
         }
 
         if(fixedSpawn==null) actorSpawn.setDirection(
@@ -701,7 +864,7 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
         );
 
         try {
-            BotActor actor=new CitizensBotActor(
+            return new CitizensBotActor(
                 STEMCraft.getPlugin(),
                 id,
                 script.name(),
@@ -709,68 +872,15 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
                 skins.current()
             );
 
-            BotSession.Output output=new BotSession.Output() {
-                @Override public void navigationDiagnostic(String message) {
-                    STEMCraft.getPlugin().getLogger().info("[STEMBot navigation] " + message);
-                }
-                @Override public Runnable await(String key, java.util.function.Consumer<Boolean> completion) {
-                    var request = new dev.stemcraft.api.event.guide.GuideActionRequestEvent(player, key, completion);
-                    try {
-                        Bukkit.getPluginManager().callEvent(request);
-                        if (!request.claimed()) completion.accept(false);
-                    } catch (RuntimeException failure) {
-                        request.cancel();
-                        completion.accept(false);
-                        STEMCraft.getPlugin().getLogger().log(java.util.logging.Level.WARNING,
-                            "STEMBot guide callback failed: " + key, failure);
-                    }
-                    return request::cancel;
-                }
-
-                @Override
-                public void depart(BotActor departing) {
-                    StemBotFeature.this.depart(id,departing,script.departureDelayTicks());
-                }
-
-                @Override
-                public void say(String text) {
-                    sayLine(player,text);
-                }
-
-                @Override
-                public int talk(String text) {
-                    return talkLine(player,actor,text);
-                }
-            };
-
-            BotSession session=new BotSession(
-                script,
-                actor,
-                world.getName(),
-                action,
-                output
-            );
-
-            sessions.put(id,session);
-            actor.puff();
-
-            if(firstTime)
-                markSeenWorld(player,world.getName());
-
         } catch(RuntimeException failure) {
-            player.sendMessage(
-                Component.text(
-                    "STEMBot could not join you just now.",
-                    NamedTextColor.YELLOW
-                )
-            );
-
-            STEMCraft.getPlugin().getLogger().log(
-                java.util.logging.Level.WARNING,
-                "Could not summon STEMBot",
-                failure
-            );
+            reportSpawnFailure(player,failure);
+            return null;
         }
+    }
+
+    private void reportSpawnFailure(Player player,RuntimeException failure) {
+        player.sendMessage(Component.text("STEMBot could not join you just now.",NamedTextColor.YELLOW));
+        STEMCraft.getPlugin().getLogger().log(java.util.logging.Level.WARNING,"Could not summon STEMBot",failure);
     }
 
     static @javax.annotation.Nullable Location findSpawn(
@@ -1026,6 +1136,7 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
     // The actor is disposed below; the handle only represents ownership across ticks.
     @SuppressWarnings("resource")
     private void close(UUID id,boolean farewell) {
+        closeNoSpawnSession(id);
         controls.remove(id);
         activeBotRequests.remove(id);
         pendingArrivals.remove(id);
@@ -1045,6 +1156,8 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
 
         for(UUID id:List.copyOf(sessions.keySet()))
             close(id,false);
+        for(UUID id:List.copyOf(noSpawnSessions.keySet()))
+            closeNoSpawnSession(id);
         for(BotActor actor:List.copyOf(departures.keySet())) actor.close();
         departures.clear();
     }

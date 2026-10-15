@@ -137,12 +137,51 @@ help-topics:
 With no `mailbox-received` route, the mailbox explanation runs only on the
 player's first mail notification. Adding `mailbox-received: mailbox-reminder`
 also runs `mailbox-reminder` on later notifications. `/help mail` and
-`/help mailbox` use the configured help topic actions; `/stembot <topic>` has
-tab completion for the configured topics.
-All automatic arrival, trigger and help-topic actions pause during combat until
+`/help mailbox` use the configured help topic actions. `/help <topic>` and
+`/stembot <topic>` complete the configured topics and `close`, with prefix
+filtering and refreshed suggestions after reload. Player `/help` completions
+are replaced through `TabCompleteEvent` when Bukkit owns the command alias.
+An idle topic that spawns a guide starts on the next scheduler tick without a waiting
+message. Requests blocked by combat or another guide task explain the actual
+reason for waiting.
+Automatic arrival, trigger and help-topic actions that spawn a guide pause during combat until
 the configured quiet period has elapsed. The bundled mailbox explanation says
 to craft the mailbox in the Survival world. `/help` and `/help <topic>` forward
 to STEMBot, while `/stembot` and `/stembot <topic>` remain available directly.
+
+Prefix a help topic's target with `no-spawn:` to start it without a guide actor:
+
+```yaml
+help-topics:
+  mail: mailbox-help
+  wilderness: no-spawn:survival-wilderness
+```
+
+The prefix is a route option; the action name remains `survival-wilderness`.
+Text-only steps answer immediately, including during combat or another guide
+conversation. Before spawning, `say`, `talk`, `require-world`, `exit-region`,
+`sleep`, `speed` and `action` work without an NPC. These steps do not require
+Citizens or safe NPC ground. Ordinary chat retains its existing routing, and
+robot sounds, gestures and particles start with the spawned guide.
+Reaching `end`, `close` or the end of the list before spawning closes silently.
+Each command request starts from the player's current position. Feature disabling
+still disables these topics.
+
+When `walk`, `look`, `point`, `wave`, `sneak`, `stand`, `listen` or `await` is
+reached, the interpreter requests a guide before executing that instruction.
+It keeps the same session, action, instruction pointer and speed; previous text
+is not repeated. An active guide, pending arrival/departure or combat cooldown
+delays the spawn, with one notice per waiting reason. The existing guide retains
+ownership. Missing Citizens or an unusable spawn spot ends only that request and
+reports why; the script remains loaded. Normal action/reference validation still
+applies to every topic.
+
+Once the actor appears, the remaining steps use normal speech, gestures, nearby
+private chat and departure behaviour. `listen` and `await` use the same routing
+and provider cleanup as ordinary guide sessions. Actor creation happens at most
+once per session, including through action jumps and world-check fallbacks.
+World changes, disconnect, `/stembot close`, reload and disable cancel pending
+steps. World routes and event triggers retain their initial guide spawning.
 
 ## Reusable region directions and world requirements
 
@@ -165,13 +204,13 @@ The bundled `/help wilderness` topic uses these reusable instructions:
 
 ```yaml
 help-topics:
-  wilderness: survival-wilderness
+  wilderness: no-spawn:survival-wilderness
 
 actions:
   survival-wilderness:
     - 'require-world:survival* normal -> survival-wilderness-world-required'
     - 'exit-region:survival-old-terrain'
-    - 'action:survival-menu'
+    - 'end'
   survival-wilderness-world-required:
     - 'talk:Ask me for these directions when you are in a Survival overworld.'
     - 'end'
@@ -218,8 +257,9 @@ disengaged/public chat retain their existing behaviour.
 
 STEMBot compares the four cardinal exits from the player's current X/Z and picks
 the shortest accessible one within the world border. Equal distances prefer
-north, east, south, then west. It speaks the direction, rounded-up horizontal
-distance and target block coordinates, and points that way while speaking.
+north, east, south, then west. The reply gives the direction, rounded-up horizontal
+distance and target block coordinates. A spawned guide also points that way;
+the bundled no-spawn command sends only text and ends without a menu.
 Ask again after moving to recalculate. The guidance reports when the player is
 already outside, bounds are missing or the border blocks all exits.
 

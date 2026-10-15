@@ -291,7 +291,7 @@ actions:
   survival-wilderness:
     - 'require-world:survival* normal -> survival-wilderness-world-required'
     - 'exit-region:survival-old-terrain'
-    - 'action:survival-menu'
+    - 'end'
 
   survival-wilderness-world-required:
     - 'talk:Ask me for these directions when you are in a Survival overworld. I need your position there to find the closest way out of the old terrain.'
@@ -573,7 +573,11 @@ triggers:
   # Add mailbox-received: some-action to run an action on later mail receipts.
 
 # /help <topic> and /stembot <topic> run these actions.
+# Prefix a target with no-spawn: to start without an NPC.
+# Text, world checks, exit-region, sleep, speed and action jumps work without the bot.
+# Movement, gestures, listen and await summon the bot when that step is reached.
+# If another task or combat delays spawning, the action waits at that step.
 help-topics:
   mail: mailbox-help
   mailbox: mailbox-help
-  wilderness: survival-wilderness
+  wilderness: no-spawn:survival-wilderness

@@ -165,12 +165,14 @@ class BotScriptTest {
             assertTrue(script.actions().containsKey("creative-merge"));
             assertTrue(script.actions().containsKey("practice-quest"));
             assertEquals("survival-wilderness",script.helpTopicAction("wilderness"));
+            assertTrue(script.helpTopic("wilderness").noSpawn());
             var directions=script.actions().get("survival-wilderness");
             assertEquals(BotScript.Op.REQUIRE_WORLD,directions.getFirst().op());
             assertEquals("normal",directions.getFirst().text());
             assertTrue(directions.getFirst().routes().getFirst().matches("survival_north"));
             assertEquals(BotScript.Op.EXIT_REGION,directions.get(1).op());
             assertEquals("survival-old-terrain",directions.get(1).text());
+            assertEquals(BotScript.Op.END,directions.getLast().op());
             assertNull(script.regionGuide().regions().get("survival-old-terrain").bounds());
             assertEquals(3, script.scanning().size());
             assertEquals(10, script.scanningCooldownSeconds());

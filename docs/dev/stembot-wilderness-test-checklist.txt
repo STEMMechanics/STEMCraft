@@ -24,6 +24,10 @@ these sample bounds must not replace the real Survival boundary.
 [ ] R01 - Explicit command topic
     In the test overworld, run /help wilderness, then /stembot wilderness.
     Both should give directions through the survival-wilderness action.
+    With wilderness: no-spawn:survival-wilderness, expect only a text reply:
+    no NPC, speech sounds, menu, farewell, particles or private chat capture.
+    Repeat with Citizens disabled and during combat; replies should still work.
+    Ask during another guide conversation; its actor/control must be preserved.
 
 [ ] R02 - Survival overworld requirement
     Run /help wilderness in Creative, the Nether, and the End.
@@ -33,19 +37,19 @@ these sample bounds must not replace the real Survival boundary.
 
 [ ] R03 - North exit
     At X/Z 4000.5,100.5: north, about 101 blocks, target Z -1.
-    Check that STEMBot faces/gestures towards the stated target.
+    Ask a spawned guide in private chat to check facing/gestures towards the target.
 
 [ ] R04 - East exit
     At X/Z 7900.5,4000.5: east, about 100 blocks, target X 8000.
-    Check pointing.
+    Check pointing when asking a spawned guide in private chat.
 
 [ ] R05 - South exit
     At X/Z 4000.5,7900.5: south, about 100 blocks, target Z 8000.
-    Check pointing.
+    Check pointing when asking a spawned guide in private chat.
 
 [ ] R06 - West exit
     At X/Z 100.5,4000.5: west, about 101 blocks, target X -1.
-    Check pointing.
+    Check pointing when asking a spawned guide in private chat.
 
 [ ] R07 - Recalculate after moving
     Ask near one edge, move near another, and ask again. The second reply
@@ -98,6 +102,20 @@ these sample bounds must not replace the real Survival boundary.
     Remove testexit, test-exit and test-room. Restore test-world settings.
     Configure the actual old Survival bounds before enabling for players.
     No sample coordinates should remain in the live configuration.
+
+[ ] R15 - On-demand actor steps
+    Temporarily map help-topics.demo to no-spawn:lazy-demo and define:
+      lazy-demo: ['talk:First reply', 'sleep:40', 'wave', 'talk:I am here', 'end']
+    Run /help demo. First reply must be text only. After two seconds, the
+    bot should appear once, wave, speak normally and finish. First reply
+    must not repeat. Try while a guide is active or combat blocks spawning:
+    the text is immediate, one wait notice appears, and wave waits until
+    the guide is free and combat has ended. Existing guide control stays intact.
+    Try a listen/await step too: the NPC must appear before private replies
+    or provider callbacks start. Missing Citizens or blocked spawn space
+    should stop only this request with an explanation; wilderness text help
+    must still work. Reload or change worlds while waiting: no late spawn.
+    Remove demo and lazy-demo after testing.
 
 Notes: _________________________________________________________________
 ________________________________________________________________________
