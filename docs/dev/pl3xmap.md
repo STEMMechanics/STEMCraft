@@ -4,7 +4,20 @@ Pl3xMap is a soft dependency. The 26.3 branch is currently built and tested agai
 
 ## Named regions and structures
 
-`NamedRegions` publishes immutable map-area snapshots from compact named-region storage. Biome areas become polygons; discovered structures use bundled icons. Refreshes are throttled by `map.update-minutes`, with dirty-state invalidation after region changes. The layer keys are `stemcraft_named_regions` and `stemcraft_named_structures`.
+Discovered structures use bundled icons from immutable snapshots. Biome geometry
+uses the [viewport browser extension and API](../../tools/pl3xmap-regions/README.md):
+the client loads only visible vector tiles, with detail reduced at distant zooms.
+The `stemcraft_named_regions` marker file is always `[]` and its live marker
+updates are disabled. SSE carries only small revision notifications for biome
+changes, throttled by `map.update-minutes`. The layer keys remain
+`stemcraft_named_regions` and `stemcraft_named_structures`.
+
+Install the browser extension and route its API to STEMCraft's web service before
+expecting biome outlines. The plugin alone stops the old geometry payloads.
+`named-regions.map.biomes.enabled: false` removes only the biome overlay and
+disables its API; it retains structure icons and in-game names. Set
+`named-regions.map.enabled: false` to remove both named overlays. Hiding a legacy
+marker layer in the browser does not prevent Pl3xMap from fetching its data.
 
 STEMCraft loads at STARTUP and Pl3xMap at POSTWORLD. Register when Pl3xMap enables as well as when it is already available; watch map-world loads and map reloads. The lifecycle fix in PR #158 also unregisters event handlers on shutdown. If layers are absent entirely, check startup registration and `named-regions.map.enabled`; if present but empty, check configured world names, discovery data and refresh timing. Existing player web sessions may need a refresh.
 
@@ -57,8 +70,11 @@ for comparison; Deep's next rendered tiles will show the roof.
 The grave overlay previously requested marker rebuilding/serialization/file
 writes at a one-second interval. That avoidable background work is now throttled
 and cached, but marker work is separate from terrain-render scheduling. Named
-overlays default to five-minute updates, with a 60-second minimum; their area
-geometry is rebuilt only when dirty and the refresh interval has elapsed.
+overlays default to five-minute updates, with a 60-second minimum. Structure
+snapshots rebuild only when dirty and the refresh interval has elapsed; biome
+tiles read bounded samples from the cached storage instead of rebuilding
+whole-world polygons. See the extension instructions for SSE proxy settings,
+mutable terrain cache rules and a browser/network verification checklist.
 
 To attribute a live CPU spike, capture all threads during the same workload:
 

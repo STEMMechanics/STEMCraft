@@ -5,10 +5,9 @@ import net.pl3x.map.core.Pl3xMap;
 import net.pl3x.map.core.image.IconImage;
 import net.pl3x.map.core.markers.layer.WorldLayer;
 import net.pl3x.map.core.markers.marker.Marker;
-import net.pl3x.map.core.markers.marker.Polyline;
 import net.pl3x.map.core.markers.option.Options;
 import net.pl3x.map.core.markers.option.Tooltip;
-import net.pl3x.map.core.markers.Point;
+import net.pl3x.map.core.util.FileUtil;
 import net.pl3x.map.core.world.World;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -16,11 +15,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
 import java.util.function.Supplier;
+import java.util.function.LongSupplier;
 
 /** Optional live Pl3xMap layer for generated region and structure names. */
 public final class Pl3xMapNamedRegions implements net.pl3x.map.core.event.EventListener {
-    private boolean enabled;
-    public record Style(int strokeColour, int fillColour, int lineThickness) { }
+    private volatile boolean enabled;
     private static final String BIOME_KEY = "stemcraft_named_regions";
     private static final String STRUCTURE_KEY = "stemcraft_named_structures";
     private static final String STRUCTURE_ICON_PREFIX = "stemcraft_named_structure_";
@@ -30,18 +29,17 @@ public final class Pl3xMapNamedRegions implements net.pl3x.map.core.event.EventL
         "trail-ruins","trial-chambers","village","generic");
     private final STEMCraft plugin;
     private final Supplier<Collection<NamedMapArea>> areas;
-    private final List<Style> biomeStyles;
-    private final boolean permanentLabels;
+    private final LongSupplier revision;
+    private final boolean biomesEnabled;
     private final String biomeLayerName;
     private final String structureLayerName;
     private final int updateIntervalSeconds;
     private final int structureIconSize;
-    public Pl3xMapNamedRegions(STEMCraft plugin, Supplier<Collection<NamedMapArea>> areas, List<Style> biomeStyles,
-                               boolean permanentLabels, String biomeLayerName, String structureLayerName,
+    public Pl3xMapNamedRegions(STEMCraft plugin, Supplier<Collection<NamedMapArea>> areas, LongSupplier revision,
+                               boolean biomesEnabled, String biomeLayerName, String structureLayerName,
                                int updateIntervalSeconds, int structureIconSize) {
-        this.plugin = plugin; this.areas = areas; this.biomeStyles = List.copyOf(biomeStyles);
-        if (this.biomeStyles.isEmpty()) throw new IllegalArgumentException("At least one biome map style is required");
-        this.permanentLabels = permanentLabels; this.biomeLayerName = biomeLayerName;
+        this.plugin = plugin; this.areas = areas; this.revision = revision;
+        this.biomesEnabled = biomesEnabled; this.biomeLayerName = biomeLayerName;
         this.structureLayerName = structureLayerName; this.updateIntervalSeconds = updateIntervalSeconds;
         this.structureIconSize = structureIconSize;
     }
@@ -69,7 +67,9 @@ public final class Pl3xMapNamedRegions implements net.pl3x.map.core.event.EventL
     private void registerWorld(World world) {
         world.getLayerRegistry().unregister(BIOME_KEY);
         world.getLayerRegistry().unregister(STRUCTURE_KEY);
-        world.getLayerRegistry().register(BIOME_KEY, new Layer(BIOME_KEY, biomeLayerName, world, false));
+        clearLegacyGeometry(world);
+        if (biomesEnabled)
+            world.getLayerRegistry().register(BIOME_KEY, new Layer(BIOME_KEY, biomeLayerName, world, false));
         world.getLayerRegistry().register(STRUCTURE_KEY, new Layer(STRUCTURE_KEY, structureLayerName, world, true));
     }
 
@@ -83,8 +83,14 @@ public final class Pl3xMapNamedRegions implements net.pl3x.map.core.event.EventL
         Pl3xMap.api().getWorldRegistry().forEach(world -> {
             world.getLayerRegistry().unregister(BIOME_KEY);
             world.getLayerRegistry().unregister(STRUCTURE_KEY);
+            clearLegacyGeometry(world);
         });
         ICON_NAMES.forEach(name -> Pl3xMap.api().getIconRegistry().unregister(STRUCTURE_ICON_PREFIX + name));
+    }
+
+    private static void clearLegacyGeometry(World world) {
+        // Old browsers may still request this URL after the layer is replaced or disabled.
+        FileUtil.writeJson("[]", world.getMarkersDirectory().resolve(BIOME_KEY + ".json"));
     }
 
     private void registerStructureIcons() {
@@ -100,31 +106,35 @@ public final class Pl3xMapNamedRegions implements net.pl3x.map.core.event.EventL
 
     private final class Layer extends WorldLayer {
         private final boolean structures;
+        private long notifiedRevision = Long.MIN_VALUE;
+        private long notifiedAt;
         private Layer(String key, String name, World world, boolean structures) { super(key, world, () -> name); this.structures=structures; setUpdateInterval(updateIntervalSeconds);
-            setLiveUpdate(true); setShowControls(true); setDefaultHidden(false); setPriority(35); setZIndex(35); }
+            setLiveUpdate(structures); setShowControls(true); setDefaultHidden(false); setPriority(35); setZIndex(35); }
         @Override public Collection<Marker<?>> getMarkers() {
+            if (!enabled) return List.of();
+            if (!structures) {
+                long current = revision.getAsLong();
+                long now = System.currentTimeMillis();
+                if (current != notifiedRevision && (notifiedAt == 0 || now - notifiedAt >= updateIntervalSeconds * 1000L)) {
+                    getWorld().getServerSentEventHandler().send("stemcraft-regions", "{\"revision\":" + current + "}");
+                    notifiedRevision = current;
+                    notifiedAt = now;
+                }
+                // The browser extension owns viewport geometry. Neither marker JSON nor
+                // Pl3xMap's live marker stream receives the whole-world boundaries.
+                return List.of();
+            }
             List<Marker<?>> result = new ArrayList<>();
             for (NamedMapArea area : areas.get()) {
                 if (!area.world().equals(getWorld().getName())) continue;
                 if (area.id().startsWith("structure:") != structures) continue;
                 if (area.boundaries().isEmpty()) continue;
                 String tooltip = escape(area.name()) + "<br><small>" + escape(area.type()) + "</small>";
-                if (structures) {
-                    NamedMapArea.MapPoint centre = centre(area);
-                    String icon=iconName(area.type());
-                    result.add(Marker.icon(area.id(), centre.x(), centre.z(), STRUCTURE_ICON_PREFIX+icon, structureIconSize)
-                        .setOptions(Options.builder().tooltipContent(tooltip)
-                            .tooltipDirection(Tooltip.Direction.RIGHT).build()));
-                    continue;
-                }
-                Style style = biomeStyles.get(Math.floorMod(area.id().hashCode(), biomeStyles.size()));
-                List<Polyline> rings = area.boundaries().stream().map(points -> Marker.polyline(area.id() + "-ring",
-                    points.stream().map(point -> Point.of(point.x(), point.z())).toList()).loop()).toList();
-                result.add(Marker.polygon(area.id(), rings)
-                    .setOptions(Options.builder().stroke(true).strokeWeight(style.lineThickness())
-                        .strokeColor(style.strokeColour()).fill(true).fillColor(style.fillColour())
-                        .tooltipContent(tooltip)
-                        .tooltipPermanent(permanentLabels).build()));
+                NamedMapArea.MapPoint centre = centre(area);
+                String icon=iconName(area.type());
+                result.add(Marker.icon(area.id(), centre.x(), centre.z(), STRUCTURE_ICON_PREFIX+icon, structureIconSize)
+                    .setOptions(Options.builder().tooltipContent(tooltip)
+                        .tooltipDirection(Tooltip.Direction.RIGHT).build()));
             }
             return result;
         }

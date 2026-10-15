@@ -87,7 +87,7 @@ named-regions:
     format: " ({name})"
   map:
     enabled: true
-    # Publish accumulated region changes to Pl3xMap at most once every few minutes.
+    # Notify map clients of region changes at most once every few minutes.
     update-minutes: 5
     # Region names appear when the polygon is hovered. Set true to keep every label visible.
     permanent-labels: false
@@ -95,6 +95,9 @@ named-regions:
       biomes: "Regions"
       structures: "Structures"
     biomes:
+      # Uses the viewport browser extension; whole-world polygons are never published.
+      # Set false to remove only this overlay while retaining named regions and structure icons.
+      enabled: true
       # Each region consistently selects one translucent ARGB colour from this palette.
       # The same RGB value is used at full opacity for its border.
       palette:

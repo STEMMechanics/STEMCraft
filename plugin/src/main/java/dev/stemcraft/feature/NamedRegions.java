@@ -35,6 +35,7 @@ import java.sql.SQLException;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -100,6 +101,8 @@ public final class NamedRegions extends BaseFeature {
     private volatile boolean mapSnapshotDirty=true;
     private volatile long mapSnapshotBuiltAt;
     private long mapRefreshMillis=300_000L;
+    private final AtomicLong mapRevision=new AtomicLong(System.currentTimeMillis());
+    private volatile boolean mapViewportEnabled;
 
     private Pl3xMapNamedRegions mapLayer;
     private org.bukkit.event.Listener mapPluginEnableListener;
@@ -1671,6 +1674,7 @@ public final class NamedRegions extends BaseFeature {
     }
 
     private void disableMap() {
+        mapViewportEnabled=false;
         if(mapLayer!=null) {
             mapLayer.disable();
             mapLayer=null;
@@ -1702,17 +1706,25 @@ public final class NamedRegions extends BaseFeature {
                 getConfigSection().getInt("map.structures.icon-size",24)
             );
 
+            boolean biomesEnabled=getConfigSection().getBoolean("map.biomes.enabled",true);
+            mapRevision.incrementAndGet(); // Reloaded colours/settings must also invalidate client tiles.
+            api.web().registerEndpointHandler(NamedRegionMapEndpoint.PATH,
+                new NamedRegionMapEndpoint(worlds,()->mapViewportEnabled,mapRevision::get,
+                    this::mapRegionAt,biomeStyles,
+                    getConfigSection().getBoolean("map.permanent-labels",false),updateSeconds));
+
             mapLayer=new Pl3xMapNamedRegions(
                 STEMCraft.getPlugin(),
-                this::mapAreas,
-                biomeStyles,
-                getConfigSection().getBoolean("map.permanent-labels",false),
+                this::mapStructureAreas,
+                mapRevision::get,
+                biomesEnabled,
                 biomeLayer,
                 structureLayer,
                 updateSeconds,
                 structureIconSize
             );
             mapLayer.enable();
+            mapViewportEnabled=biomesEnabled;
         } catch(RuntimeException exception) {
             disableMap();
             STEMCraft.getPlugin().getLogger().log(java.util.logging.Level.WARNING,
@@ -1720,7 +1732,7 @@ public final class NamedRegions extends BaseFeature {
         }
     }
 
-    private List<Pl3xMapNamedRegions.Style> mapBiomeStyles() {
+    private List<NamedRegionMapEndpoint.Style> mapBiomeStyles() {
         int thickness=Math.max(
             1,
             getConfigSection().getInt("map.biomes.line-thickness",2)
@@ -1732,18 +1744,18 @@ public final class NamedRegions extends BaseFeature {
 
         if(palette.isEmpty())
             return List.of(
-                new Pl3xMapNamedRegions.Style(
+                new NamedRegionMapEndpoint.Style(
                     mapColour("map.biomes.stroke-colour","#FFFF9800"),
                     mapColour("map.biomes.fill-colour","#40FF9800"),
                     thickness
                 )
             );
 
-        List<Pl3xMapNamedRegions.Style> styles=new ArrayList<>();
+        List<NamedRegionMapEndpoint.Style> styles=new ArrayList<>();
         for(String configured:palette) {
             int fill=mapColourValue(configured,"#40FF9800");
             styles.add(
-                new Pl3xMapNamedRegions.Style(
+                new NamedRegionMapEndpoint.Style(
                     0xFF000000|(fill&0xFFFFFF),
                     fill,
                     thickness
@@ -1779,7 +1791,7 @@ public final class NamedRegions extends BaseFeature {
         }
     }
 
-    private Collection<NamedMapArea> mapAreas() {
+    private Collection<NamedMapArea> mapStructureAreas() {
         long now=System.currentTimeMillis();
 
         if(!shouldRefreshMapSnapshot(
@@ -1793,7 +1805,7 @@ public final class NamedRegions extends BaseFeature {
                 mapSnapshotDirty,mapSnapshotBuiltAt,now,mapRefreshMillis))
                 return mapSnapshot;
 
-            mapSnapshot=buildMapAreas();
+            mapSnapshot=buildStructureMapAreas();
             mapSnapshotBuiltAt=now;
             mapSnapshotDirty=false;
             return mapSnapshot;
@@ -1810,7 +1822,7 @@ public final class NamedRegions extends BaseFeature {
             &&(builtAt==0||now>=builtAt&&now-builtAt>=intervalMillis);
     }
 
-    private Collection<NamedMapArea> buildMapAreas() {
+    private Collection<NamedMapArea> buildStructureMapAreas() {
         List<NamedMapArea> result=new ArrayList<>();
 
         for(Area area:areas.values())
@@ -1830,37 +1842,19 @@ public final class NamedRegions extends BaseFeature {
                     )
                 );
 
-        Map<String,Set<Long>> byRegion=new HashMap<>();
-
-        /*
-         * v6 iterates compact chunk cells directly: no String key creation/splitting and
-         * no 16-entry ConcurrentHashMap per Minecraft chunk.
-         */
-        regionStorage.forEachCell((cell,regionId)->
-            byRegion.computeIfAbsent(regionId,ignored->new HashSet<>())
-                .add(pack(cell.cellX(),cell.cellZ()))
-        );
-
-        for(Map.Entry<String,Set<Long>> entry:byRegion.entrySet()) {
-            Area area=areas.get(resolveRegion(entry.getKey()));
-            if(area==null) continue;
-
-            result.add(
-                new NamedMapArea(
-                    area.id,
-                    area.world,
-                    area.name,
-                    friendly(area.type),
-                    boundaryLoops(entry.getValue())
-                )
-            );
-        }
-
         return List.copyOf(result);
+    }
+
+    private @Nullable NamedRegionMapEndpoint.Region mapRegionAt(String world,int x,int z) {
+        String id=regionStorage.cell(world,Math.floorDiv(x,SAMPLE_SIZE),Math.floorDiv(z,SAMPLE_SIZE));
+        Area area=id==null?null:areas.get(id);
+        return area==null||!area.world.equals(world)?null
+            :new NamedRegionMapEndpoint.Region(area.id,area.name,friendly(area.type));
     }
 
     private void invalidateMapSnapshot() {
         mapSnapshotDirty=true;
+        mapRevision.incrementAndGet();
     }
 
     static List<List<NamedMapArea.MapPoint>> boundaryLoops(Set<Long> cells) {
