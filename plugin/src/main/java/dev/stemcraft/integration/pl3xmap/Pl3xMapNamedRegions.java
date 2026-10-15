@@ -15,7 +15,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
 import java.util.function.Supplier;
-import java.util.function.LongSupplier;
 
 /** Optional live Pl3xMap layer for generated region and structure names. */
 public final class Pl3xMapNamedRegions implements net.pl3x.map.core.event.EventListener {
@@ -29,28 +28,28 @@ public final class Pl3xMapNamedRegions implements net.pl3x.map.core.event.EventL
         "trail-ruins","trial-chambers","village","generic");
     private final STEMCraft plugin;
     private final Supplier<Collection<NamedMapArea>> areas;
-    private final LongSupplier revision;
+    private final NamedMapTilePublisher tiles;
     private final boolean biomesEnabled;
     private final String biomeLayerName;
     private final String structureLayerName;
     private final int updateIntervalSeconds;
     private final int structureIconSize;
     private final Pl3xMapRegionWebFiles webFiles;
-    public Pl3xMapNamedRegions(STEMCraft plugin, Supplier<Collection<NamedMapArea>> areas, LongSupplier revision,
+    public Pl3xMapNamedRegions(STEMCraft plugin, Supplier<Collection<NamedMapArea>> areas, NamedMapTilePublisher tiles,
                                boolean biomesEnabled, String biomeLayerName, String structureLayerName,
                                int updateIntervalSeconds, int structureIconSize) {
-        this(plugin, areas, revision, biomesEnabled, biomeLayerName, structureLayerName,
-            updateIntervalSeconds, structureIconSize, true, Pl3xMapRegionWebFiles.DEFAULT_ENDPOINT);
+        this(plugin, areas, tiles, biomesEnabled, biomeLayerName, structureLayerName,
+            updateIntervalSeconds, structureIconSize, true);
     }
-    public Pl3xMapNamedRegions(STEMCraft plugin, Supplier<Collection<NamedMapArea>> areas, LongSupplier revision,
+    public Pl3xMapNamedRegions(STEMCraft plugin, Supplier<Collection<NamedMapArea>> areas, NamedMapTilePublisher tiles,
                                boolean biomesEnabled, String biomeLayerName, String structureLayerName,
                                int updateIntervalSeconds, int structureIconSize,
-                               boolean autoInstallWebFiles, String endpointUrl) {
-        this.plugin = plugin; this.areas = areas; this.revision = revision;
+                               boolean autoInstallWebFiles) {
+        this.plugin = plugin; this.areas = areas; this.tiles = tiles;
         this.biomesEnabled = biomesEnabled; this.biomeLayerName = biomeLayerName;
         this.structureLayerName = structureLayerName; this.updateIntervalSeconds = updateIntervalSeconds;
         this.structureIconSize = structureIconSize;
-        this.webFiles = biomesEnabled && autoInstallWebFiles ? new Pl3xMapRegionWebFiles(plugin, endpointUrl) : null;
+        this.webFiles = biomesEnabled && autoInstallWebFiles ? new Pl3xMapRegionWebFiles(plugin) : null;
     }
     public void enable() {
         if (enabled) return;
@@ -91,13 +90,16 @@ public final class Pl3xMapNamedRegions implements net.pl3x.map.core.event.EventL
         world.getLayerRegistry().unregister(BIOME_KEY);
         world.getLayerRegistry().unregister(STRUCTURE_KEY);
         clearLegacyGeometry(world);
-        if (biomesEnabled)
+        if (biomesEnabled && tiles.supports(world.getName())) {
             world.getLayerRegistry().register(BIOME_KEY, new Layer(BIOME_KEY, biomeLayerName, world, false));
+            refreshTiles(world);
+        }
         world.getLayerRegistry().register(STRUCTURE_KEY, new Layer(STRUCTURE_KEY, structureLayerName, world, true));
     }
 
     public void disable() {
         enabled = false;
+        tiles.close();
         // Pl3xMap has no EventRegistry.unregister API; event handler lists are mutable.
         new net.pl3x.map.core.event.world.WorldLoadedEvent(null).getHandlers()
             .removeIf(handler -> handler.getListener() == this);
@@ -109,6 +111,13 @@ public final class Pl3xMapNamedRegions implements net.pl3x.map.core.event.EventL
             clearLegacyGeometry(world);
         });
         ICON_NAMES.forEach(name -> Pl3xMap.api().getIconRegistry().unregister(STRUCTURE_ICON_PREFIX + name));
+    }
+
+    private void refreshTiles(World world) {
+        tiles.refresh(world.getName(), world.getTilesDirectory().resolve("stemcraft-regions"), current -> {
+            if (enabled && Pl3xMap.api().getWorldRegistry().get(world.getName()) == world)
+                world.getServerSentEventHandler().send("stemcraft-regions", "{\"revision\":" + current + "}");
+        });
     }
 
     private static void clearLegacyGeometry(World world) {
@@ -129,20 +138,12 @@ public final class Pl3xMapNamedRegions implements net.pl3x.map.core.event.EventL
 
     private final class Layer extends WorldLayer {
         private final boolean structures;
-        private long notifiedRevision = Long.MIN_VALUE;
-        private long notifiedAt;
         private Layer(String key, String name, World world, boolean structures) { super(key, world, () -> name); this.structures=structures; setUpdateInterval(updateIntervalSeconds);
             setLiveUpdate(structures); setShowControls(true); setDefaultHidden(false); setPriority(35); setZIndex(35); }
         @Override public Collection<Marker<?>> getMarkers() {
             if (!enabled) return List.of();
             if (!structures) {
-                long current = revision.getAsLong();
-                long now = System.currentTimeMillis();
-                if (current != notifiedRevision && (notifiedAt == 0 || now - notifiedAt >= updateIntervalSeconds * 1000L)) {
-                    getWorld().getServerSentEventHandler().send("stemcraft-regions", "{\"revision\":" + current + "}");
-                    notifiedRevision = current;
-                    notifiedAt = now;
-                }
+                refreshTiles(getWorld());
                 // The browser extension owns viewport geometry. Neither marker JSON nor
                 // Pl3xMap's live marker stream receives the whole-world boundaries.
                 return List.of();

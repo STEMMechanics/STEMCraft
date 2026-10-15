@@ -100,8 +100,6 @@ named-regions:
       enabled: true
       # Install/update the bundled browser script and its index.html tag on map enable/reload.
       auto-install: true
-      # Public route on the map website, proxied to STEMCraft's /map/named-regions endpoint.
-      endpoint-url: "/stemcraft/named-regions"
       # Each region consistently selects one translucent ARGB colour from this palette.
       # The same RGB value is used at full opacity for its border.
       palette:

@@ -15,7 +15,8 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.ArrayList;
+import java.util.function.LongConsumer;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -34,7 +35,7 @@ class Pl3xMapNamedRegionsTest {
         World initial = world("survival");
         worlds.register("survival", initial);
         var integration = new Pl3xMapNamedRegions(plugin, List::of,
-            () -> 1L, true, "Biome Regions", "Discovered Structures", 300, 24);
+            publisher(), true, "Biome Regions", "Discovered Structures", 300, 24);
         try (var access = mockStatic(Pl3xMap.class)) {
             access.when(Pl3xMap::api).thenReturn(api);
             try {
@@ -74,7 +75,7 @@ class Pl3xMapNamedRegionsTest {
         }
     }
 
-    @Test void neverPublishesBiomeGeometryAndSendsOnlyChangedRevisionNotifications() throws Exception {
+    @Test void neverPublishesBiomeGeometryAndNotifiesOnlyAfterTilePublicationCompletes() throws Exception {
         var api = api();
         var worlds = new WorldRegistry();
         when(api.getWorldRegistry()).thenReturn(worlds);
@@ -86,9 +87,11 @@ class Pl3xMapNamedRegionsTest {
         Path legacy = world.getMarkersDirectory().resolve("stemcraft_named_regions.json");
         Files.createDirectories(legacy.getParent());
         Files.writeString(legacy, "old whole-world geometry");
-        var revision = new AtomicLong(1);
+        var tiles = publisher();
+        var completions = new ArrayList<LongConsumer>();
+        doAnswer(call -> { completions.add(call.getArgument(2)); return null; }).when(tiles).refresh(anyString(), any(), any());
         @SuppressWarnings("unchecked") var areas = (java.util.function.Supplier<java.util.Collection<NamedMapArea>>) mock(java.util.function.Supplier.class);
-        var integration = new Pl3xMapNamedRegions(plugin, areas, revision::get,
+        var integration = new Pl3xMapNamedRegions(plugin, areas, tiles,
             true, "Regions", "Structures", 0, 24);
         try (var access = mockStatic(Pl3xMap.class)) {
             access.when(Pl3xMap::api).thenReturn(api);
@@ -100,11 +103,16 @@ class Pl3xMapNamedRegionsTest {
                 assertTrue(layer.getMarkers().isEmpty());
                 assertTrue(layer.getMarkers().isEmpty());
                 verifyNoInteractions(areas);
+                verifyNoInteractions(world.getServerSentEventHandler());
+                completions.getFirst().accept(1L);
                 verify(world.getServerSentEventHandler(), times(1)).send("stemcraft-regions", "{\"revision\":1}");
-                revision.incrementAndGet();
-                assertTrue(layer.getMarkers().isEmpty());
+                completions.getLast().accept(2L);
                 verify(world.getServerSentEventHandler()).send("stemcraft-regions", "{\"revision\":2}");
                 verify(world.getServerSentEventHandler(), never()).send(eq("markers"), anyString());
+                integration.disable();
+                completions.getLast().accept(3L);
+                verify(world.getServerSentEventHandler(), never()).send("stemcraft-regions", "{\"revision\":3}");
+                verify(tiles).close();
             } finally { integration.disable(); }
         }
     }
@@ -121,7 +129,7 @@ class Pl3xMapNamedRegionsTest {
         var point = new NamedMapArea.MapPoint(0, 0);
         var integration = new Pl3xMapNamedRegions(plugin, () -> List.of(
             new NamedMapArea("structure:1", "survival", "A Village", "Village", List.of(List.of(point)))),
-            () -> 1L, false, "Regions", "Structures", 300, 24);
+            publisher(), false, "Regions", "Structures", 300, 24);
         try (var access = mockStatic(Pl3xMap.class)) {
             access.when(Pl3xMap::api).thenReturn(api);
             try {
@@ -142,8 +150,8 @@ class Pl3xMapNamedRegionsTest {
         var plugin = mock(STEMCraft.class);
         when(plugin.getResource(anyString())).thenAnswer(invocation ->
             Files.newInputStream(Path.of("src/main/resources", invocation.getArgument(0, String.class))));
-        var integration = new Pl3xMapNamedRegions(plugin, List::of, () -> 1L,
-            true, "Regions", "Structures", 300, 24, false, "/custom-api");
+        var integration = new Pl3xMapNamedRegions(plugin, List::of, publisher(),
+            true, "Regions", "Structures", 300, 24, false);
         try (var access = mockStatic(Pl3xMap.class)) {
             access.when(Pl3xMap::api).thenReturn(api);
             try {
@@ -168,7 +176,7 @@ class Pl3xMapNamedRegionsTest {
         when(plugin.getLogger()).thenReturn(logger);
         when(plugin.getResource(anyString())).thenAnswer(invocation ->
             Files.newInputStream(Path.of("src/main/resources", invocation.getArgument(0, String.class))));
-        var integration = new Pl3xMapNamedRegions(plugin, List::of, () -> 1L,
+        var integration = new Pl3xMapNamedRegions(plugin, List::of, publisher(),
             true, "Regions", "Structures", 300, 24);
         try (var access = mockStatic(Pl3xMap.class)) {
             access.when(Pl3xMap::api).thenReturn(api);
@@ -182,6 +190,35 @@ class Pl3xMapNamedRegionsTest {
                 assertTrue(Files.readString(web().resolve("index.html")).contains("id=\"stemcraft-regions\""));
             } finally { integration.disable(); }
         }
+    }
+
+    @Test void worldsOutsideNamedRegionConfigurationDoNotLoadStaleBiomeFiles() throws Exception {
+        var api = api();
+        var worlds = new WorldRegistry();
+        when(api.getWorldRegistry()).thenReturn(worlds);
+        World hub = world("hub");
+        worlds.register("hub", hub);
+        var plugin = mock(STEMCraft.class);
+        when(plugin.getResource(anyString())).thenAnswer(invocation ->
+            Files.newInputStream(Path.of("src/main/resources", invocation.getArgument(0, String.class))));
+        var tiles = publisher();
+        when(tiles.supports("hub")).thenReturn(false);
+        var integration = new Pl3xMapNamedRegions(plugin, List::of, tiles, true, "Regions", "Structures", 300, 24);
+        try (var access = mockStatic(Pl3xMap.class)) {
+            access.when(Pl3xMap::api).thenReturn(api);
+            try {
+                integration.enable();
+                assertNull(hub.getLayerRegistry().get("stemcraft_named_regions"));
+                assertNotNull(hub.getLayerRegistry().get("stemcraft_named_structures"));
+                verify(tiles, never()).refresh(anyString(), any(), any());
+            } finally { integration.disable(); }
+        }
+    }
+
+    private static NamedMapTilePublisher publisher() {
+        var publisher = mock(NamedMapTilePublisher.class);
+        when(publisher.supports(anyString())).thenReturn(true);
+        return publisher;
     }
 
     private Pl3xMap api() throws Exception {
@@ -200,6 +237,7 @@ class Pl3xMapNamedRegionsTest {
         World world = mock(World.class, RETURNS_DEEP_STUBS);
         when(world.getName()).thenReturn(name);
         when(world.getLayerRegistry()).thenReturn(new Registry<Layer>());
+        when(world.getTilesDirectory()).thenReturn(tempDir.resolve(name));
         when(world.getMarkersDirectory()).thenReturn(tempDir.resolve(name).resolve("markers"));
         return world;
     }

@@ -102,7 +102,6 @@ public final class NamedRegions extends BaseFeature {
     private volatile long mapSnapshotBuiltAt;
     private long mapRefreshMillis=300_000L;
     private final AtomicLong mapRevision=new AtomicLong(System.currentTimeMillis());
-    private volatile boolean mapViewportEnabled;
 
     private Pl3xMapNamedRegions mapLayer;
     private org.bukkit.event.Listener mapPluginEnableListener;
@@ -223,6 +222,7 @@ public final class NamedRegions extends BaseFeature {
         activeNames.clear();
         retiredNames.clear();
         playerArea.clear();
+        worlds.clear();
         if(regionStorage!=null) regionStorage.clear();
 
         mapSnapshot=List.of();
@@ -1674,7 +1674,6 @@ public final class NamedRegions extends BaseFeature {
     }
 
     private void disableMap() {
-        mapViewportEnabled=false;
         if(mapLayer!=null) {
             mapLayer.disable();
             mapLayer=null;
@@ -1708,25 +1707,23 @@ public final class NamedRegions extends BaseFeature {
 
             boolean biomesEnabled=getConfigSection().getBoolean("map.biomes.enabled",true);
             mapRevision.incrementAndGet(); // Reloaded colours/settings must also invalidate client tiles.
-            api.web().registerEndpointHandler(NamedRegionMapEndpoint.PATH,
-                new NamedRegionMapEndpoint(worlds,()->mapViewportEnabled,mapRevision::get,
-                    this::mapRegionAt,biomeStyles,
-                    getConfigSection().getBoolean("map.permanent-labels",false),updateSeconds));
+            var tiles=new NamedRegionMapTiles(worlds,mapRevision::get,this::mapRegionAt,
+                this::mapBaseTiles,biomeStyles,
+                getConfigSection().getBoolean("map.permanent-labels",false),updateSeconds,
+                task->api.tasks().runAsync(task),STEMCraft.getPlugin().getLogger());
 
             mapLayer=new Pl3xMapNamedRegions(
                 STEMCraft.getPlugin(),
                 this::mapStructureAreas,
-                mapRevision::get,
+                tiles,
                 biomesEnabled,
                 biomeLayer,
                 structureLayer,
                 updateSeconds,
                 structureIconSize,
-                getConfigSection().getBoolean("map.biomes.auto-install",true),
-                getConfigSection().getString("map.biomes.endpoint-url","/stemcraft/named-regions")
+                getConfigSection().getBoolean("map.biomes.auto-install",true)
             );
             mapLayer.enable();
-            mapViewportEnabled=biomesEnabled;
         } catch(RuntimeException exception) {
             disableMap();
             STEMCraft.getPlugin().getLogger().log(java.util.logging.Level.WARNING,
@@ -1734,7 +1731,7 @@ public final class NamedRegions extends BaseFeature {
         }
     }
 
-    private List<NamedRegionMapEndpoint.Style> mapBiomeStyles() {
+    private List<NamedRegionMapTiles.Style> mapBiomeStyles() {
         int thickness=Math.max(
             1,
             getConfigSection().getInt("map.biomes.line-thickness",2)
@@ -1746,18 +1743,18 @@ public final class NamedRegions extends BaseFeature {
 
         if(palette.isEmpty())
             return List.of(
-                new NamedRegionMapEndpoint.Style(
+                new NamedRegionMapTiles.Style(
                     mapColour("map.biomes.stroke-colour","#FFFF9800"),
                     mapColour("map.biomes.fill-colour","#40FF9800"),
                     thickness
                 )
             );
 
-        List<NamedRegionMapEndpoint.Style> styles=new ArrayList<>();
+        List<NamedRegionMapTiles.Style> styles=new ArrayList<>();
         for(String configured:palette) {
             int fill=mapColourValue(configured,"#40FF9800");
             styles.add(
-                new NamedRegionMapEndpoint.Style(
+                new NamedRegionMapTiles.Style(
                     0xFF000000|(fill&0xFFFFFF),
                     fill,
                     thickness
@@ -1847,11 +1844,18 @@ public final class NamedRegions extends BaseFeature {
         return List.copyOf(result);
     }
 
-    private @Nullable NamedRegionMapEndpoint.Region mapRegionAt(String world,int x,int z) {
+    private @Nullable NamedRegionMapTiles.Region mapRegionAt(String world,int x,int z) {
         String id=regionStorage.cell(world,Math.floorDiv(x,SAMPLE_SIZE),Math.floorDiv(z,SAMPLE_SIZE));
         Area area=id==null?null:areas.get(id);
         return area==null||!area.world.equals(world)?null
-            :new NamedRegionMapEndpoint.Region(area.id,area.name,friendly(area.type));
+            :new NamedRegionMapTiles.Region(area.id,area.name,friendly(area.type));
+    }
+
+    private Set<Long> mapBaseTiles(String world) {
+        int chunks=NamedRegionMapTiles.TILE_CELLS*NamedRegionMapTiles.SAMPLE_BLOCKS/16;
+        Set<Long> result=new HashSet<>();
+        regionStorage.forEachChunk(world,(x,z)->result.add(pack(Math.floorDiv(x,chunks),Math.floorDiv(z,chunks))));
+        return result;
     }
 
     private void invalidateMapSnapshot() {

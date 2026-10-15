@@ -95,6 +95,18 @@ class NamedRegionStorageTest {
         assertEquals("a",storage.cell("survival",0,0));
     }
 
+    @Test void enumeratesOccupiedChunksWithoutMixingWorldsOrDuplicatingSamples() {
+        storage.initialise();
+        storage.setCell("survival", -1, -1, "a", true);
+        storage.setCell("survival", 1, 1, "a", true);
+        storage.setCell("survival", 2, 2, "b", true);
+        storage.setCell("nether", 16, 16, "c", true);
+        var chunks = new java.util.HashSet<Long>();
+        storage.forEachChunk("survival", (x, z) -> chunks.add(NamedRegions.pack(x, z)));
+        assertEquals(java.util.Set.of(NamedRegions.pack(-1, -1), NamedRegions.pack(0, 0)), chunks);
+        storage.forEachChunk("missing", (x, z) -> fail("Unknown world must not enumerate chunks"));
+    }
+
     @Test void unchangedChunksAreNotRewrittenAndFailedFlushesCanBeRetried() {
         storage.initialise();
         storage.setCell("survival",0,0,"a",true);

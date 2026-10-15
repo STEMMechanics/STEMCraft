@@ -54,6 +54,7 @@ class NamedRegionMapLifecycleTest {
             verify(layers.constructed().getFirst()).disable();
             enable.handle(new PluginEnableEvent(pl3x));
             assertEquals(2, layers.constructed().size());
+            verifyNoInteractions(api.web());
         }
     }
 }

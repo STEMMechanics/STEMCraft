@@ -361,6 +361,17 @@ final class NamedRegionStorage {
         }
     }
 
+    @FunctionalInterface interface ChunkConsumer { void accept(int chunkX, int chunkZ); }
+
+    /** Enumerate occupied chunks in one world without allocating or visiting their sixteen cells. */
+    void forEachChunk(String world, ChunkConsumer consumer) {
+        Integer number = worldNumbers.get(world);
+        if (number == null) return;
+        Map<Long, RegionChunk> worldChunks = chunks.get(number);
+        if (worldChunks == null) return;
+        for (long packed : worldChunks.keySet()) consumer.accept(unpackX(packed), unpackZ(packed));
+    }
+
     private synchronized int ensureWorldNumber(String world) {
         Integer current = worldNumbers.get(world);
         if (current != null) return current;

@@ -56,8 +56,8 @@
   }
 
   class ViewportLayer {
-    constructor(map, layer, world, endpoint, leaflet, request = fetch) {
-      this.map = map; this.layer = layer; this.world = world; this.endpoint = endpoint;
+    constructor(map, layer, world, directory, leaflet, request = fetch) {
+      this.map = map; this.layer = layer; this.world = world; this.directory = directory;
       this.leaflet = leaflet; this.request = request;
       this.tiles = new Map(); this.active = new Map(); this.wanted = new Set(); this.queue = [];
       this.generation = 0; this.disposed = false; this.warned = false;
@@ -77,9 +77,9 @@
     }
     visible() { return !this.disposed && this.map.hasLayer(this.layer); }
     url(parameters) {
-      const url = new URL(this.endpoint);
-      url.searchParams.set("world", this.world.name);
-      for (const [key, value] of Object.entries(parameters)) url.searchParams.set(key, value);
+      const tile = parameters.level !== undefined;
+      const url = new URL(tile ? `${parameters.level}/${parameters.x}_${parameters.z}.json` : "metadata.json", this.directory);
+      url.searchParams.set("v", tile ? parameters.v : Date.now());
       return url.href;
     }
     async json(url, signal) {
@@ -101,7 +101,7 @@
         this.pollTimer = setTimeout(() => this.refresh(), Math.max(60, settings.refreshSeconds) * 1000);
       } catch (error) {
         if (error.name === "AbortError" || controller.signal.aborted || !this.visible()) return;
-        // Other map worlds legitimately have no named-region data.
+        // The first background publication may still be running.
         if (error.status === 404 || error.status === 503) { this.resetTiles(); this.settings = undefined; }
         if (error.status !== 404 && error.status !== 503) this.warn(error);
         this.pollTimer = setTimeout(() => this.refresh(), 60000);
@@ -138,6 +138,13 @@
           this.warned = false;
         }).catch(error => {
           if (error.name === "AbortError" || work.controller.signal.aborted || !this.visible()) return;
+          if (error.status === 404) {
+            if (work.generation === this.generation && this.wanted.has(tile.key)) {
+              const empty = this.leaflet.layerGroup();
+              empty.addTo(this.layer); this.tiles.set(tile.key, empty);
+            }
+            return; // Undiscovered map tiles have no geometry file.
+          }
           this.warn(error);
           clearTimeout(this.retryTimer);
           this.retryTimer = setTimeout(() => this.update(), 5000);
@@ -173,14 +180,14 @@
   }
 
   function install(browser, document) {
-    const endpoint = new URL(document.currentScript?.dataset.endpoint || "/stemcraft/named-regions", document.baseURI).href;
     const controllers = new Map();
     browser.addEventListener("overlayadded", event => {
       if (event.detail.key !== "stemcraft_named_regions") return;
       const map = browser.pl3xmap?.map, world = browser.pl3xmap?.worldManager.currentWorld;
       if (!map || !world) return;
       controllers.get(event.detail)?.destroy();
-      controllers.set(event.detail, new ViewportLayer(map, event.detail, world, endpoint, browser.L));
+      const directory = new URL(`tiles/${encodeURIComponent(world.name)}/stemcraft-regions/`, document.baseURI).href;
+      controllers.set(event.detail, new ViewportLayer(map, event.detail, world, directory, browser.L));
     });
     browser.addEventListener("overlayremoved", event => {
       controllers.get(event.detail)?.destroy(); controllers.delete(event.detail);

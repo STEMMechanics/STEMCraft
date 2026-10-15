@@ -69,11 +69,11 @@ test('hidden layers fetch nothing; hiding aborts requests and rejects late respo
   const request = async (url, options) => {
     calls.push({url, options});
     assert.equal(options.cache, 'no-store');
-    if (!new URL(url).searchParams.has('level')) return {ok: true, json: async () => settings};
+    if (new URL(url).pathname.endsWith('/metadata.json')) return {ok: true, json: async () => settings};
     // Deliberately ignore AbortSignal to test the stale-response guard too.
     return new Promise(resolve => pending.push({resolve, options}));
   };
-  const controller = new ViewportLayer(f.map, f.layer, f.world, 'https://map.test/stemcraft/named-regions', f.leaflet, request);
+  const controller = new ViewportLayer(f.map, f.layer, f.world, 'https://map.test/world-map/tiles/survival/stemcraft-regions/', f.leaflet, request);
   t.after(() => controller.destroy());
   await flush(); assert.equal(calls.length, 0);
   f.map.visible = true; f.layer.emit('add'); await flush();
@@ -91,11 +91,14 @@ test('SSE invalidates visible tiles only when revision changes', async t => {
   let revision = 1;
   const request = async url => {
     calls.push(url);
-    return {ok: true, json: async () => new URL(url).searchParams.has('level') ? {regions: []} : {...settings, revision}};
+    return {ok: true, json: async () => !new URL(url).pathname.endsWith('/metadata.json') ? {regions: []} : {...settings, revision}};
   };
-  const controller = new ViewportLayer(f.map, f.layer, f.world, 'https://map.test/stemcraft/named-regions', f.leaflet, request);
+  const controller = new ViewportLayer(f.map, f.layer, f.world, 'https://map.test/world-map/tiles/survival/stemcraft-regions/', f.leaflet, request);
   t.after(() => controller.destroy());
   await flush(); assert.equal(calls.length, 2); assert.equal(f.layer.children.size, 1);
+  assert.equal(new URL(calls[0]).pathname, '/world-map/tiles/survival/stemcraft-regions/metadata.json');
+  assert.equal(new URL(calls[1]).pathname, '/world-map/tiles/survival/stemcraft-regions/0/0_0.json');
+  assert.ok(calls.every(url => new URL(url).origin === 'https://map.test'));
   const old = [...f.layer.children][0];
   revision = 2; f.events.dispatchEvent(new Event('stemcraft-regions')); await flush();
   assert.equal(calls.length, 4); assert.equal(f.layer.children.size, 1);
@@ -106,20 +109,36 @@ test('SSE invalidates visible tiles only when revision changes', async t => {
   f.events.dispatchEvent(new Event('stemcraft-regions')); await flush();
   assert.equal(calls.length, 5);
 });
+test('undiscovered static tiles stay empty without repeated failed requests', async t => {
+  const f = fixture(true, 128), calls = [];
+  const request = async url => {
+    calls.push(url);
+    return new URL(url).pathname.endsWith('/metadata.json')
+      ? {ok: true, json: async () => settings} : {ok: false, status: 404};
+  };
+  const controller = new ViewportLayer(f.map, f.layer, f.world,
+    'https://map.test/world-map/tiles/survival/stemcraft-regions/', f.leaflet, request);
+  t.after(() => controller.destroy());
+  await flush(); assert.equal(calls.length, 2);
+  assert.equal(controller.tiles.size, 1);
+  assert.equal(controller.warned, false);
+  controller.update(); await flush();
+  assert.equal(calls.length, 2);
+});
 test('installer is idempotent and uninstall preserves the existing theme', () => {
   const dir = mkdtempSync(join(tmpdir(), 'stemcraft-region-web-'));
   try {
     writeFileSync(join(dir, 'pl3xmap.js'), '');
     writeFileSync(join(dir, 'index.html'), '<html><body><script src="stemcraft-theme.js"></script></body></html>');
-    const install = endpoint => {
-      const result = spawnSync('sh', [join(__dirname, 'install.sh'), dir, endpoint], {encoding: 'utf8'});
+    const install = () => {
+      const result = spawnSync('sh', [join(__dirname, 'install.sh'), dir], {encoding: 'utf8'});
       assert.equal(result.status, 0, result.stderr);
     };
-    install('/stemcraft/named-regions'); install('/stemcraft/named-regions?x="&test=1');
+    install(); install();
     const page = readFileSync(join(dir, 'index.html'), 'utf8');
     assert.equal((page.match(/id="stemcraft-regions"/g) || []).length, 1);
     assert.match(page, /stemcraft-regions.js\?v=[a-f0-9]{12}/);
-    assert.match(page, /&quot;&amp;test=1/);
+    assert.doesNotMatch(page, /data-endpoint/);
     assert.match(page, /stemcraft-theme.js/);
     const result = spawnSync('sh', [join(__dirname, 'uninstall.sh'), dir], {encoding: 'utf8'});
     assert.equal(result.status, 0, result.stderr);

@@ -29,7 +29,7 @@ class Pl3xMapRegionWebFilesTest {
         assertTrue(updated.contains("<script src=\"stemcraft-theme.js\"></script>"));
         assertTrue(updated.contains("<div id=\"map\"></div>"));
         assertTrue(updated.matches("(?s).*src=\"stemcraft-regions.js\\?v=[0-9a-f]{12}\".*"));
-        assertTrue(updated.contains("data-endpoint=\"/stemcraft/named-regions\""));
+        assertFalse(updated.contains("data-endpoint="));
         assertTrue(updated.indexOf("id=\"stemcraft-regions\"") < updated.indexOf("</body>"));
         assertEquals(SCRIPT, Files.readString(web.resolve("stemcraft-regions.js")));
         assertEquals(original, Files.readString(web.resolve(".stemcraft-regions-backup/index.html")));
@@ -77,7 +77,7 @@ class Pl3xMapRegionWebFilesTest {
         var plugin = mock(STEMCraft.class);
         when(plugin.getResource("pl3xmap/stemcraft-regions.js")).thenAnswer(invocation ->
             new ByteArrayInputStream(content.get().getBytes(StandardCharsets.UTF_8)));
-        var installer = new Pl3xMapRegionWebFiles(plugin, "/map-api/regions");
+        var installer = new Pl3xMapRegionWebFiles(plugin);
         installer.install(web);
         String first = Files.readString(web.resolve("index.html"));
         content.set("console.log('updated regions');");
@@ -86,20 +86,21 @@ class Pl3xMapRegionWebFilesTest {
         installer.install(web);
         String updated = Files.readString(web.resolve("index.html"));
         assertTrue(updated.contains("Updated Pl3xMap<script src='new-theme.js'></script>"));
-        assertTrue(updated.contains("data-endpoint=\"/map-api/regions\""));
+        assertFalse(updated.contains("data-endpoint="));
         assertNotEquals(first.substring(first.indexOf("?v="), first.indexOf("?v=") + 15),
             updated.substring(updated.indexOf("?v="), updated.indexOf("?v=") + 15));
         assertEquals(content.get(), Files.readString(web.resolve("stemcraft-regions.js")));
         assertEquals(original, Files.readString(web.resolve(".stemcraft-regions-backup/index.html")));
     }
 
-    @Test void escapesConfiguredEndpointAndSkipsClosingBodyTextInCommentsAndInlineScripts() throws Exception {
-        page("<html><body><script>const text = '</body>';</script><!-- </body> -->Actual</body></html>");
-        new Pl3xMapRegionWebFiles(plugin(), "/map-api?key=\"<&'").install(web);
+    @Test void removesObsoleteEndpointAndSkipsClosingBodyTextInCommentsAndInlineScripts() throws Exception {
+        page("<html><body><script>const text = '</body>';</script><!-- </body> -->Actual"
+            + "<script id='stemcraft-regions' src='old.js' data-endpoint='/obsolete'></script></body></html>");
+        new Pl3xMapRegionWebFiles(plugin()).install(web);
         String updated = Files.readString(web.resolve("index.html"));
         assertTrue(updated.contains("const text = '</body>';"));
         assertTrue(updated.contains("<!-- </body> -->Actual  <script id=\"stemcraft-regions\""));
-        assertTrue(updated.contains("data-endpoint=\"/map-api?key=&quot;&lt;&amp;&#39;\""));
+        assertFalse(updated.contains("data-endpoint="));
     }
 
     @Test void rejectsMissingFilesOrMalformedIndexWithoutOverwritingThePage() throws Exception {
@@ -116,7 +117,7 @@ class Pl3xMapRegionWebFilesTest {
     @Test void missingBundledScriptOrFailedAssetWriteLeavesIndexUnchanged() throws Exception {
         String original = "<html><body>Original</body></html>";
         page(original);
-        var missing = new Pl3xMapRegionWebFiles(mock(STEMCraft.class), "");
+        var missing = new Pl3xMapRegionWebFiles(mock(STEMCraft.class));
         assertThrows(IOException.class, () -> missing.install(web));
         assertEquals(original, Files.readString(web.resolve("index.html")));
         Files.createDirectory(web.resolve("stemcraft-regions.js"));
@@ -151,7 +152,7 @@ class Pl3xMapRegionWebFilesTest {
         Files.writeString(web.resolve("index.html"), content);
         Files.writeString(web.resolve("pl3xmap.js"), "// Pl3xMap");
     }
-    private Pl3xMapRegionWebFiles installer() { return new Pl3xMapRegionWebFiles(plugin(), null); }
+    private Pl3xMapRegionWebFiles installer() { return new Pl3xMapRegionWebFiles(plugin()); }
     private STEMCraft plugin() {
         var plugin = mock(STEMCraft.class);
         when(plugin.getResource("pl3xmap/stemcraft-regions.js")).thenAnswer(invocation ->

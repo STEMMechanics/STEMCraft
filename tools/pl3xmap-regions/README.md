@@ -1,168 +1,91 @@
 # Named-region map tiles
 
-The named-region overlay uses small vector tiles from STEMCraft's web service.
-Pl3xMap's `stemcraft_named_regions` marker file contains `[]`; its layer retains
-the existing Layers checkbox. The browser extension fills that layer only with
-tiles intersecting the visible map, and releases tiles when they leave view.
-Hiding the layer cancels requests and clears its geometry.
+## Update
 
-Each tile contains at most 32 × 32 sampled cells, with a one-cell halo used only
-to calculate real outlines at tile edges. At the closest detail, each cell is
-the original 4 × 4 block sample. Zooming out uses five fixed probes per larger
-cell to choose a representative region; unknown terrain participates in the
-vote. Small regions can disappear at distant zooms. Collinear boundary points
-are removed without changing holes. These are sampled map outlines, not claim
-boundaries. Permanent labels can repeat where a region crosses tiles.
+1. Replace the STEMCraft plugin jar and restart the server.
+2. Refresh the map page.
 
-The browser holds at most 64 visible tiles and starts at most four tile requests
-at a time. The server reads at most 5,780 cached cells for a tile, regardless of
-world size, without loading Minecraft chunks or scanning the world cell index.
-SSE carries only `stemcraft-regions` revision notifications. Periodic metadata
-checks provide a fallback when SSE is unavailable. Responses use `no-store`,
-and tile URLs include the current revision. The structure and grave overlays
-continue to use their own marker layers.
+STEMCraft installs its browser script, updates Pl3xMap's existing index, and
+generates region files in Pl3xMap's normal web directory. The same web server
+that already serves your map serves these files. There is no separate region API,
+extra port, STEMCraft web-service dependency, or additional proxy route.
+An `endpoint-url` setting left over from an earlier experimental build is ignored.
 
-## Install
+The first region-tile generation runs in the background. Outlines appear when
+the files are ready; large discovered worlds can take longer for their first
+build. Existing stored names and in-game discovery continue to work normally.
 
-1. Replace the STEMCraft plugin jar and restart. The new plugin immediately
-   replaces the old whole-world biome marker file with `[]`. Existing proxy or
-   browser caches must also be purged/refreshed. STEMCraft automatically copies
-   its bundled `stemcraft-regions.js` into Pl3xMap's configured web directory and
-   adds its script tag to the existing `index.html`.
-2. Enable STEMCraft's web service in `plugins/STEMCraft/config.yml`:
+## How it works
 
-   ```yaml
-   web_server:
-     enabled: true
-     ip: 127.0.0.1
-     port: 8950
-   named-regions:
-     map:
-       enabled: true
-       biomes:
-         enabled: true
-         auto-install: true
-         endpoint-url: "/stemcraft/named-regions"
-   ```
+The existing `stemcraft_named_regions` marker file contains `[]`. Its layer keeps
+the Regions checkbox, while the browser loads only visible geometry tiles from:
 
-   Merge these values into existing sections. Bind to an address reachable by
-   the reverse proxy; the loopback example assumes the same host/network namespace.
-   Restart after changing configuration. Automatic installation is enabled by
-   default, including when these new biome settings are absent from an older config.
-3. Add the API route to the map site's proxy. For nginx on the same host:
+```text
+tiles/<world>/stemcraft-regions/metadata.json
+tiles/<world>/stemcraft-regions/<level>/<tile-x>_<tile-z>.json
+```
 
-   ```nginx
-   location = /stemcraft/named-regions {
-       proxy_pass http://127.0.0.1:8950/map/named-regions;
-       proxy_cache off;
-   }
-   ```
+Metadata contains only rendering settings and a revision. Each geometry tile
+contains at most 32 × 32 sampled cells; a one-cell halo distinguishes real
+outlines from tile edges. At the closest detail each cell represents 16 × 16
+blocks. Distant zooms use larger cells and five fixed probes to choose a
+representative region, including unknown terrain in the vote. Small regions can
+disappear at distant zooms. These outlines are approximate, rather than claim
+boundaries. Collinear points are removed, while holes are retained.
 
-   Query parameters pass through to the endpoint. This exposes discovered biome
-   names and approximate outlines only for the configured named-region worlds.
-   Keep the public endpoint on the map's origin; no CORS setup is needed.
-4. Refresh the map in the browser. Players open the same map URL as before;
-   the new script loads automatically from the website.
+The browser holds at most 64 visible tiles, with at most four tile requests in
+progress. Hiding Regions cancels requests and releases its geometry. Missing
+files represent undiscovered tiles and stay empty. Tile requests include the
+published revision to refresh changed data, and metadata requests bypass the
+browser cache. URLs are relative to the existing map page, including maps hosted
+under a path prefix.
 
-### Automatic website updates
+The publisher enumerates occupied chunks to find tile locations; distant
+discoveries do not generate all the empty tiles between them. It reads cached
+discovery data without loading or generating Minecraft chunks. Work runs off the
+server thread and is throttled by `named-regions.map.update-minutes` (default 5,
+minimum 1). Unchanged tile files are left untouched. Metadata is published after
+the tile files are ready and obsolete tiles have been removed, followed by a
+small SSE revision notification. Metadata
+polling also works when SSE is unavailable. Biome geometry is never sent through
+the marker endpoint or SSE. Structure and grave overlays retain their own layers.
 
-STEMCraft installs the browser files when it attaches to Pl3xMap and again after
-Pl3xMap enables/reloads. In Pl3xMap 26.2-554, the web files are generated before
-that enable event, so STEMCraft restores its tag after regeneration. It follows
-Pl3xMap's configured web directory, preserves the current page/theme, keeps one
-script tag, versions the script URL, and leaves unchanged files untouched. The
-first changed index is backed up at `.stemcraft-regions-backup/index.html`.
+## Automatic browser files
 
-This extension no longer requires changing Pl3xMap's
-`settings.web-directory.read-only` option. Keep that setting if your separate
-theme needs it. STEMCraft does not modify Pl3xMap's configuration. If browser
-file installation fails, the server logs the directory and error while retaining
-the map layers; check that its generated web files exist and are writable.
+Installation runs when STEMCraft attaches to Pl3xMap and after map enable/reload,
+following Pl3xMap's configured web directory. It preserves the current page and
+theme, backs up the first changed index at `.stemcraft-regions-backup/index.html`,
+keeps one script tag, and versions the script URL. It preserves file permissions
+and existing index symlinks. Pl3xMap's read-only option is not required for this
+extension; keep it if a separate theme needs it.
 
-The public API path comes from `named-regions.map.biomes.endpoint-url`. If your
-proxy uses a different public route, set that path in the config and restart.
-The plugin installs local website files; routing on an external proxy/CDN remains
-a hosting setting and must be configured there.
-
-### Independently hosted map files
-
-If the public map uses a separate copy of the web files, set
-`named-regions.map.biomes.auto-install: false` and update that copy manually.
-The optional installer remains available for this case:
+The existing `named-regions.map.biomes.enabled` setting removes only the biome
+overlay when false. `named-regions.map.enabled: false` removes both named overlays.
+Set `named-regions.map.biomes.auto-install: false` only if you manage a separate
+copy of the website. That copy needs the generated region files, script and index
+along with the existing map files. The optional manual browser-file installer is:
 
 ```sh
-sh tools/pl3xmap-regions/install.sh /path/to/plugins/Pl3xMap/web
+sh tools/pl3xmap-regions/install.sh /path/to/your/map/web
 ```
 
-The installer requires Python 3.
-A different same-origin public route can be passed as the second argument.
-It preserves the current theme, backs up the original index, and versions its
-script URL. An independently hosted map also needs the API proxy route on that
-host. Reapply the installer when replacing that host's web files. If Pl3xMap
-manages those files but automatic installation is disabled, keep
-`settings.web-directory.read-only: true` to retain the manually installed tag.
-
-To temporarily remove biome geometry without removing named regions or structure
-icons, set `named-regions.map.biomes.enabled: false` and restart. This removes the
-layer and disables its API. On an older plugin, `named-regions.map.enabled: false`
-disables both named map overlays as an emergency workaround.
-Refresh existing browser sessions, replace any old
-`tiles/<world>/markers/stemcraft_named_regions.json` files with `[]`, and purge
-cached copies when using that older-plugin workaround.
-
-## SSE and mutable terrain caching
-
-Apply these directives to the existing map SSE proxy location, retaining its
-correct upstream and path handling. Match both `/sse` and `/sse/<world>` (or their
-equivalents when the map is hosted below a URL prefix):
-
-```nginx
-# Inside the existing SSE location:
-proxy_buffering off;
-proxy_cache off;
-proxy_read_timeout 1h;
-```
-
-nginx documents [response buffering and proxy caching](https://nginx.org/en/docs/http/ngx_http_proxy_module.html).
-Check the effective configuration (`nginx -T`), including inherited locations
-and any CDN cache rules. These settings cannot be verified from the plugin
-repository. Reload nginx after validating configuration with `nginx -t`.
-
-Pl3xMap 26.2-554's built-in HTTP server already emits
-`Cache-Control: max-age=0, must-revalidate, no-cache` for `/tiles` responses.
-Preserve those upstream headers for mutable terrain images, block info,
-`settings.json`, `markers.json` and legacy marker files. Remove proxy/CDN rules
-that override them with long freshness times; purge existing cached copies.
-The new vector endpoint sends `Cache-Control: no-store`. Its revision parameter
-also changes tile URLs when the overlay changes. Versioning these overlay URLs
-does not version Pl3xMap's terrain images.
+It requires Python 3. To remove the script, disable automatic installation first,
+then run `tools/pl3xmap-regions/uninstall.sh` against that web directory.
 
 ## Verify
 
 ```sh
 ./gradlew :api:check :plugin:check :plugin:jar --offline --console=plain
 node --test tools/pl3xmap-regions/stemcraft-regions.test.cjs
-curl -i 'https://YOUR-MAP-HOST/stemcraft/named-regions?world=survival'
-curl -i 'https://YOUR-MAP-HOST/stemcraft/named-regions?world=survival&level=0&x=0&z=0'
-curl -N --max-time 30 'https://YOUR-MAP-HOST/sse/survival'
 ```
 
-Use the actual map path and world name. The first API response contains rendering
-settings and a revision; the second contains one bounded tile. In browser Network,
-confirm `tiles/survival/markers/stemcraft_named_regions.json` contains `[]`, that
-SSE has no biome `markers` geometry, and that viewport requests stop while Regions
-is unchecked. Pan across X/Z=0, zoom out, switch worlds, and check names on hover.
-Confirm newly discovered/renamed regions appear within the configured refresh
-interval. Local tests establish request/geometry bounds, not production payload
-size, responsiveness or effective proxy/CDN settings.
+Tests cover geometry bounds, holes and tile seams, sparse discoveries, background
+publication, cancellation, reloads, installation, and serving the generated files
+through the real Pl3xMap static web server with no custom HTTP route.
 
-## Remove the browser extension
-
-```sh
-sh tools/pl3xmap-regions/uninstall.sh /path/to/plugins/Pl3xMap/web
-```
-
-The uninstaller removes only this extension's script tag and asset, preserving
-the current theme. Set `named-regions.map.biomes.auto-install: false` first to
-prevent automatic reinstallation; disable the biome overlay too if no longer
-needed. No changes are made to terrain tiles or stored region names.
+On the live map, confirm the old biome marker file contains `[]`, visible-region
+requests use the existing `tiles/<world>/stemcraft-regions/` directory, requests
+stop when Regions is unchecked, and names appear on hover. Pan across X/Z=0,
+zoom out, switch worlds and check changes after a refresh interval. Permanent
+labels can repeat where one region crosses multiple tiles. Local tests establish
+these bounds and serving behavior; they do not measure production responsiveness.
