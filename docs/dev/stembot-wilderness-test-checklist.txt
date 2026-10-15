@@ -103,5 +103,19 @@ these sample bounds must not replace the real Survival boundary.
     Configure the actual old Survival bounds before enabling for players.
     No sample coordinates should remain in the live configuration.
 
+[ ] R15 - On-demand actor steps
+    Temporarily map help-topics.demo to no-spawn:lazy-demo and define:
+      lazy-demo: ['talk:First reply', 'sleep:40', 'wave', 'talk:I am here', 'end']
+    Run /help demo. First reply must be text only. After two seconds, the
+    bot should appear once, wave, speak normally and finish. First reply
+    must not repeat. Try while a guide is active or combat blocks spawning:
+    the text is immediate, one wait notice appears, and wave waits until
+    the guide is free and combat has ended. Existing guide control stays intact.
+    Try a listen/await step too: the NPC must appear before private replies
+    or provider callbacks start. Missing Citizens or blocked spawn space
+    should stop only this request with an explanation; wilderness text help
+    must still work. Reload or change worlds while waiting: no late spawn.
+    Remove demo and lazy-demo after testing.
+
 Notes: _________________________________________________________________
 ________________________________________________________________________

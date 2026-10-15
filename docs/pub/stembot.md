@@ -4,6 +4,8 @@ Use `/help` to summon your private guide. Only you can see STEMBot. The first vi
 
 Type `/help ` and press Tab to see the available help topics. Start typing a topic to narrow the suggestions. If STEMBot needs to wait for combat to finish or for another conversation to end, it tells you why.
 
+Some topics start with a direct text reply and bring STEMBot over only when a step needs the guide. Once it appears, nearby ordinary chat becomes private with STEMBot.
+
 ## Your first welcome
 
 When STEMBot is available, it welcomes you and asks the first-join question. Type the answer in ordinary chat. The answer stays private, and STEMBot follows you while you answer. Commands remain blocked until you pass; trying one repeats the question without using an attempt. After you pass, STEMBot starts the welcome action configured by the server.

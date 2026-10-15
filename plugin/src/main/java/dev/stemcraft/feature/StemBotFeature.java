@@ -363,10 +363,7 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
         UUID id=player.getUniqueId();
         closeNoSpawnSession(id);
         try {
-            BotSession session=BotSession.noSpawn(script,player.getWorld().getName(),action,new BotSession.Output() {
-                @Override public void say(String text) { sayLine(player,text); }
-                @Override public int talk(String text) { sayLine(player,text); return 1; }
-            });
+            BotSession session=BotSession.noSpawn(script,player.getWorld().getName(),action,sessionOutput(player,null));
             noSpawnSessions.put(id,session);
             session.tick(player.getLocation());
             if(session.closed()) noSpawnSessions.remove(id,session);
@@ -573,8 +570,10 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
     }
 
     private void tick() {
-        tickNoSpawnSessions();
-        if(!available()) return;
+        if(!available()) {
+            tickNoSpawnSessions();
+            return;
+        }
 
         tickDepartures();
         for(var entry:new ArrayList<>(pendingSummons.entrySet())) {
@@ -652,6 +651,8 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
         }
 
         processPendingBotRequests();
+        // A newly attached actor starts ticking with the regular sessions next time.
+        tickNoSpawnSessions();
     }
 
     private void processPendingBotRequests() {
@@ -758,6 +759,90 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
 
         UUID id=player.getUniqueId();
         World world=player.getWorld();
+        BotActor actor=createActor(player,fixedSpawn);
+        if(actor==null) return;
+
+        BotSession session=null;
+        try {
+            session=new BotSession(script,actor,world.getName(),action,sessionOutput(player,actor));
+            sessions.put(id,session);
+            actor.puff();
+            if(firstTime) markSeenWorld(player,world.getName());
+        } catch(RuntimeException failure) {
+            if(session!=null) sessions.remove(id,session);
+            actor.close();
+            reportSpawnFailure(player,failure);
+        }
+    }
+
+    private BotSession.Output sessionOutput(Player player,BotActor initialActor) {
+        UUID id=player.getUniqueId();
+        BotScript program=script;
+        return new BotSession.Output() {
+            private BotActor speakingActor=initialActor;
+            private String waitMessage;
+
+            @Override public BotActor spawn() {
+                if(!available()) {
+                    sayLine(player,"The next step needs STEMBot to appear, but I am not available right now. Ask staff for help.");
+                    closeNoSpawnSession(id);
+                    return null;
+                }
+                String message=shouldDeferForCombat(player)
+                    ?"I need to appear for the next step. I will join you once you are out of combat."
+                    :isBotRequestBusy(id)?"I will appear for the next step after my current task finishes.":null;
+                if(message!=null) {
+                    if(!message.equals(waitMessage)) sayLine(player,message);
+                    waitMessage=message;
+                    return null;
+                }
+                waitMessage=null;
+                BotActor appearing=createActor(player,null);
+                if(appearing==null) closeNoSpawnSession(id);
+                return appearing;
+            }
+
+            @Override public void spawned(BotSession session) {
+                speakingActor=Objects.requireNonNull(session.actor());
+                noSpawnSessions.remove(id,session);
+                sessions.put(id,session);
+                speakingActor.puff();
+            }
+
+            @Override public void navigationDiagnostic(String message) {
+                STEMCraft.getPlugin().getLogger().info("[STEMBot navigation] " + message);
+            }
+
+            @Override public Runnable await(String key,java.util.function.Consumer<Boolean> completion) {
+                var request=new dev.stemcraft.api.event.guide.GuideActionRequestEvent(player,key,completion);
+                try {
+                    Bukkit.getPluginManager().callEvent(request);
+                    if(!request.claimed()) completion.accept(false);
+                } catch(RuntimeException failure) {
+                    request.cancel();
+                    completion.accept(false);
+                    STEMCraft.getPlugin().getLogger().log(java.util.logging.Level.WARNING,
+                        "STEMBot guide callback failed: "+key,failure);
+                }
+                return request::cancel;
+            }
+
+            @Override public void depart(BotActor departing) {
+                StemBotFeature.this.depart(id,departing,program.departureDelayTicks());
+            }
+
+            @Override public void say(String text) { sayLine(player,text); }
+
+            @Override public int talk(String text) {
+                if(speakingActor==null) { sayLine(player,text); return 1; }
+                return talkLine(player,speakingActor,text);
+            }
+        };
+    }
+
+    BotActor createActor(Player player,Location fixedSpawn) {
+        UUID id=player.getUniqueId();
+        World world=player.getWorld();
         Location playerLocation=player.getLocation();
 
         Location actorSpawn=fixedSpawn==null
@@ -771,7 +856,7 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
                     NamedTextColor.YELLOW
                 )
             );
-            return;
+            return null;
         }
 
         if(fixedSpawn==null) actorSpawn.setDirection(
@@ -779,7 +864,7 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
         );
 
         try {
-            BotActor actor=new CitizensBotActor(
+            return new CitizensBotActor(
                 STEMCraft.getPlugin(),
                 id,
                 script.name(),
@@ -787,68 +872,15 @@ public final class StemBotFeature extends BaseFeature implements StemBotService 
                 skins.current()
             );
 
-            BotSession.Output output=new BotSession.Output() {
-                @Override public void navigationDiagnostic(String message) {
-                    STEMCraft.getPlugin().getLogger().info("[STEMBot navigation] " + message);
-                }
-                @Override public Runnable await(String key, java.util.function.Consumer<Boolean> completion) {
-                    var request = new dev.stemcraft.api.event.guide.GuideActionRequestEvent(player, key, completion);
-                    try {
-                        Bukkit.getPluginManager().callEvent(request);
-                        if (!request.claimed()) completion.accept(false);
-                    } catch (RuntimeException failure) {
-                        request.cancel();
-                        completion.accept(false);
-                        STEMCraft.getPlugin().getLogger().log(java.util.logging.Level.WARNING,
-                            "STEMBot guide callback failed: " + key, failure);
-                    }
-                    return request::cancel;
-                }
-
-                @Override
-                public void depart(BotActor departing) {
-                    StemBotFeature.this.depart(id,departing,script.departureDelayTicks());
-                }
-
-                @Override
-                public void say(String text) {
-                    sayLine(player,text);
-                }
-
-                @Override
-                public int talk(String text) {
-                    return talkLine(player,actor,text);
-                }
-            };
-
-            BotSession session=new BotSession(
-                script,
-                actor,
-                world.getName(),
-                action,
-                output
-            );
-
-            sessions.put(id,session);
-            actor.puff();
-
-            if(firstTime)
-                markSeenWorld(player,world.getName());
-
         } catch(RuntimeException failure) {
-            player.sendMessage(
-                Component.text(
-                    "STEMBot could not join you just now.",
-                    NamedTextColor.YELLOW
-                )
-            );
-
-            STEMCraft.getPlugin().getLogger().log(
-                java.util.logging.Level.WARNING,
-                "Could not summon STEMBot",
-                failure
-            );
+            reportSpawnFailure(player,failure);
+            return null;
         }
+    }
+
+    private void reportSpawnFailure(Player player,RuntimeException failure) {
+        player.sendMessage(Component.text("STEMBot could not join you just now.",NamedTextColor.YELLOW));
+        STEMCraft.getPlugin().getLogger().log(java.util.logging.Level.WARNING,"Could not summon STEMBot",failure);
     }
 
     static @javax.annotation.Nullable Location findSpawn(

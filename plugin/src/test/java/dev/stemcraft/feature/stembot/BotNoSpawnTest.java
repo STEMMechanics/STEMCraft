@@ -54,23 +54,19 @@ class BotNoSpawnTest {
     @ParameterizedTest
     @ValueSource(strings={"wave","walk:1 64 1","look:player","point:player","sneak","stand","speed:1",
         "listen:* -> done","await:stemcraft:coordbar 60 -> done, done"})
-    void rejectsActorAndReplyStepsBeforeTheTopicCanRun(String step) {
+    void acceptsActorAndReplyStepsForLazySpawning(String step) {
         var yaml=config();
         yaml.set("actions.directions",List.of(step));
-        var error=assertThrows(IllegalArgumentException.class,()->script(yaml));
-        assertTrue(error.getMessage().contains("help-topics.wilderness"));
-        assertTrue(error.getMessage().contains("without spawning"));
+        assertDoesNotThrow(()->script(yaml));
     }
 
-    @Test void validatesActionJumpsAndWrongWorldFallbacks() {
+    @Test void acceptsActorStepsThroughActionJumpsAndWrongWorldFallbacks() {
         var yaml=config();
         yaml.set("actions.actor-step",List.of("wave","end"));
         yaml.set("actions.directions",List.of("action:actor-step"));
-        assertTrue(assertThrows(IllegalArgumentException.class,()->script(yaml))
-            .getMessage().contains("actions.actor-step"));
+        assertDoesNotThrow(()->script(yaml));
         yaml.set("actions.directions",List.of("require-world:survival normal -> actor-step","end"));
-        assertTrue(assertThrows(IllegalArgumentException.class,()->script(yaml))
-            .getMessage().contains("actions.actor-step"));
+        assertDoesNotThrow(()->script(yaml));
     }
 
     @ParameterizedTest

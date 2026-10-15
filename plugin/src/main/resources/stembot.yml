@@ -573,9 +573,10 @@ triggers:
   # Add mailbox-received: some-action to run an action on later mail receipts.
 
 # /help <topic> and /stembot <topic> run these actions.
-# Prefix a target with no-spawn: for an immediate text-only reply without an NPC.
-# No-spawn topics support say, talk (text only), sleep, require-world,
-# exit-region, action, end and close. Other steps require a normal topic.
+# Prefix a target with no-spawn: to start without an NPC.
+# Text, world checks, exit-region, sleep, speed and action jumps work without the bot.
+# Movement, gestures, listen and await summon the bot when that step is reached.
+# If another task or combat delays spawning, the action waits at that step.
 help-topics:
   mail: mailbox-help
   mailbox: mailbox-help

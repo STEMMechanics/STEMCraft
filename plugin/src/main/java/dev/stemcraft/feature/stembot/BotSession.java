@@ -38,6 +38,10 @@ public final class BotSession {
             completion.accept(false);
             return () -> { };
         }
+        /** Supply a guide when a step needs one; null leaves that instruction pending. */
+        default BotActor spawn() { return null; }
+        /** Called after the actor is attached, before the pending instruction executes. */
+        default void spawned(BotSession session) { }
         /** Dispose of an actor, optionally after a presentation delay owned by the output. */
         default void depart(BotActor actor) { actor.close(); }
     }
@@ -45,7 +49,7 @@ public final class BotSession {
     private enum WaitMode { NONE,SLEEP,TALK,WAVE,POINT,WALK,LISTEN,AWAIT,STUCK }
 
     private final BotScript script;
-    private final BotActor actor;
+    private BotActor actor;
     private final String world;
     private final Output output;
 
@@ -93,10 +97,9 @@ public final class BotSession {
         this(script,Objects.requireNonNull(actor),world,initialAction,output,false);
     }
 
-    /** Run text, world checks and region advice without an NPC or private reply capture. */
+    /** Start without an NPC; actor and reply instructions request one from the output when reached. */
     public static BotSession noSpawn(BotScript script,String world,String action,Output output) {
-        script.validateNoSpawnAction(action);
-        return new BotSession(script,null,world,action,output,true);
+        return new BotSession(script,null,world,Objects.requireNonNull(action),output,true);
     }
 
     private BotSession(BotScript script,BotActor actor,String world,String initialAction,Output output,boolean noSpawn) {
@@ -385,7 +388,27 @@ public final class BotSession {
                 return;
             }
 
-            BotScript.Instruction instruction=program.get(pc++);
+            BotScript.Instruction instruction=program.get(pc);
+
+            if(actor==null&&instruction.requiresActor()) {
+                BotActor appearing=output.spawn();
+                if(closed) {
+                    if(appearing!=null) appearing.close();
+                    return;
+                }
+                if(appearing==null) return;
+                actor=appearing;
+                chatEngaged=true;
+                awayTicks=0;
+                idle=0;
+                try {
+                    output.spawned(this);
+                } catch(RuntimeException error) {
+                    close(false);
+                    throw error;
+                }
+            }
+            pc++;
 
             if(actor==null) {
                 runNoSpawn(instruction,owner);
@@ -518,6 +541,7 @@ public final class BotSession {
                 }
             }
             case ACTION -> jumpTo(instruction.text());
+            case SPEED -> speed=instruction.number();
             case SLEEP -> {
                 waitMode=WaitMode.SLEEP;
                 waitUntil=age+instruction.ticks();

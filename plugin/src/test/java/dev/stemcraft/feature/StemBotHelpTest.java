@@ -10,6 +10,7 @@ import dev.stemcraft.api.service.event.EventHandler;
 import dev.stemcraft.config.ConfigFileImpl;
 import dev.stemcraft.config.ConfigSectionImpl;
 import dev.stemcraft.feature.stembot.BotSession;
+import dev.stemcraft.feature.stembot.BotActor;
 import org.bukkit.NamespacedKey;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -245,6 +246,133 @@ class StemBotHelpTest {
         tick.run();
         tick.run();
         assertNull(player.nextMessage());
+    }
+
+    @Test void aLazyListenSpawnsTheActorAndCapturesRepliesInTheSameSession() {
+        configureLazyTopic("say:First","listen:yes -> done");
+        var actor=availableActor();
+        request("wilderness");
+        assertEquals("First",player.nextMessage());
+        var session=sessions.get(player.getUniqueId());
+        assertNotNull(session);
+        assertSame(actor,session.actor());
+        assertTrue(session.chatEngaged());
+        var chat=mock(io.papermc.paper.event.player.AsyncChatEvent.class);
+        when(chat.getPlayer()).thenReturn(player);
+        assertTrue(feature.isPrivateChat(chat));
+        verify(feature).createActor(player,null);
+        verify(actor).puff();
+
+        session.input("yes");
+        tick.run();
+        assertEquals("Done",player.nextMessage());
+        assertFalse(feature.hasActiveSession(player.getUniqueId()));
+    }
+
+    @Test void aLazyActorWaitsBehindTheCurrentGuideWithoutRepeatingMessagesOrTickingTwice() {
+        configureLazyTopic("say:First","wave","end");
+        var actor=availableActor();
+        var current=mock(BotSession.class);
+        sessions.put(player.getUniqueId(),current);
+        request("wilderness");
+        assertEquals("First",player.nextMessage());
+        assertTrue(player.nextMessage().contains("after my current task finishes"));
+        tick.run();
+        assertNull(player.nextMessage());
+        verify(feature,never()).createActor(player,null);
+        verify(current,never()).close(anyBoolean());
+
+        when(current.closed()).thenReturn(true);
+        tick.run();
+
+        assertSame(actor,sessions.get(player.getUniqueId()).actor());
+        verify(feature).createActor(player,null);
+        verify(actor,times(1)).lookAt(any());
+        assertNull(player.nextMessage());
+    }
+
+    @Test void combatDefersOnlyTheActorStepAndAnnouncesTheWaitOnce() {
+        configureLazyTopic("say:First","wave","end");
+        var actor=availableActor();
+        var combatKey=new NamespacedKey("stemcraft","stembot-last-combat");
+        player.getPersistentDataContainer().set(combatKey,PersistentDataType.LONG,System.currentTimeMillis());
+        request("wilderness");
+        assertEquals("First",player.nextMessage());
+        assertTrue(player.nextMessage().contains("once you are out of combat"));
+        tick.run();
+        tick.run();
+        assertNull(player.nextMessage());
+        verify(feature,never()).createActor(player,null);
+        player.getPersistentDataContainer().remove(combatKey);
+        tick.run();
+        assertSame(actor,sessions.get(player.getUniqueId()).actor());
+        verify(feature).createActor(player,null);
+    }
+
+    @Test void aMissingNpcServiceStopsOnlyTheInteractiveRequest() {
+        configureLazyTopic("say:First","wave","say:After");
+        doReturn(false).when(feature).available();
+        request("wilderness");
+        assertEquals("First",player.nextMessage());
+        assertTrue(player.nextMessage().contains("not available right now"));
+        tick.run();
+        assertNull(player.nextMessage());
+        assertFalse(feature.hasActiveSession(player.getUniqueId()));
+        assertTrue(complete(player,"/help ",true).contains("wilderness"));
+        verify(feature,never()).createActor(player,null);
+    }
+
+    @Test void anUnusableSpawnStopsTheRequestWithoutRetryingOrDisablingOtherTopics() {
+        configureLazyTopic("say:First","wave","say:After");
+        doReturn(null).when(feature).createActor(player,null);
+        request("wilderness");
+        assertEquals("First",player.nextMessage());
+        tick.run();
+        tick.run();
+        verify(feature,times(1)).createActor(player,null);
+        assertNull(player.nextMessage());
+        assertFalse(feature.hasActiveSession(player.getUniqueId()));
+        assertTrue(complete(player,"/help ",true).contains("mail"));
+    }
+
+    @Test void reloadCancelsAnInteractiveStepWaitingForTheCurrentGuide() {
+        configureLazyTopic("say:First","wave","end");
+        availableActor();
+        sessions.put(player.getUniqueId(),mock(BotSession.class));
+        request("wilderness");
+        assertEquals("First",player.nextMessage());
+        assertNotNull(player.nextMessage());
+        feature.onReload();
+        tick.run();
+        verify(feature,never()).createActor(player,null);
+        assertNull(player.nextMessage());
+    }
+
+    @Test void initialAppearanceFailuresDisposeOfTheActorAndSession() {
+        var actor=availableActor();
+        doThrow(new IllegalStateException("Appearance failed")).when(actor).puff();
+        feature.start(player,"mail-help",false);
+        verify(actor).close();
+        assertFalse(feature.hasActiveSession(player.getUniqueId()));
+        assertTrue(player.nextMessage().contains("could not join you"));
+    }
+
+    private void configureLazyTopic(String... steps) {
+        config.set("messages.prefix","");
+        config.set("speech.enabled",false);
+        config.set("speech.post-delay-ticks",0);
+        config.set("actions.directions",List.of(steps));
+        config.set("actions.done",List.of("say:Done","end"));
+        config.set("help-topics.wilderness","no-spawn:directions");
+        feature.onReload();
+    }
+
+    private BotActor availableActor() {
+        var actor=mock(BotActor.class);
+        when(actor.valid()).thenReturn(true);
+        when(actor.location()).thenAnswer(call->player.getLocation());
+        doReturn(actor).when(feature).createActor(player,null);
+        return actor;
     }
 
     private void configureNoSpawnWilderness() {

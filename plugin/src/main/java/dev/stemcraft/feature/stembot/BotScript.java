@@ -82,6 +82,13 @@ public record BotScript(
             return new Instruction(op,"",0,0,0,0,0,List.of());
         }
 
+        boolean requiresActor() {
+            return switch(op) {
+                case WALK,LOOK,POINT,WAVE,SNEAK,STAND,LISTEN,AWAIT -> true;
+                default -> false;
+            };
+        }
+
         boolean matchesWorld(org.bukkit.World world) {
             return world!=null && (text.isEmpty() || world.getEnvironment()!=null
                 && world.getEnvironment().name().equalsIgnoreCase(text))
@@ -150,37 +157,6 @@ public record BotScript(
         boolean noSpawn=target.regionMatches(true,0,"no-spawn:",0,9);
         String action=noSpawn?required(target.substring(9).trim(),"no-spawn action"):target;
         return new HelpTopic(action,noSpawn);
-    }
-
-    /** Validate every reachable step before running a topic without a guide actor. */
-    void validateNoSpawnAction(String action) {
-        validateNoSpawnAction(actions,action,"actions."+action);
-    }
-
-    private static void validateNoSpawnAction(Map<String,List<Instruction>> actions,String action,String source) {
-        var pending=new ArrayDeque<String>();
-        var visited=new HashSet<String>();
-        pending.add(action);
-        while(!pending.isEmpty()) {
-            String target=pending.removeFirst();
-            if(!visited.add(target)) continue;
-            requireTarget(actions,target,source);
-            for(Instruction instruction:actions.get(target)) {
-                switch(instruction.op()) {
-                    case SAY,TALK,SLEEP,EXIT_REGION -> {}
-                    case ACTION -> pending.add(instruction.text());
-                    case REQUIRE_WORLD -> {
-                        String fallback=instruction.routes().getFirst().target();
-                        if(!fallback.equalsIgnoreCase("end")&&!fallback.equalsIgnoreCase("close"))
-                            pending.add(fallback);
-                    }
-                    case END,CLOSE -> {}
-                    default -> throw new IllegalArgumentException(source+" cannot run without spawning: actions."
-                        +target+" uses "+instruction.op().name().toLowerCase(Locale.ROOT));
-                }
-                if(instruction.op()==Op.ACTION||instruction.op()==Op.END||instruction.op()==Op.CLOSE) break;
-            }
-        }
     }
 
     /** Run after successful parsing, so invalid scripts are never migrated on disk. */
@@ -318,7 +294,6 @@ public record BotScript(
                 throw new IllegalArgumentException("help-topics."+topic+" has an invalid topic");
             HelpTopic route=parseHelpTopic(target);
             requireTarget(actions,route.action(),"help-topics."+topic);
-            if(route.noSpawn()) validateNoSpawnAction(actions,route.action(),"help-topics."+topic);
         });
         boolean deferDuringCombat=config.getBoolean("trigger-policy.defer-during-combat",true);
         int combatCooldownSeconds=boundedInt(config.getInt("trigger-policy.combat-cooldown-seconds",10),0,3600);

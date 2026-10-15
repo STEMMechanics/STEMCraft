@@ -149,7 +149,7 @@ the configured quiet period has elapsed. The bundled mailbox explanation says
 to craft the mailbox in the Survival world. `/help` and `/help <topic>` forward
 to STEMBot, while `/stembot` and `/stembot <topic>` remain available directly.
 
-Prefix a help topic's target with `no-spawn:` to run it as private text:
+Prefix a help topic's target with `no-spawn:` to start it without a guide actor:
 
 ```yaml
 help-topics:
@@ -158,19 +158,30 @@ help-topics:
 ```
 
 The prefix is a route option; the action name remains `survival-wilderness`.
-No-spawn topics answer immediately, including during combat or another guide
-conversation. They do not need Citizens, safe NPC ground or a skin. They do not
-start private reply capture, robot sounds, gestures, particles or farewells,
-and leave an existing guide session untouched. Each command request runs the
-action again from the player's current position. Feature disabling still
-disables these topics.
+Text-only steps answer immediately, including during combat or another guide
+conversation. Before spawning, `say`, `talk`, `require-world`, `exit-region`,
+`sleep`, `speed` and `action` work without an NPC. These steps do not require
+Citizens or safe NPC ground. Ordinary chat retains its existing routing, and
+robot sounds, gestures and particles start with the spawned guide.
+Reaching `end`, `close` or the end of the list before spawning closes silently.
+Each command request starts from the player's current position. Feature disabling
+still disables these topics.
 
-These actions support `say`, `talk` (text only), `sleep`, `require-world`,
-`exit-region`, `action`, `end` and `close`. Reaching the end of the list closes
-silently too. All reachable action jumps and world-check fallbacks are validated;
-NPC movement/gestures, `listen` and `await` require a normal topic. Delayed text
-is cancelled on world changes, disconnect, `/stembot close`, reload or disable.
-World routes and event triggers retain their existing guide spawning behaviour.
+When `walk`, `look`, `point`, `wave`, `sneak`, `stand`, `listen` or `await` is
+reached, the interpreter requests a guide before executing that instruction.
+It keeps the same session, action, instruction pointer and speed; previous text
+is not repeated. An active guide, pending arrival/departure or combat cooldown
+delays the spawn, with one notice per waiting reason. The existing guide retains
+ownership. Missing Citizens or an unusable spawn spot ends only that request and
+reports why; the script remains loaded. Normal action/reference validation still
+applies to every topic.
+
+Once the actor appears, the remaining steps use normal speech, gestures, nearby
+private chat and departure behaviour. `listen` and `await` use the same routing
+and provider cleanup as ordinary guide sessions. Actor creation happens at most
+once per session, including through action jumps and world-check fallbacks.
+World changes, disconnect, `/stembot close`, reload and disable cancel pending
+steps. World routes and event triggers retain their initial guide spawning.
 
 ## Reusable region directions and world requirements
 
