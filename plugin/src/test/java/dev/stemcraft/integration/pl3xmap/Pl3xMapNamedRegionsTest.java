@@ -23,7 +23,7 @@ import static org.mockito.Mockito.*;
 class Pl3xMapNamedRegionsTest {
     @TempDir Path tempDir;
     @Test void registersExistingAndLaterWorldsAndRestoresLayersAfterMapReload() throws Exception {
-        var api = mock(Pl3xMap.class, RETURNS_DEEP_STUBS);
+        var api = api();
         var worlds = new WorldRegistry();
         var events = new EventRegistry();
         when(api.getWorldRegistry()).thenReturn(worlds);
@@ -40,6 +40,8 @@ class Pl3xMapNamedRegionsTest {
             try {
                 integration.enable();
                 assertLayers(initial);
+                assertTrue(Files.readString(web().resolve("index.html")).contains("id=\"stemcraft-regions\""));
+                assertTrue(Files.isRegularFile(web().resolve("stemcraft-regions.js")));
                 integration.enable();
                 assertEquals(1, new WorldLoadedEvent(initial).getHandlers().stream()
                     .filter(handler -> handler.getListener() == integration).count());
@@ -51,9 +53,14 @@ class Pl3xMapNamedRegionsTest {
                 initial.getLayerRegistry().unregister();
                 later.getLayerRegistry().unregister();
                 clearInvocations(api.getIconRegistry());
+                Files.writeString(web().resolve("index.html"), "<html><body>Regenerated map</body></html>");
+                Files.delete(web().resolve("stemcraft-regions.js"));
                 events.callEvent(new Pl3xMapEnabledEvent());
                 assertLayers(initial);
                 assertLayers(later);
+                assertTrue(Files.readString(web().resolve("index.html")).contains("Regenerated map"));
+                assertTrue(Files.readString(web().resolve("index.html")).contains("id=\"stemcraft-regions\""));
+                assertTrue(Files.isRegularFile(web().resolve("stemcraft-regions.js")));
                 verify(api.getIconRegistry()).register(eq("stemcraft_named_structure_generic"), any());
 
                 integration.disable();
@@ -68,7 +75,7 @@ class Pl3xMapNamedRegionsTest {
     }
 
     @Test void neverPublishesBiomeGeometryAndSendsOnlyChangedRevisionNotifications() throws Exception {
-        var api = mock(Pl3xMap.class, RETURNS_DEEP_STUBS);
+        var api = api();
         var worlds = new WorldRegistry();
         when(api.getWorldRegistry()).thenReturn(worlds);
         var plugin = mock(STEMCraft.class);
@@ -103,7 +110,7 @@ class Pl3xMapNamedRegionsTest {
     }
 
     @Test void canRemoveBiomeLayerWithoutRemovingStructureIcons() throws Exception {
-        var api = mock(Pl3xMap.class, RETURNS_DEEP_STUBS);
+        var api = api();
         var worlds = new WorldRegistry();
         when(api.getWorldRegistry()).thenReturn(worlds);
         var plugin = mock(STEMCraft.class);
@@ -120,12 +127,74 @@ class Pl3xMapNamedRegionsTest {
             try {
                 integration.enable();
                 assertNull(world.getLayerRegistry().get("stemcraft_named_regions"));
+                assertFalse(Files.exists(web().resolve("stemcraft-regions.js")));
                 Layer structures = world.getLayerRegistry().get("stemcraft_named_structures");
                 assertNotNull(structures);
                 assertEquals(1, structures.getMarkers().size());
             } finally { integration.disable(); }
         }
     }
+
+    @Test void allowsAutomaticWebFileInstallationToBeDisabledForIndependentHosting() throws Exception {
+        var api = api();
+        var worlds = new WorldRegistry();
+        when(api.getWorldRegistry()).thenReturn(worlds);
+        var plugin = mock(STEMCraft.class);
+        when(plugin.getResource(anyString())).thenAnswer(invocation ->
+            Files.newInputStream(Path.of("src/main/resources", invocation.getArgument(0, String.class))));
+        var integration = new Pl3xMapNamedRegions(plugin, List::of, () -> 1L,
+            true, "Regions", "Structures", 300, 24, false, "/custom-api");
+        try (var access = mockStatic(Pl3xMap.class)) {
+            access.when(Pl3xMap::api).thenReturn(api);
+            try {
+                integration.enable();
+                assertEquals("<html><body>Map</body></html>", Files.readString(web().resolve("index.html")));
+                assertFalse(Files.exists(web().resolve("stemcraft-regions.js")));
+                api.getEventRegistry().callEvent(new Pl3xMapEnabledEvent());
+                assertFalse(Files.exists(web().resolve("stemcraft-regions.js")));
+            } finally { integration.disable(); }
+        }
+    }
+
+    @Test void failedWebFileInstallationDoesNotDisableMapLayersOrStructureIcons() throws Exception {
+        var api = api();
+        var worlds = new WorldRegistry();
+        when(api.getWorldRegistry()).thenReturn(worlds);
+        World world = world("survival");
+        worlds.register("survival", world);
+        Files.delete(web().resolve("index.html"));
+        var plugin = mock(STEMCraft.class);
+        var logger = mock(java.util.logging.Logger.class);
+        when(plugin.getLogger()).thenReturn(logger);
+        when(plugin.getResource(anyString())).thenAnswer(invocation ->
+            Files.newInputStream(Path.of("src/main/resources", invocation.getArgument(0, String.class))));
+        var integration = new Pl3xMapNamedRegions(plugin, List::of, () -> 1L,
+            true, "Regions", "Structures", 300, 24);
+        try (var access = mockStatic(Pl3xMap.class)) {
+            access.when(Pl3xMap::api).thenReturn(api);
+            try {
+                integration.enable();
+                assertLayers(world);
+                verify(logger).log(eq(java.util.logging.Level.WARNING), contains("Could not install"), any(java.io.IOException.class));
+                verify(api.getIconRegistry()).register(eq("stemcraft_named_structure_generic"), any());
+                Files.writeString(web().resolve("index.html"), "<html><body>Restored map</body></html>");
+                api.getEventRegistry().callEvent(new Pl3xMapEnabledEvent());
+                assertTrue(Files.readString(web().resolve("index.html")).contains("id=\"stemcraft-regions\""));
+            } finally { integration.disable(); }
+        }
+    }
+
+    private Pl3xMap api() throws Exception {
+        var api = mock(Pl3xMap.class, RETURNS_DEEP_STUBS);
+        when(api.getMainDir()).thenReturn(tempDir);
+        when(api.getEventRegistry()).thenReturn(new EventRegistry());
+        Files.createDirectories(web());
+        Files.writeString(web().resolve("index.html"), "<html><body>Map</body></html>");
+        Files.writeString(web().resolve("pl3xmap.js"), "// Pl3xMap");
+        return api;
+    }
+
+    private Path web() { return tempDir.resolve("web"); }
 
     private World world(String name) {
         World world = mock(World.class, RETURNS_DEEP_STUBS);

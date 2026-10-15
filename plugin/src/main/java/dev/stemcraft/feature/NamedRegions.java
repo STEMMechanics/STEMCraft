@@ -1721,7 +1721,9 @@ public final class NamedRegions extends BaseFeature {
                 biomeLayer,
                 structureLayer,
                 updateSeconds,
-                structureIconSize
+                structureIconSize,
+                getConfigSection().getBoolean("map.biomes.auto-install",true),
+                getConfigSection().getString("map.biomes.endpoint-url","/stemcraft/named-regions")
             );
             mapLayer.enable();
             mapViewportEnabled=biomesEnabled;

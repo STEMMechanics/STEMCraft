@@ -26,8 +26,9 @@ continue to use their own marker layers.
 
 1. Replace the STEMCraft plugin jar and restart. The new plugin immediately
    replaces the old whole-world biome marker file with `[]`. Existing proxy or
-   browser caches must also be purged/refreshed. The old browser has no biome
-   outlines until the following browser extension is installed.
+   browser caches must also be purged/refreshed. STEMCraft automatically copies
+   its bundled `stemcraft-regions.js` into Pl3xMap's configured web directory and
+   adds its script tag to the existing `index.html`.
 2. Enable STEMCraft's web service in `plugins/STEMCraft/config.yml`:
 
    ```yaml
@@ -40,11 +41,14 @@ continue to use their own marker layers.
        enabled: true
        biomes:
          enabled: true
+         auto-install: true
+         endpoint-url: "/stemcraft/named-regions"
    ```
 
    Merge these values into existing sections. Bind to an address reachable by
    the reverse proxy; the loopback example assumes the same host/network namespace.
-   Restart after changing configuration.
+   Restart after changing configuration. Automatic installation is enabled by
+   default, including when these new biome settings are absent from an older config.
 3. Add the API route to the map site's proxy. For nginx on the same host:
 
    ```nginx
@@ -57,22 +61,46 @@ continue to use their own marker layers.
    Query parameters pass through to the endpoint. This exposes discovered biome
    names and approximate outlines only for the configured named-region worlds.
    Keep the public endpoint on the map's origin; no CORS setup is needed.
-4. From this repository, install the browser script into the **generated** map
-   web directory. Stop the server while changing its web files. Install the
-   optional STEMCraft theme first, if used:
+4. Refresh the map in the browser. Players open the same map URL as before;
+   the new script loads automatically from the website.
 
-   ```sh
-   sh tools/pl3xmap-regions/install.sh /path/to/plugins/Pl3xMap/web
-   ```
+### Automatic website updates
 
-   The installer requires Python 3.
-   A different same-origin public route can be passed as the second argument.
-   The installer preserves the current theme, backs up the original index,
-   and versions its script URL. Set Pl3xMap `settings.web-directory.read-only: true`
-   before restarting so Pl3xMap retains the script tag. Refresh the browser.
-   Reinstall this script after updating Pl3xMap's web files or reinstalling the
-   theme. An independently hosted map needs the same script/index update and
-   proxy route on that host.
+STEMCraft installs the browser files when it attaches to Pl3xMap and again after
+Pl3xMap enables/reloads. In Pl3xMap 26.2-554, the web files are generated before
+that enable event, so STEMCraft restores its tag after regeneration. It follows
+Pl3xMap's configured web directory, preserves the current page/theme, keeps one
+script tag, versions the script URL, and leaves unchanged files untouched. The
+first changed index is backed up at `.stemcraft-regions-backup/index.html`.
+
+This extension no longer requires changing Pl3xMap's
+`settings.web-directory.read-only` option. Keep that setting if your separate
+theme needs it. STEMCraft does not modify Pl3xMap's configuration. If browser
+file installation fails, the server logs the directory and error while retaining
+the map layers; check that its generated web files exist and are writable.
+
+The public API path comes from `named-regions.map.biomes.endpoint-url`. If your
+proxy uses a different public route, set that path in the config and restart.
+The plugin installs local website files; routing on an external proxy/CDN remains
+a hosting setting and must be configured there.
+
+### Independently hosted map files
+
+If the public map uses a separate copy of the web files, set
+`named-regions.map.biomes.auto-install: false` and update that copy manually.
+The optional installer remains available for this case:
+
+```sh
+sh tools/pl3xmap-regions/install.sh /path/to/plugins/Pl3xMap/web
+```
+
+The installer requires Python 3.
+A different same-origin public route can be passed as the second argument.
+It preserves the current theme, backs up the original index, and versions its
+script URL. An independently hosted map also needs the API proxy route on that
+host. Reapply the installer when replacing that host's web files. If Pl3xMap
+manages those files but automatic installation is disabled, keep
+`settings.web-directory.read-only: true` to retain the manually installed tag.
 
 To temporarily remove biome geometry without removing named regions or structure
 icons, set `named-regions.map.biomes.enabled: false` and restart. This removes the
@@ -135,5 +163,6 @@ sh tools/pl3xmap-regions/uninstall.sh /path/to/plugins/Pl3xMap/web
 ```
 
 The uninstaller removes only this extension's script tag and asset, preserving
-the current theme. Also disable the biome overlay in STEMCraft if it is no longer
+the current theme. Set `named-regions.map.biomes.auto-install: false` first to
+prevent automatic reinstallation; disable the biome overlay too if no longer
 needed. No changes are made to terrain tiles or stored region names.

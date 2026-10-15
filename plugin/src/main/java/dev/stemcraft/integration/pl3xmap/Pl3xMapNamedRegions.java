@@ -35,18 +35,28 @@ public final class Pl3xMapNamedRegions implements net.pl3x.map.core.event.EventL
     private final String structureLayerName;
     private final int updateIntervalSeconds;
     private final int structureIconSize;
+    private final Pl3xMapRegionWebFiles webFiles;
     public Pl3xMapNamedRegions(STEMCraft plugin, Supplier<Collection<NamedMapArea>> areas, LongSupplier revision,
                                boolean biomesEnabled, String biomeLayerName, String structureLayerName,
                                int updateIntervalSeconds, int structureIconSize) {
+        this(plugin, areas, revision, biomesEnabled, biomeLayerName, structureLayerName,
+            updateIntervalSeconds, structureIconSize, true, Pl3xMapRegionWebFiles.DEFAULT_ENDPOINT);
+    }
+    public Pl3xMapNamedRegions(STEMCraft plugin, Supplier<Collection<NamedMapArea>> areas, LongSupplier revision,
+                               boolean biomesEnabled, String biomeLayerName, String structureLayerName,
+                               int updateIntervalSeconds, int structureIconSize,
+                               boolean autoInstallWebFiles, String endpointUrl) {
         this.plugin = plugin; this.areas = areas; this.revision = revision;
         this.biomesEnabled = biomesEnabled; this.biomeLayerName = biomeLayerName;
         this.structureLayerName = structureLayerName; this.updateIntervalSeconds = updateIntervalSeconds;
         this.structureIconSize = structureIconSize;
+        this.webFiles = biomesEnabled && autoInstallWebFiles ? new Pl3xMapRegionWebFiles(plugin, endpointUrl) : null;
     }
     public void enable() {
         if (enabled) return;
         enabled = true;
         Pl3xMap.api().getEventRegistry().register(this);
+        installWebFiles();
         registerStructureIcons();
         Pl3xMap.api().getWorldRegistry().forEach(this::registerWorld);
     }
@@ -60,8 +70,21 @@ public final class Pl3xMapNamedRegions implements net.pl3x.map.core.event.EventL
     public void onMapEnabled(net.pl3x.map.core.event.server.Pl3xMapEnabledEvent event) {
         if (!enabled) return;
         // Pl3xMap's own reload clears icons and reconstructs its worlds.
+        // Its web files have already been extracted before this event fires.
+        installWebFiles();
         registerStructureIcons();
         Pl3xMap.api().getWorldRegistry().forEach(this::registerWorld);
+    }
+
+    private void installWebFiles() {
+        if (webFiles == null) return;
+        try {
+            webFiles.install(FileUtil.getWebDir());
+        } catch (IOException exception) {
+            plugin.getLogger().log(java.util.logging.Level.WARNING,
+                "Could not install named-region browser files in " + FileUtil.getWebDir()
+                    + "; check the generated web directory and file permissions", exception);
+        }
     }
 
     private void registerWorld(World world) {

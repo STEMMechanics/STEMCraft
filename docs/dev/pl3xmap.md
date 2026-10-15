@@ -12,8 +12,14 @@ updates are disabled. SSE carries only small revision notifications for biome
 changes, throttled by `map.update-minutes`. The layer keys remain
 `stemcraft_named_regions` and `stemcraft_named_structures`.
 
-Install the browser extension and route its API to STEMCraft's web service before
-expecting biome outlines. The plugin alone stops the old geometry payloads.
+STEMCraft automatically copies the bundled browser script into Pl3xMap's
+configured web directory and updates its existing index on attachment and map
+enable/reload. It preserves theme changes and backs up the original index;
+Pl3xMap's read-only setting is not required for this extension. The API still
+needs a public route to STEMCraft's web service. Configure a different public
+path with `named-regions.map.biomes.endpoint-url`; independently hosted web files
+can opt out with `named-regions.map.biomes.auto-install: false` and use the manual
+installer in the guide.
 `named-regions.map.biomes.enabled: false` removes only the biome overlay and
 disables its API; it retains structure icons and in-game names. Set
 `named-regions.map.enabled: false` to remove both named overlays. Hiding a legacy

@@ -24,11 +24,19 @@ if not (backup / 'index.html').exists():
     shutil.copy2(index, backup / 'index.html')
 shutil.copyfile(source, web / 'stemcraft-regions.js')
 version = hashlib.sha256(source.read_bytes()).hexdigest()[:12]
-page = re.sub(r'\s*<script\b[^>]*\bid=["\']stemcraft-regions["\'][^>]*>\s*</script>', '', page, flags=re.I)
+page = re.sub(r'[ \t]*<script\b(?=[^>]*\s+id\s*=\s*(?:"stemcraft-regions"|\'stemcraft-regions\'))[^>]*>\s*</script>[ \t]*(?:\r?\n)?', '', page, flags=re.I)
 tag = f'<script id="stemcraft-regions" src="stemcraft-regions.js?v={version}" data-endpoint="{html.escape(endpoint, quote=True)}"></script>'
-page = re.sub(r'</body\s*>', lambda match: f'  {tag}\n{match.group(0)}', page, count=1, flags=re.I)
+body = next((match for match in re.finditer(r'<!--.*?-->|<script\b[^>]*>.*?</script\s*>|(?P<body></body\s*>)', page, flags=re.I | re.S) if match.group('body')), None)
+if body is None:
+    sys.exit('Could not find closing body tag outside comments/scripts')
+position = body.start()
+line_start = page.rfind('\n', 0, position) + 1
+if not page[line_start:position].strip():
+    position = line_start
+newline = '\r\n' if '\r\n' in page else '\n'
+page = page[:position] + f'  {tag}{newline}' + page[position:]
 index.write_text(page, encoding='utf-8')
 print(f'Named-region browser extension installed in {web}')
 print(f'Route {endpoint} to STEMCraft /map/named-regions, then refresh the browser.')
-print('Set Pl3xMap settings.web-directory.read-only: true before restarting.')
+print('STEMCraft installs this automatically by default; use auto-install: false for a manually managed copy.')
 PY
