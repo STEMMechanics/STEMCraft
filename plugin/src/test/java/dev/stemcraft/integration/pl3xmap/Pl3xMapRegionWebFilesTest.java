@@ -148,6 +148,22 @@ class Pl3xMapRegionWebFilesTest {
         assertTrue(Files.readString(shared).contains("Shared theme"));
     }
 
+    @Test void uninstallRemovesOnlyOurTagsAndLeavesAnUnchangedPageUntouched() throws Exception {
+        String original = "<html>\r\n<body>\r\n<script src='theme.js'></script>\r\n"
+            + "<script data-id='stemcraft-regions' src='keep.js'></script>\r\n</body></html>";
+        page(original);
+        var installer = installer();
+        installer.install(web);
+        installer.uninstall(web);
+        Path index = web.resolve("index.html");
+        assertEquals(original, Files.readString(index));
+        assertEquals(original, Files.readString(web.resolve(".stemcraft-regions-backup/index.html")));
+        var timestamp = FileTime.fromMillis(1000);
+        Files.setLastModifiedTime(index, timestamp);
+        installer.uninstall(web);
+        assertEquals(timestamp, Files.getLastModifiedTime(index));
+    }
+
     private void page(String content) throws IOException {
         Files.writeString(web.resolve("index.html"), content);
         Files.writeString(web.resolve("pl3xmap.js"), "// Pl3xMap");

@@ -95,10 +95,11 @@ named-regions:
       biomes: "Regions"
       structures: "Structures"
     biomes:
-      # Uses the viewport browser extension; whole-world polygons are never published.
       # Set false to remove only this overlay while retaining named regions and structure icons.
       enabled: true
-      # Install/update the bundled browser script and its index.html tag on map enable/reload.
+      # False keeps the original full-region polygons. True loads only visible, simplified region tiles.
+      viewport-tiles: false
+      # Manage the browser script automatically for viewport tiles; remove its tag when returning to polygons.
       auto-install: true
       # Each region consistently selects one translucent ARGB colour from this palette.
       # The same RGB value is used at full opacity for its border.

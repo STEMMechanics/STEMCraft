@@ -6,6 +6,9 @@ import net.pl3x.map.core.event.EventRegistry;
 import net.pl3x.map.core.event.server.Pl3xMapEnabledEvent;
 import net.pl3x.map.core.event.world.WorldLoadedEvent;
 import net.pl3x.map.core.markers.layer.Layer;
+import net.pl3x.map.core.markers.Point;
+import net.pl3x.map.core.markers.marker.Icon;
+import net.pl3x.map.core.markers.marker.Polygon;
 import net.pl3x.map.core.registry.Registry;
 import net.pl3x.map.core.registry.WorldRegistry;
 import net.pl3x.map.core.world.World;
@@ -23,6 +26,90 @@ import static org.mockito.Mockito.*;
 
 class Pl3xMapNamedRegionsTest {
     @TempDir Path tempDir;
+
+    @Test void originalMarkerModePreservesPolygonDetailHolesStylesAndStructureIcons() throws Exception {
+        var api = api();
+        var worlds = new WorldRegistry();
+        when(api.getWorldRegistry()).thenReturn(worlds);
+        World world = world("survival");
+        worlds.register("survival", world);
+        var plugin = mock(STEMCraft.class);
+        when(plugin.getResource(anyString())).thenAnswer(invocation ->
+            Files.newInputStream(Path.of("src/main/resources", invocation.getArgument(0, String.class))));
+        List<NamedMapArea.MapPoint> boundary = List.of(new NamedMapArea.MapPoint(-4, 0),
+            new NamedMapArea.MapPoint(16, 0), new NamedMapArea.MapPoint(16, 16), new NamedMapArea.MapPoint(-4, 16));
+        List<NamedMapArea.MapPoint> hole = List.of(new NamedMapArea.MapPoint(4, 4),
+            new NamedMapArea.MapPoint(4, 8), new NamedMapArea.MapPoint(8, 8), new NamedMapArea.MapPoint(8, 4));
+        var region = new NamedMapArea("region:forest", "survival", "Green & Gold", "Forest", List.of(boundary, hole));
+        var structure = new NamedMapArea("structure:village", "survival", "A Village", "Village", List.of(boundary));
+        var elsewhere = new NamedMapArea("region:elsewhere", "other", "Elsewhere", "Plains", List.of(boundary));
+        var styles = List.of(new Pl3xMapNamedRegions.Style(0xff008000, 0x40008000, 3),
+            new Pl3xMapNamedRegions.Style(0xff880000, 0x40880000, 2));
+        var integration = new Pl3xMapNamedRegions(plugin, () -> List.of(region, structure, elsewhere), styles,
+            true, "Regions", "Structures", 300, 24);
+        try (var access = mockStatic(Pl3xMap.class)) {
+            access.when(Pl3xMap::api).thenReturn(api);
+            try {
+                integration.enable();
+                Layer regions = world.getLayerRegistry().get("stemcraft_named_regions");
+                assertTrue(regions.isLiveUpdate());
+                assertEquals(1, regions.getMarkers().size());
+                Polygon polygon = assertInstanceOf(Polygon.class, regions.getMarkers().iterator().next());
+                assertEquals(2, polygon.getPolylines().size());
+                assertEquals(List.of(Point.of(-4, 0), Point.of(16, 0), Point.of(16, 16), Point.of(-4, 16), Point.of(-4, 0)),
+                    polygon.getPolylines().getFirst().getPoints());
+                var style = styles.get(Math.floorMod(region.id().hashCode(), styles.size()));
+                assertEquals(style.strokeColour(), polygon.getOptions().getStroke().getColor());
+                assertEquals(style.fillColour(), polygon.getOptions().getFill().getColor());
+                assertEquals(style.lineThickness(), polygon.getOptions().getStroke().getWeight());
+                assertEquals("Green &amp; Gold<br><small>Forest</small>", polygon.getOptions().getTooltip().getContent());
+                assertTrue(polygon.getOptions().getTooltip().isPermanent());
+                var structures = world.getLayerRegistry().get("stemcraft_named_structures").getMarkers();
+                assertEquals(1, structures.size());
+                assertInstanceOf(Icon.class, structures.iterator().next());
+                assertEquals("<html><body>Map</body></html>", Files.readString(web().resolve("index.html")));
+                assertFalse(Files.exists(web().resolve("stemcraft-regions.js")));
+                assertFalse(Files.exists(world.getTilesDirectory().resolve("stemcraft-regions")));
+                verifyNoInteractions(world.getServerSentEventHandler());
+            } finally { integration.disable(); }
+        }
+    }
+
+    @Test void switchingBackToOriginalMarkersRemovesTheTileScriptAndRestoresLivePolygons() throws Exception {
+        var api = api();
+        var worlds = new WorldRegistry();
+        when(api.getWorldRegistry()).thenReturn(worlds);
+        World world = world("survival");
+        worlds.register("survival", world);
+        var plugin = mock(STEMCraft.class);
+        when(plugin.getResource(anyString())).thenAnswer(invocation ->
+            Files.newInputStream(Path.of("src/main/resources", invocation.getArgument(0, String.class))));
+        var tiles = publisher();
+        var tiled = new Pl3xMapNamedRegions(plugin, List::of, tiles, true, "Regions", "Structures", 300, 24);
+        var boundary = List.of(new NamedMapArea.MapPoint(0, 0), new NamedMapArea.MapPoint(4, 0),
+            new NamedMapArea.MapPoint(4, 4), new NamedMapArea.MapPoint(0, 4));
+        var markers = new Pl3xMapNamedRegions(plugin, () -> List.of(
+            new NamedMapArea("region:forest", "survival", "Greenwood", "Forest", List.of(boundary))),
+            List.of(new Pl3xMapNamedRegions.Style(0xff008000, 0x40008000, 2)),
+            false, "Regions", "Structures", 300, 24);
+        try (var access = mockStatic(Pl3xMap.class)) {
+            access.when(Pl3xMap::api).thenReturn(api);
+            try {
+                tiled.enable();
+                assertTrue(Files.readString(web().resolve("index.html")).contains("id=\"stemcraft-regions\""));
+                tiled.disable();
+                clearInvocations(tiles);
+                markers.enable();
+                Layer layer = world.getLayerRegistry().get("stemcraft_named_regions");
+                assertTrue(layer.isLiveUpdate());
+                assertInstanceOf(Polygon.class, layer.getMarkers().iterator().next());
+                assertEquals("<html><body>Map</body></html>", Files.readString(web().resolve("index.html")));
+                api.getEventRegistry().callEvent(new Pl3xMapEnabledEvent());
+                assertFalse(Files.readString(web().resolve("index.html")).contains("stemcraft-regions"));
+                verifyNoInteractions(tiles);
+            } finally { markers.disable(); tiled.disable(); }
+        }
+    }
     @Test void registersExistingAndLaterWorldsAndRestoresLayersAfterMapReload() throws Exception {
         var api = api();
         var worlds = new WorldRegistry();
@@ -183,7 +270,7 @@ class Pl3xMapNamedRegionsTest {
             try {
                 integration.enable();
                 assertLayers(world);
-                verify(logger).log(eq(java.util.logging.Level.WARNING), contains("Could not install"), any(java.io.IOException.class));
+                verify(logger).log(eq(java.util.logging.Level.WARNING), contains("Could not update"), any(java.io.IOException.class));
                 verify(api.getIconRegistry()).register(eq("stemcraft_named_structure_generic"), any());
                 Files.writeString(web().resolve("index.html"), "<html><body>Restored map</body></html>");
                 api.getEventRegistry().callEvent(new Pl3xMapEnabledEvent());

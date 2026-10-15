@@ -1,12 +1,25 @@
-# Named-region map tiles
+# Optional named-region map tiles
 
-## Update
+## Enable
 
-1. Replace the STEMCraft plugin jar and restart the server.
-2. Refresh the map page.
+The default display remains the original full-region polygons. The new tiled
+display is optional; enable it in STEMCraft's config:
 
-STEMCraft installs its browser script, updates Pl3xMap's existing index, and
-generates region files in Pl3xMap's normal web directory. The same web server
+```yaml
+named-regions:
+  map:
+    biomes:
+      viewport-tiles: true
+```
+
+Replace the STEMCraft plugin jar, update the setting, restart the server, and
+refresh the map page. Omitting the setting or setting it to `false` keeps the
+original display. Switching it back to `false` also removes STEMCraft's browser
+script tag automatically; restart and refresh the page to finish switching.
+
+When tiled mode is enabled, STEMCraft installs its browser script, updates
+Pl3xMap's existing index, and generates region files in Pl3xMap's normal web
+directory. The same web server
 that already serves your map serves these files. There is no separate region API,
 extra port, STEMCraft web-service dependency, or additional proxy route.
 An `endpoint-url` setting left over from an earlier experimental build is ignored.
@@ -17,8 +30,9 @@ build. Existing stored names and in-game discovery continue to work normally.
 
 ## How it works
 
-The existing `stemcraft_named_regions` marker file contains `[]`. Its layer keeps
-the Regions checkbox, while the browser loads only visible geometry tiles from:
+With `viewport-tiles: true`, the existing `stemcraft_named_regions` marker file
+contains `[]`. Its layer keeps the Regions checkbox, while the browser loads only
+visible geometry tiles from:
 
 ```text
 tiles/<world>/stemcraft-regions/metadata.json
@@ -52,8 +66,8 @@ the marker endpoint or SSE. Structure and grave overlays retain their own layers
 
 ## Automatic browser files
 
-Installation runs when STEMCraft attaches to Pl3xMap and after map enable/reload,
-following Pl3xMap's configured web directory. It preserves the current page and
+In tiled mode installation runs when STEMCraft attaches to Pl3xMap and after map
+enable/reload, following Pl3xMap's configured web directory. It preserves the current page and
 theme, backs up the first changed index at `.stemcraft-regions-backup/index.html`,
 keeps one script tag, and versions the script URL. It preserves file permissions
 and existing index symlinks. Pl3xMap's read-only option is not required for this
@@ -63,7 +77,8 @@ The existing `named-regions.map.biomes.enabled` setting removes only the biome
 overlay when false. `named-regions.map.enabled: false` removes both named overlays.
 Set `named-regions.map.biomes.auto-install: false` only if you manage a separate
 copy of the website. That copy needs the generated region files, script and index
-along with the existing map files. The optional manual browser-file installer is:
+along with the existing map files. Remove the script tag there too when returning
+to the original polygon display. The optional manual browser-file installer is:
 
 ```sh
 sh tools/pl3xmap-regions/install.sh /path/to/your/map/web
@@ -83,8 +98,8 @@ Tests cover geometry bounds, holes and tile seams, sparse discoveries, backgroun
 publication, cancellation, reloads, installation, and serving the generated files
 through the real Pl3xMap static web server with no custom HTTP route.
 
-On the live map, confirm the old biome marker file contains `[]`, visible-region
-requests use the existing `tiles/<world>/stemcraft-regions/` directory, requests
+With tiled mode enabled, confirm the old biome marker file contains `[]`, visible
+region requests use the existing `tiles/<world>/stemcraft-regions/` directory, requests
 stop when Regions is unchecked, and names appear on hover. Pan across X/Z=0,
 zoom out, switch worlds and check changes after a refresh interval. Permanent
 labels can repeat where one region crosses multiple tiles. Local tests establish

@@ -57,6 +57,15 @@ final class Pl3xMapRegionWebFiles {
         NamedMapFiles.writeIfChanged(index, updated.getBytes(StandardCharsets.UTF_8));
     }
 
+    void uninstall(Path directory) throws IOException {
+        Path index = directory.resolve("index.html");
+        if (!Files.isRegularFile(index)) return;
+        String original = Files.readString(index, StandardCharsets.UTF_8);
+        String updated = OWN_TAG.matcher(original).replaceAll("");
+        if (!original.equals(updated))
+            NamedMapFiles.writeIfChanged(index, updated.getBytes(StandardCharsets.UTF_8));
+    }
+
     private static String version(byte[] script) {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(script), 0, 6);

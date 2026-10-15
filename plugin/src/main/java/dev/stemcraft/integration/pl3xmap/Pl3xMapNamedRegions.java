@@ -5,8 +5,10 @@ import net.pl3x.map.core.Pl3xMap;
 import net.pl3x.map.core.image.IconImage;
 import net.pl3x.map.core.markers.layer.WorldLayer;
 import net.pl3x.map.core.markers.marker.Marker;
+import net.pl3x.map.core.markers.marker.Polyline;
 import net.pl3x.map.core.markers.option.Options;
 import net.pl3x.map.core.markers.option.Tooltip;
+import net.pl3x.map.core.markers.Point;
 import net.pl3x.map.core.util.FileUtil;
 import net.pl3x.map.core.world.World;
 import javax.imageio.ImageIO;
@@ -19,6 +21,7 @@ import java.util.function.Supplier;
 /** Optional live Pl3xMap layer for generated region and structure names. */
 public final class Pl3xMapNamedRegions implements net.pl3x.map.core.event.EventListener {
     private volatile boolean enabled;
+    public record Style(int strokeColour, int fillColour, int lineThickness) { }
     private static final String BIOME_KEY = "stemcraft_named_regions";
     private static final String STRUCTURE_KEY = "stemcraft_named_structures";
     private static final String STRUCTURE_ICON_PREFIX = "stemcraft_named_structure_";
@@ -29,12 +32,28 @@ public final class Pl3xMapNamedRegions implements net.pl3x.map.core.event.EventL
     private final STEMCraft plugin;
     private final Supplier<Collection<NamedMapArea>> areas;
     private final NamedMapTilePublisher tiles;
+    private final List<Style> biomeStyles;
+    private final boolean permanentLabels;
     private final boolean biomesEnabled;
     private final String biomeLayerName;
     private final String structureLayerName;
     private final int updateIntervalSeconds;
     private final int structureIconSize;
     private final Pl3xMapRegionWebFiles webFiles;
+    public Pl3xMapNamedRegions(STEMCraft plugin, Supplier<Collection<NamedMapArea>> areas, List<Style> biomeStyles,
+                               boolean permanentLabels, String biomeLayerName, String structureLayerName,
+                               int updateIntervalSeconds, int structureIconSize) {
+        this(plugin, areas, biomeStyles, permanentLabels, true, biomeLayerName, structureLayerName,
+            updateIntervalSeconds, structureIconSize, true);
+    }
+    public Pl3xMapNamedRegions(STEMCraft plugin, Supplier<Collection<NamedMapArea>> areas, List<Style> biomeStyles,
+                               boolean permanentLabels, boolean biomesEnabled, String biomeLayerName,
+                               String structureLayerName, int updateIntervalSeconds, int structureIconSize,
+                               boolean autoInstallWebFiles) {
+        this(plugin, areas, null, biomeStyles, permanentLabels, biomesEnabled, biomeLayerName,
+            structureLayerName, updateIntervalSeconds, structureIconSize, autoInstallWebFiles);
+        if (this.biomeStyles.isEmpty()) throw new IllegalArgumentException("At least one biome map style is required");
+    }
     public Pl3xMapNamedRegions(STEMCraft plugin, Supplier<Collection<NamedMapArea>> areas, NamedMapTilePublisher tiles,
                                boolean biomesEnabled, String biomeLayerName, String structureLayerName,
                                int updateIntervalSeconds, int structureIconSize) {
@@ -45,11 +64,19 @@ public final class Pl3xMapNamedRegions implements net.pl3x.map.core.event.EventL
                                boolean biomesEnabled, String biomeLayerName, String structureLayerName,
                                int updateIntervalSeconds, int structureIconSize,
                                boolean autoInstallWebFiles) {
+        this(plugin, areas, Objects.requireNonNull(tiles), List.of(), false, biomesEnabled, biomeLayerName,
+            structureLayerName, updateIntervalSeconds, structureIconSize, autoInstallWebFiles);
+    }
+    private Pl3xMapNamedRegions(STEMCraft plugin, Supplier<Collection<NamedMapArea>> areas, NamedMapTilePublisher tiles,
+                                List<Style> biomeStyles, boolean permanentLabels, boolean biomesEnabled,
+                                String biomeLayerName, String structureLayerName, int updateIntervalSeconds,
+                                int structureIconSize, boolean autoInstallWebFiles) {
         this.plugin = plugin; this.areas = areas; this.tiles = tiles;
+        this.biomeStyles = List.copyOf(biomeStyles); this.permanentLabels = permanentLabels;
         this.biomesEnabled = biomesEnabled; this.biomeLayerName = biomeLayerName;
         this.structureLayerName = structureLayerName; this.updateIntervalSeconds = updateIntervalSeconds;
         this.structureIconSize = structureIconSize;
-        this.webFiles = biomesEnabled && autoInstallWebFiles ? new Pl3xMapRegionWebFiles(plugin) : null;
+        this.webFiles = autoInstallWebFiles ? new Pl3xMapRegionWebFiles(plugin) : null;
     }
     public void enable() {
         if (enabled) return;
@@ -78,10 +105,11 @@ public final class Pl3xMapNamedRegions implements net.pl3x.map.core.event.EventL
     private void installWebFiles() {
         if (webFiles == null) return;
         try {
-            webFiles.install(FileUtil.getWebDir());
+            if (biomesEnabled && tiles != null) webFiles.install(FileUtil.getWebDir());
+            else webFiles.uninstall(FileUtil.getWebDir());
         } catch (IOException exception) {
             plugin.getLogger().log(java.util.logging.Level.WARNING,
-                "Could not install named-region browser files in " + FileUtil.getWebDir()
+                "Could not update named-region browser files in " + FileUtil.getWebDir()
                     + "; check the generated web directory and file permissions", exception);
         }
     }
@@ -89,17 +117,17 @@ public final class Pl3xMapNamedRegions implements net.pl3x.map.core.event.EventL
     private void registerWorld(World world) {
         world.getLayerRegistry().unregister(BIOME_KEY);
         world.getLayerRegistry().unregister(STRUCTURE_KEY);
-        clearLegacyGeometry(world);
-        if (biomesEnabled && tiles.supports(world.getName())) {
+        if (tiles != null || !biomesEnabled) clearLegacyGeometry(world);
+        if (biomesEnabled && (tiles == null || tiles.supports(world.getName()))) {
             world.getLayerRegistry().register(BIOME_KEY, new Layer(BIOME_KEY, biomeLayerName, world, false));
-            refreshTiles(world);
+            if (tiles != null) refreshTiles(world);
         }
         world.getLayerRegistry().register(STRUCTURE_KEY, new Layer(STRUCTURE_KEY, structureLayerName, world, true));
     }
 
     public void disable() {
         enabled = false;
-        tiles.close();
+        if (tiles != null) tiles.close();
         // Pl3xMap has no EventRegistry.unregister API; event handler lists are mutable.
         new net.pl3x.map.core.event.world.WorldLoadedEvent(null).getHandlers()
             .removeIf(handler -> handler.getListener() == this);
@@ -108,7 +136,7 @@ public final class Pl3xMapNamedRegions implements net.pl3x.map.core.event.EventL
         Pl3xMap.api().getWorldRegistry().forEach(world -> {
             world.getLayerRegistry().unregister(BIOME_KEY);
             world.getLayerRegistry().unregister(STRUCTURE_KEY);
-            clearLegacyGeometry(world);
+            if (tiles != null || !biomesEnabled) clearLegacyGeometry(world);
         });
         ICON_NAMES.forEach(name -> Pl3xMap.api().getIconRegistry().unregister(STRUCTURE_ICON_PREFIX + name));
     }
@@ -139,10 +167,10 @@ public final class Pl3xMapNamedRegions implements net.pl3x.map.core.event.EventL
     private final class Layer extends WorldLayer {
         private final boolean structures;
         private Layer(String key, String name, World world, boolean structures) { super(key, world, () -> name); this.structures=structures; setUpdateInterval(updateIntervalSeconds);
-            setLiveUpdate(structures); setShowControls(true); setDefaultHidden(false); setPriority(35); setZIndex(35); }
+            setLiveUpdate(structures || tiles == null); setShowControls(true); setDefaultHidden(false); setPriority(35); setZIndex(35); }
         @Override public Collection<Marker<?>> getMarkers() {
             if (!enabled) return List.of();
-            if (!structures) {
+            if (!structures && tiles != null) {
                 refreshTiles(getWorld());
                 // The browser extension owns viewport geometry. Neither marker JSON nor
                 // Pl3xMap's live marker stream receives the whole-world boundaries.
@@ -154,11 +182,21 @@ public final class Pl3xMapNamedRegions implements net.pl3x.map.core.event.EventL
                 if (area.id().startsWith("structure:") != structures) continue;
                 if (area.boundaries().isEmpty()) continue;
                 String tooltip = escape(area.name()) + "<br><small>" + escape(area.type()) + "</small>";
-                NamedMapArea.MapPoint centre = centre(area);
-                String icon=iconName(area.type());
-                result.add(Marker.icon(area.id(), centre.x(), centre.z(), STRUCTURE_ICON_PREFIX+icon, structureIconSize)
-                    .setOptions(Options.builder().tooltipContent(tooltip)
-                        .tooltipDirection(Tooltip.Direction.RIGHT).build()));
+                if (structures) {
+                    NamedMapArea.MapPoint centre = centre(area);
+                    String icon=iconName(area.type());
+                    result.add(Marker.icon(area.id(), centre.x(), centre.z(), STRUCTURE_ICON_PREFIX+icon, structureIconSize)
+                        .setOptions(Options.builder().tooltipContent(tooltip)
+                            .tooltipDirection(Tooltip.Direction.RIGHT).build()));
+                    continue;
+                }
+                Style style = biomeStyles.get(Math.floorMod(area.id().hashCode(), biomeStyles.size()));
+                List<Polyline> rings = area.boundaries().stream().map(points -> Marker.polyline(area.id() + "-ring",
+                    points.stream().map(point -> Point.of(point.x(), point.z())).toList()).loop()).toList();
+                result.add(Marker.polygon(area.id(), rings)
+                    .setOptions(Options.builder().stroke(true).strokeWeight(style.lineThickness())
+                        .strokeColor(style.strokeColour()).fill(true).fillColor(style.fillColour())
+                        .tooltipContent(tooltip).tooltipPermanent(permanentLabels).build()));
             }
             return result;
         }

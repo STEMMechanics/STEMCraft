@@ -100,6 +100,7 @@ public final class NamedRegions extends BaseFeature {
     private volatile Collection<NamedMapArea> mapSnapshot=List.of();
     private volatile boolean mapSnapshotDirty=true;
     private volatile long mapSnapshotBuiltAt;
+    private volatile boolean mapBiomeMarkersEnabled;
     private long mapRefreshMillis=300_000L;
     private final AtomicLong mapRevision=new AtomicLong(System.currentTimeMillis());
 
@@ -1706,23 +1707,29 @@ public final class NamedRegions extends BaseFeature {
             );
 
             boolean biomesEnabled=getConfigSection().getBoolean("map.biomes.enabled",true);
-            mapRevision.incrementAndGet(); // Reloaded colours/settings must also invalidate client tiles.
-            var tiles=new NamedRegionMapTiles(worlds,mapRevision::get,this::mapRegionAt,
-                this::mapBaseTiles,biomeStyles,
-                getConfigSection().getBoolean("map.permanent-labels",false),updateSeconds,
-                task->api.tasks().runAsync(task),STEMCraft.getPlugin().getLogger());
+            boolean viewportTiles=biomesEnabled
+                &&getConfigSection().getBoolean("map.biomes.viewport-tiles",false);
+            boolean permanentLabels=getConfigSection().getBoolean("map.permanent-labels",false);
+            boolean autoInstall=getConfigSection().getBoolean("map.biomes.auto-install",true);
+            mapBiomeMarkersEnabled=biomesEnabled&&!viewportTiles;
+            mapSnapshotBuiltAt=0;
+            mapSnapshotDirty=true;
 
-            mapLayer=new Pl3xMapNamedRegions(
-                STEMCraft.getPlugin(),
-                this::mapStructureAreas,
-                tiles,
-                biomesEnabled,
-                biomeLayer,
-                structureLayer,
-                updateSeconds,
-                structureIconSize,
-                getConfigSection().getBoolean("map.biomes.auto-install",true)
-            );
+            if(viewportTiles) {
+                mapRevision.incrementAndGet(); // Reloaded colours/settings must also invalidate client tiles.
+                var tileStyles=biomeStyles.stream().map(style->new NamedRegionMapTiles.Style(
+                    style.strokeColour(),style.fillColour(),style.lineThickness())).toList();
+                var tiles=new NamedRegionMapTiles(worlds,mapRevision::get,this::mapRegionAt,
+                    this::mapBaseTiles,tileStyles,permanentLabels,updateSeconds,
+                    task->api.tasks().runAsync(task),STEMCraft.getPlugin().getLogger());
+                mapLayer=new Pl3xMapNamedRegions(
+                    STEMCraft.getPlugin(),this::mapAreas,tiles,true,biomeLayer,
+                    structureLayer,updateSeconds,structureIconSize,autoInstall);
+            } else {
+                mapLayer=new Pl3xMapNamedRegions(
+                    STEMCraft.getPlugin(),this::mapAreas,biomeStyles,permanentLabels,biomesEnabled,
+                    biomeLayer,structureLayer,updateSeconds,structureIconSize,autoInstall);
+            }
             mapLayer.enable();
         } catch(RuntimeException exception) {
             disableMap();
@@ -1731,7 +1738,7 @@ public final class NamedRegions extends BaseFeature {
         }
     }
 
-    private List<NamedRegionMapTiles.Style> mapBiomeStyles() {
+    private List<Pl3xMapNamedRegions.Style> mapBiomeStyles() {
         int thickness=Math.max(
             1,
             getConfigSection().getInt("map.biomes.line-thickness",2)
@@ -1743,18 +1750,18 @@ public final class NamedRegions extends BaseFeature {
 
         if(palette.isEmpty())
             return List.of(
-                new NamedRegionMapTiles.Style(
+                new Pl3xMapNamedRegions.Style(
                     mapColour("map.biomes.stroke-colour","#FFFF9800"),
                     mapColour("map.biomes.fill-colour","#40FF9800"),
                     thickness
                 )
             );
 
-        List<NamedRegionMapTiles.Style> styles=new ArrayList<>();
+        List<Pl3xMapNamedRegions.Style> styles=new ArrayList<>();
         for(String configured:palette) {
             int fill=mapColourValue(configured,"#40FF9800");
             styles.add(
-                new NamedRegionMapTiles.Style(
+                new Pl3xMapNamedRegions.Style(
                     0xFF000000|(fill&0xFFFFFF),
                     fill,
                     thickness
@@ -1790,7 +1797,7 @@ public final class NamedRegions extends BaseFeature {
         }
     }
 
-    private Collection<NamedMapArea> mapStructureAreas() {
+    private Collection<NamedMapArea> mapAreas() {
         long now=System.currentTimeMillis();
 
         if(!shouldRefreshMapSnapshot(
@@ -1804,7 +1811,7 @@ public final class NamedRegions extends BaseFeature {
                 mapSnapshotDirty,mapSnapshotBuiltAt,now,mapRefreshMillis))
                 return mapSnapshot;
 
-            mapSnapshot=buildStructureMapAreas();
+            mapSnapshot=buildMapAreas();
             mapSnapshotBuiltAt=now;
             mapSnapshotDirty=false;
             return mapSnapshot;
@@ -1821,7 +1828,7 @@ public final class NamedRegions extends BaseFeature {
             &&(builtAt==0||now>=builtAt&&now-builtAt>=intervalMillis);
     }
 
-    private Collection<NamedMapArea> buildStructureMapAreas() {
+    private Collection<NamedMapArea> buildMapAreas() {
         List<NamedMapArea> result=new ArrayList<>();
 
         for(Area area:areas.values())
@@ -1840,6 +1847,20 @@ public final class NamedRegions extends BaseFeature {
                         ))
                     )
                 );
+
+        if(mapBiomeMarkersEnabled) {
+            Map<String,Set<Long>> byRegion=new HashMap<>();
+            regionStorage.forEachCell((cell,regionId)->
+                byRegion.computeIfAbsent(regionId,ignored->new HashSet<>())
+                    .add(pack(cell.cellX(),cell.cellZ()))
+            );
+            for(Map.Entry<String,Set<Long>> entry:byRegion.entrySet()) {
+                Area area=areas.get(resolveRegion(entry.getKey()));
+                if(area==null) continue;
+                result.add(new NamedMapArea(area.id,area.world,area.name,friendly(area.type),
+                    boundaryLoops(entry.getValue())));
+            }
+        }
 
         return List.copyOf(result);
     }
