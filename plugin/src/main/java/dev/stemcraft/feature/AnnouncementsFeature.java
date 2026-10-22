@@ -331,6 +331,23 @@ public class AnnouncementsFeature extends BaseFeature {
         return true;
     }
 
+    private boolean broadcastToOtherPlayers(@NotNull AnnouncementDefinition definition, @NotNull Player excluded) {
+        Workshop workshop = definition.workshopPromotion() ? findAnnouncementWorkshop() : null;
+        if (definition.workshopPromotion() && workshop == null) return false;
+        int online = Bukkit.getOnlinePlayers().size();
+        boolean sent = false;
+        for (String line : definition.lines()) {
+            String rendered = render(prefix + line, excluded, workshop, online);
+            if (rendered.isBlank()) continue;
+            for (Player recipient : Bukkit.getOnlinePlayers()) {
+                if (recipient.getUniqueId().equals(excluded.getUniqueId())) continue;
+                api.messages().send(recipient, rendered);
+                sent = true;
+            }
+        }
+        return sent;
+    }
+
     private @Nullable Workshop findAnnouncementWorkshop() {
         WorkshopService service = api.workshops();
         if (service == null || !service.isAvailable() || !service.isEnabled()) return null;
@@ -369,7 +386,7 @@ public class AnnouncementsFeature extends BaseFeature {
             api.tasks().runOnceDelay(taskId, joinDelaySeconds * 20L, () -> {
                 joinTasks.remove(player.getUniqueId(), taskId);
                 if (!enabled || !joinEnabled || !player.isOnline()) return;
-                broadcast(new AnnouncementDefinition("join", player.hasPlayedBefore() ? returningJoinMessage : firstTimeJoinMessage,
+                broadcastToOtherPlayers(new AnnouncementDefinition("join", player.hasPlayedBefore() ? returningJoinMessage : firstTimeJoinMessage,
                         true, 0L, null, null, false, false), player);
             });
         });
