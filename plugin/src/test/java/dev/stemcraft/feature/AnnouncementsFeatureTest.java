@@ -1,13 +1,19 @@
 package dev.stemcraft.feature;
 
+import dev.stemcraft.api.service.workshop.Workshop;
+import dev.stemcraft.api.service.workshop.WorkshopSource;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AnnouncementsFeatureTest {
     @Test
@@ -34,5 +40,24 @@ class AnnouncementsFeatureTest {
     void feedValuesAreEscapedBeforeTemplateInsertion() {
         assertEquals("Example \\<red\\>", AnnouncementsFeature.escapeLiteral("Example <red>"));
         assertEquals("https://example.test/a\\'b", AnnouncementsFeature.escapeLiteral("https://example.test/a'b"));
+    }
+
+    @Test
+    void workshopFiltersUseStrictDayBoundsAndCaseInsensitiveLocations() {
+        Instant now = Instant.parse("2026-10-22T00:00:00Z");
+        AnnouncementsFeature.WorkshopFilter filter = new AnnouncementsFeature.WorkshopFilter(
+                2.0, 5.0, List.of("stemcraft", "STEMMechanics Lab"));
+        Workshop matching = workshop("STEMCRAFT", now.plusSeconds(3 * 86_400L));
+
+        assertTrue(filter.matches(matching, now));
+        assertFalse(filter.matches(workshop("STEMCraft", now.plusSeconds(2 * 86_400L)), now));
+        assertFalse(filter.matches(workshop("STEMCraft", now.plusSeconds(5 * 86_400L)), now));
+        assertFalse(filter.matches(workshop("Community Hall", now.plusSeconds(3 * 86_400L)), now));
+    }
+
+    private static Workshop workshop(String location, Instant start) {
+        ZonedDateTime date = start.atZone(ZoneId.of("UTC"));
+        return new Workshop("id-" + location, "Workshop", "", date, null, location, "",
+                WorkshopSource.WEBSITE, Instant.now(), true);
     }
 }

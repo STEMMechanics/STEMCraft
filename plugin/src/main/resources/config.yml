@@ -228,16 +228,25 @@ announcements:
       - "<aqua>Welcome back, {player}!</aqua>"
   scheduled:
     server-information:
+      type: message
       enabled: true
       interval: 15m
       message:
         - "<yellow>Remember to visit <click:open_url:'https://www.stemmechanics.com.au'><underlined>stemmechanics.com.au</underlined></click> for STEM activities.</yellow>"
-  workshop-promotions:
-    enabled: true
-    interval: 30m
-    message:
-      - "<aqua>Upcoming STEMMechanics workshop:</aqua> <white>{next_workshop_title}</white>"
-      - "<gray>{next_workshop_date} at {next_workshop_time} — <click:open_url:'{next_workshop_url}'><underlined>book your place</underlined></click></gray>"
+    workshop-promotion:
+      type: workshops
+      enabled: true
+      interval: 30m
+      filters:
+        # Bounds are strict: this matches workshops more than 2 and less than 5 days away.
+        days-until:
+          greater-than: 2
+          less-than: 5
+        # Location matching is exact after trimming, but case-insensitive.
+        locations: []
+      message:
+        - "<aqua>Upcoming STEMMechanics workshop:</aqua> <white>{next_workshop_title}</white>"
+        - "<gray>{next_workshop_date} at {next_workshop_time} — <click:open_url:'{next_workshop_url}'><underlined>book your place</underlined></click></gray>"
 
 # Workshops keeps website records and manually created records in one catalogue.
 # Website entries without a reliable event start date are skipped safely.
@@ -253,6 +262,9 @@ workshops:
   read-timeout: 20s
   timezone: Australia/Brisbane
   maximum-displayed: 3
+  display-filter:
+    # Empty means all locations. Set this to ["STEMCraft"] to show only that location.
+    locations: []
 
 custom-portals:
   enabled: true

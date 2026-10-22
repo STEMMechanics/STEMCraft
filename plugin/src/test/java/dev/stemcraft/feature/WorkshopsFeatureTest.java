@@ -68,6 +68,13 @@ class WorkshopsFeatureTest {
     }
 
     @Test
+    void displayLocationFilterIsCaseInsensitiveAndEmptyMeansAll() {
+        assertTrue(WorkshopsFeature.matchesLocationFilter(" STEMCraft ", List.of("stemcraft")));
+        assertFalse(WorkshopsFeature.matchesLocationFilter("Community Hall", List.of("STEMCraft")));
+        assertTrue(WorkshopsFeature.matchesLocationFilter("Community Hall", List.of()));
+    }
+
+    @Test
     void duplicateFeedKeysKeepTheFirstRecordAndStableIdsAllowUpdates() {
         ZonedDateTime start = ZonedDateTime.parse("2026-11-14T10:00:00+10:00");
         WorkshopsFeature.ParsedFeedWorkshop first = new WorkshopsFeature.ParsedFeedWorkshop(

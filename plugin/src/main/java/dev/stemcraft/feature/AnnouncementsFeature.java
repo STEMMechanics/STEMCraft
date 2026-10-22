@@ -34,6 +34,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -43,7 +44,8 @@ public class AnnouncementsFeature extends BaseFeature {
     static final String SCHEDULE_TASK = "feature:announcements-schedule";
     static final String MIGRATION_NAME = "announcements";
     static final int MIGRATION_VERSION = 1;
-    static final String WORKSHOP_PROMOTION_ID = "workshop-promotion";
+    static final String WORKSHOP_TYPE = "workshops";
+    static final String LEGACY_WORKSHOP_PROMOTION_ID = "workshop-promotion";
     static final long NO_PLAYER_RETRY_SECONDS = 30L;
     static final ZoneId DEFAULT_ZONE = ZoneId.of("Australia/Brisbane");
     static final DateTimeFormatter WORKSHOP_DATE_FORMAT = DateTimeFormatter.ofPattern("EEEE d MMMM yyyy");
@@ -59,7 +61,6 @@ public class AnnouncementsFeature extends BaseFeature {
     private boolean scheduledEnabled;
     private boolean joinEnabled;
     private boolean announceOnStartup;
-    private boolean workshopPromotionsEnabled;
     private long defaultIntervalSeconds;
     private long minimumGapSeconds;
     private long joinDelaySeconds;
@@ -123,7 +124,6 @@ public class AnnouncementsFeature extends BaseFeature {
         scheduledEnabled = section.getBoolean("scheduled-enabled", true);
         joinEnabled = section.getBoolean("join-enabled", true);
         announceOnStartup = section.getBoolean("announce-on-startup", false);
-        workshopPromotionsEnabled = section.getBoolean("workshop-promotions.enabled", true);
         defaultIntervalSeconds = parseDuration(section.getString("default-interval", "15m"), 900L, 15L, 604800L);
         minimumGapSeconds = parseDuration(section.getString("minimum-gap", "30s"), 30L, 0L, 86400L);
         joinDelaySeconds = parseDuration(section.getString("join-delay", "5s"), 5L, 0L, 3600L);
@@ -133,7 +133,9 @@ public class AnnouncementsFeature extends BaseFeature {
         returningJoinMessage = readLines(section, "join.returning");
         configuredAnnouncements.clear();
         readConfiguredAnnouncements(section.getSection("scheduled", false));
-        readWorkshopPromotion(section.getSection("workshop-promotions", false));
+        if (configuredAnnouncements.values().stream().noneMatch(AnnouncementDefinition::workshopPromotion)) {
+            readLegacyWorkshopPromotion(section.getSection("workshop-promotions", false));
+        }
     }
 
     private void readConfiguredAnnouncements(@Nullable ConfigSection section) {
@@ -143,6 +145,7 @@ public class AnnouncementsFeature extends BaseFeature {
             if (entry == null) continue;
             List<String> lines = readLines(entry, "message");
             if (lines.isEmpty()) continue;
+            String type = entry.getString("type", "message").trim().toLowerCase(Locale.ROOT);
             configuredAnnouncements.put(id, new AnnouncementDefinition(
                     id,
                     lines,
@@ -150,26 +153,56 @@ public class AnnouncementsFeature extends BaseFeature {
                     parseDuration(entry.getString("interval", defaultIntervalSeconds + "s"), defaultIntervalSeconds, 15L, 604800L),
                     parseDate(entry.getString("start", ""), false),
                     parseDate(entry.getString("end", ""), true),
-                    false,
+                    type,
+                    WORKSHOP_TYPE.equals(type) ? readWorkshopFilter(entry.getSection("filters", false)) : WorkshopFilter.NONE,
                     false
             ));
         }
     }
 
-    private void readWorkshopPromotion(@Nullable ConfigSection section) {
-        if (!workshopPromotionsEnabled || section == null) return;
+    private void readLegacyWorkshopPromotion(@Nullable ConfigSection section) {
+        if (section == null) return;
         List<String> lines = readLines(section, "message");
         if (lines.isEmpty()) return;
-        configuredAnnouncements.put(WORKSHOP_PROMOTION_ID, new AnnouncementDefinition(
-                WORKSHOP_PROMOTION_ID,
+        configuredAnnouncements.put(LEGACY_WORKSHOP_PROMOTION_ID, new AnnouncementDefinition(
+                LEGACY_WORKSHOP_PROMOTION_ID,
                 lines,
                 section.getBoolean("enabled", true),
                 parseDuration(section.getString("interval", defaultIntervalSeconds + "s"), defaultIntervalSeconds, 15L, 604800L),
                 parseDate(section.getString("start", ""), false),
                 parseDate(section.getString("end", ""), true),
-                true,
+                WORKSHOP_TYPE,
+                WorkshopFilter.NONE,
                 false
         ));
+    }
+
+    private @NotNull WorkshopFilter readWorkshopFilter(@Nullable ConfigSection section) {
+        if (section == null) return WorkshopFilter.NONE;
+        ConfigSection days = section.getSection("days-until", false);
+        Double greaterThan = days == null ? null : optionalNonNegativeDouble(days, "greater-than");
+        Double lessThan = days == null ? null : optionalNonNegativeDouble(days, "less-than");
+        if (greaterThan != null && lessThan != null && greaterThan >= lessThan) {
+            STEMCraft.getPlugin().getLogger().warning("[announcements] Ignoring invalid workshop day filter: greater-than must be less than less-than.");
+            greaterThan = null;
+            lessThan = null;
+        }
+        List<String> locations = section.getStringList("locations").stream()
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .distinct()
+                .toList();
+        return new WorkshopFilter(greaterThan, lessThan, locations);
+    }
+
+    private @Nullable Double optionalNonNegativeDouble(@NotNull ConfigSection section, @NotNull String path) {
+        if (!section.contains(path)) return null;
+        double value = section.getDouble(path, -1.0);
+        if (!Double.isFinite(value) || value < 0.0) {
+            STEMCraft.getPlugin().getLogger().warning("[announcements] Ignoring invalid workshop filter value for " + path + ".");
+            return null;
+        }
+        return value;
     }
 
     private void ensureStorage() {
@@ -224,7 +257,8 @@ public class AnnouncementsFeature extends BaseFeature {
                     Math.max(15L, result.getLong("interval_seconds")),
                     hasStart ? Instant.ofEpochMilli(start) : null,
                     hasEnd ? Instant.ofEpochMilli(end) : null,
-                    false,
+                    "message",
+                    WorkshopFilter.NONE,
                     true
             );
         } catch (Exception exception) {
@@ -304,7 +338,7 @@ public class AnnouncementsFeature extends BaseFeature {
         if (!definition.enabled() || definition.lines().isEmpty()) return false;
         if (definition.endAt() != null && !now.isBefore(definition.endAt())) return false;
         if (definition.startAt() != null && definition.startAt().isAfter(now)) return true;
-        return !definition.workshopPromotion() || findAnnouncementWorkshop() != null;
+        return !definition.workshopPromotion() || findAnnouncementWorkshop(definition.workshopFilter(), now) != null;
     }
 
     private boolean isActive(AnnouncementDefinition definition, Instant now) {
@@ -319,7 +353,9 @@ public class AnnouncementsFeature extends BaseFeature {
     }
 
     private boolean broadcast(@NotNull AnnouncementDefinition definition, @Nullable Player recipient) {
-        Workshop workshop = definition.workshopPromotion() ? findAnnouncementWorkshop() : null;
+        Workshop workshop = definition.workshopPromotion()
+                ? findAnnouncementWorkshop(definition.workshopFilter(), Instant.now())
+                : null;
         if (definition.workshopPromotion() && workshop == null) return false;
         int online = Bukkit.getOnlinePlayers().size();
         for (String line : definition.lines()) {
@@ -332,7 +368,9 @@ public class AnnouncementsFeature extends BaseFeature {
     }
 
     private boolean broadcastToOtherPlayers(@NotNull AnnouncementDefinition definition, @NotNull Player excluded) {
-        Workshop workshop = definition.workshopPromotion() ? findAnnouncementWorkshop() : null;
+        Workshop workshop = definition.workshopPromotion()
+                ? findAnnouncementWorkshop(definition.workshopFilter(), Instant.now())
+                : null;
         if (definition.workshopPromotion() && workshop == null) return false;
         int online = Bukkit.getOnlinePlayers().size();
         boolean sent = false;
@@ -348,10 +386,14 @@ public class AnnouncementsFeature extends BaseFeature {
         return sent;
     }
 
-    private @Nullable Workshop findAnnouncementWorkshop() {
+    private @Nullable Workshop findAnnouncementWorkshop(@NotNull WorkshopFilter filter, @NotNull Instant now) {
         WorkshopService service = api.workshops();
         if (service == null || !service.isAvailable() || !service.isEnabled()) return null;
-        return service.upcoming().stream().filter(Workshop::announcementEligible).findFirst().orElse(null);
+        return service.upcoming().stream()
+                .filter(Workshop::announcementEligible)
+                .filter(workshop -> filter.matches(workshop, now))
+                .findFirst()
+                .orElse(null);
     }
 
     private @NotNull String render(@NotNull String template, @Nullable Player player, @Nullable Workshop workshop, int online) {
@@ -387,7 +429,7 @@ public class AnnouncementsFeature extends BaseFeature {
                 joinTasks.remove(player.getUniqueId(), taskId);
                 if (!enabled || !joinEnabled || !player.isOnline()) return;
                 broadcastToOtherPlayers(new AnnouncementDefinition("join", player.hasPlayedBefore() ? returningJoinMessage : firstTimeJoinMessage,
-                        true, 0L, null, null, false, false), player);
+                        true, 0L, null, null, "message", WorkshopFilter.NONE, false), player);
             });
         });
         api.events().register(PlayerQuitEvent.class, event -> cancelJoinTask(event.getPlayer().getUniqueId()));
@@ -476,7 +518,7 @@ public class AnnouncementsFeature extends BaseFeature {
         if (message.isBlank()) ctx.returnError("Provide an announcement message.");
         String id = nextManualId();
         AnnouncementDefinition definition = new AnnouncementDefinition(id, splitLines(message), true,
-                defaultIntervalSeconds, null, null, false, true);
+                defaultIntervalSeconds, null, null, "message", WorkshopFilter.NONE, true);
         if (!persistManual(definition, null)) ctx.returnError("Could not save the announcement.");
         manualAnnouncements.put(id, definition);
         rebuildDefinitions(false);
@@ -494,7 +536,7 @@ public class AnnouncementsFeature extends BaseFeature {
         String message = rawMessage(ctx, 2);
         if (message.isBlank()) ctx.returnError("Provide an announcement message.");
         AnnouncementDefinition replacement = new AnnouncementDefinition(existing.id(), splitLines(message), existing.enabled(),
-                existing.intervalSeconds(), existing.startAt(), existing.endAt(), false, true);
+                existing.intervalSeconds(), existing.startAt(), existing.endAt(), "message", WorkshopFilter.NONE, true);
         if (!persistManual(replacement, existing)) ctx.returnError("Could not update the announcement.");
         manualAnnouncements.put(replacement.id(), replacement);
         rebuildDefinitions(false);
@@ -526,7 +568,7 @@ public class AnnouncementsFeature extends BaseFeature {
             return;
         }
         AnnouncementDefinition replacement = new AnnouncementDefinition(existing.id(), existing.lines(), enabledState,
-                existing.intervalSeconds(), existing.startAt(), existing.endAt(), false, true);
+                existing.intervalSeconds(), existing.startAt(), existing.endAt(), "message", WorkshopFilter.NONE, true);
         if (api.database().update("UPDATE announcements SET enabled = ?, updated_at = ? WHERE id = ?", statement -> {
             statement.setInt(1, enabledState ? 1 : 0);
             statement.setLong(2, System.currentTimeMillis());
@@ -547,7 +589,7 @@ public class AnnouncementsFeature extends BaseFeature {
             ctx.returnError("Announcement not found.");
             return;
         }
-        if (definition.workshopPromotion() && findAnnouncementWorkshop() == null) {
+        if (definition.workshopPromotion() && findAnnouncementWorkshop(definition.workshopFilter(), Instant.now()) == null) {
             ctx.returnInfo("There is no upcoming workshop to announce.");
         }
         if (!broadcast(definition, null)) ctx.returnInfo("The announcement was skipped.");
@@ -661,10 +703,40 @@ public class AnnouncementsFeature extends BaseFeature {
     }
 
     private record AnnouncementDefinition(String id, List<String> lines, boolean enabled, long intervalSeconds,
-                                          Instant startAt, Instant endAt, boolean workshopPromotion, boolean manual) {
+                                          Instant startAt, Instant endAt, String type, WorkshopFilter workshopFilter,
+                                          boolean manual) {
         private AnnouncementDefinition {
             lines = lines == null ? List.of() : List.copyOf(lines);
             intervalSeconds = Math.max(15L, intervalSeconds);
+            type = type == null || type.isBlank() ? "message" : type.trim().toLowerCase(Locale.ROOT);
+            workshopFilter = workshopFilter == null ? WorkshopFilter.NONE : workshopFilter;
+        }
+
+        private boolean workshopPromotion() {
+            return WORKSHOP_TYPE.equals(type);
+        }
+    }
+
+    static record WorkshopFilter(@Nullable Double greaterThanDays, @Nullable Double lessThanDays,
+                                 @NotNull List<String> locations) {
+        static final WorkshopFilter NONE = new WorkshopFilter(null, null, List.of());
+
+        WorkshopFilter {
+            locations = locations == null ? List.of() : locations.stream()
+                    .map(String::trim)
+                    .filter(value -> !value.isBlank())
+                    .distinct()
+                    .toList();
+        }
+
+        boolean matches(@NotNull Workshop workshop, @NotNull Instant now) {
+            if (!locations.isEmpty() && locations.stream().noneMatch(location ->
+                    location.equalsIgnoreCase(workshop.location().trim()))) {
+                return false;
+            }
+            double daysUntil = (workshop.startAt().toInstant().toEpochMilli() - now.toEpochMilli()) / 86_400_000.0;
+            return (greaterThanDays == null || daysUntil > greaterThanDays)
+                    && (lessThanDays == null || daysUntil < lessThanDays);
         }
     }
 }

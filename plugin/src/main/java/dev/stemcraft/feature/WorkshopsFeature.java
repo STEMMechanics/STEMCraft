@@ -24,8 +24,6 @@ import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
-import org.bukkit.permissions.Permission;
-import org.bukkit.permissions.PermissionDefault;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -86,9 +84,9 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
     private long readTimeoutSeconds;
     private int maximumDisplayed;
     private ZoneId defaultTimezone;
+    private List<String> displayLocations = List.of();
     private volatile WorkshopSyncStatus syncStatus = new WorkshopSyncStatus(false, false, null, null, "", 0);
     private Command command;
-    private Permission viewPermission;
 
     public WorkshopsFeature(STEMCraftAPI api) {
         super(api);
@@ -99,7 +97,6 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
         loadSettings();
         ensureStorage();
         loadStoredWorkshops();
-        registerPermissions();
         registerTabCompletion();
         registerCommand();
         restartRefreshTask();
@@ -116,14 +113,9 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
                 command.unregister();
                 command = null;
             }
-            if (viewPermission != null) {
-                Bukkit.getPluginManager().removePermission(viewPermission);
-                viewPermission = null;
-            }
             return;
         }
         if (!wasEnabled) {
-            registerPermissions();
             registerTabCompletion();
             registerCommand();
         }
@@ -138,10 +130,6 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
         if (command != null) {
             command.unregister();
             command = null;
-        }
-        if (viewPermission != null) {
-            Bukkit.getPluginManager().removePermission(viewPermission);
-            viewPermission = null;
         }
     }
 
@@ -160,6 +148,7 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
         Instant now = Instant.now();
         synchronized (cache) {
             return cache.values().stream()
+                    .filter(this::isSourceEnabled)
                     .filter(workshop -> workshop.isUpcoming(now))
                     .sorted(workshopComparator())
                     .toList();
@@ -298,6 +287,16 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
         return maximumDisplayed;
     }
 
+    private @NotNull List<Workshop> visibleUpcoming() {
+        return upcoming().stream()
+                .filter(workshop -> matchesLocationFilter(workshop.location(), displayLocations))
+                .toList();
+    }
+
+    private boolean isSourceEnabled(@NotNull Workshop workshop) {
+        return workshop.source() == WorkshopSource.WEBSITE ? websiteEnabled : manualEnabled;
+    }
+
     private void loadSettings() {
         ConfigSection section = getConfigSection();
         enabled = isEnabled();
@@ -311,6 +310,11 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
         readTimeoutSeconds = parseDuration(section.getString("read-timeout", "20s"), 20L, 1L, 300L);
         maximumDisplayed = Math.clamp(section.getInt("maximum-displayed", 3), 1, 20);
         defaultTimezone = parseZone(section.getString("timezone", DEFAULT_ZONE.getId()), DEFAULT_ZONE);
+        displayLocations = section.getStringList("display-filter.locations").stream()
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .distinct()
+                .toList();
         syncStatus = new WorkshopSyncStatus(enabled && websiteEnabled && syncEnabled, false,
                 syncStatus.lastAttemptAt(), syncStatus.lastSuccessAt(), syncStatus.lastError(), countWebsiteWorkshops());
     }
@@ -599,6 +603,13 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
         }
     }
 
+    static boolean matchesLocationFilter(@Nullable String location, @NotNull List<String> allowedLocations) {
+        if (allowedLocations.isEmpty()) return true;
+        String value = location == null ? "" : location.trim();
+        return allowedLocations.stream().anyMatch(allowed ->
+                allowed != null && allowed.trim().equalsIgnoreCase(value));
+    }
+
     private static URI parseHttpUri(String value) {
         if (value == null || value.length() > 2048) throw new IllegalArgumentException("URL is invalid");
         String trimmed = value.trim();
@@ -713,8 +724,13 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
         command = api.commands().create("workshops")
                 .description("WORKSHOPS_DESCRIPTION")
                 .usage("WORKSHOPS_USAGE")
-                .access((sender, args) -> sender.hasPermission("stemcraft.workshops.view") ||
-                        sender.hasPermission("stemcraft.workshops.admin"))
+                .access((sender, args) -> {
+                    String subcommand = args.isEmpty() ? "" : args.getFirst().toLowerCase(Locale.ROOT);
+                    boolean publicAction = subcommand.isBlank() || subcommand.equals("help") ||
+                            subcommand.equals("list") || subcommand.equals("info");
+                    return publicAction || sender.hasPermission("stemcraft.workshops.admin") ||
+                            sender.hasPermission("stemcraft.workshops.refresh");
+                })
                 .tabCompletion("help")
                 .tabCompletion("list")
                 .tabCompletion("add")
@@ -724,13 +740,6 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
                 .tabCompletion("info", "{workshop-id}")
                 .executor((unused, cmd, ctx) -> handleCommand(ctx))
                 .register(STEMCraft.getPlugin());
-    }
-
-    private void registerPermissions() {
-        if (Bukkit.getPluginManager().getPermission("stemcraft.workshops.view") == null) {
-            viewPermission = new Permission("stemcraft.workshops.view", "View upcoming workshops.", PermissionDefault.TRUE);
-            Bukkit.getPluginManager().addPermission(viewPermission);
-        }
     }
 
     private void handleCommand(CommandContext ctx) {
@@ -762,7 +771,7 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
     }
 
     private void showWorkshops(CommandContext ctx) {
-        List<Workshop> upcoming = upcoming();
+        List<Workshop> upcoming = visibleUpcoming();
         if (upcoming.isEmpty()) {
             ctx.info("<gray>No upcoming STEMMechanics workshops are scheduled.</gray>");
             return;
@@ -798,6 +807,10 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
         if (ctx.numArgs() < 2) ctx.returnUsage();
         Workshop workshop = find(ctx.getArg(1));
         if (workshop == null) {
+            ctx.returnError("Workshop not found.");
+            return;
+        }
+        if (!isAdmin(ctx) && !matchesLocationFilter(workshop.location(), displayLocations)) {
             ctx.returnError("Workshop not found.");
             return;
         }

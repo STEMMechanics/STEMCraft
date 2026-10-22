@@ -32,16 +32,23 @@ announcements:
       - "<aqua>Welcome back, {player}!</aqua>"
   scheduled:
     server-information:
+      type: message
       enabled: true
       interval: 15m
       message:
         - "<yellow>Remember to read the server guide.</yellow>"
-  workshop-promotions:
-    enabled: true
-    interval: 30m
-    message:
-      - "<aqua>Next workshop: {next_workshop_title}</aqua>"
-      - "<gray>{next_workshop_date} at {next_workshop_time}</gray>"
+    workshop-promotion:
+      type: workshops
+      enabled: true
+      interval: 30m
+      filters:
+        days-until:
+          greater-than: 2
+          less-than: 5
+        locations: ["STEMCraft", "STEMMechanics Lab"]
+      message:
+        - "<aqua>Next workshop: {next_workshop_title}</aqua>"
+        - "<gray>{next_workshop_date} at {next_workshop_time}</gray>"
 
 workshops:
   enabled: true
@@ -55,12 +62,23 @@ workshops:
   read-timeout: 20s
   timezone: Australia/Brisbane
   maximum-displayed: 3
+  display-filter:
+    locations: ["STEMCraft"]
 ```
 
 Scheduled entries are keyed by their configuration ID. Each entry can override
-`interval`, `enabled`, `start`, and `end`. Dates accept ISO date/time values;
-date-only values use the configured timezone. Messages can be a scalar or a YAML
-list. Each list item is sent as its own chat line.
+`type`, `interval`, `enabled`, `start`, and `end`. The default `message` type is
+a normal announcement. The `workshops` type selects the next eligible workshop
+through `WorkshopService` and supports `filters.days-until.greater-than`,
+`filters.days-until.less-than`, and `filters.locations`. Day bounds are strict,
+and location matching is exact after trimming but case-insensitive. Dates accept
+ISO date/time values; date-only values use the configured timezone. Messages can
+be a scalar or a YAML list. Each list item is sent as its own chat line.
+
+`workshops.display-filter.locations` applies only to the player-facing
+`/workshops` list and `/workshops info` command. An empty list shows every
+enabled source. The `WorkshopService` API continues to expose the full upcoming
+catalogue so other features can apply their own filters.
 
 Manual announcements are stored in SQLite, so configuration reloads and server
 restarts do not replace them. Manual entries use the global interval and do not
