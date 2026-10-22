@@ -77,7 +77,7 @@ workshops:
     permission: stemcraft.workshops.instructions
     prompt:
       - "<yellow>Access instructions are needed for <white>{workshop_title}</white>.</yellow>"
-      - "<click:suggest_command:'/workshops instructions {workshop_id} '><aqua>Set instructions</aqua></click>"
+      - "<click:suggest_command:'/workshops instructions '><aqua>Set instructions</aqua></click>"
   display:
     header:
       - "<aqua><bold>STEMMechanics Upcoming Workshops</bold></aqua>"
@@ -172,8 +172,8 @@ commands only:
 /workshops add <title> | <start> | <end|-> | <location> | <url|-> | <description>
 /workshops edit <id> <title> | <start> | <end|-> | <location> | <url|-> | <description>
 /workshops remove <id>
-/workshops instructions <id> <message> | <message> ...
-/workshops instructions <id> clear
+/workshops instructions <message> | <message> ...
+/workshops instructions clear
 ```
 
 For example:
@@ -184,11 +184,11 @@ For example:
 
 Manual workshops are persisted and editable. Website records are read-only in
 Minecraft. Access instructions are separate local metadata, so the
-`instructions` command can be used for the current website record without
-editing the feed. Only the next eligible workshop can have instructions, and
-setting a new value replaces the previous value. The value is retained while
-that workshop is current and is cleared when it is no longer the next eligible
-workshop. The command uses `|` to separate multiple MiniMessage lines.
+`instructions` command can be used to configure the next eligible workshop
+without editing the feed. The command does not require a workshop ID because
+there is only one current access-instruction record. Setting a new value
+replaces the previous value, and `clear` removes it. The command uses `|` to
+separate multiple MiniMessage lines.
 
 When `instructions.prompt-enabled` is true, an administrator or a player with
 `instructions.permission` who joins during `instructions.prompt-window` before
@@ -271,7 +271,8 @@ processing. Available announcement placeholders are:
 Workshop instruction prompts also support `{workshop_id}`, `{workshop_title}`,
 `{workshop_date}`, `{workshop_time}`, `{workshop_url}`, `{workshop_location}`,
 and `{workshop_countdown}`. Feed-controlled values are escaped before they are
-inserted into MiniMessage templates.
+inserted into MiniMessage templates. `{workshop_id}` remains available for
+custom prompt text and diagnostics, but it is not required by the command.
 
 Workshop promotions are skipped when no eligible workshop exists, so their
 placeholders are never shown unresolved. Feed titles and other feed-controlled

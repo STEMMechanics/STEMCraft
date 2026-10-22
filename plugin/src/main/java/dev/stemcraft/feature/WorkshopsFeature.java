@@ -95,7 +95,7 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
     private static final List<String> DEFAULT_INSTRUCTIONS_PROMPT = List.of(
             "<yellow>Access instructions are needed for <white>{workshop_title}</white>, starting in {workshop_countdown}.</yellow>",
             "<gray>Click to suggest the setup command, then add the Minecraft destination or command players should use:</gray>",
-            "<click:suggest_command:'/workshops instructions {workshop_id} '><aqua><underlined>/workshops instructions {workshop_id}</underlined></aqua></click>");
+            "<click:suggest_command:'/workshops instructions '><aqua><underlined>/workshops instructions</underlined></aqua></click>");
 
     private final Object storageLock = new Object();
     private final AtomicBoolean refreshInProgress = new AtomicBoolean();
@@ -999,7 +999,8 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
                 .tabCompletion("add")
                 .tabCompletion("edit", "{workshop-id}")
                 .tabCompletion("remove", "{workshop-id}")
-                .tabCompletion("instructions", "{workshop-id}")
+                .tabCompletion("instructions")
+                .tabCompletion("instructions", "clear")
                 .tabCompletion("refresh")
                 .tabCompletion("info", "{workshop-id}")
                 .executor((unused, cmd, ctx) -> handleCommand(ctx))
@@ -1033,8 +1034,8 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
                 ctx.info("/workshops edit <id> <title> | <start> | <end|-> | <location> | <url|-> | <description>");
                 ctx.info("/workshops remove <id>");
             }
-            ctx.info("/workshops instructions <id> <message> | <message> ...");
-            ctx.info("/workshops instructions <id> clear");
+            ctx.info("/workshops instructions <message> | <message> ...");
+            ctx.info("/workshops instructions clear");
         }
         if (isAdmin(ctx)) {
             ctx.info("/workshops refresh");
@@ -1209,17 +1210,16 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
 
     private void setWorkshopInstructions(CommandContext ctx) {
         requireInstructionsAccess(ctx);
-        if (ctx.numArgs() < 3) ctx.returnUsage();
-        Workshop target = nextInstructionWorkshop();
-        Workshop workshop = find(ctx.getArg(1));
-        if (workshop == null || target == null || !target.id().equalsIgnoreCase(workshop.id())) {
-            ctx.returnError("Only the next eligible workshop can have access instructions.");
-            return;
-        }
-        String raw = String.join(" ", ctx.rawArgs().subList(2, ctx.rawArgs().size())).trim();
+        if (ctx.numArgs() < 2) ctx.returnUsage();
+        String raw = String.join(" ", ctx.rawArgs().subList(1, ctx.rawArgs().size())).trim();
         if (raw.equalsIgnoreCase("clear")) {
             if (!clearAccessInstructions()) ctx.returnError("Could not clear the workshop access instructions.");
-            ctx.returnSuccess("Cleared local access instructions for workshop {id}.", "id", workshop.id());
+            ctx.returnSuccess("Cleared the current workshop access instructions.");
+            return;
+        }
+        Workshop workshop = nextInstructionWorkshop();
+        if (workshop == null) {
+            ctx.returnError("There is no upcoming eligible workshop to configure.");
             return;
         }
         List<String> lines = parseAccessInstructions(raw);
@@ -1228,7 +1228,7 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
             ctx.returnError("Could not save the workshop access instructions.");
             return;
         }
-        ctx.returnSuccess("Saved access instructions for workshop {id}.", "id", workshop.id());
+        ctx.returnSuccess("Saved access instructions for the next workshop.");
     }
 
     private void addWorkshop(CommandContext ctx) {

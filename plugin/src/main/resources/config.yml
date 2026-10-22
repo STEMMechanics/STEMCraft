@@ -281,7 +281,7 @@ workshops:
     prompt:
       - "<yellow>Access instructions are needed for <white>{workshop_title}</white>, starting in {workshop_countdown}.</yellow>"
       - "<gray>Click to suggest the setup command, then add the Minecraft destination or command players should use:</gray>"
-      - "<click:suggest_command:'/workshops instructions {workshop_id} '><aqua><underlined>/workshops instructions {workshop_id}</underlined></aqua></click>"
+      - "<click:suggest_command:'/workshops instructions '><aqua><underlined>/workshops instructions</underlined></aqua></click>"
   display:
     # Each item is one MiniMessage line. Set header/footer to [] to hide them.
     header:
