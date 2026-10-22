@@ -197,6 +197,14 @@ named-regions:
     pools: {}
 
 custom-commands:
+  # command defaults to the entry key when it is omitted.
+  # Each run entry is executed in order. Prefix messages with message: and use
+  # player: or server: to choose who runs command actions.
+  # discord:
+  #   permission: ""
+  #   run:
+  #     - "message:<aqua>Join our Discord community:</aqua>"
+  #     - "message:<click:open_url:'https://discord.example'><underlined><aqua>discord.example</aqua></underlined></click>"
   survival:
     permission: stemcraft.command.survival
     command: survival

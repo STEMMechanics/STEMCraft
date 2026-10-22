@@ -158,6 +158,11 @@ public class CustomCommands extends BaseFeature {
                 .tabCompletion("setcommand", "{custom-command-id}", "{custom-command-command-index:$1}")
                 .tabCompletion("setcommand", "{custom-command-id}", "{custom-command-command-index:$1}", "")
                 .tabCompletion("removecommand", "{custom-command-id}", "{custom-command-command-index:$1}")
+                .tabCompletion("addmessage", "{custom-command-id}")
+                .tabCompletion("addmessage", "{custom-command-id}", "")
+                .tabCompletion("setmessage", "{custom-command-id}", "{custom-command-message-index:$1}")
+                .tabCompletion("setmessage", "{custom-command-id}", "{custom-command-message-index:$1}", "")
+                .tabCompletion("removemessage", "{custom-command-id}", "{custom-command-message-index:$1}")
                 .executor((unused, cmd, ctx) -> handleEditorCommand(ctx))
                 .register(STEMCraft.getPlugin());
     }
@@ -181,6 +186,27 @@ public class CustomCommands extends BaseFeature {
 
             List<String> indexes = new ArrayList<>();
             for (int i = 1; i <= entry.runCommands().size(); i++) {
+                indexes.add(String.valueOf(i));
+            }
+
+            return indexes;
+        });
+
+        api.tabComplete().register("custom-command-message-index", (player, args) -> {
+            if (args.length == 0 || args[0] == null || args[0].isBlank()) {
+                return List.of();
+            }
+
+            CustomCommandEntry entry = findEntry(normalizeConfigId(args[0]));
+            List<Integer> messagePositions = entry == null
+                    ? List.of()
+                    : messageActionPositions(entry.runCommands());
+            if (messagePositions.isEmpty()) {
+                return List.of();
+            }
+
+            List<String> indexes = new ArrayList<>();
+            for (int i = 1; i <= messagePositions.size(); i++) {
                 indexes.add(String.valueOf(i));
             }
 
@@ -217,6 +243,9 @@ public class CustomCommands extends BaseFeature {
             case "addcommand" -> addEditorCommand(ctx);
             case "setcommand" -> setEditorCommand(ctx);
             case "removecommand" -> removeEditorCommand(ctx);
+            case "addmessage" -> addEditorMessage(ctx);
+            case "setmessage" -> setEditorMessage(ctx);
+            case "removemessage" -> removeEditorMessage(ctx);
             default -> ctx.returnUsage();
         }
     }
@@ -242,9 +271,11 @@ public class CustomCommands extends BaseFeature {
                         }
 
                         CustomCommandEntry entry = entries.get(i);
+                        String commandSummary = entry.runCommands().size()
+                                + pluralize(entry.runCommands().size(), " action", " actions");
                         Component line = Component.text(entry.id(), NamedTextColor.YELLOW)
                                 .append(Component.text(" - ", NamedTextColor.GRAY))
-                                .append(Component.text(" " + entry.runCommands().size() + pluralize(entry.runCommands().size(), " cmd", " cmds"), NamedTextColor.AQUA));
+                                .append(Component.text(" " + commandSummary, NamedTextColor.AQUA));
 
                         if (isPlayer) {
                             line = line.append(Component.text(" "))
@@ -292,12 +323,11 @@ public class CustomCommands extends BaseFeature {
         ctx.getSender().sendMessage(buildInfoCommandsHeaderLine(entry, ctx.isPlayer()));
 
         if (entry.runCommands().isEmpty()) {
-            ctx.getSender().sendMessage(Component.text("No run commands are configured.", NamedTextColor.RED));
-            return;
-        }
-
-        for (int i = 0; i < entry.runCommands().size(); i++) {
-            ctx.getSender().sendMessage(buildInfoConfiguredCommandLine(entry, i, ctx.isPlayer()));
+            ctx.getSender().sendMessage(Component.text("No actions are configured.", NamedTextColor.RED));
+        } else {
+            for (int i = 0; i < entry.runCommands().size(); i++) {
+                ctx.getSender().sendMessage(buildInfoConfiguredCommandLine(entry, i, ctx.isPlayer()));
+            }
         }
     }
 
@@ -343,13 +373,17 @@ public class CustomCommands extends BaseFeature {
     }
 
     private Component buildInfoCommandsHeaderLine(CustomCommandEntry entry, boolean isPlayer) {
-        Component line = Component.text("Commands:", NamedTextColor.GRAY);
+        Component line = Component.text("Actions:", NamedTextColor.GRAY);
 
         if (isPlayer) {
             line = line.append(Component.text(" "))
                     .append(actionButton("[Add]", NamedTextColor.GREEN,
                             ClickEvent.suggestCommand("/" + EDITOR_LABEL + " addcommand " + entry.id() + " "),
-                            "Add a configured command"));
+                            "Add a configured command"))
+                    .append(Component.text(" "))
+                    .append(actionButton("[Message]", NamedTextColor.AQUA,
+                            ClickEvent.suggestCommand("/" + EDITOR_LABEL + " addmessage " + entry.id() + " "),
+                            "Add a response message"));
         }
 
         return line;
@@ -418,7 +452,8 @@ public class CustomCommands extends BaseFeature {
         validateCommandLabel(ctx, id, label);
 
         String permission = entry.explicitPermission() ? entry.permission() : defaultPermission(label);
-        saveEntry(new CustomCommandEntry(entry.id(), label, permission, entry.explicitPermission(), entry.runCommands()));
+        saveEntry(new CustomCommandEntry(entry.id(), label, permission, entry.explicitPermission(),
+                entry.runCommands()));
         ctx.returnSuccess("Updated custom command '" + entry.id() + "' to '/" + label + "'.");
     }
 
@@ -442,7 +477,8 @@ public class CustomCommands extends BaseFeature {
             }
         }
 
-        saveEntry(new CustomCommandEntry(entry.id(), entry.label(), permission, explicitPermission, entry.runCommands()));
+        saveEntry(new CustomCommandEntry(entry.id(), entry.label(), permission, explicitPermission,
+                entry.runCommands()));
         ctx.returnSuccess("Updated permission for '/" + entry.label() + "' to " + describePermission(entry.label(), permission, explicitPermission) + ".");
     }
 
@@ -451,7 +487,8 @@ public class CustomCommands extends BaseFeature {
         String id = normalizeConfigId(ctx.getArg(1));
         CustomCommandEntry entry = requireEntry(ctx, id);
 
-        saveEntry(new CustomCommandEntry(entry.id(), entry.label(), "", true, entry.runCommands()));
+        saveEntry(new CustomCommandEntry(entry.id(), entry.label(), "", true,
+                entry.runCommands()));
         ctx.returnSuccess("Cleared the permission requirement for '/" + entry.label() + "'.");
     }
 
@@ -469,7 +506,8 @@ public class CustomCommands extends BaseFeature {
 
         List<String> runCommands = new ArrayList<>(entry.runCommands());
         runCommands.add(runCommand);
-        saveEntry(new CustomCommandEntry(entry.id(), entry.label(), entry.permission(), entry.explicitPermission(), runCommands));
+        saveEntry(new CustomCommandEntry(entry.id(), entry.label(), entry.permission(), entry.explicitPermission(),
+                runCommands));
         ctx.returnSuccess("Added run command #" + runCommands.size() + " to '/" + entry.label() + "'.");
     }
 
@@ -490,7 +528,8 @@ public class CustomCommands extends BaseFeature {
         }
 
         runCommands.set(zeroBasedIndex, runCommand);
-        saveEntry(new CustomCommandEntry(entry.id(), entry.label(), entry.permission(), entry.explicitPermission(), runCommands));
+        saveEntry(new CustomCommandEntry(entry.id(), entry.label(), entry.permission(), entry.explicitPermission(),
+                runCommands));
         ctx.returnSuccess("Updated run command #" + index + " for '/" + entry.label() + "'.");
     }
 
@@ -507,8 +546,65 @@ public class CustomCommands extends BaseFeature {
         }
 
         runCommands.remove(zeroBasedIndex);
-        saveEntry(new CustomCommandEntry(entry.id(), entry.label(), entry.permission(), entry.explicitPermission(), runCommands));
+        saveEntry(new CustomCommandEntry(entry.id(), entry.label(), entry.permission(), entry.explicitPermission(),
+                runCommands));
         ctx.returnSuccess("Removed run command #" + index + " from '/" + entry.label() + "'.");
+    }
+
+    private void addEditorMessage(dev.stemcraft.api.command.CommandContext ctx) {
+        if (ctx.rawArgs().size() < 3) {
+            ctx.returnUsage();
+        }
+
+        String id = normalizeConfigId(ctx.rawArgs().get(1));
+        CustomCommandEntry entry = requireEntry(ctx, id);
+        List<String> runCommands = new ArrayList<>(entry.runCommands());
+        for (String messageLine : splitMessageLines(joinRawArgs(ctx, 2))) {
+            runCommands.add(messageAction(messageLine));
+        }
+
+        saveEntry(new CustomCommandEntry(entry.id(), entry.label(), entry.permission(), entry.explicitPermission(),
+                runCommands));
+        ctx.returnSuccess("Added message action(s) to '/" + entry.label() + "'.");
+    }
+
+    private void setEditorMessage(dev.stemcraft.api.command.CommandContext ctx) {
+        if (ctx.rawArgs().size() < 4) {
+            ctx.returnUsage();
+        }
+
+        String id = normalizeConfigId(ctx.rawArgs().get(1));
+        CustomCommandEntry entry = requireEntry(ctx, id);
+        int index = ctx.getArgAsInt(2, -1);
+        List<String> runCommands = new ArrayList<>(entry.runCommands());
+        List<Integer> messagePositions = messageActionPositions(runCommands);
+        int messageIndex = validateMessageIndex(ctx, index, messagePositions.size());
+        int runIndex = messagePositions.get(messageIndex);
+
+        List<String> replacement = splitMessageLines(joinRawArgs(ctx, 3));
+        runCommands.remove(runIndex);
+        for (int i = replacement.size() - 1; i >= 0; i--) {
+            runCommands.add(runIndex, messageAction(replacement.get(i)));
+        }
+
+        saveEntry(new CustomCommandEntry(entry.id(), entry.label(), entry.permission(), entry.explicitPermission(),
+                runCommands));
+        ctx.returnSuccess("Updated message action #" + index + " for '/" + entry.label() + "'.");
+    }
+
+    private void removeEditorMessage(dev.stemcraft.api.command.CommandContext ctx) {
+        ctx.checkArgsSizeAtLeast(3, "CUSTOM_COMMAND_EDITOR_USAGE");
+        String id = normalizeConfigId(ctx.getArg(1));
+        CustomCommandEntry entry = requireEntry(ctx, id);
+        List<String> runCommands = new ArrayList<>(entry.runCommands());
+        List<Integer> messagePositions = messageActionPositions(runCommands);
+        int index = ctx.getArgAsInt(2, -1);
+        int messageIndex = validateMessageIndex(ctx, index, messagePositions.size());
+
+        runCommands.remove((int) messagePositions.get(messageIndex));
+        saveEntry(new CustomCommandEntry(entry.id(), entry.label(), entry.permission(), entry.explicitPermission(),
+                runCommands));
+        ctx.returnSuccess("Removed message action #" + index + " from '/" + entry.label() + "'.");
     }
 
     private void unregisterCommands(boolean syncAfter) {
@@ -545,10 +641,45 @@ public class CustomCommands extends BaseFeature {
         return commands;
     }
 
+    static boolean isMessageAction(String action) {
+        return action != null && action.regionMatches(true, 0, "message:", 0, "message:".length());
+    }
+
+    static String messageActionText(String action) {
+        if (!isMessageAction(action)) {
+            return "";
+        }
+
+        String text = action.substring("message:".length());
+        return text.startsWith(" ") ? text.substring(1) : text;
+    }
+
+    static String messageAction(String message) {
+        return "message:" + (message == null ? "" : message);
+    }
+
+    static List<Integer> messageActionPositions(List<String> actions) {
+        List<Integer> positions = new ArrayList<>();
+        for (int i = 0; i < actions.size(); i++) {
+            if (isMessageAction(actions.get(i))) {
+                positions.add(i);
+            }
+        }
+        return positions;
+    }
+
+    static List<String> splitMessageLines(String message) {
+        if (message == null) {
+            return List.of();
+        }
+
+        String normalized = message.replace("\r\n", "\n").replace('\r', '\n');
+        return List.of(normalized.split("\n", -1));
+    }
+
     static void migrateSurvivalShortcut(String id, ConfigSection entry) {
         if (!id.equals("survival") || !normalizeLabel(entry.getString("command", id)).equals("survival")) return;
-        CustomCommandEntry existing = readEntry(id, entry);
-        if (!existing.runCommands().equals(List.of("tpworld survival"))) return;
+        if (!getRunCommands(entry).equals(List.of("tpworld survival"))) return;
         entry.set("run", List.of("server:tpworld survival {player}"));
         entry.save();
     }
@@ -559,7 +690,8 @@ public class CustomCommands extends BaseFeature {
         String configuredPermission = entry.getString("permission", "");
         String permission = explicitPermission ? configuredPermission : defaultPermission(label);
 
-        return new CustomCommandEntry(id, label, permission, explicitPermission, List.copyOf(getRunCommands(entry)));
+        return new CustomCommandEntry(id, label, permission, explicitPermission,
+                List.copyOf(getRunCommands(entry)));
     }
 
     static void writeEntry(ConfigSection root, CustomCommandEntry entry) {
@@ -569,6 +701,7 @@ public class CustomCommands extends BaseFeature {
             section.set("permission", entry.permission());
         }
         section.set("run", new ArrayList<>(entry.runCommands()));
+        section.remove("message");
     }
 
     static String normalizeConfigId(String id) {
@@ -688,6 +821,14 @@ public class CustomCommands extends BaseFeature {
         return index - 1;
     }
 
+    private int validateMessageIndex(dev.stemcraft.api.command.CommandContext ctx, int index, int size) {
+        if (index < 1 || index > size) {
+            ctx.returnError("Message action index must be between 1 and " + size + ".");
+        }
+
+        return index - 1;
+    }
+
     private String joinRawArgs(dev.stemcraft.api.command.CommandContext ctx, int start) {
         if (start < 0 || start >= ctx.rawArgs().size()) {
             return "";
@@ -748,12 +889,12 @@ public class CustomCommands extends BaseFeature {
                     }
 
                     if (activeEntry.runCommands().isEmpty()) {
-                        ctx.returnInfo("CUSTOM_COMMAND_NO_COMMANDS_SET");
+                        ctx.returnInfo("CUSTOM_COMMAND_NO_ACTIONS_SET");
                     }
 
-                    for (String configuredCommand : activeEntry.runCommands()) {
-                        if (!dispatchConfiguredCommand(player, configuredCommand)) {
-                            ctx.returnError("CUSTOM_COMMAND_RUN_FAILED", "command", configuredCommand);
+                    for (String configuredAction : activeEntry.runCommands()) {
+                        if (!dispatchConfiguredCommand(player, configuredAction)) {
+                            ctx.returnError("CUSTOM_COMMAND_RUN_FAILED", "command", configuredAction);
                         }
                     }
                 })
@@ -802,12 +943,18 @@ public class CustomCommands extends BaseFeature {
         return null;
     }
 
-    private boolean dispatchConfiguredCommand(Player player, String rawCommand) {
-        if (rawCommand == null) {
+    private boolean dispatchConfiguredCommand(Player player, String rawAction) {
+        if (rawAction == null) {
             return false;
         }
 
-        ParsedRunCommand parsedCommand = parseRunCommand(player, applyCommandPlaceholders(player, rawCommand.trim()));
+        String resolvedAction = applyCommandPlaceholders(player, rawAction.trim());
+        if (isMessageAction(resolvedAction)) {
+            api.messages().send(player, messageActionText(resolvedAction));
+            return true;
+        }
+
+        ParsedRunCommand parsedCommand = parseRunCommand(player, resolvedAction);
         if (parsedCommand.command().isBlank()) {
             return false;
         }

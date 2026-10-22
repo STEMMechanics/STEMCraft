@@ -217,7 +217,37 @@ The `/world` command is one of the most important operator surfaces. It covers:
 
 Join and leave commands run as the player by default. Use `player:` or `server:` prefixes on individual entries to control sender mode per command.
 
-Custom command aliases also run as the player by default. Use `player:` or `server:` on a configured run entry to force the sender, and `{player}` / `{uuid}` placeholders inside the configured command text.
+Custom command aliases use the entry key as their command label when `command` is
+omitted. The `run` list is an ordered action list. An action beginning with
+`message:` is sent to the player through the message service; all other actions
+are dispatched as commands. Commands run as the player by default. Use `player:`
+or `server:` on an action to choose the sender, and use `{player}` / `{uuid}`
+placeholders inside command or message text.
+
+```yaml
+custom-commands:
+  discord:
+    permission: ""
+    run:
+      - "message:<aqua>Join our Discord community:</aqua>"
+      - "message:<click:open_url:'https://discord.example'><underlined><aqua>discord.example</aqua></underlined></click>"
+      - "server:discord announce {player}"
+```
+
+The command editor appends actions to the same ordered list:
+
+```text
+/customcommands create discord
+/customcommands addmessage discord "<aqua>Join our Discord community:</aqua>"
+/customcommands addcommand discord "server:discord announce {player}"
+```
+
+Use `/customcommands info discord` to see the complete action order. The
+`setcommand` and `removecommand` editor commands use the overall action index;
+`setmessage` and `removemessage` use the ordinal among message actions. Add
+actions in the desired sequence, or edit the YAML directly when you need to
+reorder an existing list. Message actions support MiniMessage formatting,
+routing directives, locale keys, and the same placeholders as command actions.
 
 ## Permission Conventions
 
