@@ -956,7 +956,9 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
         long countdown = Math.max(0L, workshop.startAt().toEpochSecond() - now.getEpochSecond());
         values.put("workshop_countdown", AnnouncementsFeature.escapeLiteral(
                 countdown == 0L ? "now" : TimeUtil.formatLongDuration(countdown)));
-        String rendered = PlaceholderUtil.apply(template, values);
+        String rendered = PlaceholderUtil.apply(
+                WorkshopDateFormatter.apply(template, WorkshopDateFormatter.dateValues(workshop, defaultTimezone)),
+                values);
         String expanded = api.placeholders().apply(player, rendered);
         return expanded == null ? "" : expanded;
     }
@@ -1089,7 +1091,9 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
 
     private @NotNull String renderDisplayLine(@NotNull String template, @Nullable Workshop workshop,
                                                int index, int count, int shown) {
-        String rendered = PlaceholderUtil.apply(template, displayPlaceholders(workshop, index, count, shown, defaultTimezone));
+        String rendered = PlaceholderUtil.apply(
+                WorkshopDateFormatter.apply(template, WorkshopDateFormatter.dateValues(workshop, defaultTimezone)),
+                displayPlaceholders(workshop, index, count, shown, defaultTimezone));
         String expanded = api.placeholders().apply(rendered);
         return expanded == null ? "" : expanded;
     }

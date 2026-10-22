@@ -11,6 +11,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -100,6 +101,21 @@ class WorkshopsFeatureTest {
         assertEquals("10:00 AM", values.get("time"));
         assertEquals("Saturday 14 November 2026 at 12:00 PM", values.get("end"));
         assertEquals("https://example.test/book", values.get("booking_url"));
+    }
+
+    @Test
+    void workshopDatePlaceholdersUseCompactDatePatterns() {
+        ZonedDateTime date = ZonedDateTime.parse("2026-11-14T10:00:00+10:00");
+
+        assertEquals("Sat 14 Nov", WorkshopDateFormatter.format(date, "ddd dd mmm"));
+        assertEquals("2026-11-14", WorkshopDateFormatter.format(date, "yyyy-mm-dd"));
+        assertEquals("Sat 14 Nov", WorkshopDateFormatter.apply(
+                "{date:ddd dd mmm}", Map.of("date", date)));
+    }
+
+    @Test
+    void missingWorkshopDateValuesRenderAsEmpty() {
+        assertEquals("", WorkshopDateFormatter.apply("{end_date:ddd dd mmm}", Map.of()));
     }
 
     @Test

@@ -419,6 +419,7 @@ public class AnnouncementsFeature extends BaseFeature {
 
     private @NotNull String render(@NotNull String template, @Nullable Player player, @Nullable Workshop workshop, int online) {
         Map<String, String> values = new LinkedHashMap<>();
+        Map<String, ZonedDateTime> dateValues = WorkshopDateFormatter.dateValues(workshop, defaultTimezone);
         values.put("player", player == null ? "" : escapeLiteral(player.getName()));
         values.put("online_players", Integer.toString(online));
         values.put("next_workshop_title", "");
@@ -471,7 +472,7 @@ public class AnnouncementsFeature extends BaseFeature {
                 values.put("active_workshop_remaining", remainingText);
             }
         }
-        String rendered = PlaceholderUtil.apply(template, values);
+        String rendered = PlaceholderUtil.apply(WorkshopDateFormatter.apply(template, dateValues), values);
         String withPlaceholders = api.placeholders().apply(player, rendered);
         return withPlaceholders == null ? "" : withPlaceholders;
     }

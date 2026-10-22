@@ -63,6 +63,8 @@ public class ResourcePackCommand {
                     }
                 })
                 .register(STEMCraft.getPlugin());
+
+        new GlyphCommand(api, service).onEnable();
     }
 
     /**

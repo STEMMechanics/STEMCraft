@@ -120,6 +120,15 @@ lines are the display format; use `{next_workshop_title}`,
 `next_workshop_*` placeholders to control the output. The separate
 `join.active-workshop` block handles workshops already in progress.
 
+Date placeholders accept an optional compact format after a colon. For example,
+`{date:ddd dd mmm}` renders a workshop start as `Sat 14 Nov`. The supported
+date fields are `date`, `start_date`, `end_date`, `workshop_date`,
+`next_workshop_date`, `next_workshop_end_date`, `active_workshop_date`, and
+`active_workshop_end_date`. Format tokens are `d`/`dd` for the day of the
+month, `ddd`/`dddd` for the abbreviated/full weekday, `m`/`mm`/`mmm`/`mmmm`
+for the month, and `yy`/`yyyy` for the year. Existing unformatted placeholders
+continue to use the configured default display format.
+
 `workshops.display-filter.locations` applies only to the player-facing
 `/workshops` list and `/workshops info` command. An empty list shows every
 enabled source. The `WorkshopService` API continues to expose the full upcoming
@@ -134,6 +143,15 @@ the `no-booking` lines are then used instead. Available list placeholders are
 `{time}`, `{start}`, `{start_date}`, `{start_time}`, `{end}`, `{end_date}`,
 `{end_time}`, `{location}`, `{booking_url}`, `{url}`, `{id}`, and `{source}`.
 Workshop values are escaped before MiniMessage parses the configured template.
+
+The same date format syntax can be used in a list line, for example:
+
+```yaml
+display:
+  entry:
+    - "<yellow>{index}. {title}</yellow>"
+    - "<white>{date:ddd dd mmm} at {time}</white>"
+```
 
 Manual announcements are stored in SQLite, so configuration reloads and server
 restarts do not replace them. Manual entries use the global interval and do not
@@ -198,6 +216,12 @@ commands only:
 /workshops instructions <message> | <message> ...
 /workshops instructions clear
 ```
+
+`/glyph` is available to all players and displays the registered resource-pack
+glyphs in a paginated chat menu. Twelve glyphs are shown per line; hover over a
+glyph to see its shortcut, such as `:roles/stemcraft:`. Add text after the
+command to perform a case-insensitive partial search, for example
+`/glyph roles` or `/glyph roles 2`.
 
 For example:
 

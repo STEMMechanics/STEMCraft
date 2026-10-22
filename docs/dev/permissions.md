@@ -24,7 +24,7 @@ manage your preferred grouping in LuckPerms.
 | `stemcraft.namedregion.read` | Info, list, find and nearby named regions |
 | `stemcraft.noticeboard.read` | List notices and your own posts |
 | `stemcraft.noticeboard.post` | Post a notice; edit/remove your own posts |
-| *(none)* | `/workshops`, `/workshops list`, `/workshops info` and `/workshops help` are public |
+| *(none)* | `/glyph`, `/workshops`, `/workshops list`, `/workshops info` and `/workshops help` are public |
 | `stemcraft.sign.format` | Format sign text and use registered glyphs; requires an explicit grant; defaults false |
 
 If you previously granted `stemcraft.player` or `stemcraft.minigame.play` while testing
