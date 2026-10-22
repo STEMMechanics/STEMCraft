@@ -30,6 +30,14 @@ announcements:
       - "<aqua>Welcome, {player}!</aqua>"
     returning:
       - "<aqua>Welcome back, {player}!</aqua>"
+    upcoming-workshop:
+      enabled: true
+      filters:
+        days-until: {}
+        locations: ["STEMCraft"]
+      message:
+        - "<aqua>Next workshop: {next_workshop_title}</aqua>"
+        - "<gray>{next_workshop_date} at {next_workshop_time}</gray>"
     active-workshop:
       enabled: true
       message:
@@ -101,6 +109,17 @@ and location matching is exact after trimming but case-insensitive. Dates accept
 ISO date/time values; date-only values use the configured timezone. Messages can
 be a scalar or a YAML list. Each list item is sent as its own chat line.
 
+`announcements.join.upcoming-workshop` uses the same filter structure and
+message placeholders, but is evaluated for each player after `join-delay`.
+It selects the next eligible workshop whose start time is still in the future,
+sends the configured lines only to that joining player, and sends nothing when
+the Workshops feature is unavailable or no workshop matches. Its `message`
+lines are the display format; use `{next_workshop_title}`,
+`{next_workshop_date}`, `{next_workshop_time}`, `{next_workshop_url}`,
+`{next_workshop_location}`, `{next_workshop_countdown}`, and the other
+`next_workshop_*` placeholders to control the output. The separate
+`join.active-workshop` block handles workshops already in progress.
+
 `workshops.display-filter.locations` applies only to the player-facing
 `/workshops` list and `/workshops info` command. An empty list shows every
 enabled source. The `WorkshopService` API continues to expose the full upcoming
@@ -147,6 +166,10 @@ Scheduled announcements rotate one due entry at a time in due-time and ID order.
 The minimum-gap setting prevents several overdue entries from filling chat at
 once. No scheduled message is sent when the server has no online players.
 Join tasks are delayed by `join-delay` and are cancelled when the player quits.
+When `announcements.join.upcoming-workshop.enabled` is true, the delayed join
+sequence also checks the configured future-workshop filter and sends its
+`message` lines to the joining player only. No message is sent when there is
+no matching workshop.
 When `announcements.join.active-workshop.enabled` is true, the delayed private
 join message also checks the Workshops API for the first eligible workshop that
 has started and has not reached its end time. It sends the configured
