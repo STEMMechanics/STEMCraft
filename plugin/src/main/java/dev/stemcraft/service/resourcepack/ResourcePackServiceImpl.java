@@ -217,6 +217,21 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
         return getConfigSection();
     }
 
+    @Override
+    public @NotNull List<String> registeredGlyphTokens() {
+        return appliedManifestTokens.stream()
+                .map(ResourcePackServiceImpl::glyphShortcut)
+                .sorted(String.CASE_INSENSITIVE_ORDER)
+                .toList();
+    }
+
+    private static @NotNull String glyphShortcut(@NotNull String token) {
+        String normalized = token.trim();
+        if (!normalized.startsWith(":")) normalized = ":" + normalized;
+        if (!normalized.endsWith(":")) normalized += ":";
+        return normalized;
+    }
+
     public @NotNull File[] dataPackDirectories() {
         File[] packDirs = dataPacksDir == null ? null : dataPacksDir.listFiles(File::isDirectory);
         return packDirs == null ? new File[0] : packDirs;
