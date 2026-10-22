@@ -139,11 +139,6 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
     }
 
     @Override
-    public boolean isEnabled() {
-        return enabled;
-    }
-
-    @Override
     public @NotNull List<Workshop> upcoming() {
         Instant now = Instant.now();
         synchronized (cache) {
