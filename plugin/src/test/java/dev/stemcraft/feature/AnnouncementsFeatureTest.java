@@ -55,6 +55,22 @@ class AnnouncementsFeatureTest {
         assertFalse(filter.matches(workshop("Community Hall", now.plusSeconds(3 * 86_400L)), now));
     }
 
+    @Test
+    void activeWorkshopWindowIncludesStartAndExcludesEnd() {
+        Instant start = Instant.parse("2026-10-22T10:00:00Z");
+        Workshop workshop = new Workshop("active", "Workshop", "",
+                start.atZone(ZoneId.of("UTC")), start.plusSeconds(3600).atZone(ZoneId.of("UTC")),
+                "STEMCraft", "", WorkshopSource.WEBSITE, Instant.now(), true);
+
+        assertFalse(AnnouncementsFeature.isActiveWorkshop(workshop, start.minusSeconds(1)));
+        assertTrue(AnnouncementsFeature.isActiveWorkshop(workshop, start));
+        assertTrue(AnnouncementsFeature.isActiveWorkshop(workshop, start.plusSeconds(3599)));
+        assertFalse(AnnouncementsFeature.isActiveWorkshop(workshop, start.plusSeconds(3600)));
+        assertFalse(AnnouncementsFeature.isActiveWorkshop(
+                new Workshop("undated-end", "Workshop", "", start.atZone(ZoneId.of("UTC")), null,
+                        "STEMCraft", "", WorkshopSource.WEBSITE, Instant.now(), true), start));
+    }
+
     private static Workshop workshop(String location, Instant start) {
         ZonedDateTime date = start.atZone(ZoneId.of("UTC"));
         return new Workshop("id-" + location, "Workshop", "", date, null, location, "",

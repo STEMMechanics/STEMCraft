@@ -226,6 +226,12 @@ announcements:
       - "<gray>Use <yellow>/workshops</yellow> to see upcoming STEMMechanics workshops.</gray>"
     returning:
       - "<aqua>Welcome back, {player}!</aqua>"
+    active-workshop:
+      enabled: true
+      message:
+        - "<aqua>Workshop currently in progress:</aqua> <white>{active_workshop_title}</white>"
+        - "<gray>Where: {active_workshop_location}</gray>"
+        - "<gray>Finishes {active_workshop_end_date} at {active_workshop_end_time}.</gray>"
   scheduled:
     server-information:
       type: message
@@ -265,6 +271,21 @@ workshops:
   display-filter:
     # Empty means all locations. Set this to ["STEMCraft"] to show only that location.
     locations: []
+  display:
+    # Each item is one MiniMessage line. Set header/footer to [] to hide them.
+    header:
+      - "<aqua><bold>STEMMechanics Upcoming Workshops</bold></aqua>"
+    entry:
+      - "<yellow>{index}. {title}</yellow>"
+      - "<white>{date} at {time}</white>"
+      - "<gray>{location}</gray>"
+      - "<click:open_url:'{booking_url}'><aqua>[Click to view details]</aqua></click>"
+    # These lines are used when a workshop has no booking URL. Lines in entry
+    # containing {booking_url} or {url} are skipped in that case.
+    no-booking:
+      - "<dark_gray>Details: /workshops info {id}</dark_gray>"
+    footer:
+      - "<gray>Visit stemmechanics.com.au for more workshops.</gray>"
 
 custom-portals:
   enabled: true

@@ -18,11 +18,14 @@ import dev.stemcraft.api.service.workshop.Workshop;
 import dev.stemcraft.api.service.workshop.WorkshopService;
 import dev.stemcraft.api.service.workshop.WorkshopSource;
 import dev.stemcraft.api.service.workshop.WorkshopSyncStatus;
+import dev.stemcraft.api.util.PlaceholderUtil;
 import dev.stemcraft.api.util.TimeUtil;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
+import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -68,6 +71,20 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
     static final long MAX_FEED_BYTES = 1_048_576L;
     static final String DEFAULT_FEED_URL = "https://www.stemmechanics.com.au/workshops/feed";
     static final ZoneId DEFAULT_ZONE = ZoneId.of("Australia/Brisbane");
+    static final DateTimeFormatter DISPLAY_DATE_FORMAT = DateTimeFormatter.ofPattern("EEEE d MMMM yyyy", Locale.ENGLISH);
+    static final DateTimeFormatter DISPLAY_TIME_FORMAT = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH);
+    private static final MiniMessage MINI_MESSAGE = MiniMessage.miniMessage();
+    private static final List<String> DEFAULT_DISPLAY_HEADER = List.of(
+            "<aqua><bold>STEMMechanics Upcoming Workshops</bold></aqua>");
+    private static final List<String> DEFAULT_DISPLAY_ENTRY = List.of(
+            "<yellow>{index}. {title}</yellow>",
+            "<white>{date} at {time}</white>",
+            "<gray>{location}</gray>",
+            "<click:open_url:'{booking_url}'><aqua>[Click to view details]</aqua></click>");
+    private static final List<String> DEFAULT_DISPLAY_NO_BOOKING = List.of(
+            "<dark_gray>Details: /workshops info {id}</dark_gray>");
+    private static final List<String> DEFAULT_DISPLAY_FOOTER = List.of(
+            "<gray>Visit stemmechanics.com.au for more workshops.</gray>");
 
     private final Object storageLock = new Object();
     private final AtomicBoolean refreshInProgress = new AtomicBoolean();
@@ -85,6 +102,10 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
     private int maximumDisplayed;
     private ZoneId defaultTimezone;
     private List<String> displayLocations = List.of();
+    private List<String> displayHeader = DEFAULT_DISPLAY_HEADER;
+    private List<String> displayEntry = DEFAULT_DISPLAY_ENTRY;
+    private List<String> displayNoBooking = DEFAULT_DISPLAY_NO_BOOKING;
+    private List<String> displayFooter = DEFAULT_DISPLAY_FOOTER;
     private volatile WorkshopSyncStatus syncStatus = new WorkshopSyncStatus(false, false, null, null, "", 0);
     private Command command;
 
@@ -310,8 +331,39 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
                 .filter(value -> !value.isBlank())
                 .distinct()
                 .toList();
+        displayHeader = configuredLines(section, "display.header", DEFAULT_DISPLAY_HEADER);
+        displayEntry = configuredLines(section, "display.entry", DEFAULT_DISPLAY_ENTRY);
+        displayNoBooking = configuredLines(section, "display.no-booking", DEFAULT_DISPLAY_NO_BOOKING);
+        displayFooter = configuredLines(section, "display.footer", DEFAULT_DISPLAY_FOOTER);
         syncStatus = new WorkshopSyncStatus(enabled && websiteEnabled && syncEnabled, false,
                 syncStatus.lastAttemptAt(), syncStatus.lastSuccessAt(), syncStatus.lastError(), countWebsiteWorkshops());
+    }
+
+    private static @NotNull List<String> configuredLines(@NotNull ConfigSection section, @NotNull String path,
+                                                          @NotNull List<String> fallback) {
+        return section.contains(path) ? readLines(section.get(path)) : fallback;
+    }
+
+    private static @NotNull List<String> readLines(@Nullable Object value) {
+        if (value == null) return List.of();
+        List<String> values = new ArrayList<>();
+        if (value instanceof List<?> list) {
+            for (Object item : list) {
+                if (item != null) values.addAll(splitLines(String.valueOf(item)));
+            }
+        } else {
+            values.addAll(splitLines(String.valueOf(value)));
+        }
+        return List.copyOf(values);
+    }
+
+    private static @NotNull List<String> splitLines(@Nullable String value) {
+        if (value == null || value.isBlank()) return List.of();
+        List<String> lines = new ArrayList<>();
+        for (String line : value.split("\\R", -1)) {
+            if (!line.isBlank()) lines.add(line);
+        }
+        return List.copyOf(lines);
     }
 
     private void restartRefreshTask() {
@@ -772,13 +824,92 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
             return;
         }
 
-        ctx.info("<aqua><bold>STEMMechanics Upcoming Workshops</bold></aqua>");
         int limit = Math.min(maximumDisplayed, upcoming.size());
+        List<Workshop> displayed = upcoming.subList(0, limit);
+        sendDisplayLines(ctx.getSender(), displayHeader, null, 0, upcoming.size(), displayed.size());
         for (int i = 0; i < limit; i++) {
             Workshop workshop = upcoming.get(i);
-            ctx.getSender().sendMessage(renderWorkshopLine(i + 1, workshop));
+            sendDisplayLines(ctx.getSender(), displayEntry, workshop, i + 1, upcoming.size(), displayed.size());
+            if (workshop.bookingUrl().isBlank()) {
+                sendDisplayLines(ctx.getSender(), displayNoBooking, workshop, i + 1, upcoming.size(), displayed.size());
+            }
         }
-        ctx.info("<gray>Visit stemmechanics.com.au for more workshops.</gray>");
+        sendDisplayLines(ctx.getSender(), displayFooter, null, 0, upcoming.size(), displayed.size());
+    }
+
+    private void sendDisplayLines(@NotNull CommandSender sender, @NotNull List<String> templates,
+                                  @Nullable Workshop workshop, int index, int count, int shown) {
+        for (String template : templates) {
+            if (skipOptionalDisplayLine(template, workshop)) continue;
+            String rendered = renderDisplayLine(template, workshop, index, count, shown);
+            if (!rendered.isBlank()) sender.sendMessage(MINI_MESSAGE.deserialize(rendered));
+        }
+    }
+
+    private static boolean skipOptionalDisplayLine(@NotNull String template, @Nullable Workshop workshop) {
+        if (workshop == null) return false;
+        String normalized = template.toLowerCase(Locale.ROOT);
+        if (workshop.bookingUrl().isBlank() && (normalized.contains("{booking_url}") || normalized.contains("{url}"))) {
+            return true;
+        }
+        if (workshop.location().isBlank() && normalized.contains("{location}")) return true;
+        return workshop.description().isBlank() && normalized.contains("{description}");
+    }
+
+    private @NotNull String renderDisplayLine(@NotNull String template, @Nullable Workshop workshop,
+                                               int index, int count, int shown) {
+        String rendered = PlaceholderUtil.apply(template, displayPlaceholders(workshop, index, count, shown, defaultTimezone));
+        String expanded = api.placeholders().apply(rendered);
+        return expanded == null ? "" : expanded;
+    }
+
+    static @NotNull Map<String, String> displayPlaceholders(@Nullable Workshop workshop, int index, int count,
+                                                             int shown, @NotNull ZoneId timezone) {
+        Map<String, String> values = new LinkedHashMap<>();
+        values.put("index", Integer.toString(index));
+        values.put("count", Integer.toString(count));
+        values.put("shown", Integer.toString(shown));
+        values.put("title", "");
+        values.put("description", "");
+        values.put("date", "");
+        values.put("time", "");
+        values.put("start_date", "");
+        values.put("start_time", "");
+        values.put("start", "");
+        values.put("end_date", "");
+        values.put("end_time", "");
+        values.put("end", "");
+        values.put("location", "");
+        values.put("booking_url", "");
+        values.put("url", "");
+        values.put("id", "");
+        values.put("source", "");
+        if (workshop == null) return values;
+
+        ZonedDateTime start = workshop.startAt().withZoneSameInstant(timezone);
+        String date = DISPLAY_DATE_FORMAT.format(start);
+        String time = DISPLAY_TIME_FORMAT.format(start);
+        values.put("title", AnnouncementsFeature.escapeLiteral(workshop.title()));
+        values.put("description", AnnouncementsFeature.escapeLiteral(workshop.description()));
+        values.put("date", AnnouncementsFeature.escapeLiteral(date));
+        values.put("time", AnnouncementsFeature.escapeLiteral(time));
+        values.put("start_date", AnnouncementsFeature.escapeLiteral(date));
+        values.put("start_time", AnnouncementsFeature.escapeLiteral(time));
+        values.put("start", AnnouncementsFeature.escapeLiteral(date + " at " + time));
+        values.put("location", AnnouncementsFeature.escapeLiteral(workshop.location()));
+        values.put("booking_url", AnnouncementsFeature.escapeLiteral(workshop.bookingUrl()));
+        values.put("url", AnnouncementsFeature.escapeLiteral(workshop.bookingUrl()));
+        values.put("id", AnnouncementsFeature.escapeLiteral(workshop.id()));
+        values.put("source", AnnouncementsFeature.escapeLiteral(workshop.source().name().toLowerCase(Locale.ROOT)));
+        if (workshop.endAt() != null) {
+            ZonedDateTime end = workshop.endAt().withZoneSameInstant(timezone);
+            String endDate = DISPLAY_DATE_FORMAT.format(end);
+            String endTime = DISPLAY_TIME_FORMAT.format(end);
+            values.put("end_date", AnnouncementsFeature.escapeLiteral(endDate));
+            values.put("end_time", AnnouncementsFeature.escapeLiteral(endTime));
+            values.put("end", AnnouncementsFeature.escapeLiteral(endDate + " at " + endTime));
+        }
+        return values;
     }
 
     private Component renderWorkshopLine(int index, Workshop workshop) {

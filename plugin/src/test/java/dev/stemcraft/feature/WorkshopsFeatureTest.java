@@ -75,6 +75,24 @@ class WorkshopsFeatureTest {
     }
 
     @Test
+    void displayPlaceholdersUseConfiguredTimezoneAndSafeWorkshopValues() {
+        Workshop workshop = new Workshop(
+                "manual-1", "Robotics <Challenge>", "Build <robots>",
+                ZonedDateTime.parse("2026-11-14T10:00:00+10:00"),
+                ZonedDateTime.parse("2026-11-14T12:00:00+10:00"),
+                "STEMCraft", "https://example.test/book", WorkshopSource.MANUAL, Instant.now(), true);
+
+        var values = WorkshopsFeature.displayPlaceholders(workshop, 2, 4, 3, ZoneId.of("Australia/Brisbane"));
+
+        assertEquals("2", values.get("index"));
+        assertEquals("Robotics \\<Challenge\\>", values.get("title"));
+        assertEquals("Saturday 14 November 2026", values.get("date"));
+        assertEquals("10:00 AM", values.get("time"));
+        assertEquals("Saturday 14 November 2026 at 12:00 PM", values.get("end"));
+        assertEquals("https://example.test/book", values.get("booking_url"));
+    }
+
+    @Test
     void duplicateFeedKeysKeepTheFirstRecordAndStableIdsAllowUpdates() {
         ZonedDateTime start = ZonedDateTime.parse("2026-11-14T10:00:00+10:00");
         WorkshopsFeature.ParsedFeedWorkshop first = new WorkshopsFeature.ParsedFeedWorkshop(

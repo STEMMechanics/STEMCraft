@@ -30,6 +30,12 @@ announcements:
       - "<aqua>Welcome, {player}!</aqua>"
     returning:
       - "<aqua>Welcome back, {player}!</aqua>"
+    active-workshop:
+      enabled: true
+      message:
+        - "<aqua>Workshop currently in progress:</aqua> <white>{active_workshop_title}</white>"
+        - "<gray>Where: {active_workshop_location}</gray>"
+        - "<gray>Finishes {active_workshop_end_date} at {active_workshop_end_time}.</gray>"
   scheduled:
     server-information:
       type: message
@@ -64,6 +70,18 @@ workshops:
   maximum-displayed: 3
   display-filter:
     locations: ["STEMCraft"]
+  display:
+    header:
+      - "<aqua><bold>STEMMechanics Upcoming Workshops</bold></aqua>"
+    entry:
+      - "<yellow>{index}. {title}</yellow>"
+      - "<white>{date} at {time}</white>"
+      - "<gray>{location}</gray>"
+      - "<click:open_url:'{booking_url}'><aqua>[Click to view details]</aqua></click>"
+    no-booking:
+      - "<dark_gray>Details: /workshops info {id}</dark_gray>"
+    footer:
+      - "<gray>Visit stemmechanics.com.au for more workshops.</gray>"
 ```
 
 Scheduled entries are keyed by their configuration ID. Each entry can override
@@ -79,6 +97,16 @@ be a scalar or a YAML list. Each list item is sent as its own chat line.
 `/workshops` list and `/workshops info` command. An empty list shows every
 enabled source. The `WorkshopService` API continues to expose the full upcoming
 catalogue so other features can apply their own filters.
+
+The `/workshops` list uses the configurable `workshops.display.header`,
+`display.entry`, `display.no-booking`, and `display.footer` line lists. Each
+line is MiniMessage. Set `header` or `footer` to `[]` to hide it. Entry lines
+containing `{booking_url}` or `{url}` are skipped when no booking link exists;
+the `no-booking` lines are then used instead. Available list placeholders are
+`{index}`, `{count}`, `{shown}`, `{title}`, `{description}`, `{date}`,
+`{time}`, `{start}`, `{start_date}`, `{start_time}`, `{end}`, `{end_date}`,
+`{end_time}`, `{location}`, `{booking_url}`, `{url}`, `{id}`, and `{source}`.
+Workshop values are escaped before MiniMessage parses the configured template.
 
 Manual announcements are stored in SQLite, so configuration reloads and server
 restarts do not replace them. Manual entries use the global interval and do not
@@ -111,6 +139,11 @@ Scheduled announcements rotate one due entry at a time in due-time and ID order.
 The minimum-gap setting prevents several overdue entries from filling chat at
 once. No scheduled message is sent when the server has no online players.
 Join tasks are delayed by `join-delay` and are cancelled when the player quits.
+When `announcements.join.active-workshop.enabled` is true, the delayed private
+join message also checks the Workshops API for the first eligible workshop that
+has started and has not reached its end time. It sends the configured
+`active-workshop.message` to that joining player only. Workshops without an end
+time are not treated as active because their running window cannot be known.
 
 ## Workshop commands
 
@@ -192,7 +225,19 @@ processing. Available announcement placeholders are:
 | `{next_workshop_date}` | Next workshop date in the announcement timezone |
 | `{next_workshop_time}` | Next workshop time in the announcement timezone |
 | `{next_workshop_url}` | Safe HTTP(S) booking URL, or empty |
+| `{next_workshop_location}` | Next workshop location, or empty |
+| `{next_workshop_end_date}` | Next workshop end date, or empty |
+| `{next_workshop_end_time}` | Next workshop end time, or empty |
+| `{next_workshop_remaining}` | Human-readable time until the end, or empty |
 | `{next_workshop_countdown}` | Human-readable time until the workshop |
+| `{active_workshop_title}` | Active workshop title in a join message |
+| `{active_workshop_date}` | Active workshop start date |
+| `{active_workshop_time}` | Active workshop start time |
+| `{active_workshop_url}` | Active workshop booking URL |
+| `{active_workshop_location}` | Active workshop location |
+| `{active_workshop_end_date}` | Active workshop end date |
+| `{active_workshop_end_time}` | Active workshop end time |
+| `{active_workshop_remaining}` | Human-readable time remaining in the active workshop |
 
 Workshop promotions are skipped when no eligible workshop exists, so their
 placeholders are never shown unresolved. Feed titles and other feed-controlled

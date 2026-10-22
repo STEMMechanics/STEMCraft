@@ -67,6 +67,8 @@ public class AnnouncementsFeature extends BaseFeature {
     private String prefix;
     private List<String> firstTimeJoinMessage = List.of();
     private List<String> returningJoinMessage = List.of();
+    private boolean activeWorkshopJoinEnabled;
+    private List<String> activeWorkshopJoinMessage = List.of();
     private ZoneId defaultTimezone = DEFAULT_ZONE;
     private Instant lastScheduledBroadcastAt;
     private Command command;
@@ -131,6 +133,9 @@ public class AnnouncementsFeature extends BaseFeature {
         defaultTimezone = parseZone(section.getString("timezone", DEFAULT_ZONE.getId()), DEFAULT_ZONE);
         firstTimeJoinMessage = readLines(section, "join.first-time");
         returningJoinMessage = readLines(section, "join.returning");
+        ConfigSection activeWorkshopJoin = section.getSection("join.active-workshop", false);
+        activeWorkshopJoinEnabled = activeWorkshopJoin != null && activeWorkshopJoin.getBoolean("enabled", false);
+        activeWorkshopJoinMessage = activeWorkshopJoin == null ? List.of() : readLines(activeWorkshopJoin, "message");
         configuredAnnouncements.clear();
         readConfiguredAnnouncements(section.getSection("scheduled", false));
         if (configuredAnnouncements.values().stream().noneMatch(AnnouncementDefinition::workshopPromotion)) {
@@ -385,15 +390,51 @@ public class AnnouncementsFeature extends BaseFeature {
         values.put("next_workshop_date", "");
         values.put("next_workshop_time", "");
         values.put("next_workshop_url", "");
+        values.put("next_workshop_location", "");
+        values.put("next_workshop_end_date", "");
+        values.put("next_workshop_end_time", "");
+        values.put("next_workshop_remaining", "");
         values.put("next_workshop_countdown", "");
+        values.put("active_workshop_title", "");
+        values.put("active_workshop_date", "");
+        values.put("active_workshop_time", "");
+        values.put("active_workshop_url", "");
+        values.put("active_workshop_location", "");
+        values.put("active_workshop_end_date", "");
+        values.put("active_workshop_end_time", "");
+        values.put("active_workshop_remaining", "");
         if (workshop != null) {
             ZonedDateTime local = workshop.startAt().withZoneSameInstant(defaultTimezone);
             long countdown = Math.max(0L, (workshop.startAt().toInstant().toEpochMilli() - System.currentTimeMillis()) / 1000L);
-            values.put("next_workshop_title", escapeLiteral(workshop.title()));
-            values.put("next_workshop_date", escapeLiteral(WORKSHOP_DATE_FORMAT.format(local)));
-            values.put("next_workshop_time", escapeLiteral(WORKSHOP_TIME_FORMAT.format(local)));
-            values.put("next_workshop_url", escapeLiteral(workshop.bookingUrl()));
+            String title = escapeLiteral(workshop.title());
+            String date = escapeLiteral(WORKSHOP_DATE_FORMAT.format(local));
+            String time = escapeLiteral(WORKSHOP_TIME_FORMAT.format(local));
+            String url = escapeLiteral(workshop.bookingUrl());
+            String location = escapeLiteral(workshop.location());
+            values.put("next_workshop_title", title);
+            values.put("next_workshop_date", date);
+            values.put("next_workshop_time", time);
+            values.put("next_workshop_url", url);
+            values.put("next_workshop_location", location);
             values.put("next_workshop_countdown", escapeLiteral(countdown == 0L ? "now" : TimeUtil.formatLongDuration(countdown)));
+            values.put("active_workshop_title", title);
+            values.put("active_workshop_date", date);
+            values.put("active_workshop_time", time);
+            values.put("active_workshop_url", url);
+            values.put("active_workshop_location", location);
+            if (workshop.endAt() != null) {
+                ZonedDateTime end = workshop.endAt().withZoneSameInstant(defaultTimezone);
+                String endDate = escapeLiteral(WORKSHOP_DATE_FORMAT.format(end));
+                String endTime = escapeLiteral(WORKSHOP_TIME_FORMAT.format(end));
+                long remaining = Math.max(0L, (workshop.endAt().toInstant().toEpochMilli() - System.currentTimeMillis()) / 1000L);
+                String remainingText = escapeLiteral(TimeUtil.formatLongDuration(remaining));
+                values.put("next_workshop_end_date", endDate);
+                values.put("next_workshop_end_time", endTime);
+                values.put("next_workshop_remaining", remainingText);
+                values.put("active_workshop_end_date", endDate);
+                values.put("active_workshop_end_time", endTime);
+                values.put("active_workshop_remaining", remainingText);
+            }
         }
         String rendered = PlaceholderUtil.apply(template, values);
         String withPlaceholders = api.placeholders().apply(player, rendered);
@@ -411,6 +452,7 @@ public class AnnouncementsFeature extends BaseFeature {
                 if (!enabled || !joinEnabled || !player.isOnline()) return;
                 broadcast(new AnnouncementDefinition("join", player.hasPlayedBefore() ? returningJoinMessage : firstTimeJoinMessage,
                         true, 0L, null, null, "message", WorkshopFilter.NONE, false), player);
+                broadcastActiveWorkshop(player);
             });
         });
         api.events().register(PlayerQuitEvent.class, event -> cancelJoinTask(event.getPlayer().getUniqueId()));
@@ -424,6 +466,36 @@ public class AnnouncementsFeature extends BaseFeature {
     private void cancelJoinTasks() {
         for (String taskId : joinTasks.values()) api.tasks().cancel(taskId);
         joinTasks.clear();
+    }
+
+    private void broadcastActiveWorkshop(@NotNull Player player) {
+        if (!activeWorkshopJoinEnabled || activeWorkshopJoinMessage.isEmpty()) return;
+        Workshop workshop = findActiveWorkshop(Instant.now());
+        if (workshop == null) return;
+
+        int online = Bukkit.getOnlinePlayers().size();
+        for (String line : activeWorkshopJoinMessage) {
+            String normalized = line.toLowerCase(Locale.ROOT);
+            if (workshop.location().isBlank() && normalized.contains("{active_workshop_location}")) continue;
+            String rendered = render(prefix + line, player, workshop, online);
+            if (!rendered.isBlank()) api.messages().send(player, rendered);
+        }
+    }
+
+    private @Nullable Workshop findActiveWorkshop(@NotNull Instant now) {
+        WorkshopService service = api.workshops();
+        if (service == null || !service.isAvailable() || !service.isEnabled()) return null;
+        return service.upcoming().stream()
+                .filter(Workshop::announcementEligible)
+                .filter(workshop -> isActiveWorkshop(workshop, now))
+                .findFirst()
+                .orElse(null);
+    }
+
+    static boolean isActiveWorkshop(@NotNull Workshop workshop, @NotNull Instant now) {
+        return workshop.endAt() != null
+                && !now.isBefore(workshop.startAt().toInstant())
+                && now.isBefore(workshop.endAt().toInstant());
     }
 
     private void registerCommand() {
