@@ -22,6 +22,8 @@ The main `config.yml` covers many areas, including:
 - hub behavior
 - random first spawn rules
 - custom commands
+- announcements and workshop promotions
+- website and manual workshops
 - recipes
 - player stats options
 - web/resource-pack configuration

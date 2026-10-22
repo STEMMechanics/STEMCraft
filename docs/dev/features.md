@@ -77,6 +77,8 @@ continue using that old profile.
 | `QuestFeature` | Private NPC quests, updating owner-bound books, objective progress, prerequisites, and rewards |
 | `InteractiveMenus` | Book/form-based interactive menu system with admin editing |
 | `CustomCommands` | Config-defined command aliases with player/server sender control |
+| `AnnouncementsFeature` | Scheduled, join, manual, and workshop-promotion chat messages; see [Announcements and Workshops](announcements-workshops.md) |
+| `WorkshopsFeature` | Website RSS synchronization, manual workshop catalogue, and `/workshops`; see [Announcements and Workshops](announcements-workshops.md) |
 | `PlayerTabList` | Header/footer tab list rendering and update loop |
 | `PlayerGameMessages` | Join, quit, death, and related configurable player messages |
 

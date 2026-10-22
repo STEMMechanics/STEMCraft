@@ -40,6 +40,7 @@ The public integration surface is `dev.stemcraft.api.STEMCraftAPI`.
 - `tabComplete()`
 - `tasks()`
 - `web()`
+- `workshops()`
 - `worlds()`
 
 ## Save checkpoints
@@ -101,6 +102,14 @@ The command API centers on:
 This is the preferred way to register new command surfaces inside STEMCraft and companion plugins.
 All `CommandContext` positional argument accessors use zero-based indexes. `getArgsAsString(index)` joins arguments
 starting at that same zero-based index, while `getArgsAsString()` joins the complete positional argument list.
+
+### Workshops
+
+`WorkshopService` is the internal catalogue boundary for website and manual
+STEMMechanics workshops. Use `api.workshops()` rather than depending on the RSS
+parser or its SQLite tables. The service returns `WorkshopService.UNAVAILABLE`
+when the optional feature is disabled. See [Announcements and Workshops](announcements-workshops.md)
+for the model, synchronization status, and examples.
 
 ### Events
 

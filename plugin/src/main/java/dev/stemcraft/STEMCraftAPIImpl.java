@@ -55,6 +55,7 @@ import dev.stemcraft.api.service.punishment.PunishmentService;
 import dev.stemcraft.api.service.tabcomplete.TabCompleteService;
 import dev.stemcraft.api.service.web.WebService;
 import dev.stemcraft.api.service.world.WorldService;
+import dev.stemcraft.api.service.workshop.WorkshopService;
 import dev.stemcraft.api.service.minigame.MiniGameService;
 
 import java.io.File;
@@ -290,4 +291,10 @@ public class STEMCraftAPIImpl extends HasMessagesImpl implements STEMCraftAPI {
      */
     @Override
     public WorldService worlds() { return plugin.worlds(); }
+
+    @Override
+    public WorkshopService workshops() {
+        WorkshopService workshops = plugin.workshops();
+        return workshops == null || !workshops.isAvailable() ? WorkshopService.UNAVAILABLE : workshops;
+    }
 }

@@ -99,6 +99,7 @@ class STEMCraftAPIImplTest {
         "tabComplete",
         "tasks",
         "web",
+        "workshops",
         "worlds",
         "worldGeneration"
     );
@@ -222,6 +223,7 @@ class STEMCraftAPIImplTest {
         expectedDelegates.put("tabComplete", tabComplete);
         expectedDelegates.put("tasks", tasks);
         expectedDelegates.put("web", web);
+        expectedDelegates.put("workshops", dev.stemcraft.api.service.workshop.WorkshopService.UNAVAILABLE);
         expectedDelegates.put("worlds", worlds);
         var worldGeneration = mock(dev.stemcraft.api.service.world.WorldGeneration.class);
         when(worlds.generator()).thenReturn(worldGeneration);
@@ -306,6 +308,15 @@ class STEMCraftAPIImplTest {
         var bot=mock(dev.stemcraft.feature.StemBotFeature.class);
         when(plugin.stemBot()).thenReturn(bot);
         assertSame(bot,api.stemBot());
+    }
+
+    @Test
+    void unavailableWorkshopFeatureUsesSafeService() {
+        var workshops = mock(dev.stemcraft.api.service.workshop.WorkshopService.class);
+        when(plugin.workshops()).thenReturn(workshops);
+        when(workshops.isAvailable()).thenReturn(false);
+
+        assertSame(dev.stemcraft.api.service.workshop.WorkshopService.UNAVAILABLE, api.workshops());
     }
 
     @Test

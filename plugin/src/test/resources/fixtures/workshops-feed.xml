@@ -1,0 +1,31 @@
+<?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?>
+<rss version="2.0" xmlns:sm="https://stemmechanics.com/ns/rss/workshop">
+  <channel>
+    <title>STEMMechanics Workshops</title>
+    <item>
+      <title>Robotics with Safe Formatting &lt;Test&gt;</title>
+      <link>https://www.stemmechanics.com.au/workshops/robotics</link>
+      <guid isPermaLink="true">https://www.stemmechanics.com.au/workshops/robotics</guid>
+      <pubDate>Thu, 01 Jan 2026 00:00:00 +1000</pubDate>
+      <description><![CDATA[Learn robotics.]]></description>
+      <sm:startDate>2026-11-14T10:00:00+10:00</sm:startDate>
+      <sm:endDate>2026-11-14T12:00:00+10:00</sm:endDate>
+      <sm:location>STEMMechanics Lab</sm:location>
+      <sm:status>Open</sm:status>
+    </item>
+    <item>
+      <title>Workshop with no event date</title>
+      <link>https://www.stemmechanics.com.au/workshops/undated</link>
+      <guid>undated-workshop</guid>
+      <pubDate>Fri, 02 Jan 2026 00:00:00 +1000</pubDate>
+      <description>It must be skipped.</description>
+    </item>
+    <item>
+      <title>Closed workshop</title>
+      <link>https://www.stemmechanics.com.au/workshops/closed</link>
+      <guid>closed-workshop</guid>
+      <sm:startDate>2026-12-01T10:00:00+10:00</sm:startDate>
+      <sm:status>Closed</sm:status>
+    </item>
+  </channel>
+</rss>

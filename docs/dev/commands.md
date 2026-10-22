@@ -30,6 +30,8 @@ The list below reflects the active built-in command roots in source.
 | `/muteall` | `ChatServiceImpl` | Global chat mute control |
 | `/ban`, `/unban`, `/kick`, `/warn` | `PunishmentServiceImpl` | Punishment management |
 | `/report` | `ChatServiceImpl` | Player report submission |
+| `/announcements` | `AnnouncementsFeature` | List, manage, and broadcast configured announcements |
+| `/workshops` | `WorkshopsFeature` | View upcoming workshops and manage manual entries |
 
 ### STEMBot wilderness directions
 

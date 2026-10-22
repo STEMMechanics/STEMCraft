@@ -55,6 +55,7 @@ import dev.stemcraft.api.service.punishment.PunishmentService;
 import dev.stemcraft.api.service.tabcomplete.TabCompleteService;
 import dev.stemcraft.api.service.web.WebService;
 import dev.stemcraft.api.service.world.WorldService;
+import dev.stemcraft.api.service.workshop.WorkshopService;
 
 import java.io.File;
 
@@ -238,6 +239,9 @@ public interface STEMCraftAPI {
      * Get the world service.
      */
     WorldService worlds();
+
+    /** Get the optional STEMMechanics workshop catalogue service. */
+    default WorkshopService workshops() { return WorkshopService.UNAVAILABLE; }
 
     /**
      * Static access to the STEMCraft API instance.
