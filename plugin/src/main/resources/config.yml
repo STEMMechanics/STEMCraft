@@ -269,12 +269,19 @@ workshops:
   timezone: Australia/Brisbane
   maximum-displayed: 3
   display-filter:
-    # Empty means all locations. Set this to ["STEMCraft"] to show only that location.
+    # Empty means all feed locations. Match the value supplied by the feed, such as ["server"].
     locations: []
-  # The feed location is often a generic value such as "server". These local
-  # messages describe the actual Minecraft world or command players should use.
-  # A per-workshop /workshops instructions override takes precedence.
-  access-messages: {}
+  # Prompt an administrator or an explicitly permitted player to set access
+  # instructions for the next workshop during the hour before it starts.
+  instructions:
+    prompt-enabled: true
+    prompt-window: 1h
+    prompt-delay: 5s
+    permission: stemcraft.workshops.instructions
+    prompt:
+      - "<yellow>Access instructions are needed for <white>{workshop_title}</white>, starting in {workshop_countdown}.</yellow>"
+      - "<gray>Click to suggest the setup command, then add the Minecraft destination or command players should use:</gray>"
+      - "<click:suggest_command:'/workshops instructions {workshop_id} '><aqua><underlined>/workshops instructions {workshop_id}</underlined></aqua></click>"
   display:
     # Each item is one MiniMessage line. Set header/footer to [] to hide them.
     header:

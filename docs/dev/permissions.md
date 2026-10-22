@@ -76,6 +76,7 @@ authorize deleting another island. An administrator must confirm resets too.
 | `stemcraft.announcements.broadcast` | `stemcraft.announcements.admin` for announcement list, editing, enable/disable, removal and reload |
 | *(none)* | `stemcraft.workshops.admin` for manual workshop management and feed refresh |
 | *(none)* | `stemcraft.workshops.refresh` for feed refresh without manual workshop management |
+| `stemcraft.workshops.instructions` | `stemcraft.workshops.admin` also grants access-instruction prompts and editing |
 | `stemcraft.book` for get/list/show self | `stemcraft.book.others` for showing another player a book; `stemcraft.book.edit` for authoring/editing |
 | `stemcraft.command.back` | `stemcraft.command.back.others` |
 | `stemcraft.command.spawn` for current-world self travel | `.spawn.others` to target another player; `.spawn.worlds` for any world or `.spawn.world.<world-name>` for a specific world |

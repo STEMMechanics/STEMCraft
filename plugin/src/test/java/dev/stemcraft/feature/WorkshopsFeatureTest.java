@@ -126,6 +126,19 @@ class WorkshopsFeatureTest {
         assertNull(WorkshopsFeature.parseDateTime("not-a-date", ZoneId.of("Australia/Brisbane"), false));
     }
 
+    @Test
+    void accessPromptOnlyRunsBeforeTheWorkshopWithinTheConfiguredWindow() {
+        Instant start = Instant.parse("2026-11-14T01:00:00Z");
+        Workshop workshop = new Workshop(
+                "one", "One", "", start.atZone(ZoneId.of("UTC")), null, "", "",
+                WorkshopSource.WEBSITE, Instant.now(), true);
+
+        assertFalse(WorkshopsFeature.withinPromptWindow(workshop, start.minusSeconds(3601), 3600));
+        assertTrue(WorkshopsFeature.withinPromptWindow(workshop, start.minusSeconds(3600), 3600));
+        assertTrue(WorkshopsFeature.withinPromptWindow(workshop, start.minusSeconds(1), 3600));
+        assertFalse(WorkshopsFeature.withinPromptWindow(workshop, start, 3600));
+    }
+
     private static byte[] fixture() throws IOException {
         try (InputStream input = WorkshopsFeatureTest.class.getResourceAsStream("/fixtures/workshops-feed.xml")) {
             if (input == null) throw new IOException("Fixture not found");

@@ -27,6 +27,8 @@ import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -61,6 +63,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Maintains website and manually created STEMMechanics workshops. */
@@ -68,6 +71,8 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
     static final String REFRESH_TASK = "feature:workshops-refresh";
     static final String MIGRATION_NAME = "workshops";
     static final int MIGRATION_VERSION = 2;
+    static final String DEFAULT_INSTRUCTIONS_PERMISSION = "stemcraft.workshops.instructions";
+    static final String ACCESS_PROMPT_TASK_PREFIX = "workshops:access-prompt:";
     static final long MAX_FEED_BYTES = 1_048_576L;
     static final int MAX_ACCESS_INSTRUCTION_LINES = 20;
     static final int MAX_ACCESS_INSTRUCTION_LENGTH = 1024;
@@ -87,11 +92,16 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
             "<dark_gray>Details: /workshops info {id}</dark_gray>");
     private static final List<String> DEFAULT_DISPLAY_FOOTER = List.of(
             "<gray>Visit stemmechanics.com.au for more workshops.</gray>");
+    private static final List<String> DEFAULT_INSTRUCTIONS_PROMPT = List.of(
+            "<yellow>Access instructions are needed for <white>{workshop_title}</white>, starting in {workshop_countdown}.</yellow>",
+            "<gray>Click to suggest the setup command, then add the Minecraft destination or command players should use:</gray>",
+            "<click:suggest_command:'/workshops instructions {workshop_id} '><aqua><underlined>/workshops instructions {workshop_id}</underlined></aqua></click>");
 
     private final Object storageLock = new Object();
     private final AtomicBoolean refreshInProgress = new AtomicBoolean();
     private final Map<String, Workshop> cache = new LinkedHashMap<>();
     private final Map<String, List<String>> accessOverrides = new LinkedHashMap<>();
+    private final Map<UUID, String> accessPromptTasks = new LinkedHashMap<>();
 
     private volatile boolean enabled;
     private boolean websiteEnabled;
@@ -105,13 +115,18 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
     private int maximumDisplayed;
     private ZoneId defaultTimezone;
     private List<String> displayLocations = List.of();
-    private Map<String, List<String>> accessMessagesByLocation = Map.of();
+    private boolean instructionsPromptEnabled;
+    private long instructionsPromptWindowSeconds;
+    private long instructionsPromptDelaySeconds;
+    private String instructionsPermission;
+    private List<String> instructionsPromptMessage = List.of();
     private List<String> displayHeader = DEFAULT_DISPLAY_HEADER;
     private List<String> displayEntry = DEFAULT_DISPLAY_ENTRY;
     private List<String> displayNoBooking = DEFAULT_DISPLAY_NO_BOOKING;
     private List<String> displayFooter = DEFAULT_DISPLAY_FOOTER;
     private volatile WorkshopSyncStatus syncStatus = new WorkshopSyncStatus(false, false, null, null, "", 0);
     private Command command;
+    private boolean eventsRegistered;
 
     public WorkshopsFeature(STEMCraftAPI api) {
         super(api);
@@ -125,6 +140,7 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
         loadStoredAccessOverrides();
         registerTabCompletion();
         registerCommand();
+        registerEvents();
         restartRefreshTask();
     }
 
@@ -135,6 +151,7 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
         loadSettings();
         if (!enabled) {
             api.tasks().cancel(REFRESH_TASK);
+            cancelAccessPromptTasks();
             if (command != null) {
                 command.unregister();
                 command = null;
@@ -144,6 +161,7 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
         if (!wasEnabled) {
             registerTabCompletion();
             registerCommand();
+            registerEvents();
         }
         loadStoredWorkshops();
         loadStoredAccessOverrides();
@@ -154,6 +172,7 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
     public void onDisable() {
         enabled = false;
         api.tasks().cancel(REFRESH_TASK);
+        cancelAccessPromptTasks();
         if (command != null) {
             command.unregister();
             command = null;
@@ -311,11 +330,19 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
     @Override
     public @NotNull List<String> accessInstructions(@NotNull Workshop workshop) {
         if (workshop == null) return List.of();
+        Workshop target = nextInstructionWorkshop();
+        if (target == null || !target.id().equalsIgnoreCase(workshop.id())) return List.of();
         synchronized (accessOverrides) {
             List<String> override = accessOverrides.get(normalizeKey(workshop.id()));
-            if (override != null) return override;
+            return override == null ? List.of() : override;
         }
-        return accessMessagesByLocation.getOrDefault(normalizeLocation(workshop.location()), List.of());
+    }
+
+    private @Nullable Workshop nextInstructionWorkshop() {
+        return upcoming().stream()
+                .filter(Workshop::announcementEligible)
+                .findFirst()
+                .orElse(null);
     }
 
     private boolean saveAccessInstructions(@NotNull Workshop workshop, @NotNull List<String> lines) {
@@ -331,20 +358,21 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
             statement.setLong(3, System.currentTimeMillis());
         });
         if (changed != 1) return false;
+        api.database().update(
+                "DELETE FROM workshop_access_instructions WHERE workshop_id <> ?",
+                statement -> statement.setString(1, workshop.id())
+        );
         synchronized (accessOverrides) {
+            accessOverrides.clear();
             accessOverrides.put(normalizeKey(workshop.id()), bounded);
         }
         return true;
     }
 
-    private boolean clearAccessInstructions(@NotNull Workshop workshop) {
-        int changed = api.database().update(
-                "DELETE FROM workshop_access_instructions WHERE workshop_id = ?",
-                statement -> statement.setString(1, workshop.id())
-        );
-        if (changed > 1) return false;
+    private boolean clearAccessInstructions() {
+        api.database().update("DELETE FROM workshop_access_instructions", null);
         synchronized (accessOverrides) {
-            accessOverrides.remove(normalizeKey(workshop.id()));
+            accessOverrides.clear();
         }
         return true;
     }
@@ -389,7 +417,14 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
         displayEntry = configuredLines(section, "display.entry", DEFAULT_DISPLAY_ENTRY);
         displayNoBooking = configuredLines(section, "display.no-booking", DEFAULT_DISPLAY_NO_BOOKING);
         displayFooter = configuredLines(section, "display.footer", DEFAULT_DISPLAY_FOOTER);
-        accessMessagesByLocation = configuredAccessMessages(section.getSection("access-messages", false));
+        instructionsPromptEnabled = section.getBoolean("instructions.prompt-enabled", true);
+        instructionsPromptWindowSeconds = parseDuration(
+                section.getString("instructions.prompt-window", "1h"), 3600L, 60L, 604800L);
+        instructionsPromptDelaySeconds = parseDuration(
+                section.getString("instructions.prompt-delay", "5s"), 5L, 0L, 3600L);
+        instructionsPermission = section.getString("instructions.permission", DEFAULT_INSTRUCTIONS_PERMISSION).trim();
+        if (instructionsPermission.isBlank()) instructionsPermission = DEFAULT_INSTRUCTIONS_PERMISSION;
+        instructionsPromptMessage = configuredLines(section, "instructions.prompt", DEFAULT_INSTRUCTIONS_PROMPT);
         syncStatus = new WorkshopSyncStatus(enabled && websiteEnabled && syncEnabled, false,
                 syncStatus.lastAttemptAt(), syncStatus.lastSuccessAt(), syncStatus.lastError(), countWebsiteWorkshops());
     }
@@ -421,16 +456,6 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
         return List.copyOf(lines);
     }
 
-    private static @NotNull Map<String, List<String>> configuredAccessMessages(@Nullable ConfigSection section) {
-        if (section == null) return Map.of();
-        Map<String, List<String>> messages = new LinkedHashMap<>();
-        for (String location : section.getKeys(false)) {
-            List<String> lines = boundedAccessInstructions(readLines(section.get(location)));
-            if (!lines.isEmpty()) messages.put(normalizeLocation(location), lines);
-        }
-        return Map.copyOf(messages);
-    }
-
     private static @NotNull List<String> boundedAccessInstructions(@Nullable List<String> lines) {
         if (lines == null || lines.isEmpty()) return List.of();
         List<String> bounded = new ArrayList<>();
@@ -440,10 +465,6 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
             if (bounded.size() >= MAX_ACCESS_INSTRUCTION_LINES) break;
         }
         return List.copyOf(bounded);
-    }
-
-    private static @NotNull String normalizeLocation(@Nullable String location) {
-        return location == null ? "" : location.trim().toLowerCase(Locale.ROOT);
     }
 
     private static @NotNull String normalizeKey(@Nullable String value) {
@@ -522,18 +543,27 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
     }
 
     private void loadStoredAccessOverrides() {
+        Workshop target = nextInstructionWorkshop();
         Map<String, List<String>> loaded = new LinkedHashMap<>();
-        api.database().queryEach(
-                "SELECT workshop_id, message FROM workshop_access_instructions",
-                null,
-                result -> {
-                    String id = result.getString("workshop_id");
-                    List<String> lines = boundedAccessInstructions(splitLines(result.getString("message")));
-                    if (!normalizeKey(id).isBlank() && !lines.isEmpty()) {
-                        loaded.put(normalizeKey(id), lines);
+        if (target == null) {
+            api.database().update("DELETE FROM workshop_access_instructions", null);
+        } else {
+            api.database().update(
+                    "DELETE FROM workshop_access_instructions WHERE workshop_id <> ?",
+                    statement -> statement.setString(1, target.id())
+            );
+            api.database().queryEach(
+                    "SELECT workshop_id, message FROM workshop_access_instructions WHERE workshop_id = ?",
+                    statement -> statement.setString(1, target.id()),
+                    result -> {
+                        String id = result.getString("workshop_id");
+                        List<String> lines = boundedAccessInstructions(splitLines(result.getString("message")));
+                        if (!normalizeKey(id).isBlank() && !lines.isEmpty()) {
+                            loaded.put(normalizeKey(id), lines);
+                        }
                     }
-                }
-        );
+            );
+        }
         synchronized (accessOverrides) {
             accessOverrides.clear();
             accessOverrides.putAll(loaded);
@@ -864,6 +894,73 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
                 .orElse(id);
     }
 
+    private void registerEvents() {
+        if (eventsRegistered) return;
+        eventsRegistered = true;
+        api.events().register(PlayerJoinEvent.class, event -> scheduleAccessPrompt(event.getPlayer()));
+        api.events().register(PlayerQuitEvent.class, event -> cancelAccessPrompt(event.getPlayer().getUniqueId()));
+    }
+
+    private void scheduleAccessPrompt(@NotNull Player player) {
+        if (!enabled || !instructionsPromptEnabled || !canManageInstructions(player)) return;
+        String taskId = ACCESS_PROMPT_TASK_PREFIX + player.getUniqueId();
+        String previous = accessPromptTasks.put(player.getUniqueId(), taskId);
+        if (previous != null) api.tasks().cancel(previous);
+        api.tasks().runOnceDelay(taskId, instructionsPromptDelaySeconds * 20L, () -> {
+            accessPromptTasks.remove(player.getUniqueId(), taskId);
+            if (!enabled || !player.isOnline()) return;
+            promptForAccessInstructions(player);
+        });
+    }
+
+    private void cancelAccessPrompt(@NotNull UUID playerId) {
+        String taskId = accessPromptTasks.remove(playerId);
+        if (taskId != null) api.tasks().cancel(taskId);
+    }
+
+    private void cancelAccessPromptTasks() {
+        for (String taskId : accessPromptTasks.values()) api.tasks().cancel(taskId);
+        accessPromptTasks.clear();
+    }
+
+    private void promptForAccessInstructions(@NotNull Player player) {
+        if (!instructionsPromptEnabled || !canManageInstructions(player)) return;
+        Instant now = Instant.now();
+        Workshop workshop = nextInstructionWorkshop();
+        if (workshop == null || !withinPromptWindow(workshop, now) || !accessInstructions(workshop).isEmpty()) return;
+
+        for (String template : instructionsPromptMessage) {
+            String rendered = renderInstructionsPrompt(template, workshop, player, now);
+            if (!rendered.isBlank()) player.sendMessage(MINI_MESSAGE.deserialize(rendered));
+        }
+    }
+
+    static boolean withinPromptWindow(@NotNull Workshop workshop, @NotNull Instant now, long windowSeconds) {
+        Instant start = workshop.startAt().toInstant();
+        return !now.isBefore(start.minusSeconds(Math.max(0L, windowSeconds))) && now.isBefore(start);
+    }
+
+    private boolean withinPromptWindow(@NotNull Workshop workshop, @NotNull Instant now) {
+        return withinPromptWindow(workshop, now, instructionsPromptWindowSeconds);
+    }
+
+    private @NotNull String renderInstructionsPrompt(@NotNull String template, @NotNull Workshop workshop,
+                                                     @NotNull Player player, @NotNull Instant now) {
+        Map<String, String> values = new LinkedHashMap<>(displayPlaceholders(workshop, 1, 1, 1, defaultTimezone));
+        values.put("workshop_id", values.get("id"));
+        values.put("workshop_title", values.get("title"));
+        values.put("workshop_date", values.get("date"));
+        values.put("workshop_time", values.get("time"));
+        values.put("workshop_url", values.get("booking_url"));
+        values.put("workshop_location", values.get("location"));
+        long countdown = Math.max(0L, workshop.startAt().toEpochSecond() - now.getEpochSecond());
+        values.put("workshop_countdown", AnnouncementsFeature.escapeLiteral(
+                countdown == 0L ? "now" : TimeUtil.formatLongDuration(countdown)));
+        String rendered = PlaceholderUtil.apply(template, values);
+        String expanded = api.placeholders().apply(player, rendered);
+        return expanded == null ? "" : expanded;
+    }
+
     static @NotNull Map<String, ParsedFeedWorkshop> deduplicateRecords(@NotNull List<ParsedFeedWorkshop> records) {
         Map<String, ParsedFeedWorkshop> unique = new LinkedHashMap<>();
         for (ParsedFeedWorkshop record : records) {
@@ -892,8 +989,10 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
                     String subcommand = args.isEmpty() ? "" : args.getFirst().toLowerCase(Locale.ROOT);
                     boolean publicAction = subcommand.isBlank() || subcommand.equals("help") ||
                             subcommand.equals("list") || subcommand.equals("info");
+                    boolean instructionsAction = subcommand.equals("instructions") &&
+                            (sender.hasPermission(instructionsPermission) || sender.hasPermission("stemcraft.workshops.admin"));
                     return publicAction || sender.hasPermission("stemcraft.workshops.admin") ||
-                            sender.hasPermission("stemcraft.workshops.refresh");
+                            sender.hasPermission("stemcraft.workshops.refresh") || instructionsAction;
                 })
                 .tabCompletion("help")
                 .tabCompletion("list")
@@ -928,12 +1027,16 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
     private void showHelp(CommandContext ctx) {
         ctx.info("/workshops [list] - show upcoming workshops");
         ctx.info("/workshops info <id> - show workshop details");
-        if (isAdmin(ctx)) {
-            ctx.info("/workshops add <title> | <start> | <end|-> | <location> | <url|-> | <description>");
-            ctx.info("/workshops edit <id> <title> | <start> | <end|-> | <location> | <url|-> | <description>");
-            ctx.info("/workshops remove <id>");
+        if (isAdmin(ctx) || canManageInstructions(ctx)) {
+            if (isAdmin(ctx)) {
+                ctx.info("/workshops add <title> | <start> | <end|-> | <location> | <url|-> | <description>");
+                ctx.info("/workshops edit <id> <title> | <start> | <end|-> | <location> | <url|-> | <description>");
+                ctx.info("/workshops remove <id>");
+            }
             ctx.info("/workshops instructions <id> <message> | <message> ...");
             ctx.info("/workshops instructions <id> clear");
+        }
+        if (isAdmin(ctx)) {
             ctx.info("/workshops refresh");
         }
     }
@@ -1105,16 +1208,17 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
     }
 
     private void setWorkshopInstructions(CommandContext ctx) {
-        requireAdmin(ctx);
+        requireInstructionsAccess(ctx);
         if (ctx.numArgs() < 3) ctx.returnUsage();
+        Workshop target = nextInstructionWorkshop();
         Workshop workshop = find(ctx.getArg(1));
-        if (workshop == null) {
-            ctx.returnError("Workshop not found.");
+        if (workshop == null || target == null || !target.id().equalsIgnoreCase(workshop.id())) {
+            ctx.returnError("Only the next eligible workshop can have access instructions.");
             return;
         }
         String raw = String.join(" ", ctx.rawArgs().subList(2, ctx.rawArgs().size())).trim();
         if (raw.equalsIgnoreCase("clear")) {
-            if (!clearAccessInstructions(workshop)) ctx.returnError("Could not clear the workshop access instructions.");
+            if (!clearAccessInstructions()) ctx.returnError("Could not clear the workshop access instructions.");
             ctx.returnSuccess("Cleared local access instructions for workshop {id}.", "id", workshop.id());
             return;
         }
@@ -1212,6 +1316,19 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
     private boolean requireAdmin(CommandContext ctx) {
         if (!isAdmin(ctx)) ctx.returnError("COMMAND_NO_PERMISSION");
         return true;
+    }
+
+    private boolean requireInstructionsAccess(CommandContext ctx) {
+        if (!canManageInstructions(ctx)) ctx.returnError("COMMAND_NO_PERMISSION");
+        return true;
+    }
+
+    private boolean canManageInstructions(CommandContext ctx) {
+        return ctx.hasPermission(instructionsPermission) || isAdmin(ctx);
+    }
+
+    private boolean canManageInstructions(@NotNull CommandSender sender) {
+        return sender.hasPermission(instructionsPermission) || sender.hasPermission("stemcraft.workshops.admin");
     }
 
     private boolean isAdmin(CommandContext ctx) {

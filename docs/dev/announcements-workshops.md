@@ -69,10 +69,15 @@ workshops:
   timezone: Australia/Brisbane
   maximum-displayed: 3
   display-filter:
-    locations: ["STEMCraft"]
-  access-messages:
-    server:
-      - "<gray>Go to the <yellow>STEMCraft</yellow> world and run <yellow>/server stemcraft</yellow>.</gray>"
+    locations: ["server"]
+  instructions:
+    prompt-enabled: true
+    prompt-window: 1h
+    prompt-delay: 5s
+    permission: stemcraft.workshops.instructions
+    prompt:
+      - "<yellow>Access instructions are needed for <white>{workshop_title}</white>.</yellow>"
+      - "<click:suggest_command:'/workshops instructions {workshop_id} '><aqua>Set instructions</aqua></click>"
   display:
     header:
       - "<aqua><bold>STEMMechanics Upcoming Workshops</bold></aqua>"
@@ -147,10 +152,8 @@ join message also checks the Workshops API for the first eligible workshop that
 has started and has not reached its end time. It sends the configured
 `active-workshop.message` to that joining player only. Workshops without an end
 time are not treated as active because their running window cannot be known. The
-matching workshop's access instructions are sent after that message, so the
-generic website location (often `server`) does not need to contain the Minecraft
-world or command players must use. Scheduled workshop promotions also append the
-same access instructions when they exist.
+matching workshop's access instructions are sent after that message. Scheduled
+workshop promotions also append them when they exist.
 
 ## Workshop commands
 
@@ -159,7 +162,9 @@ entries by default. Entries are sorted by start time, displayed in the configure
 timezone, and remain current until their end time when an end time exists. An
 entry without an end time expires at its start time.
 
-Administrators with `stemcraft.workshops.admin` can use:
+Administrators with `stemcraft.workshops.admin` can use all commands below.
+Players with `stemcraft.workshops.instructions` can use the `instructions`
+commands only:
 
 ```text
 /workshops list
@@ -178,21 +183,19 @@ For example:
 ```
 
 Manual workshops are persisted and editable. Website records are read-only in
-Minecraft. Access instructions are a separate local override, so the
-`instructions` command can be used for website records without editing the feed
-record. Use `clear` to return to the location-based configuration. The command
-uses `|` to separate multiple MiniMessage lines. `/workshops refresh` starts an
-asynchronous synchronisation and requires `stemcraft.workshops.refresh` or the
-administrator permission.
+Minecraft. Access instructions are separate local metadata, so the
+`instructions` command can be used for the current website record without
+editing the feed. Only the next eligible workshop can have instructions, and
+setting a new value replaces the previous value. The value is retained while
+that workshop is current and is cleared when it is no longer the next eligible
+workshop. The command uses `|` to separate multiple MiniMessage lines.
 
-`workshops.access-messages` is a case-insensitive location fallback. For
-example, a website record whose feed location is `server` uses the `server`
-entry above. A saved `/workshops instructions <id> ...` override takes
-precedence for that one workshop and is persisted separately in SQLite. Admins
-see the workshop ID and source in the `/workshops` list so website entries can
-be targeted. Access instruction lines use the normal workshop placeholders,
-including `{title}`, `{date}`, `{time}`, `{location}`, `{id}`, and the active or
-next workshop placeholders.
+When `instructions.prompt-enabled` is true, an administrator or a player with
+`instructions.permission` who joins during `instructions.prompt-window` before
+the next workshop starts receives the configured prompt. The prompt suggests
+the command and does not assume a world name or server command. `/workshops
+refresh` starts an asynchronous synchronisation and requires
+`stemcraft.workshops.refresh` or the administrator permission.
 
 ## RSS synchronisation
 
@@ -235,6 +238,9 @@ catalogue as normal states. A workshop identifies its source with
 `WorkshopSource.WEBSITE` or `WorkshopSource.MANUAL` and stores start/end values
 as timezone-aware `ZonedDateTime` values.
 
+`accessInstructions` returns lines only for the current next eligible workshop;
+it returns an empty list for older or later entries.
+
 ## Placeholders and safety
 
 Announcements support MiniMessage and the existing STEMCraft message/placeholder
@@ -261,6 +267,11 @@ processing. Available announcement placeholders are:
 | `{active_workshop_end_date}` | Active workshop end date |
 | `{active_workshop_end_time}` | Active workshop end time |
 | `{active_workshop_remaining}` | Human-readable time remaining in the active workshop |
+
+Workshop instruction prompts also support `{workshop_id}`, `{workshop_title}`,
+`{workshop_date}`, `{workshop_time}`, `{workshop_url}`, `{workshop_location}`,
+and `{workshop_countdown}`. Feed-controlled values are escaped before they are
+inserted into MiniMessage templates.
 
 Workshop promotions are skipped when no eligible workshop exists, so their
 placeholders are never shown unresolved. Feed titles and other feed-controlled
