@@ -124,6 +124,82 @@ class CustomCommandsTest {
     }
 
     @Test
+    void readEntryAcceptsOrderedMessageActions() {
+        ConfigFileImpl config = new ConfigFileImpl();
+        assertTrue(config.load(tempDir.toFile(), "custom-commands-message.yml", true));
+
+        config.set("discord.run", List.of(
+                "message:<aqua>Join us</aqua>",
+                "server:announce {player}",
+                "message:<gray>discord.example</gray>"
+        ));
+
+        CustomCommands.CustomCommandEntry entry = CustomCommands.readEntry(
+                "discord", config.getSection("discord", false));
+        assertEquals("discord", entry.label());
+        assertEquals(List.of(
+                "message:<aqua>Join us</aqua>",
+                "server:announce {player}",
+                "message:<gray>discord.example</gray>"
+        ), entry.runCommands());
+    }
+
+    @Test
+    void writeEntryPersistsOrderedActions() {
+        ConfigFileImpl config = new ConfigFileImpl();
+        assertTrue(config.load(tempDir.toFile(), "custom-commands-write-message.yml", true));
+
+        CustomCommands.writeEntry(config, new CustomCommands.CustomCommandEntry(
+                "discord",
+                "discord",
+                "",
+                true,
+                List.of(
+                        "message:<aqua>Join us</aqua>",
+                        "message:",
+                        "message:<gray>discord.example</gray>"
+                )
+        ));
+
+        assertEquals(List.of(
+                "message:<aqua>Join us</aqua>",
+                "message:",
+                "message:<gray>discord.example</gray>"
+        ), config.getStringList("discord.run"));
+        assertFalse(config.contains("discord.message"));
+
+        CustomCommands.CustomCommandEntry entry = CustomCommands.readEntry(
+                "discord", config.getSection("discord", false));
+        assertEquals(List.of(
+                "message:<aqua>Join us</aqua>",
+                "message:",
+                "message:<gray>discord.example</gray>"
+        ), entry.runCommands());
+    }
+
+    @Test
+    void messageActionsCanBeIdentifiedAndExtractedFromOrderedActions() {
+        List<String> actions = List.of(
+                "server:announce one",
+                "message:<gold>First</gold>",
+                "player:warp spawn",
+                "MESSAGE: <gray>Second</gray>"
+        );
+
+        assertTrue(CustomCommands.isMessageAction(actions.get(1)));
+        assertTrue(CustomCommands.isMessageAction(actions.get(3)));
+        assertEquals("<gold>First</gold>", CustomCommands.messageActionText(actions.get(1)));
+        assertEquals("<gray>Second</gray>", CustomCommands.messageActionText(actions.get(3)));
+        assertEquals(List.of(1, 3), CustomCommands.messageActionPositions(actions));
+    }
+
+    @Test
+    void splitMessageLinesNormalizesLineEndingsAndPreservesBlankLines() {
+        assertEquals(List.of("one", "", "three", ""),
+                CustomCommands.splitMessageLines("one\r\n\r\nthree\r"));
+    }
+
+    @Test
     void normalizeHelpersStripLeadingSlashes() {
         assertEquals("survival", CustomCommands.normalizeConfigId(" /Survival "));
         assertEquals("survival", CustomCommands.normalizeLabel("//Survival"));
