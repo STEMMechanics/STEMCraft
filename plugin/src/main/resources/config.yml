@@ -407,14 +407,18 @@ notice-boards:
 interactive-menus:
   enabled: true
 
-web_server:
-    enabled: true
-    # Loopback serves a local reverse proxy. Use 0.0.0.0 for direct remote access.
-    ip: "127.0.0.1"
-    port: 8950
-    path: www
-    # Direct connections use HTTP. HTTPS requires an external TLS reverse proxy.
-    public-url: ""
+web-server:
+  enabled: true
+  # Loopback serves a local reverse proxy. Use 0.0.0.0 for direct remote access.
+  ip: "127.0.0.1"
+  port: 8950
+  path: www
+  # Direct connections use HTTP. HTTPS requires an external TLS reverse proxy.
+  public-url: ""
+  status:
+    players:
+      # When enabled, /status includes current usernames in the players array.
+      enabled: false
 
 first-join:
   enabled: true

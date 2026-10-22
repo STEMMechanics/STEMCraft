@@ -103,6 +103,27 @@ This is the preferred way to register new command surfaces inside STEMCraft and 
 All `CommandContext` positional argument accessors use zero-based indexes. `getArgsAsString(index)` joins arguments
 starting at that same zero-based index, while `getArgsAsString()` joins the complete positional argument list.
 
+### Public web status
+
+`GET /status` is the public, read-only status endpoint served by the embedded
+web service. Its existing response fields are backward compatible. The
+optional `players` field is omitted by default and is enabled with:
+
+```yaml
+web-server:
+  status:
+    players:
+      enabled: true
+```
+
+When enabled, `players` contains only the current online Minecraft usernames,
+sorted case-insensitively. The endpoint does not expose IP addresses, UUIDs,
+emails or other personal data, and does not use Discord role authorisation.
+Keep the web service bound to loopback and put an HTTPS reverse proxy in front
+of it when another service such as STEMBot connects over a network. Existing
+administrative and write endpoints continue to enforce their endpoint-specific
+authentication.
+
 ### Workshops
 
 `WorkshopService` is the internal catalogue boundary for website and manual

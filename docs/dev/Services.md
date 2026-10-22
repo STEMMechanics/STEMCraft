@@ -38,7 +38,7 @@ These are the runtime services instantiated in `STEMCraft.java` and exposed thro
 | Resource Pack | `ResourcePackServiceImpl` | Pack generation, hosting, and distribution |
 | Selection | `SelectionServiceImpl` | Selection/session helpers used by editing workflows |
 | Tab Complete | `TabCompleteServiceImpl` | Named tab-completion providers and placeholder expansion |
-| Web | `WebServiceImpl` | Embedded HTTP endpoint registration and status endpoint |
+| Web | `WebServiceImpl` | Embedded HTTP endpoint registration, status endpoint, and optional public player list |
 | Worlds | `WorldServiceImpl` | World lifecycle, generators, settings, links, and world command tooling |
 
 ## Service Notes

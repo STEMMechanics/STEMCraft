@@ -51,10 +51,20 @@ player. A failed start reports failure to the player and logs the cause.
 
 Direct connections to the embedded server use **HTTP**. An HTTPS public URL
 requires a reverse proxy that terminates TLS and forwards HTTP to this server.
-`web_server.ip: "127.0.0.1"` accepts local connections, such as a local reverse
+`web-server.ip: "127.0.0.1"` accepts local connections, such as a local reverse
 proxy. For direct connections from other computers, bind to `"0.0.0.0"` and
-forward/allow the configured port, then set `web_server.public-url` to the
+forward/allow the configured port, then set `web-server.public-url` to the
 address clients can reach.
+
+The read-only `GET /status` endpoint does not require Discord role
+authorisation. Existing status fields remain available to callers. To include
+current online Minecraft usernames, set
+`web-server.status.players.enabled: true`; the response then adds a sorted
+`players` array containing usernames only. IP addresses, UUIDs, emails and
+other personal data are not included. Keep the embedded server on loopback
+when the endpoint is consumed through a local HTTPS reverse proxy, and use
+the HTTPS `public-url` between STEMBot and the proxy. Administrative or write
+endpoints keep their own authentication requirements.
 
 Open the `/status` link from the affected computer first, then use
 `/resourcepack url` to test the pack download. If no request appears in the log,

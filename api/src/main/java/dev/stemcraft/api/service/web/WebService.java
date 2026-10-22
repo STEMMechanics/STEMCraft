@@ -26,6 +26,11 @@ import javax.annotation.Nullable;
 
 /**
  * Service for managing a webserver within the STEMCraft plugin.
+ *
+ * <p>The implementation also provides a public, read-only {@code GET /status}
+ * endpoint. Its existing response fields are always preserved. When
+ * {@code web-server.status.players.enabled} is enabled, the response adds a
+ * {@code players} array containing current online Minecraft usernames only.</p>
  */
 public interface WebService {
 
