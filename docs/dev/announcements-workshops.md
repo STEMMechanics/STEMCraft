@@ -34,7 +34,7 @@ announcements:
       enabled: true
       message:
         - "<aqua>Workshop currently in progress:</aqua> <white>{active_workshop_title}</white>"
-        - "<gray>Where: {active_workshop_location}</gray>"
+        - "<gray>Use <yellow>/workshops</yellow> for the access details.</gray>"
         - "<gray>Finishes {active_workshop_end_date} at {active_workshop_end_time}.</gray>"
   scheduled:
     server-information:
@@ -70,6 +70,9 @@ workshops:
   maximum-displayed: 3
   display-filter:
     locations: ["STEMCraft"]
+  access-messages:
+    server:
+      - "<gray>Go to the <yellow>STEMCraft</yellow> world and run <yellow>/server stemcraft</yellow>.</gray>"
   display:
     header:
       - "<aqua><bold>STEMMechanics Upcoming Workshops</bold></aqua>"
@@ -143,7 +146,11 @@ When `announcements.join.active-workshop.enabled` is true, the delayed private
 join message also checks the Workshops API for the first eligible workshop that
 has started and has not reached its end time. It sends the configured
 `active-workshop.message` to that joining player only. Workshops without an end
-time are not treated as active because their running window cannot be known.
+time are not treated as active because their running window cannot be known. The
+matching workshop's access instructions are sent after that message, so the
+generic website location (often `server`) does not need to contain the Minecraft
+world or command players must use. Scheduled workshop promotions also append the
+same access instructions when they exist.
 
 ## Workshop commands
 
@@ -160,6 +167,8 @@ Administrators with `stemcraft.workshops.admin` can use:
 /workshops add <title> | <start> | <end|-> | <location> | <url|-> | <description>
 /workshops edit <id> <title> | <start> | <end|-> | <location> | <url|-> | <description>
 /workshops remove <id>
+/workshops instructions <id> <message> | <message> ...
+/workshops instructions <id> clear
 ```
 
 For example:
@@ -169,8 +178,21 @@ For example:
 ```
 
 Manual workshops are persisted and editable. Website records are read-only in
-Minecraft. `/workshops refresh` starts an asynchronous synchronisation and
-requires `stemcraft.workshops.refresh` or the administrator permission.
+Minecraft. Access instructions are a separate local override, so the
+`instructions` command can be used for website records without editing the feed
+record. Use `clear` to return to the location-based configuration. The command
+uses `|` to separate multiple MiniMessage lines. `/workshops refresh` starts an
+asynchronous synchronisation and requires `stemcraft.workshops.refresh` or the
+administrator permission.
+
+`workshops.access-messages` is a case-insensitive location fallback. For
+example, a website record whose feed location is `server` uses the `server`
+entry above. A saved `/workshops instructions <id> ...` override takes
+precedence for that one workshop and is persisted separately in SQLite. Admins
+see the workshop ID and source in the `/workshops` list so website entries can
+be targeted. Access instruction lines use the normal workshop placeholders,
+including `{title}`, `{date}`, `{time}`, `{location}`, `{id}`, and the active or
+next workshop placeholders.
 
 ## RSS synchronisation
 
@@ -204,6 +226,7 @@ Workshop next = workshops.nextUpcoming();
 List<Workshop> range = workshops.within(from, to);
 Workshop byId = workshops.find(id);
 WorkshopSyncStatus status = workshops.syncStatus();
+List<String> access = workshops.accessInstructions(byId);
 ```
 
 The API returns `WorkshopService.UNAVAILABLE` when the feature is disabled or

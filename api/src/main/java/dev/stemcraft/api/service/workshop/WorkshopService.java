@@ -71,6 +71,17 @@ public interface WorkshopService {
     /** Return the latest synchronisation state. */
     @NotNull WorkshopSyncStatus syncStatus();
 
+    /**
+     * Return locally configured access instructions for a workshop.
+     *
+     * <p>These instructions are presentation metadata owned by STEMCraft. They
+     * may describe the Minecraft world or command players should use and are
+     * intentionally separate from the read-only website workshop record.</p>
+     */
+    default @NotNull List<String> accessInstructions(@NotNull Workshop workshop) {
+        return List.of();
+    }
+
     /** Convenience factory for manual records. */
     static Workshop manual(
             @NotNull String id,

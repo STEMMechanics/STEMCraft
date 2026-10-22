@@ -75,6 +75,16 @@ class WorkshopsFeatureTest {
     }
 
     @Test
+    void accessInstructionsSupportFormattedMultipleLines() {
+        assertEquals(List.of(
+                "<gray>Go to <yellow>workshop-world</yellow>.</gray>",
+                "<gray>Run <yellow>/server workshop</yellow>.</gray>"),
+                WorkshopsFeature.parseAccessInstructions(
+                        "<gray>Go to <yellow>workshop-world</yellow>.</gray> | " +
+                                "<gray>Run <yellow>/server workshop</yellow>.</gray>"));
+    }
+
+    @Test
     void displayPlaceholdersUseConfiguredTimezoneAndSafeWorkshopValues() {
         Workshop workshop = new Workshop(
                 "manual-1", "Robotics <Challenge>", "Build <robots>",

@@ -369,7 +369,21 @@ public class AnnouncementsFeature extends BaseFeature {
             if (recipient == null) api.messages().broadcast(rendered);
             else api.messages().send(recipient, rendered);
         }
+        if (definition.workshopPromotion() && workshop != null) {
+            sendWorkshopAccessInstructions(api.workshops(), workshop, recipient, online);
+        }
         return true;
+    }
+
+    private void sendWorkshopAccessInstructions(@Nullable WorkshopService service, @NotNull Workshop workshop,
+                                                @Nullable Player recipient, int online) {
+        if (service == null || !service.isAvailable() || !service.isEnabled()) return;
+        for (String line : service.accessInstructions(workshop)) {
+            String rendered = render(prefix + line, recipient, workshop, online);
+            if (rendered.isBlank()) continue;
+            if (recipient == null) api.messages().broadcast(rendered);
+            else api.messages().send(recipient, rendered);
+        }
     }
 
     private @Nullable Workshop findAnnouncementWorkshop(@NotNull WorkshopFilter filter, @NotNull Instant now) {
@@ -469,17 +483,21 @@ public class AnnouncementsFeature extends BaseFeature {
     }
 
     private void broadcastActiveWorkshop(@NotNull Player player) {
-        if (!activeWorkshopJoinEnabled || activeWorkshopJoinMessage.isEmpty()) return;
+        if (!activeWorkshopJoinEnabled) return;
         Workshop workshop = findActiveWorkshop(Instant.now());
         if (workshop == null) return;
 
+        WorkshopService service = api.workshops();
+        List<String> accessInstructions = service == null ? List.of() : service.accessInstructions(workshop);
         int online = Bukkit.getOnlinePlayers().size();
         for (String line : activeWorkshopJoinMessage) {
             String normalized = line.toLowerCase(Locale.ROOT);
+            if (!accessInstructions.isEmpty() && normalized.contains("{active_workshop_location}")) continue;
             if (workshop.location().isBlank() && normalized.contains("{active_workshop_location}")) continue;
             String rendered = render(prefix + line, player, workshop, online);
             if (!rendered.isBlank()) api.messages().send(player, rendered);
         }
+        sendWorkshopAccessInstructions(service, workshop, player, online);
     }
 
     private @Nullable Workshop findActiveWorkshop(@NotNull Instant now) {

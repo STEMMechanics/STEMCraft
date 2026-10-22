@@ -67,8 +67,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class WorkshopsFeature extends BaseFeature implements WorkshopService {
     static final String REFRESH_TASK = "feature:workshops-refresh";
     static final String MIGRATION_NAME = "workshops";
-    static final int MIGRATION_VERSION = 1;
+    static final int MIGRATION_VERSION = 2;
     static final long MAX_FEED_BYTES = 1_048_576L;
+    static final int MAX_ACCESS_INSTRUCTION_LINES = 20;
+    static final int MAX_ACCESS_INSTRUCTION_LENGTH = 1024;
     static final String DEFAULT_FEED_URL = "https://www.stemmechanics.com.au/workshops/feed";
     static final ZoneId DEFAULT_ZONE = ZoneId.of("Australia/Brisbane");
     static final DateTimeFormatter DISPLAY_DATE_FORMAT = DateTimeFormatter.ofPattern("EEEE d MMMM yyyy", Locale.ENGLISH);
@@ -89,6 +91,7 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
     private final Object storageLock = new Object();
     private final AtomicBoolean refreshInProgress = new AtomicBoolean();
     private final Map<String, Workshop> cache = new LinkedHashMap<>();
+    private final Map<String, List<String>> accessOverrides = new LinkedHashMap<>();
 
     private volatile boolean enabled;
     private boolean websiteEnabled;
@@ -102,6 +105,7 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
     private int maximumDisplayed;
     private ZoneId defaultTimezone;
     private List<String> displayLocations = List.of();
+    private Map<String, List<String>> accessMessagesByLocation = Map.of();
     private List<String> displayHeader = DEFAULT_DISPLAY_HEADER;
     private List<String> displayEntry = DEFAULT_DISPLAY_ENTRY;
     private List<String> displayNoBooking = DEFAULT_DISPLAY_NO_BOOKING;
@@ -118,6 +122,7 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
         loadSettings();
         ensureStorage();
         loadStoredWorkshops();
+        loadStoredAccessOverrides();
         registerTabCompletion();
         registerCommand();
         restartRefreshTask();
@@ -141,6 +146,7 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
             registerCommand();
         }
         loadStoredWorkshops();
+        loadStoredAccessOverrides();
         restartRefreshTask();
     }
 
@@ -283,6 +289,13 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
                     statement -> statement.setString(1, existing.id())
             );
             if (changed != 1) return false;
+            api.database().update(
+                    "DELETE FROM workshop_access_instructions WHERE workshop_id = ?",
+                    statement -> statement.setString(1, existing.id())
+            );
+            synchronized (accessOverrides) {
+                accessOverrides.remove(normalizeKey(existing.id()));
+            }
             synchronized (cache) {
                 cache.remove(existing.id());
             }
@@ -293,6 +306,47 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
     @Override
     public @NotNull WorkshopSyncStatus syncStatus() {
         return syncStatus;
+    }
+
+    @Override
+    public @NotNull List<String> accessInstructions(@NotNull Workshop workshop) {
+        if (workshop == null) return List.of();
+        synchronized (accessOverrides) {
+            List<String> override = accessOverrides.get(normalizeKey(workshop.id()));
+            if (override != null) return override;
+        }
+        return accessMessagesByLocation.getOrDefault(normalizeLocation(workshop.location()), List.of());
+    }
+
+    private boolean saveAccessInstructions(@NotNull Workshop workshop, @NotNull List<String> lines) {
+        List<String> bounded = boundedAccessInstructions(lines);
+        if (bounded.isEmpty()) return false;
+        int changed = api.database().update("""
+                INSERT INTO workshop_access_instructions (workshop_id, message, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(workshop_id) DO UPDATE SET message = excluded.message, updated_at = excluded.updated_at
+                """, statement -> {
+            statement.setString(1, workshop.id());
+            statement.setString(2, String.join("\n", bounded));
+            statement.setLong(3, System.currentTimeMillis());
+        });
+        if (changed != 1) return false;
+        synchronized (accessOverrides) {
+            accessOverrides.put(normalizeKey(workshop.id()), bounded);
+        }
+        return true;
+    }
+
+    private boolean clearAccessInstructions(@NotNull Workshop workshop) {
+        int changed = api.database().update(
+                "DELETE FROM workshop_access_instructions WHERE workshop_id = ?",
+                statement -> statement.setString(1, workshop.id())
+        );
+        if (changed > 1) return false;
+        synchronized (accessOverrides) {
+            accessOverrides.remove(normalizeKey(workshop.id()));
+        }
+        return true;
     }
 
     ZoneId defaultTimezone() {
@@ -335,6 +389,7 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
         displayEntry = configuredLines(section, "display.entry", DEFAULT_DISPLAY_ENTRY);
         displayNoBooking = configuredLines(section, "display.no-booking", DEFAULT_DISPLAY_NO_BOOKING);
         displayFooter = configuredLines(section, "display.footer", DEFAULT_DISPLAY_FOOTER);
+        accessMessagesByLocation = configuredAccessMessages(section.getSection("access-messages", false));
         syncStatus = new WorkshopSyncStatus(enabled && websiteEnabled && syncEnabled, false,
                 syncStatus.lastAttemptAt(), syncStatus.lastSuccessAt(), syncStatus.lastError(), countWebsiteWorkshops());
     }
@@ -366,6 +421,35 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
         return List.copyOf(lines);
     }
 
+    private static @NotNull Map<String, List<String>> configuredAccessMessages(@Nullable ConfigSection section) {
+        if (section == null) return Map.of();
+        Map<String, List<String>> messages = new LinkedHashMap<>();
+        for (String location : section.getKeys(false)) {
+            List<String> lines = boundedAccessInstructions(readLines(section.get(location)));
+            if (!lines.isEmpty()) messages.put(normalizeLocation(location), lines);
+        }
+        return Map.copyOf(messages);
+    }
+
+    private static @NotNull List<String> boundedAccessInstructions(@Nullable List<String> lines) {
+        if (lines == null || lines.isEmpty()) return List.of();
+        List<String> bounded = new ArrayList<>();
+        for (String line : lines) {
+            if (line == null || line.isBlank()) continue;
+            bounded.add(boundedText(line, MAX_ACCESS_INSTRUCTION_LENGTH));
+            if (bounded.size() >= MAX_ACCESS_INSTRUCTION_LINES) break;
+        }
+        return List.copyOf(bounded);
+    }
+
+    private static @NotNull String normalizeLocation(@Nullable String location) {
+        return location == null ? "" : location.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private static @NotNull String normalizeKey(@Nullable String value) {
+        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+    }
+
     private void restartRefreshTask() {
         api.tasks().cancel(REFRESH_TASK);
         if (!enabled || !websiteEnabled || !syncEnabled) {
@@ -377,33 +461,47 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
     }
 
     private void ensureStorage() {
-        if (api.database().migrationVersion(MIGRATION_NAME) >= MIGRATION_VERSION) {
-            return;
+        int version = api.database().migrationVersion(MIGRATION_NAME);
+        if (version < 1) {
+            boolean created = api.database().execute("""
+                    CREATE TABLE IF NOT EXISTS workshops (
+                        id TEXT PRIMARY KEY,
+                        source TEXT NOT NULL,
+                        source_key TEXT NOT NULL UNIQUE,
+                        title TEXT NOT NULL,
+                        description TEXT NOT NULL,
+                        start_at INTEGER NOT NULL,
+                        end_at INTEGER,
+                        timezone TEXT NOT NULL,
+                        location TEXT NOT NULL,
+                        booking_url TEXT NOT NULL,
+                        updated_at INTEGER NOT NULL,
+                        announcement_eligible INTEGER NOT NULL
+                    )
+                    """);
+            if (!created) {
+                pluginWarning("Could not create the workshops table.");
+                return;
+            }
+            api.database().execute("CREATE INDEX IF NOT EXISTS workshops_start_idx ON workshops (start_at);");
+            api.database().execute("CREATE INDEX IF NOT EXISTS workshops_source_idx ON workshops (source);");
+            api.database().setMigrationVersion(MIGRATION_NAME, 1);
+            version = 1;
         }
-
-        boolean created = api.database().execute("""
-                CREATE TABLE IF NOT EXISTS workshops (
-                    id TEXT PRIMARY KEY,
-                    source TEXT NOT NULL,
-                    source_key TEXT NOT NULL UNIQUE,
-                    title TEXT NOT NULL,
-                    description TEXT NOT NULL,
-                    start_at INTEGER NOT NULL,
-                    end_at INTEGER,
-                    timezone TEXT NOT NULL,
-                    location TEXT NOT NULL,
-                    booking_url TEXT NOT NULL,
-                    updated_at INTEGER NOT NULL,
-                    announcement_eligible INTEGER NOT NULL
-                )
-                """);
-        if (!created) {
-            pluginWarning("Could not create the workshops table.");
-            return;
+        if (version < 2) {
+            boolean created = api.database().execute("""
+                    CREATE TABLE IF NOT EXISTS workshop_access_instructions (
+                        workshop_id TEXT PRIMARY KEY,
+                        message TEXT NOT NULL,
+                        updated_at INTEGER NOT NULL
+                    )
+                    """);
+            if (!created) {
+                pluginWarning("Could not create the workshop access instructions table.");
+                return;
+            }
+            api.database().setMigrationVersion(MIGRATION_NAME, 2);
         }
-        api.database().execute("CREATE INDEX IF NOT EXISTS workshops_start_idx ON workshops (start_at);");
-        api.database().execute("CREATE INDEX IF NOT EXISTS workshops_source_idx ON workshops (source);");
-        api.database().setMigrationVersion(MIGRATION_NAME, MIGRATION_VERSION);
     }
 
     private void loadStoredWorkshops() {
@@ -420,6 +518,25 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
         synchronized (cache) {
             cache.clear();
             cache.putAll(loaded);
+        }
+    }
+
+    private void loadStoredAccessOverrides() {
+        Map<String, List<String>> loaded = new LinkedHashMap<>();
+        api.database().queryEach(
+                "SELECT workshop_id, message FROM workshop_access_instructions",
+                null,
+                result -> {
+                    String id = result.getString("workshop_id");
+                    List<String> lines = boundedAccessInstructions(splitLines(result.getString("message")));
+                    if (!normalizeKey(id).isBlank() && !lines.isEmpty()) {
+                        loaded.put(normalizeKey(id), lines);
+                    }
+                }
+        );
+        synchronized (accessOverrides) {
+            accessOverrides.clear();
+            accessOverrides.putAll(loaded);
         }
     }
 
@@ -783,6 +900,7 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
                 .tabCompletion("add")
                 .tabCompletion("edit", "{workshop-id}")
                 .tabCompletion("remove", "{workshop-id}")
+                .tabCompletion("instructions", "{workshop-id}")
                 .tabCompletion("refresh")
                 .tabCompletion("info", "{workshop-id}")
                 .executor((unused, cmd, ctx) -> handleCommand(ctx))
@@ -800,6 +918,7 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
             case "add" -> addWorkshop(ctx);
             case "edit" -> editWorkshop(ctx);
             case "remove" -> removeWorkshop(ctx);
+            case "instructions" -> setWorkshopInstructions(ctx);
             case "refresh" -> refreshWorkshopFeed(ctx);
             case "info" -> showWorkshopInfo(ctx);
             default -> ctx.returnUsage();
@@ -813,6 +932,8 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
             ctx.info("/workshops add <title> | <start> | <end|-> | <location> | <url|-> | <description>");
             ctx.info("/workshops edit <id> <title> | <start> | <end|-> | <location> | <url|-> | <description>");
             ctx.info("/workshops remove <id>");
+            ctx.info("/workshops instructions <id> <message> | <message> ...");
+            ctx.info("/workshops instructions <id> clear");
             ctx.info("/workshops refresh");
         }
     }
@@ -832,6 +953,12 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
             sendDisplayLines(ctx.getSender(), displayEntry, workshop, i + 1, upcoming.size(), displayed.size());
             if (workshop.bookingUrl().isBlank()) {
                 sendDisplayLines(ctx.getSender(), displayNoBooking, workshop, i + 1, upcoming.size(), displayed.size());
+            }
+            sendDisplayLines(ctx.getSender(), accessInstructions(workshop), workshop,
+                    i + 1, upcoming.size(), displayed.size());
+            if (isAdmin(ctx)) {
+                ctx.info("ID: {id} | Source: {source}",
+                        "id", workshop.id(), "source", workshop.source().name());
             }
         }
         sendDisplayLines(ctx.getSender(), displayFooter, null, 0, upcoming.size(), displayed.size());
@@ -884,6 +1011,20 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
         values.put("url", "");
         values.put("id", "");
         values.put("source", "");
+        values.put("next_workshop_title", "");
+        values.put("next_workshop_date", "");
+        values.put("next_workshop_time", "");
+        values.put("next_workshop_url", "");
+        values.put("next_workshop_location", "");
+        values.put("next_workshop_end_date", "");
+        values.put("next_workshop_end_time", "");
+        values.put("active_workshop_title", "");
+        values.put("active_workshop_date", "");
+        values.put("active_workshop_time", "");
+        values.put("active_workshop_url", "");
+        values.put("active_workshop_location", "");
+        values.put("active_workshop_end_date", "");
+        values.put("active_workshop_end_time", "");
         if (workshop == null) return values;
 
         ZonedDateTime start = workshop.startAt().withZoneSameInstant(timezone);
@@ -901,6 +1042,16 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
         values.put("url", AnnouncementsFeature.escapeLiteral(workshop.bookingUrl()));
         values.put("id", AnnouncementsFeature.escapeLiteral(workshop.id()));
         values.put("source", AnnouncementsFeature.escapeLiteral(workshop.source().name().toLowerCase(Locale.ROOT)));
+        values.put("next_workshop_title", values.get("title"));
+        values.put("next_workshop_date", values.get("date"));
+        values.put("next_workshop_time", values.get("time"));
+        values.put("next_workshop_url", values.get("booking_url"));
+        values.put("next_workshop_location", values.get("location"));
+        values.put("active_workshop_title", values.get("title"));
+        values.put("active_workshop_date", values.get("date"));
+        values.put("active_workshop_time", values.get("time"));
+        values.put("active_workshop_url", values.get("booking_url"));
+        values.put("active_workshop_location", values.get("location"));
         if (workshop.endAt() != null) {
             ZonedDateTime end = workshop.endAt().withZoneSameInstant(timezone);
             String endDate = DISPLAY_DATE_FORMAT.format(end);
@@ -908,6 +1059,10 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
             values.put("end_date", AnnouncementsFeature.escapeLiteral(endDate));
             values.put("end_time", AnnouncementsFeature.escapeLiteral(endTime));
             values.put("end", AnnouncementsFeature.escapeLiteral(endDate + " at " + endTime));
+            values.put("next_workshop_end_date", values.get("end_date"));
+            values.put("next_workshop_end_time", values.get("end_time"));
+            values.put("active_workshop_end_date", values.get("end_date"));
+            values.put("active_workshop_end_time", values.get("end_time"));
         }
         return values;
     }
@@ -945,7 +1100,31 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
             ctx.getSender().sendMessage(Component.text(workshop.description(), NamedTextColor.GRAY));
         }
         ctx.getSender().sendMessage(renderWorkshopLine(1, workshop));
+        sendDisplayLines(ctx.getSender(), accessInstructions(workshop), workshop, 1, 1, 1);
         if (isAdmin(ctx)) ctx.info("ID: {id} | Source: {source}", "id", workshop.id(), "source", workshop.source().name());
+    }
+
+    private void setWorkshopInstructions(CommandContext ctx) {
+        requireAdmin(ctx);
+        if (ctx.numArgs() < 3) ctx.returnUsage();
+        Workshop workshop = find(ctx.getArg(1));
+        if (workshop == null) {
+            ctx.returnError("Workshop not found.");
+            return;
+        }
+        String raw = String.join(" ", ctx.rawArgs().subList(2, ctx.rawArgs().size())).trim();
+        if (raw.equalsIgnoreCase("clear")) {
+            if (!clearAccessInstructions(workshop)) ctx.returnError("Could not clear the workshop access instructions.");
+            ctx.returnSuccess("Cleared local access instructions for workshop {id}.", "id", workshop.id());
+            return;
+        }
+        List<String> lines = parseAccessInstructions(raw);
+        if (lines.isEmpty()) ctx.returnError("Provide an access message, or use clear.");
+        if (!saveAccessInstructions(workshop, lines)) {
+            ctx.returnError("Could not save the workshop access instructions.");
+            return;
+        }
+        ctx.returnSuccess("Saved access instructions for workshop {id}.", "id", workshop.id());
     }
 
     private void addWorkshop(CommandContext ctx) {
@@ -1008,6 +1187,18 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
         }
         if (endAt != null && endAt.isBefore(startAt)) ctx.returnError("Workshop end must not be before its start.");
         return new WorkshopInput(title, description, startAt, endAt, location, url);
+    }
+
+    static @NotNull List<String> parseAccessInstructions(@Nullable String raw) {
+        if (raw == null || raw.isBlank()) return List.of();
+        List<String> lines = new ArrayList<>();
+        for (String value : raw.split("\\s*\\|\\s*", -1)) {
+            String line = boundedText(value, MAX_ACCESS_INSTRUCTION_LENGTH);
+            if (line.isBlank()) continue;
+            lines.add(line);
+            if (lines.size() >= MAX_ACCESS_INSTRUCTION_LINES) break;
+        }
+        return List.copyOf(lines);
     }
 
     private String nextManualId() {

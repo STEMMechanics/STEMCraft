@@ -230,7 +230,7 @@ announcements:
       enabled: true
       message:
         - "<aqua>Workshop currently in progress:</aqua> <white>{active_workshop_title}</white>"
-        - "<gray>Where: {active_workshop_location}</gray>"
+        - "<gray>Use <yellow>/workshops</yellow> for the access details.</gray>"
         - "<gray>Finishes {active_workshop_end_date} at {active_workshop_end_time}.</gray>"
   scheduled:
     server-information:
@@ -271,6 +271,10 @@ workshops:
   display-filter:
     # Empty means all locations. Set this to ["STEMCraft"] to show only that location.
     locations: []
+  # The feed location is often a generic value such as "server". These local
+  # messages describe the actual Minecraft world or command players should use.
+  # A per-workshop /workshops instructions override takes precedence.
+  access-messages: {}
   display:
     # Each item is one MiniMessage line. Set header/footer to [] to hide them.
     header:
