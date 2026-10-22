@@ -56,6 +56,22 @@ class AnnouncementsFeatureTest {
     }
 
     @Test
+    void upcomingJoinWorkshopRequiresAFutureStartAndMatchingLocation() {
+        Instant now = Instant.parse("2026-10-22T00:00:00Z");
+        AnnouncementsFeature.WorkshopFilter filter = new AnnouncementsFeature.WorkshopFilter(
+                null, null, List.of("STEMCraft"));
+
+        Workshop future = workshop("STEMCraft", now.plusSeconds(60));
+        Workshop past = workshop("STEMCraft", now.minusSeconds(60));
+        Workshop otherLocation = workshop("Community Hall", now.plusSeconds(60));
+
+        assertTrue(AnnouncementsFeature.isFutureWorkshop(future, now));
+        assertFalse(AnnouncementsFeature.isFutureWorkshop(past, now));
+        assertTrue(filter.matches(future, now));
+        assertFalse(filter.matches(otherLocation, now));
+    }
+
+    @Test
     void activeWorkshopWindowIncludesStartAndExcludesEnd() {
         Instant start = Instant.parse("2026-10-22T10:00:00Z");
         Workshop workshop = new Workshop("active", "Workshop", "",

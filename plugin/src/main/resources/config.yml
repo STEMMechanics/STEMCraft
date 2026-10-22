@@ -226,6 +226,18 @@ announcements:
       - "<gray>Use <yellow>/workshops</yellow> to see upcoming STEMMechanics workshops.</gray>"
     returning:
       - "<aqua>Welcome back, {player}!</aqua>"
+    upcoming-workshop:
+      # This private message is skipped when Workshops is unavailable or no workshop matches.
+      enabled: true
+      filters:
+        # Optional strict bounds. Leave empty to match the next future workshop at any distance.
+        days-until: {}
+        # Matching is case-insensitive after trimming. Empty means every location.
+        locations: []
+      # These lines use the next_workshop_* placeholders listed in the documentation.
+      message:
+        - "<aqua>Upcoming STEMMechanics workshop:</aqua> <white>{next_workshop_title}</white>"
+        - "<gray>{next_workshop_date} at {next_workshop_time} — <click:open_url:'{next_workshop_url}'><underlined>book your place</underlined></click></gray>"
     active-workshop:
       enabled: true
       message:

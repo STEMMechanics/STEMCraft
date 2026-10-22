@@ -67,6 +67,9 @@ public class AnnouncementsFeature extends BaseFeature {
     private String prefix;
     private List<String> firstTimeJoinMessage = List.of();
     private List<String> returningJoinMessage = List.of();
+    private boolean upcomingWorkshopJoinEnabled;
+    private List<String> upcomingWorkshopJoinMessage = List.of();
+    private WorkshopFilter upcomingWorkshopJoinFilter = WorkshopFilter.NONE;
     private boolean activeWorkshopJoinEnabled;
     private List<String> activeWorkshopJoinMessage = List.of();
     private ZoneId defaultTimezone = DEFAULT_ZONE;
@@ -133,6 +136,13 @@ public class AnnouncementsFeature extends BaseFeature {
         defaultTimezone = parseZone(section.getString("timezone", DEFAULT_ZONE.getId()), DEFAULT_ZONE);
         firstTimeJoinMessage = readLines(section, "join.first-time");
         returningJoinMessage = readLines(section, "join.returning");
+        ConfigSection upcomingWorkshopJoin = section.getSection("join.upcoming-workshop", false);
+        upcomingWorkshopJoinEnabled = upcomingWorkshopJoin != null
+                && upcomingWorkshopJoin.getBoolean("enabled", false);
+        upcomingWorkshopJoinMessage = upcomingWorkshopJoin == null
+                ? List.of() : readLines(upcomingWorkshopJoin, "message");
+        upcomingWorkshopJoinFilter = upcomingWorkshopJoin == null
+                ? WorkshopFilter.NONE : readWorkshopFilter(upcomingWorkshopJoin.getSection("filters", false));
         ConfigSection activeWorkshopJoin = section.getSection("join.active-workshop", false);
         activeWorkshopJoinEnabled = activeWorkshopJoin != null && activeWorkshopJoin.getBoolean("enabled", false);
         activeWorkshopJoinMessage = activeWorkshopJoin == null ? List.of() : readLines(activeWorkshopJoin, "message");
@@ -396,6 +406,17 @@ public class AnnouncementsFeature extends BaseFeature {
                 .orElse(null);
     }
 
+    private @Nullable Workshop findUpcomingJoinWorkshop(@NotNull WorkshopFilter filter, @NotNull Instant now) {
+        WorkshopService service = api.workshops();
+        if (service == null || !service.isAvailable() || !service.isEnabled()) return null;
+        return service.upcoming().stream()
+                .filter(Workshop::announcementEligible)
+                .filter(workshop -> isFutureWorkshop(workshop, now))
+                .filter(workshop -> filter.matches(workshop, now))
+                .findFirst()
+                .orElse(null);
+    }
+
     private @NotNull String render(@NotNull String template, @Nullable Player player, @Nullable Workshop workshop, int online) {
         Map<String, String> values = new LinkedHashMap<>();
         values.put("player", player == null ? "" : escapeLiteral(player.getName()));
@@ -466,6 +487,7 @@ public class AnnouncementsFeature extends BaseFeature {
                 if (!enabled || !joinEnabled || !player.isOnline()) return;
                 broadcast(new AnnouncementDefinition("join", player.hasPlayedBefore() ? returningJoinMessage : firstTimeJoinMessage,
                         true, 0L, null, null, "message", WorkshopFilter.NONE, false), player);
+                broadcastUpcomingWorkshop(player);
                 broadcastActiveWorkshop(player);
             });
         });
@@ -480,6 +502,18 @@ public class AnnouncementsFeature extends BaseFeature {
     private void cancelJoinTasks() {
         for (String taskId : joinTasks.values()) api.tasks().cancel(taskId);
         joinTasks.clear();
+    }
+
+    private void broadcastUpcomingWorkshop(@NotNull Player player) {
+        if (!upcomingWorkshopJoinEnabled || upcomingWorkshopJoinMessage.isEmpty()) return;
+        Workshop workshop = findUpcomingJoinWorkshop(upcomingWorkshopJoinFilter, Instant.now());
+        if (workshop == null) return;
+
+        int online = Bukkit.getOnlinePlayers().size();
+        for (String line : upcomingWorkshopJoinMessage) {
+            String rendered = render(prefix + line, player, workshop, online);
+            if (!rendered.isBlank()) api.messages().send(player, rendered);
+        }
     }
 
     private void broadcastActiveWorkshop(@NotNull Player player) {
@@ -514,6 +548,10 @@ public class AnnouncementsFeature extends BaseFeature {
         return workshop.endAt() != null
                 && !now.isBefore(workshop.startAt().toInstant())
                 && now.isBefore(workshop.endAt().toInstant());
+    }
+
+    static boolean isFutureWorkshop(@NotNull Workshop workshop, @NotNull Instant now) {
+        return workshop.startAt().toInstant().isAfter(now);
     }
 
     private void registerCommand() {
