@@ -25,6 +25,7 @@ import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.util.StringUtil;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
@@ -75,7 +76,18 @@ public class PlayerGameMessages extends BaseFeature {
             String raw = pick(joinList);
             if (raw == null) return;
 
-            event.joinMessage(render("<yellow>" + raw, event.getPlayer(), null, null));
+            Player joiningPlayer = event.getPlayer();
+            Component message = render("<yellow>" + raw, joiningPlayer, null, null);
+
+            // Bukkit's join message is delivered to the joining player as well as
+            // everyone else. Send the custom message explicitly so the joiner is
+            // excluded while the rest of the online players still see it.
+            event.joinMessage(null);
+            for (Player recipient : Bukkit.getOnlinePlayers()) {
+                if (!recipient.getUniqueId().equals(joiningPlayer.getUniqueId())) {
+                    recipient.sendMessage(message);
+                }
+            }
         });
 
 

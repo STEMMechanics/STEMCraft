@@ -24,6 +24,7 @@ manage your preferred grouping in LuckPerms.
 | `stemcraft.namedregion.read` | Info, list, find and nearby named regions |
 | `stemcraft.noticeboard.read` | List notices and your own posts |
 | `stemcraft.noticeboard.post` | Post a notice; edit/remove your own posts |
+| *(none)* | `/workshops`, `/workshops list`, `/workshops info` and `/workshops help` are public |
 | `stemcraft.sign.format` | Format sign text and use registered glyphs; requires an explicit grant; defaults false |
 
 If you previously granted `stemcraft.player` or `stemcraft.minigame.play` while testing
@@ -72,6 +73,10 @@ authorize deleting another island. An administrator must confirm resets too.
 | `stemcraft.mailbox.send` | `stemcraft.mailbox.admin` for queue management and `/mail` item drafts |
 | `stemcraft.namedregion.read` | `stemcraft.namedregion.teleport` for travel; `stemcraft.namedregion.admin` for all management |
 | `stemcraft.noticeboard.read` and `.post` | `stemcraft.noticeboard.admin` for other users' posts, arbitrary expiry and board management |
+| `stemcraft.announcements.broadcast` | `stemcraft.announcements.admin` for announcement list, editing, enable/disable, removal and reload |
+| *(none)* | `stemcraft.workshops.admin` for manual workshop management and feed refresh |
+| *(none)* | `stemcraft.workshops.refresh` for feed refresh without manual workshop management |
+| `stemcraft.workshops.instructions` | `stemcraft.workshops.admin` also grants access-instruction prompts and editing |
 | `stemcraft.book` for get/list/show self | `stemcraft.book.others` for showing another player a book; `stemcraft.book.edit` for authoring/editing |
 | `stemcraft.command.back` | `stemcraft.command.back.others` |
 | `stemcraft.command.spawn` for current-world self travel | `.spawn.others` to target another player; `.spawn.worlds` for any world or `.spawn.world.<world-name>` for a specific world |

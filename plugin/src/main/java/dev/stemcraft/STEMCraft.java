@@ -40,6 +40,7 @@ import dev.stemcraft.feature.Mailboxes;
 import dev.stemcraft.api.service.comet.CometService;
 import dev.stemcraft.api.service.mailbox.MailboxService;
 import dev.stemcraft.api.service.save.SaveReport;
+import dev.stemcraft.api.service.workshop.WorkshopService;
 import dev.stemcraft.service.command.CommandServiceImpl;
 import dev.stemcraft.service.message.MessageServiceImpl;
 import dev.stemcraft.service.minigame.MiniGameServiceImpl;
@@ -137,6 +138,7 @@ public final class STEMCraft extends JavaPlugin {
     private dev.stemcraft.feature.StemBotFeature stemBot;
     private WebServiceImpl web;
     private WorldServiceImpl worlds;
+    private WorkshopService workshops;
 
     @Getter(AccessLevel.NONE)
     private ConfigFile configFile;
@@ -613,6 +615,9 @@ public final class STEMCraft extends JavaPlugin {
         }
         if (feature instanceof Mailboxes mailboxFeature) {
             mailboxes = mailboxFeature;
+        }
+        if (feature instanceof WorkshopService workshopService) {
+            workshops = workshopService;
         }
         loadedFeatures.add(feature);
         debug("STEMCRAFT_FEATURE_LOADED", "name", feature.id());

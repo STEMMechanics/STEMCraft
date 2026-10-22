@@ -19,6 +19,7 @@
 - [Interactive guide callbacks](https://github.com/STEMMechanics/stemcraft/wiki/guide-callbacks)
 - [Quests](https://github.com/STEMMechanics/stemcraft/wiki/quests)
 - [Commands](https://github.com/STEMMechanics/stemcraft/wiki/commands)
+- [Announcements and Workshops](https://github.com/STEMMechanics/stemcraft/wiki/announcements-workshops)
 - [API](https://github.com/STEMMechanics/stemcraft/wiki/API)
 - [Minigames](https://github.com/STEMMechanics/stemcraft/wiki/Minigames)
 - [Minigame placeholders](https://github.com/STEMMechanics/stemcraft/wiki/minigame-placeholders)

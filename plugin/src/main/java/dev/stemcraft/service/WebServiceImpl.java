@@ -30,6 +30,10 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.service.web.WebService;
 import dev.stemcraft.api.service.web.WebServiceEndpointHandler;
 import dev.stemcraft.api.service.web.WebServiceRequest;
+import org.bukkit.entity.Player;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerKickEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.jspecify.annotations.NonNull;
 import org.jetbrains.annotations.NotNull;
 
@@ -48,6 +52,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -62,8 +67,11 @@ public class WebServiceImpl extends BaseService implements WebService {
     private File wwwRoot;
     private HttpServer httpServer;
     private volatile Map<String, WebServiceEndpointHandler> endpointHandlers = Map.of();
+    private volatile List<String> onlinePlayerNames = List.of();
     private String ip;
     private int port;
+    private volatile boolean publicPlayersEnabled;
+    private boolean playerSnapshotListenersRegistered;
 
     /**
      * Constructor for the WebServiceImpl.
@@ -72,7 +80,7 @@ public class WebServiceImpl extends BaseService implements WebService {
      * @param api The STEMCraft API instance.
      */
     public WebServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
-        super(plugin, api, "web_server");
+        super(plugin, api, "web-server");
     }
 
     /**
@@ -164,6 +172,7 @@ public class WebServiceImpl extends BaseService implements WebService {
         }
 
         loadSettings();
+        refreshOnlinePlayerSnapshot();
 
         String wwwPath = getConfigSection().getString("path", "www");
         wwwPath = wwwPath
@@ -199,6 +208,7 @@ public class WebServiceImpl extends BaseService implements WebService {
             httpServer.setExecutor(null);
             registerEndpointHandler("/status", this::handleStatusEndpoint);
             httpServer.start();
+            registerPlayerSnapshotListeners();
             api.messages().info("WEB_SERVER_STARTED_ON", "ip", ip, "port", String.valueOf(httpServer.getAddress().getPort()));
         } catch (IOException | IllegalArgumentException e) {
             if (httpServer != null) {
@@ -223,6 +233,7 @@ public class WebServiceImpl extends BaseService implements WebService {
     @Override
     public void onDisable() {
         stop();
+        onlinePlayerNames = List.of();
     }
 
     /**
@@ -242,12 +253,16 @@ public class WebServiceImpl extends BaseService implements WebService {
 
         Map<String, Object> payload = new LinkedHashMap<>();
         boolean maintenance = plugin.isMaintenanceMode();
+        List<String> currentPlayerNames = onlinePlayerNames;
         payload.put("online", true);
-        payload.put("players_online", plugin.getServer().getOnlinePlayers().size());
+        payload.put("players_online", currentPlayerNames.size());
         payload.put("max_players", plugin.getServer().getMaxPlayers());
         payload.put("version", plugin.getServer().getMinecraftVersion());
         payload.put("maintenance", maintenance);
         payload.put("message", maintenance ? MAINTENANCE_MESSAGE : null);
+        if (publicPlayersEnabled) {
+            payload.put("players", currentPlayerNames);
+        }
         payload.put("checked_at", OffsetDateTime.now(ZoneId.systemDefault()).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
 
         Map<String, Object> response = new LinkedHashMap<>();
@@ -287,9 +302,30 @@ public class WebServiceImpl extends BaseService implements WebService {
         return "http://" + host + ":" + listeningPort;
     }
 
-    private void loadSettings() {
+    void loadSettings() {
         port = getConfigSection().getInt("port", 8950);
         ip = getConfigSection().getString("ip", "127.0.0.1");
+        publicPlayersEnabled = getConfigSection().getBoolean("status.players.enabled", false);
+    }
+
+    private void registerPlayerSnapshotListeners() {
+        if (playerSnapshotListenersRegistered) {
+            return;
+        }
+
+        api.events().register(PlayerJoinEvent.class, event -> refreshOnlinePlayerSnapshot());
+        api.events().register(PlayerQuitEvent.class, event -> refreshOnlinePlayerSnapshot());
+        api.events().register(PlayerKickEvent.class, event -> refreshOnlinePlayerSnapshot());
+        playerSnapshotListenersRegistered = true;
+    }
+
+    void refreshOnlinePlayerSnapshot() {
+        List<String> names = plugin.getServer().getOnlinePlayers().stream()
+                .map(Player::getName)
+                .filter(name -> name != null && !name.isBlank())
+                .sorted(Comparator.comparing((String name) -> name.toLowerCase(Locale.ROOT)))
+                .toList();
+        onlinePlayerNames = List.copyOf(names);
     }
 
     /**
