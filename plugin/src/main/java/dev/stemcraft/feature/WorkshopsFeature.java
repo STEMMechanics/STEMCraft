@@ -299,7 +299,7 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
 
     private void loadSettings() {
         ConfigSection section = getConfigSection();
-        enabled = isEnabled();
+        enabled = super.isEnabled();
         websiteEnabled = section.getBoolean("website-enabled", true);
         syncEnabled = section.getBoolean("rss-sync-enabled", true);
         manualEnabled = section.getBoolean("manual-enabled", true);
