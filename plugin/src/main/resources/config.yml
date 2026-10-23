@@ -435,6 +435,19 @@ web-server:
   path: www
   # Direct connections use HTTP. HTTPS requires an external TLS reverse proxy.
   public-url: ""
+  mail-api:
+    # Enable only after setting a long random bearer token below.
+    enabled: false
+    key: ""
+    # This name is written into letters sent through the HTTP endpoint.
+    sender: "Discord Rewards"
+    # Requests larger than this are rejected before item parsing.
+    max-body-bytes: 32768
+    # Limits protect the server if the integration key is exposed.
+    max-items: 26
+    max-item-amount: 1024
+    # delay_seconds may be 0 through this value. Omitted delay uses mailboxes.delivery.base-delay.
+    max-delay-seconds: 604800
   status:
     players:
       # When enabled, /status includes current usernames in the players array.

@@ -71,6 +71,40 @@ mailboxes:
 
 Dialog labels and messages are configurable under `mailboxes.dialog` and `mailboxes.messages`.
 
+## Authenticated HTTP mail endpoint
+
+The webserver can accept mail from an external integration such as a Discord bot. It is disabled until a bearer key is configured:
+
+```yaml
+web-server:
+  mail-api:
+    enabled: true
+    key: "replace-with-a-long-random-secret"
+    sender: "Discord Rewards"
+```
+
+The endpoint is `POST /api/v1/survival/mail`. Keep the webserver bound to loopback and put an HTTPS reverse proxy in front of it when the integration is remote. Send the key in the `Authorization` header, never in the URL:
+
+```bash
+curl -X POST https://play.example.com/api/v1/survival/mail \
+  -H 'Authorization: Bearer replace-with-a-long-random-secret' \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: discord-event-12345' \
+  --data '{
+    "player": "WinnerName",
+    "message": "Thanks for joining the event!",
+    "delay_seconds": 0,
+    "items": [
+      {"id": "diamond", "amount": 3},
+      {"id": "bread", "amount": 16}
+    ]
+  }'
+```
+
+`player` is resolved using the server's known Java and Bedrock identities. Item IDs may be vanilla materials such as `minecraft:diamond` or registered custom item IDs, including their supported bracket properties. `delay_seconds` is optional: omitting it uses `mailboxes.delivery.base-delay`, `0` delivers on the next queue pass, and a positive value delays delivery by that many seconds. The configured `max-delay-seconds` limit applies to explicit delays.
+
+A successful request returns HTTP `202` with `queued: true`. A repeated request with the same `Idempotency-Key` and body returns the original result without sending a second delivery. The key cache lasts until the server restarts. Invalid keys return `401`; unknown players return `404`; invalid payloads return `400`.
+
 ## Sending mail through the API
 
 Recipients are identified only by UUID. Their current known name is resolved internally.
