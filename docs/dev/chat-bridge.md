@@ -24,16 +24,27 @@ chat:
       player-quit: true
       minigame-start: true
       minigame-end: true
+      player-death: true
+      server-start: true
+      server-stop: true
 ```
 
-The four lifecycle event switches are enabled by default when the bridge is
-enabled. Set an individual switch to `false` when the bot should ignore that
-event category. The bridge sends these event names:
+The event switches are enabled by default when the bridge is enabled. Set an
+individual switch to `false` when the bot should ignore that event category.
+Server startup and shutdown events have no player and an empty `data` object.
+Startup is sent for the initial server load, and shutdown is queued while
+STEMCraft disables for a server stop; shutdown delivery is best-effort with a
+five-second drain limit.
+
+The bridge sends these event names:
 
 - `minecraft.player_join`
 - `minecraft.player_quit`
 - `minecraft.minigame_start`
 - `minecraft.minigame_end`
+- `minecraft.player_death`
+- `minecraft.server_start`
+- `minecraft.server_stop`
 
 The token is separate from `web-server.mail-api.key`. Keep the receiver on
 HTTPS and set a different token for each server or bot. The bridge is disabled
@@ -72,8 +83,10 @@ Keeping Discord formatting in the bot makes the plugin payload useful for
 other consumers too and leaves room for a later Discord-to-Minecraft command
 without coupling the two directions.
 
-Player lifecycle events include the player object at the top level and an
-`online_players` count in `data`:
+Player join and quit events include the player object at the top level and an
+`online_players` count in `data`. Player death events include the player
+object and `killer`, `cause`, and `world` in `data`; `killer` is null
+when no player caused the death:
 
 ```json
 {
@@ -88,6 +101,27 @@ Player lifecycle events include the player object at the top level and an
   },
   "data": {
     "online_players": 12
+  }
+}
+```
+
+A player death event uses the same top-level player shape:
+
+```json
+{
+  "event": "minecraft.player_death",
+  "event_id": "7b5e1d0e-8d86-4a93-9ea2-92a57fb1b40e",
+  "occurred_at": "2026-10-24T01:02:03Z",
+  "server": "survival",
+  "channel": "global",
+  "player": {
+    "name": "Alex",
+    "uuid": "01234567-89ab-cdef-0123-456789abcdef"
+  },
+  "data": {
+    "killer": "Steve",
+    "cause": "player_attack",
+    "world": "survival"
   }
 }
 ```

@@ -375,6 +375,10 @@ public final class STEMCraft extends JavaPlugin {
     /** {@inheritDoc} */
     @Override
     public void onDisable() {
+        if (Bukkit.isStopping() && chat != null) {
+            chat.publishChatBridgeEvent("minecraft.server_stop", null, Map.of());
+        }
+
         if (saves != null) {
             SaveReport report = saves.saveAll();
             if (!report.successful()) {
