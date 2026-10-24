@@ -21,7 +21,7 @@ dependencies {
     compileOnly("io.papermc.paper:paper-api:${rootProject.ext.paperApiVersion}")
 
     // WorldEdit
-    compileOnly("com.sk89q.worldedit:worldedit-bukkit:7.4.4")
+    compileOnly("com.sk89q.worldedit:worldedit-bukkit:7.4.6")
 
     compileOnly("com.google.code.findbugs:jsr305:3.0.2")
 
@@ -56,7 +56,7 @@ dependencies {
     testImplementation("com.google.code.findbugs:jsr305:3.0.2")
     testImplementation("org.geysermc.geyser:api:2.9.0-SNAPSHOT")
     testImplementation("net.luckperms:api:5.4")
-    testImplementation("com.sk89q.worldedit:worldedit-bukkit:7.4.4")
+    testImplementation("com.sk89q.worldedit:worldedit-bukkit:7.4.6")
     testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.11.0"
 }
 

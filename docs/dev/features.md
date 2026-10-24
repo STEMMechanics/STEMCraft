@@ -81,6 +81,7 @@ continue using that old profile.
 | `WorkshopsFeature` | Website RSS synchronization, manual workshop catalogue, and `/workshops`; see [Announcements and Workshops](announcements-workshops.md) |
 | `PlayerTabList` | Header/footer tab list rendering and update loop |
 | `PlayerGameMessages` | Join, quit, death, and related configurable player messages |
+| `PlayerWelcome` | Configurable first-time, returning, and anniversary welcomes with an optional returning-player activity summary backed by `player_welcome_activity` |
 
 Geyser-Spigot and Floodgate are optional. Java players can use interactive menu
 books without either plugin. Bedrock menu forms use the dialog service, which loads
