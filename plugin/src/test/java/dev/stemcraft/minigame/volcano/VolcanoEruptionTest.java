@@ -3,6 +3,7 @@ package dev.stemcraft.minigame.volcano;
 import com.sk89q.worldedit.math.BlockVector3;
 import com.sk89q.worldedit.regions.CuboidRegion;
 import dev.stemcraft.api.model.SCRegion;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Particle;
 import org.bukkit.block.Block;
@@ -123,6 +124,28 @@ class VolcanoEruptionTest {
                     .allMatch(p -> p.offsetY() > 0));
         }
         assertTrue(previousHeight > firstHeight + 1.5);
+    }
+
+    @Test
+    void activeJetsExposeADamageableGeyserColumn() {
+        VolcanoEruption eruption = eruption();
+        Block vent = null;
+        long eruptionTick = 0;
+        for (long tick = 2; tick <= 120; tick += 2) {
+            eruption.tick(tick);
+            vent = floor.stream().filter(block -> block.getType() == Material.MAGMA_BLOCK).findFirst().orElse(null);
+            if (vent != null) {
+                eruptionTick = tick;
+                break;
+            }
+        }
+
+        assertNotNull(vent);
+        Location geyserBase = vent.getLocation().clone().add(0.5, 1, 0.5);
+        assertTrue(eruption.isGeyserHazard(geyserBase, eruptionTick));
+
+        eruption.tick(eruptionTick + 10);
+        assertTrue(eruption.isGeyserHazard(geyserBase.clone().add(0, 0.5, 0), eruptionTick + 10));
     }
 
     @Test

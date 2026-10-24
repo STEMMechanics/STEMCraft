@@ -137,9 +137,13 @@ most a quarter. Both the floor's original block data and air above it are restor
 after a round, manual stop, unload or normal shutdown. Hot tiles cool into basalt
 or blackstone during play.
 
-Magma uses normal Minecraft heat damage, and real lava uses normal lava damage.
-Flame markers deal half a heart per second while touched. Lethal damage eliminates
-the player into spectator mode; PvP remains disabled. The default running HUD
+Volcano applies controlled hazard damage every half second so vanilla damage
+immunity cannot make lava or magma harmless. Magma deals one heart per hit, while
+lava and rising geysers deal two hearts per hit. Lava and geysers also leave the
+player burning briefly after they escape. Natural health regeneration is disabled
+while the round is running, so full hunger cannot undo hazard damage. Flame markers
+deal half a heart per second while touched. Lethal damage eliminates the player
+into spectator mode; PvP remains disabled. The default running HUD
 shows personal survival time instead of an eruption count. Eliminated players'
 timers freeze, and scores record whole seconds survived. Existing generated HUD
 lines are upgraded; custom or disabled displays are preserved. Custom HUDs can
