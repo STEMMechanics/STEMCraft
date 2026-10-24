@@ -276,6 +276,7 @@ public class MiniGameArenaImpl extends HasMetaImpl<MiniGameArena> implements Min
         MiniGameArenaHandler handler = service.getHandler(this.namespace());
         handler.onArenaStatusChanged(this, oldStatus, newStatus);
         service.teamSelectionSupport().onArenaStatusChanged(this, oldStatus, newStatus);
+        service.notifyArenaStatusChanged(this, oldStatus, newStatus);
         return this;
     }
 

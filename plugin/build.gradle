@@ -23,10 +23,10 @@ dependencies {
     compileOnly("io.papermc.paper:paper-api:${rootProject.ext.paperApiVersion}")
     compileOnly('org.geysermc.floodgate:api:2.2.4-SNAPSHOT')
     compileOnly('org.geysermc.geyser:api:2.9.0-SNAPSHOT')
-    compileOnly('me.clip:placeholderapi:2.11.6')
+    compileOnly('me.clip:placeholderapi:2.12.3')
     compileOnly('net.luckperms:api:5.4')
     compileOnly('com.googlecode.json-simple:json-simple:1.1.1')
-    compileOnly('com.sk89q.worldedit:worldedit-bukkit:7.4.4')
+    compileOnly('com.sk89q.worldedit:worldedit-bukkit:7.4.6')
     // Pl3xMap has no published 26.3 build yet; keep the optional bridge
     // compiled against the last available API until one is released.
     compileOnly('maven.modrinth:pl3xmap:26.2-554')
@@ -63,7 +63,7 @@ dependencies {
     testCompileOnly "io.papermc.paper:paper-api:${rootProject.ext.paperApiVersion}"
     //noinspection VulnerableLibrariesLocal
     testRuntimeOnly "io.papermc.paper:paper-api:${rootProject.ext.paperTestRuntimeVersion}"
-    testImplementation("com.sk89q.worldedit:worldedit-bukkit:7.4.4")
+    testImplementation("com.sk89q.worldedit:worldedit-bukkit:7.4.6")
     //noinspection VulnerableLibrariesLocal
     // MockBukkit does not publish a v26.3 artifact yet; see the API module.
     testImplementation("org.mockbukkit.mockbukkit:mockbukkit-v26.2:4.116.1") {

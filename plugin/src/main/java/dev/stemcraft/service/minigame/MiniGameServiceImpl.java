@@ -27,6 +27,7 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.minigame.MiniGame;
 import dev.stemcraft.api.minigame.MiniGameArena;
 import dev.stemcraft.api.minigame.MiniGameArenaHandler;
+import dev.stemcraft.api.minigame.MiniGameTeam;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.service.minigame.MiniGameService;
 import dev.stemcraft.api.service.protection.ProtectionType;
@@ -477,6 +478,143 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
 
     MiniGameTeamSelectionSupport teamSelectionSupport() {
         return teamSelectionSupport;
+    }
+
+    void notifyArenaStatusChanged(@NotNull MiniGameArena arena,
+                                  @Nullable MiniGameArena.ArenaStatus oldStatus,
+                                  @NotNull MiniGameArena.ArenaStatus newStatus) {
+        if (plugin == null || plugin.chat() == null) {
+            return;
+        }
+
+        boolean started = (newStatus == MiniGameArena.ArenaStatus.PREPARATION
+                || newStatus == MiniGameArena.ArenaStatus.RUNNING)
+            && oldStatus != MiniGameArena.ArenaStatus.PREPARATION
+            && oldStatus != MiniGameArena.ArenaStatus.RUNNING;
+        boolean ended = (newStatus == MiniGameArena.ArenaStatus.COOLDOWN
+                || newStatus == MiniGameArena.ArenaStatus.ENDING)
+            && oldStatus != MiniGameArena.ArenaStatus.COOLDOWN
+            && oldStatus != MiniGameArena.ArenaStatus.ENDING;
+
+        if (started) {
+            plugin.chat().publishChatBridgeEvent(
+                "minecraft.minigame_start", null, buildChatBridgeArenaData(arena, newStatus, false));
+        }
+        if (ended) {
+            plugin.chat().publishChatBridgeEvent(
+                "minecraft.minigame_end", null, buildChatBridgeArenaData(arena, newStatus, true));
+        }
+    }
+
+    private @NotNull Map<String, Object> buildChatBridgeArenaData(@NotNull MiniGameArena arena,
+                                                                   @NotNull MiniGameArena.ArenaStatus status,
+                                                                   boolean includeResult) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("minigame", arena.namespace());
+        Map<String, Object> arenaData = new LinkedHashMap<>();
+        arenaData.put("id", arena.id());
+        arenaData.put("name", Objects.requireNonNullElse(arena.getName(), ""));
+        arenaData.put("world", arena.world() == null
+            ? ""
+            : Objects.requireNonNullElse(arena.world().getName(), ""));
+        data.put("arena", arenaData);
+        data.put("status", status.name().toLowerCase(Locale.ROOT));
+        data.put("players", chatBridgePlayers(arena.getPlayers()));
+        data.put("spectators", chatBridgePlayers(arena.getSpectators()));
+        data.put("teams", chatBridgeTeams(arena));
+
+        if (includeResult) {
+            String winner = chatBridgeWinner(arena);
+            String winnerTeam = chatBridgeWinnerTeam(arena);
+            data.put("winner", winner);
+            data.put("winner_team", winnerTeam);
+            data.put("winner_players", chatBridgeWinnerPlayers(arena, winner, winnerTeam));
+        }
+        return data;
+    }
+
+    private @NotNull List<Map<String, Object>> chatBridgePlayers(@NotNull Collection<Player> players) {
+        return players.stream().map(player -> {
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("name", player.getName());
+            data.put("uuid", player.getUniqueId().toString());
+            return data;
+        }).toList();
+    }
+
+    private @NotNull List<Map<String, Object>> chatBridgeTeams(@NotNull MiniGameArena arena) {
+        return arena.getTeams().stream().map(team -> {
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("name", team.getName());
+            data.put("display_name", team.get("displayName", String.class, team.getName()));
+            data.put("score", team.getScore());
+            data.put("players", chatBridgePlayers(arena.getTeamPlayers(team.getName())));
+            return data;
+        }).toList();
+    }
+
+    private @Nullable String chatBridgeWinner(@NotNull MiniGameArena arena) {
+        for (String key : List.of("winner", "winnerName")) {
+            String value = arena.get(key, String.class);
+            if (value != null && !value.isBlank() && !value.equals("-")
+                && !value.equalsIgnoreCase("No winner")) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private @Nullable String chatBridgeWinnerTeam(@NotNull MiniGameArena arena) {
+        String configured = arena.get("winnerTeam", String.class);
+        if (configured != null && !configured.isBlank()) {
+            return configured;
+        }
+
+        if (!"bridge".equals(arena.namespace())) {
+            return null;
+        }
+
+        List<MiniGameTeam> teams = arena.getTeams();
+        if (teams.isEmpty()) {
+            return null;
+        }
+
+        int highestScore = teams.stream().mapToInt(MiniGameTeam::getScore).max().orElse(0);
+        if (highestScore <= 0) {
+            return null;
+        }
+        List<MiniGameTeam> leaders = teams.stream().filter(team -> team.getScore() == highestScore).toList();
+        return leaders.size() == 1 ? leaders.getFirst().getName() : null;
+    }
+
+    private @NotNull List<Map<String, Object>> chatBridgeWinnerPlayers(@NotNull MiniGameArena arena,
+                                                                         @Nullable String winner,
+                                                                         @Nullable String winnerTeam) {
+        if (winnerTeam != null) {
+            return chatBridgePlayers(arena.getTeamPlayers(winnerTeam));
+        }
+
+        if ("nightfall".equals(arena.namespace())) {
+            Set<?> eliminated = arena.get("nightEliminatedPlayers", Set.class);
+            if (eliminated != null) {
+                return chatBridgePlayers(arena.getPlayers().stream()
+                    .filter(player -> !eliminated.contains(player.getUniqueId()))
+                    .toList());
+            }
+        }
+
+        if (winner == null) {
+            return List.of();
+        }
+
+        Set<String> winnerNames = Arrays.stream(winner.split(","))
+            .map(String::trim)
+            .filter(name -> !name.isBlank())
+            .map(name -> name.toLowerCase(Locale.ROOT))
+            .collect(java.util.stream.Collectors.toSet());
+        return chatBridgePlayers(arena.getPlayers().stream()
+            .filter(player -> winnerNames.contains(player.getName().toLowerCase(Locale.ROOT)))
+            .toList());
     }
 
     MiniGameImpl getMiniGameImpl(@NotNull String namespace) {
