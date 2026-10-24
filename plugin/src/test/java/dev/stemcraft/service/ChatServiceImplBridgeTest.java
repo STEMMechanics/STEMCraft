@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 class ChatServiceImplBridgeTest {
     private static final ChatServiceImpl.ChatBridgeSettings SETTINGS = new ChatServiceImpl.ChatBridgeSettings(
         true,
-        URI.create("https://bot.example.test/minecraft/events"),
+        URI.create("https://bot.example.test/minecraft/event"),
         "token",
         "survival",
         "global",
@@ -48,6 +48,14 @@ class ChatServiceImplBridgeTest {
         assertFalse(json.has("player"));
         assertEquals("bedwars", json.getAsJsonObject("data").get("minigame").getAsString());
         assertEquals("red", json.getAsJsonObject("data").get("winner_team").getAsString());
+    }
+
+    @Test
+    void endpointNormalisationRemovesTrailingSlashes() {
+        assertEquals(
+            "https://bot.example.test/minecraft/event",
+            ChatServiceImpl.normalizeChatBridgeEndpoint("https://bot.example.test/minecraft/event///")
+        );
     }
 
     @Test

@@ -910,6 +910,8 @@ chat:
   # bearer-authenticated JSON receiver. Chat is queued off the event thread.
   discord-bridge:
     enabled: false
+    # Set this to the bot's public receiver URL, for example:
+    # https://discord-bot.example.com/minecraft/event
     url: ""
     bearer-token: ""
     server-id: survival

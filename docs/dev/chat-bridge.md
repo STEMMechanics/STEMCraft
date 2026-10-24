@@ -12,7 +12,7 @@ Enable it under `chat.discord-bridge`:
 chat:
   discord-bridge:
     enabled: true
-    url: "https://bot.example.test/minecraft/events"
+    url: "https://bot.example.test/minecraft/event"
     bearer-token: "a-secret-known-by-both-sides"
     server-id: survival
     channel: global
@@ -28,6 +28,10 @@ chat:
       server-start: true
       server-stop: true
 ```
+
+Use the same receiver path in the plugin URL and the bot environment. New
+deployments should use `/minecraft/event`; an existing `/minecraft/chat` path
+continues to work when it remains explicitly configured on both sides.
 
 The event switches are enabled by default when the bridge is enabled. Set an
 individual switch to `false` when the bot should ignore that event category.
@@ -56,7 +60,7 @@ warning.
 The receiver gets:
 
 ```http
-POST /minecraft/events HTTP/1.1
+POST /minecraft/event HTTP/1.1
 Authorization: Bearer a-secret-known-by-both-sides
 Content-Type: application/json; charset=utf-8
 X-STEMCraft-Event-Id: 7b5e1d0e-8d86-4a93-9ea2-92a57fb1b40e

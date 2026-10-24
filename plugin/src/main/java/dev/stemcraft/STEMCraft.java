@@ -788,6 +788,10 @@ public final class STEMCraft extends JavaPlugin {
             debugging = configFile.getBoolean("debug", false);
         }
 
+        if (!localesOnly && chat != null) {
+            chat.onReload();
+        }
+
         messages = new MessageServiceImpl(this, api);
         messages.onEnable();
 
