@@ -21,10 +21,13 @@
 package dev.stemcraft.service;
 
 import dev.stemcraft.STEMCraft;
+import dev.stemcraft.hologram.LeaderboardLayout;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.Command;
 import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.config.ConfigSection;
+import dev.stemcraft.api.minigame.MiniGame;
+import dev.stemcraft.api.minigame.MiniGameArena;
 import dev.stemcraft.api.service.playerstats.PlayerStatDefinition;
 import dev.stemcraft.api.service.playerstats.PlayerStatValue;
 import dev.stemcraft.api.service.playerstats.PlayerStatsRecord;
@@ -46,6 +49,11 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.TextDisplay;
+import org.bukkit.block.Block;
+import org.bukkit.event.EventPriority;
+import org.bukkit.event.block.Action;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.event.world.ChunkUnloadEvent;
 import org.bukkit.event.world.WorldLoadEvent;
@@ -68,17 +76,22 @@ import java.util.function.Predicate;
 public class HologramServiceImpl extends BaseService implements HologramService {
     private static final double LINE_SPACING = 0.25;
     private static final String STAT_LEADERBOARD_TYPE = "stat_leaderboard";
+    private static final String MINIGAME_LEADERBOARD_TYPE = "minigame_leaderboard";
     private static final int DEFAULT_STAT_LEADERBOARD_LIMIT = 10;
     private static final String STEMCRAFT_HOLOGRAM_TAG = "stemcraft:hologram";
     private static final String STEMCRAFT_DYNAMIC_HOLOGRAM_TAG = "stemcraft:dynamic-hologram";
     private static final String VISIBILITY_TASK_ID = "service:hologram-visibility";
     private static final String DYNAMIC_FOLLOW_TASK_ID = "service:hologram-dynamic-follow";
+    private static final String MINIGAME_LEADERBOARD_CYCLE_TASK_ID = "service:hologram-minigame-leaderboard-cycle";
+    private static final int DEFAULT_MINIGAME_LEADERBOARD_DELAY_SECONDS = 20;
+    private static final int MAX_MINIGAME_LEADERBOARD_DELAY_SECONDS = 3600;
     private static final long DEFAULT_VISIBILITY_UPDATE_TICKS = 10L;
     private static final double DEFAULT_MAX_VISIBLE_DISTANCE = 32.0D;
     private static final DecimalFormat STAT_VALUE_FORMAT = new DecimalFormat("0.##");
 
     private final Map<Integer, HologramData> holograms = new HashMap<>();
     private final Map<Integer, List<UUID>> entitiesById = new HashMap<>();
+    private final Set<Integer> spawningIds = new HashSet<>();
     private final Map<String, HologramTypeHandler> handlers = new HashMap<>();
     private final Map<DynamicKey, DynamicHologram> dynamicHolograms = new HashMap<>();
     private final Map<UUID, Set<UUID>> hiddenExternalViewers = new HashMap<>();
@@ -87,6 +100,10 @@ public class HologramServiceImpl extends BaseService implements HologramService 
     private double maxVisibleDistanceSquared = DEFAULT_MAX_VISIBLE_DISTANCE * DEFAULT_MAX_VISIBLE_DISTANCE;
     private boolean requireLineOfSight = true;
     private boolean applyToCitizensHolograms = true;
+    private int minigameLeaderboardDelaySeconds = DEFAULT_MINIGAME_LEADERBOARD_DELAY_SECONDS;
+    private int minigameLeaderboardIndex;
+    private long nextMinigameLeaderboardCycleAt;
+    @Nullable private CycleButtonLocation minigameLeaderboardButton;
 
     /**
      * Constructor for HologramServiceImpl.
@@ -104,6 +121,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
     public void onEnable() {
         ensureStorage();
         reloadVisibilitySettings();
+        despawnAll();
 
         registerType("", new HologramTypeHandler() {
             /** {@inheritDoc} */
@@ -131,6 +149,18 @@ public class HologramServiceImpl extends BaseService implements HologramService 
             @Override
             public @NonNull List<String> lines(@NonNull String type, @NonNull String context, int id, @NonNull List<String> data) {
                 return renderStatLeaderboard(context, data);
+            }
+        });
+
+        registerType(MINIGAME_LEADERBOARD_TYPE, new HologramTypeHandler() {
+            @Override
+            public List<String> list(@NonNull String type) {
+                return Collections.emptyList();
+            }
+
+            @Override
+            public @NonNull List<String> lines(@NonNull String type, @NonNull String context, int id, @NonNull List<String> data) {
+                return renderMinigameLeaderboard(data);
             }
         });
 
@@ -192,13 +222,19 @@ public class HologramServiceImpl extends BaseService implements HologramService 
             }
         });
 
+        api.events().register(PlayerInteractEvent.class, this::handleMinigameLeaderboardButton,
+            EventPriority.MONITOR, true);
+
 
         api.tabComplete().register("hologram_type", (player, args) ->
                 new ArrayList<>(handlers.keySet())
         );
 
+        api.tabComplete().register("hologram_id", (player, args) -> holograms.keySet().stream()
+            .sorted().map(String::valueOf).toList());
+
         api.tabComplete().register("hologram_context", (player, args) -> {
-            if (args.length < 2) {
+            if (args.length < 1) {
                 return Collections.emptyList();
             }
             String type = StringUtil.slugify(args[args.length - 1]);
@@ -215,10 +251,14 @@ public class HologramServiceImpl extends BaseService implements HologramService 
                 .usage("HOLOGRAM_USAGE")
                 .permission("stemcraft.command.hologram")
 
-                .tabCompletion("create", "{hologram_type}", "{hologram_context}")
+                .tabCompletion("create", "{hologram_type}", "{hologram_context:$1}")
                 .tabCompletion("closest", "{range}")
-                .tabCompletion("delete", "{id}")
-                .tabCompletion("deleteall", "{hologram_type}", "{hologram_context}")
+                .tabCompletion("delete", "{hologram_id}")
+                .tabCompletion("delete", "-range", "-limit", "", "")
+                .tabCompletion("deleteall", "{hologram_type}", "{hologram_context:$1}")
+                .tabCompletion("cycle", "delay", "{int}")
+                .tabCompletion("cycle", "button", "set")
+                .tabCompletion("cycle", "button", "clear")
 
                 .executor((api, cmd, ctx) -> {
 
@@ -236,13 +276,16 @@ public class HologramServiceImpl extends BaseService implements HologramService 
                         case "closest" -> subCommandClosest(api, cmd, ctx);
                         case "delete" -> subCommandDelete(api, cmd, ctx);
                         case "deleteall" -> subCommandDeleteAll(api, cmd, ctx);
+                        case "cycle" -> subCommandCycle(ctx);
                         default -> cmd.error(ctx.getSender(), "HOLOGRAM_USAGE");
                     }
 
                 })
                 .register(plugin);
 
+        spawnAll();
         startVisibilityController();
+        startMinigameLeaderboardCycleTask();
     }
 
     /**
@@ -250,6 +293,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
      */
     public void onDisable() {
         stopVisibilityController();
+        api.tasks().cancel(MINIGAME_LEADERBOARD_CYCLE_TASK_ID);
         restoreManagedVisibility();
         clearDynamicHolograms();
         despawnAll();
@@ -265,7 +309,10 @@ public class HologramServiceImpl extends BaseService implements HologramService 
     public void onReload() {
         super.onReload();
         reloadVisibilitySettings();
+        despawnAll();
+        spawnAll();
         startVisibilityController();
+        startMinigameLeaderboardCycleTask();
     }
 
     /**
@@ -341,7 +388,14 @@ public class HologramServiceImpl extends BaseService implements HologramService 
      * @param ctx The command context.
      */
     private void subCommandDelete(STEMCraftAPI api, Command cmd, CommandContext ctx) {
-        // hologram delete <id>
+        List<String> rawArgs = ctx.rawArgs();
+        if (rawArgs.size() > 1 && rawArgs.get(1).startsWith("-")) {
+            subCommandDeleteInRange(ctx, rawArgs);
+            return;
+        }
+        if (rawArgs.size() != 2) {
+            ctx.returnError("HOLOGRAM_USAGE_DELETE");
+        }
         ctx.checkArgsSizeAtLeast(2, "HOLOGRAM_USAGE_DELETE");
         ctx.checkArgIsInt(1, "HOLOGRAM_ID_INVALID", "id", ctx.getArg(1));
 
@@ -353,6 +407,70 @@ public class HologramServiceImpl extends BaseService implements HologramService 
 
         delete(id);
         ctx.returnSuccess("HOLOGRAM_DELETE_SUCCESS", "id", String.valueOf(id));
+    }
+
+    private void subCommandDeleteInRange(CommandContext ctx, List<String> args) {
+        ctx.checkNotConsole();
+        String rawRange = null;
+        String rawLimit = null;
+        for (int index = 1; index < args.size(); index += 2) {
+            if (index + 1 >= args.size()) {
+                ctx.returnError("HOLOGRAM_USAGE_DELETE");
+            }
+            switch (args.get(index).toLowerCase(Locale.ROOT)) {
+                case "-range" -> {
+                    if (rawRange != null) ctx.returnError("HOLOGRAM_USAGE_DELETE");
+                    rawRange = args.get(index + 1);
+                }
+                case "-limit" -> {
+                    if (rawLimit != null) ctx.returnError("HOLOGRAM_USAGE_DELETE");
+                    rawLimit = args.get(index + 1);
+                }
+                default -> ctx.returnError("HOLOGRAM_USAGE_DELETE");
+            }
+        }
+        if (rawRange == null) {
+            ctx.returnError("HOLOGRAM_USAGE_DELETE");
+            return;
+        }
+
+        double range = 0;
+        try {
+            range = Double.parseDouble(rawRange);
+        } catch (NumberFormatException exception) {
+            ctx.returnError("HOLOGRAM_DELETE_RANGE_INVALID", "range", rawRange);
+        }
+        if (!Double.isFinite(range) || range <= 0) {
+            ctx.returnError("HOLOGRAM_DELETE_RANGE_INVALID", "range", rawRange);
+        }
+        int limit = Integer.MAX_VALUE;
+        if (rawLimit != null) {
+            try {
+                limit = Integer.parseInt(rawLimit);
+            } catch (NumberFormatException exception) {
+                ctx.returnError("HOLOGRAM_DELETE_LIMIT_INVALID", "limit", rawLimit);
+            }
+            if (limit <= 0) {
+                ctx.returnError("HOLOGRAM_DELETE_LIMIT_INVALID", "limit", rawLimit);
+            }
+        }
+
+        Location origin = ctx.asPlayer().getLocation();
+        double maxDistanceSquared = range * range;
+        List<Integer> ids = holograms.values().stream()
+            .filter(data -> Objects.equals(data.location.getWorld(), origin.getWorld()))
+            .filter(data -> data.location.distanceSquared(origin) <= maxDistanceSquared)
+            .sorted(Comparator.comparingDouble((HologramData data) -> data.location.distanceSquared(origin))
+                .thenComparingInt(data -> data.id))
+            .limit(limit)
+            .map(data -> data.id)
+            .toList();
+        if (ids.isEmpty()) {
+            ctx.returnError("HOLOGRAM_CLOSEST_NONE", "range", rawRange);
+        }
+
+        ids.forEach(this::delete);
+        ctx.returnSuccess("HOLOGRAM_DELETE_RANGE_SUCCESS", "count", ids.size(), "range", rawRange);
     }
 
     /**
@@ -383,6 +501,77 @@ public class HologramServiceImpl extends BaseService implements HologramService 
 
         delete(type, context);
         ctx.returnSuccess("HOLOGRAM_DELETEALL_SUCCESS", "type", type);
+    }
+
+    private void subCommandCycle(CommandContext ctx) {
+        if (ctx.numArgs() < 2) {
+            ctx.returnError("HOLOGRAM_USAGE_CYCLE");
+        }
+
+        String setting = ctx.getArg(1).toLowerCase(Locale.ROOT);
+        switch (setting) {
+            case "delay" -> {
+                if (ctx.numArgs() == 2) {
+                    ctx.returnSuccess("HOLOGRAM_CYCLE_DELAY_CURRENT", "seconds",
+                        Integer.toString(minigameLeaderboardDelaySeconds));
+                    return;
+                }
+                ctx.checkArgsSizeAtLeast(3, "HOLOGRAM_USAGE_CYCLE");
+                ctx.checkArgIsInt(2, "HOLOGRAM_CYCLE_DELAY_INVALID", "seconds", ctx.getArg(2));
+                int seconds = ctx.getArgAsInt(2);
+                if (seconds < 0 || seconds > MAX_MINIGAME_LEADERBOARD_DELAY_SECONDS) {
+                    ctx.returnError("HOLOGRAM_CYCLE_DELAY_INVALID", "seconds", Integer.toString(seconds));
+                }
+                ConfigSection section = getConfigSection();
+                section.set("minigame_leaderboard.cycle_delay_seconds", seconds);
+                section.save();
+                minigameLeaderboardDelaySeconds = seconds;
+                resetMinigameLeaderboardCycleDeadline();
+                startMinigameLeaderboardCycleTask();
+                ctx.returnSuccess("HOLOGRAM_CYCLE_DELAY_SET", "seconds", Integer.toString(seconds));
+            }
+            case "button" -> {
+                ctx.checkArgsSizeAtLeast(3, "HOLOGRAM_USAGE_CYCLE");
+                String action = ctx.getArg(2).toLowerCase(Locale.ROOT);
+                if (action.equals("set")) {
+                    ctx.checkNotConsole();
+                    Player player = ctx.asPlayer();
+                    Block target = player.getTargetBlockExact(8);
+                    if (target == null || !isButton(target)) {
+                        ctx.returnError("HOLOGRAM_CYCLE_BUTTON_INVALID");
+                        return;
+                    }
+                    setMinigameLeaderboardButton(target);
+                    ctx.returnSuccess("HOLOGRAM_CYCLE_BUTTON_SET", "world", target.getWorld().getName(),
+                        "x", Integer.toString(target.getX()), "y", Integer.toString(target.getY()),
+                        "z", Integer.toString(target.getZ()));
+                } else if (action.equals("clear")) {
+                    clearMinigameLeaderboardButton();
+                    ctx.returnSuccess("HOLOGRAM_CYCLE_BUTTON_CLEARED");
+                } else {
+                    ctx.returnError("HOLOGRAM_USAGE_CYCLE");
+                }
+            }
+            default -> ctx.returnError("HOLOGRAM_USAGE_CYCLE");
+        }
+    }
+
+    private void setMinigameLeaderboardButton(@NotNull Block block) {
+        ConfigSection section = getConfigSection();
+        section.set("minigame_leaderboard.button.world", block.getWorld().getName());
+        section.set("minigame_leaderboard.button.x", block.getX());
+        section.set("minigame_leaderboard.button.y", block.getY());
+        section.set("minigame_leaderboard.button.z", block.getZ());
+        section.save();
+        minigameLeaderboardButton = new CycleButtonLocation(
+            block.getWorld().getName(), block.getX(), block.getY(), block.getZ());
+    }
+
+    private void clearMinigameLeaderboardButton() {
+        ConfigSection section = getConfigSection();
+        section.remove("minigame_leaderboard.button");
+        section.save();
+        minigameLeaderboardButton = null;
     }
 
     /**
@@ -416,6 +605,8 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         }
 
         String slug = StringUtil.slugify(type);
+        boolean firstMinigameLeaderboard = slug.equals(MINIGAME_LEADERBOARD_TYPE)
+            && holograms.values().stream().noneMatch(item -> item.type.equals(MINIGAME_LEADERBOARD_TYPE));
 
         int nextId = holograms.keySet().stream().max(Integer::compareTo).orElse(0) + 1;
         HologramData hologram = new HologramData(
@@ -429,6 +620,9 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         holograms.put(nextId, hologram);
         save(nextId);
         spawn(hologram);
+        if (firstMinigameLeaderboard) {
+            resetMinigameLeaderboardCycleDeadline();
+        }
 
         return nextId;
     }
@@ -447,12 +641,6 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         }
 
         hologram.data = new ArrayList<>(data);
-        HologramTypeHandler handler = handlers.get(hologram.type);
-        if (handler != null) {
-            List<String> resolvedLines = handler.lines(hologram.type, hologram.context, hologram.id, data);
-            hologram.data = new ArrayList<>(resolvedLines);
-        }
-
         save(id);
         respawn(hologram);
     }
@@ -478,10 +666,6 @@ public class HologramServiceImpl extends BaseService implements HologramService 
                 continue;
             }
 
-            List<String> resolvedLines = handler.lines(data.type, data.context, data.id, data.data);
-            data.data = new ArrayList<>(resolvedLines);
-
-            save(data.id);
             respawn(data);
         }
     }
@@ -718,6 +902,9 @@ public class HologramServiceImpl extends BaseService implements HologramService 
      * @param data The hologram data to respawn.
      */
     private void respawn(HologramData data) {
+        if (spawningIds.contains(data.id)) {
+            return;
+        }
         despawn(data.id);
         spawn(data);
     }
@@ -729,48 +916,51 @@ public class HologramServiceImpl extends BaseService implements HologramService 
      */
     private void spawn(HologramData hologram) {
         HologramTypeHandler handler = handlers.get(hologram.type);
-        if (handler == null) {
-            return;
-        }
-
-        List<String> lines = handler.lines(hologram.type, hologram.context, hologram.id, hologram.data);
-        if (lines.isEmpty()) {
-            return;
-        }
-
         World world = hologram.location.getWorld();
-        if (world == null) {
+        if (handler == null || world == null
+            || !world.isChunkLoaded(hologram.location.getBlockX() >> 4, hologram.location.getBlockZ() >> 4)
+            || entitiesById.containsKey(hologram.id) || !spawningIds.add(hologram.id)) {
             return;
         }
 
+        // Claim the board before rendering/spawning can invoke synchronous event callbacks.
         List<UUID> uuids = new ArrayList<>();
-        double yOffset = 0;
-
-        for (String line : lines) {
-            Location lineLoc = hologram.location.clone().add(0, yOffset, 0);
-            String renderedLine = api.placeholders().apply(line);
-            ArmorStand stand = world.spawn(lineLoc, ArmorStand.class, entity -> {
-                entity.setMarker(true);
-                entity.setInvisible(true);
-                entity.setGravity(false);
-                entity.setSmall(true);
-                entity.setCustomNameVisible(true);
-                entity.customName(TextUtil.colourise(renderedLine));
-                entity.setVisibleByDefault(!visibilityEnabled);
-                entity.setPersistent(false);
-                entity.addScoreboardTag(STEMCRAFT_HOLOGRAM_TAG);
-            });
-            uuids.add(stand.getUniqueId());
-            yOffset -= LINE_SPACING;
-        }
-
         entitiesById.put(hologram.id, uuids);
-        if (visibilityEnabled) {
-            for (UUID uuid : uuids) {
-                Entity entity = findEntity(uuid);
-                if (entity != null) {
-                    syncVisibility(entity, false);
+        boolean complete = false;
+        try {
+            List<String> lines = handler.lines(hologram.type, hologram.context, hologram.id, hologram.data);
+            double yOffset = 0;
+            for (String line : lines) {
+                Location lineLoc = hologram.location.clone().add(0, yOffset, 0);
+                String renderedLine = api.placeholders().apply(line);
+                world.spawn(lineLoc, ArmorStand.class, entity -> {
+                    uuids.add(entity.getUniqueId());
+                    entity.addScoreboardTag(STEMCRAFT_HOLOGRAM_TAG);
+                    entity.setPersistent(false);
+                    entity.setMarker(true);
+                    entity.setInvisible(true);
+                    entity.setGravity(false);
+                    entity.setSmall(true);
+                    entity.setCustomNameVisible(true);
+                    entity.customName(TextUtil.colourise(renderedLine));
+                    entity.setVisibleByDefault(!visibilityEnabled);
+                });
+                yOffset -= LINE_SPACING;
+            }
+
+            if (visibilityEnabled) {
+                for (UUID uuid : uuids) {
+                    Entity entity = findEntity(uuid);
+                    if (entity != null) {
+                        syncVisibility(entity, false);
+                    }
                 }
+            }
+            complete = true;
+        } finally {
+            spawningIds.remove(hologram.id);
+            if (!complete) {
+                despawn(hologram.id);
             }
         }
     }
@@ -831,6 +1021,15 @@ public class HologramServiceImpl extends BaseService implements HologramService 
     }
 
     private record DynamicKey(@NotNull String type, @NotNull String context) { }
+
+    private record CycleButtonLocation(@NotNull String world, int x, int y, int z) { }
+
+    private record MiniGameLeaderboardSource(
+        @NotNull String namespace,
+        @NotNull String arenaId,
+        @NotNull String arenaName,
+        @NotNull String statKey
+    ) { }
 
     private static final class DynamicHologram {
         private final DynamicKey key;
@@ -900,6 +1099,53 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         return lines;
     }
 
+    private @NotNull List<String> renderMinigameLeaderboard(@NotNull List<String> data) {
+        List<MiniGameLeaderboardSource> sources = minigameLeaderboardSources();
+        if (sources.isEmpty()) {
+            return List.of("<gray>No arena-specific minigame rankings are available.</gray>");
+        }
+
+        minigameLeaderboardIndex = Math.floorMod(minigameLeaderboardIndex, sources.size());
+        MiniGameLeaderboardSource source = sources.get(minigameLeaderboardIndex);
+        return renderStatLeaderboard(source.statKey(), data);
+    }
+
+    private @NotNull List<MiniGameLeaderboardSource> minigameLeaderboardSources() {
+        List<PlayerStatDefinition> definitions = api.playerStats().getDefinitions();
+        List<MiniGameLeaderboardSource> sources = new ArrayList<>();
+        for (MiniGame minigame : api.minigames().list()) {
+            for (MiniGameArena arena : minigame.arenas()) {
+                PlayerStatDefinition definition = definitions.stream()
+                    .filter(candidate -> "arena".equalsIgnoreCase(Objects.requireNonNullElse(candidate.scope(), "")))
+                    .filter(candidate -> Objects.equals(candidate.namespace(), arena.namespace()))
+                    .filter(candidate -> Objects.equals(candidate.scopeId(), arena.id()))
+                    .min(Comparator
+                        .comparingInt(this::minigameLeaderboardStatPriority)
+                        .thenComparing(PlayerStatDefinition::key, String.CASE_INSENSITIVE_ORDER))
+                    .orElse(null);
+                if (definition != null) {
+                    sources.add(new MiniGameLeaderboardSource(
+                        arena.namespace(), arena.id(), arena.getName(), definition.key()));
+                }
+            }
+        }
+
+        sources.sort(Comparator
+            .comparing(MiniGameLeaderboardSource::namespace, String.CASE_INSENSITIVE_ORDER)
+            .thenComparing(MiniGameLeaderboardSource::arenaName, String.CASE_INSENSITIVE_ORDER)
+            .thenComparing(MiniGameLeaderboardSource::arenaId, String.CASE_INSENSITIVE_ORDER));
+        return sources;
+    }
+
+    private int minigameLeaderboardStatPriority(@NotNull PlayerStatDefinition definition) {
+        String title = definition.title().toLowerCase(Locale.ROOT);
+        String key = definition.key().toLowerCase(Locale.ROOT);
+        if (title.contains("win") || key.matches(".*_wins?(?:_.*)?")) return 0;
+        if (title.contains("goal") || key.contains("_goal")) return 1;
+        if (title.contains("score") || key.contains("_score")) return 2;
+        return 3;
+    }
+
     private @NotNull List<String> renderStatLeaderboard(@NotNull String context, @NotNull List<String> data) {
         String statKey = context.trim();
         if (statKey.isBlank()) {
@@ -921,6 +1167,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
             return lines;
         }
 
+        List<String> rows = new ArrayList<>();
         int rank = 1;
         for (PlayerStatsRecord record : records) {
             PlayerStatValue value = record.stats().isEmpty() ? null : record.stats().getFirst();
@@ -937,7 +1184,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
                 ? Objects.requireNonNullElse(options.firstLine(), options.line())
                 : options.line();
 
-            lines.add(template
+            rows.add(template
                 .replace("{rank}", Integer.toString(rank))
                 .replace("{player}", playerName)
                 .replace("{value}", formatStatValue(value.value()))
@@ -945,6 +1192,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
                 .replace("{period}", options.periodLabel()));
             rank++;
         }
+        lines.addAll(LeaderboardLayout.align(rows));
         return lines;
     }
 
@@ -952,8 +1200,8 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         String title = "<gold>" + definition.title() + "</gold>";
         int limit = DEFAULT_STAT_LEADERBOARD_LIMIT;
         String period = "all";
-        String line = "<yellow>{rank}.</yellow> <aqua>{player}</aqua> <dark_gray>-</dark_gray> <gold>{value}</gold>";
-        String firstLine = "<gold>{rank}.</gold> <yellow>{player}</yellow> <dark_gray>-</dark_gray> <gold>{value}</gold>";
+        String line = "<yellow>{rank}.</yellow>{rank-gap}<aqua>{player}</aqua>{gap}<gold>{value}</gold>";
+        String firstLine = "<gold>{rank}.</gold>{rank-gap}<yellow>{player}</yellow>{gap}<gold>{value}</gold>";
 
         for (String rawLine : data) {
             int separator = rawLine.indexOf('=');
@@ -1207,6 +1455,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         changed |= ensureDefault(section, "visibility.max_distance", DEFAULT_MAX_VISIBLE_DISTANCE);
         changed |= ensureDefault(section, "visibility.require_line_of_sight", true);
         changed |= ensureDefault(section, "visibility.apply_to_citizens", true);
+        changed |= ensureDefault(section, "minigame_leaderboard.cycle_delay_seconds", DEFAULT_MINIGAME_LEADERBOARD_DELAY_SECONDS);
 
         if (changed) {
             section.save();
@@ -1218,6 +1467,75 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         maxVisibleDistanceSquared = maxVisibleDistance * maxVisibleDistance;
         requireLineOfSight = section.getBoolean("visibility.require_line_of_sight", true);
         applyToCitizensHolograms = section.getBoolean("visibility.apply_to_citizens", true);
+        minigameLeaderboardDelaySeconds = Math.clamp(
+            section.getInt("minigame_leaderboard.cycle_delay_seconds", DEFAULT_MINIGAME_LEADERBOARD_DELAY_SECONDS),
+            0,
+            MAX_MINIGAME_LEADERBOARD_DELAY_SECONDS
+        );
+        String buttonWorld = section.getString("minigame_leaderboard.button.world", "").trim();
+        minigameLeaderboardButton = buttonWorld.isBlank() ? null : new CycleButtonLocation(
+            buttonWorld,
+            section.getInt("minigame_leaderboard.button.x", 0),
+            section.getInt("minigame_leaderboard.button.y", 0),
+            section.getInt("minigame_leaderboard.button.z", 0)
+        );
+    }
+
+    private void startMinigameLeaderboardCycleTask() {
+        api.tasks().cancel(MINIGAME_LEADERBOARD_CYCLE_TASK_ID);
+        resetMinigameLeaderboardCycleDeadline();
+        if (minigameLeaderboardDelaySeconds == 0) {
+            return;
+        }
+        api.tasks().repeating(MINIGAME_LEADERBOARD_CYCLE_TASK_ID, 20L, 20L, this::tickMinigameLeaderboardCycle);
+    }
+
+    private void tickMinigameLeaderboardCycle() {
+        if (minigameLeaderboardDelaySeconds == 0 || System.currentTimeMillis() < nextMinigameLeaderboardCycleAt) {
+            return;
+        }
+        if (holograms.values().stream().noneMatch(data -> data.type.equals(MINIGAME_LEADERBOARD_TYPE))) {
+            resetMinigameLeaderboardCycleDeadline();
+            return;
+        }
+        advanceMinigameLeaderboard();
+    }
+
+    private void advanceMinigameLeaderboard() {
+        if (holograms.values().stream().noneMatch(data -> data.type.equals(MINIGAME_LEADERBOARD_TYPE))) {
+            return;
+        }
+        List<MiniGameLeaderboardSource> sources = minigameLeaderboardSources();
+        if (sources.isEmpty()) {
+            minigameLeaderboardIndex = 0;
+        } else {
+            minigameLeaderboardIndex = (minigameLeaderboardIndex + 1) % sources.size();
+        }
+        resetMinigameLeaderboardCycleDeadline();
+        update(MINIGAME_LEADERBOARD_TYPE, null);
+    }
+
+    private void resetMinigameLeaderboardCycleDeadline() {
+        nextMinigameLeaderboardCycleAt = minigameLeaderboardDelaySeconds == 0
+            ? Long.MAX_VALUE
+            : System.currentTimeMillis() + minigameLeaderboardDelaySeconds * 1000L;
+    }
+
+    private void handleMinigameLeaderboardButton(@NotNull PlayerInteractEvent event) {
+        Block clicked = event.getClickedBlock();
+        CycleButtonLocation configured = minigameLeaderboardButton;
+        if (event.getAction() != Action.RIGHT_CLICK_BLOCK || event.getHand() != EquipmentSlot.HAND
+            || clicked == null || !isButton(clicked) || configured == null) {
+            return;
+        }
+        if (clicked.getWorld().getName().equalsIgnoreCase(configured.world())
+            && clicked.getX() == configured.x() && clicked.getY() == configured.y() && clicked.getZ() == configured.z()) {
+            advanceMinigameLeaderboard();
+        }
+    }
+
+    private boolean isButton(@NotNull Block block) {
+        return block.getType().name().endsWith("_BUTTON");
     }
 
     private boolean ensureDefault(@NotNull ConfigSection section, @NotNull String path, @NotNull Object value) {

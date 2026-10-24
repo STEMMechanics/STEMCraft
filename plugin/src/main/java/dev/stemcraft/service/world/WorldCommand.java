@@ -585,11 +585,12 @@ public class WorldCommand {
 
         try {
             api.worlds().duplicateWorld(src, dst);
-            ctx.returnInfo("WORLD_DUPLICATED", "source", src, "target", dst);
         } catch (Exception e) {
             api.messages().error("WORLD_FAILED_DUPLICATE", e, "world", src);
             ctx.returnError("WORLD_FAILED_DUPLICATE", "world", src);
+            return;
         }
+        ctx.returnInfo("WORLD_DUPLICATED", "source", src, "target", dst);
     }
 
     /**

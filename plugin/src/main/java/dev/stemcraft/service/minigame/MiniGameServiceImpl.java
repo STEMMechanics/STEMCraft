@@ -21,6 +21,7 @@
 package dev.stemcraft.service.minigame;
 
 import com.destroystokyo.paper.event.player.PlayerAdvancementCriterionGrantEvent;
+import com.destroystokyo.paper.event.player.PlayerSetSpawnEvent;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.minigame.MiniGame;
@@ -53,6 +54,7 @@ import org.bukkit.event.inventory.CraftItemEvent;
 import org.bukkit.event.inventory.PrepareItemCraftEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerBedEnterEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.inventory.InventoryPickupItemEvent;
 import org.bukkit.event.world.WorldUnloadEvent;
@@ -113,6 +115,9 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
                 event.setCancelled(true);
             }
         }, EventPriority.HIGHEST, true);
+
+        api.events().register(PlayerBedEnterEvent.class, this::handleBedEnter, EventPriority.HIGHEST, true);
+        api.events().register(PlayerSetSpawnEvent.class, this::handleSpawnChange, EventPriority.HIGHEST, true);
 
         // Countdown Task
         api.tasks().repeating("minigame-countdown", 20, 20, () -> {
@@ -411,6 +416,25 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
                 activeArena.handleExternalTeleport(player);
             });
         });
+    }
+
+    void handleBedEnter(@NotNull PlayerBedEnterEvent event) {
+        MiniGameArenaImpl arena = findPlayerArena(event.getPlayer());
+        if (arena == null) {
+            return;
+        }
+
+        event.setCancelled(true);
+        arena.warn(event.getPlayer(), "Respawn points are disabled in minigames.");
+    }
+
+    void handleSpawnChange(@NotNull PlayerSetSpawnEvent event) {
+        if (findPlayerArena(event.getPlayer()) == null
+            || event.getCause() == PlayerSetSpawnEvent.Cause.PLUGIN) {
+            return;
+        }
+
+        event.setCancelled(true);
     }
 
     @Override

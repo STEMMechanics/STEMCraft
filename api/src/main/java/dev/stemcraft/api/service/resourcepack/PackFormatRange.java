@@ -4,20 +4,23 @@ import org.jetbrains.annotations.NotNull;
 
 /**
  * Inclusive range of resource-pack format versions.
+ *
+ * <p>Format versions are represented as decimals because newer Minecraft
+ * resource-pack formats can contain a fractional component, such as 97.1.</p>
  */
-public record PackFormatRange(int minFormat, int maxFormat) {
-    private static final PackFormatRange ALL = new PackFormatRange(1, Integer.MAX_VALUE);
+public record PackFormatRange(double minFormat, double maxFormat) {
+    private static final PackFormatRange ALL = new PackFormatRange(1, Double.POSITIVE_INFINITY);
 
     public PackFormatRange {
-        if (minFormat <= 0) {
+        if (!Double.isFinite(minFormat) || minFormat <= 0) {
             throw new IllegalArgumentException("minFormat must be positive");
         }
-        if (maxFormat < minFormat) {
+        if (Double.isNaN(maxFormat) || maxFormat < minFormat) {
             throw new IllegalArgumentException("maxFormat must be greater than or equal to minFormat");
         }
     }
 
-    public boolean contains(int format) {
+    public boolean contains(double format) {
         return format >= minFormat && format <= maxFormat;
     }
 
@@ -35,11 +38,11 @@ public record PackFormatRange(int minFormat, int maxFormat) {
         );
     }
 
-    public @NotNull PackFormatRange clipMin(int minValue) {
+    public @NotNull PackFormatRange clipMin(double minValue) {
         return new PackFormatRange(Math.max(minFormat, minValue), maxFormat);
     }
 
-    public boolean isAfter(int format) {
+    public boolean isAfter(double format) {
         return minFormat > format;
     }
 

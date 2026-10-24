@@ -40,6 +40,7 @@ import dev.stemcraft.feature.Mailboxes;
 import dev.stemcraft.api.service.comet.CometService;
 import dev.stemcraft.api.service.mailbox.MailboxService;
 import dev.stemcraft.api.service.save.SaveReport;
+import dev.stemcraft.api.service.workshop.WorkshopService;
 import dev.stemcraft.service.command.CommandServiceImpl;
 import dev.stemcraft.service.message.MessageServiceImpl;
 import dev.stemcraft.service.minigame.MiniGameServiceImpl;
@@ -92,8 +93,8 @@ import java.util.regex.Pattern;
 @Getter
 @Accessors(fluent = true)
 public final class STEMCraft extends JavaPlugin {
-    public static final String MINIMUM_MINECRAFT_VERSION = "26.2";
-    private static final int[] MINIMUM_MINECRAFT_VERSION_COMPONENTS = {26, 2, 0};
+    public static final String MINIMUM_MINECRAFT_VERSION = "26.3";
+    private static final int[] MINIMUM_MINECRAFT_VERSION_COMPONENTS = {26, 3, 0};
     private static final Pattern VERSION_COMPONENT_PATTERN = Pattern.compile("\\d+");
     private static final String BOOTSTRAP_ERROR_LOAD_CONFIG = "Could not load config.yml.";
     private static STEMCraftAPI api;
@@ -101,6 +102,7 @@ public final class STEMCraft extends JavaPlugin {
 
     private ChatServiceImpl chat;
     private CommandServiceImpl commands;
+    private DebugServiceImpl debug;
     private CoordinateBarServiceImpl coordinateBar;
     private ConfigServiceImpl config;
     private AuditServiceImpl audit;
@@ -137,6 +139,7 @@ public final class STEMCraft extends JavaPlugin {
     private dev.stemcraft.feature.StemBotFeature stemBot;
     private WebServiceImpl web;
     private WorldServiceImpl worlds;
+    private WorkshopService workshops;
 
     @Getter(AccessLevel.NONE)
     private ConfigFile configFile;
@@ -220,6 +223,7 @@ public final class STEMCraft extends JavaPlugin {
         audit = new AuditServiceImpl(this, api);
         chat = new ChatServiceImpl(this, api);
         commands = new CommandServiceImpl(this, api);
+        debug = new DebugServiceImpl(this, api);
         coordinateBar = new CoordinateBarServiceImpl(this, api);
         database = new DatabaseServiceImpl(this, api);
         dialogs = new DialogServiceImpl(this, api);
@@ -256,6 +260,7 @@ public final class STEMCraft extends JavaPlugin {
         audit.onEnable();
         chat.onEnable();
         commands.onEnable();
+        debug.onEnable();
         coordinateBar.onEnable();
         events.onEnable();
         holograms.onEnable();
@@ -414,6 +419,7 @@ public final class STEMCraft extends JavaPlugin {
         disableService(database);
         disableService(dialogs);
         disableService(commands);
+        disableService(debug);
         disableService(coordinateBar);
         disableService(chat);
 
@@ -614,6 +620,9 @@ public final class STEMCraft extends JavaPlugin {
         if (feature instanceof Mailboxes mailboxFeature) {
             mailboxes = mailboxFeature;
         }
+        if (feature instanceof WorkshopService workshopService) {
+            workshops = workshopService;
+        }
         loadedFeatures.add(feature);
         debug("STEMCRAFT_FEATURE_LOADED", "name", feature.id());
     }
@@ -752,7 +761,7 @@ public final class STEMCraft extends JavaPlugin {
 
                     callback.accept(instance);
 
-                } catch (ReflectiveOperationException | RuntimeException ex) {
+                } catch (ReflectiveOperationException | RuntimeException | LinkageError ex) {
                     recordLoadFailure(className, ex.getClass().getSimpleName() + ": " + ex.getMessage());
                     error("STEMCRAFT_ERROR_LOAD_CLASS", ex,
                             "class", className,

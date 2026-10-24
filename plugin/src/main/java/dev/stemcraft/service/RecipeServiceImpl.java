@@ -46,7 +46,6 @@ import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.potion.PotionType;
-import io.papermc.paper.potion.PotionMix;
 
 /**
  * Implementation of the RecipeService for managing custom recipes.
@@ -399,8 +398,8 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
             RecipeChoice input = potionInputChoice(recipe.getString("input", "AWKWARD"));
             if (input == null) continue;
             NamespacedKey key = key("brew_" + id);
-            Bukkit.getPotionBrewer().removePotionMix(key);
-            Bukkit.getPotionBrewer().addPotionMix(new PotionMix(key, result, input, ingredient));
+            Bukkit.removeRecipe(key);
+            Bukkit.addRecipe(new BrewingRecipe(key, result, input, ingredient));
         }
     }
 

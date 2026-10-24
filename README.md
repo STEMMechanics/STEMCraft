@@ -8,9 +8,9 @@ This is the core STEMCraft plugin that provides the core functionality and helpe
 ## Requirements
 
 - Java 25
-- Paper 26.2 or higher
+- Paper 26.3 or higher
 
-STEMCraft checks the server version during startup and disables itself with a clear log message when run on Minecraft versions older than 26.2.
+STEMCraft checks the server version during startup and disables itself with a clear log message when run on Minecraft versions older than 26.3.
 
 
 ## Usage

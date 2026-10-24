@@ -29,6 +29,7 @@ import org.bukkit.block.BlockState;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockDropItemEvent;
 import org.bukkit.event.block.BlockFadeEvent;
 import org.bukkit.event.block.BlockIgniteEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
@@ -160,6 +161,14 @@ public class RestrictCreative extends BaseFeature {
                 event.setCancelled(true);
             }
         });
+
+        // Container contents and jukebox records are block drops, not player drops.
+        api.events().register(BlockDropItemEvent.class, event -> {
+            Player player = event.getPlayer();
+            if (player.getGameMode() == GameMode.CREATIVE && !player.hasPermission(PERMISSION_DROP_ITEMS)) {
+                event.setCancelled(true);
+            }
+        }, EventPriority.HIGHEST, true);
 
         api.events().register(EntityPickupItemEvent.class, event -> {
             if (event.getEntity() instanceof Player player) {

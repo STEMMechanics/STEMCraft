@@ -6,6 +6,7 @@ import dev.stemcraft.service.AuditServiceImpl;
 import dev.stemcraft.service.ConfigServiceImpl;
 import dev.stemcraft.service.CoordinateBarServiceImpl;
 import dev.stemcraft.service.DatabaseServiceImpl;
+import dev.stemcraft.service.DebugServiceImpl;
 import dev.stemcraft.service.EventServiceImpl;
 import dev.stemcraft.service.HologramServiceImpl;
 import dev.stemcraft.service.GiftServiceImpl;
@@ -68,6 +69,7 @@ class STEMCraftAPIImplTest {
         "audit",
         "comets",
         "commands",
+        "debug",
         "coordinateBar",
         "config",
         "database",
@@ -99,6 +101,7 @@ class STEMCraftAPIImplTest {
         "tabComplete",
         "tasks",
         "web",
+        "workshops",
         "worlds",
         "worldGeneration"
     );
@@ -120,6 +123,7 @@ class STEMCraftAPIImplTest {
         AuditServiceImpl audit = mock(AuditServiceImpl.class);
         CometService comets = mock(CometService.class);
         CommandServiceImpl commands = mock(CommandServiceImpl.class);
+        DebugServiceImpl debug = mock(DebugServiceImpl.class);
         CoordinateBarServiceImpl coordinateBar = mock(CoordinateBarServiceImpl.class);
         ConfigServiceImpl config = mock(ConfigServiceImpl.class);
         DatabaseServiceImpl database = mock(DatabaseServiceImpl.class);
@@ -155,6 +159,7 @@ class STEMCraftAPIImplTest {
         when(plugin.audit()).thenReturn(audit);
         when(plugin.comets()).thenReturn(comets);
         when(plugin.commands()).thenReturn(commands);
+        when(plugin.debug()).thenReturn(debug);
         when(plugin.coordinateBar()).thenReturn(coordinateBar);
         when(plugin.config()).thenReturn(config);
         when(plugin.database()).thenReturn(database);
@@ -192,6 +197,7 @@ class STEMCraftAPIImplTest {
         expectedDelegates.put("audit", audit);
         expectedDelegates.put("comets", comets);
         expectedDelegates.put("commands", commands);
+        expectedDelegates.put("debug", debug);
         expectedDelegates.put("coordinateBar", coordinateBar);
         expectedDelegates.put("config", config);
         expectedDelegates.put("database", database);
@@ -222,6 +228,7 @@ class STEMCraftAPIImplTest {
         expectedDelegates.put("tabComplete", tabComplete);
         expectedDelegates.put("tasks", tasks);
         expectedDelegates.put("web", web);
+        expectedDelegates.put("workshops", dev.stemcraft.api.service.workshop.WorkshopService.UNAVAILABLE);
         expectedDelegates.put("worlds", worlds);
         var worldGeneration = mock(dev.stemcraft.api.service.world.WorldGeneration.class);
         when(worlds.generator()).thenReturn(worldGeneration);
@@ -257,11 +264,11 @@ class STEMCraftAPIImplTest {
     }
 
     @Test
-    void minecraftVersionSupportStartsAt26_2() {
+    void minecraftVersionSupportStartsAt26_3() {
         assertFalse(STEMCraft.isMinecraftVersionSupported(new int[] {1, 21, 11}));
-        assertFalse(STEMCraft.isMinecraftVersionSupported(new int[] {26, 1, 9}));
-        assertTrue(STEMCraft.isMinecraftVersionSupported(new int[] {26, 2, 0}));
-        assertTrue(STEMCraft.isMinecraftVersionSupported(new int[] {26, 2, 1}));
+        assertFalse(STEMCraft.isMinecraftVersionSupported(new int[] {26, 2, 9}));
+        assertTrue(STEMCraft.isMinecraftVersionSupported(new int[] {26, 3, 0}));
+        assertTrue(STEMCraft.isMinecraftVersionSupported(new int[] {26, 3, 1}));
         assertTrue(STEMCraft.isMinecraftVersionSupported(new int[] {27, 0, 0}));
         int[] missingVersion = null;
         // Exercise the null-input contract despite static analysis knowing its result.
@@ -306,6 +313,15 @@ class STEMCraftAPIImplTest {
         var bot=mock(dev.stemcraft.feature.StemBotFeature.class);
         when(plugin.stemBot()).thenReturn(bot);
         assertSame(bot,api.stemBot());
+    }
+
+    @Test
+    void unavailableWorkshopFeatureUsesSafeService() {
+        var workshops = mock(dev.stemcraft.api.service.workshop.WorkshopService.class);
+        when(plugin.workshops()).thenReturn(workshops);
+        when(workshops.isAvailable()).thenReturn(false);
+
+        assertSame(dev.stemcraft.api.service.workshop.WorkshopService.UNAVAILABLE, api.workshops());
     }
 
     @Test

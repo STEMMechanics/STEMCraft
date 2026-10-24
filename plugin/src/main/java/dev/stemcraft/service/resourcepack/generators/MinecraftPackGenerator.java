@@ -43,7 +43,7 @@ public class MinecraftPackGenerator extends AbstractResourcePackGenerator {
                         outputNamespace
                     );
                     if (context.target().packFormat() >= 88 && namespaceDir.getName().equals("minecraft")) {
-                        migrate26_2Textures(context.writer().resolve(outputNamespace));
+                        migrateLegacyPillarTextures(context.writer().resolve(outputNamespace));
                     }
                 } catch (IOException e) {
                     throw new ResourcePackGeneratorException(
@@ -55,7 +55,7 @@ public class MinecraftPackGenerator extends AbstractResourcePackGenerator {
         }
     }
 
-    private void migrate26_2Textures(@NotNull Path minecraftAssets) throws IOException {
+    private void migrateLegacyPillarTextures(@NotNull Path minecraftAssets) throws IOException {
         migrateRenamedTexture(minecraftAssets, "textures/block/quartz_pillar.png", "textures/block/quartz_pillar_side.png");
         migrateRenamedTexture(minecraftAssets, "textures/block/purpur_pillar.png", "textures/block/purpur_pillar_side.png");
     }

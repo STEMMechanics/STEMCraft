@@ -15,9 +15,11 @@ The list below reflects the active built-in command roots in source.
 | --- | --- | --- |
 | `/stemcraft` | `STEMCraftCommand` | Status, version, explicit STEMCraft/extension saves, reload, and first-join administration |
 | `/maintenance` | `STEMCraft.java` | Toggles server maintenance mode |
-| `/webserver` | `WebServiceImpl` | Embedded web server control |
+| `/debug` | `DebugServiceImpl` | List and run registered feature/service diagnostics; requires `stemcraft.command.debug` |
+| `/webserver` | `WebServiceImpl` | Embedded web server control, status and a clickable HTTP diagnostic URL |
 | `/world` | `WorldCommand` | World lifecycle, inspection, settings, and join/leave command editing |
-| `/resourcepack` | `ResourcePackCommand` | Pack delivery and pack build operations |
+| `/resourcepack` | `ResourcePackCommand` | Pack delivery, pack builds and a clickable download URL |
+| `/glyph` | `GlyphCommand` | Browse and search registered resource-pack glyphs |
 | `/namedregion` | `NamedRegions` | Inspect, find, teleport to, rename, retire, release, and regenerate named areas; see [Named Regions](https://github.com/STEMMechanics/stemcraft/wiki/named-regions) |
 | `/hologram` | `HologramServiceImpl` | Hologram creation and editing |
 | `/mail` | `Mailboxes` | Compose item and message deliveries (mailbox admin) |
@@ -30,6 +32,118 @@ The list below reflects the active built-in command roots in source.
 | `/muteall` | `ChatServiceImpl` | Global chat mute control |
 | `/ban`, `/unban`, `/kick`, `/warn` | `PunishmentServiceImpl` | Punishment management |
 | `/report` | `ChatServiceImpl` | Player report submission |
+| `/announcements` | `AnnouncementsFeature` | List, manage, and broadcast configured announcements |
+| `/workshops` | `WorkshopsFeature` | View upcoming workshops and manage manual entries |
+
+### STEMBot wilderness directions
+
+The configured `/help wilderness` and `/stembot wilderness` topic checks that the
+player is in a Survival overworld, then uses `exit-region:survival-old-terrain` to
+give the closest direction out of the supplied area, distance and coordinates.
+Topics, world restrictions and dialogue live in `stembot.yml`. The same
+`require-world` and `exit-region` instructions can serve other topics and regions.
+See [STEMBot](stembot.md) for bounds and custom-script setup.
+
+### Web server diagnostics
+
+Use `/webserver` or `/webserver status` to see whether the embedded server is
+running, its listening address, and a clickable `/status` URL. Successful
+`/webserver start` and `/webserver stop` commands confirm their outcome to the
+player. A failed start reports failure to the player and logs the cause.
+
+Direct connections to the embedded server use **HTTP**. An HTTPS public URL
+requires a reverse proxy that terminates TLS and forwards HTTP to this server.
+`web-server.ip: "127.0.0.1"` accepts local connections, such as a local reverse
+proxy. For direct connections from other computers, bind to `"0.0.0.0"` and
+forward/allow the configured port, then set `web-server.public-url` to the
+address clients can reach.
+
+The read-only `GET /status` endpoint does not require Discord role
+authorisation. Existing status fields remain available to callers. To include
+current online Minecraft usernames, set
+`web-server.status.players.enabled: true`; the response then adds a sorted
+`players` array containing usernames only. IP addresses, UUIDs, emails and
+other personal data are not included. Keep the embedded server on loopback
+when the endpoint is consumed through a local HTTPS reverse proxy, and use
+the HTTPS `public-url` between STEMBot and the proxy. Administrative or write
+endpoints keep their own authentication requirements.
+
+Open the `/status` link from the affected computer first, then use
+`/resourcepack url` to test the pack download. If no request appears in the log,
+the request did not reach the HTTP handler: check the protocol, address, port,
+proxy, and firewall. Handler failures log their exception and return HTTP 500
+when a response has not already started. Quest editor access codes stay redacted
+from request log paths.
+
+### Resource pack download diagnostics
+
+Use `/resourcepack url` (or `/respack url`) to print the current download address
+as a clickable link. Open it in a browser on the affected player's computer to
+check whether that computer can download the pack. The address includes the same
+version parameter used when sending the pack to Minecraft. This command displays
+the URL without requesting an in-game download or rebuilding the pack.
+It requires `stemcraft.command.resourcepack`, like the other resource pack commands.
+Tab completion offers `info`, `send`, `sendall`, `url` and `zip`; player names are
+offered after `send`.
+
+### Hologram cycleboard
+
+Create one rotating arena-stat board with `/hologram create minigame_leaderboard`.
+
+Boards render only while their chunks are loaded; automatic rotation does not
+load unattended chunks. Returning renders the current page once. Reloading
+STEMCraft rebuilds tracked boards. Unlinked nameplates remain for manual cleanup.
+
+Default leaderboard rows use columns: ranks and names align left, and scores or
+times align right. This also applies to `stat_leaderboard` and Parkour/Boat Race
+record boards. Rows fit the longest entry with a minimum two-space gap between
+the name and score/time, measured in the default Minecraft font. Spaces leave at most
+three pixels of rounding. Titles remain centered. Custom `line=` and `first=`
+templates retain their formatting; add `{gap}` between the name and score/time
+to align the right column, and `{rank-gap}` after the rank to align names.
+
+It discovers arena-scoped minigame stats and shows one arena at a time. Wins are
+used when available; otherwise it prefers goals, scores, then a stat by key.
+The default rotation delay is 20 seconds. Configure or disable timed rotation
+with `/hologram cycle delay <seconds>` (`0` disables timed rotation), then set a
+single manual advance button with `/hologram cycle button set` while looking at
+it, or remove it with `/hologram cycle button clear`. Setting these options
+requires `stemcraft.command.hologram`; any player can press the configured
+button. The board accepts the stat leaderboard options `limit`, `period`, `line`,
+and `first` as pipe-separated data after the type.
+
+### Hologram deletion
+
+Use `/hologram delete -range 4` to delete all registered STEMCraft holograms
+within four blocks of your position in the current world. Add `-limit 1` to
+delete only the nearest one. The limit is optional; candidates are ordered from
+closest to furthest, with the lower hologram ID first when distances tie.
+Distance is measured to the saved board position, as with `/hologram closest`.
+Positive decimal ranges are accepted, and the two flags can appear in either order.
+Deleting by ID still works, including from the console. Range deletion requires
+a player and the existing `stemcraft.command.hologram` permission.
+
+Deletion removes registered boards and their tracked rows. It does not remove
+unlinked nameplates, Citizens displays, or other plugins' entities. Reload and
+shutdown likewise leave untracked entities alone.
+
+For explicit cleanup of old STEMCraft-tagged static rows, stand nearby and run:
+
+```text
+/minecraft:kill @e[type=minecraft:armor_stand,distance=..4,nbt={Tags:["stemcraft:hologram"]},nbt=!{Tags:["stemcraft:dynamic-hologram"]}]
+```
+
+This also removes any active STEMCraft rows in that radius. It requires the
+`minecraft.command.kill` and `minecraft.command.selector` permissions; see
+[Paper's permissions reference](https://docs.papermc.io/paper/reference/permissions/).
+Use NBT filters for these colon-containing tag names. Minecraft's `tag=` selector
+reads an unquoted word and does not accept these names, even with quotes. The
+selector above was verified with Mojang's Minecraft 26.2 parser.
+From the server console, use the player's location instead:
+
+```text
+minecraft:execute at <player> run minecraft:kill @e[type=minecraft:armor_stand,distance=..4,nbt={Tags:["stemcraft:hologram"]},nbt=!{Tags:["stemcraft:dynamic-hologram"]}]
+```
 
 ## Travel and Utility
 
@@ -105,7 +219,37 @@ The `/world` command is one of the most important operator surfaces. It covers:
 
 Join and leave commands run as the player by default. Use `player:` or `server:` prefixes on individual entries to control sender mode per command.
 
-Custom command aliases also run as the player by default. Use `player:` or `server:` on a configured run entry to force the sender, and `{player}` / `{uuid}` placeholders inside the configured command text.
+Custom command aliases use the entry key as their command label when `command` is
+omitted. The `run` list is an ordered action list. An action beginning with
+`message:` is sent to the player through the message service; all other actions
+are dispatched as commands. Commands run as the player by default. Use `player:`
+or `server:` on an action to choose the sender, and use `{player}` / `{uuid}`
+placeholders inside command or message text.
+
+```yaml
+custom-commands:
+  discord:
+    permission: ""
+    run:
+      - "message:<aqua>Join our Discord community:</aqua>"
+      - "message:<click:open_url:'https://discord.example'><underlined><aqua>discord.example</aqua></underlined></click>"
+      - "server:discord announce {player}"
+```
+
+The command editor appends actions to the same ordered list:
+
+```text
+/customcommands create discord
+/customcommands addmessage discord "<aqua>Join our Discord community:</aqua>"
+/customcommands addcommand discord "server:discord announce {player}"
+```
+
+Use `/customcommands info discord` to see the complete action order. The
+`setcommand` and `removecommand` editor commands use the overall action index;
+`setmessage` and `removemessage` use the ordinal among message actions. Add
+actions in the desired sequence, or edit the YAML directly when you need to
+reorder an existing list. Message actions support MiniMessage formatting,
+routing directives, locale keys, and the same placeholders as command actions.
 
 ## Permission Conventions
 

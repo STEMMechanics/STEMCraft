@@ -1,0 +1,1158 @@
+/*
+ * STEMCraft - Minecraft Plugin
+ * Copyright (C) 2026 James Collins
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, version 3.
+ */
+
+package dev.stemcraft.feature;
+
+import dev.stemcraft.STEMCraft;
+import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.api.command.Command;
+import dev.stemcraft.api.command.CommandContext;
+import dev.stemcraft.api.config.ConfigSection;
+import dev.stemcraft.api.service.debug.DebugContext;
+import dev.stemcraft.api.service.debug.DebugRegistration;
+import dev.stemcraft.api.service.workshop.Workshop;
+import dev.stemcraft.api.service.workshop.WorkshopService;
+import dev.stemcraft.api.service.workshop.WorkshopSource;
+import dev.stemcraft.api.util.PlaceholderUtil;
+import dev.stemcraft.api.util.TimeUtil;
+import dev.stemcraft.api.util.TextUtil;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
+import org.bukkit.Bukkit;
+import org.bukkit.Registry;
+import org.bukkit.Sound;
+import org.bukkit.entity.Player;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.sql.ResultSet;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+/** Delivers scheduled, join, manual, and workshop-backed announcements. */
+public class AnnouncementsFeature extends BaseFeature {
+    static final String SCHEDULE_TASK = "feature:announcements-schedule";
+    static final String MIGRATION_NAME = "announcements";
+    static final int MIGRATION_VERSION = 1;
+    static final String WORKSHOP_TYPE = "workshops";
+    static final String LEGACY_WORKSHOP_PROMOTION_ID = "workshop-promotion";
+    static final String UPCOMING_WORKSHOP_JOIN_TASK_PREFIX = "announcements:join:upcoming-workshop:";
+    static final String ACTIVE_WORKSHOP_JOIN_TASK_PREFIX = "announcements:join:active-workshop:";
+    static final long NO_PLAYER_RETRY_SECONDS = 30L;
+    static final ZoneId DEFAULT_ZONE = ZoneId.of("Australia/Brisbane");
+    static final DateTimeFormatter WORKSHOP_DATE_FORMAT = DateTimeFormatter.ofPattern("EEEE d MMMM yyyy");
+    static final DateTimeFormatter WORKSHOP_TIME_FORMAT = DateTimeFormatter.ofPattern("h:mm a");
+    private static final String DEFAULT_UPCOMING_WORKSHOP_SOUND = "BLOCK_NOTE_BLOCK_CHIME";
+    private static final String DEFAULT_ACTIVE_WORKSHOP_SOUND = "BLOCK_BELL_USE";
+    private static final PlainTextComponentSerializer PLAIN_TEXT = PlainTextComponentSerializer.plainText();
+
+    private final Map<String, AnnouncementDefinition> configuredAnnouncements = new LinkedHashMap<>();
+    private final Map<String, AnnouncementDefinition> manualAnnouncements = new LinkedHashMap<>();
+    private final Map<String, AnnouncementDefinition> definitions = new LinkedHashMap<>();
+    private final Map<String, Instant> nextDue = new LinkedHashMap<>();
+    private final Map<UUID, String> joinTasks = new ConcurrentHashMap<>();
+    private final Map<UUID, String> upcomingWorkshopJoinTasks = new ConcurrentHashMap<>();
+    private final Map<UUID, String> activeWorkshopJoinTasks = new ConcurrentHashMap<>();
+
+    private boolean enabled;
+    private boolean scheduledEnabled;
+    private boolean joinEnabled;
+    private boolean announceOnStartup;
+    private long defaultIntervalSeconds;
+    private long minimumGapSeconds;
+    private long joinDelaySeconds;
+    private long upcomingWorkshopJoinDelaySeconds;
+    private long activeWorkshopJoinDelaySeconds;
+    private String prefix;
+    private List<String> firstTimeJoinMessage = List.of();
+    private List<String> returningJoinMessage = List.of();
+    private boolean upcomingWorkshopJoinEnabled;
+    private List<String> upcomingWorkshopJoinMessage = List.of();
+    private WorkshopFilter upcomingWorkshopJoinFilter = WorkshopFilter.NONE;
+    private AnnouncementSound upcomingWorkshopJoinSound = AnnouncementSound.DISABLED;
+    private boolean activeWorkshopJoinEnabled;
+    private List<String> activeWorkshopJoinMessage = List.of();
+    private AnnouncementSound activeWorkshopJoinSound = AnnouncementSound.DISABLED;
+    private ZoneId defaultTimezone = DEFAULT_ZONE;
+    private Instant lastScheduledBroadcastAt;
+    private Command command;
+    private DebugRegistration workshopLoginDebug;
+    private DebugRegistration workshopLoginUpcomingDebug;
+
+    public AnnouncementsFeature(STEMCraftAPI api) {
+        super(api);
+    }
+
+    @Override
+    public void onEnable() {
+        loadSettings();
+        ensureStorage();
+        loadManualAnnouncements();
+        registerCommand();
+        registerEvents();
+        registerDebugTests();
+        rebuildDefinitions(true);
+    }
+
+    @Override
+    public void onReload() {
+        super.onReload();
+        boolean wasEnabled = enabled;
+        loadSettings();
+        loadManualAnnouncements();
+        if (!joinEnabled) cancelJoinTasks();
+        else {
+            if (!upcomingWorkshopJoinEnabled) cancelUpcomingWorkshopJoinTasks();
+            if (!activeWorkshopJoinEnabled) cancelActiveWorkshopJoinTasks();
+        }
+        if (!enabled) {
+            unregisterDebugTests();
+            api.tasks().cancel(SCHEDULE_TASK);
+            cancelJoinTasks();
+            if (command != null) {
+                command.unregister();
+                command = null;
+            }
+            return;
+        }
+        if (!wasEnabled && command == null) {
+            registerCommand();
+        }
+        registerDebugTests();
+        rebuildDefinitions(false);
+    }
+
+    @Override
+    public void onDisable() {
+        enabled = false;
+        api.tasks().cancel(SCHEDULE_TASK);
+        cancelJoinTasks();
+        if (command != null) {
+            command.unregister();
+            command = null;
+        }
+        unregisterDebugTests();
+    }
+
+    private void registerDebugTests() {
+        if (workshopLoginDebug != null) return;
+        workshopLoginDebug = api.debug().register(
+                "workshop-login-active",
+                "Show and deliver the active-workshop join notice for a player.",
+                this::debugWorkshopLoginActive
+        );
+        workshopLoginUpcomingDebug = api.debug().register(
+                "workshop-login-upcoming",
+                "Show and deliver the upcoming-workshop join notice for a player.",
+                this::debugWorkshopLoginUpcoming
+        );
+    }
+
+    private void unregisterDebugTests() {
+        if (workshopLoginDebug != null) workshopLoginDebug.close();
+        if (workshopLoginUpcomingDebug != null) workshopLoginUpcomingDebug.close();
+        workshopLoginDebug = null;
+        workshopLoginUpcomingDebug = null;
+    }
+
+    private void loadSettings() {
+        ConfigSection section = getConfigSection();
+        enabled = isEnabled();
+        scheduledEnabled = section.getBoolean("scheduled-enabled", true);
+        joinEnabled = section.getBoolean("join-enabled", true);
+        announceOnStartup = section.getBoolean("announce-on-startup", false);
+        defaultIntervalSeconds = parseDuration(section.getString("default-interval", "15m"), 900L, 15L, 604800L);
+        minimumGapSeconds = parseDuration(section.getString("minimum-gap", "30s"), 30L, 0L, 86400L);
+        joinDelaySeconds = parseDuration(section.getString("join-delay", "5s"), 5L, 0L, 3600L);
+        prefix = section.getString("prefix", "");
+        defaultTimezone = parseZone(section.getString("timezone", DEFAULT_ZONE.getId()), DEFAULT_ZONE);
+        firstTimeJoinMessage = readLines(section, "join.first-time");
+        returningJoinMessage = readLines(section, "join.returning");
+        ConfigSection upcomingWorkshopJoin = section.getSection("join.upcoming-workshop", false);
+        upcomingWorkshopJoinEnabled = upcomingWorkshopJoin != null
+                && upcomingWorkshopJoin.getBoolean("enabled", false);
+        upcomingWorkshopJoinMessage = upcomingWorkshopJoin == null
+                ? List.of() : readLines(upcomingWorkshopJoin, "message");
+        upcomingWorkshopJoinFilter = upcomingWorkshopJoin == null
+                ? WorkshopFilter.NONE : readWorkshopFilter(upcomingWorkshopJoin.getSection("filters", false));
+        upcomingWorkshopJoinDelaySeconds = upcomingWorkshopJoin == null
+                ? 0L : parseDuration(upcomingWorkshopJoin.getString("delay", "0s"), 0L, 0L, 3600L);
+        upcomingWorkshopJoinSound = readAnnouncementSound(upcomingWorkshopJoin, DEFAULT_UPCOMING_WORKSHOP_SOUND);
+        ConfigSection activeWorkshopJoin = section.getSection("join.active-workshop", false);
+        activeWorkshopJoinEnabled = activeWorkshopJoin != null && activeWorkshopJoin.getBoolean("enabled", false);
+        activeWorkshopJoinMessage = activeWorkshopJoin == null ? List.of() : readLines(activeWorkshopJoin, "message");
+        activeWorkshopJoinDelaySeconds = activeWorkshopJoin == null
+                ? 0L : parseDuration(activeWorkshopJoin.getString("delay", "0s"), 0L, 0L, 3600L);
+        activeWorkshopJoinSound = readAnnouncementSound(activeWorkshopJoin, DEFAULT_ACTIVE_WORKSHOP_SOUND);
+        configuredAnnouncements.clear();
+        readConfiguredAnnouncements(section.getSection("scheduled", false));
+        if (configuredAnnouncements.values().stream().noneMatch(AnnouncementDefinition::workshopPromotion)) {
+            readLegacyWorkshopPromotion(section.getSection("workshop-promotions", false));
+        }
+    }
+
+    private void readConfiguredAnnouncements(@Nullable ConfigSection section) {
+        if (section == null) return;
+        for (String id : section.getKeys(false).stream().sorted().toList()) {
+            ConfigSection entry = section.getSection(id, false);
+            if (entry == null) continue;
+            List<String> lines = readLines(entry, "message");
+            if (lines.isEmpty()) continue;
+            String type = entry.getString("type", "message").trim().toLowerCase(Locale.ROOT);
+            configuredAnnouncements.put(id, new AnnouncementDefinition(
+                    id,
+                    lines,
+                    entry.getBoolean("enabled", true),
+                    parseDuration(entry.getString("interval", defaultIntervalSeconds + "s"), defaultIntervalSeconds, 15L, 604800L),
+                    parseDate(entry.getString("start", ""), false),
+                    parseDate(entry.getString("end", ""), true),
+                    type,
+                    WORKSHOP_TYPE.equals(type) ? readWorkshopFilter(entry.getSection("filters", false)) : WorkshopFilter.NONE,
+                    false
+            ));
+        }
+    }
+
+    private void readLegacyWorkshopPromotion(@Nullable ConfigSection section) {
+        if (section == null) return;
+        List<String> lines = readLines(section, "message");
+        if (lines.isEmpty()) return;
+        configuredAnnouncements.put(LEGACY_WORKSHOP_PROMOTION_ID, new AnnouncementDefinition(
+                LEGACY_WORKSHOP_PROMOTION_ID,
+                lines,
+                section.getBoolean("enabled", true),
+                parseDuration(section.getString("interval", defaultIntervalSeconds + "s"), defaultIntervalSeconds, 15L, 604800L),
+                parseDate(section.getString("start", ""), false),
+                parseDate(section.getString("end", ""), true),
+                WORKSHOP_TYPE,
+                WorkshopFilter.NONE,
+                false
+        ));
+    }
+
+    private @NotNull WorkshopFilter readWorkshopFilter(@Nullable ConfigSection section) {
+        if (section == null) return WorkshopFilter.NONE;
+        ConfigSection days = section.getSection("days-until", false);
+        Double greaterThan = days == null ? null : optionalNonNegativeDouble(days, "greater-than");
+        Double lessThan = days == null ? null : optionalNonNegativeDouble(days, "less-than");
+        if (greaterThan != null && lessThan != null && greaterThan >= lessThan) {
+            STEMCraft.getPlugin().getLogger().warning("[announcements] Ignoring invalid workshop day filter: greater-than must be less than less-than.");
+            greaterThan = null;
+            lessThan = null;
+        }
+        List<String> locations = section.getStringList("locations").stream()
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .distinct()
+                .toList();
+        return new WorkshopFilter(greaterThan, lessThan, locations);
+    }
+
+    private @Nullable Double optionalNonNegativeDouble(@NotNull ConfigSection section, @NotNull String path) {
+        if (!section.contains(path)) return null;
+        double value = section.getDouble(path, -1.0);
+        if (!Double.isFinite(value) || value < 0.0) {
+            STEMCraft.getPlugin().getLogger().warning("[announcements] Ignoring invalid workshop filter value for " + path + ".");
+            return null;
+        }
+        return value;
+    }
+
+    private @NotNull AnnouncementSound readAnnouncementSound(@Nullable ConfigSection parent,
+                                                              @NotNull String defaultName) {
+        if (parent == null) return defaultAnnouncementSound(defaultName);
+        ConfigSection section = parent.getSection("sound", false);
+        if (section == null) return defaultAnnouncementSound(defaultName);
+        if (!section.getBoolean("enabled", true)) return AnnouncementSound.DISABLED;
+
+        String rawName = section.getString("name", defaultName).trim();
+        if (rawName.isBlank()) rawName = defaultName;
+
+        Sound sound = findSound(rawName);
+        if (sound == null) {
+            STEMCraft.getPlugin().getLogger().warning(
+                    "[announcements] Unknown announcement sound '" + rawName + "'; using " + defaultName + ".");
+            return defaultAnnouncementSound(defaultName);
+        }
+
+        float volume = readSoundValue(section, "volume", 1.0f, 0.0f, 10.0f);
+        float pitch = readSoundValue(section, "pitch", 1.0f, 0.5f, 2.0f);
+        return new AnnouncementSound(sound, volume, pitch);
+    }
+
+    private @NotNull AnnouncementSound defaultAnnouncementSound(@NotNull String name) {
+        Sound sound = findSound(name);
+        return sound == null ? AnnouncementSound.DISABLED : new AnnouncementSound(sound, 1.0f, 1.0f);
+    }
+
+    private @Nullable Sound findSound(@NotNull String rawName) {
+        String normalized = rawName.toLowerCase(Locale.ROOT);
+        String keyName = normalized.contains(":")
+                ? normalized.substring(normalized.indexOf(':') + 1)
+                : normalized;
+        String enumName = keyName.replace('.', '_');
+        return Registry.SOUNDS.keyStream()
+                .filter(key -> {
+                    String registeredKey = key.toString().toLowerCase(Locale.ROOT);
+                    String registeredKeyName = key.getKey().toLowerCase(Locale.ROOT);
+                    return registeredKey.equals(normalized)
+                            || registeredKeyName.equals(keyName)
+                            || registeredKeyName.replace('.', '_').equals(enumName);
+                })
+                .map(Registry.SOUNDS::get)
+                .filter(java.util.Objects::nonNull)
+                .findFirst()
+                .orElse(null);
+    }
+
+    private float readSoundValue(@NotNull ConfigSection section, @NotNull String path,
+                                 float fallback, float minimum, float maximum) {
+        float value = section.getFloat(path, fallback);
+        if (!Float.isFinite(value)) {
+            STEMCraft.getPlugin().getLogger().warning(
+                    "[announcements] Invalid announcement sound " + path + "; using " + fallback + ".");
+            return fallback;
+        }
+        float clamped = Math.max(minimum, Math.min(maximum, value));
+        if (clamped != value) {
+            STEMCraft.getPlugin().getLogger().warning(
+                    "[announcements] Announcement sound " + path + " must be between "
+                            + minimum + " and " + maximum + "; using " + clamped + ".");
+        }
+        return clamped;
+    }
+
+    private void ensureStorage() {
+        if (api.database().migrationVersion(MIGRATION_NAME) >= MIGRATION_VERSION) return;
+        boolean created = api.database().execute("""
+                CREATE TABLE IF NOT EXISTS announcements (
+                    id TEXT PRIMARY KEY,
+                    message TEXT NOT NULL,
+                    enabled INTEGER NOT NULL,
+                    interval_seconds INTEGER NOT NULL,
+                    start_at INTEGER,
+                    end_at INTEGER,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL
+                )
+                """);
+        if (!created) {
+            STEMCraft.getPlugin().getLogger().warning("[announcements] Could not create the announcements table.");
+            return;
+        }
+        api.database().setMigrationVersion(MIGRATION_NAME, MIGRATION_VERSION);
+    }
+
+    private void loadManualAnnouncements() {
+        manualAnnouncements.clear();
+        try {
+            api.database().queryEach(
+                    "SELECT id, message, enabled, interval_seconds, start_at, end_at FROM announcements ORDER BY id",
+                    null,
+                    result -> {
+                        AnnouncementDefinition definition = readManualAnnouncement(result);
+                        if (definition != null) manualAnnouncements.put(definition.id(), definition);
+                    }
+            );
+        } catch (RuntimeException exception) {
+            STEMCraft.getPlugin().getLogger().warning("[announcements] Could not load saved announcements: " + exception.getMessage());
+        }
+    }
+
+    private @Nullable AnnouncementDefinition readManualAnnouncement(ResultSet result) {
+        try {
+            long start = result.getLong("start_at");
+            boolean hasStart = !result.wasNull();
+            long end = result.getLong("end_at");
+            boolean hasEnd = !result.wasNull();
+            List<String> lines = splitLines(result.getString("message"));
+            if (lines.isEmpty()) return null;
+            return new AnnouncementDefinition(
+                    result.getString("id"),
+                    lines,
+                    result.getInt("enabled") != 0,
+                    Math.max(15L, result.getLong("interval_seconds")),
+                    hasStart ? Instant.ofEpochMilli(start) : null,
+                    hasEnd ? Instant.ofEpochMilli(end) : null,
+                    "message",
+                    WorkshopFilter.NONE,
+                    true
+            );
+        } catch (Exception exception) {
+            STEMCraft.getPlugin().getLogger().warning("[announcements] Skipped an invalid saved announcement: " + exception.getMessage());
+            return null;
+        }
+    }
+
+    private void rebuildDefinitions(boolean startup) {
+        Map<String, Instant> previousDue = new LinkedHashMap<>(nextDue);
+        definitions.clear();
+        definitions.putAll(configuredAnnouncements);
+        definitions.putAll(manualAnnouncements);
+        nextDue.clear();
+        Instant now = Instant.now();
+        for (AnnouncementDefinition definition : definitions.values()) {
+            Instant due = previousDue.get(definition.id());
+            if (due == null) {
+                due = announceOnStartup && startup ? now : now.plusSeconds(definition.intervalSeconds());
+            }
+            nextDue.put(definition.id(), due);
+        }
+        if (!enabled || !scheduledEnabled) {
+            api.tasks().cancel(SCHEDULE_TASK);
+            return;
+        }
+        scheduleNext();
+    }
+
+    private void scheduleNext() {
+        api.tasks().cancel(SCHEDULE_TASK);
+        if (!enabled || !scheduledEnabled || definitions.isEmpty()) return;
+        Instant now = Instant.now();
+        Instant next = definitions.values().stream()
+                .filter(definition -> isPotentiallyActive(definition, now))
+                .map(definition -> effectiveDue(definition, now))
+                .min(Comparator.naturalOrder())
+                .orElse(now.plusSeconds(NO_PLAYER_RETRY_SECONDS));
+        long delay = Math.max(1L, (next.toEpochMilli() - now.toEpochMilli() + 49L) / 50L);
+        api.tasks().runOnceDelay(SCHEDULE_TASK, delay, this::processScheduled);
+    }
+
+    private void processScheduled() {
+        if (!enabled || !scheduledEnabled) return;
+        Instant now = Instant.now();
+        if (Bukkit.getOnlinePlayers().isEmpty()) {
+            api.tasks().runOnceDelay(SCHEDULE_TASK, NO_PLAYER_RETRY_SECONDS * 20L, this::processScheduled);
+            return;
+        }
+        List<AnnouncementDefinition> due = definitions.values().stream()
+                .filter(definition -> isActive(definition, now))
+                .filter(definition -> !effectiveDue(definition, now).isAfter(now))
+                .sorted(Comparator.comparing((AnnouncementDefinition definition) -> effectiveDue(definition, now))
+                        .thenComparing(AnnouncementDefinition::id))
+                .toList();
+        if (due.isEmpty()) {
+            scheduleNext();
+            return;
+        }
+        if (lastScheduledBroadcastAt != null && now.isBefore(lastScheduledBroadcastAt.plusSeconds(minimumGapSeconds))) {
+            long delay = Math.max(1L, (lastScheduledBroadcastAt.plusSeconds(minimumGapSeconds).toEpochMilli() - now.toEpochMilli() + 49L) / 50L);
+            api.tasks().runOnceDelay(SCHEDULE_TASK, delay, this::processScheduled);
+            return;
+        }
+
+        AnnouncementDefinition selected = due.getFirst();
+        if (broadcast(selected, null)) {
+            lastScheduledBroadcastAt = now;
+            nextDue.put(selected.id(), now.plusSeconds(selected.intervalSeconds()));
+        } else {
+            nextDue.put(selected.id(), now.plusSeconds(NO_PLAYER_RETRY_SECONDS));
+        }
+        scheduleNext();
+    }
+
+    private boolean isPotentiallyActive(AnnouncementDefinition definition, Instant now) {
+        if (!definition.enabled() || definition.lines().isEmpty()) return false;
+        if (definition.endAt() != null && !now.isBefore(definition.endAt())) return false;
+        if (definition.startAt() != null && definition.startAt().isAfter(now)) return true;
+        return !definition.workshopPromotion() || findAnnouncementWorkshop(definition.workshopFilter(), now) != null;
+    }
+
+    private boolean isActive(AnnouncementDefinition definition, Instant now) {
+        if (!isPotentiallyActive(definition, now)) return false;
+        return definition.startAt() == null || !definition.startAt().isAfter(now);
+    }
+
+    private Instant effectiveDue(AnnouncementDefinition definition, Instant now) {
+        Instant due = nextDue.getOrDefault(definition.id(), now.plusSeconds(definition.intervalSeconds()));
+        if (definition.startAt() != null && due.isBefore(definition.startAt())) return definition.startAt();
+        return due;
+    }
+
+    private boolean broadcast(@NotNull AnnouncementDefinition definition, @Nullable Player recipient) {
+        Workshop workshop = definition.workshopPromotion()
+                ? findAnnouncementWorkshop(definition.workshopFilter(), Instant.now())
+                : null;
+        if (definition.workshopPromotion() && workshop == null) return false;
+        int online = Bukkit.getOnlinePlayers().size();
+        for (String line : definition.lines()) {
+            String rendered = render(prefix + line, recipient, workshop, online);
+            if (rendered.isBlank()) continue;
+            if (recipient == null) api.messages().broadcast(rendered);
+            else api.messages().send(recipient, rendered);
+        }
+        if (definition.workshopPromotion() && workshop != null) {
+            sendWorkshopAccessInstructions(api.workshops(), workshop, recipient, online);
+        }
+        return true;
+    }
+
+    private void sendWorkshopAccessInstructions(@Nullable WorkshopService service, @NotNull Workshop workshop,
+                                                @Nullable Player recipient, int online) {
+        for (String rendered : renderWorkshopAccessInstructions(service, workshop, recipient, online)) {
+            if (recipient == null) api.messages().broadcast(rendered);
+            else api.messages().send(recipient, rendered);
+        }
+    }
+
+    private @NotNull List<String> renderWorkshopAccessInstructions(@Nullable WorkshopService service,
+                                                                    @NotNull Workshop workshop,
+                                                                    @Nullable Player recipient,
+                                                                    int online) {
+        if (service == null || !service.isAvailable() || !service.isEnabled()) return List.of();
+        List<String> renderedLines = new ArrayList<>();
+        for (String line : service.accessInstructions(workshop)) {
+            String rendered = render(prefix + line, recipient, workshop, online);
+            if (!rendered.isBlank()) renderedLines.add(rendered);
+        }
+        return List.copyOf(renderedLines);
+    }
+
+    private @Nullable Workshop findAnnouncementWorkshop(@NotNull WorkshopFilter filter, @NotNull Instant now) {
+        WorkshopService service = api.workshops();
+        if (service == null || !service.isAvailable() || !service.isEnabled()) return null;
+        return service.upcoming().stream()
+                .filter(Workshop::announcementEligible)
+                .filter(workshop -> filter.matches(workshop, now))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private @Nullable Workshop findUpcomingJoinWorkshop(@NotNull WorkshopFilter filter, @NotNull Instant now) {
+        WorkshopService service = api.workshops();
+        if (service == null || !service.isAvailable() || !service.isEnabled()) return null;
+        return service.upcoming().stream()
+                .filter(Workshop::announcementEligible)
+                .filter(workshop -> isFutureWorkshop(workshop, now))
+                .filter(workshop -> filter.matches(workshop, now))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private @NotNull String render(@NotNull String template, @Nullable Player player, @Nullable Workshop workshop, int online) {
+        Map<String, String> values = new LinkedHashMap<>();
+        Map<String, ZonedDateTime> dateValues = WorkshopDateFormatter.dateValues(workshop, defaultTimezone);
+        values.put("player", player == null ? "" : escapeLiteral(player.getName()));
+        values.put("online_players", Integer.toString(online));
+        values.put("next_workshop_title", "");
+        values.put("next_workshop_date", "");
+        values.put("next_workshop_time", "");
+        values.put("next_workshop_url", "");
+        values.put("next_workshop_location", "");
+        values.put("next_workshop_end_date", "");
+        values.put("next_workshop_end_time", "");
+        values.put("next_workshop_remaining", "");
+        values.put("next_workshop_countdown", "");
+        values.put("active_workshop_title", "");
+        values.put("active_workshop_date", "");
+        values.put("active_workshop_time", "");
+        values.put("active_workshop_url", "");
+        values.put("active_workshop_location", "");
+        values.put("active_workshop_end_date", "");
+        values.put("active_workshop_end_time", "");
+        values.put("active_workshop_remaining", "");
+        if (workshop != null) {
+            ZonedDateTime local = workshop.startAt().withZoneSameInstant(defaultTimezone);
+            long countdown = Math.max(0L, (workshop.startAt().toInstant().toEpochMilli() - System.currentTimeMillis()) / 1000L);
+            String title = escapeLiteral(workshop.title());
+            String date = escapeLiteral(WORKSHOP_DATE_FORMAT.format(local));
+            String time = escapeLiteral(WORKSHOP_TIME_FORMAT.format(local));
+            String url = escapeLiteral(workshop.bookingUrl());
+            String location = escapeLiteral(workshop.location());
+            values.put("next_workshop_title", title);
+            values.put("next_workshop_date", date);
+            values.put("next_workshop_time", time);
+            values.put("next_workshop_url", url);
+            values.put("next_workshop_location", location);
+            values.put("next_workshop_countdown", escapeLiteral(countdown == 0L ? "now" : TimeUtil.formatLongDuration(countdown)));
+            values.put("active_workshop_title", title);
+            values.put("active_workshop_date", date);
+            values.put("active_workshop_time", time);
+            values.put("active_workshop_url", url);
+            values.put("active_workshop_location", location);
+            if (workshop.endAt() != null) {
+                ZonedDateTime end = workshop.endAt().withZoneSameInstant(defaultTimezone);
+                String endDate = escapeLiteral(WORKSHOP_DATE_FORMAT.format(end));
+                String endTime = escapeLiteral(WORKSHOP_TIME_FORMAT.format(end));
+                long remaining = Math.max(0L, (workshop.endAt().toInstant().toEpochMilli() - System.currentTimeMillis()) / 1000L);
+                String remainingText = escapeLiteral(TimeUtil.formatLongDuration(remaining));
+                values.put("next_workshop_end_date", endDate);
+                values.put("next_workshop_end_time", endTime);
+                values.put("next_workshop_remaining", remainingText);
+                values.put("active_workshop_end_date", endDate);
+                values.put("active_workshop_end_time", endTime);
+                values.put("active_workshop_remaining", remainingText);
+            }
+        }
+        String rendered = PlaceholderUtil.apply(WorkshopDateFormatter.apply(template, dateValues), values);
+        String withPlaceholders = api.placeholders().apply(player, rendered);
+        return withPlaceholders == null ? "" : withPlaceholders;
+    }
+
+    private void registerEvents() {
+        api.events().register(PlayerJoinEvent.class, event -> {
+            if (!enabled || !joinEnabled) return;
+            Player player = event.getPlayer();
+            String taskId = "announcements:join:" + player.getUniqueId();
+            joinTasks.put(player.getUniqueId(), taskId);
+            api.tasks().runOnceDelay(taskId, joinDelaySeconds * 20L, () -> {
+                joinTasks.remove(player.getUniqueId(), taskId);
+                if (!enabled || !joinEnabled || !player.isOnline()) return;
+                broadcast(new AnnouncementDefinition("join", player.hasPlayedBefore() ? returningJoinMessage : firstTimeJoinMessage,
+                        true, 0L, null, null, "message", WorkshopFilter.NONE, false), player);
+                scheduleUpcomingWorkshop(player);
+                scheduleActiveWorkshop(player);
+            });
+        });
+        api.events().register(PlayerQuitEvent.class, event -> {
+            UUID playerId = event.getPlayer().getUniqueId();
+            cancelJoinTask(playerId);
+            cancelUpcomingWorkshopJoinTask(playerId);
+            cancelActiveWorkshopJoinTask(playerId);
+        });
+    }
+
+    private void cancelJoinTask(UUID playerId) {
+        String taskId = joinTasks.remove(playerId);
+        if (taskId != null) api.tasks().cancel(taskId);
+    }
+
+    private void cancelJoinTasks() {
+        for (String taskId : joinTasks.values()) api.tasks().cancel(taskId);
+        joinTasks.clear();
+        cancelUpcomingWorkshopJoinTasks();
+        cancelActiveWorkshopJoinTasks();
+    }
+
+    private void cancelUpcomingWorkshopJoinTask(@NotNull UUID playerId) {
+        String taskId = upcomingWorkshopJoinTasks.remove(playerId);
+        if (taskId != null) api.tasks().cancel(taskId);
+    }
+
+    private void cancelUpcomingWorkshopJoinTasks() {
+        for (String taskId : upcomingWorkshopJoinTasks.values()) api.tasks().cancel(taskId);
+        upcomingWorkshopJoinTasks.clear();
+    }
+
+    private void cancelActiveWorkshopJoinTask(@NotNull UUID playerId) {
+        String taskId = activeWorkshopJoinTasks.remove(playerId);
+        if (taskId != null) api.tasks().cancel(taskId);
+    }
+
+    private void cancelActiveWorkshopJoinTasks() {
+        for (String taskId : activeWorkshopJoinTasks.values()) api.tasks().cancel(taskId);
+        activeWorkshopJoinTasks.clear();
+    }
+
+    private void scheduleUpcomingWorkshop(@NotNull Player player) {
+        if (!upcomingWorkshopJoinEnabled || upcomingWorkshopJoinMessage.isEmpty()) return;
+        if (upcomingWorkshopJoinDelaySeconds <= 0L) {
+            broadcastUpcomingWorkshop(player);
+            return;
+        }
+
+        UUID playerId = player.getUniqueId();
+        String taskId = UPCOMING_WORKSHOP_JOIN_TASK_PREFIX + playerId;
+        String previous = upcomingWorkshopJoinTasks.put(playerId, taskId);
+        if (previous != null) api.tasks().cancel(previous);
+        api.tasks().runOnceDelay(taskId, upcomingWorkshopJoinDelaySeconds * 20L, () -> {
+            upcomingWorkshopJoinTasks.remove(playerId, taskId);
+            if (!enabled || !joinEnabled || !player.isOnline()) return;
+            broadcastUpcomingWorkshop(player);
+        });
+    }
+
+    private void broadcastUpcomingWorkshop(@NotNull Player player) {
+        if (!upcomingWorkshopJoinEnabled || upcomingWorkshopJoinMessage.isEmpty()) return;
+        Workshop workshop = findUpcomingJoinWorkshop(upcomingWorkshopJoinFilter, Instant.now());
+        if (workshop == null) return;
+
+        int online = Bukkit.getOnlinePlayers().size();
+        List<String> messages = renderUpcomingWorkshopMessages(player, workshop, online);
+        for (String rendered : messages) {
+            api.messages().send(player, rendered);
+        }
+        if (!messages.isEmpty()) playAnnouncementSound(player, upcomingWorkshopJoinSound);
+    }
+
+    private void scheduleActiveWorkshop(@NotNull Player player) {
+        if (!activeWorkshopJoinEnabled) return;
+        if (activeWorkshopJoinDelaySeconds <= 0L) {
+            broadcastActiveWorkshop(player);
+            return;
+        }
+
+        UUID playerId = player.getUniqueId();
+        String taskId = ACTIVE_WORKSHOP_JOIN_TASK_PREFIX + playerId;
+        String previous = activeWorkshopJoinTasks.put(playerId, taskId);
+        if (previous != null) api.tasks().cancel(previous);
+        api.tasks().runOnceDelay(taskId, activeWorkshopJoinDelaySeconds * 20L, () -> {
+            activeWorkshopJoinTasks.remove(playerId, taskId);
+            if (!enabled || !joinEnabled || !player.isOnline()) return;
+            broadcastActiveWorkshop(player);
+        });
+    }
+
+    private void playAnnouncementSound(@NotNull Player player, @NotNull AnnouncementSound announcementSound) {
+        Sound sound = announcementSound.sound();
+        if (sound == null) return;
+        player.playSound(player.getLocation(), sound,
+                announcementSound.volume(), announcementSound.pitch());
+    }
+
+    private @NotNull List<String> renderUpcomingWorkshopMessages(@NotNull Player player,
+                                                                  @NotNull Workshop workshop,
+                                                                  int online) {
+        List<String> renderedLines = new ArrayList<>();
+        for (String line : upcomingWorkshopJoinMessage) {
+            String rendered = render(prefix + line, player, workshop, online);
+            if (!rendered.isBlank()) renderedLines.add(rendered);
+        }
+        return List.copyOf(renderedLines);
+    }
+
+    private void broadcastActiveWorkshop(@NotNull Player player) {
+        if (!activeWorkshopJoinEnabled) return;
+        Workshop workshop = findActiveWorkshop(Instant.now());
+        if (workshop == null) return;
+
+        WorkshopService service = api.workshops();
+        int online = Bukkit.getOnlinePlayers().size();
+        List<String> accessInstructions = renderWorkshopAccessInstructions(service, workshop, player, online);
+        List<String> messages = renderActiveWorkshopMessages(player, workshop, accessInstructions, online);
+        for (String rendered : messages) api.messages().send(player, rendered);
+        for (String rendered : accessInstructions) api.messages().send(player, rendered);
+        if (!messages.isEmpty() || !accessInstructions.isEmpty()) {
+            playAnnouncementSound(player, activeWorkshopJoinSound);
+        }
+    }
+
+    private @NotNull List<String> renderActiveWorkshopMessages(@NotNull Player player,
+                                                                @NotNull Workshop workshop,
+                                                                @NotNull List<String> accessInstructions,
+                                                                int online) {
+        List<String> renderedLines = new ArrayList<>();
+        for (String line : activeWorkshopJoinMessage) {
+            String normalized = line.toLowerCase(Locale.ROOT);
+            if (!accessInstructions.isEmpty() && normalized.contains("{active_workshop_location}")) continue;
+            if (workshop.location().isBlank() && normalized.contains("{active_workshop_location}")) continue;
+            String rendered = render(prefix + line, player, workshop, online);
+            if (!rendered.isBlank()) renderedLines.add(rendered);
+        }
+        return List.copyOf(renderedLines);
+    }
+
+    private void deliverDebugMessage(@NotNull DebugContext context, @NotNull Player player,
+                                     @NotNull String message) {
+        api.messages().send(player, message);
+        if (!context.sender().equals(player)) context.sender().sendMessage(playerVisibleText(message));
+    }
+
+    static @NotNull String playerVisibleText(@NotNull String message) {
+        return PLAIN_TEXT.serialize(TextUtil.colourise(message));
+    }
+
+    private @NotNull Workshop selectDebugWorkshop(@Nullable Workshop matched,
+                                                  @NotNull Instant now,
+                                                  boolean active) {
+        if (matched != null) return matched;
+
+        WorkshopService service = api.workshops();
+        if (service != null && service.isAvailable() && service.isEnabled()) {
+            Workshop next = service.upcoming().stream()
+                    .filter(Workshop::announcementEligible)
+                    .findFirst()
+                    .orElse(null);
+            if (next != null) return next;
+        }
+        return sampleDebugWorkshop(now, defaultTimezone, active);
+    }
+
+    static @NotNull Workshop sampleDebugWorkshop(@NotNull Instant now, @NotNull ZoneId timezone, boolean active) {
+        ZonedDateTime start = (active ? now.minusSeconds(1800L) : now.plusSeconds(172800L)).atZone(timezone);
+        ZonedDateTime end = active ? now.plusSeconds(1800L).atZone(timezone) : start.plusHours(2L);
+        return new Workshop(
+                "debug-workshop",
+                "Example STEMMechanics Workshop",
+                "Example workshop used by the /debug preview.",
+                start,
+                end,
+                "STEMMechanics Lab",
+                "https://www.stemmechanics.com.au/workshops",
+                WorkshopSource.MANUAL,
+                now,
+                true
+        );
+    }
+
+    private void debugWorkshopLoginActive(@NotNull DebugContext context) {
+        Player player = context.player();
+        if (player == null) return;
+
+        WorkshopService service = api.workshops();
+        Instant now = Instant.now();
+        Workshop liveWorkshop = findActiveWorkshop(now);
+        Workshop workshop = selectDebugWorkshop(liveWorkshop, now, true);
+        if (activeWorkshopJoinMessage.isEmpty()) return;
+
+        int online = Bukkit.getOnlinePlayers().size();
+        List<String> accessInstructions = renderWorkshopAccessInstructions(service, workshop, player, online);
+        List<String> messages = renderActiveWorkshopMessages(player, workshop, accessInstructions, online);
+        for (String message : messages) deliverDebugMessage(context, player, message);
+        for (String message : accessInstructions) deliverDebugMessage(context, player, message);
+        if (!messages.isEmpty() || !accessInstructions.isEmpty()) {
+            playAnnouncementSound(player, activeWorkshopJoinSound);
+        }
+    }
+
+    private void debugWorkshopLoginUpcoming(@NotNull DebugContext context) {
+        Player player = context.player();
+        if (player == null) return;
+
+        Instant now = Instant.now();
+        Workshop liveWorkshop = findUpcomingJoinWorkshop(upcomingWorkshopJoinFilter, now);
+        Workshop workshop = selectDebugWorkshop(liveWorkshop, now, false);
+        if (upcomingWorkshopJoinMessage.isEmpty()) return;
+
+        int online = Bukkit.getOnlinePlayers().size();
+        List<String> messages = renderUpcomingWorkshopMessages(player, workshop, online);
+        for (String message : messages) deliverDebugMessage(context, player, message);
+        if (!messages.isEmpty()) playAnnouncementSound(player, upcomingWorkshopJoinSound);
+    }
+
+    private @Nullable Workshop findActiveWorkshop(@NotNull Instant now) {
+        WorkshopService service = api.workshops();
+        if (service == null || !service.isAvailable() || !service.isEnabled()) return null;
+        return service.upcoming().stream()
+                .filter(Workshop::announcementEligible)
+                .filter(workshop -> isActiveWorkshop(workshop, now))
+                .findFirst()
+                .orElse(null);
+    }
+
+    static boolean isActiveWorkshop(@NotNull Workshop workshop, @NotNull Instant now) {
+        return workshop.endAt() != null
+                && !now.isBefore(workshop.startAt().toInstant())
+                && now.isBefore(workshop.endAt().toInstant());
+    }
+
+    static boolean isFutureWorkshop(@NotNull Workshop workshop, @NotNull Instant now) {
+        return workshop.startAt().toInstant().isAfter(now);
+    }
+
+    private void registerCommand() {
+        if (command != null) return;
+        command = api.commands().create("announcements")
+                .description("ANNOUNCEMENTS_DESCRIPTION")
+                .usage("ANNOUNCEMENTS_USAGE")
+                .tabCompletion("help")
+                .tabCompletion("list")
+                .tabCompletion("add")
+                .tabCompletion("edit", "{announcement-id}")
+                .tabCompletion("remove", "{announcement-id}")
+                .tabCompletion("enable", "{announcement-id}")
+                .tabCompletion("disable", "{announcement-id}")
+                .tabCompletion("broadcast", "{announcement-id}")
+                .tabCompletion("reload")
+                .executor((unused, cmd, ctx) -> handleCommand(ctx))
+                .register(STEMCraft.getPlugin());
+        api.tabComplete().register("announcement-id", (player, args) -> definitions.keySet().stream().sorted().toList());
+    }
+
+    private void handleCommand(CommandContext ctx) {
+        String subcommand = ctx.getArgLower(0);
+        if (subcommand == null || subcommand.equals("help")) {
+            showHelp(ctx);
+            return;
+        }
+        switch (subcommand) {
+            case "list" -> list(ctx);
+            case "add" -> add(ctx);
+            case "edit" -> edit(ctx);
+            case "remove" -> remove(ctx);
+            case "enable" -> setEnabled(ctx, true);
+            case "disable" -> setEnabled(ctx, false);
+            case "broadcast" -> broadcastNow(ctx);
+            case "reload" -> reload(ctx);
+            default -> ctx.returnUsage();
+        }
+    }
+
+    private void showHelp(CommandContext ctx) {
+        ctx.info("/announcements list - list configured announcements");
+        ctx.info("/announcements broadcast <id> - broadcast an announcement now");
+        if (isAdmin(ctx)) {
+            ctx.info("/announcements add <message>");
+            ctx.info("/announcements edit <id> <message>");
+            ctx.info("/announcements remove <id>");
+            ctx.info("/announcements enable|disable <id>");
+            ctx.info("/announcements reload");
+        }
+    }
+
+    private void list(CommandContext ctx) {
+        requireAdmin(ctx);
+        if (definitions.isEmpty()) {
+            ctx.info("No announcements are configured.");
+            return;
+        }
+        for (AnnouncementDefinition definition : definitions.values()) {
+            String preview = definition.lines().getFirst().replace('\n', ' ');
+            if (preview.length() > 80) preview = preview.substring(0, 77) + "...";
+            ctx.info("{id}: {state} ({source}) - {preview}",
+                    "id", definition.id(),
+                    "state", definition.enabled() ? "enabled" : "disabled",
+                    "source", definition.manual() ? "manual" : "config",
+                    "preview", preview);
+        }
+    }
+
+    private void add(CommandContext ctx) {
+        requireAdmin(ctx);
+        String message = rawMessage(ctx, 1);
+        if (message.isBlank()) ctx.returnError("Provide an announcement message.");
+        String id = nextManualId();
+        AnnouncementDefinition definition = new AnnouncementDefinition(id, splitLines(message), true,
+                defaultIntervalSeconds, null, null, "message", WorkshopFilter.NONE, true);
+        if (!persistManual(definition, null)) ctx.returnError("Could not save the announcement.");
+        manualAnnouncements.put(id, definition);
+        rebuildDefinitions(false);
+        ctx.returnSuccess("Added announcement {id}.", "id", id);
+    }
+
+    private void edit(CommandContext ctx) {
+        requireAdmin(ctx);
+        if (ctx.numArgs() < 3) ctx.returnUsage();
+        AnnouncementDefinition existing = manualAnnouncements.get(ctx.getArg(1));
+        if (existing == null) {
+            ctx.returnError("Manual announcement not found.");
+            return;
+        }
+        String message = rawMessage(ctx, 2);
+        if (message.isBlank()) ctx.returnError("Provide an announcement message.");
+        AnnouncementDefinition replacement = new AnnouncementDefinition(existing.id(), splitLines(message), existing.enabled(),
+                existing.intervalSeconds(), existing.startAt(), existing.endAt(), "message", WorkshopFilter.NONE, true);
+        if (!persistManual(replacement, existing)) ctx.returnError("Could not update the announcement.");
+        manualAnnouncements.put(replacement.id(), replacement);
+        rebuildDefinitions(false);
+        ctx.returnSuccess("Updated announcement {id}.", "id", replacement.id());
+    }
+
+    private void remove(CommandContext ctx) {
+        requireAdmin(ctx);
+        if (ctx.numArgs() < 2) ctx.returnUsage();
+        String id = ctx.getArg(1);
+        if (!manualAnnouncements.containsKey(id)) {
+            ctx.returnError("Manual announcement not found.");
+            return;
+        }
+        int changed = api.database().update("DELETE FROM announcements WHERE id = ?", statement -> statement.setString(1, id));
+        if (changed != 1) ctx.returnError("Could not remove the announcement.");
+        manualAnnouncements.remove(id);
+        rebuildDefinitions(false);
+        ctx.returnSuccess("Removed announcement {id}.", "id", id);
+    }
+
+    private void setEnabled(CommandContext ctx, boolean enabledState) {
+        requireAdmin(ctx);
+        if (ctx.numArgs() < 2) ctx.returnUsage();
+        String id = ctx.getArg(1);
+        AnnouncementDefinition existing = manualAnnouncements.get(id);
+        if (existing == null) {
+            ctx.returnError("Manual announcement not found.");
+            return;
+        }
+        AnnouncementDefinition replacement = new AnnouncementDefinition(existing.id(), existing.lines(), enabledState,
+                existing.intervalSeconds(), existing.startAt(), existing.endAt(), "message", WorkshopFilter.NONE, true);
+        if (api.database().update("UPDATE announcements SET enabled = ?, updated_at = ? WHERE id = ?", statement -> {
+            statement.setInt(1, enabledState ? 1 : 0);
+            statement.setLong(2, System.currentTimeMillis());
+            statement.setString(3, id);
+        }) != 1) ctx.returnError("Could not update the announcement.");
+        manualAnnouncements.put(id, replacement);
+        rebuildDefinitions(false);
+        ctx.returnSuccess("Announcement {id} is now {state}.", "id", id, "state", enabledState ? "enabled" : "disabled");
+    }
+
+    private void broadcastNow(CommandContext ctx) {
+        if (!ctx.hasPermission("stemcraft.announcements.broadcast") && !isAdmin(ctx)) {
+            ctx.returnError("COMMAND_NO_PERMISSION");
+        }
+        if (ctx.numArgs() < 2) ctx.returnUsage();
+        AnnouncementDefinition definition = definitions.get(ctx.getArg(1));
+        if (definition == null) {
+            ctx.returnError("Announcement not found.");
+            return;
+        }
+        if (definition.workshopPromotion() && findAnnouncementWorkshop(definition.workshopFilter(), Instant.now()) == null) {
+            ctx.returnInfo("There is no upcoming workshop to announce.");
+        }
+        if (!broadcast(definition, null)) ctx.returnInfo("The announcement was skipped.");
+        else ctx.returnSuccess("Broadcast announcement {id}.", "id", definition.id());
+    }
+
+    private void reload(CommandContext ctx) {
+        requireAdmin(ctx);
+        STEMCraft.getPlugin().reloadStemCraft(false);
+        ctx.returnSuccess("Announcements reloaded.");
+    }
+
+    private @NotNull String rawMessage(CommandContext ctx, int start) {
+        if (ctx.rawArgs().size() <= start) return "";
+        return String.join(" ", ctx.rawArgs().subList(start, ctx.rawArgs().size())).trim();
+    }
+
+    private boolean persistManual(AnnouncementDefinition definition, @Nullable AnnouncementDefinition existing) {
+        Long start = definition.startAt() == null ? null : definition.startAt().toEpochMilli();
+        Long end = definition.endAt() == null ? null : definition.endAt().toEpochMilli();
+        long now = System.currentTimeMillis();
+        int changed = api.database().update("""
+                INSERT INTO announcements (id, message, enabled, interval_seconds, start_at, end_at, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET message = excluded.message, enabled = excluded.enabled,
+                    interval_seconds = excluded.interval_seconds, start_at = excluded.start_at, end_at = excluded.end_at,
+                    updated_at = excluded.updated_at
+                """, statement -> {
+            statement.setString(1, definition.id());
+            statement.setString(2, String.join("\n", definition.lines()));
+            statement.setInt(3, definition.enabled() ? 1 : 0);
+            statement.setLong(4, definition.intervalSeconds());
+            if (start == null) statement.setObject(5, null); else statement.setLong(5, start);
+            if (end == null) statement.setObject(6, null); else statement.setLong(6, end);
+            statement.setLong(7, existing == null ? now : now);
+            statement.setLong(8, now);
+        });
+        return changed == 1;
+    }
+
+    private String nextManualId() {
+        String id;
+        do {
+            id = "manual-" + UUID.randomUUID().toString().substring(0, 8);
+        } while (definitions.containsKey(id));
+        return id;
+    }
+
+    private boolean isAdmin(CommandContext ctx) {
+        return ctx.hasPermission("stemcraft.announcements.admin");
+    }
+
+    private void requireAdmin(CommandContext ctx) {
+        if (!isAdmin(ctx)) ctx.returnError("COMMAND_NO_PERMISSION");
+    }
+
+    private @NotNull List<String> readLines(@NotNull ConfigSection section, @NotNull String path) {
+        Object value = section.get(path);
+        if (value instanceof String string) return splitLines(string);
+        if (value instanceof List<?> list) {
+            List<String> lines = new ArrayList<>();
+            for (Object item : list) if (item != null) lines.addAll(splitLines(String.valueOf(item)));
+            return List.copyOf(lines);
+        }
+        return List.of();
+    }
+
+    private static @NotNull List<String> splitLines(@Nullable String value) {
+        if (value == null || value.isBlank()) return List.of();
+        List<String> lines = new ArrayList<>();
+        for (String line : value.split("\\R", -1)) if (!line.isBlank()) lines.add(line);
+        return List.copyOf(lines);
+    }
+
+    static @NotNull String renderTemplate(@NotNull String template, @NotNull Map<String, String> values) {
+        return PlaceholderUtil.apply(template, values);
+    }
+
+    static @NotNull List<String> orderedDueIds(@NotNull Map<String, Instant> due, @NotNull Instant now) {
+        return due.entrySet().stream().filter(entry -> !entry.getValue().isAfter(now))
+                .sorted(Map.Entry.<String, Instant>comparingByValue().thenComparing(Map.Entry::getKey))
+                .map(Map.Entry::getKey).toList();
+    }
+
+    static @NotNull String escapeLiteral(@Nullable String value) {
+        if (value == null) return "";
+        return value.replace("\\", "\\\\")
+                .replace("<", "\\<")
+                .replace(">", "\\>")
+                .replace("'", "\\'")
+                .replace("\"", "\\\"");
+    }
+
+    private static long parseDuration(String value, long fallback, long min, long max) {
+        try {
+            return Math.clamp(TimeUtil.parseDuration(value), min, max);
+        } catch (RuntimeException ignored) {
+            return fallback;
+        }
+    }
+
+    private @Nullable Instant parseDate(String value, boolean endOfDay) {
+        if (value == null || value.isBlank()) return null;
+        ZonedDateTime parsed = WorkshopsFeature.parseDateTime(value, defaultTimezone, endOfDay);
+        return parsed == null ? null : parsed.toInstant();
+    }
+
+    private static ZoneId parseZone(String value, ZoneId fallback) {
+        try { return ZoneId.of(value); }
+        catch (RuntimeException ignored) { return fallback; }
+    }
+
+    private record AnnouncementDefinition(String id, List<String> lines, boolean enabled, long intervalSeconds,
+                                          Instant startAt, Instant endAt, String type, WorkshopFilter workshopFilter,
+                                          boolean manual) {
+        private AnnouncementDefinition {
+            lines = lines == null ? List.of() : List.copyOf(lines);
+            intervalSeconds = Math.max(15L, intervalSeconds);
+            type = type == null || type.isBlank() ? "message" : type.trim().toLowerCase(Locale.ROOT);
+            workshopFilter = workshopFilter == null ? WorkshopFilter.NONE : workshopFilter;
+        }
+
+        private boolean workshopPromotion() {
+            return WORKSHOP_TYPE.equals(type);
+        }
+    }
+
+    private record AnnouncementSound(@Nullable Sound sound, float volume, float pitch) {
+        private static final AnnouncementSound DISABLED = new AnnouncementSound(null, 1.0f, 1.0f);
+    }
+
+    static record WorkshopFilter(@Nullable Double greaterThanDays, @Nullable Double lessThanDays,
+                                 @NotNull List<String> locations) {
+        static final WorkshopFilter NONE = new WorkshopFilter(null, null, List.of());
+
+        WorkshopFilter {
+            locations = locations == null ? List.of() : locations.stream()
+                    .map(String::trim)
+                    .filter(value -> !value.isBlank())
+                    .distinct()
+                    .toList();
+        }
+
+        boolean matches(@NotNull Workshop workshop, @NotNull Instant now) {
+            if (!locations.isEmpty() && locations.stream().noneMatch(location ->
+                    location.equalsIgnoreCase(workshop.location().trim()))) {
+                return false;
+            }
+            double daysUntil = (workshop.startAt().toInstant().toEpochMilli() - now.toEpochMilli()) / 86_400_000.0;
+            return (greaterThanDays == null || daysUntil > greaterThanDays)
+                    && (lessThanDays == null || daysUntil < lessThanDays);
+        }
+    }
+}

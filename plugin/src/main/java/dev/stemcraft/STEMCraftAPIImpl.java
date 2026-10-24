@@ -26,6 +26,7 @@ import dev.stemcraft.api.service.coordinatebar.CoordinateBarService;
 import dev.stemcraft.api.service.audit.AuditService;
 import dev.stemcraft.api.service.config.ConfigService;
 import dev.stemcraft.api.service.database.DatabaseService;
+import dev.stemcraft.api.service.debug.DebugService;
 import dev.stemcraft.api.service.dialog.DialogService;
 import dev.stemcraft.api.service.event.EventService;
 import dev.stemcraft.api.service.motd.MotdService;
@@ -55,6 +56,7 @@ import dev.stemcraft.api.service.punishment.PunishmentService;
 import dev.stemcraft.api.service.tabcomplete.TabCompleteService;
 import dev.stemcraft.api.service.web.WebService;
 import dev.stemcraft.api.service.world.WorldService;
+import dev.stemcraft.api.service.workshop.WorkshopService;
 import dev.stemcraft.api.service.minigame.MiniGameService;
 
 import java.io.File;
@@ -102,6 +104,9 @@ public class STEMCraftAPIImpl extends HasMessagesImpl implements STEMCraftAPI {
     public CommandService commands() {
         return plugin.commands();
     }
+
+    @Override
+    public DebugService debug() { return plugin.debug(); }
 
     @Override
     public CoordinateBarService coordinateBar() { return plugin.coordinateBar(); }
@@ -290,4 +295,10 @@ public class STEMCraftAPIImpl extends HasMessagesImpl implements STEMCraftAPI {
      */
     @Override
     public WorldService worlds() { return plugin.worlds(); }
+
+    @Override
+    public WorkshopService workshops() {
+        WorkshopService workshops = plugin.workshops();
+        return workshops == null || !workshops.isAvailable() ? WorkshopService.UNAVAILABLE : workshops;
+    }
 }

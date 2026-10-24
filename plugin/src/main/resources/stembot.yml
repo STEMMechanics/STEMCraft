@@ -127,6 +127,15 @@ messages:
 # point:<x> <y> <z>
 #   Look at the target and perform a pointing-style arm gesture.
 #
+# require-world:<pattern>|<pattern> [environment] -> <fallback-action>
+#   Continue only in a matching Bukkit world; otherwise jump to the fallback.
+#   Patterns use *; environment is normal, nether, the_end or custom (optional).
+#   Example: require-world:survival* normal -> survival-world-required
+#
+# exit-region:<region-id>
+#   Speak and point towards the closest exit from the supplied regions entry,
+#   using the player's current position. No teleport or walking order.
+#
 # wave
 # sneak
 # stand
@@ -276,8 +285,17 @@ actions:
     - 'action:survival-menu'
 
   survival-menu:
-    - 'say::chat_bubble: &eAsk about quests, practice, coordbar, skills, cooking, animals, mail, portals, tools, harvesting, graves, rules, or commands. Say bye to finish.'
-    - 'listen:bye|bye!|close|exit -> close, *practice*|*tutorial* -> survival-practice, *coord* -> survival-coordinates, *vein*|*tree*|*harvest*|*refill*|*durability*|*anvil*|*tool*|*qol* -> survival-qol, *skill*|*level*|*unlock*|*xp*|*badge* -> survival-skills, *cook*|*rice*|*food*|*recipe*|*item*|*chisel*|*bucket*|*fertili* -> survival-cooking, *animal*|*crate*|*lead* -> survival-animals, *mail*|*gift* -> survival-mail, *portal*|*deep*|*skyland*|*wasteland*|*faraway* -> survival-portals, *sleep*|*night* -> survival-sleep, *quest* -> survival-quests, *rules* -> survival-rules, *command* -> survival-commands, *died*|*death*|*grave* -> survival-graves, *hub*|*back*|*lost*|*spawn* -> survival-navigation, *start*|*build*|*food*|*shelter* -> survival-start, *chat*|*help* -> survival-chat, * -> survival-confused'
+    - 'say::chat_bubble: &eAsk about wilderness, quests, practice, coordbar, skills, cooking, animals, mail, portals, tools, harvesting, graves, rules, or commands. Say bye to finish.'
+    - 'listen:bye|bye!|close|exit -> close, *wilderness*|*new terrain*|*new chunks*|*new forest*|*dappled*|*26.3* -> survival-wilderness, *practice*|*tutorial* -> survival-practice, *coord* -> survival-coordinates, *vein*|*tree*|*harvest*|*refill*|*durability*|*anvil*|*tool*|*qol* -> survival-qol, *skill*|*level*|*unlock*|*xp*|*badge* -> survival-skills, *cook*|*rice*|*food*|*recipe*|*item*|*chisel*|*bucket*|*fertili* -> survival-cooking, *animal*|*crate*|*lead* -> survival-animals, *mail*|*gift* -> survival-mail, *portal*|*deep*|*skyland*|*wasteland*|*faraway* -> survival-portals, *sleep*|*night* -> survival-sleep, *quest* -> survival-quests, *rules* -> survival-rules, *command* -> survival-commands, *died*|*death*|*grave* -> survival-graves, *hub*|*back*|*lost*|*spawn* -> survival-navigation, *start*|*build*|*food*|*shelter* -> survival-start, *chat*|*help* -> survival-chat, * -> survival-confused'
+
+  survival-wilderness:
+    - 'require-world:survival* normal -> survival-wilderness-world-required'
+    - 'exit-region:survival-old-terrain'
+    - 'end'
+
+  survival-wilderness-world-required:
+    - 'talk:Ask me for these directions when you are in a Survival overworld. I need your position there to find the closest way out of the old terrain.'
+    - 'end'
 
   survival-confused:
     - 'talk:Beep boop! I recognise a few topics. Try one of the examples below.'
@@ -504,6 +522,22 @@ actions:
     - 'talk:Use /help mail or /help mailbox whenever you need these instructions again.'
 
 
+# Reusable rectangular X/Z regions, selected explicitly by exit-region:<id>.
+# Region definitions do not add help topics or chat routes. Actions own world checks.
+# Bounds are inclusive block corners: [x1, z1, x2, z2] or "x1,z1;x2,z2".
+# Empty bounds leave that region unmapped. Default alignment is exact blocks;
+# align-to-chunks expands to complete chunks when mapping generation footprints.
+regions:
+  survival-old-terrain:
+    # Example only: "0,0;8000,8000". Replace with the actual old terrain corners.
+    bounds: []
+    align-to-chunks: true
+    messages:
+      inside: 'Head {direction} about {distance} blocks, towards X {x}, Z {z}. That is the closest way past the old 26.2 generation boundary; newly generated chunks beyond it use 26.3.'
+      outside: 'You are already beyond the old 26.2 generation boundary. Newly generated chunks here use 26.3. Keep exploring for the new wilderness features.'
+      unconfigured: 'I do not have the old terrain boundary mapped yet. Ask a staff member to map it.'
+      blocked: 'The world border blocks the way out of the old terrain. Ask staff where the new wilderness is accessible.'
+
 # Actions are selected by Bukkit world name.
 # command-action: /help or /stembot; absent means STEMBot is unavailable there.
 # first-time-action: once per player/world, taking priority on the first visit.
@@ -539,6 +573,11 @@ triggers:
   # Add mailbox-received: some-action to run an action on later mail receipts.
 
 # /help <topic> and /stembot <topic> run these actions.
+# Prefix a target with no-spawn: to start without an NPC.
+# Text, world checks, exit-region, sleep, speed and action jumps work without the bot.
+# Movement, gestures, listen and await summon the bot when that step is reached.
+# If another task or combat delays spawning, the action waits at that step.
 help-topics:
   mail: mailbox-help
   mailbox: mailbox-help
+  wilderness: no-spawn:survival-wilderness

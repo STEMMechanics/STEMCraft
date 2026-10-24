@@ -8,7 +8,7 @@ lead into enclosed doorway rooms with warm ceiling lights. No resource pack is r
 ## Quick test
 
 Build with Java 25 using `./gradlew check :plugin:jar`. Install the generated
-STEMCraft jar on a Paper 26.2 test server and restart. The administrator command
+STEMCraft jar on a Paper 26.3 test server and restart. The administrator command
 requires `stemcraft.command.underhalls`.
 
 1. In `survival`, aim at a supporting block with a clear space three blocks wide,
@@ -56,7 +56,7 @@ The generator is also available as `/world create test_underhalls underhalls see
 Worlds using this generator receive normal building and exit-room routing to the
 configured source world, regardless of their name.
 
-This branch is based directly on `version/26.2.x`. Inventory sharing follows the
+This branch is based directly on `version/26.3.x`. Inventory sharing follows the
 server's GMI implementation. [Inventory PR #176](https://github.com/STEMMechanics/STEMCraft/pull/176)
 adds automatic sharing between `survival` and `survival_underhalls`; without that
 change, the base branch's GMI uses separate profiles for those worlds.

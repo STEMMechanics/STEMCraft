@@ -210,12 +210,12 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
 
         if (newStatus == MiniGameArena.ArenaStatus.STARTING) {
             clearSnowballSupply(arena);
-            prepareStartingGrid(arena);
             broadcastToOccupants(arena, "<gold>Race countdown started.</gold>");
             return;
         }
 
         if (newStatus == MiniGameArena.ArenaStatus.RUNNING) {
+            prepareStartingGrid(arena);
             cancelStartingGridLock(arena);
             prepareRunningState(arena);
             showRaceStartTitle(arena);
@@ -293,8 +293,6 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
                     arena.setStatus(MiniGameArena.ArenaStatus.STARTING, boatRace.startCountdownSeconds(arena));
                 }
             });
-        } else if (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING) {
-            api.tasks().nextTick(() -> prepareStartingGrid(arena));
         }
 
         return arena.getLobbySpawn();
@@ -469,7 +467,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
             boatRace.stageProgress(arena).put(player.getUniqueId(), 0);
             startingWalkSpeeds(arena).putIfAbsent(player.getUniqueId(), player.getWalkSpeed());
             player.setWalkSpeed(0.0f);
-            positionPlayerOnStartingGrid(arena, player, slotLocation);
+            spawnBoat(arena, player, slotLocation);
         }
 
         for (Player spectator : arena.getSpectators()) {
@@ -479,7 +477,6 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
             }
         }
 
-        scheduleStartingGridLock(arena);
     }
 
     private void prepareRunningState(@NotNull MiniGameArena arena) {
@@ -837,33 +834,6 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
 
             handleStageEnter(arena, player, expectedStage, location);
         }
-    }
-
-    private void positionPlayerOnStartingGrid(@NotNull MiniGameArena arena, @NotNull Player player, @NotNull Location location) {
-        Location spawn = location.clone();
-        if (spawn.getWorld() == null) {
-            return;
-        }
-
-        // Join teleports are queued to the next tick. Defer grid placement until after those
-        // complete so the lobby teleport cannot pull racers back out of their start boats.
-        api.tasks().nextTick(() -> {
-            if (!arena.hasPlayer(player) || arena.getStatus() != MiniGameArena.ArenaStatus.STARTING) {
-                return;
-            }
-
-            teleportInternally(player, spawn);
-            api.tasks().nextTick(() -> {
-                if (!arena.hasPlayer(player)) {
-                    return;
-                }
-                if (arena.getStatus() != MiniGameArena.ArenaStatus.STARTING && arena.getStatus() != MiniGameArena.ArenaStatus.RUNNING) {
-                    return;
-                }
-
-                spawnBoat(arena, player, spawn);
-            });
-        });
     }
 
     private void spawnBoat(@NotNull MiniGameArena arena, @NotNull Player player, @NotNull Location location) {
@@ -1419,8 +1389,7 @@ public class BoatRaceArenaHandler implements MiniGameArenaHandler {
                 @Override
                 public void onExit(@NotNull Player player, @NotNull SCRegion region, @Nullable Location from, @Nullable Location to) {
                     if (arena.hasPlayer(player)
-                        && (arena.getStatus() == MiniGameArena.ArenaStatus.STARTING
-                            || arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING
+                        && (arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING
                             || arena.getStatus() == MiniGameArena.ArenaStatus.ENDING)) {
                         resetToCheckpoint(arena, player, "You left the course. Returned to your last checkpoint.");
                     } else if (arena.hasOccupant(player)

@@ -4,6 +4,7 @@ import org.bukkit.Location;
 
 import java.util.List;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -37,6 +38,10 @@ public final class BotSession {
             completion.accept(false);
             return () -> { };
         }
+        /** Supply a guide when a step needs one; null leaves that instruction pending. */
+        default BotActor spawn() { return null; }
+        /** Called after the actor is attached, before the pending instruction executes. */
+        default void spawned(BotSession session) { }
         /** Dispose of an actor, optionally after a presentation delay owned by the output. */
         default void depart(BotActor actor) { actor.close(); }
     }
@@ -44,7 +49,7 @@ public final class BotSession {
     private enum WaitMode { NONE,SLEEP,TALK,WAVE,POINT,WALK,LISTEN,AWAIT,STUCK }
 
     private final BotScript script;
-    private final BotActor actor;
+    private BotActor actor;
     private final String world;
     private final Output output;
 
@@ -59,6 +64,7 @@ public final class BotSession {
     private WaitMode waitMode=WaitMode.NONE;
     private List<BotScript.ListenRoute> listening=List.of();
     private Location walkTarget;
+    private Location talkTarget;
     private Location progress;
     private Location recoveryTarget;
     private BotActor.RouteSearch routeSearch;
@@ -88,11 +94,21 @@ public final class BotSession {
         String initialAction,
         Output output
     ) {
+        this(script,Objects.requireNonNull(actor),world,initialAction,output,false);
+    }
+
+    /** Start without an NPC; actor and reply instructions request one from the output when reached. */
+    public static BotSession noSpawn(BotScript script,String world,String action,Output output) {
+        return new BotSession(script,null,world,Objects.requireNonNull(action),output,true);
+    }
+
+    private BotSession(BotScript script,BotActor actor,String world,String initialAction,Output output,boolean noSpawn) {
         this.script=script;
         this.actor=actor;
         this.world=world;
         this.output=output;
         this.speed=script.defaultSpeed();
+        chatEngaged=!noSpawn;
         if(initialAction == null) controlled=true;
         else jumpTo(initialAction);
     }
@@ -145,7 +161,7 @@ public final class BotSession {
         else jumpTo(actionName);
     }
 
-    /** @return the private actor controlled by this session */
+    /** @return the private actor, or null for a no-spawn help topic */
     public BotActor actor() { return actor; }
     /** @return whether the session has terminated and no longer accepts input */
     public boolean closed() { return closed; }
@@ -198,24 +214,22 @@ public final class BotSession {
 
         for(BotScript.ListenRoute route:replyRoutes()) {
             if(!route.matches(input)) continue;
-
-            speechRevision++;
-            actor.cancel();
-            walkTarget=null;
-            progress=null;
-            playerBehind=false;
-            listening=List.of();
-            waitMode=WaitMode.NONE;
-
-            if(route.target().equalsIgnoreCase("close")
-                ||route.target().equalsIgnoreCase("end")) {
-                close();
-            } else {
-                jumpTo(route.target());
-            }
+            replyTo(route.target());
             return;
         }
         if(waitMode==WaitMode.STUCK) stuckPrompt();
+    }
+
+    private void replyTo(String target) {
+        speechRevision++;
+        actor.cancel();
+        walkTarget=null;
+        progress=null;
+        playerBehind=false;
+        listening=List.of();
+        waitMode=WaitMode.NONE;
+        if(target.equalsIgnoreCase("close")||target.equalsIgnoreCase("end")) close();
+        else jumpTo(target);
     }
 
     /** Find the upcoming reply prompt without executing its intervening actions. */
@@ -231,6 +245,13 @@ public final class BotSession {
             switch(instruction.op()) {
                 case LISTEN -> { return instruction.routes(); }
                 case ACTION -> { nextAction=instruction.text(); nextPc=0; }
+                case REQUIRE_WORLD -> {
+                    if(!instruction.matchesWorld(actor.location().getWorld())) {
+                        nextAction=instruction.routes().getFirst().target();
+                        if(nextAction.equalsIgnoreCase("close")||nextAction.equalsIgnoreCase("end")) return List.of();
+                        nextPc=0;
+                    }
+                }
                 case END,CLOSE -> { return List.of(); }
                 default -> { }
             }
@@ -243,6 +264,19 @@ public final class BotSession {
         idle+=5;
 
         if(closed) return;
+
+        if(actor==null) {
+            if(owner.getWorld()==null||!owner.getWorld().getName().equals(world)
+                ||idle>=script.idleSeconds()*20) {
+                close(false);
+                return;
+            }
+            age+=5;
+            if(waitMode==WaitMode.SLEEP&&age<waitUntil) return;
+            waitMode=WaitMode.NONE;
+            run(owner);
+            return;
+        }
 
         if(!actor.valid()
             ||owner.getWorld()==null
@@ -354,16 +388,61 @@ public final class BotSession {
                 return;
             }
 
-            BotScript.Instruction instruction=program.get(pc++);
+            BotScript.Instruction instruction=program.get(pc);
+
+            if(actor==null&&instruction.requiresActor()) {
+                BotActor appearing=output.spawn();
+                if(closed) {
+                    if(appearing!=null) appearing.close();
+                    return;
+                }
+                if(appearing==null) return;
+                actor=appearing;
+                chatEngaged=true;
+                awayTicks=0;
+                idle=0;
+                try {
+                    output.spawned(this);
+                } catch(RuntimeException error) {
+                    close(false);
+                    throw error;
+                }
+            }
+            pc++;
+
+            if(actor==null) {
+                runNoSpawn(instruction,owner);
+                continue;
+            }
 
             switch(instruction.op()) {
                 case SAY -> output.say(instruction.text());
 
                 case TALK -> {
+                    talkTarget=null;
                     int duration=Math.max(1,output.talk(instruction.text()));
                     waitMode=WaitMode.TALK;
                     waitUntil=age+duration;
                     nextGesture=age;
+                }
+
+                case REQUIRE_WORLD -> {
+                    if(!instruction.matchesWorld(owner.getWorld())) {
+                        String fallback=instruction.routes().getFirst().target();
+                        if(fallback.equalsIgnoreCase("close")||fallback.equalsIgnoreCase("end")) close();
+                        else jumpTo(fallback);
+                    }
+                }
+
+                case EXIT_REGION -> {
+                    var advice=script.regionGuide().advise(instruction.text(),owner);
+                    var route=advice.route();
+                    talkTarget=route==null?null:new Location(owner.getWorld(),route.x(),owner.getY()+1.4,route.z());
+                    int duration=Math.max(1,output.talk(advice.message()));
+                    waitMode=WaitMode.TALK;
+                    waitUntil=age+duration;
+                    nextGesture=age;
+                    animateTalk(owner);
                 }
 
                 case SLEEP -> {
@@ -448,6 +527,28 @@ public final class BotSession {
         if(guard>=64)
             throw new IllegalStateException(
                 "STEMBot action loop exceeded 64 immediate instructions; check action:"+action);
+    }
+
+    private void runNoSpawn(BotScript.Instruction instruction,Location owner) {
+        switch(instruction.op()) {
+            case SAY,TALK -> output.say(instruction.text());
+            case EXIT_REGION -> output.say(script.regionGuide().advise(instruction.text(),owner).message());
+            case REQUIRE_WORLD -> {
+                if(!instruction.matchesWorld(owner.getWorld())) {
+                    String fallback=instruction.routes().getFirst().target();
+                    if(fallback.equalsIgnoreCase("end")||fallback.equalsIgnoreCase("close")) close(false);
+                    else jumpTo(fallback);
+                }
+            }
+            case ACTION -> jumpTo(instruction.text());
+            case SPEED -> speed=instruction.number();
+            case SLEEP -> {
+                waitMode=WaitMode.SLEEP;
+                waitUntil=age+instruction.ticks();
+            }
+            case END,CLOSE -> close(false);
+            default -> throw new IllegalStateException("STEMBot no-spawn topic cannot use "+instruction.op());
+        }
     }
 
     /**
@@ -598,7 +699,7 @@ public final class BotSession {
     private void animateTalk(Location owner) {
         if(age<nextGesture) return;
 
-        actor.lookAt(owner.clone().add(0,1.4,0));
+        actor.lookAt(talkTarget==null?owner.clone().add(0,1.4,0):talkTarget.clone());
 
         // Mostly main-hand movement, occasionally off-hand, to avoid a rigid repeated wave.
         actor.animate(ThreadLocalRandom.current().nextInt(4)==0
@@ -671,6 +772,7 @@ public final class BotSession {
         cancelCallback();
         action=target;
         pc=0;
+        talkTarget=null;
         waitMode=WaitMode.NONE;
         listening=List.of();
     }
@@ -687,6 +789,8 @@ public final class BotSession {
         resetRecovery();
         speechRevision++;
         cancelCallback();
+
+        if(actor==null) return;
 
         try {
             actor.cancel();

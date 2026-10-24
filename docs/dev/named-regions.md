@@ -6,7 +6,7 @@
 
 The feature runs only in worlds listed under `named-regions.worlds`.
 
-Biome territories are sampled on a four-by-four-block grid. Orthogonally adjacent cells in the same biome family join the same region. If a newly sampled cell connects multiple regions, unlocked regions are merged; a locked, administratively renamed region takes precedence. The implementation groups Minecraft biomes into the configured families such as `plains`, `forest`, `ocean`, `mountains`, and `snow`.
+Biome territories are sampled on a four-by-four-block grid. Orthogonally adjacent cells in the same biome family join the same region. If a newly sampled cell connects multiple regions, unlocked regions are merged; a locked, administratively renamed region takes precedence. The implementation groups Minecraft biomes into the configured families such as `plains`, `forest`, `ocean`, `mountains`, and `snow`. Minecraft 26.3's `dappled_forest` automatically belongs to the existing `forest` family and uses its name sources, forms, and map style; it needs no extra configuration.
 
 Generated structures are stored separately using their structure bounding box. Structure variants are grouped into common families where appropriate, for example all village variants use `village` and all ruined portal variants use `ruined-portal`. Buried treasure and nether fossils are disabled by default because they are small and easily discovered; other structure families default to enabled unless explicitly disabled.
 
@@ -20,12 +20,17 @@ Configuration offers two naming approaches:
 
 - `names.pools.<type>` supplies a complete, explicit pool and takes precedence for that type.
 - `names.sources.<type>` and `names.forms.<type>` generate a larger pool. One-word sources are used directly and expanded through forms containing `{root}`; multi-word sources are treated as complete names.
+- `names.additional-sources.<type>` adds themed roots to those sources without replacing existing lists. The bundled additions produce at least **800 new, distinct candidates per type**, after case-insensitive duplicate removal and the word limits. All twelve biome families and the four dedicated structure families have additions; other structure types use `additional-sources.default`. Set a type's additional list to `[]` to opt it out.
 
 If a type has no source or form list, the corresponding `default` list is used. Generated candidates are compacted to at most two words for biome regions and three words for structures. Three-word structure names are also preserved when migrating older saved names. When every pooled candidate is unavailable, the feature creates a stable fallback from the friendly type and a letter code derived from the region ID.
 
 When a region is merged or renamed, its former name is retired for `names.retirement-days`. Retired names cannot be reassigned until that period expires or an administrator releases them. Changing naming configuration affects only new names; use the regeneration command to update existing areas.
 
-Missing `names.sources` or `names.forms` sections are restored from the bundled defaults during feature startup. This prevents older configuration files from losing the required default naming data.
+Missing `names.sources`, `names.forms` or `names.additional-sources` sections are restored from the bundled defaults during feature startup. The additional section upgrades existing servers without replacing their custom source, form or explicit pool lists. Additions stay under the live feature section, including legacy `named_regions` and `features.*` paths. Existing additional sections, including empty per-type opt-outs, are retained.
+
+After installing the update, restart to install the missing additions. Saved region names remain unchanged. Run `/namedregion regenerate *` to retry all fallback names with the expanded pools, or `/namedregion regenerate <id>` for one region. A remaining fallback means the available names are still active or retired; `/namedregion retired` lists reservations and `/namedregion release *` makes retired names reusable while keeping active names reserved.
+
+The capacity tests compare expanded pools against the same configuration without `additional-sources`, and require at least 800 new candidates for every family and the default structural fallback. They also cover assignment after the old Forest/Plains pools are fully reserved, custom forms, per-type opt-outs and persistence of the startup upgrade. See the [printable server checklist](named-region-name-expansion-test-checklist.txt).
 
 ## Player presentation
 

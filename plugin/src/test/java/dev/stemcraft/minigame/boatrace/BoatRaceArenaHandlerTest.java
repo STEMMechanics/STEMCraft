@@ -41,6 +41,27 @@ import static org.mockito.Mockito.when;
 
 class BoatRaceArenaHandlerTest {
     @Test
+    void countdownDoesNotPlaceOrFreezePlayersOnGrid() {
+        STEMCraftAPI api = mock(STEMCraftAPI.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
+        BoatRaceMiniGame game = mock(BoatRaceMiniGame.class);
+        MiniGameArena arena = mock(MiniGameArena.class);
+        Player player = mock(Player.class);
+        when(arena.getPlayers()).thenReturn(List.of(player));
+        when(arena.getOccupants()).thenReturn(List.of());
+        when(player.getInventory()).thenReturn(mock(org.bukkit.inventory.PlayerInventory.class));
+        org.bukkit.inventory.ItemStack air = mock(org.bukkit.inventory.ItemStack.class);
+        when(air.getType()).thenReturn(Material.AIR);
+        when(player.getInventory().getItemInOffHand()).thenReturn(air);
+        BoatRaceArenaHandler handler = new BoatRaceArenaHandler(api, game);
+
+        handler.onArenaStatusChanged(arena, MiniGameArena.ArenaStatus.WAITING, MiniGameArena.ArenaStatus.STARTING);
+
+        verify(player, never()).teleport(any(Location.class));
+        verify(player, never()).setWalkSpeed(0.0f);
+        verify(api.tasks(), never()).nextTick(any());
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     void finishRaceAdvanceShowsTitleForNextLap() throws Exception {
         STEMCraftAPI api = mock(STEMCraftAPI.class);

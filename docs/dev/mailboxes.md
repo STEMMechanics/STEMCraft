@@ -71,6 +71,42 @@ mailboxes:
 
 Dialog labels and messages are configurable under `mailboxes.dialog` and `mailboxes.messages`.
 
+## Authenticated HTTP mail endpoint
+
+The webserver can accept mail from an external integration such as a Discord bot. It remains disabled until `enabled` is set to `true`. When `key` is blank, STEMCraft generates a cryptographically random bearer key on startup, saves it in the live `config.yml`, and announces that it was generated in the console without printing the secret:
+
+```yaml
+web-server:
+  mail-api:
+    enabled: true
+    key: "generated-and-saved-on-first-startup"
+    sender: "Discord Rewards"
+```
+
+Copy the generated value from the live configuration file into the integration's secret store. It is persistent across restarts; clearing it causes a new key to be generated on the next startup.
+
+The endpoint is `POST /api/v1/survival/mail`. Keep the webserver bound to loopback and put an HTTPS reverse proxy in front of it when the integration is remote. Send the key in the `Authorization` header, never in the URL:
+
+```bash
+curl -X POST https://play.example.com/api/v1/survival/mail \
+  -H 'Authorization: Bearer replace-with-a-long-random-secret' \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: discord-event-12345' \
+  --data '{
+    "player": "WinnerName",
+    "message": "Thanks for joining the event!",
+    "delay_seconds": 0,
+    "items": [
+      {"id": "diamond", "amount": 3},
+      {"id": "bread", "amount": 16}
+    ]
+  }'
+```
+
+`player` is resolved using the server's known Java and Bedrock identities. Item IDs may be vanilla materials such as `minecraft:diamond` or registered custom item IDs, including their supported bracket properties. `delay_seconds` is optional: omitting it uses `mailboxes.delivery.base-delay`, `0` delivers on the next queue pass, and a positive value delays delivery by that many seconds. The configured `max-delay-seconds` limit applies to explicit delays.
+
+A successful request returns HTTP `202` with `queued: true`. A repeated request with the same `Idempotency-Key` and body returns the original result without sending a second delivery. The key cache lasts until the server restarts. Invalid keys return `401`; unknown players return `404`; invalid payloads return `400`.
+
 ## Sending mail through the API
 
 Recipients are identified only by UUID. Their current known name is resolved internally.

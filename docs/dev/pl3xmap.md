@@ -1,10 +1,38 @@
 # Pl3xMap integration
 
-Pl3xMap is a soft dependency, currently built against 26.2-554. Keep external types inside optional integration classes; core services and generator APIs should remain loadable when Pl3xMap is absent.
+Pl3xMap is a soft dependency. The 26.3 branch is currently built and tested against Pl3xMap 26.2-554 because no 26.3 artifact is published yet. Keep external types inside optional integration classes; core services and generator APIs should remain loadable when Pl3xMap is absent.
 
 ## Named regions and structures
 
-`NamedRegions` publishes immutable map-area snapshots from compact named-region storage. Biome areas become polygons; discovered structures use bundled icons. Refreshes are throttled by `map.update-minutes`, with dirty-state invalidation after region changes. The layer keys are `stemcraft_named_regions` and `stemcraft_named_structures`.
+Discovered structures use bundled icons from immutable snapshots. Biome geometry
+defaults to the original full-region polygons through Pl3xMap's marker files and
+live updates. `named-regions.map.biomes.viewport-tiles: false` preserves that
+behavior, including when the setting is absent from an existing configuration.
+Set it to `true` to opt into
+[static region tiles](../../tools/pl3xmap-regions/README.md): the client loads only
+visible vector tiles, with detail reduced at distant zooms. In this mode the
+`stemcraft_named_regions` marker file is `[]`, its live marker updates are
+disabled, and SSE carries only small revision notifications for biome changes,
+throttled by `map.update-minutes`. The layer keys remain
+`stemcraft_named_regions` and `stemcraft_named_structures`.
+
+In tiled mode STEMCraft automatically copies the bundled browser script into
+Pl3xMap's configured web directory and updates its existing index on attachment and map
+enable/reload. It preserves theme changes and backs up the original index;
+Pl3xMap's read-only setting is not required for this extension. A background
+publisher generates bounded JSON tiles and small metadata files under each
+world's existing `tiles/<world>/stemcraft-regions/` directory. Pl3xMap's existing
+web server serves them, with no separate API, port or proxy route. This also
+works when another web server serves the same generated files. Independently
+hosted copies can opt out with `named-regions.map.biomes.auto-install: false`
+and include the script/index/region tiles in their existing map-file deployment.
+Returning `viewport-tiles` to `false` removes STEMCraft's script tag from the
+managed index and restores live polygons. Restart and refresh the map page after
+changing modes; independently managed websites must remove their script tag too.
+`named-regions.map.biomes.enabled: false` removes only the biome overlay and
+stops its tile publication; it retains structure icons and in-game names. Set
+`named-regions.map.enabled: false` to remove both named overlays. Hiding a legacy
+marker layer in the browser does not prevent Pl3xMap from fetching its data.
 
 STEMCraft loads at STARTUP and Pl3xMap at POSTWORLD. Register when Pl3xMap enables as well as when it is already available; watch map-world loads and map reloads. The lifecycle fix in PR #158 also unregisters event handlers on shutdown. If layers are absent entirely, check startup registration and `named-regions.map.enabled`; if present but empty, check configured world names, discovery data and refresh timing. Existing player web sessions may need a refresh.
 
@@ -15,6 +43,70 @@ See [generator map renderers](generator-map-renderers.md). Deep's policy changes
 ## Other overlays
 
 `Pl3xMapGraveMarkers` supplies an optional graves layer. Its markers come from grave snapshots, not named-region storage. Each integration owns its keys and should not remove another integration's layers or icons.
+
+Grave snapshots are immutable and published when a grave is created, resolved,
+reset or loaded. Map workers never traverse the live grave index. Unchanged
+snapshots reuse marker objects. The default `graves.map.update-seconds` is 10
+(range 1-3600); `graves.map.enabled: false` disables this overlay while keeping
+the grave feature. Restart after changing these settings.
+
+## Terrain render scheduling and CPU investigation
+
+The STEMCraft integration does **not** call Pl3xMap's full-render commands or
+`RegionProcessor.addRegions`, and it does not request terrain renders when named
+areas or grave markers change. Those updates produce marker JSON under the map's
+output directory, separate from the world's `.mca` region files. The generator
+bridge replaces the existing `basic` renderer builder once per map-world load;
+it does not add another terrain renderer or enqueue regions.
+
+There are two possible indirect sources of extra terrain updates:
+
+- Floor Shuffle, Volcano and other block-changing features alter real world
+  blocks. When Paper saves those chunks, Pl3xMap's region-file watcher can enqueue
+  the changed `.mca` region for rendering. This is an automatic region update,
+  rather than a STEMCraft request to render the entire world. Consider excluding
+  dedicated minigame worlds from Pl3xMap if their changing floors do not need maps.
+- Named-region backfill loads existing chunks asynchronously and requests unload
+  afterward. If Paper saves or upgrades those chunks, the same file watcher can
+  see region changes. Discovery writes its names/cells to our database; it does
+  not edit terrain or send a render request. Backfill defaults to one request in
+  flight, every 10 ticks, and pauses while players are online. Temporarily set
+  `named-regions.map.backfill-existing-chunks: false` and restart to isolate it.
+  Disabling only `named-regions.map.enabled` does **not** disable backfill.
+
+Deep's custom renderer can increase the cost of a region already queued by
+Pl3xMap, because it scans beneath the roof for a cavern floor. A debugger test
+confirmed a scan beginning at Y=180 with bounds -64..319; it walked the roof and
+cavern instead of using just the ordinary surface heightmap. It only reads saved
+chunk snapshots and does not load Bukkit chunks or generate terrain. Setting
+`generator-maps.enabled: false` and restarting restores the ordinary renderer
+for comparison; Deep's next rendered tiles will show the roof.
+
+The grave overlay previously requested marker rebuilding/serialization/file
+writes at a one-second interval. That avoidable background work is now throttled
+and cached, but marker work is separate from terrain-render scheduling. Named
+overlays default to five-minute updates, with a 60-second minimum. Structure
+snapshots rebuild only when dirty and the refresh interval has elapsed. In the
+default mode these snapshots include full biome boundaries. With viewport tiles
+enabled, snapshots contain only structures; biome tiles are generated from cached
+discovery data off the server thread, and unchanged files are left untouched.
+The publisher enumerates occupied chunks to
+avoid generating gaps between distant discoveries. Metadata is published last;
+SSE then announces only its revision. See the extension instructions for
+generation detail, bounds and a browser/network verification checklist.
+
+To attribute a live CPU spike, capture all threads during the same workload:
+
+```text
+/spark profiler start --thread * --timeout 60
+```
+
+This includes off-thread render and marker workers; see the
+[spark command documentation](https://spark.lucko.me/docs/Command-Usage).
+Compare idle operation with block-changing games running, then test backfill or
+the generator bridge individually. A profile and region-file activity are needed
+to establish which indirect path occurs on a particular server; the local tests
+do not measure production CPU savings.
 
 ## Verification
 

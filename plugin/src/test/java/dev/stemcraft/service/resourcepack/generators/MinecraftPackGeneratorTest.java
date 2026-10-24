@@ -27,7 +27,7 @@ class MinecraftPackGeneratorTest {
     Path tempDir;
 
     @Test
-    void generateMigratesRenamedPillarTexturesFor26_2() throws Exception {
+    void generateMigratesRenamedPillarTexturesFor26_3() throws Exception {
         Path dataPack = tempDir.resolve("data-packs/source");
         Path blocks = dataPack.resolve("contents/minecraft/textures/block");
         Files.createDirectories(blocks);
@@ -40,7 +40,7 @@ class MinecraftPackGeneratorTest {
         Path output = tempDir.resolve("output");
         TestWriter writer = new TestWriter(output);
         new MinecraftPackGenerator(service).generate(new ResourcePackBuildContext(
-            new ResourcePackBuildTarget("26.2", 88),
+            new ResourcePackBuildTarget("26.3", 97.1),
             writer,
             mock(ConfigSectionView.class)
         ));

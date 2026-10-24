@@ -1,6 +1,7 @@
 package dev.stemcraft.minigame.floorshuffle;
 
 import dev.stemcraft.STEMCraft;
+import dev.stemcraft.minigame.MiniGameArenaInfoSupport;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.minigame.MiniGameArena;
@@ -27,7 +28,7 @@ final class FloorShuffleCommand {
                 "validate", "enable", "disable", "delete", "addspawn", "removespawn")) {
             command.tabCompletion(action, "{" + id + "-arenas}");
         }
-        for (String key : List.of("arena", "floor", "lobby", "spectator", "minplayers", "maxplayers", "roundseconds", "countdown")) {
+        for (String key : List.of("arena", "floor", "lobby", "spectator", "minplayers", "maxplayers", "roundseconds", "countdown", "startdelay", "lobbyshuffle")) {
             command.tabCompletion("set", "{" + id + "-arenas}", key);
         }
         command.executor((_, _, ctx) -> execute(ctx)).register(STEMCraft.getPlugin());
@@ -36,7 +37,12 @@ final class FloorShuffleCommand {
     private void execute(CommandContext ctx) {
         String action = ctx.numArgs() == 0 ? "list" : ctx.getArgLower(0);
         if (action.equals("list")) {
-            for (MiniGameArena a : owner.game.arenas())
+            List<MiniGameArena> arenas = owner.game.arenas();
+            if (arenas.isEmpty()) {
+                ctx.info("No Floor Shuffle arenas are loaded.");
+                return;
+            }
+            for (MiniGameArena a : arenas)
                 ctx.info(a.id() + " — " + a.getStatus() + " (" + a.numPlayers() + "/" + a.getMaxPlayers() + ")");
             return;
         }
@@ -73,8 +79,11 @@ final class FloorShuffleCommand {
             return;
         }
         switch (action) {
-            case "info", "validate" -> {
-                ctx.info(a.id() + ": " + a.getStatus() + "; spawns=" + owner.settings(a).spawns.size());
+            case "info" -> {
+                showInfo(ctx, a);
+                return;
+            }
+            case "validate" -> {
                 var result = a.validate();
                 if (!result.hasErrors()) ctx.success("Arena setup is valid.");
                 else result.getErrors().forEach(ctx::warn);
@@ -165,6 +174,20 @@ final class FloorShuffleCommand {
                     case "floor" -> d.floor = selection(ctx, a);
                     case "lobby" -> a.setLobbySpawn(location(ctx, a));
                     case "spectator" -> a.setSpectatorSpawn(location(ctx, a));
+                    case "lobbyshuffle" -> {
+                        ctx.checkArgsSizeAtLeast(4);
+                        d.lobbyShuffleSeconds = ctx.getArgAsInt(3, 3, 0, 3600);
+                    }
+                    case "startdelay" -> {
+                        ctx.checkArgsSizeAtLeast(4);
+                        ctx.checkArgIsInt(3, "Start delay must be a whole number.");
+                        int seconds = ctx.getArgAsInt(3);
+                        if (seconds < 0 || seconds > 60) {
+                            ctx.returnError("Start delay must be between 0 and 60 seconds.");
+                            return;
+                        }
+                        d.startDelaySeconds = seconds;
+                    }
                     default -> {
                         ctx.checkArgsSizeAtLeast(4);
                         int n = ctx.getArgAsInt(3, 1, 1, 3600);
@@ -188,6 +211,17 @@ final class FloorShuffleCommand {
         }
         owner.save(a);
         ctx.success("Setup saved. Use validate to check remaining steps.");
+    }
+
+    private void showInfo(CommandContext ctx, MiniGameArena a) {
+        FloorShuffleArenaSettings d = owner.settings(a);
+        MiniGameArenaInfoSupport.common(ctx, a, d.countdown, d.roundSeconds);
+        ctx.info(" - Floor start delay: " + d.startDelaySeconds + " sec");
+        MiniGameArenaInfoSupport.locations(ctx, "Starting spawns", d.spawns);
+        ctx.info(" - Floor region: " + MiniGameArenaInfoSupport.formatRegion(d.floor));
+        ctx.info(" - Lobby shuffle: " + (d.lobbyShuffleSeconds == 0 ? "disabled" : d.lobbyShuffleSeconds + " sec"));
+        ctx.info(" - Spawn mode: " + (d.spawns.isEmpty()
+                ? "random floor blocks, one block above the floor" : "configured starting spawns"));
     }
 
     private Player player(CommandContext ctx) {

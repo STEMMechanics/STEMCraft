@@ -173,6 +173,22 @@ class TntRunArenaHandlerTest {
     }
 
     @Test
+    void countdownDoesNotPlaceOrFreezePlayersOnGrid() {
+        MiniGameArena arena = mock(MiniGameArena.class);
+        org.bukkit.entity.Player player = mock(org.bukkit.entity.Player.class);
+        TntRunArenaHandler handler = newHandlerWithLifecycleHooks(new boolean[1], new boolean[1]);
+        when(arena.getPlayers()).thenReturn(List.of(player));
+        when(arena.getOccupants()).thenReturn(List.of());
+        when(arena.getOrCreate(eq("pendingDecays"), eq(Set.class), any())).thenReturn(new LinkedHashSet<String>());
+        when(arena.getOrCreate(eq("occupiedSupportAges"), eq(Map.class), any())).thenReturn(new LinkedHashMap<String, Long>());
+
+        handler.onArenaStatusChanged(arena, MiniGameArena.ArenaStatus.WAITING, MiniGameArena.ArenaStatus.STARTING);
+
+        verify(player, never()).teleport(any(Location.class));
+        verify(player, never()).setWalkSpeed(0.0f);
+    }
+
+    @Test
     void idleUnloadDoesNotRestoreOldSnapshot() {
         MiniGameArena arena = mock(MiniGameArena.class);
         boolean[] resetCalled = {false};

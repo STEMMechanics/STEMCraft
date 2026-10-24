@@ -4,6 +4,10 @@ import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.service.resourcepack.ResourcePackService;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.entity.Player;
 
 /**
@@ -32,9 +36,10 @@ public class ResourcePackCommand {
                 .aliases("respack")
                 .usage("RESOURCEPACK_USAGE")
                 .description("RESOURCEPACK_DESCRIPTION")
-                .tabCompletion("{player}")
+                .tabCompletion("info")
                 .tabCompletion("send", "{player}")
                 .tabCompletion("sendall")
+                .tabCompletion("url")
                 .tabCompletion("zip")
                 .permission("stemcraft.command.resourcepack")
                 .executor((api, cmd, ctx) -> {
@@ -50,6 +55,7 @@ public class ResourcePackCommand {
 
                     switch(subCommand) {
                         case "info" -> subCommandInfo(ctx);
+                        case "url" -> subCommandUrl(ctx);
                         case "send" -> subCommandSend(ctx);
                         case "sendall" -> subCommandSendAll(ctx);
                         case "zip" -> subCommandZip(ctx);
@@ -57,6 +63,8 @@ public class ResourcePackCommand {
                     }
                 })
                 .register(STEMCraft.getPlugin());
+
+        new GlyphCommand(api, service).onEnable();
     }
 
     /**
@@ -75,6 +83,18 @@ public class ResourcePackCommand {
         } else {
             ctx.info("RESOURCEPACK_INFO_HASH_UNAVAILABLE");
         }
+    }
+
+    /** Displays the exact download address as a link for testing client access. */
+    private void subCommandUrl(CommandContext ctx) {
+        String packUrl = service.host().getUrl();
+        if (!ctx.isPlayer()) {
+            ctx.getSender().sendMessage(packUrl);
+            return;
+        }
+        ctx.getSender().sendMessage(Component.text(packUrl, NamedTextColor.AQUA)
+                .decorate(TextDecoration.UNDERLINED)
+                .clickEvent(ClickEvent.openUrl(packUrl)));
     }
 
     /**

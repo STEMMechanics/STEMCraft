@@ -4,6 +4,7 @@ import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.Command;
 import io.papermc.paper.event.player.AsyncChatEvent;
+import io.papermc.paper.event.player.PlayerArmSwingEvent;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
@@ -54,7 +55,7 @@ public final class Afk extends BaseFeature {
         });
         listen(PlayerInteractEvent.class, event -> activity(event.getPlayer()));
         listen(PlayerInteractEntityEvent.class, event -> activity(event.getPlayer()));
-        listen(PlayerAnimationEvent.class, event -> activity(event.getPlayer()));
+        listen(PlayerArmSwingEvent.class, event -> activity(event.getPlayer()));
         listen(PlayerItemHeldEvent.class, event -> activity(event.getPlayer()));
         listen(PlayerDropItemEvent.class, event -> activity(event.getPlayer()));
         listen(PlayerSwapHandItemsEvent.class, event -> activity(event.getPlayer()));

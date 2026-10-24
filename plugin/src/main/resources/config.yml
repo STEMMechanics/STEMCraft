@@ -87,7 +87,7 @@ named-regions:
     format: " ({name})"
   map:
     enabled: true
-    # Publish accumulated region changes to Pl3xMap at most once every few minutes.
+    # Notify map clients of region changes at most once every few minutes.
     update-minutes: 5
     # Region names appear when the polygon is hovered. Set true to keep every label visible.
     permanent-labels: false
@@ -95,6 +95,12 @@ named-regions:
       biomes: "Regions"
       structures: "Structures"
     biomes:
+      # Set false to remove only this overlay while retaining named regions and structure icons.
+      enabled: true
+      # False keeps the original full-region polygons. True loads only visible, simplified region tiles.
+      viewport-tiles: false
+      # Manage the browser script automatically for viewport tiles; remove its tag when returning to polygons.
+      auto-install: true
       # Each region consistently selects one translucent ARGB colour from this palette.
       # The same RGB value is used at full opacity for its border.
       palette:
@@ -147,6 +153,28 @@ named-regions:
       shipwreck: [Maribel, Stormcrow, Sea Wraith, Golden Gull, North Star, Wayfarer, Tide Runner, Blue Finch, Argent Dawn, Red Sail, Albatross, Black Pearl, Corsair, Fair Wind, Flying Fish, Grey Petrel, Ocean Rose, Sea Drake, Silver Spray, Wanderer, Lost Fleet, Shipwreck Shore, Faldir's Cove, Steamwheedle Port, Menethil Harbor, Stormwind Harbor]
       ruined-portal: [Fallen, Shattered, Ashen, Silent, Lost, Crimson, Broken, Forgotten, Ancient, Withered, Blighted, Charred, Ember, Fractured, Hollow, Obsidian, Riven, Scorched, Smouldering, Sundered, Dark Portal, Emerald Dream, Darkmoon Faire]
       default: [Ratta, Ancient, Hidden, Forgotten, Silent, Ember, Stone, Shadow, Golden, Lost, Broken, Cinder, Deep, Echo, Fallen, Hollow, Iron, Moon, Old, Veiled, Hallowfall, Azj-Kahet, Shadowlands, Dragon Isles, Broken Isles, Argus, Outland, Northrend, Pandaria, Draenor, Kalimdor, Khaz Algar, Undermine, Revendreth, Bastion, The Maw, Forbidden Reach, Emerald Dream]
+    # Extra themed roots add at least 800 distinct possibilities per type with the bundled forms.
+    # A missing section is installed on startup without replacing existing sources/forms/pools.
+    # Other structure types use default. Set a type to [] to disable its additional roots.
+    # Saved names stay unchanged until /namedregion regenerate <id|*> is run.
+    additional-sources:
+      desert: [Duneglass, Suncinder, Sandwhisper, Miragecrest, Scorpionveil, Amberdune, Cactusreach, Dustglimmer, Sunbrass, Siroccowind]
+      forest: [Briarshade, Oakveil, Fernhollow, Maplewhisper, Dewgrove, Mossbloom, Willowglade, Birchhaven, Beechshadow, Aspenleaf]
+      jungle: [Orchidshade, Vinesong, Jaguarcrest, Rainhollow, Canopyglow, Bambooveil, Parrotwing, Pythonleaf, Monsoonheart, Toucanrise]
+      ocean: [Tidewhisper, Reefglow, Saltbloom, Gullcrest, Dolphinwake, Coralhaven, Brinewatch, Seaglass, Kelpveil, Wavehollow]
+      mountains: [Cragspire, Granitewind, Eaglesummit, Slatehorn, Thundercrag, Basaltcrest, Skyforge, Falconridge, Stoneglacier, Cloudriven]
+      snow: [Rimehaven, Frostgleam, Icethorn, Snowmantle, Glaciersong, Winterveil, Hailwatch, Sleetbloom, Polarcrest, Frostlark]
+      swamp: [Reedhollow, Bogwhisper, Fenveil, Cypressmere, Lilysedge, Toadglimmer, Peatshadow, Heronmire, Sedgehaven, Marshsong]
+      badlands: [Claycrest, Canyonglass, Vermilionrise, Rustcrown, Mesaflame, Coppergulch, Shalewatch, Ochrespire, Redstrata, Firedust]
+      savanna: [Acaciavale, Lionglade, Baobabwind, Sunthatch, Zebracrest, Tallveld, Marulahaven, Antelopewatch, Goldthistle, Thornsun]
+      taiga: [Sprucehollow, Pineglimmer, Firwatch, Lynxshade, Elkbough, Cedarfrost, Needlehaven, Timberveil, Moosecrest, Larchsong]
+      mushroom-fields: [Sporehaven, Mycoglow, Capwhisper, Fungalveil, Puffcrest, Violetstem, Shroomhollow, Toadcap, Gillsong, Hyphabloom]
+      plains: [Larkmead, Cloverdown, Honeyfield, Wheatcrest, Barleyvale, Meadowbrook, Windgrass, Buttercup, Fieldstone, Goldenacre]
+      mineshaft: [Coalspire, Flintvein, Pickstone, Copperdrift, Silverlode, Ironhollow, Quartzdeep, Garnetdelve, Rustridge, Lanternfall]
+      village: [Hearthford, Thistlewick, Brambleton, Ciderbrook, Millbridge, Appleby, Honeyham, Wattleford, Bellhaven, Turnipstead]
+      shipwreck: [Swiftwing, Wavewalker, Moonrider, Seasilk, Starling, Windwhisper, Saltrose, Tideborne, Brightfin, Sunsail]
+      ruined-portal: [Riftscar, Voidglass, Ashbound, Runefall, Emberveil, Cindergate, Shatterwind, Duskseal, Fatesunder, Vesperflame]
+      default: [Runeward, Oathstone, Duskmantle, Echoward, Grimspire, Starvault, Gloomcrest, Cinderwatch, Fatehollow, Vesper]
     # Templates applied to one-word source entries. Multi-word source entries bypass these forms.
     forms:
       desert: ["{root} Desert", "{root} Sands", "{root} Expanse", "Dunes of {root}", "{root} Wastes", "{root} Dunes", "{root} Barrens", "The {root}"]
@@ -169,6 +197,14 @@ named-regions:
     pools: {}
 
 custom-commands:
+  # command defaults to the entry key when it is omitted.
+  # Each run entry is executed in order. Prefix messages with message: and use
+  # player: or server: to choose who runs command actions.
+  # discord:
+  #   permission: ""
+  #   run:
+  #     - "message:<aqua>Join our Discord community:</aqua>"
+  #     - "message:<click:open_url:'https://discord.example'><underlined><aqua>discord.example</aqua></underlined></click>"
   survival:
     permission: stemcraft.command.survival
     command: survival
@@ -179,6 +215,130 @@ custom-commands:
     command: creative
     run:
       - "server:tpworld creative {player}"
+
+# Server announcements are independent of the workshops catalogue. Manual
+# announcements are stored in SQLite and are not overwritten by config reloads.
+announcements:
+  enabled: true
+  scheduled-enabled: true
+  announce-on-startup: false
+  default-interval: 15m
+  minimum-gap: 30s
+  join-enabled: true
+  join-delay: 5s
+  timezone: Australia/Brisbane
+  prefix: "<dark_aqua>[STEMCraft]</dark_aqua> "
+  join:
+    first-time:
+      - "<aqua>Welcome to STEMCraft, {player}!</aqua>"
+      - "<gray>Use <yellow>/workshops</yellow> to see upcoming STEMMechanics workshops.</gray>"
+    returning:
+      - "<aqua>Welcome back, {player}!</aqua>"
+    upcoming-workshop:
+      # This private message is skipped when Workshops is unavailable or no workshop matches.
+      enabled: true
+      # Optional additional delay after join-delay. Omit this key for immediate delivery.
+      # delay: 10s
+      filters:
+        # Optional strict bounds. Leave empty to match the next future workshop at any distance.
+        days-until: {}
+        # Matching is case-insensitive after trimming. Empty means every location.
+        locations: []
+      # These lines use the next_workshop_* placeholders listed in the documentation.
+      # Use {next_workshop_date:relative} for Today, Tomorrow, or a nearby weekday;
+      # use {next_workshop_date:RELATIVE} for uppercase output.
+      message:
+        - "<aqua>Upcoming STEMMechanics workshop:</aqua> <white>{next_workshop_title}</white>"
+        - "<gray>{next_workshop_date} at {next_workshop_time} — <click:open_url:'{next_workshop_url}'><underlined>book your place</underlined></click></gray>"
+      # Optional sound played to the joining player after the notice is delivered.
+      # Omit this section, or leave it empty, to use BLOCK_NOTE_BLOCK_CHIME.
+      # Set enabled to false to disable it.
+      # sound:
+      #   enabled: true
+      #   name: BLOCK_NOTE_BLOCK_CHIME
+      #   volume: 0.8
+      #   pitch: 1.0
+    active-workshop:
+      enabled: true
+      # Optional additional delay after join-delay. Omit this key for immediate delivery.
+      # delay: 10s
+      message:
+        - "<aqua>Workshop currently in progress:</aqua> <white>{active_workshop_title}</white>"
+        - "<gray>Use <yellow>/workshops</yellow> for the access details.</gray>"
+        # Use {active_workshop_end_date:relative} for Today, Tomorrow, or a nearby weekday.
+        - "<gray>Finishes {active_workshop_end_date} at {active_workshop_end_time}.</gray>"
+      # Optional sound played to the player after the active-workshop notice is delivered.
+      # Omit this section, or leave it empty, to use BLOCK_BELL_USE.
+      # Set enabled to false to disable it.
+      # sound:
+      #   enabled: true
+      #   name: BLOCK_BELL_USE
+      #   volume: 0.8
+      #   pitch: 1.0
+  scheduled:
+    server-information:
+      type: message
+      enabled: true
+      interval: 15m
+      message:
+        - "<yellow>Remember to visit <click:open_url:'https://www.stemmechanics.com.au'><underlined>stemmechanics.com.au</underlined></click> for STEM activities.</yellow>"
+    workshop-promotion:
+      type: workshops
+      enabled: true
+      interval: 30m
+      filters:
+        # Bounds are strict: this matches workshops more than 2 and less than 5 days away.
+        days-until:
+          greater-than: 2
+          less-than: 5
+        # Location matching is exact after trimming, but case-insensitive.
+        locations: []
+      message:
+        - "<aqua>Upcoming STEMMechanics workshop:</aqua> <white>{next_workshop_title}</white>"
+        - "<gray>{next_workshop_date} at {next_workshop_time} — <click:open_url:'{next_workshop_url}'><underlined>book your place</underlined></click></gray>"
+
+# Workshops keeps website records and manually created records in one catalogue.
+# Website entries without a reliable event start date are skipped safely.
+workshops:
+  enabled: true
+  website-enabled: true
+  rss-sync-enabled: true
+  manual-enabled: true
+  cache-persistence: true
+  rss-url: "https://www.stemmechanics.com.au/workshops/feed"
+  refresh-interval: 60m
+  connection-timeout: 10s
+  read-timeout: 20s
+  timezone: Australia/Brisbane
+  maximum-displayed: 3
+  display-filter:
+    # Empty means all feed locations. Match the value supplied by the feed, such as ["server"].
+    locations: []
+  # Prompt an administrator or an explicitly permitted player to update the
+  # workshop custom command/access text during the hour before it starts.
+  instructions:
+    prompt-enabled: true
+    prompt-window: 1h
+    prompt-delay: 5s
+    permission: stemcraft.workshops.instructions
+    prompt:
+      - "<yellow>Update the workshop custom command for <white>{workshop_title}</white>, starting in {workshop_countdown}.</yellow>"
+      - "<gray>Players will use that custom command to access this workshop.</gray>"
+  display:
+    # Each item is one MiniMessage line. Set header/footer to [] to hide them.
+    header:
+      - "<aqua><bold>STEMMechanics Upcoming Workshops</bold></aqua>"
+    entry:
+      - "<yellow>{index}. {title}</yellow>"
+      - "<white>{date} at {time}</white>"
+      - "<gray>{location}</gray>"
+      - "<click:open_url:'{booking_url}'><aqua>[Click to view details]</aqua></click>"
+    # These lines are used when a workshop has no booking URL. Lines in entry
+    # containing {booking_url} or {url} are skipped in that case.
+    no-booking:
+      - "<dark_gray>Details: /workshops info {id}</dark_gray>"
+    footer:
+      - "<gray>Visit stemmechanics.com.au for more workshops.</gray>"
 
 custom-portals:
   enabled: true
@@ -289,11 +449,32 @@ notice-boards:
 interactive-menus:
   enabled: true
 
-web_server:
-    enabled: true
-    port: 8950
-    path: www
-    public-url: ""
+web-server:
+  enabled: true
+  # Loopback serves a local reverse proxy. Use 0.0.0.0 for direct remote access.
+  ip: "127.0.0.1"
+  port: 8950
+  path: www
+  # Direct connections use HTTP. HTTPS requires an external TLS reverse proxy.
+  public-url: ""
+  mail-api:
+    # A blank key is replaced with a secure, persistent bearer token on startup.
+    # The generated value is saved here and announced in the console without printing the secret.
+    enabled: false
+    key: ""
+    # This name is written into letters sent through the HTTP endpoint.
+    sender: "Discord Rewards"
+    # Requests larger than this are rejected before item parsing.
+    max-body-bytes: 32768
+    # Limits protect the server if the integration key is exposed.
+    max-items: 26
+    max-item-amount: 1024
+    # delay_seconds may be 0 through this value. Omitted delay uses mailboxes.delivery.base-delay.
+    max-delay-seconds: 604800
+  status:
+    players:
+      # When enabled, /status includes current usernames in the players array.
+      enabled: false
 
 first-join:
   enabled: true
@@ -714,6 +895,18 @@ chat:
   filter_command: ""
   duplicate_message_limit: 2
   duplicate_message_warning: "Please do not repeat the same message"
+  # Optional outbound bridge for a Discord bot (or another HTTP consumer).
+  # The bot owns the Discord SDK/webhook and only needs to expose this small
+  # bearer-authenticated JSON receiver. Chat is queued off the event thread.
+  discord-bridge:
+    enabled: false
+    url: ""
+    bearer-token: ""
+    server-id: survival
+    channel: global
+    timeout: 3s
+    queue-size: 256
+    max-retries: 3
   content_filter:
     enabled: true
     minimum_severity: mild
@@ -1354,6 +1547,13 @@ formatted-signs:
 # Generator-owned map policies; Pl3xMap remains optional.
 generator-maps:
   enabled: true
+
+graves:
+  map:
+    enabled: true
+    # Avoid rebuilding/writing unchanged grave markers every second (1-3600).
+    update-seconds: 10
+
 # AFK is session-only and clears when a player returns or reconnects.
 afk:
   enabled: true

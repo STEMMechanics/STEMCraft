@@ -40,18 +40,18 @@ class PackMetaGeneratorTest {
 
         TestResourcePackWriter writer = new TestResourcePackWriter(
             tempDir,
-            new PackFormatRange(32, 88),
+            new PackFormatRange(32, 97.1),
             null
         );
         new PackMetaGenerator(service).generate(new ResourcePackBuildContext(
-            new ResourcePackBuildTarget("26.2", 88),
+            new ResourcePackBuildTarget("26.3", 97.1),
             writer,
             config
         ));
 
         JsonObject pack = readPack(tempDir);
         assertEquals(32, pack.get("min_format").getAsInt());
-        assertEquals(88, pack.get("max_format").getAsInt());
+        assertEquals(97.1, pack.get("max_format").getAsDouble());
         assertEquals(64, pack.get("pack_format").getAsInt());
 
         JsonArray supportedFormats = pack.getAsJsonArray("supported_formats");
@@ -123,7 +123,7 @@ class PackMetaGeneratorTest {
         Path output = tempDir.resolve("with-overlay");
         Files.createDirectories(output);
         new PackMetaGenerator(service).generate(new ResourcePackBuildContext(
-            new ResourcePackBuildTarget("26.2", 88),
+            new ResourcePackBuildTarget("26.3", 97.1),
             new TestResourcePackWriter(output, new PackFormatRange(64, 88), null),
             config
         ));

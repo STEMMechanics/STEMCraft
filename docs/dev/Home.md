@@ -10,9 +10,9 @@ STEMCraft is a Paper plugin with four main layers:
 ## Requirements
 
 - Java 25
-- Paper for Minecraft 26.2 or newer
+- Paper for Minecraft 26.3 or newer
 
-The plugin declares Paper API version `26.2` and also checks the Minecraft version before initializing services. On an older server it logs the detected and required versions, disables itself, and performs no data or service initialization.
+The plugin declares Paper API version `26.3` and also checks the Minecraft version before initializing services. On an older server it logs the detected and required versions, disables itself, and performs no data or service initialization.
 
 This wiki mirrors the current source tree and is intended to give server operators and plugin developers a stable index over the runtime surface.
 

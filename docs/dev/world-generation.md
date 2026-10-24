@@ -6,7 +6,7 @@ The Underhalls uses a separate yellow end-stone maze generator and one-way doorw
 
 ## Test worlds
 
-Build with Java 25 using `./gradlew check :plugin:jar`. The plugin targets the repository's supported Paper 26.2 runtime and pinned Paper API dependency. Install the jar from `plugin/build/libs` on a test server, then use:
+Build with Java 25 using `./gradlew check :plugin:jar`. The plugin targets the repository's supported Paper 26.3 runtime and pinned Paper API dependency. Install the jar from `plugin/build/libs` on a test server, then use:
 
 ```text
 /world listgenerators

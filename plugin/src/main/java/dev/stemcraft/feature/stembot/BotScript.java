@@ -36,6 +36,7 @@ public record BotScript(
     Map<String,SpawnPoint> alwaysWorldSpawns,
     Map<String,String> triggerActions,
     Map<String,String> helpTopics,
+    BotRegionGuide regionGuide,
     boolean deferDuringCombat,
     int combatCooldownSeconds
 ) {
@@ -48,7 +49,7 @@ public record BotScript(
                                int awayTimeoutSeconds,String disengaged,String reengaged) {}
 
     public enum Op {
-        SAY,TALK,SLEEP,WALK,SPEED,LOOK,POINT,WAVE,SNEAK,STAND,ACTION,LISTEN,AWAIT,END,CLOSE
+        SAY,TALK,SLEEP,WALK,SPEED,LOOK,POINT,REQUIRE_WORLD,EXIT_REGION,WAVE,SNEAK,STAND,ACTION,LISTEN,AWAIT,END,CLOSE
     }
 
     public record SpeechSettings(
@@ -80,6 +81,19 @@ public record BotScript(
         static Instruction simple(Op op) {
             return new Instruction(op,"",0,0,0,0,0,List.of());
         }
+
+        boolean requiresActor() {
+            return switch(op) {
+                case WALK,LOOK,POINT,WAVE,SNEAK,STAND,LISTEN,AWAIT -> true;
+                default -> false;
+            };
+        }
+
+        boolean matchesWorld(org.bukkit.World world) {
+            return world!=null && (text.isEmpty() || world.getEnvironment()!=null
+                && world.getEnvironment().name().equalsIgnoreCase(text))
+                && routes.getFirst().matches(world.getName());
+        }
     }
 
     public record ListenRoute(List<Pattern> patterns,String target) {
@@ -89,6 +103,7 @@ public record BotScript(
     }
 
     public record TriggerAction(String action,boolean once) {}
+    public record HelpTopic(String action,boolean noSpawn) {}
 
     public String commandAction(String world) {
         return commandWorld.get(world.toLowerCase(Locale.ROOT));
@@ -129,7 +144,19 @@ public record BotScript(
     }
 
     public String helpTopicAction(String topic) {
-        return helpTopics.get(topic.toLowerCase(Locale.ROOT));
+        HelpTopic route=helpTopic(topic);
+        return route==null?null:route.action();
+    }
+
+    public HelpTopic helpTopic(String topic) {
+        String target=helpTopics.get(topic.toLowerCase(Locale.ROOT));
+        return target==null?null:parseHelpTopic(target);
+    }
+
+    private static HelpTopic parseHelpTopic(String target) {
+        boolean noSpawn=target.regionMatches(true,0,"no-spawn:",0,9);
+        String action=noSpawn?required(target.substring(9).trim(),"no-spawn action"):target;
+        return new HelpTopic(action,noSpawn);
     }
 
     /** Run after successful parsing, so invalid scripts are never migrated on disk. */
@@ -241,15 +268,20 @@ public record BotScript(
         if(speech.maxBeeps()<speech.minBeeps())
             throw new IllegalArgumentException("speech.max-beeps must be >= speech.min-beeps");
 
-        Map<String,List<Instruction>> actions=readActions(config.getSection("actions",false));
+        Map<String,List<Instruction>> actions=new LinkedHashMap<>(readActions(config.getSection("actions",false)));
         Map<String,String> commandWorld=worldActions(config,"command-action","command");
         Map<String,String> firstTimeWorld=worldActions(config,"first-time-action","first-time");
         Map<String,String> alwaysWorld=worldActions(config,"always-action",null);
         Map<String,SpawnPoint> alwaysWorldSpawns=worldSpawns(config);
         Map<String,String> triggerActions=readRoutes(config.getSection("triggers",false));
-        Map<String,String> helpTopics=readRoutes(config.getSection("help-topics",false));
+        Map<String,String> helpTopics=new LinkedHashMap<>(readRoutes(config.getSection("help-topics",false)));
+        BotRegionGuide regionGuide=BotRegionGuide.read(config);
 
         validateTargets(actions,commandWorld,firstTimeWorld);
+        actions.forEach((action,program)->program.forEach(instruction->{
+            if(instruction.op()==Op.EXIT_REGION && !regionGuide.regions().containsKey(instruction.text()))
+                throw new IllegalArgumentException("actions."+action+" references unknown region '"+instruction.text()+"'");
+        }));
         alwaysWorld.forEach((world,target)->requireTarget(actions,target,"worlds."+world+".always-action"));
         triggerActions.forEach((trigger,target)->{
             String base=trigger.endsWith("-once")?trigger.substring(0,trigger.length()-5):trigger;
@@ -260,7 +292,8 @@ public record BotScript(
         helpTopics.forEach((topic,target)->{
             if(!topic.matches("[a-z0-9][a-z0-9_-]{0,31}"))
                 throw new IllegalArgumentException("help-topics."+topic+" has an invalid topic");
-            requireTarget(actions,target,"help-topics."+topic);
+            HelpTopic route=parseHelpTopic(target);
+            requireTarget(actions,route.action(),"help-topics."+topic);
         });
         boolean deferDuringCombat=config.getBoolean("trigger-policy.defer-during-combat",true);
         int combatCooldownSeconds=boundedInt(config.getInt("trigger-policy.combat-cooldown-seconds",10),0,3600);
@@ -296,6 +329,7 @@ public record BotScript(
             Map.copyOf(alwaysWorldSpawns),
             Map.copyOf(triggerActions),
             Map.copyOf(helpTopics),
+            regionGuide,
             deferDuringCombat,
             combatCooldownSeconds
         );
@@ -353,6 +387,8 @@ public record BotScript(
             case "point" -> argument.equalsIgnoreCase("player")
                 ?new Instruction(Op.POINT,"player",0,0,0,0,0,List.of())
                 :parsePointInstruction(Op.POINT,argument,false);
+            case "require-world" -> parseWorldRequirement(argument);
+            case "exit-region" -> new Instruction(Op.EXIT_REGION,required(argument,"region id"),0,0,0,0,0,List.of());
             case "speed" -> new Instruction(Op.SPEED,"",0,0,0,
                 bounded(parseDouble(argument,"speed"),0.2,2.5),0,List.of());
             case "wave" -> Instruction.simple(Op.WAVE);
@@ -365,6 +401,27 @@ public record BotScript(
             case "close" -> Instruction.simple(Op.CLOSE);
             default -> throw new IllegalArgumentException("Unknown STEMBot instruction: "+command);
         };
+    }
+
+    private static Instruction parseWorldRequirement(String argument) {
+        String[] parts=argument.split("\\s*->\\s*",2);
+        String[] request=parts[0].trim().split("\\s+");
+        if(parts.length!=2 || request.length<1 || request.length>2 || request[0].isBlank()
+            || parts[1].isBlank() || parts[1].matches(".*\\s.*"))
+            throw new IllegalArgumentException("require-world expects pattern[|pattern] [environment] -> fallback-action");
+        String environment=request.length==2?request[1].toLowerCase(Locale.ROOT):"";
+        if(!environment.isEmpty()) {
+            try {
+                org.bukkit.World.Environment.valueOf(environment.toUpperCase(Locale.ROOT));
+            } catch(IllegalArgumentException invalid) {
+                throw new IllegalArgumentException("require-world environment must be normal, nether, the_end or custom",invalid);
+            }
+        }
+        List<Pattern> patterns=new ArrayList<>();
+        for(String pattern:request[0].split("\\|",-1))
+            patterns.add(wildcard(required(pattern,"world pattern")));
+        return new Instruction(Op.REQUIRE_WORLD,environment,0,0,0,0,0,
+            List.of(new ListenRoute(List.copyOf(patterns),parts[1].trim())));
     }
 
     private static Instruction parseAwait(String argument) {
@@ -449,11 +506,11 @@ public record BotScript(
                 if(instruction.op()==Op.ACTION)
                     requireTarget(actions,instruction.text(),"actions."+entry.getKey());
 
-                if(instruction.op()==Op.LISTEN || instruction.op()==Op.AWAIT)
+                if(instruction.op()==Op.LISTEN || instruction.op()==Op.AWAIT || instruction.op()==Op.REQUIRE_WORLD)
                     for(ListenRoute route:instruction.routes())
                         if(instruction.op()==Op.AWAIT || (!route.target().equalsIgnoreCase("close")
                             &&!route.target().equalsIgnoreCase("end")))
-                            requireTarget(actions,route.target(),"listen in "+entry.getKey());
+                            requireTarget(actions,route.target(),instruction.op().name().toLowerCase(Locale.ROOT)+" in "+entry.getKey());
             }
         }
 

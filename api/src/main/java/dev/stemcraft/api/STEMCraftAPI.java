@@ -26,6 +26,7 @@ import dev.stemcraft.api.service.coordinatebar.CoordinateBarService;
 import dev.stemcraft.api.service.audit.AuditService;
 import dev.stemcraft.api.internal.InstanceHolder;
 import dev.stemcraft.api.service.database.DatabaseService;
+import dev.stemcraft.api.service.debug.DebugService;
 import dev.stemcraft.api.service.dialog.DialogService;
 import dev.stemcraft.api.service.event.EventService;
 import dev.stemcraft.api.service.config.ConfigService;
@@ -55,6 +56,7 @@ import dev.stemcraft.api.service.punishment.PunishmentService;
 import dev.stemcraft.api.service.tabcomplete.TabCompleteService;
 import dev.stemcraft.api.service.web.WebService;
 import dev.stemcraft.api.service.world.WorldService;
+import dev.stemcraft.api.service.workshop.WorkshopService;
 
 import java.io.File;
 
@@ -79,6 +81,9 @@ public interface STEMCraftAPI {
      * Register a new command.
      */
     CommandService commands();
+
+    /** Get the shared feature and service debug-test registry. */
+    default DebugService debug() { return DebugService.UNAVAILABLE; }
 
     /** Access the optional private STEMBot guide. */
     default dev.stemcraft.api.service.stembot.StemBotService stemBot() {
@@ -238,6 +243,9 @@ public interface STEMCraftAPI {
      * Get the world service.
      */
     WorldService worlds();
+
+    /** Get the optional STEMMechanics workshop catalogue service. */
+    default WorkshopService workshops() { return WorkshopService.UNAVAILABLE; }
 
     /**
      * Static access to the STEMCraft API instance.

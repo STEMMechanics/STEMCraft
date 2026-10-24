@@ -1,7 +1,7 @@
 name: STEMCraft
 version: '${version}'
 main: dev.stemcraft.STEMCraft
-api-version: '26.2'
+api-version: '26.3'
 load: STARTUP
 softdepend:
   - WorldEdit

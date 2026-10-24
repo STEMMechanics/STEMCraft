@@ -1,0 +1,121 @@
+STEMBOT REGION DIRECTIONS - SERVER TEST CHECKLIST
+
+Build: __________________  Date: ______________  Tester: _________________
+Tick each item after testing it in-game.
+
+SETUP
+Use a Survival test overworld with Citizens and STEMBot enabled. Merge the
+new actions, regions and help-topics from the bundled stembot.yml into your
+deployed file; preserve its other settings. Set this test region's bounds:
+
+  regions:
+    survival-old-terrain:
+      bounds: "0,0;7999,7999"
+      align-to-chunks: true
+
+Keep its messages. The survival-wilderness action must start with:
+  require-world:survival* normal -> survival-wilderness-world-required
+  exit-region:survival-old-terrain
+
+Adjust survival* if your test world's name differs. Reload STEMCraft.
+Choose safe ground Y values for the X/Z positions below. Use test worlds;
+these sample bounds must not replace the real Survival boundary.
+
+[ ] R01 - Explicit command topic
+    In the test overworld, run /help wilderness, then /stembot wilderness.
+    Both should give directions through the survival-wilderness action.
+    With wilderness: no-spawn:survival-wilderness, expect only a text reply:
+    no NPC, speech sounds, menu, farewell, particles or private chat capture.
+    Repeat with Citizens disabled and during combat; replies should still work.
+    Ask during another guide conversation; its actor/control must be preserved.
+
+[ ] R02 - Survival overworld requirement
+    Run /help wilderness in Creative, the Nether, and the End.
+    Expect the Survival overworld explanation; no exit coordinates.
+    Try another Survival overworld matching your configured world pattern.
+    It should pass the world check and use the supplied region.
+
+[ ] R03 - North exit
+    At X/Z 4000.5,100.5: north, about 101 blocks, target Z -1.
+    Ask a spawned guide in private chat to check facing/gestures towards the target.
+
+[ ] R04 - East exit
+    At X/Z 7900.5,4000.5: east, about 100 blocks, target X 8000.
+    Check pointing when asking a spawned guide in private chat.
+
+[ ] R05 - South exit
+    At X/Z 4000.5,7900.5: south, about 100 blocks, target Z 8000.
+    Check pointing when asking a spawned guide in private chat.
+
+[ ] R06 - West exit
+    At X/Z 100.5,4000.5: west, about 101 blocks, target X -1.
+    Check pointing when asking a spawned guide in private chat.
+
+[ ] R07 - Recalculate after moving
+    Ask near one edge, move near another, and ask again. The second reply
+    must use the new position. The player travels; no teleport is offered.
+
+[ ] R08 - Already outside
+    Cross to X -1 or X 8000 and ask again. Expect the outside explanation
+    rather than directions to another edge.
+
+[ ] R09 - Optional chunk alignment and negative corners
+    Set bounds to "-1,-1;8000,8000", keep align-to-chunks: true, and reload.
+    X 8015 is still inside; east target X 8016, west target X -17.
+    Set align-to-chunks: false and reload. East target is now X 8001,
+    west target X -2. Restore the original test bounds and alignment.
+
+[ ] R10 - World border and missing bounds
+    In the test world, block the closest exit with the world border.
+    Expect an accessible exit instead. Block all exits: expect the blocked
+    explanation. Set bounds: [] and reload: expect the unmapped reply.
+    Restore the world border and test bounds afterwards.
+
+[ ] R11 - Reuse the direction instruction
+    Merge another region/action/topic into the test script:
+      regions.test-room.bounds: [0, 0, 9, 9]
+      actions.test-exit:
+        - 'require-world:survival* normal -> end'
+        - 'exit-region:test-room'
+        - 'end'
+      help-topics.testexit: test-exit
+    These are config paths: add them under the existing YAML sections.
+    Reload. At X/Z 8.5,5 run /help testexit: east, 2 blocks, X 10, Z 5.
+    The default reply should describe a region without wilderness/version
+    text. At X/Z 10,5 it should report that you are already outside.
+
+[ ] R12 - No built-in topic or chat preference
+    Set help-topics.wilderness to '' and remove the wilderness/new-terrain
+    patterns from the Survival menu's listen instruction. Reload.
+    /help wilderness should list configured topics instead of giving a
+    direction. Private chat should follow the remaining menu routes.
+    A region definition alone must not recreate topics or chat shortcuts.
+    Restore the desired topic and explicit listen routes afterwards.
+
+[ ] R13 - Privacy and existing behaviour
+    Check with a second player: only the owner sees/hears the guide reply.
+    Outside conversation range, chat stays public and does not route topics.
+    Existing tours, topic changes, bye/close and controlled first-join
+    questions must still work. Check Java and Bedrock clients if available.
+
+[ ] R14 - Final configuration
+    Remove testexit, test-exit and test-room. Restore test-world settings.
+    Configure the actual old Survival bounds before enabling for players.
+    No sample coordinates should remain in the live configuration.
+
+[ ] R15 - On-demand actor steps
+    Temporarily map help-topics.demo to no-spawn:lazy-demo and define:
+      lazy-demo: ['talk:First reply', 'sleep:40', 'wave', 'talk:I am here', 'end']
+    Run /help demo. First reply must be text only. After two seconds, the
+    bot should appear once, wave, speak normally and finish. First reply
+    must not repeat. Try while a guide is active or combat blocks spawning:
+    the text is immediate, one wait notice appears, and wave waits until
+    the guide is free and combat has ended. Existing guide control stays intact.
+    Try a listen/await step too: the NPC must appear before private replies
+    or provider callbacks start. Missing Citizens or blocked spawn space
+    should stop only this request with an explanation; wilderness text help
+    must still work. Reload or change worlds while waiting: no late spawn.
+    Remove demo and lazy-demo after testing.
+
+Notes: _________________________________________________________________
+________________________________________________________________________

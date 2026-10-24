@@ -51,8 +51,8 @@ import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.file.*;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -1215,31 +1215,51 @@ public class WorldServiceImpl extends BaseService implements WorldService {
      * @throws IOException If an I/O error occurs.
      */
     @Override public void duplicateWorld(@NotNull String src, @NotNull String dst) throws IOException {
-        requireUnloaded(src); requireUnloaded(dst);
-        ResolvedWorldPath source = resolvedWorldPath(src);
-        if (source.kind() == WorldStorageKind.INTEGRATED_DIMENSION) {
-            throw new IOException("Duplicating integrated Paper dimensions is not supported. Duplicate the base world instead.");
+        if (!dst.matches("[a-z0-9._-]+") || dst.equals(".") || dst.equals("..")) {
+            throw new IOException("Destination world name must use lowercase letters, numbers, dots, underscores or hyphens.");
         }
+        if (src.equalsIgnoreCase(dst) || Bukkit.getWorld(dst) != null
+                || Files.exists(worldRoot(dst)) || Files.exists(resolvedWorldPath(dst).path())) {
+            throw new FileAlreadyExistsException("Destination world already exists: " + dst);
+        }
+        ResolvedWorldPath source = resolvedWorldPath(src);
         Path s = source.path();
-        Path d = worldRoot(dst);
-        if (!Files.exists(s)) throw new IOException("Source world not found: " + src);
-        try (var stream = Files.walk(s)) {
-            stream.forEach(p -> {
-                Path rel = s.relativize(p);
-                String rs = rel.toString().replace('\\', '/');
-                if (rs.endsWith("uid.dat") || rs.endsWith("session.lock")) return;
+        // Integrated worlds are independent dimensions in the same Paper world storage.
+        Path d = source.kind() == WorldStorageKind.INTEGRATED_DIMENSION ? s.resolveSibling(dst) : worldRoot(dst);
+        if (!Files.isDirectory(s)) throw new IOException("Source world not found: " + src);
+        if (Files.exists(d)) throw new FileAlreadyExistsException("Destination world already exists: " + dst);
+        requireUnloaded(src);
+        Files.createDirectory(d); // Claim a new destination; never merge into an existing world.
+        try {
+            Files.walkFileTree(s, new SimpleFileVisitor<>() {
+                @Override
+                public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) throws IOException {
+                    if (!directory.equals(s)) Files.createDirectory(d.resolve(s.relativize(directory)));
+                    return FileVisitResult.CONTINUE;
+                }
 
-                Path out = d.resolve(rel);
-                try {
-                    if (Files.isDirectory(p)) {
-                        Files.createDirectories(out);
-                    } else {
-                        Files.copy(p, out, StandardCopyOption.COPY_ATTRIBUTES);
+                @Override
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
+                    Path relative = s.relativize(file);
+                    String name = file.getFileName().toString();
+                    // Paper 26.1+ stores the world UUID separately from settings and PDC.
+                    if (name.equals("uid.dat") || name.equals("session.lock")
+                            || relative.endsWith(Path.of("data", "paper", "metadata.dat"))
+                            || relative.endsWith(Path.of("data", "paper", "metadata.dat_old"))) {
+                        return FileVisitResult.CONTINUE;
                     }
-                } catch (IOException e) {
-                    throw new UncheckedIOException(e); // cleaner than RuntimeException
+                    if (attributes.isSymbolicLink()) throw new IOException("Cannot duplicate symbolic link: " + relative);
+                    Files.copy(file, d.resolve(relative), StandardCopyOption.COPY_ATTRIBUTES);
+                    return FileVisitResult.CONTINUE;
                 }
             });
+        } catch (IOException exception) {
+            try (var paths = Files.walk(d)) {
+                for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) Files.delete(path);
+            } catch (IOException cleanupException) {
+                exception.addSuppressed(cleanupException);
+            }
+            throw exception;
         }
     }
 
@@ -1493,11 +1513,11 @@ public class WorldServiceImpl extends BaseService implements WorldService {
     static @Nullable Path findIntegratedWorldPath(@NotNull Path container, @NotNull String worldName, @NotNull World.Environment environment) {
         try {
             for (Path root : recognizedWorldRoots(container)) {
+                Path customDimensionPath = root.resolve(PAPER_DIMENSIONS_DIRECTORY).resolve(worldName);
+                if (Files.isDirectory(customDimensionPath)) {
+                    return customDimensionPath;
+                }
                 if (environment == World.Environment.NORMAL) {
-                    Path customDimensionPath = root.resolve(PAPER_DIMENSIONS_DIRECTORY).resolve(worldName);
-                    if (Files.isDirectory(customDimensionPath)) {
-                        return customDimensionPath;
-                    }
                     continue;
                 }
 

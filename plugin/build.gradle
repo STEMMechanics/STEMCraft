@@ -27,6 +27,8 @@ dependencies {
     compileOnly('net.luckperms:api:5.4')
     compileOnly('com.googlecode.json-simple:json-simple:1.1.1')
     compileOnly('com.sk89q.worldedit:worldedit-bukkit:7.4.4')
+    // Pl3xMap has no published 26.3 build yet; keep the optional bridge
+    // compiled against the last available API until one is released.
     compileOnly('maven.modrinth:pl3xmap:26.2-554')
 
     // Lombok
@@ -55,10 +57,15 @@ dependencies {
     testImplementation "net.luckperms:api:5.4"
     testImplementation "maven.modrinth:pl3xmap:26.2-554"
     testRuntimeOnly "org.apache.logging.log4j:log4j-core:2.25.3"
+    // Compile plugin tests against the new target, but run MockBukkit with the
+    // Paper API it actually implements until a v26.3 artifact is published.
     //noinspection VulnerableLibrariesLocal
-    testImplementation "io.papermc.paper:paper-api:${rootProject.ext.paperApiVersion}"
+    testCompileOnly "io.papermc.paper:paper-api:${rootProject.ext.paperApiVersion}"
+    //noinspection VulnerableLibrariesLocal
+    testRuntimeOnly "io.papermc.paper:paper-api:${rootProject.ext.paperTestRuntimeVersion}"
     testImplementation("com.sk89q.worldedit:worldedit-bukkit:7.4.4")
     //noinspection VulnerableLibrariesLocal
+    // MockBukkit does not publish a v26.3 artifact yet; see the API module.
     testImplementation("org.mockbukkit.mockbukkit:mockbukkit-v26.2:4.116.1") {
         exclude group: "org.junit"
         exclude group: "org.junit.jupiter"

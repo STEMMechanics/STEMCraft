@@ -44,6 +44,19 @@ public interface ResourcePackService {
     @NotNull ResourcePackHost host();
 
     /**
+     * Gets the glyph shortcuts registered from the generated resource-pack manifest.
+     *
+     * <p>Shortcuts include their surrounding colons, for example
+     * {@code :roles/stemcraft:}. Implementations that do not expose a generated
+     * manifest may return an empty list.</p>
+     *
+     * @return The registered glyph shortcuts.
+     */
+    default @NotNull List<String> registeredGlyphTokens() {
+        return List.of();
+    }
+
+    /**
      * Registers a resource pack generator.
      *
      * @param generator The resource pack generator to register.
@@ -103,7 +116,7 @@ public interface ResourcePackService {
      *
      * @return The min and max supported pack formats for the current service state.
      */
-    int[] supportedVersion();
+    double[] supportedVersion();
 
     /**
      * Gets the supported format range for the base build target generated for

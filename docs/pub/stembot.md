@@ -2,6 +2,10 @@
 
 Use `/help` to summon your private guide. Only you can see STEMBot. The first visit introduces the Hub; you can return whenever you want a reminder.
 
+Type `/help ` and press Tab to see the available help topics. Start typing a topic to narrow the suggestions. If STEMBot needs to wait for combat to finish or for another conversation to end, it tells you why.
+
+Some topics start with a direct text reply and bring STEMBot over only when a step needs the guide. Once it appears, nearby ordinary chat becomes private with STEMBot.
+
 ## Your first welcome
 
 When STEMBot is available, it welcomes you and asks the first-join question. Type the answer in ordinary chat. The answer stays private, and STEMBot follows you while you answer. Commands remain blocked until you pass; trying one repeats the question without using an attempt. After you pass, STEMBot starts the welcome action configured by the server.
@@ -20,11 +24,28 @@ STEMBot recognises configured topics rather than answering every possible senten
 | --- | --- |
 | Hub | `tour`, `survival`, `creative`, `minigames`, `noticeboard`, `voting` |
 | Creative | `plots`, `merge`, `delete`, `clear`, `helpers`, `selection`, `signs`, `rules` |
-| Survival | `getting started`, `quests`, `practice`, `coordbar`, `skills`, `vein mining`, `harvesting`, `tools`, `cooking`, `animals`, `mail`, `portals`, `graves`, `sleep`, `rules` |
+| Survival | `wilderness`, `getting started`, `quests`, `practice`, `coordbar`, `skills`, `vein mining`, `harvesting`, `tools`, `cooking`, `animals`, `mail`, `portals`, `graves`, `sleep`, `rules` |
 
 If STEMBot cannot walk to a stop, follow its retry/continue prompt. Tell an administrator where it happened and what you asked. You can still use `/hub` and other commands yourself.
 
 > **Image placeholder — private conversation:** Show STEMBot, one example topic and the chat-bubble player reply. Add labels explaining “type a topic” and “commands use /”.
+
+## Finding new wilderness
+
+Use `/help wilderness` or `/stembot wilderness` in a Survival overworld. With the
+default settings, the command gives a private text reply immediately without
+summoning STEMBot or starting a conversation. You can also ask "Where are the new
+chunks?" while talking privately to a spawned guide.
+When the server has mapped its old terrain boundary, the reply gives the closest
+compass direction, approximate distance and target coordinates. A spawned guide
+also points that way. You travel there yourself; asking again after moving
+recalculates the directions.
+
+STEMBot tells you when you are already beyond the old terrain area or when the world
+border blocks the exit. The distance is horizontal and straight-line, so choose a
+walking route that suits the terrain. Reaching new-generation chunks gives you an
+area to explore; it does not guarantee a particular biome immediately or that
+another player has not already generated those chunks.
 
 ## Optional practice
 
