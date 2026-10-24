@@ -435,7 +435,8 @@ public class ChatServiceImpl extends BaseService {
         boolean enabled = getConfigSection().getBoolean(
                 "discord-bridge.enabled",
                 getConfigSection().getBoolean("discord_bridge.enabled", false));
-        String endpointValue = firstConfiguredString("discord-bridge.url", "discord_bridge.url", "");
+        String endpointValue = normalizeChatBridgeEndpoint(
+                firstConfiguredString("discord-bridge.url", "discord_bridge.url", ""));
         String bearerToken = firstConfiguredString("discord-bridge.bearer-token", "discord_bridge.bearer_token", "");
         String serverId = firstConfiguredString("discord-bridge.server-id", "discord_bridge.server_id", "survival");
         String channel = firstConfiguredString("discord-bridge.channel", "discord_bridge.channel", "global");
@@ -672,6 +673,11 @@ public class ChatServiceImpl extends BaseService {
         if (primary != null && !primary.isBlank()) return primary.trim();
         String fallback = getConfigSection().getString(fallbackPath, defaultValue);
         return Objects.requireNonNullElse(fallback, defaultValue).trim();
+    }
+
+    static String normalizeChatBridgeEndpoint(String endpoint) {
+        if (endpoint.isBlank()) return endpoint;
+        return endpoint.replaceFirst("/+$", "");
     }
 
     private boolean firstConfiguredBoolean(String primaryPath, String fallbackPath, boolean defaultValue) {
