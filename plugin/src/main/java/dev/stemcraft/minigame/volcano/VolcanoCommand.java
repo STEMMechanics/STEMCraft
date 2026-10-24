@@ -2,6 +2,7 @@ package dev.stemcraft.minigame.volcano;
 
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.minigame.MiniGameArenaInfoSupport;
+import dev.stemcraft.minigame.MiniGameCommandSupport;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.minigame.MiniGameArena;
@@ -24,10 +25,11 @@ final class VolcanoCommand {
         String id = VolcanoMiniGame.NAMESPACE;
         api.tabComplete().register(id + "-arenas", (_, _) -> owner.game.arenas().stream().map(MiniGameArena::id).sorted().toList());
         var command = api.commands().create(id).usage("/" + id + " <command> [arena]");
-        for (String action : List.of("list", "leave", "create", "info", "join", "spectate", "start", "stop", "save",
+        for (String action : List.of("list", "leave", "create", "info", "join", "joinall", "spectate", "start", "stop", "save",
                 "validate", "enable", "disable", "delete", "addspawn", "removespawn")) {
             command.tabCompletion(action, "{" + id + "-arenas}");
         }
+        command.tabCompletion("join", "{" + id + "-arenas}", "{players}");
         for (String key : List.of("arena", "floor", "lobby", "spectator", "minplayers", "maxplayers", "roundseconds", "countdown", "startdelay")) {
             command.tabCompletion("set", "{" + id + "-arenas}", key);
         }
@@ -37,7 +39,12 @@ final class VolcanoCommand {
     private void execute(CommandContext ctx) {
         String action = ctx.numArgs() == 0 ? "list" : ctx.getArgLower(0);
         if (action.equals("list")) {
-            for (MiniGameArena a : owner.game.arenas())
+            List<MiniGameArena> arenas = owner.game.arenas();
+            if (arenas.isEmpty()) {
+                ctx.info("No Volcano arenas are loaded.");
+                return;
+            }
+            for (MiniGameArena a : arenas)
                 ctx.info(a.id() + " — " + a.getStatus() + " (" + a.numPlayers() + "/" + a.getMaxPlayers() + ")");
             return;
         }
@@ -84,7 +91,42 @@ final class VolcanoCommand {
                 else result.getErrors().forEach(ctx::warn);
                 return;
             }
-            case "join", "spectate" -> {
+            case "join" -> {
+                List<Player> targets = MiniGameCommandSupport.targets(ctx, 2);
+                if (targets.isEmpty()) {
+                    ctx.returnError("Player is required.");
+                    return;
+                }
+                if (a.getStatus() == MiniGameArena.ArenaStatus.DISABLED || a.getStatus() == MiniGameArena.ArenaStatus.SETUP) {
+                    ctx.returnError("Arena is not enabled.");
+                    return;
+                }
+                if (!a.isJoinable()) {
+                    ctx.returnError("Arena is not joinable. Use spectate.");
+                    return;
+                }
+                MiniGameCommandSupport.JoinResult result = MiniGameCommandSupport.addPlayers(owner.game, a, targets, false);
+                if (result.added() == 0) {
+                    ctx.returnError("No players could be added to arena '" + a.id() + "'.");
+                    return;
+                }
+                ctx.success("Arena '" + a.id() + "': joined " + result.joined() + ", skipped " + result.skipped() + ".");
+                return;
+            }
+            case "joinall" -> {
+                if (a.getStatus() == MiniGameArena.ArenaStatus.DISABLED || a.getStatus() == MiniGameArena.ArenaStatus.SETUP || !a.isJoinable()) {
+                    ctx.returnError("Arena is not joinable right now.");
+                    return;
+                }
+                MiniGameCommandSupport.JoinResult result = MiniGameCommandSupport.addOnlinePlayers(owner.game, a, false);
+                if (result.added() == 0) {
+                    ctx.returnError("No online players could be added to arena '" + a.id() + "'.");
+                    return;
+                }
+                ctx.success("Arena '" + a.id() + "': joined " + result.joined() + ", skipped " + result.skipped() + ".");
+                return;
+            }
+            case "spectate" -> {
                 Player p = player(ctx);
                 if (owner.game.findPlayer(p) != null) {
                     ctx.returnError("Leave your current arena first.");
