@@ -331,7 +331,7 @@ public class ChatServiceImpl extends BaseService {
                 : lastDamage.getCause().name().toLowerCase(Locale.ROOT));
             data.put("world", player.getWorld().getName());
             publishChatBridgeEvent("minecraft.player_death", player, data);
-        }, EventPriority.MONITOR);
+        }, EventPriority.MONITOR, true);
 
         api.events().register(PlayerEditBookEvent.class, event -> {
             BookMeta meta = event.getNewBookMeta();
