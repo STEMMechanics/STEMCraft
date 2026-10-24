@@ -59,6 +59,37 @@ final class VolcanoEruption {
         return lava.containsKey(block);
     }
 
+    boolean isHotFloor(Block block) {
+        return hotFloorUntil.containsKey(block);
+    }
+
+    boolean hasLavaContact(Location location) {
+        if (location == null || location.getWorld() != world) return false;
+        for (int offset = -1; offset <= 1; offset++) {
+            if (containsLava(location.clone().add(0, offset, 0).getBlock())) return true;
+        }
+        return false;
+    }
+
+    boolean isGeyserHazard(Location location, long tick) {
+        if (location == null || location.getWorld() != world) return false;
+        for (Jet jet : jets) {
+            long age = tick - jet.start;
+            if (age < 0 || age >= jet.duration) continue;
+
+            double rise = Math.min(1.0, age / 20.0) * jet.height;
+            double centreX = jet.block.getX() + 0.5 + jet.direction.getModX() * rise * 0.12;
+            double centreZ = jet.block.getZ() + 0.5 + jet.direction.getModZ() * rise * 0.12;
+            double relativeY = location.getY() - (jet.block.getY() + 1.0);
+            if (relativeY < -0.25 || relativeY > rise + 1.1) continue;
+
+            double dx = location.getX() - centreX;
+            double dz = location.getZ() - centreZ;
+            if (dx * dx + dz * dz <= 0.75 * 0.75) return true;
+        }
+        return false;
+    }
+
     void tick(long tick) {
         if (restored) return;
         cool(tick);

@@ -33,12 +33,20 @@ import java.util.concurrent.ThreadLocalRandom;
 import static dev.stemcraft.api.minigame.MiniGameArena.ArenaStatus.*;
 
 final class VolcanoArenaHandler implements MiniGameArenaHandler {
+    private static final long HAZARD_DAMAGE_INTERVAL_TICKS = 10L;
+    private static final double LAVA_DAMAGE = 4.0d;
+    private static final double GEYSER_DAMAGE = 4.0d;
+    private static final double HOT_FLOOR_DAMAGE = 2.0d;
+    private static final int LAVA_FIRE_TICKS = 60;
+
     private final STEMCraftAPI api;
     private final VolcanoMiniGame owner;
     private final Map<MiniGameArena, Round> rounds = new HashMap<>();
 
     static final class Round {
         final Map<UUID, Long> nextFlameDamage = new HashMap<>();
+        final Map<UUID, Long> nextHazardDamage = new HashMap<>();
+        final Set<UUID> scriptedHazardDamage = new HashSet<>();
         final Map<UUID, Location> respawns = new HashMap<>();
         final Map<UUID, Long> survivalTicks = new HashMap<>();
         VolcanoEruption eruption;
@@ -288,6 +296,8 @@ final class VolcanoArenaHandler implements MiniGameArenaHandler {
         p.setFireTicks(0);
         p.setHealth(PlayerUtil.getMaxHealth(p));
         p.setFoodLevel(20);
+        p.setSaturation(0.0f);
+        p.setExhaustion(0.0f);
         p.setFallDistance(0);
     }
 
@@ -314,14 +324,52 @@ final class VolcanoArenaHandler implements MiniGameArenaHandler {
         r.eruption.tick(r.tick);
         // Flame particles mark a hot floor tile; touching them burns once per second.
         for (Player p : new ArrayList<>(a.getPlayers())) {
+            Hazard hazard = hazardAt(r, p);
+            if (hazard != null && r.tick >= r.nextHazardDamage.getOrDefault(p.getUniqueId(), 0L)) {
+                r.nextHazardDamage.put(p.getUniqueId(), r.tick + HAZARD_DAMAGE_INTERVAL_TICKS);
+                applyHazardDamage(r, p, hazard);
+                if (a.getStatus() != RUNNING) return;
+            }
+
             Block support = p.getLocation().subtract(0, 1, 0).getBlock();
             if (r.eruption.isWarning(support) && r.tick >= r.nextFlameDamage.getOrDefault(p.getUniqueId(), 0L)) {
                 r.nextFlameDamage.put(p.getUniqueId(), r.tick + 20);
+                p.setNoDamageTicks(0);
                 p.damage(1.0, DamageSource.builder(DamageType.IN_FIRE).build());
+                p.setNoDamageTicks(0);
                 if (a.getStatus() != RUNNING) return;
             }
         }
     }
+
+    private Hazard hazardAt(Round r, Player player) {
+        Location location = player.getLocation();
+        if (r.eruption.isGeyserHazard(location, r.tick)) {
+            return new Hazard(DamageType.IN_FIRE, GEYSER_DAMAGE, true);
+        }
+        if (r.eruption.hasLavaContact(location)) {
+            return new Hazard(DamageType.LAVA, LAVA_DAMAGE, true);
+        }
+        if (r.eruption.isHotFloor(location.clone().subtract(0, 1, 0).getBlock())) {
+            return new Hazard(DamageType.HOT_FLOOR, HOT_FLOOR_DAMAGE, false);
+        }
+        return null;
+    }
+
+    private void applyHazardDamage(Round round, Player player, Hazard hazard) {
+        if (hazard.setsFire) player.setFireTicks(Math.max(player.getFireTicks(), LAVA_FIRE_TICKS));
+        UUID uuid = player.getUniqueId();
+        round.scriptedHazardDamage.add(uuid);
+        player.setNoDamageTicks(0);
+        try {
+            player.damage(hazard.amount, DamageSource.builder(hazard.damageType).build());
+        } finally {
+            round.scriptedHazardDamage.remove(uuid);
+            player.setNoDamageTicks(0);
+        }
+    }
+
+    private record Hazard(DamageType damageType, double amount, boolean setsFire) { }
 
     private void eliminate(MiniGameArena a, Player p) {
         Round r = rounds.get(a);
@@ -389,6 +437,12 @@ final class VolcanoArenaHandler implements MiniGameArenaHandler {
         DamageType damageType = e.getDamageSource().getDamageType();
         if (!Set.of(DamageType.HOT_FLOOR, DamageType.IN_FIRE, DamageType.ON_FIRE,
                 DamageType.LAVA, DamageType.FALL).contains(damageType)) return HandlerEventResult.DENY;
+        Round round = rounds.get(a);
+        if (round != null && !round.scriptedHazardDamage.contains(p.getUniqueId())
+                && (damageType == DamageType.LAVA || damageType == DamageType.HOT_FLOOR)
+                && managedHazardContact(round, p, damageType)) {
+            return HandlerEventResult.DENY;
+        }
         if (e.getFinalDamage() >= p.getHealth()) {
             // End participation without sending the player through the server respawn screen.
             a.getPlayer(p).setDeaths(a.getPlayer(p).getDeaths() + 1);
@@ -399,12 +453,25 @@ final class VolcanoArenaHandler implements MiniGameArenaHandler {
         return HandlerEventResult.ALLOW;
     }
 
+    private boolean managedHazardContact(Round round, Player player, DamageType damageType) {
+        if (round.eruption == null) return false;
+        if (damageType == DamageType.LAVA) return round.eruption.hasLavaContact(player.getLocation());
+        return round.eruption.isHotFloor(player.getLocation().clone().subtract(0, 1, 0).getBlock());
+    }
+
+    void onHealthRegain(EntityRegainHealthEvent event) {
+        if (!(event.getEntity() instanceof Player player)) return;
+        MiniGameArena arena = owner.game.findPlayer(player);
+        if (arena != null && arena.getStatus() == RUNNING) event.setCancelled(true);
+    }
+
     void registerListeners() {
         // Vanilla fluid updates would escape the platform or fight the animated flow levels.
         api.events().register(BlockFromToEvent.class, this::onFluidFlow, EventPriority.HIGHEST, true);
         api.events().register(FluidLevelChangeEvent.class, this::onFluidLevelChange, EventPriority.HIGHEST, true);
         api.events().register(BlockFormEvent.class, this::onLavaForm, EventPriority.HIGHEST, true);
         api.events().register(BlockIgniteEvent.class, this::onLavaIgnite, EventPriority.HIGHEST, true);
+        api.events().register(EntityRegainHealthEvent.class, this::onHealthRegain);
         api.events().register(PlayerInteractEvent.class, this::interact);
         api.events().register(PlayerInteractEntityEvent.class, e -> {
             MiniGameArena a = owner.game.findPlayer(e.getPlayer());
