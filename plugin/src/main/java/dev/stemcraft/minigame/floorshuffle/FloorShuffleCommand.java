@@ -37,7 +37,12 @@ final class FloorShuffleCommand {
     private void execute(CommandContext ctx) {
         String action = ctx.numArgs() == 0 ? "list" : ctx.getArgLower(0);
         if (action.equals("list")) {
-            for (MiniGameArena a : owner.game.arenas())
+            List<MiniGameArena> arenas = owner.game.arenas();
+            if (arenas.isEmpty()) {
+                ctx.info("No Floor Shuffle arenas are loaded.");
+                return;
+            }
+            for (MiniGameArena a : arenas)
                 ctx.info(a.id() + " — " + a.getStatus() + " (" + a.numPlayers() + "/" + a.getMaxPlayers() + ")");
             return;
         }
