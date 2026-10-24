@@ -111,6 +111,21 @@ class WorkshopsFeatureTest {
         assertEquals("2026-11-14", WorkshopDateFormatter.format(date, "yyyy-mm-dd"));
         assertEquals("Sat 14 Nov", WorkshopDateFormatter.apply(
                 "{date:ddd dd mmm}", Map.of("date", date)));
+        assertEquals("Sat 14 Nov", WorkshopDateFormatter.apply(
+                "{active_workshop_end_date:ddd dd mmm}", Map.of("active_workshop_end_date", date)));
+    }
+
+    @Test
+    void relativeWorkshopDatePlaceholdersUseTodayTomorrowWeekdayAndFallback() {
+        ZoneId zone = ZoneId.of("Australia/Brisbane");
+        ZonedDateTime now = ZonedDateTime.of(2026, 11, 10, 12, 0, 0, 0, zone);
+
+        assertEquals("Today", WorkshopDateFormatter.format(now.plusHours(4), "relative", now));
+        assertEquals("Tomorrow", WorkshopDateFormatter.format(now.plusDays(1), "relative", now));
+        assertEquals("Thursday", WorkshopDateFormatter.format(now.plusDays(2), "relative", now));
+        assertEquals("Sat 21 Nov", WorkshopDateFormatter.format(now.plusDays(11), "relative", now));
+        assertEquals("THURSDAY", WorkshopDateFormatter.format(now.plusDays(2), "RELATIVE", now));
+        assertEquals("TODAY", WorkshopDateFormatter.format(now.plusHours(4), "RELETIVE", now));
     }
 
     @Test

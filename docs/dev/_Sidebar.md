@@ -19,6 +19,8 @@
 - [Interactive guide callbacks](https://github.com/STEMMechanics/stemcraft/wiki/guide-callbacks)
 - [Quests](https://github.com/STEMMechanics/stemcraft/wiki/quests)
 - [Commands](https://github.com/STEMMechanics/stemcraft/wiki/commands)
+- [Debug tests](https://github.com/STEMMechanics/stemcraft/wiki/debug)
+- [Chat HTTP bridge](https://github.com/STEMMechanics/stemcraft/wiki/chat-bridge)
 - [Announcements and Workshops](https://github.com/STEMMechanics/stemcraft/wiki/announcements-workshops)
 - [API](https://github.com/STEMMechanics/stemcraft/wiki/API)
 - [Minigames](https://github.com/STEMMechanics/stemcraft/wiki/Minigames)

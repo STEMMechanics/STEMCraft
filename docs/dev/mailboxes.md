@@ -73,15 +73,17 @@ Dialog labels and messages are configurable under `mailboxes.dialog` and `mailbo
 
 ## Authenticated HTTP mail endpoint
 
-The webserver can accept mail from an external integration such as a Discord bot. It is disabled until a bearer key is configured:
+The webserver can accept mail from an external integration such as a Discord bot. It remains disabled until `enabled` is set to `true`. When `key` is blank, STEMCraft generates a cryptographically random bearer key on startup, saves it in the live `config.yml`, and announces that it was generated in the console without printing the secret:
 
 ```yaml
 web-server:
   mail-api:
     enabled: true
-    key: "replace-with-a-long-random-secret"
+    key: "generated-and-saved-on-first-startup"
     sender: "Discord Rewards"
 ```
+
+Copy the generated value from the live configuration file into the integration's secret store. It is persistent across restarts; clearing it causes a new key to be generated on the next startup.
 
 The endpoint is `POST /api/v1/survival/mail`. Keep the webserver bound to loopback and put an HTTPS reverse proxy in front of it when the integration is remote. Send the key in the `Authorization` header, never in the URL:
 

@@ -13,9 +13,11 @@ import dev.stemcraft.api.service.workshop.Workshop;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -47,11 +49,42 @@ final class WorkshopDateFormatter {
     }
 
     static @NotNull String format(@NotNull ZonedDateTime date, @NotNull String pattern) {
+        return format(date, pattern, ZonedDateTime.now(date.getZone()));
+    }
+
+    static @NotNull String format(@NotNull ZonedDateTime date, @NotNull String pattern,
+                                  @NotNull ZonedDateTime now) {
+        String trimmed = pattern.trim();
+        if (isRelativePattern(trimmed)) {
+            String value = formatRelative(date, now);
+            return isUppercaseRelative(trimmed) ? value.toUpperCase(Locale.ENGLISH) : value;
+        }
         try {
-            return DateTimeFormatter.ofPattern(toJavaPattern(pattern), Locale.ENGLISH).format(date);
+            return DateTimeFormatter.ofPattern(toJavaPattern(trimmed), Locale.ENGLISH).format(date);
         } catch (IllegalArgumentException exception) {
             return "";
         }
+    }
+
+    private static @NotNull String formatRelative(@NotNull ZonedDateTime date, @NotNull ZonedDateTime now) {
+        LocalDate today = now.withZoneSameInstant(date.getZone()).toLocalDate();
+        LocalDate target = date.toLocalDate();
+        long daysUntil = ChronoUnit.DAYS.between(today, target);
+        if (daysUntil == 0L) return "Today";
+        if (daysUntil == 1L) return "Tomorrow";
+        if (daysUntil >= 2L && daysUntil < 6L) {
+            return DateTimeFormatter.ofPattern("EEEE", Locale.ENGLISH).format(date);
+        }
+        return DateTimeFormatter.ofPattern(toJavaPattern("ddd dd mmm"), Locale.ENGLISH).format(date);
+    }
+
+    private static boolean isRelativePattern(@NotNull String pattern) {
+        String normalized = pattern.toLowerCase(Locale.ROOT);
+        return normalized.equals("relative") || normalized.equals("reletive");
+    }
+
+    private static boolean isUppercaseRelative(@NotNull String pattern) {
+        return pattern.equals("RELATIVE") || pattern.equals("RELETIVE");
     }
 
     static @NotNull Map<String, ZonedDateTime> dateValues(@Nullable Workshop workshop, @NotNull ZoneId timezone) {

@@ -17,6 +17,7 @@ manage your preferred grouping in LuckPerms.
 | `stemcraft.command.hub` | Return yourself to the hub |
 | `stemcraft.command.survival` | Use the configured fixed Survival shortcut |
 | `stemcraft.command.creative` | Use the configured fixed Creative shortcut |
+| `stemcraft.command.debug` | Run registered STEMCraft diagnostics |
 | `stemcraft.command.coord` | Toggle your coordinate action bar |
 | `stemcraft.command.coordbar` | Toggle your coordinate boss bar |
 | `stemcraft.minigame.skyblock.reset` | Reset your own island, with confirmation |

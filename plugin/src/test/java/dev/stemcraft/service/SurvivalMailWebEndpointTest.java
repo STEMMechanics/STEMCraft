@@ -24,12 +24,15 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -45,17 +48,19 @@ class SurvivalMailWebEndpointTest {
     private MailboxService mailboxes;
     private PlayerService players;
     private ItemService items;
+    private STEMCraft plugin;
+    private ConfigSection settings;
     private WebServiceImpl service;
 
     @BeforeEach
     void setUp() {
         server = MockBukkit.mock();
-        STEMCraft plugin = mock(STEMCraft.class);
+        plugin = mock(STEMCraft.class);
         api = mock(STEMCraftAPI.class);
         mailboxes = mock(MailboxService.class);
         players = mock(PlayerService.class);
         items = mock(ItemService.class);
-        ConfigSection settings = mock(ConfigSection.class);
+        settings = mock(ConfigSection.class);
 
         when(plugin.getServer()).thenReturn(server);
         when(api.mailboxes()).thenReturn(mailboxes);
@@ -144,6 +149,20 @@ class SurvivalMailWebEndpointTest {
 
         assertEquals(401, responseMap(response).get("responseCode"));
         verify(mailboxes, times(0)).send(any(MailSendRequest.class));
+    }
+
+    @Test
+    void blankKeyIsGeneratedSavedAndAnnounced() {
+        Logger logger = mock(Logger.class);
+        when(plugin.getLogger()).thenReturn(logger);
+        when(settings.getString("mail-api.key", "")).thenReturn("");
+
+        service.loadSettings();
+
+        verify(settings).set(eq("mail-api.key"), argThat(value -> value instanceof String
+            && ((String) value).matches("[A-Za-z0-9_-]{43}")));
+        verify(settings).save();
+        verify(logger).info("[web-server] Generated a new mail-api key and saved it to config.yml. Keep this key secret.");
     }
 
     @Test

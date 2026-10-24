@@ -22,6 +22,7 @@ package dev.stemcraft.service;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.service.profanity.ProfanityFilterResult;
@@ -48,8 +49,15 @@ import org.bukkit.event.player.PlayerEditBookEvent;
 import org.bukkit.inventory.meta.BookMeta;
 
 import javax.annotation.Nullable;
+import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
@@ -59,7 +67,11 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import org.jetbrains.annotations.NotNull;
 
 public class ChatServiceImpl extends BaseService {
@@ -109,6 +121,9 @@ public class ChatServiceImpl extends BaseService {
     private List<ModerationActionRule> moderationActionRules = List.of();
 
     private boolean muted;
+    private volatile ChatBridgeSettings chatBridgeSettings = ChatBridgeSettings.disabled();
+    private volatile HttpClient chatBridgeHttpClient;
+    private volatile ThreadPoolExecutor chatBridgeExecutor;
 
     public ChatServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api, "chat");
@@ -124,6 +139,7 @@ public class ChatServiceImpl extends BaseService {
         }
 
         reloadSettings();
+        startChatBridge();
         ensureModerationStorage();
         ensureReportStorage();
         registerModerationCommands();
@@ -230,6 +246,13 @@ public class ChatServiceImpl extends BaseService {
             event.renderer((source, sourceDisplayName, message, viewer) -> rendered);
         });
 
+        api.events().register(AsyncChatEvent.class, event -> {
+            if (!chatBridgeSettings.enabled()) return;
+            if (plugin.stemBot() != null && plugin.stemBot().isPrivateChat(event)) return;
+            if (plugin.firstJoin() != null && plugin.firstJoin().hasActiveSession(event.getPlayer().getUniqueId())) return;
+            enqueueChatBridgeEvent(event.getPlayer(), PLAIN.serialize(event.message()));
+        }, EventPriority.MONITOR, true);
+
         api.events().register(PlayerJoinEvent.class, event -> {
             Player player = event.getPlayer();
             // Let login messages and permission initialization finish before the reminder.
@@ -318,8 +341,15 @@ public class ChatServiceImpl extends BaseService {
 
     @Override
     public void onReload() {
+        shutdownChatBridge();
         super.onReload();
         reloadSettings();
+        startChatBridge();
+    }
+
+    @Override
+    public void onDisable() {
+        shutdownChatBridge();
     }
 
     private void reloadSettings() {
@@ -368,6 +398,202 @@ public class ChatServiceImpl extends BaseService {
         );
         loadModerationActionRules();
     }
+
+    private void startChatBridge() {
+        shutdownChatBridge();
+
+        boolean enabled = getConfigSection().getBoolean(
+                "discord-bridge.enabled",
+                getConfigSection().getBoolean("discord_bridge.enabled", false));
+        String endpointValue = firstConfiguredString("discord-bridge.url", "discord_bridge.url", "");
+        String bearerToken = firstConfiguredString("discord-bridge.bearer-token", "discord_bridge.bearer_token", "");
+        String serverId = firstConfiguredString("discord-bridge.server-id", "discord_bridge.server_id", "survival");
+        String channel = firstConfiguredString("discord-bridge.channel", "discord_bridge.channel", "global");
+        String timeoutValue = firstConfiguredString("discord-bridge.timeout", "discord_bridge.timeout", "3s");
+
+        if (!enabled) return;
+        if (endpointValue.isBlank() || bearerToken.isBlank()) {
+            chatBridgeWarning("[chat] Discord bridge is enabled but its URL or bearer token is blank; bridge disabled.");
+            return;
+        }
+
+        URI endpoint;
+        try {
+            endpoint = new URI(endpointValue);
+        } catch (URISyntaxException exception) {
+            chatBridgeWarning("[chat] Discord bridge URL is invalid; bridge disabled.");
+            return;
+        }
+        if (!("http".equalsIgnoreCase(endpoint.getScheme()) || "https".equalsIgnoreCase(endpoint.getScheme()))
+                || endpoint.getHost() == null) {
+            chatBridgeWarning("[chat] Discord bridge URL must be an HTTP(S) URL with a host; bridge disabled.");
+            return;
+        }
+
+        long timeoutSeconds = parseChatBridgeDuration(timeoutValue, 3L, 1L, 30L);
+        int queueSize = Math.clamp(getConfigSection().getInt(
+                "discord-bridge.queue-size",
+                getConfigSection().getInt("discord_bridge.queue_size", 256)), 16, 4096);
+        int maxRetries = Math.clamp(getConfigSection().getInt(
+                "discord-bridge.max-retries",
+                getConfigSection().getInt("discord_bridge.max_retries", 3)), 0, 5);
+        ChatBridgeSettings settings = new ChatBridgeSettings(
+                true,
+                endpoint,
+                bearerToken,
+                serverId.isBlank() ? "survival" : serverId,
+                channel.isBlank() ? "global" : channel,
+                Duration.ofSeconds(timeoutSeconds),
+                maxRetries
+        );
+
+        try {
+            chatBridgeHttpClient = HttpClient.newBuilder()
+                    .connectTimeout(settings.timeout())
+                    .build();
+            chatBridgeExecutor = new ThreadPoolExecutor(
+                    1,
+                    1,
+                    0L,
+                    TimeUnit.MILLISECONDS,
+                    new ArrayBlockingQueue<>(queueSize),
+                    runnable -> {
+                        Thread thread = new Thread(runnable, "stemcraft-chat-bridge");
+                        thread.setDaemon(true);
+                        return thread;
+                    },
+                    new ThreadPoolExecutor.AbortPolicy()
+            );
+            chatBridgeSettings = settings;
+            chatBridgeInfo("[chat] Discord bridge enabled for " + endpoint + " (queue=" + queueSize + ").");
+        } catch (RuntimeException exception) {
+            chatBridgeSettings = ChatBridgeSettings.disabled();
+            chatBridgeHttpClient = null;
+            chatBridgeExecutor = null;
+            chatBridgeWarning("[chat] Could not start the Discord bridge: " + exception.getMessage());
+        }
+    }
+
+    private void shutdownChatBridge() {
+        chatBridgeSettings = ChatBridgeSettings.disabled();
+        ThreadPoolExecutor executor = chatBridgeExecutor;
+        chatBridgeExecutor = null;
+        chatBridgeHttpClient = null;
+        if (executor != null) executor.shutdownNow();
+    }
+
+    private void enqueueChatBridgeEvent(@NotNull Player player, @NotNull String message) {
+        ChatBridgeSettings settings = chatBridgeSettings;
+        ThreadPoolExecutor executor = chatBridgeExecutor;
+        HttpClient client = chatBridgeHttpClient;
+        if (!settings.enabled() || executor == null || client == null || message.isBlank()) return;
+
+        ChatBridgeEvent event = new ChatBridgeEvent(
+                UUID.randomUUID(),
+                Instant.now(),
+                player.getUniqueId(),
+                player.getName(),
+                message,
+                settings
+        );
+        try {
+            executor.execute(() -> deliverChatBridgeEvent(client, event));
+        } catch (RejectedExecutionException ignored) {
+            chatBridgeWarning("[chat] Discord bridge queue is full; a chat message was not forwarded.");
+        }
+    }
+
+    private void deliverChatBridgeEvent(@NotNull HttpClient client, @NotNull ChatBridgeEvent event) {
+        ChatBridgeSettings settings = event.settings();
+        String body = chatBridgePayload(event);
+        HttpRequest request = HttpRequest.newBuilder(settings.endpoint())
+                .timeout(settings.timeout())
+                .header("Authorization", "Bearer " + settings.bearerToken())
+                .header("Content-Type", "application/json; charset=utf-8")
+                .header("X-STEMCraft-Event-Id", event.eventId().toString())
+                .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
+                .build();
+
+        for (int attempt = 0; attempt <= settings.maxRetries(); attempt++) {
+            try {
+                HttpResponse<Void> response = client.send(request, HttpResponse.BodyHandlers.discarding());
+                int status = response.statusCode();
+                if (status >= 200 && status < 300) return;
+                if (status >= 400 && status < 500) {
+                    chatBridgeWarning("[chat] Discord bridge rejected a chat event with HTTP " + status + ".");
+                    return;
+                }
+                if (attempt == settings.maxRetries()) {
+                    chatBridgeWarning("[chat] Discord bridge failed a chat event with HTTP " + status + ".");
+                    return;
+                }
+            } catch (IOException | InterruptedException exception) {
+                if (exception instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+                if (attempt == settings.maxRetries()) {
+                    chatBridgeWarning("[chat] Discord bridge request failed: " + exception.getMessage());
+                    return;
+                }
+            }
+
+            try {
+                Thread.sleep(Math.min(5_000L, 250L * (1L << attempt)));
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+    }
+
+    private static String chatBridgePayload(@NotNull ChatBridgeEvent event) {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("event", "minecraft.chat");
+        payload.addProperty("event_id", event.eventId().toString());
+        payload.addProperty("occurred_at", event.occurredAt().toString());
+        payload.addProperty("server", event.settings().serverId());
+        payload.addProperty("channel", event.settings().channel());
+        JsonObject player = new JsonObject();
+        player.addProperty("name", event.playerName());
+        player.addProperty("uuid", event.playerUuid().toString());
+        payload.add("player", player);
+        payload.addProperty("message", event.message());
+        return GSON.toJson(payload);
+    }
+
+    private String firstConfiguredString(String primaryPath, String fallbackPath, String defaultValue) {
+        String primary = getConfigSection().getString(primaryPath, "");
+        if (primary != null && !primary.isBlank()) return primary.trim();
+        String fallback = getConfigSection().getString(fallbackPath, defaultValue);
+        return Objects.requireNonNullElse(fallback, defaultValue).trim();
+    }
+
+    private static long parseChatBridgeDuration(String value, long fallback, long min, long max) {
+        try {
+            return Math.clamp(TimeUtil.parseDuration(value), min, max);
+        } catch (RuntimeException ignored) {
+            return fallback;
+        }
+    }
+
+    private void chatBridgeInfo(String message) {
+        if (plugin.getLogger() != null) plugin.getLogger().info(message);
+    }
+
+    private void chatBridgeWarning(String message) {
+        if (plugin.getLogger() != null) plugin.getLogger().warning(message);
+    }
+
+    private record ChatBridgeSettings(boolean enabled, URI endpoint, String bearerToken, String serverId,
+                                      String channel, Duration timeout, int maxRetries) {
+        private static ChatBridgeSettings disabled() {
+            return new ChatBridgeSettings(false, null, "", "", "", Duration.ofSeconds(3), 0);
+        }
+    }
+
+    private record ChatBridgeEvent(UUID eventId, Instant occurredAt, UUID playerUuid, String playerName,
+                                   String message, ChatBridgeSettings settings) { }
 
     boolean isDuplicateMessageBlocked(UUID playerId, String message) {
         if (duplicateMessageLimit <= 0) {

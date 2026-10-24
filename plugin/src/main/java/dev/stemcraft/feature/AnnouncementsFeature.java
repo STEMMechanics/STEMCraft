@@ -14,11 +14,18 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.Command;
 import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.config.ConfigSection;
+import dev.stemcraft.api.service.debug.DebugContext;
+import dev.stemcraft.api.service.debug.DebugRegistration;
 import dev.stemcraft.api.service.workshop.Workshop;
 import dev.stemcraft.api.service.workshop.WorkshopService;
+import dev.stemcraft.api.service.workshop.WorkshopSource;
 import dev.stemcraft.api.util.PlaceholderUtil;
 import dev.stemcraft.api.util.TimeUtil;
+import dev.stemcraft.api.util.TextUtil;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
+import org.bukkit.Registry;
+import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -46,16 +53,23 @@ public class AnnouncementsFeature extends BaseFeature {
     static final int MIGRATION_VERSION = 1;
     static final String WORKSHOP_TYPE = "workshops";
     static final String LEGACY_WORKSHOP_PROMOTION_ID = "workshop-promotion";
+    static final String UPCOMING_WORKSHOP_JOIN_TASK_PREFIX = "announcements:join:upcoming-workshop:";
+    static final String ACTIVE_WORKSHOP_JOIN_TASK_PREFIX = "announcements:join:active-workshop:";
     static final long NO_PLAYER_RETRY_SECONDS = 30L;
     static final ZoneId DEFAULT_ZONE = ZoneId.of("Australia/Brisbane");
     static final DateTimeFormatter WORKSHOP_DATE_FORMAT = DateTimeFormatter.ofPattern("EEEE d MMMM yyyy");
     static final DateTimeFormatter WORKSHOP_TIME_FORMAT = DateTimeFormatter.ofPattern("h:mm a");
+    private static final String DEFAULT_UPCOMING_WORKSHOP_SOUND = "BLOCK_NOTE_BLOCK_CHIME";
+    private static final String DEFAULT_ACTIVE_WORKSHOP_SOUND = "BLOCK_BELL_USE";
+    private static final PlainTextComponentSerializer PLAIN_TEXT = PlainTextComponentSerializer.plainText();
 
     private final Map<String, AnnouncementDefinition> configuredAnnouncements = new LinkedHashMap<>();
     private final Map<String, AnnouncementDefinition> manualAnnouncements = new LinkedHashMap<>();
     private final Map<String, AnnouncementDefinition> definitions = new LinkedHashMap<>();
     private final Map<String, Instant> nextDue = new LinkedHashMap<>();
     private final Map<UUID, String> joinTasks = new ConcurrentHashMap<>();
+    private final Map<UUID, String> upcomingWorkshopJoinTasks = new ConcurrentHashMap<>();
+    private final Map<UUID, String> activeWorkshopJoinTasks = new ConcurrentHashMap<>();
 
     private boolean enabled;
     private boolean scheduledEnabled;
@@ -64,17 +78,23 @@ public class AnnouncementsFeature extends BaseFeature {
     private long defaultIntervalSeconds;
     private long minimumGapSeconds;
     private long joinDelaySeconds;
+    private long upcomingWorkshopJoinDelaySeconds;
+    private long activeWorkshopJoinDelaySeconds;
     private String prefix;
     private List<String> firstTimeJoinMessage = List.of();
     private List<String> returningJoinMessage = List.of();
     private boolean upcomingWorkshopJoinEnabled;
     private List<String> upcomingWorkshopJoinMessage = List.of();
     private WorkshopFilter upcomingWorkshopJoinFilter = WorkshopFilter.NONE;
+    private AnnouncementSound upcomingWorkshopJoinSound = AnnouncementSound.DISABLED;
     private boolean activeWorkshopJoinEnabled;
     private List<String> activeWorkshopJoinMessage = List.of();
+    private AnnouncementSound activeWorkshopJoinSound = AnnouncementSound.DISABLED;
     private ZoneId defaultTimezone = DEFAULT_ZONE;
     private Instant lastScheduledBroadcastAt;
     private Command command;
+    private DebugRegistration workshopLoginDebug;
+    private DebugRegistration workshopLoginUpcomingDebug;
 
     public AnnouncementsFeature(STEMCraftAPI api) {
         super(api);
@@ -87,6 +107,7 @@ public class AnnouncementsFeature extends BaseFeature {
         loadManualAnnouncements();
         registerCommand();
         registerEvents();
+        registerDebugTests();
         rebuildDefinitions(true);
     }
 
@@ -97,7 +118,12 @@ public class AnnouncementsFeature extends BaseFeature {
         loadSettings();
         loadManualAnnouncements();
         if (!joinEnabled) cancelJoinTasks();
+        else {
+            if (!upcomingWorkshopJoinEnabled) cancelUpcomingWorkshopJoinTasks();
+            if (!activeWorkshopJoinEnabled) cancelActiveWorkshopJoinTasks();
+        }
         if (!enabled) {
+            unregisterDebugTests();
             api.tasks().cancel(SCHEDULE_TASK);
             cancelJoinTasks();
             if (command != null) {
@@ -109,6 +135,7 @@ public class AnnouncementsFeature extends BaseFeature {
         if (!wasEnabled && command == null) {
             registerCommand();
         }
+        registerDebugTests();
         rebuildDefinitions(false);
     }
 
@@ -121,6 +148,28 @@ public class AnnouncementsFeature extends BaseFeature {
             command.unregister();
             command = null;
         }
+        unregisterDebugTests();
+    }
+
+    private void registerDebugTests() {
+        if (workshopLoginDebug != null) return;
+        workshopLoginDebug = api.debug().register(
+                "workshop-login-active",
+                "Show and deliver the active-workshop join notice for a player.",
+                this::debugWorkshopLoginActive
+        );
+        workshopLoginUpcomingDebug = api.debug().register(
+                "workshop-login-upcoming",
+                "Show and deliver the upcoming-workshop join notice for a player.",
+                this::debugWorkshopLoginUpcoming
+        );
+    }
+
+    private void unregisterDebugTests() {
+        if (workshopLoginDebug != null) workshopLoginDebug.close();
+        if (workshopLoginUpcomingDebug != null) workshopLoginUpcomingDebug.close();
+        workshopLoginDebug = null;
+        workshopLoginUpcomingDebug = null;
     }
 
     private void loadSettings() {
@@ -143,9 +192,15 @@ public class AnnouncementsFeature extends BaseFeature {
                 ? List.of() : readLines(upcomingWorkshopJoin, "message");
         upcomingWorkshopJoinFilter = upcomingWorkshopJoin == null
                 ? WorkshopFilter.NONE : readWorkshopFilter(upcomingWorkshopJoin.getSection("filters", false));
+        upcomingWorkshopJoinDelaySeconds = upcomingWorkshopJoin == null
+                ? 0L : parseDuration(upcomingWorkshopJoin.getString("delay", "0s"), 0L, 0L, 3600L);
+        upcomingWorkshopJoinSound = readAnnouncementSound(upcomingWorkshopJoin, DEFAULT_UPCOMING_WORKSHOP_SOUND);
         ConfigSection activeWorkshopJoin = section.getSection("join.active-workshop", false);
         activeWorkshopJoinEnabled = activeWorkshopJoin != null && activeWorkshopJoin.getBoolean("enabled", false);
         activeWorkshopJoinMessage = activeWorkshopJoin == null ? List.of() : readLines(activeWorkshopJoin, "message");
+        activeWorkshopJoinDelaySeconds = activeWorkshopJoin == null
+                ? 0L : parseDuration(activeWorkshopJoin.getString("delay", "0s"), 0L, 0L, 3600L);
+        activeWorkshopJoinSound = readAnnouncementSound(activeWorkshopJoin, DEFAULT_ACTIVE_WORKSHOP_SOUND);
         configuredAnnouncements.clear();
         readConfiguredAnnouncements(section.getSection("scheduled", false));
         if (configuredAnnouncements.values().stream().noneMatch(AnnouncementDefinition::workshopPromotion)) {
@@ -218,6 +273,70 @@ public class AnnouncementsFeature extends BaseFeature {
             return null;
         }
         return value;
+    }
+
+    private @NotNull AnnouncementSound readAnnouncementSound(@Nullable ConfigSection parent,
+                                                              @NotNull String defaultName) {
+        if (parent == null) return defaultAnnouncementSound(defaultName);
+        ConfigSection section = parent.getSection("sound", false);
+        if (section == null) return defaultAnnouncementSound(defaultName);
+        if (!section.getBoolean("enabled", true)) return AnnouncementSound.DISABLED;
+
+        String rawName = section.getString("name", defaultName).trim();
+        if (rawName.isBlank()) rawName = defaultName;
+
+        Sound sound = findSound(rawName);
+        if (sound == null) {
+            STEMCraft.getPlugin().getLogger().warning(
+                    "[announcements] Unknown announcement sound '" + rawName + "'; using " + defaultName + ".");
+            return defaultAnnouncementSound(defaultName);
+        }
+
+        float volume = readSoundValue(section, "volume", 1.0f, 0.0f, 10.0f);
+        float pitch = readSoundValue(section, "pitch", 1.0f, 0.5f, 2.0f);
+        return new AnnouncementSound(sound, volume, pitch);
+    }
+
+    private @NotNull AnnouncementSound defaultAnnouncementSound(@NotNull String name) {
+        Sound sound = findSound(name);
+        return sound == null ? AnnouncementSound.DISABLED : new AnnouncementSound(sound, 1.0f, 1.0f);
+    }
+
+    private @Nullable Sound findSound(@NotNull String rawName) {
+        String normalized = rawName.toLowerCase(Locale.ROOT);
+        String keyName = normalized.contains(":")
+                ? normalized.substring(normalized.indexOf(':') + 1)
+                : normalized;
+        String enumName = keyName.replace('.', '_');
+        return Registry.SOUNDS.keyStream()
+                .filter(key -> {
+                    String registeredKey = key.toString().toLowerCase(Locale.ROOT);
+                    String registeredKeyName = key.getKey().toLowerCase(Locale.ROOT);
+                    return registeredKey.equals(normalized)
+                            || registeredKeyName.equals(keyName)
+                            || registeredKeyName.replace('.', '_').equals(enumName);
+                })
+                .map(Registry.SOUNDS::get)
+                .filter(java.util.Objects::nonNull)
+                .findFirst()
+                .orElse(null);
+    }
+
+    private float readSoundValue(@NotNull ConfigSection section, @NotNull String path,
+                                 float fallback, float minimum, float maximum) {
+        float value = section.getFloat(path, fallback);
+        if (!Float.isFinite(value)) {
+            STEMCraft.getPlugin().getLogger().warning(
+                    "[announcements] Invalid announcement sound " + path + "; using " + fallback + ".");
+            return fallback;
+        }
+        float clamped = Math.max(minimum, Math.min(maximum, value));
+        if (clamped != value) {
+            STEMCraft.getPlugin().getLogger().warning(
+                    "[announcements] Announcement sound " + path + " must be between "
+                            + minimum + " and " + maximum + "; using " + clamped + ".");
+        }
+        return clamped;
     }
 
     private void ensureStorage() {
@@ -387,13 +506,23 @@ public class AnnouncementsFeature extends BaseFeature {
 
     private void sendWorkshopAccessInstructions(@Nullable WorkshopService service, @NotNull Workshop workshop,
                                                 @Nullable Player recipient, int online) {
-        if (service == null || !service.isAvailable() || !service.isEnabled()) return;
-        for (String line : service.accessInstructions(workshop)) {
-            String rendered = render(prefix + line, recipient, workshop, online);
-            if (rendered.isBlank()) continue;
+        for (String rendered : renderWorkshopAccessInstructions(service, workshop, recipient, online)) {
             if (recipient == null) api.messages().broadcast(rendered);
             else api.messages().send(recipient, rendered);
         }
+    }
+
+    private @NotNull List<String> renderWorkshopAccessInstructions(@Nullable WorkshopService service,
+                                                                    @NotNull Workshop workshop,
+                                                                    @Nullable Player recipient,
+                                                                    int online) {
+        if (service == null || !service.isAvailable() || !service.isEnabled()) return List.of();
+        List<String> renderedLines = new ArrayList<>();
+        for (String line : service.accessInstructions(workshop)) {
+            String rendered = render(prefix + line, recipient, workshop, online);
+            if (!rendered.isBlank()) renderedLines.add(rendered);
+        }
+        return List.copyOf(renderedLines);
     }
 
     private @Nullable Workshop findAnnouncementWorkshop(@NotNull WorkshopFilter filter, @NotNull Instant now) {
@@ -488,11 +617,16 @@ public class AnnouncementsFeature extends BaseFeature {
                 if (!enabled || !joinEnabled || !player.isOnline()) return;
                 broadcast(new AnnouncementDefinition("join", player.hasPlayedBefore() ? returningJoinMessage : firstTimeJoinMessage,
                         true, 0L, null, null, "message", WorkshopFilter.NONE, false), player);
-                broadcastUpcomingWorkshop(player);
-                broadcastActiveWorkshop(player);
+                scheduleUpcomingWorkshop(player);
+                scheduleActiveWorkshop(player);
             });
         });
-        api.events().register(PlayerQuitEvent.class, event -> cancelJoinTask(event.getPlayer().getUniqueId()));
+        api.events().register(PlayerQuitEvent.class, event -> {
+            UUID playerId = event.getPlayer().getUniqueId();
+            cancelJoinTask(playerId);
+            cancelUpcomingWorkshopJoinTask(playerId);
+            cancelActiveWorkshopJoinTask(playerId);
+        });
     }
 
     private void cancelJoinTask(UUID playerId) {
@@ -503,6 +637,46 @@ public class AnnouncementsFeature extends BaseFeature {
     private void cancelJoinTasks() {
         for (String taskId : joinTasks.values()) api.tasks().cancel(taskId);
         joinTasks.clear();
+        cancelUpcomingWorkshopJoinTasks();
+        cancelActiveWorkshopJoinTasks();
+    }
+
+    private void cancelUpcomingWorkshopJoinTask(@NotNull UUID playerId) {
+        String taskId = upcomingWorkshopJoinTasks.remove(playerId);
+        if (taskId != null) api.tasks().cancel(taskId);
+    }
+
+    private void cancelUpcomingWorkshopJoinTasks() {
+        for (String taskId : upcomingWorkshopJoinTasks.values()) api.tasks().cancel(taskId);
+        upcomingWorkshopJoinTasks.clear();
+    }
+
+    private void cancelActiveWorkshopJoinTask(@NotNull UUID playerId) {
+        String taskId = activeWorkshopJoinTasks.remove(playerId);
+        if (taskId != null) api.tasks().cancel(taskId);
+    }
+
+    private void cancelActiveWorkshopJoinTasks() {
+        for (String taskId : activeWorkshopJoinTasks.values()) api.tasks().cancel(taskId);
+        activeWorkshopJoinTasks.clear();
+    }
+
+    private void scheduleUpcomingWorkshop(@NotNull Player player) {
+        if (!upcomingWorkshopJoinEnabled || upcomingWorkshopJoinMessage.isEmpty()) return;
+        if (upcomingWorkshopJoinDelaySeconds <= 0L) {
+            broadcastUpcomingWorkshop(player);
+            return;
+        }
+
+        UUID playerId = player.getUniqueId();
+        String taskId = UPCOMING_WORKSHOP_JOIN_TASK_PREFIX + playerId;
+        String previous = upcomingWorkshopJoinTasks.put(playerId, taskId);
+        if (previous != null) api.tasks().cancel(previous);
+        api.tasks().runOnceDelay(taskId, upcomingWorkshopJoinDelaySeconds * 20L, () -> {
+            upcomingWorkshopJoinTasks.remove(playerId, taskId);
+            if (!enabled || !joinEnabled || !player.isOnline()) return;
+            broadcastUpcomingWorkshop(player);
+        });
     }
 
     private void broadcastUpcomingWorkshop(@NotNull Player player) {
@@ -511,10 +685,47 @@ public class AnnouncementsFeature extends BaseFeature {
         if (workshop == null) return;
 
         int online = Bukkit.getOnlinePlayers().size();
+        List<String> messages = renderUpcomingWorkshopMessages(player, workshop, online);
+        for (String rendered : messages) {
+            api.messages().send(player, rendered);
+        }
+        if (!messages.isEmpty()) playAnnouncementSound(player, upcomingWorkshopJoinSound);
+    }
+
+    private void scheduleActiveWorkshop(@NotNull Player player) {
+        if (!activeWorkshopJoinEnabled) return;
+        if (activeWorkshopJoinDelaySeconds <= 0L) {
+            broadcastActiveWorkshop(player);
+            return;
+        }
+
+        UUID playerId = player.getUniqueId();
+        String taskId = ACTIVE_WORKSHOP_JOIN_TASK_PREFIX + playerId;
+        String previous = activeWorkshopJoinTasks.put(playerId, taskId);
+        if (previous != null) api.tasks().cancel(previous);
+        api.tasks().runOnceDelay(taskId, activeWorkshopJoinDelaySeconds * 20L, () -> {
+            activeWorkshopJoinTasks.remove(playerId, taskId);
+            if (!enabled || !joinEnabled || !player.isOnline()) return;
+            broadcastActiveWorkshop(player);
+        });
+    }
+
+    private void playAnnouncementSound(@NotNull Player player, @NotNull AnnouncementSound announcementSound) {
+        Sound sound = announcementSound.sound();
+        if (sound == null) return;
+        player.playSound(player.getLocation(), sound,
+                announcementSound.volume(), announcementSound.pitch());
+    }
+
+    private @NotNull List<String> renderUpcomingWorkshopMessages(@NotNull Player player,
+                                                                  @NotNull Workshop workshop,
+                                                                  int online) {
+        List<String> renderedLines = new ArrayList<>();
         for (String line : upcomingWorkshopJoinMessage) {
             String rendered = render(prefix + line, player, workshop, online);
-            if (!rendered.isBlank()) api.messages().send(player, rendered);
+            if (!rendered.isBlank()) renderedLines.add(rendered);
         }
+        return List.copyOf(renderedLines);
     }
 
     private void broadcastActiveWorkshop(@NotNull Player player) {
@@ -523,16 +734,107 @@ public class AnnouncementsFeature extends BaseFeature {
         if (workshop == null) return;
 
         WorkshopService service = api.workshops();
-        List<String> accessInstructions = service == null ? List.of() : service.accessInstructions(workshop);
         int online = Bukkit.getOnlinePlayers().size();
+        List<String> accessInstructions = renderWorkshopAccessInstructions(service, workshop, player, online);
+        List<String> messages = renderActiveWorkshopMessages(player, workshop, accessInstructions, online);
+        for (String rendered : messages) api.messages().send(player, rendered);
+        for (String rendered : accessInstructions) api.messages().send(player, rendered);
+        if (!messages.isEmpty() || !accessInstructions.isEmpty()) {
+            playAnnouncementSound(player, activeWorkshopJoinSound);
+        }
+    }
+
+    private @NotNull List<String> renderActiveWorkshopMessages(@NotNull Player player,
+                                                                @NotNull Workshop workshop,
+                                                                @NotNull List<String> accessInstructions,
+                                                                int online) {
+        List<String> renderedLines = new ArrayList<>();
         for (String line : activeWorkshopJoinMessage) {
             String normalized = line.toLowerCase(Locale.ROOT);
             if (!accessInstructions.isEmpty() && normalized.contains("{active_workshop_location}")) continue;
             if (workshop.location().isBlank() && normalized.contains("{active_workshop_location}")) continue;
             String rendered = render(prefix + line, player, workshop, online);
-            if (!rendered.isBlank()) api.messages().send(player, rendered);
+            if (!rendered.isBlank()) renderedLines.add(rendered);
         }
-        sendWorkshopAccessInstructions(service, workshop, player, online);
+        return List.copyOf(renderedLines);
+    }
+
+    private void deliverDebugMessage(@NotNull DebugContext context, @NotNull Player player,
+                                     @NotNull String message) {
+        api.messages().send(player, message);
+        if (!context.sender().equals(player)) context.sender().sendMessage(playerVisibleText(message));
+    }
+
+    static @NotNull String playerVisibleText(@NotNull String message) {
+        return PLAIN_TEXT.serialize(TextUtil.colourise(message));
+    }
+
+    private @NotNull Workshop selectDebugWorkshop(@Nullable Workshop matched,
+                                                  @NotNull Instant now,
+                                                  boolean active) {
+        if (matched != null) return matched;
+
+        WorkshopService service = api.workshops();
+        if (service != null && service.isAvailable() && service.isEnabled()) {
+            Workshop next = service.upcoming().stream()
+                    .filter(Workshop::announcementEligible)
+                    .findFirst()
+                    .orElse(null);
+            if (next != null) return next;
+        }
+        return sampleDebugWorkshop(now, defaultTimezone, active);
+    }
+
+    static @NotNull Workshop sampleDebugWorkshop(@NotNull Instant now, @NotNull ZoneId timezone, boolean active) {
+        ZonedDateTime start = (active ? now.minusSeconds(1800L) : now.plusSeconds(172800L)).atZone(timezone);
+        ZonedDateTime end = active ? now.plusSeconds(1800L).atZone(timezone) : start.plusHours(2L);
+        return new Workshop(
+                "debug-workshop",
+                "Example STEMMechanics Workshop",
+                "Example workshop used by the /debug preview.",
+                start,
+                end,
+                "STEMMechanics Lab",
+                "https://www.stemmechanics.com.au/workshops",
+                WorkshopSource.MANUAL,
+                now,
+                true
+        );
+    }
+
+    private void debugWorkshopLoginActive(@NotNull DebugContext context) {
+        Player player = context.player();
+        if (player == null) return;
+
+        WorkshopService service = api.workshops();
+        Instant now = Instant.now();
+        Workshop liveWorkshop = findActiveWorkshop(now);
+        Workshop workshop = selectDebugWorkshop(liveWorkshop, now, true);
+        if (activeWorkshopJoinMessage.isEmpty()) return;
+
+        int online = Bukkit.getOnlinePlayers().size();
+        List<String> accessInstructions = renderWorkshopAccessInstructions(service, workshop, player, online);
+        List<String> messages = renderActiveWorkshopMessages(player, workshop, accessInstructions, online);
+        for (String message : messages) deliverDebugMessage(context, player, message);
+        for (String message : accessInstructions) deliverDebugMessage(context, player, message);
+        if (!messages.isEmpty() || !accessInstructions.isEmpty()) {
+            playAnnouncementSound(player, activeWorkshopJoinSound);
+        }
+    }
+
+    private void debugWorkshopLoginUpcoming(@NotNull DebugContext context) {
+        Player player = context.player();
+        if (player == null) return;
+
+        Instant now = Instant.now();
+        Workshop liveWorkshop = findUpcomingJoinWorkshop(upcomingWorkshopJoinFilter, now);
+        Workshop workshop = selectDebugWorkshop(liveWorkshop, now, false);
+        if (upcomingWorkshopJoinMessage.isEmpty()) return;
+
+        int online = Bukkit.getOnlinePlayers().size();
+        List<String> messages = renderUpcomingWorkshopMessages(player, workshop, online);
+        for (String message : messages) deliverDebugMessage(context, player, message);
+        if (!messages.isEmpty()) playAnnouncementSound(player, upcomingWorkshopJoinSound);
     }
 
     private @Nullable Workshop findActiveWorkshop(@NotNull Instant now) {
@@ -825,6 +1127,10 @@ public class AnnouncementsFeature extends BaseFeature {
         private boolean workshopPromotion() {
             return WORKSHOP_TYPE.equals(type);
         }
+    }
+
+    private record AnnouncementSound(@Nullable Sound sound, float volume, float pitch) {
+        private static final AnnouncementSound DISABLED = new AnnouncementSound(null, 1.0f, 1.0f);
     }
 
     static record WorkshopFilter(@Nullable Double greaterThanDays, @Nullable Double lessThanDays,

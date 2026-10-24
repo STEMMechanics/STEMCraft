@@ -17,6 +17,7 @@ final class ExamplePluginBootstrap {
 From `STEMCraftAPI`, you can access:
 
 - `commands()` - command registration
+- `debug()` - disposable feature and service diagnostic tests exposed through `/debug`
 - `coordinateBar()` - player-specific coordinate boss-bar additions
 - `comets()` - destructive comet events with optional direction and loot
 - `config()` - YAML config files/sections
@@ -71,6 +72,23 @@ final class ExampleEvents {
     }
 }
 ```
+
+## Debug tests
+
+Features and services can register player-targeted diagnostics and close them
+with their own lifecycle:
+
+```java
+DebugRegistration registration = api.debug().register(
+    "example-state",
+    "Inspect example state for a player.",
+    context -> context.info("Player: " + context.player().getName())
+);
+```
+
+Players run `/debug example-state`; the console uses `/debug example-state
+<player>`. See [Debug tests](https://github.com/STEMMechanics/stemcraft/wiki/debug)
+for the command behavior and the built-in workshop test.
 
 ## Coordinate Bar API
 
