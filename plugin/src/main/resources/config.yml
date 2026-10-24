@@ -297,15 +297,15 @@ announcements:
         - "<aqua>Upcoming STEMMechanics workshop:</aqua> <white>{next_workshop_title}</white>"
         - "<gray>{next_workshop_date} at {next_workshop_time} — <click:open_url:'{next_workshop_url}'><underlined>book your place</underlined></click></gray>"
 
-# Workshops keeps website records and manually created records in one catalogue.
-# Website entries without a reliable event start date are skipped safely.
+# Workshops is opt-in. Set enabled to true to expose its catalogue and commands.
+# Set rss-url to a feed URL to import website workshops; a blank URL disables RSS sync.
 workshops:
-  enabled: true
+  enabled: false
   website-enabled: true
   rss-sync-enabled: true
   manual-enabled: true
   cache-persistence: true
-  rss-url: "https://www.stemmechanics.com.au/workshops/feed"
+  rss-url: ""
   refresh-interval: 60m
   connection-timeout: 10s
   read-timeout: 20s
