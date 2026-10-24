@@ -922,6 +922,9 @@ chat:
       player-quit: true
       minigame-start: true
       minigame-end: true
+      player-death: true
+      server-start: true
+      server-stop: true
   content_filter:
     enabled: true
     minimum_severity: mild
