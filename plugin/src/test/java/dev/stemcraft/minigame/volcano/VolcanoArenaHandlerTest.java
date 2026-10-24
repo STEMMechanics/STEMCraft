@@ -16,6 +16,7 @@ import org.bukkit.event.block.BlockFormEvent;
 import org.bukkit.event.block.BlockFromToEvent;
 import org.bukkit.event.block.BlockIgniteEvent;
 import org.bukkit.event.block.FluidLevelChangeEvent;
+import org.bukkit.event.entity.EntityRegainHealthEvent;
 import org.bukkit.entity.Player;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -206,6 +207,53 @@ class VolcanoArenaHandlerTest {
         verify(arena).addSpectator(p);
         verify(arena.getPlayer(p)).setDeaths(1);
         assertEquals(ENDING, status);
+    }
+
+    @Test
+    void naturalRegenerationIsBlockedDuringTheRound() {
+        game();
+        Player p = join();
+        start();
+        when(game.game.findPlayer(p)).thenReturn(arena);
+
+        EntityRegainHealthEvent event = mock(EntityRegainHealthEvent.class);
+        when(event.getEntity()).thenReturn(p);
+        handler.onHealthRegain(event);
+
+        verify(event).setCancelled(true);
+    }
+
+    @Test
+    void controlledLavaDamageIgnoresTheVanillaDamageCooldownAndLeavesFireBehind() throws Exception {
+        game();
+        Player p = join();
+        Runnable tick = start();
+        VolcanoEruption eruption = mock(VolcanoEruption.class);
+        round().eruption = eruption;
+        when(eruption.hasLavaContact(any(Location.class))).thenReturn(true);
+        clearInvocations(p);
+
+        tick.run();
+
+        verify(p).damage(eq(4.0), argThat((DamageSource source) -> source.getDamageType() == DamageType.LAVA));
+        verify(p).setFireTicks(intThat(value -> value >= 60));
+        verify(p, times(2)).setNoDamageTicks(0);
+    }
+
+    @Test
+    void geyserColumnsDamagePlayersStandingInTheirPath() throws Exception {
+        game();
+        Player p = join();
+        Runnable tick = start();
+        VolcanoEruption eruption = mock(VolcanoEruption.class);
+        round().eruption = eruption;
+        when(eruption.isGeyserHazard(any(Location.class), anyLong())).thenReturn(true);
+        clearInvocations(p);
+
+        tick.run();
+
+        verify(p).damage(eq(4.0), argThat((DamageSource source) -> source.getDamageType() == DamageType.IN_FIRE));
+        verify(p).setFireTicks(intThat(value -> value >= 60));
     }
 
     @Test
