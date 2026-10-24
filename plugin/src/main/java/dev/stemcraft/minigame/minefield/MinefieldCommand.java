@@ -1,6 +1,7 @@
 package dev.stemcraft.minigame.minefield;
 
 import dev.stemcraft.STEMCraft;
+import dev.stemcraft.minigame.MiniGameCommandSupport;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.minigame.ArenaValidationResult;
@@ -47,7 +48,7 @@ public class MinefieldCommand {
             .tabCompletion("create", "")
             .tabCompletion("create", "", "{world}")
             .tabCompletion("delete", "{minefield-arenas}")
-            .tabCompletion("join", "{minefield-arenas}", "{player}")
+            .tabCompletion("join", "{minefield-arenas}", "{players}")
             .tabCompletion("joinall", "{minefield-arenas}")
             .tabCompletion("spectate", "{minefield-arenas}", "{player}")
             .tabCompletion("leave", "{player}")
@@ -217,20 +218,31 @@ public class MinefieldCommand {
     private void commandJoin(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2);
         MiniGameArena arena = requireArena(ctx);
-        Player targetPlayer = ctx.getArgAsPlayerOrSender(2);
-        if (targetPlayer == null) {
+        List<Player> targets = MiniGameCommandSupport.targets(ctx, 2);
+        if (targets.isEmpty()) {
             ctx.returnError("Player is required.");
             return;
         }
-        ensureNotInArena(ctx, targetPlayer);
+        if (targets.size() == 1) {
+            ensureNotInArena(ctx, targets.getFirst());
+        }
 
         if (!arena.isJoinable()) {
             ctx.returnError("Arena '" + arena.id() + "' is not joinable right now.");
             return;
         }
 
-        arena.addPlayer(targetPlayer);
-        ctx.success("Player '" + targetPlayer.getName() + "' joined arena '" + arena.id() + "'.");
+        MiniGameCommandSupport.JoinResult result = MiniGameCommandSupport.addPlayers(
+            minefield.minigame(), arena, targets, false);
+        if (result.added() == 0) {
+            ctx.returnError("No players could be added to arena '" + arena.id() + "'.");
+            return;
+        }
+        if (targets.size() == 1) {
+            ctx.success("Player '" + targets.getFirst().getName() + "' joined arena '" + arena.id() + "'.");
+            return;
+        }
+        ctx.success("Arena '" + arena.id() + "': joined " + result.joined() + ", skipped " + result.skipped() + ".");
     }
 
     private void commandJoinAll(CommandContext ctx) {

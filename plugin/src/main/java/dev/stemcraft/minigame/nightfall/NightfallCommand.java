@@ -1,6 +1,7 @@
 package dev.stemcraft.minigame.nightfall;
 
 import dev.stemcraft.STEMCraft;
+import dev.stemcraft.minigame.MiniGameCommandSupport;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.minigame.ArenaValidationResult;
@@ -50,7 +51,7 @@ public class NightfallCommand {
             .tabCompletion("create", "")
             .tabCompletion("create", "", "{world}")
             .tabCompletion("delete", "{nightfall-arenas}")
-            .tabCompletion("join", "{nightfall-arenas}", "{player}")
+            .tabCompletion("join", "{nightfall-arenas}", "{players}")
             .tabCompletion("joinall", "{nightfall-arenas}")
             .tabCompletion("spectate", "{nightfall-arenas}", "{player}")
             .tabCompletion("leave", "{player}")
@@ -287,30 +288,43 @@ public class NightfallCommand {
     private void commandJoin(CommandContext ctx) {
         ctx.checkArgsSizeAtLeast(2);
         MiniGameArena arena = requireArena(ctx);
-        Player targetPlayer = ctx.getArgAsPlayerOrSender(2);
-        if (targetPlayer == null) {
+        List<Player> targets = MiniGameCommandSupport.targets(ctx, 2);
+        if (targets.isEmpty()) {
             ctx.returnError("Player is required.");
             return;
         }
-        ensureNotInArena(ctx, targetPlayer);
+        if (targets.size() == 1) {
+            ensureNotInArena(ctx, targets.getFirst());
+        }
 
-        if ((!nightfall.allowLateJoin(arena)
+        boolean spectateOnly = ((!nightfall.allowLateJoin(arena)
             && (arena.getStatus() == MiniGameArena.ArenaStatus.PREPARATION
             || arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING))
             || arena.getStatus() == MiniGameArena.ArenaStatus.COOLDOWN
-            || arena.getStatus() == MiniGameArena.ArenaStatus.ENDING) {
-            arena.addSpectator(targetPlayer);
-            ctx.success("Player '" + targetPlayer.getName() + "' is now spectating arena '" + arena.id() + "'.");
-            return;
-        }
+            || arena.getStatus() == MiniGameArena.ArenaStatus.ENDING);
 
-        if (!arena.isJoinable()) {
+        if (!spectateOnly && !arena.isJoinable()) {
             ctx.returnError("Arena '" + arena.id() + "' is not joinable right now.");
             return;
         }
 
-        arena.addPlayer(targetPlayer);
-        ctx.success("Player '" + targetPlayer.getName() + "' joined arena '" + arena.id() + "'.");
+        MiniGameCommandSupport.JoinResult result = MiniGameCommandSupport.addPlayers(
+            nightfall.minigame(), arena, targets, spectateOnly);
+        if (result.added() == 0) {
+            ctx.returnError("No players could be added to arena '" + arena.id() + "'.");
+            return;
+        }
+        if (targets.size() == 1) {
+            Player targetPlayer = targets.getFirst();
+            if (result.spectating() > 0) {
+                ctx.success("Player '" + targetPlayer.getName() + "' is now spectating arena '" + arena.id() + "'.");
+            } else {
+                ctx.success("Player '" + targetPlayer.getName() + "' joined arena '" + arena.id() + "'.");
+            }
+            return;
+        }
+        ctx.success("Arena '" + arena.id() + "': joined " + result.joined()
+            + ", spectating " + result.spectating() + ", skipped " + result.skipped() + ".");
     }
 
     private void commandJoinAll(CommandContext ctx) {
