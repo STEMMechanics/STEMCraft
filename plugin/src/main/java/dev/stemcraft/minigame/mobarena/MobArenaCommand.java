@@ -156,6 +156,7 @@ final class MobArenaCommand {
                 .tabCompletion("zone", "{mobarena-arenas}", "delete", "")
                 .tabCompletion("zone", "{mobarena-arenas}", "select", "")
                 .executor((ignored, cmd, ctx) -> {
+                    ctx.checkArgsNotEmpty();
                     switch (ctx.getArgLower(0)) {
                         case "list" -> commandList(ctx);
                         case "info" -> commandInfo(ctx);
@@ -719,6 +720,7 @@ final class MobArenaCommand {
 
     private void printPlayerDeathMessages(@NotNull final CommandContext ctx, @lombok.NonNull final MiniGameArena arena) {
         final List<String> playerDeathMessages = arena.getList("player-death-messages", String.class);
+        if (playerDeathMessages == null) return;
         for (int i = 0; i < playerDeathMessages.size(); i++) {
             ctx.info("    - " + (i + 1) + ": " + playerDeathMessages.get(i));
         }
