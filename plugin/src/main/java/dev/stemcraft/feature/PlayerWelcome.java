@@ -30,6 +30,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -51,15 +52,23 @@ import java.util.UUID;
  */
 public class PlayerWelcome extends BaseFeature {
     private static final String TABLE_NAME = "player_welcome_state";
+    private static final String ACTIVITY_TABLE_NAME = "player_welcome_activity";
     private static final String MIGRATION_NAME = "player-welcome";
-    private static final int MIGRATION_VERSION = 1;
+    private static final int MIGRATION_VERSION = 2;
     private static final long JOIN_MESSAGE_DELAY_TICKS = 20L;
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ISO_LOCAL_DATE;
+    private static final int DEFAULT_AWAY_SUMMARY_LIMIT = 3;
+    private static final String DEFAULT_AWAY_SUMMARY_HEADING = "<gray>While you were away:</gray>";
+    private static final String DEFAULT_AWAY_SUMMARY_LINE = "<gray>-</gray> <white>{player}</white> <gray>was online {ago} ago</gray>";
 
     private boolean enabled;
     private List<String> firstTimeMessage = List.of();
     private List<String> returningMessage = List.of();
     private Map<Integer, List<String>> anniversaryMessages = Map.of();
+    private boolean awaySummaryEnabled;
+    private int awaySummaryLimit;
+    private String awaySummaryHeading = DEFAULT_AWAY_SUMMARY_HEADING;
+    private String awaySummaryLine = DEFAULT_AWAY_SUMMARY_LINE;
 
     public enum MessageKind {
         FIRST_TIME("first-time", "first-time"),
@@ -102,6 +111,13 @@ public class PlayerWelcome extends BaseFeature {
                 handleJoin(player);
             });
         });
+
+        api.events().register(PlayerQuitEvent.class, event -> {
+            if (!enabled) {
+                return;
+            }
+            upsertActivity(event.getPlayer(), System.currentTimeMillis());
+        });
     }
 
     @Override
@@ -115,6 +131,10 @@ public class PlayerWelcome extends BaseFeature {
         firstTimeMessage = readMessageList("first-time");
         returningMessage = readMessageList("returning");
         anniversaryMessages = readAnniversaryMessages();
+        awaySummaryEnabled = getConfigSection().getBoolean("away-summary.enabled", true);
+        awaySummaryLimit = Math.max(1, getConfigSection().getInt("away-summary.limit", DEFAULT_AWAY_SUMMARY_LIMIT));
+        awaySummaryHeading = getConfigSection().getString("away-summary.heading", DEFAULT_AWAY_SUMMARY_HEADING);
+        awaySummaryLine = getConfigSection().getString("away-summary.line", DEFAULT_AWAY_SUMMARY_LINE);
     }
 
     private void ensureStorage() {
@@ -135,23 +155,40 @@ public class PlayerWelcome extends BaseFeature {
             return;
         }
 
+        created = api.database().execute(
+            "CREATE TABLE IF NOT EXISTS " + ACTIVITY_TABLE_NAME + " (" +
+                "player_uuid TEXT PRIMARY KEY," +
+                "last_seen_at INTEGER NOT NULL," +
+                "last_name TEXT NOT NULL" +
+            ");"
+        );
+        if (!created) {
+            api.messages().error("Failed to create " + ACTIVITY_TABLE_NAME + " table.");
+            return;
+        }
+
+        api.database().execute("CREATE INDEX IF NOT EXISTS player_welcome_activity_seen_at ON " + ACTIVITY_TABLE_NAME + "(last_seen_at);");
         api.database().setMigrationVersion(MIGRATION_NAME, MIGRATION_VERSION);
     }
 
     private void handleJoin(@NotNull Player player) {
         PlayerWelcomeState state = loadState(player.getUniqueId());
+        PlayerActivityState activity = loadActivity(player.getUniqueId());
         boolean firstTime = state == null && !player.hasPlayedBefore();
         long now = System.currentTimeMillis();
 
         long firstJoinedAt = resolveFirstJoinedAt(player, state, now);
         int lastAnniversaryYear = state == null ? 0 : state.lastAnniversaryYear();
+        long previousLastSeenAt = activity == null ? 0L : activity.lastSeenAt();
 
         upsertState(player, firstJoinedAt, lastAnniversaryYear);
+        upsertActivity(player, now);
 
         if (firstTime) {
             sendMessage(player, firstTimeMessage, firstJoinedAt, 0);
         } else {
             sendMessage(player, returningMessage, firstJoinedAt, 0);
+            sendAwaySummary(player, previousLastSeenAt, now);
         }
 
         Integer anniversaryYear = selectAnniversaryYear(
@@ -196,6 +233,14 @@ public class PlayerWelcome extends BaseFeature {
         );
     }
 
+    private @Nullable PlayerActivityState loadActivity(@NotNull UUID playerId) {
+        return api.database().querySingleMapped(
+            "SELECT last_seen_at FROM " + ACTIVITY_TABLE_NAME + " WHERE player_uuid = ?",
+            ps -> ps.setString(1, playerId.toString().toLowerCase(Locale.ROOT)),
+            rs -> new PlayerActivityState(rs.getLong("last_seen_at"))
+        );
+    }
+
     private void upsertState(@NotNull Player player, long firstJoinedAt, int lastAnniversaryYear) {
         api.database().update(
             "INSERT INTO " + TABLE_NAME + " (player_uuid, first_joined_at, last_anniversary_year, last_name) VALUES (?, ?, ?, ?) " +
@@ -208,6 +253,20 @@ public class PlayerWelcome extends BaseFeature {
                 ps.setLong(2, firstJoinedAt);
                 ps.setInt(3, lastAnniversaryYear);
                 ps.setString(4, player.getName());
+            }
+        );
+    }
+
+    private void upsertActivity(@NotNull Player player, long lastSeenAt) {
+        api.database().update(
+            "INSERT INTO " + ACTIVITY_TABLE_NAME + " (player_uuid, last_seen_at, last_name) VALUES (?, ?, ?) " +
+                "ON CONFLICT(player_uuid) DO UPDATE SET " +
+                "last_seen_at = excluded.last_seen_at, " +
+                "last_name = excluded.last_name",
+            ps -> {
+                ps.setString(1, player.getUniqueId().toString().toLowerCase(Locale.ROOT));
+                ps.setLong(2, lastSeenAt);
+                ps.setString(3, player.getName());
             }
         );
     }
@@ -232,6 +291,33 @@ public class PlayerWelcome extends BaseFeature {
             for (Component line : rendered) {
                 online.sendMessage(line);
             }
+        }
+    }
+
+    private void sendAwaySummary(@NotNull Player player, long previousLastSeenAt, long now) {
+        if (!awaySummaryEnabled || previousLastSeenAt <= 0L || previousLastSeenAt >= now) {
+            return;
+        }
+
+        List<AwayActivity> activities = recentAwayActivity(player.getUniqueId(), previousLastSeenAt, awaySummaryLimit);
+        if (activities.isEmpty()) {
+            return;
+        }
+
+        if (awaySummaryHeading != null && !awaySummaryHeading.isBlank()) {
+            player.sendMessage(renderComponentLine(api.placeholders().apply(player, awaySummaryHeading)));
+        }
+
+        for (AwayActivity activity : activities) {
+            String rendered = PlaceholderUtil.apply(
+                awaySummaryLine,
+                Map.of(
+                    "player", activity.playerName(),
+                    "ago", formatAgo(now - activity.lastSeenAt()),
+                    "last_seen_at", Long.toString(activity.lastSeenAt())
+                )
+            );
+            player.sendMessage(renderComponentLine(api.placeholders().apply(player, rendered)));
         }
     }
 
@@ -274,6 +360,26 @@ public class PlayerWelcome extends BaseFeature {
 
         String rendered = PlaceholderUtil.apply(line, placeholders);
         return api.placeholders().apply(player, rendered);
+    }
+
+    private @NotNull List<AwayActivity> recentAwayActivity(@NotNull UUID playerId, long sinceExclusive, int limit) {
+        List<AwayActivity> activities = new ArrayList<>();
+        api.database().queryEach(
+            "SELECT player_uuid, last_name, last_seen_at FROM " + ACTIVITY_TABLE_NAME + " " +
+                "WHERE player_uuid != ? AND last_seen_at > ? " +
+                "ORDER BY last_seen_at DESC LIMIT ?",
+            ps -> {
+                ps.setString(1, playerId.toString().toLowerCase(Locale.ROOT));
+                ps.setLong(2, sinceExclusive);
+                ps.setInt(3, Math.max(1, limit));
+            },
+            rs -> activities.add(new AwayActivity(
+                rs.getString("player_uuid"),
+                rs.getString("last_name"),
+                rs.getLong("last_seen_at")
+            ))
+        );
+        return List.copyOf(activities);
     }
 
     private @NotNull List<String> readMessageList(@NotNull String path) {
@@ -454,6 +560,29 @@ public class PlayerWelcome extends BaseFeature {
         };
     }
 
+    static @NotNull String formatAgo(long elapsedMillis) {
+        if (elapsedMillis <= 30_000L) {
+            return "just now";
+        }
+
+        long minutes = Math.max(1L, elapsedMillis / 60_000L);
+        if (minutes < 60L) {
+            return pluralize(minutes, "minute");
+        }
+
+        long hours = minutes / 60L;
+        if (hours < 24L) {
+            return pluralize(hours, "hour");
+        }
+
+        long days = hours / 24L;
+        return pluralize(days, "day");
+    }
+
+    private static @NotNull String pluralize(long value, @NotNull String unit) {
+        return value == 1L ? value + " " + unit : value + " " + unit + "s";
+    }
+
     private static int parsePositiveInt(@Nullable String value) {
         if (value == null || value.isBlank()) {
             return -1;
@@ -472,5 +601,11 @@ public class PlayerWelcome extends BaseFeature {
     }
 
     private record PlayerWelcomeState(long firstJoinedAt, int lastAnniversaryYear) {
+    }
+
+    private record PlayerActivityState(long lastSeenAt) {
+    }
+
+    private record AwayActivity(@NotNull String playerUuid, @NotNull String playerName, long lastSeenAt) {
     }
 }
