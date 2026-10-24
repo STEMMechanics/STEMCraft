@@ -5,9 +5,10 @@ STEMCraft provides two independent features:
 - `announcements` delivers configured, scheduled, join, manual, and workshop-promotion messages.
 - `workshops` maintains the upcoming STEMMechanics workshop catalogue.
 
-The features may be enabled or disabled separately. Announcements asks the
-`WorkshopService` for the next eligible workshop and never reads the RSS feed
-or the workshops database directly.
+The features may be enabled or disabled separately. Workshops is disabled by
+default; set `workshops.enabled: true` to expose its catalogue and commands.
+Announcements asks the `WorkshopService` for the next eligible workshop and
+never reads the RSS feed or the workshops database directly.
 
 ## Configuration
 
@@ -80,12 +81,12 @@ announcements:
         - "<gray>{next_workshop_date} at {next_workshop_time}</gray>"
 
 workshops:
-  enabled: true
+  enabled: false
   website-enabled: true
   rss-sync-enabled: true
   manual-enabled: true
   cache-persistence: true
-  rss-url: "https://www.stemmechanics.com.au/workshops/feed"
+  rss-url: ""
   refresh-interval: 60m
   connection-timeout: 10s
   read-timeout: 20s
@@ -291,8 +292,12 @@ is useful. `/workshops refresh` starts an asynchronous synchronisation and requi
 
 ## RSS synchronisation
 
-The default feed is the [STEMMechanics workshop RSS feed](https://www.stemmechanics.com.au/workshops/feed).
-The current feed is RSS 2.0 with the `sm` namespace at
+There is no built-in feed URL. Set `workshops.rss-url` to the RSS feed you
+want to use; a blank value disables website synchronisation. Manual workshop
+entries remain available when the feature is enabled and RSS synchronisation is
+disabled.
+
+Feeds use RSS 2.0 with the `sm` namespace at
 `https://stemmechanics.com/ns/rss/workshop`. Each item supplies `title`, `link`,
 `guid`, `description`, `pubDate`, and the event-specific fields
 `sm:startDate`, `sm:endDate`, `sm:location`, `sm:price`, `sm:ages`, and

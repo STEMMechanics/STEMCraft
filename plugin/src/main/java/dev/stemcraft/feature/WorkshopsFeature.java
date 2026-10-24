@@ -78,7 +78,6 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
     static final long MAX_FEED_BYTES = 1_048_576L;
     static final int MAX_ACCESS_INSTRUCTION_LINES = 20;
     static final int MAX_ACCESS_INSTRUCTION_LENGTH = 1024;
-    static final String DEFAULT_FEED_URL = "https://www.stemmechanics.com.au/workshops/feed";
     static final ZoneId DEFAULT_ZONE = ZoneId.of("Australia/Brisbane");
     static final DateTimeFormatter DISPLAY_DATE_FORMAT = DateTimeFormatter.ofPattern("EEEE d MMMM yyyy", Locale.ENGLISH);
     static final DateTimeFormatter DISPLAY_TIME_FORMAT = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH);
@@ -139,6 +138,7 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
     @Override
     public void onEnable() {
         loadSettings();
+        if (!enabled) return;
         ensureStorage();
         loadStoredWorkshops();
         loadStoredAccessOverrides();
@@ -165,6 +165,7 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
             return;
         }
         if (!wasEnabled) {
+            ensureStorage();
             registerTabCompletion();
             registerCommand();
             registerEvents();
@@ -249,7 +250,7 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
 
     @Override
     public void refresh() {
-        if (!enabled || !websiteEnabled || !syncEnabled) {
+        if (!isWebsiteSyncEnabled()) {
             return;
         }
         api.tasks().runAsync(this::refreshWebsite);
@@ -410,7 +411,7 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
         syncEnabled = section.getBoolean("rss-sync-enabled", true);
         manualEnabled = section.getBoolean("manual-enabled", true);
         cachePersistence = section.getBoolean("cache-persistence", true);
-        feedUrl = section.getString("rss-url", DEFAULT_FEED_URL).trim();
+        feedUrl = section.getString("rss-url", "").trim();
         refreshIntervalSeconds = parseDuration(section.getString("refresh-interval", "60m"), 3600L, 15L, 604800L);
         connectTimeoutSeconds = parseDuration(section.getString("connection-timeout", "10s"), 10L, 1L, 120L);
         readTimeoutSeconds = parseDuration(section.getString("read-timeout", "20s"), 20L, 1L, 300L);
@@ -433,7 +434,7 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
         instructionsPermission = section.getString("instructions.permission", DEFAULT_INSTRUCTIONS_PERMISSION).trim();
         if (instructionsPermission.isBlank()) instructionsPermission = DEFAULT_INSTRUCTIONS_PERMISSION;
         instructionsPromptMessage = configuredLines(section, "instructions.prompt", DEFAULT_INSTRUCTIONS_PROMPT);
-        syncStatus = new WorkshopSyncStatus(enabled && websiteEnabled && syncEnabled, false,
+        syncStatus = new WorkshopSyncStatus(isWebsiteSyncEnabled(), false,
                 syncStatus.lastAttemptAt(), syncStatus.lastSuccessAt(), syncStatus.lastError(), countWebsiteWorkshops());
     }
 
@@ -479,9 +480,13 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
         return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
     }
 
+    private boolean isWebsiteSyncEnabled() {
+        return enabled && websiteEnabled && syncEnabled && !feedUrl.isBlank();
+    }
+
     private void restartRefreshTask() {
         api.tasks().cancel(REFRESH_TASK);
-        if (!enabled || !websiteEnabled || !syncEnabled) {
+        if (!isWebsiteSyncEnabled()) {
             return;
         }
         long periodTicks = Math.max(20L, refreshIntervalSeconds * 20L);
@@ -633,7 +638,7 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
     }
 
     private void refreshWebsite() {
-        if (!enabled || !websiteEnabled || !syncEnabled || !refreshInProgress.compareAndSet(false, true)) {
+        if (!isWebsiteSyncEnabled() || !refreshInProgress.compareAndSet(false, true)) {
             return;
         }
         Instant attemptedAt = Instant.now();
