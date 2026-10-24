@@ -1,6 +1,7 @@
 package dev.stemcraft.minigame.skyblock;
 
 import dev.stemcraft.STEMCraft;
+import dev.stemcraft.minigame.MiniGameCommandSupport;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.minigame.MiniGameArena;
@@ -38,11 +39,12 @@ public class SkyBlockCommand {
 
         api.commands().create("skyblock")
             .access((sender, args) -> dev.stemcraft.permission.PlayerCommandAccess.minigame(sender, args, "skyblock"))
-            .usage("/skyblock <list|info|join|spectate|leave|reset|reload|pool>")
+            .usage("/skyblock <list|info|join|joinall|spectate|leave|reset|reload|pool>")
             .tabCompletion("list")
             .tabCompletion("list", "{int}")
             .tabCompletion("info", "{skyblock-owners}")
-            .tabCompletion("join", "{player}")
+            .tabCompletion("join", "{players}")
+            .tabCompletion("joinall")
             .tabCompletion("spectate", "{skyblock-owners}", "{player}")
             .tabCompletion("leave", "{player}")
             .tabCompletion("reset", "{skyblock-owners}", "confirm")
@@ -59,6 +61,7 @@ public class SkyBlockCommand {
                     case "list" -> commandList(ctx);
                     case "info" -> commandInfo(ctx);
                     case "join" -> commandJoin(ctx);
+                    case "joinall" -> commandJoinAll(ctx);
                     case "spectate" -> commandSpectate(ctx);
                     case "leave" -> commandLeave(ctx);
                     case "reset" -> commandReset(ctx);
@@ -125,25 +128,61 @@ public class SkyBlockCommand {
     }
 
     private void commandJoin(CommandContext ctx) {
-        Player targetPlayer = ctx.getArgAsPlayerOrSender(1);
-        if (targetPlayer == null) {
+        List<Player> targets = MiniGameCommandSupport.targets(ctx, 1);
+        if (targets.isEmpty()) {
             ctx.returnError("Player is required.");
             return;
         }
 
-        MiniGameArena existingArena = skyBlock.minigame().findPlayer(targetPlayer);
-        MiniGameArena targetArena = skyBlock.createOrResumeGame(targetPlayer);
-        if (existingArena != null && existingArena == targetArena) {
-            ctx.success("Player '" + targetPlayer.getName() + "' is already in their SkyBlock game.");
-            return;
-        }
-        if (existingArena != null) {
-            ctx.returnError("Player '" + targetPlayer.getName() + "' is already in arena '" + existingArena.id() + "'.");
-            return;
+        joinPlayers(ctx, targets);
+    }
+
+    private void commandJoinAll(CommandContext ctx) {
+        joinPlayers(ctx, Bukkit.getOnlinePlayers());
+    }
+
+    private void joinPlayers(CommandContext ctx, Iterable<? extends Player> targetPlayers) {
+        List<Player> targets = new ArrayList<>();
+        targetPlayers.forEach(targets::add);
+
+        int joined = 0;
+        int skipped = 0;
+        MiniGameArena singleArena = null;
+        for (Player targetPlayer : targets) {
+            MiniGameArena existingArena = skyBlock.minigame().findPlayer(targetPlayer);
+            MiniGameArena ownerArena = skyBlock.findArenaByOwner(targetPlayer.getUniqueId());
+            if (existingArena != null) {
+                if (targets.size() == 1 && existingArena == ownerArena) {
+                    ctx.success("Player '" + targetPlayer.getName() + "' is already in their SkyBlock game.");
+                    return;
+                }
+                if (targets.size() == 1) {
+                    ctx.returnError("Player '" + targetPlayer.getName() + "' is already in arena '" + existingArena.id() + "'.");
+                    return;
+                }
+                skipped++;
+                continue;
+            }
+
+            MiniGameArena targetArena = ownerArena != null ? ownerArena : skyBlock.createOrResumeGame(targetPlayer);
+            targetArena.addPlayer(targetPlayer);
+            if (targetArena.hasPlayer(targetPlayer)) {
+                joined++;
+                singleArena = targetArena;
+            } else {
+                skipped++;
+            }
         }
 
-        targetArena.addPlayer(targetPlayer);
-        ctx.success("Player '" + targetPlayer.getName() + "' joined SkyBlock '" + skyBlock.ownerName(targetArena) + "'.");
+        if (joined == 0) {
+            ctx.returnError("No online players could be added to SkyBlock.");
+            return;
+        }
+        if (targets.size() == 1 && singleArena != null) {
+            ctx.success("Player '" + targets.getFirst().getName() + "' joined SkyBlock '" + skyBlock.ownerName(singleArena) + "'.");
+            return;
+        }
+        ctx.success("SkyBlock: joined " + joined + ", skipped " + skipped + ".");
     }
 
     private void commandSpectate(CommandContext ctx) {
