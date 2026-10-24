@@ -907,6 +907,11 @@ chat:
     timeout: 3s
     queue-size: 256
     max-retries: 3
+    events:
+      player-join: true
+      player-quit: true
+      minigame-start: true
+      minigame-end: true
   content_filter:
     enabled: true
     minimum_severity: mild
