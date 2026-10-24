@@ -23,7 +23,7 @@ dependencies {
     compileOnly("io.papermc.paper:paper-api:${rootProject.ext.paperApiVersion}")
     compileOnly('org.geysermc.floodgate:api:2.2.4-SNAPSHOT')
     compileOnly('org.geysermc.geyser:api:2.9.0-SNAPSHOT')
-    compileOnly('me.clip:placeholderapi:2.11.6')
+    compileOnly('me.clip:placeholderapi:2.12.3')
     compileOnly('net.luckperms:api:5.4')
     compileOnly('com.googlecode.json-simple:json-simple:1.1.1')
     compileOnly('com.sk89q.worldedit:worldedit-bukkit:7.4.6')
