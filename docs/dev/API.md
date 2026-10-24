@@ -12,6 +12,7 @@ The public integration surface is `dev.stemcraft.api.STEMCraftAPI`.
 `STEMCraftAPI` exposes the following runtime service families:
 
 - `commands()`
+- `debug()`
 - `coordinateBar()`
 - `comets()`
 - `config()`

@@ -6,6 +6,7 @@ import dev.stemcraft.service.AuditServiceImpl;
 import dev.stemcraft.service.ConfigServiceImpl;
 import dev.stemcraft.service.CoordinateBarServiceImpl;
 import dev.stemcraft.service.DatabaseServiceImpl;
+import dev.stemcraft.service.DebugServiceImpl;
 import dev.stemcraft.service.EventServiceImpl;
 import dev.stemcraft.service.HologramServiceImpl;
 import dev.stemcraft.service.GiftServiceImpl;
@@ -68,6 +69,7 @@ class STEMCraftAPIImplTest {
         "audit",
         "comets",
         "commands",
+        "debug",
         "coordinateBar",
         "config",
         "database",
@@ -121,6 +123,7 @@ class STEMCraftAPIImplTest {
         AuditServiceImpl audit = mock(AuditServiceImpl.class);
         CometService comets = mock(CometService.class);
         CommandServiceImpl commands = mock(CommandServiceImpl.class);
+        DebugServiceImpl debug = mock(DebugServiceImpl.class);
         CoordinateBarServiceImpl coordinateBar = mock(CoordinateBarServiceImpl.class);
         ConfigServiceImpl config = mock(ConfigServiceImpl.class);
         DatabaseServiceImpl database = mock(DatabaseServiceImpl.class);
@@ -156,6 +159,7 @@ class STEMCraftAPIImplTest {
         when(plugin.audit()).thenReturn(audit);
         when(plugin.comets()).thenReturn(comets);
         when(plugin.commands()).thenReturn(commands);
+        when(plugin.debug()).thenReturn(debug);
         when(plugin.coordinateBar()).thenReturn(coordinateBar);
         when(plugin.config()).thenReturn(config);
         when(plugin.database()).thenReturn(database);
@@ -193,6 +197,7 @@ class STEMCraftAPIImplTest {
         expectedDelegates.put("audit", audit);
         expectedDelegates.put("comets", comets);
         expectedDelegates.put("commands", commands);
+        expectedDelegates.put("debug", debug);
         expectedDelegates.put("coordinateBar", coordinateBar);
         expectedDelegates.put("config", config);
         expectedDelegates.put("database", database);

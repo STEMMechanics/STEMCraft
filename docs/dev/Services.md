@@ -18,6 +18,7 @@ These are the runtime services instantiated in `STEMCraft.java` and exposed thro
 | Audit | `AuditServiceImpl` | Structured audit logging and audit command surfaces |
 | Chat | `ChatServiceImpl` | Moderation workflows, reports, mute-all state, and report review surfaces |
 | Commands | `CommandServiceImpl` | Fluent command registration API used by the rest of the plugin |
+| Debug | `DebugServiceImpl` | Feature and service diagnostics exposed through `/debug` |
 | Comets | `CometFeature` | API-launched destructive comet events and per-event loot |
 | Database | `DatabaseServiceImpl` | SQLite execution, query helpers, and migration version tracking |
 | Events | `EventServiceImpl` | Simplified event listener registration |
@@ -82,6 +83,9 @@ These services form the moderation stack. Together they cover:
 - punishment persistence and command surfaces
 - audit review
 - player reporting
+
+Chat can optionally forward accepted global messages to an external HTTP
+consumer through the bearer-authenticated [chat bridge](chat-bridge.md).
 
 ### Tasks
 

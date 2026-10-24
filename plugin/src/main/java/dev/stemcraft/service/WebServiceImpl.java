@@ -58,6 +58,7 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -80,6 +81,7 @@ import java.util.concurrent.TimeoutException;
  */
 public class WebServiceImpl extends BaseService implements WebService {
     private static final Gson GSON = new GsonBuilder().serializeNulls().create();
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final String MAINTENANCE_MESSAGE = "Server is under maintenance. Please try again later.";
     private static final String SURVIVAL_MAIL_PATH = "/api/v1/survival/mail";
     private static final String BEARER_PREFIX = "Bearer ";
@@ -88,6 +90,7 @@ public class WebServiceImpl extends BaseService implements WebService {
     private static final int DEFAULT_MAIL_API_MAX_ITEMS = 26;
     private static final int DEFAULT_MAIL_API_MAX_ITEM_AMOUNT = 1024;
     private static final long DEFAULT_MAIL_API_MAX_DELAY_SECONDS = 7L * 24L * 60L * 60L;
+    private static final int MAIL_API_KEY_BYTES = 32;
     private static final int MAIL_API_MAX_MESSAGE_LENGTH = 2048;
     private static final int MAIL_API_MAX_IDEMPOTENCY_KEY_LENGTH = 128;
     private static final int MAIL_API_MAX_IDEMPOTENCY_ENTRIES = 1024;
@@ -776,7 +779,20 @@ public class WebServiceImpl extends BaseService implements WebService {
         ip = getConfigSection().getString("ip", "127.0.0.1");
         publicPlayersEnabled = getConfigSection().getBoolean("status.players.enabled", false);
         mailApiEnabled = getConfigSection().getBoolean("mail-api.enabled", false);
-        mailApiKey = Objects.requireNonNullElse(getConfigSection().getString("mail-api.key", ""), "").trim();
+        String configuredMailApiKey = Objects.requireNonNullElse(
+            getConfigSection().getString("mail-api.key", ""), "").trim();
+        if (!configuredMailApiKey.isBlank()) {
+            mailApiKey = configuredMailApiKey;
+        } else if (mailApiKey.isBlank()) {
+            mailApiKey = generateMailApiKey();
+            getConfigSection().set("mail-api.key", mailApiKey);
+            saveConfig();
+            java.util.logging.Logger logger = plugin.getLogger();
+            if (logger != null) {
+                logger.info(
+                    "[web-server] Generated a new mail-api key and saved it to config.yml. Keep this key secret.");
+            }
+        }
         mailApiSender = Objects.requireNonNullElse(
             getConfigSection().getString("mail-api.sender", "Discord Rewards"), "Discord Rewards").trim();
         if (mailApiSender.isBlank()) {
@@ -798,6 +814,12 @@ public class WebServiceImpl extends BaseService implements WebService {
             "mail-api.max-delay-seconds", DEFAULT_MAIL_API_MAX_DELAY_SECONDS);
         mailApiMaxDelaySeconds = configuredMaxDelaySeconds >= 0
             ? configuredMaxDelaySeconds : DEFAULT_MAIL_API_MAX_DELAY_SECONDS;
+    }
+
+    private static String generateMailApiKey() {
+        byte[] bytes = new byte[MAIL_API_KEY_BYTES];
+        SECURE_RANDOM.nextBytes(bytes);
+        return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
     void registerPlayerSnapshotListeners() {

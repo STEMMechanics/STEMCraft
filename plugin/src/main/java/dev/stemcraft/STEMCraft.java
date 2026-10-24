@@ -102,6 +102,7 @@ public final class STEMCraft extends JavaPlugin {
 
     private ChatServiceImpl chat;
     private CommandServiceImpl commands;
+    private DebugServiceImpl debug;
     private CoordinateBarServiceImpl coordinateBar;
     private ConfigServiceImpl config;
     private AuditServiceImpl audit;
@@ -222,6 +223,7 @@ public final class STEMCraft extends JavaPlugin {
         audit = new AuditServiceImpl(this, api);
         chat = new ChatServiceImpl(this, api);
         commands = new CommandServiceImpl(this, api);
+        debug = new DebugServiceImpl(this, api);
         coordinateBar = new CoordinateBarServiceImpl(this, api);
         database = new DatabaseServiceImpl(this, api);
         dialogs = new DialogServiceImpl(this, api);
@@ -258,6 +260,7 @@ public final class STEMCraft extends JavaPlugin {
         audit.onEnable();
         chat.onEnable();
         commands.onEnable();
+        debug.onEnable();
         coordinateBar.onEnable();
         events.onEnable();
         holograms.onEnable();
@@ -416,6 +419,7 @@ public final class STEMCraft extends JavaPlugin {
         disableService(database);
         disableService(dialogs);
         disableService(commands);
+        disableService(debug);
         disableService(coordinateBar);
         disableService(chat);
 

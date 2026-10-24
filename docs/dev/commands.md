@@ -15,6 +15,7 @@ The list below reflects the active built-in command roots in source.
 | --- | --- | --- |
 | `/stemcraft` | `STEMCraftCommand` | Status, version, explicit STEMCraft/extension saves, reload, and first-join administration |
 | `/maintenance` | `STEMCraft.java` | Toggles server maintenance mode |
+| `/debug` | `DebugServiceImpl` | List and run registered feature/service diagnostics; requires `stemcraft.command.debug` |
 | `/webserver` | `WebServiceImpl` | Embedded web server control, status and a clickable HTTP diagnostic URL |
 | `/world` | `WorldCommand` | World lifecycle, inspection, settings, and join/leave command editing |
 | `/resourcepack` | `ResourcePackCommand` | Pack delivery, pack builds and a clickable download URL |

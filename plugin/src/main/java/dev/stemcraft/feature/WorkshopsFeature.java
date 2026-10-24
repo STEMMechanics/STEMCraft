@@ -14,6 +14,8 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.Command;
 import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.config.ConfigSection;
+import dev.stemcraft.api.service.debug.DebugContext;
+import dev.stemcraft.api.service.debug.DebugRegistration;
 import dev.stemcraft.api.service.workshop.Workshop;
 import dev.stemcraft.api.service.workshop.WorkshopService;
 import dev.stemcraft.api.service.workshop.WorkshopSource;
@@ -93,9 +95,8 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
     private static final List<String> DEFAULT_DISPLAY_FOOTER = List.of(
             "<gray>Visit stemmechanics.com.au for more workshops.</gray>");
     private static final List<String> DEFAULT_INSTRUCTIONS_PROMPT = List.of(
-            "<yellow>Access instructions are needed for <white>{workshop_title}</white>, starting in {workshop_countdown}.</yellow>",
-            "<gray>Click to suggest the setup command, then add the Minecraft destination or command players should use:</gray>",
-            "<click:suggest_command:'/workshops instructions '><aqua><underlined>/workshops instructions</underlined></aqua></click>");
+            "<yellow>Update the workshop custom command for <white>{workshop_title}</white>, starting in {workshop_countdown}.</yellow>",
+            "<gray>Players will use that custom command to access this workshop.</gray>");
 
     private final Object storageLock = new Object();
     private final AtomicBoolean refreshInProgress = new AtomicBoolean();
@@ -127,6 +128,9 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
     private volatile WorkshopSyncStatus syncStatus = new WorkshopSyncStatus(false, false, null, null, "", 0);
     private Command command;
     private boolean eventsRegistered;
+    private DebugRegistration workshopStatusDebug;
+    private DebugRegistration workshopUpcomingDebug;
+    private DebugRegistration workshopAccessPromptDebug;
 
     public WorkshopsFeature(STEMCraftAPI api) {
         super(api);
@@ -141,6 +145,7 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
         registerTabCompletion();
         registerCommand();
         registerEvents();
+        registerDebugTests();
         restartRefreshTask();
     }
 
@@ -156,6 +161,7 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
                 command.unregister();
                 command = null;
             }
+            unregisterDebugTests();
             return;
         }
         if (!wasEnabled) {
@@ -165,6 +171,7 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
         }
         loadStoredWorkshops();
         loadStoredAccessOverrides();
+        registerDebugTests();
         restartRefreshTask();
     }
 
@@ -177,6 +184,7 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
             command.unregister();
             command = null;
         }
+        unregisterDebugTests();
     }
 
     @Override
@@ -923,6 +931,150 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
         accessPromptTasks.clear();
     }
 
+    private void registerDebugTests() {
+        if (workshopStatusDebug != null) return;
+        workshopStatusDebug = api.debug().register(
+                "workshop-status",
+                "Inspect workshop configuration, cache, and feed synchronisation state.",
+                this::debugWorkshopStatus
+        );
+        workshopUpcomingDebug = api.debug().register(
+                "workshop-upcoming",
+                "Preview the player-facing upcoming workshops list.",
+                this::debugWorkshopUpcoming
+        );
+        workshopAccessPromptDebug = api.debug().register(
+                "workshop-access-prompt",
+                "Preview and deliver the workshop access-instructions prompt.",
+                this::debugWorkshopAccessPrompt
+        );
+    }
+
+    private void unregisterDebugTests() {
+        if (workshopStatusDebug != null) workshopStatusDebug.close();
+        if (workshopUpcomingDebug != null) workshopUpcomingDebug.close();
+        if (workshopAccessPromptDebug != null) workshopAccessPromptDebug.close();
+        workshopStatusDebug = null;
+        workshopUpcomingDebug = null;
+        workshopAccessPromptDebug = null;
+    }
+
+    private void debugWorkshopStatus(@NotNull DebugContext context) {
+        Player player = context.player();
+        if (player == null) {
+            context.error("This debug test requires a player target.");
+            return;
+        }
+
+        WorkshopSyncStatus status = syncStatus;
+        List<Workshop> upcoming = upcoming();
+        List<Workshop> visible = visibleUpcoming();
+        int cached;
+        int manual;
+        synchronized (cache) {
+            cached = cache.size();
+            manual = (int) cache.values().stream()
+                    .filter(workshop -> workshop.source() == WorkshopSource.MANUAL)
+                    .count();
+        }
+
+        context.info("<aqua>Debug test: workshop-status</aqua>");
+        context.info("Player: " + player.getName());
+        context.info("Workshops feature enabled: " + enabled);
+        context.info("Website workshops enabled: " + websiteEnabled);
+        context.info("Website feed synchronisation enabled: " + syncEnabled);
+        context.info("Manual workshops enabled: " + manualEnabled);
+        context.info("Cache persistence enabled: " + cachePersistence);
+        context.info("Cached workshops: " + cached + " (website: " + countWebsiteWorkshops() + ", manual: " + manual + ")");
+        context.info("Upcoming workshops: " + upcoming.size());
+        context.info("Visible after location filters: " + visible.size() + " (maximum displayed: " + maximumDisplayed + ")");
+        context.info("Synchronisation enabled: " + status.enabled());
+        context.info("Synchronisation in progress: " + status.inProgress());
+        context.info("Website workshops in last sync snapshot: " + status.websiteWorkshopCount());
+        context.info("Last sync attempt: " + String.valueOf(status.lastAttemptAt()));
+        context.info("Last successful sync: " + String.valueOf(status.lastSuccessAt()));
+        if (!status.lastError().isBlank()) {
+            context.warn("Last sync error: " + AnnouncementsFeature.escapeLiteral(status.lastError()));
+        }
+
+        Workshop next = nextUpcoming();
+        if (next == null) {
+            context.warn("There is no upcoming workshop in the current cache.");
+        } else {
+            context.info("Next workshop: " + debugWorkshopSummary(next));
+        }
+        Workshop instructionTarget = nextInstructionWorkshop();
+        if (instructionTarget == null) {
+            context.info("Access-instructions target: none");
+        } else {
+            context.info("Access-instructions target: " + debugWorkshopSummary(instructionTarget));
+            context.info("Stored access-instruction lines: " + accessInstructions(instructionTarget).size());
+        }
+        context.success("Workshop status inspection completed.");
+    }
+
+    private void debugWorkshopUpcoming(@NotNull DebugContext context) {
+        Player player = context.player();
+        if (player == null) return;
+
+        List<Workshop> liveUpcoming = visibleUpcoming();
+        boolean simulated = liveUpcoming.isEmpty();
+        List<Workshop> upcoming = simulated
+                ? List.of(AnnouncementsFeature.sampleDebugWorkshop(Instant.now(), defaultTimezone, false))
+                : liveUpcoming;
+
+        int limit = Math.min(maximumDisplayed, upcoming.size());
+        List<String> previewLines = new ArrayList<>();
+        previewLines.addAll(sendDisplayLines(player, displayHeader, null, 0, upcoming.size(), limit));
+        for (int i = 0; i < limit; i++) {
+            Workshop workshop = upcoming.get(i);
+            previewLines.addAll(sendDisplayLines(player, displayEntry, workshop, i + 1, upcoming.size(), limit));
+            if (workshop.bookingUrl().isBlank()) {
+                previewLines.addAll(sendDisplayLines(player, displayNoBooking, workshop, i + 1, upcoming.size(), limit));
+            }
+            previewLines.addAll(sendDisplayLines(player, accessInstructions(workshop), workshop,
+                    i + 1, upcoming.size(), limit));
+        }
+        previewLines.addAll(sendDisplayLines(player, displayFooter, null, 0, upcoming.size(), limit));
+        for (String line : previewLines) echoDebugPreviewLine(context, player, line);
+    }
+
+    private void debugWorkshopAccessPrompt(@NotNull DebugContext context) {
+        Player player = context.player();
+        if (player == null) return;
+
+        Instant now = Instant.now();
+        Workshop liveWorkshop = nextInstructionWorkshop();
+        Workshop workshop = liveWorkshop;
+        if (workshop == null) {
+            workshop = upcoming().stream().findFirst()
+                    .orElseGet(() -> AnnouncementsFeature.sampleDebugWorkshop(now, defaultTimezone, false));
+        }
+
+        if (instructionsPromptMessage.isEmpty()) return;
+
+        for (String template : instructionsPromptMessage) {
+            String message = renderInstructionsPrompt(template, workshop, player, now);
+            if (message.isBlank()) continue;
+            player.sendMessage(MINI_MESSAGE.deserialize(message));
+            if (!context.sender().equals(player)) {
+                context.sender().sendMessage(AnnouncementsFeature.playerVisibleText(message));
+            }
+        }
+    }
+
+    private void echoDebugPreviewLine(@NotNull DebugContext context, @NotNull Player player,
+                                      @NotNull String message) {
+        if (!context.sender().equals(player)) {
+            context.sender().sendMessage(AnnouncementsFeature.playerVisibleText(message));
+        }
+    }
+
+    private static @NotNull String debugWorkshopSummary(@NotNull Workshop workshop) {
+        return workshop.id() + " (" + AnnouncementsFeature.escapeLiteral(workshop.title()) + ") at "
+                + workshop.startAt();
+    }
+
     private void promptForAccessInstructions(@NotNull Player player) {
         if (!instructionsPromptEnabled || !canManageInstructions(player)) return;
         Instant now = Instant.now();
@@ -1070,13 +1222,16 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
         sendDisplayLines(ctx.getSender(), displayFooter, null, 0, upcoming.size(), displayed.size());
     }
 
-    private void sendDisplayLines(@NotNull CommandSender sender, @NotNull List<String> templates,
-                                  @Nullable Workshop workshop, int index, int count, int shown) {
+    private @NotNull List<String> sendDisplayLines(@NotNull CommandSender sender, @NotNull List<String> templates,
+                                                   @Nullable Workshop workshop, int index, int count, int shown) {
+        List<String> renderedLines = new ArrayList<>();
         for (String template : templates) {
             if (skipOptionalDisplayLine(template, workshop)) continue;
             String rendered = renderDisplayLine(template, workshop, index, count, shown);
-            if (!rendered.isBlank()) sender.sendMessage(MINI_MESSAGE.deserialize(rendered));
+            if (!rendered.isBlank()) renderedLines.add(rendered);
         }
+        for (String rendered : renderedLines) sender.sendMessage(MINI_MESSAGE.deserialize(rendered));
+        return List.copyOf(renderedLines);
     }
 
     private static boolean skipOptionalDisplayLine(@NotNull String template, @Nullable Workshop workshop) {

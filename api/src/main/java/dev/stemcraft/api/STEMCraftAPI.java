@@ -26,6 +26,7 @@ import dev.stemcraft.api.service.coordinatebar.CoordinateBarService;
 import dev.stemcraft.api.service.audit.AuditService;
 import dev.stemcraft.api.internal.InstanceHolder;
 import dev.stemcraft.api.service.database.DatabaseService;
+import dev.stemcraft.api.service.debug.DebugService;
 import dev.stemcraft.api.service.dialog.DialogService;
 import dev.stemcraft.api.service.event.EventService;
 import dev.stemcraft.api.service.config.ConfigService;
@@ -80,6 +81,9 @@ public interface STEMCraftAPI {
      * Register a new command.
      */
     CommandService commands();
+
+    /** Get the shared feature and service debug-test registry. */
+    default DebugService debug() { return DebugService.UNAVAILABLE; }
 
     /** Access the optional private STEMBot guide. */
     default dev.stemcraft.api.service.stembot.StemBotService stemBot() {

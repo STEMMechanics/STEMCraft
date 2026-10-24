@@ -26,6 +26,7 @@ import dev.stemcraft.api.service.coordinatebar.CoordinateBarService;
 import dev.stemcraft.api.service.audit.AuditService;
 import dev.stemcraft.api.service.config.ConfigService;
 import dev.stemcraft.api.service.database.DatabaseService;
+import dev.stemcraft.api.service.debug.DebugService;
 import dev.stemcraft.api.service.dialog.DialogService;
 import dev.stemcraft.api.service.event.EventService;
 import dev.stemcraft.api.service.motd.MotdService;
@@ -103,6 +104,9 @@ public class STEMCraftAPIImpl extends HasMessagesImpl implements STEMCraftAPI {
     public CommandService commands() {
         return plugin.commands();
     }
+
+    @Override
+    public DebugService debug() { return plugin.debug(); }
 
     @Override
     public CoordinateBarService coordinateBar() { return plugin.coordinateBar(); }

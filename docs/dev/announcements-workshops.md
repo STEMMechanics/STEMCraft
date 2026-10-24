@@ -32,18 +32,33 @@ announcements:
       - "<aqua>Welcome back, {player}!</aqua>"
     upcoming-workshop:
       enabled: true
+      # Optional additional delay after join-delay. Omit for immediate delivery.
+      delay: 0s
       filters:
         days-until: {}
         locations: ["STEMCraft"]
       message:
         - "<aqua>Next workshop: {next_workshop_title}</aqua>"
         - "<gray>{next_workshop_date} at {next_workshop_time}</gray>"
+      # Optional sound played to the joining player after the notice is delivered.
+      sound:
+        enabled: true
+        name: BLOCK_NOTE_BLOCK_CHIME
+        volume: 0.8
+        pitch: 1.0
     active-workshop:
       enabled: true
+      # Optional additional delay after join-delay. Omit for immediate delivery.
+      delay: 0s
       message:
         - "<aqua>Workshop currently in progress:</aqua> <white>{active_workshop_title}</white>"
         - "<gray>Use <yellow>/workshops</yellow> for the access details.</gray>"
         - "<gray>Finishes {active_workshop_end_date} at {active_workshop_end_time}.</gray>"
+      sound:
+        enabled: true
+        name: BLOCK_BELL_USE
+        volume: 0.8
+        pitch: 1.0
   scheduled:
     server-information:
       type: message
@@ -84,8 +99,8 @@ workshops:
     prompt-delay: 5s
     permission: stemcraft.workshops.instructions
     prompt:
-      - "<yellow>Access instructions are needed for <white>{workshop_title}</white>.</yellow>"
-      - "<click:suggest_command:'/workshops instructions '><aqua>Set instructions</aqua></click>"
+      - "<yellow>Update the workshop custom command for <white>{workshop_title}</white>.</yellow>"
+      - "<gray>Players will use that custom command to access this workshop.</gray>"
   display:
     header:
       - "<aqua><bold>STEMMechanics Upcoming Workshops</bold></aqua>"
@@ -111,14 +126,31 @@ be a scalar or a YAML list. Each list item is sent as its own chat line.
 
 `announcements.join.upcoming-workshop` uses the same filter structure and
 message placeholders, but is evaluated for each player after `join-delay`.
-It selects the next eligible workshop whose start time is still in the future,
-sends the configured lines only to that joining player, and sends nothing when
-the Workshops feature is unavailable or no workshop matches. Its `message`
+Its optional `delay` adds a further per-player delay after `join-delay`; it
+uses the normal duration syntax such as `10s` or `1m`. A missing `delay` or a
+value of `0s` sends the message immediately after `join-delay`. It selects the
+next eligible workshop whose start time is still in the future, sends the
+configured lines only to that joining player, and sends nothing when the
+Workshops feature is unavailable or no workshop matches. Its `message`
 lines are the display format; use `{next_workshop_title}`,
 `{next_workshop_date}`, `{next_workshop_time}`, `{next_workshop_url}`,
 `{next_workshop_location}`, `{next_workshop_countdown}`, and the other
 `next_workshop_*` placeholders to control the output. The separate
 `join.active-workshop` block handles workshops already in progress.
+The optional `sound` section plays a Bukkit sound for the joining player after
+at least one upcoming-workshop line is delivered. `name` is a Bukkit `Sound`
+enum name, `volume` is clamped to `0.0`–`10.0`, and `pitch` is clamped to
+`0.5`–`2.0`. An omitted or empty upcoming-workshop sound uses
+`BLOCK_NOTE_BLOCK_CHIME`; set `enabled: false` to disable it.
+The `/debug workshop-login-upcoming` preview uses the same sound setting.
+The `join.active-workshop` block accepts an optional `delay` as well as the
+same optional `sound` section. The delay uses the normal duration syntax such
+as `10s` or `1m` and is applied after `join-delay`; a missing `delay` or `0s`
+delivers the notice immediately after `join-delay`. If the player leaves while
+the delay is pending, the notice is cancelled. The sound plays after the
+active-workshop text or access instructions are delivered.
+An omitted or empty active-workshop sound uses `BLOCK_BELL_USE`; set
+`enabled: false` to disable it.
 
 Date placeholders accept an optional compact format after a colon. For example,
 `{date:ddd dd mmm}` renders a workshop start as `Sat 14 Nov`. The supported
@@ -128,6 +160,15 @@ date fields are `date`, `start_date`, `end_date`, `workshop_date`,
 month, `ddd`/`dddd` for the abbreviated/full weekday, `m`/`mm`/`mmm`/`mmmm`
 for the month, and `yy`/`yyyy` for the year. Existing unformatted placeholders
 continue to use the configured default display format.
+
+Use `relative` as a special format when a date should adapt to the current
+calendar date. It returns `Today` for the current day, `Tomorrow` for the next
+day, the full weekday such as `Thursday` for dates two to five calendar days
+away, and `ddd dd mmm` such as `Sat 21 Nov` from six days onward. Use
+`RELATIVE` for uppercase output such as `TODAY` or `THURSDAY`. The relative
+format is available on the same date fields, including
+`{active_workshop_end_date:relative}`, and uses the configured workshop
+timezone.
 
 `workshops.display-filter.locations` applies only to the player-facing
 `/workshops` list and `/workshops info` command. An empty list shows every
@@ -186,15 +227,17 @@ once. No scheduled message is sent when the server has no online players.
 Join tasks are delayed by `join-delay` and are cancelled when the player quits.
 When `announcements.join.upcoming-workshop.enabled` is true, the delayed join
 sequence also checks the configured future-workshop filter and sends its
-`message` lines to the joining player only. No message is sent when there is
-no matching workshop.
+`message` lines to the joining player only. Its optional `delay` is applied
+after the normal join delay. No message is sent when there is no matching
+workshop.
 When `announcements.join.active-workshop.enabled` is true, the delayed private
 join message also checks the Workshops API for the first eligible workshop that
 has started and has not reached its end time. It sends the configured
-`active-workshop.message` to that joining player only. Workshops without an end
-time are not treated as active because their running window cannot be known. The
-matching workshop's access instructions are sent after that message. Scheduled
-workshop promotions also append them when they exist.
+`active-workshop.message` to that joining player only after its optional
+additional `delay`. Workshops without an end time are not treated as active
+because their running window cannot be known. The matching workshop's access
+instructions are sent after that message. Scheduled workshop promotions also
+append them when they exist.
 
 ## Workshop commands
 
@@ -239,9 +282,11 @@ separate multiple MiniMessage lines.
 
 When `instructions.prompt-enabled` is true, an administrator or a player with
 `instructions.permission` who joins during `instructions.prompt-window` before
-the next workshop starts receives the configured prompt. The prompt suggests
-the command and does not assume a world name or server command. `/workshops
-refresh` starts an asynchronous synchronisation and requires
+the next workshop starts receives the configured prompt. The bundled prompt
+reminds staff to update the workshop custom command that players will use; it
+is fully configurable at `instructions.prompt`. `/workshops instructions`
+continues to store optional access text for workshop announcements when that
+is useful. `/workshops refresh` starts an asynchronous synchronisation and requires
 `stemcraft.workshops.refresh` or the administrator permission.
 
 ## RSS synchronisation
