@@ -43,8 +43,11 @@ import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.block.SignChangeEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.server.ServerLoadEvent;
 import org.bukkit.event.player.PlayerEditBookEvent;
 import org.bukkit.inventory.meta.BookMeta;
 
@@ -263,6 +266,12 @@ public class ChatServiceImpl extends BaseService {
             api.tasks().runLater(40L, () -> remindPendingReports(player));
         });
 
+        api.events().register(ServerLoadEvent.class, event -> {
+            if (event.getType() == ServerLoadEvent.LoadType.STARTUP) {
+                publishChatBridgeEvent("minecraft.server_start", null, Map.of());
+            }
+        });
+
         api.events().register(SignChangeEvent.class, event -> {
             String content = event.lines().stream()
                 .map(PLAIN::serialize)
@@ -311,6 +320,19 @@ public class ChatServiceImpl extends BaseService {
             ));
         });
 
+        api.events().register(PlayerDeathEvent.class, event -> {
+            Player player = event.getEntity();
+            EntityDamageEvent lastDamage = player.getLastDamageCause();
+            Player killer = player.getKiller();
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("killer", killer == null ? null : killer.getName());
+            data.put("cause", lastDamage == null
+                ? "unknown"
+                : lastDamage.getCause().name().toLowerCase(Locale.ROOT));
+            data.put("world", player.getWorld().getName());
+            publishChatBridgeEvent("minecraft.player_death", player, data);
+        }, EventPriority.MONITOR);
+
         api.events().register(PlayerEditBookEvent.class, event -> {
             BookMeta meta = event.getNewBookMeta();
             EncodedBookContent encoded = encodeBookContent(meta);
@@ -357,7 +379,7 @@ public class ChatServiceImpl extends BaseService {
 
     @Override
     public void onDisable() {
-        shutdownChatBridge();
+        shutdownChatBridge(Bukkit.isStopping());
     }
 
     private void reloadSettings() {
@@ -426,6 +448,12 @@ public class ChatServiceImpl extends BaseService {
             "discord-bridge.events.minigame-start", "discord_bridge.events.minigame_start", true);
         boolean minigameEndEvents = firstConfiguredBoolean(
             "discord-bridge.events.minigame-end", "discord_bridge.events.minigame_end", true);
+        boolean playerDeathEvents = firstConfiguredBoolean(
+            "discord-bridge.events.player-death", "discord_bridge.events.player_death", true);
+        boolean serverStartEvents = firstConfiguredBoolean(
+            "discord-bridge.events.server-start", "discord_bridge.events.server_start", true);
+        boolean serverStopEvents = firstConfiguredBoolean(
+            "discord-bridge.events.server-stop", "discord_bridge.events.server_stop", true);
 
         if (!enabled) return;
         if (endpointValue.isBlank() || bearerToken.isBlank()) {
@@ -464,7 +492,10 @@ public class ChatServiceImpl extends BaseService {
                 playerJoinEvents,
                 playerQuitEvents,
                 minigameStartEvents,
-                minigameEndEvents
+                minigameEndEvents,
+                playerDeathEvents,
+                serverStartEvents,
+                serverStopEvents
         );
 
         try {
@@ -495,11 +526,31 @@ public class ChatServiceImpl extends BaseService {
     }
 
     private void shutdownChatBridge() {
+        shutdownChatBridge(false);
+    }
+
+    private void shutdownChatBridge(boolean drainQueue) {
         chatBridgeSettings = ChatBridgeSettings.disabled();
         ThreadPoolExecutor executor = chatBridgeExecutor;
         chatBridgeExecutor = null;
         chatBridgeHttpClient = null;
-        if (executor != null) executor.shutdownNow();
+        if (executor == null) return;
+
+        if (!drainQueue) {
+            executor.shutdownNow();
+            return;
+        }
+
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                chatBridgeWarning("[chat] Discord bridge did not drain before server shutdown; queued events may be lost.");
+                executor.shutdownNow();
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            executor.shutdownNow();
+        }
     }
 
     private void enqueueChatBridgeEvent(@NotNull Player player, @NotNull String message) {
@@ -544,6 +595,9 @@ public class ChatServiceImpl extends BaseService {
             case "minecraft.player_quit" -> settings.playerQuitEvents();
             case "minecraft.minigame_start" -> settings.minigameStartEvents();
             case "minecraft.minigame_end" -> settings.minigameEndEvents();
+            case "minecraft.player_death" -> settings.playerDeathEvents();
+            case "minecraft.server_start" -> settings.serverStartEvents();
+            case "minecraft.server_stop" -> settings.serverStopEvents();
             default -> false;
         };
     }
@@ -646,10 +700,12 @@ public class ChatServiceImpl extends BaseService {
     static record ChatBridgeSettings(boolean enabled, URI endpoint, String bearerToken, String serverId,
                                      String channel, Duration timeout, int maxRetries,
                                      boolean playerJoinEvents, boolean playerQuitEvents,
-                                     boolean minigameStartEvents, boolean minigameEndEvents) {
+                                     boolean minigameStartEvents, boolean minigameEndEvents,
+                                     boolean playerDeathEvents, boolean serverStartEvents,
+                                     boolean serverStopEvents) {
         private static ChatBridgeSettings disabled() {
             return new ChatBridgeSettings(false, null, "", "", "", Duration.ofSeconds(3), 0,
-                false, false, false, false);
+                false, false, false, false, false, false, false);
         }
     }
 

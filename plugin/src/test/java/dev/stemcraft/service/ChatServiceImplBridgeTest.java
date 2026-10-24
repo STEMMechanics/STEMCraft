@@ -25,6 +25,9 @@ class ChatServiceImplBridgeTest {
         true,
         true,
         true,
+        true,
+        true,
+        true,
         true
     );
 
