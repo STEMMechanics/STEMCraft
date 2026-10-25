@@ -25,6 +25,7 @@ import dev.stemcraft.api.service.playerreset.*;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.Command;
+import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.service.protection.ProtectionRequest;
 import dev.stemcraft.api.service.protection.ProtectionType;
@@ -500,6 +501,54 @@ public class TeleportUtils extends BaseFeature {
                             cmd.info(ctx.getSender(), "TPWORLD_SUCCESS_LAST", "world", worldName);
                         }
                     }
+                })
+                .register(STEMCraft.getPlugin());
+
+        // /tpworldat <world> <x> <y> <z> [player]
+        api.commands().create("tpworldat")
+                .usage("TPWORLDAT_USAGE")
+                .permission("stemcraft.command.tpworldat")
+                .description("TPWORLDAT_DESCRIPTION")
+                .tabCompletion("{world}", "", "", "", "{player}")
+                .executor((plugin, cmd, ctx) -> {
+                    ctx.checkArgsSizeAtLeast(4);
+
+                    if (ctx.isConsole() && ctx.args().size() < 5) {
+                        ctx.returnError("CONSOLE_PLAYER_REQUIRED");
+                    }
+
+                    String worldName = ctx.getArg(0);
+                    World world = Bukkit.getWorld(worldName);
+                    if (world == null) {
+                        ctx.returnError("WORLD_NOT_FOUND", "world", worldName);
+                    }
+
+                    double x = parseWorldCoordinate(ctx, 1, "X");
+                    double y = parseWorldCoordinate(ctx, 2, "Y");
+                    double z = parseWorldCoordinate(ctx, 3, "Z");
+
+                    Player targetPlayer = ctx.getPlayer(4, ctx.getSender());
+                    if (targetPlayer == null) {
+                        ctx.returnError("PLAYER_NOT_FOUND", "player", ctx.getArg(4));
+                    }
+
+                    Location targetLocation = new Location(
+                            world,
+                            x,
+                            y,
+                            z,
+                            targetPlayer.getLocation().getYaw(),
+                            targetPlayer.getLocation().getPitch()
+                    );
+                    PlayerUtil.teleport(targetPlayer, targetLocation);
+                    ctx.returnInfo(
+                            "TPWORLDAT_SUCCESS",
+                            "player", targetPlayer.getName(),
+                            "world", worldName,
+                            "x", ctx.getArg(1),
+                            "y", ctx.getArg(2),
+                            "z", ctx.getArg(3)
+                    );
                 })
                 .register(STEMCraft.getPlugin());
 
@@ -1138,6 +1187,28 @@ public class TeleportUtils extends BaseFeature {
         setBackLocation(target.getUniqueId(), target.getLocation());
         target.teleport(world.getSpawnLocation());
         cmd.info(sender, "SPAWN_SUCCESS", "player", target.getName(), "world", world.getName());
+    }
+
+    private static double parseWorldCoordinate(CommandContext ctx,
+                                               int index,
+                                               String axis) {
+        String coordinate = ctx.getArg(index);
+        ctx.checkArgIsDouble(
+                index,
+                "TPWORLDAT_INVALID_COORDINATE",
+                "axis", axis,
+                "coordinate", coordinate
+        );
+
+        double value = ctx.getArgAsDouble(index);
+        if (!Double.isFinite(value)) {
+            ctx.returnError(
+                    "TPWORLDAT_INVALID_COORDINATE",
+                    "axis", axis,
+                    "coordinate", coordinate
+            );
+        }
+        return value;
     }
 
     private static String formatLocation(Location location) {
