@@ -22,11 +22,14 @@ package dev.stemcraft.service;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.service.profanity.ProfanityFilterResult;
 import dev.stemcraft.api.service.profanity.ProfanitySeverity;
+import dev.stemcraft.api.service.web.WebServiceRequest;
 import dev.stemcraft.api.util.TextUtil;
 import dev.stemcraft.api.util.TimeUtil;
 import io.papermc.paper.ban.BanListType;
@@ -62,15 +65,18 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -82,6 +88,12 @@ import org.jetbrains.annotations.NotNull;
 public class ChatServiceImpl extends BaseService {
     private static final Gson GSON = new GsonBuilder().serializeNulls().create();
     private static final PlainTextComponentSerializer PLAIN = PlainTextComponentSerializer.plainText();
+    private static final String DISCORD_CHAT_PATH = "/api/v1/chat/discord";
+    private static final String DISCORD_BEARER_PREFIX = "Bearer ";
+    private static final String DEFAULT_DISCORD_CHAT_FORMAT = "&1[DISCORD] {displayname}: {message} ";
+    private static final int DISCORD_CHAT_MAX_BODY_BYTES = 16 * 1024;
+    private static final int DISCORD_CHAT_MAX_TEXT_LENGTH = 1800;
+    private static final int DISCORD_CHAT_MAX_IDEMPOTENCY_ENTRIES = 1024;
     private static final String BOOK_TITLE_SEPARATOR = "\n\n---BOOK-TITLE---\n\n";
     private static final String BOOK_PAGE_SEPARATOR = "\n\n---BOOK-PAGE---\n\n";
     private static final int MODERATION_DEFAULT_LIMIT = 20;
@@ -132,6 +144,11 @@ public class ChatServiceImpl extends BaseService {
     private volatile ChatBridgeSettings chatBridgeSettings = ChatBridgeSettings.disabled();
     private volatile HttpClient chatBridgeHttpClient;
     private volatile ThreadPoolExecutor chatBridgeExecutor;
+    private volatile boolean discordChatInboundEnabled;
+    private volatile String discordChatBearerToken = "";
+    private volatile String discordChatFormat = TextUtil.colouriseToSection(DEFAULT_DISCORD_CHAT_FORMAT);
+    private final Object discordChatIdempotencyLock = new Object();
+    private final Set<String> processedDiscordChatIds = new LinkedHashSet<>();
 
     public ChatServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api, "chat");
@@ -147,6 +164,7 @@ public class ChatServiceImpl extends BaseService {
         }
 
         reloadSettings();
+        api.web().registerEndpointHandler(DISCORD_CHAT_PATH, this::handleDiscordChatEndpoint);
         startChatBridge();
         ensureModerationStorage();
         ensureReportStorage();
@@ -401,6 +419,25 @@ public class ChatServiceImpl extends BaseService {
         );
         filterCommand = getConfigSection().getString("filter_command", "");
 
+        boolean discordBridgeEnabled = getConfigSection().getBoolean(
+            "discord-bridge.enabled",
+            getConfigSection().getBoolean("discord_bridge.enabled", false)
+        );
+        boolean discordChatInboundConfigured = getConfigSection().getBoolean(
+            "discord-bridge.inbound-enabled",
+            getConfigSection().getBoolean("discord_bridge.inbound_enabled", true)
+        );
+        discordChatInboundEnabled = discordBridgeEnabled && discordChatInboundConfigured;
+        discordChatBearerToken = firstConfiguredString(
+            "discord-bridge.bearer-token", "discord_bridge.bearer_token", ""
+        );
+        String configuredDiscordChatFormat = getConfigSection().contains("discord-bridge.inbound-format")
+            ? getConfigSection().getString("discord-bridge.inbound-format", DEFAULT_DISCORD_CHAT_FORMAT)
+            : getConfigSection().getString("discord_bridge.inbound_format", DEFAULT_DISCORD_CHAT_FORMAT);
+        discordChatFormat = TextUtil.colouriseToSection(
+            Objects.requireNonNullElse(configuredDiscordChatFormat, DEFAULT_DISCORD_CHAT_FORMAT)
+        );
+
         duplicateMessageLimit = Math.max(0, getConfigSection().getInt("duplicate_message_limit", 2));
         duplicateMessageWarning = getConfigSection().getString(
             "duplicate_message_warning", "Please do not repeat the same message");
@@ -440,6 +477,209 @@ public class ChatServiceImpl extends BaseService {
             "stemcraft.moderation.alerts"
         );
         loadModerationActionRules();
+    }
+
+    Object handleDiscordChatEndpoint(@NotNull WebServiceRequest request) {
+        if (!DISCORD_CHAT_PATH.equals(request.path())) {
+            return null;
+        }
+
+        if (!discordChatInboundEnabled || discordChatBearerToken.isBlank()) {
+            return discordChatError(404, "Not found");
+        }
+
+        if (!"POST".equalsIgnoreCase(request.method())) {
+            Map<String, String> headers = Map.of("Allow", "POST");
+            return discordChatResponse(405, Map.of("error", "Only POST is supported"), headers);
+        }
+
+        if (!isDiscordChatAuthorised(request)) {
+            return discordChatResponse(
+                401,
+                Map.of("error", "Missing or invalid bearer token"),
+                Map.of("WWW-Authenticate", "Bearer")
+            );
+        }
+
+        String contentType = request.firstHeader("Content-Type");
+        if (contentType == null || !isJsonContentType(contentType)) {
+            return discordChatError(415, "Content-Type must be application/json");
+        }
+
+        byte[] body = request.body();
+        if (body.length > DISCORD_CHAT_MAX_BODY_BYTES) {
+            return discordChatError(413, "Request body is too large");
+        }
+
+        DiscordChatRequest chat;
+        try {
+            chat = parseDiscordChatRequest(body);
+        } catch (DiscordChatValidationException exception) {
+            return discordChatError(400, exception.getMessage());
+        }
+
+        synchronized (discordChatIdempotencyLock) {
+            if (processedDiscordChatIds.contains(chat.eventId())) {
+                return discordChatResponse(200, Map.of("accepted", true, "duplicate", true), Map.of());
+            }
+
+            if (processedDiscordChatIds.size() >= DISCORD_CHAT_MAX_IDEMPOTENCY_ENTRIES) {
+                processedDiscordChatIds.remove(processedDiscordChatIds.iterator().next());
+            }
+            processedDiscordChatIds.add(chat.eventId());
+        }
+
+        try {
+            Runnable broadcast = () -> broadcastDiscordChat(chat);
+            if (Bukkit.isPrimaryThread()) {
+                broadcast.run();
+            } else {
+                api.tasks().runSync(broadcast);
+            }
+        } catch (RuntimeException exception) {
+            synchronized (discordChatIdempotencyLock) {
+                processedDiscordChatIds.remove(chat.eventId());
+            }
+            chatBridgeWarning("[chat] Could not deliver Discord chat to Minecraft: " + exception.getMessage());
+            return discordChatError(503, "The server could not process the request");
+        }
+
+        return discordChatResponse(202, Map.of("accepted", true), Map.of());
+    }
+
+    private boolean isDiscordChatAuthorised(@NotNull WebServiceRequest request) {
+        String authorization = request.firstHeader("Authorization");
+        if (authorization == null
+            || !authorization.regionMatches(true, 0, DISCORD_BEARER_PREFIX, 0, DISCORD_BEARER_PREFIX.length())) {
+            return false;
+        }
+
+        String providedToken = authorization.substring(DISCORD_BEARER_PREFIX.length()).trim();
+        if (providedToken.isBlank()) {
+            return false;
+        }
+
+        return MessageDigest.isEqual(
+            discordChatBearerToken.getBytes(StandardCharsets.UTF_8),
+            providedToken.getBytes(StandardCharsets.UTF_8)
+        );
+    }
+
+    private void broadcastDiscordChat(@NotNull DiscordChatRequest chat) {
+        Component message = LegacyComponentSerializer.legacySection().deserialize(
+            formatDiscordChatMessage(discordChatFormat, chat.username(), chat.displayName(), chat.message())
+        );
+        Bukkit.getOnlinePlayers().forEach(player -> player.sendMessage(message));
+        chatBridgeInfo("[chat] Discord message delivered to Minecraft from " + chat.displayName() + ".");
+    }
+
+    static String formatDiscordChatMessage(@NotNull String format,
+                                           @NotNull String username,
+                                           @NotNull String displayName,
+                                           @NotNull String message) {
+        return format
+            .replace("{username}", stripSectionCharacters(username))
+            .replace("{displayname}", stripSectionCharacters(displayName))
+            .replace("{message}", stripSectionCharacters(message));
+    }
+
+    // Keep endpoint tests independent of the optional Vault runtime dependency.
+    void configureDiscordChatInboundForTest(@NotNull String bearerToken, @NotNull String format) {
+        discordChatInboundEnabled = true;
+        discordChatBearerToken = bearerToken;
+        discordChatFormat = format;
+    }
+
+    private static String stripSectionCharacters(@NotNull String value) {
+        return value.replace("§", "");
+    }
+
+    private static DiscordChatRequest parseDiscordChatRequest(byte @NotNull [] body) {
+        JsonElement parsed;
+        try {
+            parsed = JsonParser.parseString(new String(body, StandardCharsets.UTF_8));
+        } catch (RuntimeException exception) {
+            throw new DiscordChatValidationException("Request body is not valid JSON");
+        }
+        if (!parsed.isJsonObject()) {
+            throw new DiscordChatValidationException("Request body must be a JSON object");
+        }
+
+        JsonObject root = parsed.getAsJsonObject();
+        String event = requiredDiscordChatText(root, "event");
+        if (!"discord.chat".equals(event)) {
+            throw new DiscordChatValidationException("event must be discord.chat");
+        }
+
+        String eventId = requiredDiscordChatText(root, "event_id");
+        String username = requiredDiscordChatText(root, "username");
+        String displayName = requiredDiscordChatText(root, "displayname");
+        String message = requiredDiscordChatText(root, "message");
+        validateDiscordChatLength("event_id", eventId, 200);
+        validateDiscordChatLength("username", username, 100);
+        validateDiscordChatLength("displayname", displayName, 100);
+        validateDiscordChatLength("message", message, DISCORD_CHAT_MAX_TEXT_LENGTH);
+        if (username.isBlank()) {
+            throw new DiscordChatValidationException("username is required");
+        }
+        if (message.isBlank()) {
+            throw new DiscordChatValidationException("message is required");
+        }
+
+        return new DiscordChatRequest(
+            eventId,
+            username,
+            displayName.isBlank() ? username : displayName,
+            message
+        );
+    }
+
+    private static String requiredDiscordChatText(@NotNull JsonObject object, @NotNull String field) {
+        JsonElement value = object.get(field);
+        if (value == null || value.isJsonNull()
+            || !value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString()) {
+            throw new DiscordChatValidationException(field + " must be a string");
+        }
+        return value.getAsString().trim();
+    }
+
+    private static void validateDiscordChatLength(@NotNull String field, @NotNull String value, int maximum) {
+        if (value.codePointCount(0, value.length()) > maximum) {
+            throw new DiscordChatValidationException(field + " must be at most " + maximum + " characters");
+        }
+    }
+
+    private static boolean isJsonContentType(@NotNull String contentType) {
+        int separator = contentType.indexOf(';');
+        String mediaType = (separator < 0 ? contentType : contentType.substring(0, separator)).trim();
+        return "application/json".equalsIgnoreCase(mediaType);
+    }
+
+    private static Map<String, Object> discordChatError(int responseCode, @NotNull String message) {
+        return discordChatResponse(responseCode, Map.of("error", message), Map.of());
+    }
+
+    private static Map<String, Object> discordChatResponse(int responseCode,
+                                                           @NotNull Map<String, ?> payload,
+                                                           @NotNull Map<String, String> headers) {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("responseCode", responseCode);
+        response.put("contentType", "application/json; charset=utf-8");
+        if (!headers.isEmpty()) {
+            response.put("headers", headers);
+        }
+        response.put("body", GSON.toJson(payload));
+        return response;
+    }
+
+    private record DiscordChatRequest(String eventId, String username, String displayName, String message) {}
+
+    private static final class DiscordChatValidationException extends IllegalArgumentException {
+        private static final long serialVersionUID = 1L;
+
+        private DiscordChatValidationException(@NotNull String message) {
+            super(message);
+        }
     }
 
     private void startChatBridge() {

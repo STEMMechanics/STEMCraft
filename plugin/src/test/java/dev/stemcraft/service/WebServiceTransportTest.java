@@ -106,6 +106,43 @@ class WebServiceTransportTest {
     }
 
     @Test
+    void rootServesTheBundledLandingPageWhenNoCustomIndexExists() throws Exception {
+        when(plugin.getResource("www/index.html"))
+            .thenAnswer(invocation -> getClass().getResourceAsStream("/www/index.html"));
+        service.start();
+
+        HttpResponse<String> response = get("/");
+
+        assertEquals(200, response.statusCode());
+        assertTrue(response.body().contains("play.stemcraft.com.au"));
+        assertTrue(response.body().contains("Connect to the server"));
+    }
+
+    @Test
+    void rootServesACustomIndexInsteadOfRejectingTheDirectory() throws Exception {
+        Path root = Files.createDirectories(dataFolder.resolve("www"));
+        Files.writeString(root.resolve("index.html"), "<html>custom landing page</html>");
+        service.start();
+
+        HttpResponse<String> response = get("/");
+
+        assertEquals(200, response.statusCode());
+        assertEquals("<html>custom landing page</html>", response.body());
+    }
+
+    @Test
+    void robotsTxtDisallowsCrawlersByDefault() throws Exception {
+        when(plugin.getResource("www/robots.txt"))
+            .thenAnswer(invocation -> getClass().getResourceAsStream("/www/robots.txt"));
+        service.start();
+
+        HttpResponse<String> response = get("/robots.txt");
+
+        assertEquals(200, response.statusCode());
+        assertEquals("User-agent: *\nDisallow: /\n", response.body());
+    }
+
+    @Test
     void throwingEndpointReturnsAnHttpErrorInsteadOfDroppingTheConnection() throws Exception {
         service.registerEndpointHandler("/broken", request -> {
             throw new IllegalStateException("endpoint failed");
