@@ -25,8 +25,14 @@ chat:
       minigame-start: true
       minigame-end: true
       player-death: true
+      player-command: true
       server-start: true
       server-stop: true
+    redacted-commands:
+      - login
+      - register
+      - changepassword
+      - password
 ```
 
 Use the same receiver path in the plugin URL and the bot environment. New
@@ -47,6 +53,7 @@ The bridge sends these event names:
 - `minecraft.minigame_start`
 - `minecraft.minigame_end`
 - `minecraft.player_death`
+- `minecraft.player_command`
 - `minecraft.server_start`
 - `minecraft.server_stop`
 
@@ -89,7 +96,8 @@ without coupling the two directions.
 
 Player join and quit events include the player object at the top level and an
 `online_players` count in `data`. Player death events include the player
-object and `killer`, `cause`, and `world` in `data`; `killer` is null
+object and the rendered death `message`, `killer`, `cause`, and `world` in
+`data`; `killer` is null
 when no player caused the death:
 
 ```json
@@ -123,9 +131,31 @@ A player death event uses the same top-level player shape:
     "uuid": "01234567-89ab-cdef-0123-456789abcdef"
   },
   "data": {
+    "message": "Alex was slain by Steve",
     "killer": "Steve",
     "cause": "player_attack",
     "world": "survival"
+  }
+}
+```
+
+Player command events include the player object and the command in `data`.
+Arguments for command roots listed under `redacted-commands` are replaced with
+`<redacted>` before the event leaves the server:
+
+```json
+{
+  "event": "minecraft.player_command",
+  "event_id": "7b5e1d0e-8d86-4a93-9ea2-92a57fb1b40e",
+  "occurred_at": "2026-10-24T01:02:03Z",
+  "server": "survival",
+  "channel": "global",
+  "player": {
+    "name": "Alex",
+    "uuid": "01234567-89ab-cdef-0123-456789abcdef"
+  },
+  "data": {
+    "command": "/spawn home"
   }
 }
 ```

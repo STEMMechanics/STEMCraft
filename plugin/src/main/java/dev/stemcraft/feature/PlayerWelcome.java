@@ -20,10 +20,12 @@
 
 package dev.stemcraft.feature;
 
+import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.util.PlaceholderUtil;
 import dev.stemcraft.api.util.TextUtil;
+import dev.stemcraft.service.PlayerLoginMessageServiceImpl;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
@@ -185,10 +187,10 @@ public class PlayerWelcome extends BaseFeature {
         upsertActivity(player, now);
 
         if (firstTime) {
-            sendMessage(player, firstTimeMessage, firstJoinedAt, 0);
+            queueWelcomeMessage(player, firstTimeMessage, firstJoinedAt, 0);
         } else {
-            sendMessage(player, returningMessage, firstJoinedAt, 0);
-            sendAwaySummary(player, previousLastSeenAt, now);
+            queueWelcomeMessage(player, returningMessage, firstJoinedAt, 0);
+            queueAwaySummary(player, previousLastSeenAt);
         }
 
         Integer anniversaryYear = selectAnniversaryYear(
@@ -205,8 +207,15 @@ public class PlayerWelcome extends BaseFeature {
             return;
         }
 
-        broadcastMessage(player, message, firstJoinedAt, anniversaryYear);
-        upsertState(player, firstJoinedAt, anniversaryYear);
+        playerLoginMessages().queue(
+            player,
+            PlayerLoginMessageServiceImpl.Priority.OTHER,
+            "anniversary",
+            recipient -> {
+                broadcastMessage(recipient, message, firstJoinedAt, anniversaryYear);
+                upsertState(recipient, firstJoinedAt, anniversaryYear);
+            }
+        );
     }
 
     private long resolveFirstJoinedAt(@NotNull OfflinePlayer player, @Nullable PlayerWelcomeState state, long now) {
@@ -279,6 +288,33 @@ public class PlayerWelcome extends BaseFeature {
         for (Component line : renderComponents(player, messageLines, firstJoinedAt, years)) {
             player.sendMessage(line);
         }
+    }
+
+    private void queueWelcomeMessage(@NotNull Player player, @Nullable List<String> messageLines,
+                                     long firstJoinedAt, int years) {
+        if (!hasUsableMessage(messageLines)) {
+            return;
+        }
+
+        playerLoginMessages().queue(
+            player,
+            PlayerLoginMessageServiceImpl.Priority.WELCOME_CUSTOM,
+            "welcome",
+            recipient -> sendMessage(recipient, messageLines, firstJoinedAt, years)
+        );
+    }
+
+    private void queueAwaySummary(@NotNull Player player, long previousLastSeenAt) {
+        playerLoginMessages().queue(
+            player,
+            PlayerLoginMessageServiceImpl.Priority.AWAY_SUMMARY,
+            "away-summary",
+            recipient -> sendAwaySummary(recipient, previousLastSeenAt, System.currentTimeMillis())
+        );
+    }
+
+    private @NotNull PlayerLoginMessageServiceImpl playerLoginMessages() {
+        return STEMCraft.getPlugin().playerLoginMessages();
     }
 
     private void broadcastMessage(@NotNull Player player, @NotNull List<String> messageLines, long firstJoinedAt, int years) {
@@ -367,17 +403,31 @@ public class PlayerWelcome extends BaseFeature {
         api.database().queryEach(
             "SELECT player_uuid, last_name, last_seen_at FROM " + ACTIVITY_TABLE_NAME + " " +
                 "WHERE player_uuid != ? AND last_seen_at > ? " +
-                "ORDER BY last_seen_at DESC LIMIT ?",
+                "ORDER BY last_seen_at DESC",
             ps -> {
                 ps.setString(1, playerId.toString().toLowerCase(Locale.ROOT));
                 ps.setLong(2, sinceExclusive);
-                ps.setInt(3, Math.max(1, limit));
             },
-            rs -> activities.add(new AwayActivity(
-                rs.getString("player_uuid"),
-                rs.getString("last_name"),
-                rs.getLong("last_seen_at")
-            ))
+            rs -> {
+                if (activities.size() >= limit) {
+                    return;
+                }
+
+                String rawUuid = rs.getString("player_uuid");
+                try {
+                    if (Bukkit.getPlayer(UUID.fromString(rawUuid)) != null) {
+                        return;
+                    }
+                } catch (IllegalArgumentException ignored) {
+                    return;
+                }
+
+                activities.add(new AwayActivity(
+                    rawUuid,
+                    rs.getString("last_name"),
+                    rs.getLong("last_seen_at")
+                ));
+            }
         );
         return List.copyOf(activities);
     }

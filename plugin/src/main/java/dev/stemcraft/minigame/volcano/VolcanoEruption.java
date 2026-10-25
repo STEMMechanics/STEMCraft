@@ -21,6 +21,10 @@ import java.util.Random;
 
 /** One arena's vents and controlled lava flows, including every block needed for restoration. */
 final class VolcanoEruption {
+    private static final double GEYSER_MIN_HEIGHT = 10.0;
+    private static final double GEYSER_MAX_HEIGHT = 15.0;
+    private static final int GEYSER_MIN_DURATION_TICKS = 30;
+    private static final int GEYSER_DURATION_VARIANCE_TICKS = 25;
     private static final List<BlockFace> DIRECTIONS = List.of(
             BlockFace.NORTH, BlockFace.EAST, BlockFace.SOUTH, BlockFace.WEST);
 
@@ -153,8 +157,9 @@ final class VolcanoEruption {
             block.setType(Material.MAGMA_BLOCK, false);
             hotFloorUntil.put(block, tick + 100 + random.nextInt(61));
             BlockFace direction = randomDirection();
-            double height = (pattern == Pattern.SPOUTS ? 4.5 : 2.5) + random.nextDouble() * 2;
-            jets.add(new Jet(block, direction, tick, 30 + random.nextInt(25), height));
+            double height = GEYSER_MIN_HEIGHT + random.nextDouble() * (GEYSER_MAX_HEIGHT - GEYSER_MIN_HEIGHT);
+            jets.add(new Jet(block, direction, tick,
+                    GEYSER_MIN_DURATION_TICKS + random.nextInt(GEYSER_DURATION_VARIANCE_TICKS + 1), height));
             if (flood(block, 0, tick)) flows.add(new Flow(block, direction, 3 + random.nextInt(4), tick + 6));
             world.spawnParticle(Particle.LAVA, block.getLocation().clone().add(0.5, 1.2, 0.5), 8, 0.25, 0.1, 0.25, 0.1);
             openCrater(block);
@@ -173,6 +178,12 @@ final class VolcanoEruption {
             double rise = Math.min(1, (tick - jet.start) / 20.0) * jet.height;
             Location tip = base.clone().add(jet.direction.getModX() * rise * 0.12, rise,
                     jet.direction.getModZ() * rise * 0.12);
+            for (double y = 1.0; y < rise; y += 1.0) {
+                Location column = base.clone().add(jet.direction.getModX() * y * 0.12, y,
+                        jet.direction.getModZ() * y * 0.12);
+                world.spawnParticle(Particle.FLAME, column, 2, 0.12, 0.18, 0.12, 0.015);
+                if (tick % 4 == 0) world.spawnParticle(Particle.LAVA, column, 1, 0.1, 0.1, 0.1, 0.02);
+            }
             world.spawnParticle(Particle.FLAME, tip, 6, 0.18, 0.12, 0.18, 0.025);
             world.spawnParticle(Particle.FLAME, base, 0, jet.direction.getModX() * 0.18, 1,
                     jet.direction.getModZ() * 0.18, 0.3);
@@ -218,18 +229,16 @@ final class VolcanoEruption {
         Block above = ground.getRelative(BlockFace.UP);
         LavaTile previous = lava.get(above);
         if (previous == null && lava.size() >= lavaLimit) return false;
-        long expires = tick + 110 + random.nextInt(51);
         BlockData original = previous == null ? above.getBlockData().clone() : previous.original;
         if (previous != null) {
-            expires = Math.max(expires, previous.expires);
             level = Math.min(level, ((Levelled) above.getBlockData()).getLevel());
         }
         Levelled data = (Levelled) Material.LAVA.createBlockData();
         data.setLevel(level);
         above.setBlockData(data, false);
         ground.setType(Material.MAGMA_BLOCK, false);
-        hotFloorUntil.merge(ground, expires, Math::max);
-        lava.put(above, new LavaTile(original, expires));
+        hotFloorUntil.merge(ground, tick + 100 + random.nextInt(61), Math::max);
+        lava.put(above, new LavaTile(original));
         return true;
     }
 
@@ -240,7 +249,8 @@ final class VolcanoEruption {
         for (BlockFace direction : shuffledDirections()) {
             Block neighbour = vent.getRelative(direction);
             if (floor.containsKey(neighbour) && neighbour.getType().isSolid()
-                    && !warnings.contains(neighbour) && !hotFloorUntil.containsKey(neighbour)) {
+                    && !warnings.contains(neighbour) && !hotFloorUntil.containsKey(neighbour)
+                    && !lava.containsKey(neighbour.getRelative(BlockFace.UP))) {
                 neighbour.setType(Material.AIR, false);
                 return;
             }
@@ -248,14 +258,6 @@ final class VolcanoEruption {
     }
 
     private void cool(long tick) {
-        var tiles = lava.entrySet().iterator();
-        while (tiles.hasNext()) {
-            var entry = tiles.next();
-            LavaTile tile = entry.getValue();
-            if (tick < tile.expires) continue;
-            entry.getKey().setBlockData(tile.original, false);
-            tiles.remove();
-        }
         var hot = hotFloorUntil.entrySet().iterator();
         while (hot.hasNext()) {
             var entry = hot.next();
@@ -289,7 +291,7 @@ final class VolcanoEruption {
         return directions;
     }
 
-    private record LavaTile(BlockData original, long expires) { }
+    private record LavaTile(BlockData original) { }
     private record Jet(Block block, BlockFace direction, long start, int duration, double height) { }
 
     private static final class Flow {

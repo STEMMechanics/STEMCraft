@@ -46,6 +46,7 @@ import org.bukkit.event.block.SignChangeEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.server.ServerLoadEvent;
 import org.bukkit.event.player.PlayerEditBookEvent;
@@ -85,6 +86,9 @@ public class ChatServiceImpl extends BaseService {
     private static final String BOOK_PAGE_SEPARATOR = "\n\n---BOOK-PAGE---\n\n";
     private static final int MODERATION_DEFAULT_LIMIT = 20;
     private static final int MODERATION_MAX_LIMIT = 100;
+    private static final List<String> DEFAULT_REDACTED_COMMAND_ROOTS = List.of(
+        "login", "register", "changepassword", "password"
+    );
     private static final List<ModerationActionRule> DEFAULT_MODERATION_ACTION_RULES = List.of(
         new ModerationActionRule(3, "warn", 0L),
         new ModerationActionRule(5, "kick", 0L),
@@ -330,7 +334,16 @@ public class ChatServiceImpl extends BaseService {
                 ? "unknown"
                 : lastDamage.getCause().name().toLowerCase(Locale.ROOT));
             data.put("world", player.getWorld().getName());
+            Component deathMessage = event.deathMessage();
+            data.put("message", deathMessage == null ? "" : PLAIN.serialize(deathMessage));
             publishChatBridgeEvent("minecraft.player_death", player, data);
+        }, EventPriority.MONITOR, true);
+
+        api.events().register(PlayerCommandPreprocessEvent.class, event -> {
+            if (!chatBridgeSettings.enabled()) return;
+            String command = redactCommand(event.getMessage(), chatBridgeSettings.redactedCommandRoots());
+            if (command.isBlank()) return;
+            publishChatBridgeEvent("minecraft.player_command", event.getPlayer(), Map.of("command", command));
         }, EventPriority.MONITOR, true);
 
         api.events().register(PlayerEditBookEvent.class, event -> {
@@ -451,10 +464,15 @@ public class ChatServiceImpl extends BaseService {
             "discord-bridge.events.minigame-end", "discord_bridge.events.minigame_end", true);
         boolean playerDeathEvents = firstConfiguredBoolean(
             "discord-bridge.events.player-death", "discord_bridge.events.player_death", true);
+        boolean playerCommandEvents = firstConfiguredBoolean(
+            "discord-bridge.events.player-command", "discord_bridge.events.player_command", true);
         boolean serverStartEvents = firstConfiguredBoolean(
             "discord-bridge.events.server-start", "discord_bridge.events.server_start", true);
         boolean serverStopEvents = firstConfiguredBoolean(
             "discord-bridge.events.server-stop", "discord_bridge.events.server_stop", true);
+        List<String> redactedCommandRoots = firstConfiguredStringList(
+            "discord-bridge.redacted-commands", "discord_bridge.redacted_commands",
+            DEFAULT_REDACTED_COMMAND_ROOTS);
 
         if (!enabled) return;
         if (endpointValue.isBlank() || bearerToken.isBlank()) {
@@ -495,8 +513,10 @@ public class ChatServiceImpl extends BaseService {
                 minigameStartEvents,
                 minigameEndEvents,
                 playerDeathEvents,
+                playerCommandEvents,
                 serverStartEvents,
-                serverStopEvents
+                serverStopEvents,
+                redactedCommandRoots
         );
 
         try {
@@ -597,6 +617,7 @@ public class ChatServiceImpl extends BaseService {
             case "minecraft.minigame_start" -> settings.minigameStartEvents();
             case "minecraft.minigame_end" -> settings.minigameEndEvents();
             case "minecraft.player_death" -> settings.playerDeathEvents();
+            case "minecraft.player_command" -> settings.playerCommandEvents();
             case "minecraft.server_start" -> settings.serverStartEvents();
             case "minecraft.server_stop" -> settings.serverStopEvents();
             default -> false;
@@ -675,6 +696,46 @@ public class ChatServiceImpl extends BaseService {
         return Objects.requireNonNullElse(fallback, defaultValue).trim();
     }
 
+    private List<String> firstConfiguredStringList(String primaryPath, String fallbackPath, List<String> defaultValue) {
+        if (getConfigSection().contains(primaryPath)) {
+            return normalizeCommandRoots(getConfigSection().getStringList(primaryPath));
+        }
+        if (getConfigSection().contains(fallbackPath)) {
+            return normalizeCommandRoots(getConfigSection().getStringList(fallbackPath));
+        }
+        return List.copyOf(defaultValue);
+    }
+
+    private static List<String> normalizeCommandRoots(List<String> roots) {
+        return roots.stream()
+            .map(String::trim)
+            .map(value -> value.startsWith("/") ? value.substring(1) : value)
+            .map(value -> {
+                int namespace = value.lastIndexOf(':');
+                return namespace >= 0 ? value.substring(namespace + 1) : value;
+            })
+            .map(value -> value.toLowerCase(Locale.ROOT))
+            .filter(value -> !value.isBlank())
+            .distinct()
+            .toList();
+    }
+
+    static String redactCommand(@NotNull String rawCommand, @NotNull List<String> redactedRoots) {
+        String command = rawCommand == null ? "" : rawCommand.trim();
+        if (command.isBlank() || !command.startsWith("/")) return "";
+
+        String withoutSlash = command.substring(1);
+        int end = 0;
+        while (end < withoutSlash.length() && !Character.isWhitespace(withoutSlash.charAt(end))) end++;
+        String root = withoutSlash.substring(0, end);
+        int namespace = root.lastIndexOf(':');
+        String normalizedRoot = (namespace >= 0 ? root.substring(namespace + 1) : root).toLowerCase(Locale.ROOT);
+        if (redactedRoots.contains(normalizedRoot) && end < withoutSlash.length()) {
+            return "/" + root + " <redacted>";
+        }
+        return command;
+    }
+
     static String normalizeChatBridgeEndpoint(String endpoint) {
         if (endpoint.isBlank()) return endpoint;
         return endpoint.replaceFirst("/+$", "");
@@ -707,11 +768,12 @@ public class ChatServiceImpl extends BaseService {
                                      String channel, Duration timeout, int maxRetries,
                                      boolean playerJoinEvents, boolean playerQuitEvents,
                                      boolean minigameStartEvents, boolean minigameEndEvents,
-                                     boolean playerDeathEvents, boolean serverStartEvents,
-                                     boolean serverStopEvents) {
+                                     boolean playerDeathEvents, boolean playerCommandEvents,
+                                     boolean serverStartEvents, boolean serverStopEvents,
+                                     List<String> redactedCommandRoots) {
         private static ChatBridgeSettings disabled() {
             return new ChatBridgeSettings(false, null, "", "", "", Duration.ofSeconds(3), 0,
-                false, false, false, false, false, false, false);
+                false, false, false, false, false, false, false, false, List.of());
         }
     }
 
