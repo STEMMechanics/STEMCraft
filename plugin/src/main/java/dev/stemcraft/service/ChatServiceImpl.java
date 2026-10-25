@@ -566,8 +566,12 @@ public class ChatServiceImpl extends BaseService {
     }
 
     private void broadcastDiscordChat(@NotNull DiscordChatRequest chat) {
+        String formatted = formatDiscordChatMessage(
+            discordChatFormat, chat.username(), chat.displayName(), chat.message()
+        );
+        formatted = api.messages().tokens().apply(formatted);
         Component message = LegacyComponentSerializer.legacySection().deserialize(
-            formatDiscordChatMessage(discordChatFormat, chat.username(), chat.displayName(), chat.message())
+            formatted
         );
         Bukkit.getOnlinePlayers().forEach(player -> player.sendMessage(message));
         chatBridgeInfo("[chat] Discord message delivered to Minecraft from " + chat.displayName() + ".");
