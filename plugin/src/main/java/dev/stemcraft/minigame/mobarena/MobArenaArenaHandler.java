@@ -44,9 +44,9 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Predicate;
 
 /**
  * <p>The arena handler for Mob Arena arenas.</p>
@@ -241,6 +241,12 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
             case FALL -> {
                 return MobDeathReason.Fell;
             }
+            case PROJECTILE -> {
+                return MobDeathReason.Shot;
+            }
+            case DROWNING -> {
+                return MobDeathReason.Drowned;
+            }
             default -> {
                 return MobDeathReason.Generic;
             }
@@ -291,6 +297,8 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
         Generic,
         Exploded,
         Fell,
+        Shot,
+        Drowned,
         LeftRegion
     }
 
@@ -320,41 +328,48 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
 
         mobDeathReason = mobDeathReason == null ? MobDeathReason.Generic : mobDeathReason;
 
-        final List<String> applicableMessages = new ArrayList<>();
-
-        if (entityArena.get("entity-death-messages-mode", MobArenaDeathMessageMode.class, MobArenaDeathMessageMode.UNION) == MobArenaDeathMessageMode.UNION) {
-            final List<String> globalEntityDeathReasons = mobArena.getApplicableGlobalEntityDeathReasons(mobDeathReason);
-            if (globalEntityDeathReasons != null && !globalEntityDeathReasons.isEmpty()) {
-                applicableMessages.addAll(globalEntityDeathReasons);
-            }
-        }
-
-        final List<String> entityDeathReasons = entityArena.getList("entity-death-messages." + mobDeathReason.name(), String.class);
-        if (entityDeathReasons != null && !entityDeathReasons.isEmpty()) {
-            applicableMessages.addAll(entityDeathReasons);
-        }
-
-        final List<String> filteredMessages = applicableMessages.stream().filter(message -> message.contains("{causer}") == (causingEntity != null)).toList();
-
-        final int filteredMessageIndex;
-
-        if (filteredMessages.isEmpty()) {
-            return;
-        } else if (filteredMessages.size() == 1) {
-            filteredMessageIndex = 0;
-        } else {
-            filteredMessageIndex = ThreadLocalRandom.current().nextInt(filteredMessages.size() - 1);
-        }
-
-        final String chosenMessage = filteredMessages.get(filteredMessageIndex);
+        final String chosenMessage = getDeathMessageFromSpecificGlobalAndMode(entityArena.getList("entity-death-messages." + mobDeathReason.name(), String.class),
+                mobArena.getApplicableGlobalEntityDeathReasons(mobDeathReason), entityArena.get("entity-death-messages-mode", MobArenaDeathMessageMode.class, MobArenaDeathMessageMode.UNION), causingEntity != null);
         final String finalMessage;
         if (causingEntity != null) {
-            finalMessage = PlaceholderUtil.apply(chosenMessage, "entity", entity, "causer", causingEntity.getName());
+            finalMessage = PlaceholderUtil.apply(chosenMessage, "entity", entity.getName(), "causer", causingEntity.getName());
         } else {
-            finalMessage = chosenMessage;
+            finalMessage = PlaceholderUtil.apply(chosenMessage, "entity", entity.getName());
         }
 
         broadcastInfoToOccupants(entityArena, finalMessage);
+    }
+
+    private static @Nullable String getDeathMessageFromSpecificGlobalAndMode(final @Nullable List<String> deathReasons, final @Nullable List<String> globalDeathReasons, final MobArenaDeathMessageMode mode, final boolean shouldHaveCauser) {
+        final List<String> applicableMessages = new ArrayList<>();
+
+        if (mode == MobArenaDeathMessageMode.UNION) {
+            if (globalDeathReasons != null && !globalDeathReasons.isEmpty()) {
+                applicableMessages.addAll(globalDeathReasons);
+            }
+        }
+
+        if (deathReasons != null && !deathReasons.isEmpty()) {
+            applicableMessages.addAll(deathReasons);
+        }
+
+        return getRandomElementOnConditional(applicableMessages, message -> message.contains("{causer}") == (shouldHaveCauser));
+    }
+
+    private static <T> @Nullable T getRandomElementOnConditional(@NotNull final List<T> applicable, final Predicate<? super T> predicate) {
+        final List<T> filtered = applicable.stream().filter(predicate).toList();
+
+        final int filteredIndex;
+
+        if (filtered.isEmpty()) {
+            return null;
+        } else if (filtered.size() == 1) {
+            filteredIndex = 0;
+        } else {
+            filteredIndex = ThreadLocalRandom.current().nextInt(filtered.size() - 1);
+        }
+
+        return filtered.get(filteredIndex);
     }
 
     /**
@@ -635,7 +650,9 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
             mobsSpawned += mobsToSpawn;
 
             for (int j = 0; j < mobsToSpawn; j++) {
-                @NotNull final Entity newEntity = arena.world().spawn(Objects.requireNonNull(RegionLocationSupport.randomGroundLocation(spawnZoneRegion)), entityClass);
+                final @Nullable Location location = RegionLocationSupport.randomGroundLocation(spawnZoneRegion);
+                if (location == null) continue;
+                @NotNull final Entity newEntity = arena.world().spawn(location, entityClass);
                 entityMiniGameArenaMap.put(newEntity, arena);
                 if (arena.get(spawnerConfigPrefix + "countTowardsMobCount", Boolean.class)) {
                     trackedEntityMiniGameArenaMap.put(newEntity, arena);
@@ -867,13 +884,7 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
             mgPlayer.addDeath();
         }
 
-        if (causingEntity != null) {
-            broadcastInfoToOccupants(arena,
-                    "<red>" + player.getName() + "</red> <gray>was eliminated by a</gray> <gold>" + causingEntity.getName() + "</gold><gray>.</gray>");
-        } else {
-            broadcastInfoToOccupants(arena,
-                    "<red>" + player.getName() + "</red> <gray>fell into the void.</gray>");
-        }
+        doPlayerDeathMessage(arena, player, causingEntity);
 
         @NotNull final Location playerFormerLocation = player.getLocation();
 
@@ -896,6 +907,16 @@ final class MobArenaArenaHandler implements MiniGameArenaHandler {
             arena.setCountdown(mobArena.endingSeconds(arena));
             broadcastInfoToOccupants(arena,
                     "<rainbow>Congratulations!</rainbow> You got up to wave <gold>" + arena.get("wave", Integer.class) + "</gold>!");
+        }
+    }
+
+    private void doPlayerDeathMessage(@NonNull final MiniGameArena arena, @NonNull final Player player, @Nullable final Entity causingEntity) {
+        final @Nullable String deathMessageFromSpecificGlobalAndMode = PlaceholderUtil.apply(getDeathMessageFromSpecificGlobalAndMode(arena.getList("player-death-messages", String.class),
+                mobArena.getGlobalPlayerDeathReasons(), arena.get("player-death-messages-mode", MobArenaDeathMessageMode.class), causingEntity != null),
+                "entity", player.getName(), "causer", causingEntity != null ? causingEntity.getName() : "");
+        if (deathMessageFromSpecificGlobalAndMode != null) {
+            broadcastInfoToOccupants(arena,
+                    deathMessageFromSpecificGlobalAndMode);
         }
     }
 
