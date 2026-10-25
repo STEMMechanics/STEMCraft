@@ -919,7 +919,12 @@ chat:
     # Set this to the bot's public receiver URL, for example:
     # https://discord-bot.example.com/minecraft/event
     url: ""
+    # The same bearer token is also accepted by STEMCraft's web server at
+    # /api/v1/chat/discord for chat sent from the configured Discord channel.
     bearer-token: ""
+    # The parent bridge must also be enabled; set this false to disable inbound chat.
+    inbound-enabled: true
+    inbound-format: "&1[DISCORD] {displayname}: {message} "
     server-id: survival
     channel: global
     timeout: 3s

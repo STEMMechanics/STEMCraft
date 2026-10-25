@@ -58,6 +58,13 @@ proxy. For direct connections from other computers, bind to `"0.0.0.0"` and
 forward/allow the configured port, then set `web-server.public-url` to the
 address clients can reach.
 
+The root path serves `www/index.html`. STEMCraft creates a bundled landing page
+there when no custom page exists, with the Java and Bedrock connection details.
+An existing `index.html` is preserved, so the page can be replaced with a
+custom landing page in the configured web-server directory. STEMCraft also
+creates a default `robots.txt` that asks all crawlers not to index the server.
+An existing custom `robots.txt` is preserved.
+
 The read-only `GET /status` endpoint does not require Discord role
 authorisation. Existing status fields remain available to callers. To include
 current online Minecraft usernames, set

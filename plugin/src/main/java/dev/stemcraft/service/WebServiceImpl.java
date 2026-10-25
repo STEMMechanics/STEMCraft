@@ -50,6 +50,7 @@ import org.jetbrains.annotations.NotNull;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
@@ -82,6 +83,8 @@ import java.util.concurrent.TimeoutException;
 public class WebServiceImpl extends BaseService implements WebService {
     private static final Gson GSON = new GsonBuilder().serializeNulls().create();
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final String DEFAULT_INDEX_RESOURCE = "www/index.html";
+    private static final String DEFAULT_ROBOTS_RESOURCE = "www/robots.txt";
     private static final String MAINTENANCE_MESSAGE = "Server is under maintenance. Please try again later.";
     private static final String SURVIVAL_MAIL_PATH = "/api/v1/survival/mail";
     private static final String BEARER_PREFIX = "Bearer ";
@@ -240,6 +243,9 @@ public class WebServiceImpl extends BaseService implements WebService {
             wwwRoot = null;
             return;
         }
+
+        ensureDefaultWebFile(DEFAULT_INDEX_RESOURCE, "index.html");
+        ensureDefaultWebFile(DEFAULT_ROBOTS_RESOURCE, "robots.txt");
 
         port = getConfigSection().getInt("port", 8950);
         ip = getConfigSection().getString("ip", "127.0.0.1");
@@ -816,6 +822,25 @@ public class WebServiceImpl extends BaseService implements WebService {
             ? configuredMaxDelaySeconds : DEFAULT_MAIL_API_MAX_DELAY_SECONDS;
     }
 
+    private void ensureDefaultWebFile(@NotNull String resourcePath, @NotNull String fileName) {
+        Path target = wwwRoot.toPath().resolve(fileName);
+        if (Files.exists(target, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(target)) {
+            return;
+        }
+
+        try (InputStream resource = plugin.getResource(resourcePath)) {
+            if (resource != null) {
+                Files.copy(resource, target);
+            }
+        } catch (IOException exception) {
+            java.util.logging.Logger logger = plugin.getLogger();
+            if (logger != null) {
+                logger.warning("Could not create the default web server " + fileName + ": "
+                    + exception.getMessage());
+            }
+        }
+    }
+
     private static String generateMailApiKey() {
         byte[] bytes = new byte[MAIL_API_KEY_BYTES];
         SECURE_RANDOM.nextBytes(bytes);
@@ -933,8 +958,12 @@ public class WebServiceImpl extends BaseService implements WebService {
             }
 
             if (Files.isDirectory(requested, LinkOption.NOFOLLOW_LINKS)) {
-                sendErrorResponse(exchange, 403, "Directory listing not permitted");
-                return;
+                Path index = requested.resolve("index.html").normalize();
+                if (!index.startsWith(root) || !Files.isRegularFile(index, LinkOption.NOFOLLOW_LINKS)) {
+                    sendErrorResponse(exchange, 403, "Directory listing not permitted");
+                    return;
+                }
+                requested = index;
             }
 
             if (!Files.exists(requested, LinkOption.NOFOLLOW_LINKS)) {
