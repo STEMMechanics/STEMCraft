@@ -110,7 +110,7 @@ minecraft:execute at <player> run minecraft:kill @e[type=minecraft:armor_stand,d
 | `/warp`, `/setwarp`, `/delwarp` | `TeleportUtils` | Warp management |
 | `/spawn`, `/tpspawn` | `TeleportUtils` | Spawn travel |
 | `/tpall`, `/tphere` | `TeleportUtils` | Player teleport administration |
-| `/tpworld`, `/tpworldspawn`, `/tpworldlast` | `TeleportUtils` | World-aware teleport tools |
+| `/tpworld`, `/tpworldat`, `/tpworldspawn`, `/tpworldlast` | `TeleportUtils` | World-aware teleport tools |
 | `/top`, `/jump`, `/thru` | `TeleportUtils` | Positional utility commands |
 | `/coord`, `/coordbar` | `Coordinates` | Coordinate displays |
 | `/speed` | `PlayerSpeed` | Walk/fly speed management |
