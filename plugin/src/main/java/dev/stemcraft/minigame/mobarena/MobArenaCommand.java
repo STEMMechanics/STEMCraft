@@ -15,10 +15,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
-import org.bukkit.Bukkit;
-import org.bukkit.Location;
-import org.bukkit.Material;
-import org.bukkit.World;
+import org.bukkit.*;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.EquipmentSlot;
@@ -439,13 +436,13 @@ final class MobArenaCommand {
 
         arena.set("spawner-configs.max", newSpawnerConfigIndex + 1);
 
-        ctx.returnSuccess("Created a new spawner config!");
+        ctx.returnSuccess("Created a new spawner config.");
     }
 
     private void commandSpawnerConfigRemove(@NotNull final CommandContext ctx) {
         @NotNull final MiniGameArena arena = requireArena(ctx);
 
-        final int spawnerIndex = ctx.getArgAsInt(3) - 1;
+        final int spawnerIndex = ctx.getArgAsInt(3);
 
         if (spawnerIndex < 0 || spawnerIndex >= arena.get("spawner-configs.max", Integer.class)) {
             ctx.returnUsage();
@@ -475,6 +472,8 @@ final class MobArenaCommand {
         arena.remove(newSpawnerConfigToRemovePrefix + "countTowardsMobCount");
 
         arena.set("spawner-configs.max", arena.get("spawner-configs.max", Integer.class) - 1);
+
+        ctx.returnSuccess("Deleted spawner config " + spawnerIndex + ".");
     }
 
     private void commandSpawnerConfigSet(@NotNull final CommandContext ctx) {
@@ -492,13 +491,14 @@ final class MobArenaCommand {
 
         switch (spawnerPropertyKey) {
             case "entityType":
-                try {
-                    final EntityType newEntityType = EntityType.valueOf(spawnerPropertyValue);
-                    arena.set("spawner-configs." + (spawnerIndex - 1) + ".entityType", newEntityType);
-                    ctx.returnSuccess("Set spawner " + spawnerIndex + "'s entity type to '" + spawnerPropertyValue + "'.");
-                } catch (final IllegalArgumentException e) {
-                    ctx.returnError("'" + spawnerPropertyValue + "' is not a valid entity type.");
+                final NamespacedKey entityKey = NamespacedKey.fromString(spawnerPropertyValue);
+                if (entityKey == null) {
+                    ctx.returnError("Invalid entity type.");
+                    break;
                 }
+                final EntityType newEntityType = Registry.ENTITY_TYPE.get(entityKey);
+                arena.set("spawner-configs." + (spawnerIndex - 1) + ".entityType", newEntityType);
+                ctx.returnSuccess("Set spawner " + spawnerIndex + "'s entity type to '" + spawnerPropertyValue + "'.");
                 break;
             case "initialAmount":
                 try {
@@ -770,8 +770,9 @@ final class MobArenaCommand {
         for (int i = 0; i < maxSpawnerConfig; i++) {
             final String spawnerConfigPrefix = "spawner-configs." + i + ".";
             ctx.info("   - " + (i + 1) + ":");
-            ctx.info("     - Entity Type: " + arena.get(spawnerConfigPrefix + "entityType", EntityType.class).toString());
+            ctx.info("     - Entity Type: " + arena.get(spawnerConfigPrefix + "entityType", EntityType.class).getKey().asMinimalString());
             ctx.info("     - Initial Amount: " + arena.get(spawnerConfigPrefix + "initialAmount", Integer.class).toString());
+            ctx.info("     - Initial Wave: " + arena.get(spawnerConfigPrefix + "initialWave", Integer.class).toString());
             ctx.info("     - Increment Amount: " + arena.get(spawnerConfigPrefix + "incrementAmount", Double.class).toString());
             ctx.info("     - Increment Type: " + arena.get(spawnerConfigPrefix + "incrementType", IncrementType.class).toString());
             ctx.info("     - Spawn Zone: " + arena.get(spawnerConfigPrefix + "spawnZone", String.class));
