@@ -919,7 +919,8 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
         String taskId = ACCESS_PROMPT_TASK_PREFIX + player.getUniqueId();
         String previous = accessPromptTasks.put(player.getUniqueId(), taskId);
         if (previous != null) api.tasks().cancel(previous);
-        api.tasks().runOnceDelay(taskId, instructionsPromptDelaySeconds * 20L, () -> {
+        long loginDelayTicks = STEMCraft.getPlugin().playerLoginMessages().delayTicks(player);
+        api.tasks().runOnceDelay(taskId, loginDelayTicks + instructionsPromptDelaySeconds * 20L + 1L, () -> {
             accessPromptTasks.remove(player.getUniqueId(), taskId);
             if (!enabled || !player.isOnline()) return;
             promptForAccessInstructions(player);

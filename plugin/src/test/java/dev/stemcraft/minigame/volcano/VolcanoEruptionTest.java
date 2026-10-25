@@ -7,6 +7,7 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Particle;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.block.data.Levelled;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -146,6 +147,37 @@ class VolcanoEruptionTest {
 
         eruption.tick(eruptionTick + 10);
         assertTrue(eruption.isGeyserHazard(geyserBase.clone().add(0, 0.5, 0), eruptionTick + 10));
+
+        world.clearSpawnedParticles();
+        eruption.tick(eruptionTick + 20);
+        double ventBaseY = vent.getY() + 1.1;
+        double height = world.getSpawnedParticles().stream()
+                .filter(p -> p.particle() == Particle.FLAME && p.count() == 6)
+                .mapToDouble(p -> p.y() - ventBaseY)
+                .max()
+                .orElseThrow();
+        assertTrue(height >= 9.9, "Geysers should reach at least ten blocks");
+        assertTrue(height <= 15.2, "Geysers should stay within the configured height");
+    }
+
+    @Test
+    void lavaRemainsUntilTheRoundRestoresTheArena() {
+        VolcanoEruption eruption = eruption();
+        for (long tick = 2; tick <= 120; tick += 2) eruption.tick(tick);
+
+        Block activeLava = floor.stream()
+                .map(block -> block.getRelative(BlockFace.UP))
+                .filter(block -> block.getType() == Material.LAVA)
+                .findFirst()
+                .orElseThrow();
+
+        eruption.tick(1000);
+        assertEquals(Material.LAVA, activeLava.getType());
+        assertTrue(eruption.containsLava(activeLava));
+
+        eruption.restore();
+        assertFalse(eruption.containsLava(activeLava));
+        assertEquals(Material.AIR, activeLava.getType());
     }
 
     @Test

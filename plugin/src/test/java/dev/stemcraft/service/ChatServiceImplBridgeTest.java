@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -28,7 +29,9 @@ class ChatServiceImplBridgeTest {
         true,
         true,
         true,
-        true
+        true,
+        true,
+        List.of("login", "register")
     );
 
     @Test
@@ -76,5 +79,15 @@ class ChatServiceImplBridgeTest {
         assertEquals("Alex", json.getAsJsonObject("player").get("name").getAsString());
         assertEquals(playerId.toString(), json.getAsJsonObject("player").get("uuid").getAsString());
         assertFalse(json.has("data"));
+    }
+
+    @Test
+    void commandsWithSensitiveArgumentsAreRedactedBeforeForwarding() {
+        assertEquals("/login <redacted>", ChatServiceImpl.redactCommand(
+            "/login secret-value", List.of("login")));
+        assertEquals("/spawn home", ChatServiceImpl.redactCommand(
+            "/spawn home", List.of("login")));
+        assertEquals("/minecraft:login <redacted>", ChatServiceImpl.redactCommand(
+            "/minecraft:login secret-value", List.of("login")));
     }
 }

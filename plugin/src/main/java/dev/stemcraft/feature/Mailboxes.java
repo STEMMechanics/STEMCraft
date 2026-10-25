@@ -26,6 +26,7 @@ import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.api.util.TextUtil;
 import dev.stemcraft.api.util.TimeUtil;
 import dev.stemcraft.permission.PlayerCommandAccess;
+import dev.stemcraft.service.PlayerLoginMessageServiceImpl;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
@@ -308,7 +309,7 @@ public class Mailboxes extends BaseFeature implements MailboxService {
                     return;
                 }
                 processMailQueue();
-                deliverPendingNotifications(player);
+                queuePendingNotifications(player);
                 refreshMailIndicatorVisibility(player);
             });
         }, EventPriority.NORMAL, false);
@@ -1827,6 +1828,15 @@ public class Mailboxes extends BaseFeature implements MailboxService {
                 ps.setString(2, message);
                 ps.setLong(3, System.currentTimeMillis());
             }
+        );
+    }
+
+    private void queuePendingNotifications(@NotNull Player player) {
+        STEMCraft.getPlugin().playerLoginMessages().queue(
+            player,
+            PlayerLoginMessageServiceImpl.Priority.OTHER,
+            "mail-notifications",
+            this::deliverPendingNotifications
         );
     }
 

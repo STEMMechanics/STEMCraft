@@ -216,6 +216,12 @@ custom-commands:
     run:
       - "server:tpworld creative {player}"
 
+# Login messages are collected briefly so welcome, away, and other join notices
+# are delivered in a predictable order.
+player-login-messages:
+  enabled: true
+  flush-delay: 5s
+
 # Server announcements are independent of the workshops catalogue. Manual
 # announcements are stored in SQLite and are not overwritten by config reloads.
 announcements:
@@ -925,8 +931,16 @@ chat:
       minigame-start: true
       minigame-end: true
       player-death: true
+      player-command: true
       server-start: true
       server-stop: true
+    # Commands whose arguments may contain passwords or other private values
+    # are sent to the bridge with their arguments removed.
+    redacted-commands:
+      - login
+      - register
+      - changepassword
+      - password
   content_filter:
     enabled: true
     minimum_severity: mild

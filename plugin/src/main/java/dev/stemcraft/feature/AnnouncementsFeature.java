@@ -22,6 +22,7 @@ import dev.stemcraft.api.service.workshop.WorkshopSource;
 import dev.stemcraft.api.util.PlaceholderUtil;
 import dev.stemcraft.api.util.TimeUtil;
 import dev.stemcraft.api.util.TextUtil;
+import dev.stemcraft.service.PlayerLoginMessageServiceImpl;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.Registry;
@@ -67,7 +68,6 @@ public class AnnouncementsFeature extends BaseFeature {
     private final Map<String, AnnouncementDefinition> manualAnnouncements = new LinkedHashMap<>();
     private final Map<String, AnnouncementDefinition> definitions = new LinkedHashMap<>();
     private final Map<String, Instant> nextDue = new LinkedHashMap<>();
-    private final Map<UUID, String> joinTasks = new ConcurrentHashMap<>();
     private final Map<UUID, String> upcomingWorkshopJoinTasks = new ConcurrentHashMap<>();
     private final Map<UUID, String> activeWorkshopJoinTasks = new ConcurrentHashMap<>();
 
@@ -610,33 +610,30 @@ public class AnnouncementsFeature extends BaseFeature {
         api.events().register(PlayerJoinEvent.class, event -> {
             if (!enabled || !joinEnabled) return;
             Player player = event.getPlayer();
-            String taskId = "announcements:join:" + player.getUniqueId();
-            joinTasks.put(player.getUniqueId(), taskId);
-            api.tasks().runOnceDelay(taskId, joinDelaySeconds * 20L, () -> {
-                joinTasks.remove(player.getUniqueId(), taskId);
-                if (!enabled || !joinEnabled || !player.isOnline()) return;
-                broadcast(new AnnouncementDefinition("join", player.hasPlayedBefore() ? returningJoinMessage : firstTimeJoinMessage,
-                        true, 0L, null, null, "message", WorkshopFilter.NONE, false), player);
-                scheduleUpcomingWorkshop(player);
-                scheduleActiveWorkshop(player);
-            });
+            PlayerLoginMessageServiceImpl loginMessages = STEMCraft.getPlugin().playerLoginMessages();
+            long loginDelayTicks = loginMessages.open(player, joinDelaySeconds * 20L);
+            loginMessages.queue(
+                player,
+                PlayerLoginMessageServiceImpl.Priority.WELCOME,
+                "welcome",
+                recipient -> {
+                    if (!enabled || !joinEnabled || !recipient.isOnline()) return;
+                    broadcast(new AnnouncementDefinition("join",
+                            recipient.hasPlayedBefore() ? returningJoinMessage : firstTimeJoinMessage,
+                            true, 0L, null, null, "message", WorkshopFilter.NONE, false), recipient);
+                }
+            );
+            scheduleUpcomingWorkshop(player, loginDelayTicks);
+            scheduleActiveWorkshop(player, loginDelayTicks);
         });
         api.events().register(PlayerQuitEvent.class, event -> {
             UUID playerId = event.getPlayer().getUniqueId();
-            cancelJoinTask(playerId);
             cancelUpcomingWorkshopJoinTask(playerId);
             cancelActiveWorkshopJoinTask(playerId);
         });
     }
 
-    private void cancelJoinTask(UUID playerId) {
-        String taskId = joinTasks.remove(playerId);
-        if (taskId != null) api.tasks().cancel(taskId);
-    }
-
     private void cancelJoinTasks() {
-        for (String taskId : joinTasks.values()) api.tasks().cancel(taskId);
-        joinTasks.clear();
         cancelUpcomingWorkshopJoinTasks();
         cancelActiveWorkshopJoinTasks();
     }
@@ -661,18 +658,14 @@ public class AnnouncementsFeature extends BaseFeature {
         activeWorkshopJoinTasks.clear();
     }
 
-    private void scheduleUpcomingWorkshop(@NotNull Player player) {
+    private void scheduleUpcomingWorkshop(@NotNull Player player, long loginDelayTicks) {
         if (!upcomingWorkshopJoinEnabled || upcomingWorkshopJoinMessage.isEmpty()) return;
-        if (upcomingWorkshopJoinDelaySeconds <= 0L) {
-            broadcastUpcomingWorkshop(player);
-            return;
-        }
 
         UUID playerId = player.getUniqueId();
         String taskId = UPCOMING_WORKSHOP_JOIN_TASK_PREFIX + playerId;
         String previous = upcomingWorkshopJoinTasks.put(playerId, taskId);
         if (previous != null) api.tasks().cancel(previous);
-        api.tasks().runOnceDelay(taskId, upcomingWorkshopJoinDelaySeconds * 20L, () -> {
+        api.tasks().runOnceDelay(taskId, loginDelayTicks + upcomingWorkshopJoinDelaySeconds * 20L + 1L, () -> {
             upcomingWorkshopJoinTasks.remove(playerId, taskId);
             if (!enabled || !joinEnabled || !player.isOnline()) return;
             broadcastUpcomingWorkshop(player);
@@ -692,18 +685,14 @@ public class AnnouncementsFeature extends BaseFeature {
         if (!messages.isEmpty()) playAnnouncementSound(player, upcomingWorkshopJoinSound);
     }
 
-    private void scheduleActiveWorkshop(@NotNull Player player) {
+    private void scheduleActiveWorkshop(@NotNull Player player, long loginDelayTicks) {
         if (!activeWorkshopJoinEnabled) return;
-        if (activeWorkshopJoinDelaySeconds <= 0L) {
-            broadcastActiveWorkshop(player);
-            return;
-        }
 
         UUID playerId = player.getUniqueId();
         String taskId = ACTIVE_WORKSHOP_JOIN_TASK_PREFIX + playerId;
         String previous = activeWorkshopJoinTasks.put(playerId, taskId);
         if (previous != null) api.tasks().cancel(previous);
-        api.tasks().runOnceDelay(taskId, activeWorkshopJoinDelaySeconds * 20L, () -> {
+        api.tasks().runOnceDelay(taskId, loginDelayTicks + activeWorkshopJoinDelaySeconds * 20L + 1L, () -> {
             activeWorkshopJoinTasks.remove(playerId, taskId);
             if (!enabled || !joinEnabled || !player.isOnline()) return;
             broadcastActiveWorkshop(player);
