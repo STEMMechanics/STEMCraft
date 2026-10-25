@@ -482,7 +482,7 @@ final class MobArenaCommand {
 
         ctx.checkArgsSizeAtLeast(6);
 
-        final int spawnerIndex = ctx.getArgAsInt(3) - 1;
+        final int spawnerIndex = ctx.getArgAsInt(3);
         final String spawnerPropertyKey = ctx.getArg(4);
         final String spawnerPropertyValue = ctx.getArg(5);
 
