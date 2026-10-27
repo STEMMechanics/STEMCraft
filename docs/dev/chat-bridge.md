@@ -30,6 +30,7 @@ chat:
       player-command: true
       server-start: true
       server-stop: true
+      server-message: true
     redacted-commands:
       - login
       - register
@@ -58,6 +59,12 @@ The bridge sends these event names:
 - `minecraft.player_command`
 - `minecraft.server_start`
 - `minecraft.server_stop`
+- `minecraft.server_message`
+
+`minecraft.server_message` is emitted for server-originated `say` and
+`minecraft:say` commands, including commands sent by Craftarr, RCON, scripts,
+and other server services. Its `data.message` contains the text after the
+command; the Discord bot renders that text as a compact amber embed.
 
 The token is separate from `web-server.mail-api.key`. Keep the receiver on
 HTTPS and set a different token for each server or bot. The bridge is disabled
