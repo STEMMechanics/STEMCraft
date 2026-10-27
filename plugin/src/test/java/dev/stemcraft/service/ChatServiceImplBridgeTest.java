@@ -31,6 +31,7 @@ class ChatServiceImplBridgeTest {
         true,
         true,
         true,
+        true,
         List.of("login", "register")
     );
 
@@ -79,6 +80,16 @@ class ChatServiceImplBridgeTest {
         assertEquals("Alex", json.getAsJsonObject("player").get("name").getAsString());
         assertEquals(playerId.toString(), json.getAsJsonObject("player").get("uuid").getAsString());
         assertFalse(json.has("data"));
+    }
+
+    @Test
+    void serverSayCommandsBecomePlainServerMessages() {
+        assertEquals("Server restarting to apply updates", ChatServiceImpl.serverMessageFromCommand(
+            "say Server restarting to apply updates"));
+        assertEquals("Maintenance complete", ChatServiceImpl.serverMessageFromCommand(
+            "/minecraft:say Maintenance complete"));
+        assertEquals("", ChatServiceImpl.serverMessageFromCommand("tellraw @a {}"));
+        assertEquals("", ChatServiceImpl.serverMessageFromCommand("say"));
     }
 
     @Test

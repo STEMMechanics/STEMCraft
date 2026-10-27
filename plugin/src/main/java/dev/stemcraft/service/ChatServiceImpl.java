@@ -51,6 +51,7 @@ import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.server.ServerCommandEvent;
 import org.bukkit.event.server.ServerLoadEvent;
 import org.bukkit.event.player.PlayerEditBookEvent;
 import org.bukkit.inventory.meta.BookMeta;
@@ -293,6 +294,12 @@ public class ChatServiceImpl extends BaseService {
                 publishChatBridgeEvent("minecraft.server_start", null, Map.of());
             }
         });
+
+        api.events().register(ServerCommandEvent.class, event -> {
+            String message = serverMessageFromCommand(event.getCommand());
+            if (message.isBlank()) return;
+            publishChatBridgeEvent("minecraft.server_message", null, Map.of("message", message));
+        }, EventPriority.MONITOR, true);
 
         api.events().register(SignChangeEvent.class, event -> {
             String content = event.lines().stream()
@@ -714,6 +721,8 @@ public class ChatServiceImpl extends BaseService {
             "discord-bridge.events.server-start", "discord_bridge.events.server_start", true);
         boolean serverStopEvents = firstConfiguredBoolean(
             "discord-bridge.events.server-stop", "discord_bridge.events.server_stop", true);
+        boolean serverMessageEvents = firstConfiguredBoolean(
+            "discord-bridge.events.server-message", "discord_bridge.events.server_message", true);
         List<String> redactedCommandRoots = firstConfiguredStringList(
             "discord-bridge.redacted-commands", "discord_bridge.redacted_commands",
             DEFAULT_REDACTED_COMMAND_ROOTS);
@@ -760,6 +769,7 @@ public class ChatServiceImpl extends BaseService {
                 playerCommandEvents,
                 serverStartEvents,
                 serverStopEvents,
+                serverMessageEvents,
                 redactedCommandRoots
         );
 
@@ -864,6 +874,7 @@ public class ChatServiceImpl extends BaseService {
             case "minecraft.player_command" -> settings.playerCommandEvents();
             case "minecraft.server_start" -> settings.serverStartEvents();
             case "minecraft.server_stop" -> settings.serverStopEvents();
+            case "minecraft.server_message" -> settings.serverMessageEvents();
             default -> false;
         };
     }
@@ -985,6 +996,20 @@ public class ChatServiceImpl extends BaseService {
         return endpoint.replaceFirst("/+$", "");
     }
 
+    static String serverMessageFromCommand(@Nullable String rawCommand) {
+        String command = rawCommand == null ? "" : rawCommand.trim();
+        if (command.startsWith("/")) command = command.substring(1).trim();
+        if (command.isBlank()) return "";
+
+        int end = 0;
+        while (end < command.length() && !Character.isWhitespace(command.charAt(end))) end++;
+        String root = command.substring(0, end);
+        int namespace = root.lastIndexOf(':');
+        String normalizedRoot = (namespace >= 0 ? root.substring(namespace + 1) : root).toLowerCase(Locale.ROOT);
+        if (!"say".equals(normalizedRoot) || end >= command.length()) return "";
+        return command.substring(end).trim();
+    }
+
     private boolean firstConfiguredBoolean(String primaryPath, String fallbackPath, boolean defaultValue) {
         if (getConfigSection().contains(primaryPath)) {
             return getConfigSection().getBoolean(primaryPath, defaultValue);
@@ -1014,10 +1039,11 @@ public class ChatServiceImpl extends BaseService {
                                      boolean minigameStartEvents, boolean minigameEndEvents,
                                      boolean playerDeathEvents, boolean playerCommandEvents,
                                      boolean serverStartEvents, boolean serverStopEvents,
+                                     boolean serverMessageEvents,
                                      List<String> redactedCommandRoots) {
         private static ChatBridgeSettings disabled() {
             return new ChatBridgeSettings(false, null, "", "", "", Duration.ofSeconds(3), 0,
-                false, false, false, false, false, false, false, false, List.of());
+                false, false, false, false, false, false, false, false, false, List.of());
         }
     }
 

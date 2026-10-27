@@ -939,6 +939,7 @@ chat:
       player-command: true
       server-start: true
       server-stop: true
+      server-message: true
     # Commands whose arguments may contain passwords or other private values
     # are sent to the bridge with their arguments removed.
     redacted-commands:
