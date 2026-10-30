@@ -36,7 +36,7 @@ import org.bukkit.projectiles.ProjectileSource;
  * Feature that adjusts mob difficulty based on distance from world spawn.
  */
 public class DistanceDifficulty extends BaseFeature {
-    private static final int DEFAULT_RANGE = 500;
+    private static final int DEFAULT_RANGE = 1000;
     private static final double DEFAULT_MULTIPLIER = 0.25;
 
     private NamespacedKey key;

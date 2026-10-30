@@ -62,6 +62,32 @@ The world service stores per-world settings under the `worlds` config section. T
 - linked nether and end worlds
 - join and leave commands
 
+## Distance Difficulty
+
+`distance-difficulty.range` defaults to `1000`, and `multiplier` remains `0.25`.
+The bundled config uses the legacy `distance_difficulty` key, which startup
+migrates to `distance-difficulty`.
+
+Difficulty is `1.0 + floor(distance / range) * multiplier`. Distance is the larger
+absolute X/Z block offset from the mob's world spawn; height is ignored.
+
+| Distance from world spawn | Difficulty multiplier |
+| --- | --- |
+| 0–999 blocks | 1.00× |
+| 1,000–1,999 blocks | 1.25× |
+| 2,000–2,999 blocks | 1.50× |
+| 3,000–3,999 blocks | 1.75× |
+| 4,000–4,999 blocks | 2.00× |
+| 5,000–5,999 blocks | 2.25× |
+
+Scaling continues by 0.25× every 1,000 blocks with no cap. The multiplier is stored
+when a hostile mob spawns. Against Survival-mode players, the mob deals damage
+multiplied by this value and receives player damage divided by it.
+
+Existing saved settings are preserved. To adopt these defaults on an existing
+server, set `range: 1000` and `multiplier: 0.25` in its distance-difficulty section
+and reload the plugin. Already-spawned mobs retain their stored multiplier.
+
 ## WorldEdit Selection Previews
 
 `selection_preview` renders player-specific previews for cuboid, sphere/ellipsoid,

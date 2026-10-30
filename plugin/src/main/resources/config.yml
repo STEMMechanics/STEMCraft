@@ -903,7 +903,8 @@ dragon-respawn:
   worlds: []
 
 distance_difficulty:
-  range: 500
+  # Add 25% difficulty per 1,000 blocks from world spawn (2.0x at 4,000).
+  range: 1000
   multiplier: 0.25
 
 chat:
