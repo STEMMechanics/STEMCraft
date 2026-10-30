@@ -75,14 +75,8 @@ final class MobArenaCommand {
                 .sorted()
                 .toList());
         api.tabComplete().register("mobarena-death-message-set", (sender, args)-> Arrays.stream(MobDeathReason.values()).map(Enum::toString).sorted().toList());
-        api.tabComplete().register("mobarena-death-message", (sender, args)->{
-            /*final int myIndex = switch (args[2]) { case "add" -> 3; case "set" -> 4; default -> 4; };
-
-            // We just help the user add in the placeholders if the want to.
-            final Stream<String> possiblePlaceholders = Stream.of("{entity}", "{causer}");
-            return possiblePlaceholders.map(suggestion -> args[myIndex] + suggestion).toList();*/
-            return List.of("");
-        });
+        api.tabComplete().register("mobarena-death-message", (sender, args, draft) ->
+            List.of(draft + "{entity}", draft + "{causer}"));
 
         api.commands().create("mobarena")
                 .permission("stemcraft.command.mobarena")

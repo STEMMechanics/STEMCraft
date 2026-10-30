@@ -45,12 +45,51 @@ public interface TabCompleteService {
     void register(@NotNull String name, @NotNull TabCompletionProvider callback);
 
     /**
+     * Register a tab completion provider that can inspect the current argument draft.
+     *
+     * <p>This overload is additive: existing providers using the two-argument callback
+     * remain valid and continue to receive only their provider context.</p>
+     *
+     * @param name The name of the tab completion provider.
+     * @param callback The draft-aware callback to provide completions.
+     * @example Registering a draft-aware provider
+     * {@code
+     * api.tabComplete().register("message", (player, args, draft) ->
+     *     List.of(draft + "{placeholder}"));
+     * }
+     */
+    default void register(@NotNull String name, @NotNull DraftAwareTabCompletionProvider callback) {
+        register(name, (player, args) -> callback.provide(player, args, ""));
+    }
+
+    /**
      * Get a list of tab completions for a specific provider name.
      *
      * @param name The name of the tab completion provider.
      * @param player The player requesting tab completions.
-     * @param args The current arguments typed by the player.
+     * @param args Provider context supplied by the command's placeholder.
      * @return A list of tab completions.
      */
     @NotNull List<String> getCompletionList(@NotNull String name, @NotNull Player player, @NotNull String... args);
+
+    /**
+     * Get completions while supplying the current argument draft separately from provider context.
+     *
+     * <p>Implementations that do not support draft-aware providers fall back to the legacy
+     * lookup and ignore {@code draft}.</p>
+     *
+     * @param name The name of the tab completion provider.
+     * @param player The player requesting the completions.
+     * @param args Provider context resolved from completed command arguments.
+     * @param draft The current argument draft being completed.
+     * @return A list of tab completions.
+     */
+    default @NotNull List<String> getCompletionList(
+        @NotNull String name,
+        @NotNull Player player,
+        @NotNull String[] args,
+        @NotNull String draft
+    ) {
+        return getCompletionList(name, player, args);
+    }
 }

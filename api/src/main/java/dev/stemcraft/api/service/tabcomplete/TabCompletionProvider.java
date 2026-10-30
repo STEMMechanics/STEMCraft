@@ -27,6 +27,9 @@ import java.util.List;
 
 /**
  * Functional interface for providing tab completions for commands.
+ *
+ * <p>Use {@link DraftAwareTabCompletionProvider} when the provider also needs the
+ * argument currently being completed.</p>
  */
 @FunctionalInterface
 public interface TabCompletionProvider {
@@ -35,7 +38,7 @@ public interface TabCompletionProvider {
      * Provides a list of tab completions based on the player and current arguments.
      *
      * @param player The player requesting tab completions.
-     * @param args The current arguments typed by the player.
+     * @param args Provider context supplied by the command's placeholder.
      * @return A list of tab completions.
      */
     @NotNull List<String> provide(@NotNull Player player, @NotNull String... args);

@@ -53,6 +53,23 @@ class TabCompleteServiceImplTest {
     }
 
     @Test
+    void draftAwareProvidersReceiveContextAndDraftWithoutChangingLegacyProviders() {
+        Player viewer = viewer();
+        service.register("draft", (player, args, draft) ->
+            List.of(String.join("/", args) + ":" + draft));
+        service.register("legacy", (player, args) -> List.of(String.join("/", args)));
+
+        assertEquals(
+            List.of("arena:partial"),
+            service.getCompletionList("draft", viewer, new String[]{"arena"}, "partial")
+        );
+        assertEquals(
+            List.of("arena"),
+            service.getCompletionList("legacy", viewer, new String[]{"arena"}, "ignored")
+        );
+    }
+
+    @Test
     void onEnableRegistersCoreTabCompletions() {
         Player viewer = viewer();
         service.onEnable();
