@@ -40,6 +40,7 @@ import dev.stemcraft.feature.Mailboxes;
 import dev.stemcraft.api.service.comet.CometService;
 import dev.stemcraft.api.service.mailbox.MailboxService;
 import dev.stemcraft.api.service.save.SaveReport;
+import dev.stemcraft.api.service.web.WebService;
 import dev.stemcraft.api.service.workshop.WorkshopService;
 import dev.stemcraft.service.command.CommandServiceImpl;
 import dev.stemcraft.service.message.MessageServiceImpl;
@@ -382,7 +383,7 @@ public final class STEMCraft extends JavaPlugin {
     @Override
     public void onDisable() {
         if (Bukkit.isStopping() && api != null && api.web() != null) {
-            api.web().publishEvent("minecraft.server_stop", null, null, Map.of());
+            publishServerShutdownEvents(api.web(), List.copyOf(Bukkit.getOnlinePlayers()));
         }
 
         if (saves != null) {
@@ -438,6 +439,20 @@ public final class STEMCraft extends JavaPlugin {
         disableService(tasks);
         disableService(locales);
         disableService(messages);
+    }
+
+    static void publishServerShutdownEvents(@NotNull WebService webService,
+                                            @NotNull List<? extends Player> onlinePlayers) {
+        for (int index = 0; index < onlinePlayers.size(); index++) {
+            Player player = onlinePlayers.get(index);
+            webService.publishEvent(
+                "minecraft.player_quit",
+                player.getUniqueId(),
+                player.getName(),
+                Map.of("online_players", onlinePlayers.size() - index - 1)
+            );
+        }
+        webService.publishEvent("minecraft.server_stop", null, null, Map.of());
     }
 
     /** Save all active STEMCraft features, services, configs, and registered extensions. */
