@@ -862,7 +862,7 @@ public class AnnouncementsFeature extends BaseFeature {
                 .tabCompletion("reload")
                 .executor((unused, cmd, ctx) -> handleCommand(ctx))
                 .register(STEMCraft.getPlugin());
-        api.tabComplete().register("announcement-id", (player, args) -> definitions.keySet().stream().sorted().toList());
+        api.tabComplete().register("announcement-id", (player, args, currentArgument) -> definitions.keySet().stream().sorted().toList());
     }
 
     private void handleCommand(CommandContext ctx) {

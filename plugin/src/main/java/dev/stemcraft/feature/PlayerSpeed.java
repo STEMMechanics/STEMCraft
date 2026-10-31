@@ -51,10 +51,10 @@ public class PlayerSpeed extends BaseFeature {
     @Override
     public void onEnable() {
         // Tab Completion - Type
-        api.tabComplete().register("speedtype", (player, args) -> Arrays.asList(movementTypes));
+        api.tabComplete().register("speedtype", (player, args, currentArgument) -> Arrays.asList(movementTypes));
 
         // Tab Completion - Speed
-        api.tabComplete().register("speed", (player, args) -> {
+        api.tabComplete().register("speed", (player, args, currentArgument) -> {
             String[] speed = {"1", "1.5", "1.75", "2"};
             return Arrays.asList(speed);
         });

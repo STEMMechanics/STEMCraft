@@ -45,7 +45,7 @@ public final class DebugServiceImpl extends BaseService implements DebugService 
 
     @Override
     public void onEnable() {
-        api.tabComplete().register("debug-test", (player, args) -> tests().stream()
+        api.tabComplete().register("debug-test", (player, args, currentArgument) -> tests().stream()
                 .map(DebugTest::id)
                 .toList());
 

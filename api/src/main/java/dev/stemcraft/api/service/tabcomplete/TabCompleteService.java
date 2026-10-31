@@ -39,7 +39,7 @@ public interface TabCompleteService {
      * @param callback The callback to provide tab completions.
      * @example Registering a provider
      * {@code
-     * api.tabComplete().register("arena", (player, args) -> arenaIds);
+     * api.tabComplete().register("arena", (player, args, currentArgument) -> arenaIds);
      * }
      */
     void register(@NotNull String name, @NotNull TabCompletionProvider callback);
@@ -49,8 +49,26 @@ public interface TabCompleteService {
      *
      * @param name The name of the tab completion provider.
      * @param player The player requesting tab completions.
-     * @param args The current arguments typed by the player.
+     * @param args Provider context supplied by the command's placeholder.
      * @return A list of tab completions.
      */
     @NotNull List<String> getCompletionList(@NotNull String name, @NotNull Player player, @NotNull String... args);
+
+    /**
+     * Get completions while supplying the current argument separately from provider context.
+     *
+     * @param name The name of the tab completion provider.
+     * @param player The player requesting the completions.
+     * @param args Provider context resolved from completed command arguments.
+     * @param currentArgument The current argument being completed.
+     * @return A list of tab completions.
+     */
+    default @NotNull List<String> getCompletionList(
+        @NotNull String name,
+        @NotNull Player player,
+        @NotNull String[] args,
+        @NotNull String currentArgument
+    ) {
+        return getCompletionList(name, player, args);
+    }
 }

@@ -1134,7 +1134,7 @@ public class WorkshopsFeature extends BaseFeature implements WorkshopService {
     }
 
     private void registerTabCompletion() {
-        api.tabComplete().register("workshop-id", (player, args) -> {
+        api.tabComplete().register("workshop-id", (player, args, currentArgument) -> {
             synchronized (cache) {
                 return cache.keySet().stream().sorted().toList();
             }
