@@ -19,10 +19,21 @@ import dev.stemcraft.api.service.debug.DebugHandler;
 import dev.stemcraft.api.service.debug.DebugRegistration;
 import dev.stemcraft.api.service.debug.DebugService;
 import dev.stemcraft.api.service.debug.DebugTest;
+import org.bukkit.NamespacedKey;
+import org.bukkit.block.Block;
+import org.bukkit.block.BlockState;
+import org.bukkit.block.TileState;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataContainer;
+import org.bukkit.persistence.PersistentDataType;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -38,6 +49,7 @@ public final class DebugServiceImpl extends BaseService implements DebugService 
 
     private final Map<String, RegisteredTest> registeredTests = new ConcurrentHashMap<>();
     private Command command;
+    private DebugRegistration inspectRegistration;
 
     public DebugServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
@@ -48,6 +60,8 @@ public final class DebugServiceImpl extends BaseService implements DebugService 
         api.tabComplete().register("debug-test", (player, args, currentArgument) -> tests().stream()
                 .map(DebugTest::id)
                 .toList());
+        inspectRegistration = register("inspect",
+                "Inspect the target block, entity, and held item.", this::inspect);
 
         command = api.commands().create("debug")
                 .description("Run a registered STEMCraft diagnostic.")
@@ -63,6 +77,10 @@ public final class DebugServiceImpl extends BaseService implements DebugService 
         if (command != null) {
             command.unregister();
             command = null;
+        }
+        if (inspectRegistration != null) {
+            inspectRegistration.close();
+            inspectRegistration = null;
         }
         registeredTests.clear();
     }
@@ -158,6 +176,97 @@ public final class DebugServiceImpl extends BaseService implements DebugService 
             context.info("Run /debug <test> <player> from the console.");
         } else {
             context.info("Run /debug <test> to inspect yourself.");
+        }
+    }
+
+    private void inspect(DebugContext context) {
+        Player player = context.player();
+        if (player == null) {
+            context.error("A player is required for /debug inspect.");
+            return;
+        }
+
+        ItemStack held = player.getInventory().getItemInMainHand();
+        if (held == null || held.getType().isAir()) {
+            context.info("Held item: empty");
+        } else {
+            context.info("Held item: " + held.getType() + " x" + held.getAmount());
+            context.info("Custom item id: " + Objects.requireNonNullElse(
+                    api.items().getCustomItemId(held), "none"));
+            ItemMeta meta = held.getItemMeta();
+            if (meta != null) inspectPdc(context, "Item PDC", meta.getPersistentDataContainer());
+        }
+
+        Block block = player.getTargetBlockExact(8);
+        if (block == null) {
+            context.info("Target block: none within 8 blocks.");
+        } else {
+            context.info("Target block: " + block.getType() + " at " + block.getWorld().getName()
+                    + " " + block.getX() + "," + block.getY() + "," + block.getZ());
+            context.info("Block data: " + block.getBlockData().getAsString());
+            BlockState state = block.getState();
+            if (state instanceof TileState tile) {
+                inspectPdc(context, "Block tile PDC", tile.getPersistentDataContainer());
+            } else {
+                context.info("Block tile PDC: none (not a tile entity).");
+            }
+            inspectPdc(context, "Chunk PDC", block.getChunk().getPersistentDataContainer());
+        }
+
+        Entity entity = player.getTargetEntity(8);
+        if (entity == null) {
+            context.info("Target entity: none within 8 blocks.");
+        } else {
+            context.info("Target entity: " + entity.getType() + " " + entity.getUniqueId());
+            context.info("Entity scoreboard tags: " + (entity.getScoreboardTags().isEmpty()
+                    ? "none" : String.join(", ", entity.getScoreboardTags())));
+            inspectPdc(context, "Entity PDC", entity.getPersistentDataContainer());
+        }
+    }
+
+    private static void inspectPdc(DebugContext context, String label, PersistentDataContainer data) {
+        List<NamespacedKey> keys = new ArrayList<>(data.getKeys());
+        keys.sort(Comparator.comparing(NamespacedKey::toString));
+        if (keys.isEmpty()) {
+            context.info(label + ": none");
+            return;
+        }
+        context.info(label + ":");
+        for (NamespacedKey key : keys) {
+            context.info("- " + key + " = " + pdcValue(data, key));
+        }
+    }
+
+    private static String pdcValue(PersistentDataContainer data, NamespacedKey key) {
+        String string = read(data, key, PersistentDataType.STRING);
+        if (string != null) return "STRING " + string;
+        Byte byteValue = read(data, key, PersistentDataType.BYTE);
+        if (byteValue != null) return "BYTE " + byteValue;
+        Integer integer = read(data, key, PersistentDataType.INTEGER);
+        if (integer != null) return "INTEGER " + integer;
+        Long longValue = read(data, key, PersistentDataType.LONG);
+        if (longValue != null) return "LONG " + longValue;
+        Float floatValue = read(data, key, PersistentDataType.FLOAT);
+        if (floatValue != null) return "FLOAT " + floatValue;
+        Double doubleValue = read(data, key, PersistentDataType.DOUBLE);
+        if (doubleValue != null) return "DOUBLE " + doubleValue;
+        byte[] bytes = read(data, key, PersistentDataType.BYTE_ARRAY);
+        if (bytes != null) return "BYTE_ARRAY " + Arrays.toString(bytes);
+        int[] integers = read(data, key, PersistentDataType.INTEGER_ARRAY);
+        if (integers != null) return "INTEGER_ARRAY " + Arrays.toString(integers);
+        long[] longs = read(data, key, PersistentDataType.LONG_ARRAY);
+        if (longs != null) return "LONG_ARRAY " + Arrays.toString(longs);
+        PersistentDataContainer nested = read(data, key, PersistentDataType.TAG_CONTAINER);
+        if (nested != null) return "TAG_CONTAINER (" + nested.getKeys().size() + " entries)";
+        return "present (unrecognised type)";
+    }
+
+    private static <P, C> C read(PersistentDataContainer data, NamespacedKey key,
+                                 PersistentDataType<P, C> type) {
+        try {
+            return data.get(key, type);
+        } catch (RuntimeException ignored) {
+            return null;
         }
     }
 

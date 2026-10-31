@@ -3,6 +3,7 @@ package dev.stemcraft.feature;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SkipNightTest {
@@ -28,5 +29,14 @@ class SkipNightTest {
         assertEquals(1.0d, SkipNight.sleeperProgress(3, 2));
         assertEquals(0.0d, SkipNight.sleeperProgress(-1, 2));
         assertTrue(Double.isFinite(SkipNight.sleeperProgress(1, 0)));
+    }
+
+    @Test
+    void nightSkipUsesTheVanillaBedWindow() {
+        assertTrue(SkipNight.canStartNightSkip(12542));
+        assertTrue(SkipNight.canStartNightSkip(18000));
+        assertFalse(SkipNight.canStartNightSkip(12541));
+        assertFalse(SkipNight.canStartNightSkip(0));
+        assertTrue(SkipNight.canStartNightSkip(36542));
     }
 }

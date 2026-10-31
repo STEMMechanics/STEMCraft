@@ -41,6 +41,8 @@ import java.util.List;
  */
 public class SkipNight extends BaseFeature {
     private static final GameRule<Integer> RANDOM_TICK_SPEED_RULE = requireGameRule();
+    /** Vanilla allows players to enter beds from this point in the normal night cycle. */
+    private static final long NIGHT_START_TICK = 12542L;
 
     private double skipPercentage = 1d;
     private int skipRandomTickSpeed = 3;
@@ -227,11 +229,11 @@ public class SkipNight extends BaseFeature {
 
         if (!isSkippingNight(world)) {
             if (numSleepers >= required) {
-                for (Player player : players) {
-                    api.messages().info(player, "SKIP_NIGHT_ENOUGH_PLAYERS");
+                if (skipNight(world)) {
+                    for (Player player : players) {
+                        api.messages().info(player, "SKIP_NIGHT_ENOUGH_PLAYERS");
+                    }
                 }
-
-                skipNight(world);
             }
         } else {
             if (numSleepers < required) {
@@ -252,22 +254,22 @@ public class SkipNight extends BaseFeature {
         return Math.max(0.0d, Math.min(1.0d, (double) sleepers / required));
     }
 
+    static boolean canStartNightSkip(long timeOfDay) {
+        return Math.floorMod(timeOfDay, 24000L) >= NIGHT_START_TICK;
+    }
+
     /**
      * Skip the night of a specified world.
      *
      * @param world The world to skip the night.
      */
-    private void skipNight(World world) {
-        if (!worldRandomTickCount.containsKey(world)) {
-            if (world.getTime() > 13000) {
-                if (!worldRandomTickCount.containsKey(world)) {
-                    worldRandomTickCount.put(world, getRandomTickSpeed(world));
-                    setRandomTickSpeed(world, skipRandomTickSpeed);
+    private boolean skipNight(World world) {
+        if (worldRandomTickCount.containsKey(world) || !canStartNightSkip(world.getTime())) return false;
 
-                    skipNightStep(world);
-                }
-            }
-        }
+        worldRandomTickCount.put(world, getRandomTickSpeed(world));
+        setRandomTickSpeed(world, skipRandomTickSpeed);
+        skipNightStep(world);
+        return true;
     }
 
     /**

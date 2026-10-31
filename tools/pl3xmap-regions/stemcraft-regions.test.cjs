@@ -5,7 +5,7 @@ const {mkdtempSync, writeFileSync, readFileSync, rmSync} = require('node:fs');
 const {tmpdir} = require('node:os');
 const {join} = require('node:path');
 const {spawnSync} = require('node:child_process');
-const {planTiles, drawTile, styleIndex, escapeHtml, ViewportLayer, MAX_TILES, MAX_REQUESTS} =
+const {planTiles, drawTile, styleIndex, escapeHtml, ViewportLayer, install, MAX_TILES, MAX_REQUESTS} =
   require('../../plugin/src/main/resources/pl3xmap/stemcraft-regions.js');
 const settings = {revision: 1, tileCells: 32, sampleBlocks: 4, maxLevel: 19, refreshSeconds: 300,
   permanentLabels: false, styles: [{strokeColour: 0xff112233 | 0, fillColour: 0x40112233, lineThickness: 2}]};
@@ -60,7 +60,8 @@ function fixture(visible = true, extent = 1024) {
   layer.addLayer = item => layer.children.add(item); layer.removeLayer = item => layer.children.delete(item);
   const map = {visible, on() {}, off() {}, hasLayer: () => map.visible,
     getPane: () => ({}), createPane: () => ({style: {}}), getSize: () => ({x: extent, y: extent}),
-    getBounds: () => ({getWest: () => 0, getEast: () => extent, getSouth: () => 0, getNorth: () => extent})};
+    getBounds: () => ({getWest: () => 0, getEast: () => extent, getSouth: () => 0, getNorth: () => extent}),
+    eachLayer: callback => (map.initialLayers || []).forEach(callback)};
   const events = new EventTarget();
   return {map, layer, events, world: {name: 'survival', eventSource: events}, leaflet: leaflet()};
 }
@@ -103,6 +104,28 @@ test('default requests retain the global fetch receiver', async t => {
   });
   controller = new ViewportLayer(f.map, f.layer, f.world,
     'https://map.test/world-map/tiles/survival/stemcraft-regions/', f.leaflet);
+  await flush();
+  assert.equal(calls.length, 2);
+});
+test('installer attaches to a default-visible overlay added before the script', async t => {
+  const f = fixture(true, 128), calls = [];
+  f.layer.key = 'stemcraft_named_regions';
+  f.map.initialLayers = [f.layer];
+  const request = async (url, options) => {
+    calls.push({url, options});
+    return new URL(url).pathname.endsWith('/metadata.json')
+      ? {ok: true, json: async () => settings}
+      : {ok: true, json: async () => ({regions: []})};
+  };
+  const browser = new EventTarget();
+  browser.pl3xmap = {map: f.map, worldManager: {currentWorld: f.world}};
+  browser.L = f.leaflet;
+  install(browser, {baseURI: 'https://map.test/world-map/'}, request);
+  await flush();
+  assert.equal(calls.length, 2);
+  assert.equal(new URL(calls[0].url).pathname,
+    '/world-map/tiles/survival/stemcraft-regions/metadata.json');
+  browser.dispatchEvent(new Event('beforeunload'));
   await flush();
   assert.equal(calls.length, 2);
 });
