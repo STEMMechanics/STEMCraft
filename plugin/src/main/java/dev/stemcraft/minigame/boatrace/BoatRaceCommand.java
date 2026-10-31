@@ -35,7 +35,7 @@ public class BoatRaceCommand {
     }
 
     public void onEnable() {
-        api.tabComplete().register("boatrace-arenas", (sender, args) -> boatRace.minigame().arenas().stream()
+        api.tabComplete().register("boatrace-arenas", (sender, args, currentArgument) -> boatRace.minigame().arenas().stream()
             .map(MiniGameArena::id)
             .sorted()
             .toList());

@@ -36,7 +36,7 @@ public class NightfallCommand {
     }
 
     public void onEnable() {
-        api.tabComplete().register("nightfall-arenas", (sender, args) -> nightfall.minigame().arenas().stream()
+        api.tabComplete().register("nightfall-arenas", (sender, args, currentArgument) -> nightfall.minigame().arenas().stream()
             .map(MiniGameArena::id)
             .sorted()
             .toList());

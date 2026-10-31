@@ -95,8 +95,8 @@ public class InteractiveMenus extends BaseFeature {
     }
 
     private void registerCommand() {
-        api.tabComplete().register("interactive-menus", (player, args) -> new ArrayList<>(menus.keySet()));
-        api.tabComplete().register("interactive-menu-items", (player, args) -> {
+        api.tabComplete().register("interactive-menus", (player, args, currentArgument) -> new ArrayList<>(menus.keySet()));
+        api.tabComplete().register("interactive-menu-items", (player, args, currentArgument) -> {
             if (args.length == 0) {
                 return List.of();
             }

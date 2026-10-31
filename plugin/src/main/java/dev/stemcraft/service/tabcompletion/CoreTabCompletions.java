@@ -69,19 +69,19 @@ public class CoreTabCompletions {
         registerRegistryCompletion(api, "sound", RegistryKey.SOUND_EVENT);
         registerRegistryCompletion(api, "particle", RegistryKey.PARTICLE_TYPE);
 
-        api.tabComplete().register("boolean", (player, args) -> List.of("true", "false"));
-        api.tabComplete().register("difficulty", (player, args) -> Arrays.stream(Difficulty.values())
+        api.tabComplete().register("boolean", (player, args, currentArgument) -> List.of("true", "false"));
+        api.tabComplete().register("difficulty", (player, args, currentArgument) -> Arrays.stream(Difficulty.values())
                 .map(difficulty -> difficulty.name().toLowerCase(Locale.ROOT)).toList());
 
         // Online players
-        api.tabComplete().register("player", (player, args) ->
+        api.tabComplete().register("player", (player, args, currentArgument) ->
                 Bukkit.getOnlinePlayers()
                         .stream()
                         .filter(online -> player == null || player.canSee(online))
                         .map(Player::getName)
                         .toList()
         );
-        api.tabComplete().register("offline-player", (viewer, args) -> {
+        api.tabComplete().register("offline-player", (viewer, args, currentArgument) -> {
             Map<String, String> names = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
             for (Player online : Bukkit.getOnlinePlayers()) {
                 if (viewer == null || viewer.canSee(online)) names.putIfAbsent(online.getName(), online.getName());
@@ -95,7 +95,7 @@ public class CoreTabCompletions {
             }
             return List.copyOf(names.values());
         });
-        api.tabComplete().register("players", (player, args) -> {
+        api.tabComplete().register("players", (player, args, currentArgument) -> {
             List<String> names = Bukkit.getOnlinePlayers()
                     .stream()
                     .filter(online -> player == null || player.canSee(online))
@@ -108,41 +108,41 @@ public class CoreTabCompletions {
         });
 
         // Common durations
-        api.tabComplete().register("duration", (player, args) -> List.of(
+        api.tabComplete().register("duration", (player, args, currentArgument) -> List.of(
                 "1m", "2m", "5m", "10m", "15m", "30m",
                 "1h", "2h", "4h",
                 "1d", "1w"
         ));
 
         // Worlds
-        api.tabComplete().register("world", (player, args) -> Bukkit.getWorlds().stream().map(World::getName).toList());
+        api.tabComplete().register("world", (player, args, currentArgument) -> Bukkit.getWorlds().stream().map(World::getName).toList());
 
         // Game-modes
-        api.tabComplete().register("gamemode", (player, args) -> List.of(
+        api.tabComplete().register("gamemode", (player, args, currentArgument) -> List.of(
                 "survival", "creative", "spectator", "adventure"
         ));
 
-        api.tabComplete().register("int", (player, args) -> List.of(
+        api.tabComplete().register("int", (player, args, currentArgument) -> List.of(
                 "1", "2", "5", "10", "15", "20", "25", "50", "100"
         ));
         // Resolve the alias dynamically so a later int override also applies to number.
-        api.tabComplete().register("number", (player, args) -> api.tabComplete().getCompletionList("int", player, args));
+        api.tabComplete().register("number", (player, args, currentArgument) -> api.tabComplete().getCompletionList("int", player, args));
     }
 
     private static void registerMaterialCompletion(STEMCraftAPI api, String name, Predicate<Material> filter) {
         List<String> names = Arrays.stream(Material.values()).filter(material -> !material.isLegacy())
                 .filter(filter).map(material -> material.getKey().toString()).sorted().toList();
-        api.tabComplete().register(name, (player, args) -> names);
+        api.tabComplete().register(name, (player, args, currentArgument) -> names);
     }
 
     private static <T extends Keyed> void registerRegistryCompletion(STEMCraftAPI api, String name, RegistryKey<T> key) {
-        api.tabComplete().register(name, (player, args) -> RegistryAccess.registryAccess().getRegistry(key)
+        api.tabComplete().register(name, (player, args, currentArgument) -> RegistryAccess.registryAccess().getRegistry(key)
                 .keyStream().map(Object::toString).sorted().toList());
     }
 
     private static void registerEntityCompletion(STEMCraftAPI api, String name, Predicate<EntityType> filter) {
         List<String> names = Arrays.stream(EntityType.values()).filter(filter).map(Enum::name).sorted().toList();
-        api.tabComplete().register(name, (player, args) -> names);
+        api.tabComplete().register(name, (player, args, currentArgument) -> names);
     }
 
     private static boolean isMob(EntityType type) {

@@ -59,24 +59,24 @@ final class MobArenaCommand {
      * <p>Enables {@code MobArenaCommand}, registering the titular command.</p>
     */
     public void onEnable() {
-        api.tabComplete().register("mobarena-arenas", (sender, args)->mobArena.minigame()
+        api.tabComplete().register("mobarena-arenas", (sender, args, currentArgument)->mobArena.minigame()
                 .arenas()
                 .stream()
                 .map(MiniGameArena::id)
                 .sorted()
                 .toList());
-        api.tabComplete().register("mobarena-increment-type", (sender, args)-> Arrays.stream(IncrementType.values())
+        api.tabComplete().register("mobarena-increment-type", (sender, args, currentArgument)-> Arrays.stream(IncrementType.values())
                 .map(Enum::toString)
                 .sorted()
                 .toList());
-        api.tabComplete().register("mobarena-equipment-slots", (sender, args)->Arrays.stream(EquipmentSlot.values())
+        api.tabComplete().register("mobarena-equipment-slots", (sender, args, currentArgument)->Arrays.stream(EquipmentSlot.values())
                 .filter(MobArenaConfig::isValidArmorSlot)
                 .map(Enum::toString)
                 .sorted()
                 .toList());
-        api.tabComplete().register("mobarena-death-message-set", (sender, args)-> Arrays.stream(MobDeathReason.values()).map(Enum::toString).sorted().toList());
-        api.tabComplete().register("mobarena-death-message", (sender, args, draft) ->
-            List.of(draft + "{entity}", draft + "{causer}"));
+        api.tabComplete().register("mobarena-death-message-set", (sender, args, currentArgument)-> Arrays.stream(MobDeathReason.values()).map(Enum::toString).sorted().toList());
+        api.tabComplete().register("mobarena-death-message", (sender, args, currentArgument) ->
+            List.of(currentArgument + "{entity}", currentArgument + "{causer}"));
 
         api.commands().create("mobarena")
                 .permission("stemcraft.command.mobarena")

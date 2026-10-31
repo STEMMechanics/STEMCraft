@@ -24,7 +24,6 @@ import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.service.tabcomplete.TabCompleteService;
 import dev.stemcraft.api.service.tabcomplete.TabCompletionProvider;
-import dev.stemcraft.api.service.tabcomplete.DraftAwareTabCompletionProvider;
 import dev.stemcraft.service.BaseService;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
@@ -37,12 +36,7 @@ import java.util.List;
  * Implementation of the TabCompleteService interface.
  */
 public class TabCompleteServiceImpl extends BaseService implements TabCompleteService {
-    @FunctionalInterface
-    private interface RegisteredProvider {
-        @NotNull List<String> provide(@NotNull Player player, @NotNull String[] args, @NotNull String draft);
-    }
-
-    private final HashMap<String, RegisteredProvider> tabCompletionPlaceholders = new HashMap<>();
+    private final HashMap<String, TabCompletionProvider> tabCompletionPlaceholders = new HashMap<>();
 
     /**
      * Constructor for TabCompleteServiceImpl.
@@ -67,19 +61,9 @@ public class TabCompleteServiceImpl extends BaseService implements TabCompleteSe
      * @param name The name of the placeholder.
      * @param callback The callback to provide completions.
      */
-    public void register(@NotNull String name, @NotNull TabCompletionProvider callback) {
-        tabCompletionPlaceholders.put(name, (player, args, draft) -> callback.provide(player, args));
-    }
-
-    /**
-     * Register a draft-aware tab completion placeholder.
-     *
-     * @param name The name of the tab completion provider.
-     * @param callback The draft-aware callback to provide completions.
-     */
     @Override
-    public void register(@NotNull String name, @NotNull DraftAwareTabCompletionProvider callback) {
-        tabCompletionPlaceholders.put(name, callback::provide);
+    public void register(@NotNull String name, @NotNull TabCompletionProvider callback) {
+        tabCompletionPlaceholders.put(name, callback);
     }
 
     /**
@@ -95,12 +79,12 @@ public class TabCompleteServiceImpl extends BaseService implements TabCompleteSe
     }
 
     /**
-     * Get completions with the active argument draft separated from provider context.
+     * Get completions with the current argument separated from provider context.
      *
      * @param name The name of the tab completion provider.
      * @param player The player requesting the completions.
      * @param args Provider context resolved from completed command arguments.
-     * @param draft The current argument draft being completed.
+     * @param currentArgument The current argument being completed.
      * @return A list of tab completions.
      */
     @Override
@@ -108,9 +92,9 @@ public class TabCompleteServiceImpl extends BaseService implements TabCompleteSe
         @NotNull String name,
         @NotNull Player player,
         @NotNull String[] args,
-        @NotNull String draft
+        @NotNull String currentArgument
     ) {
-        RegisteredProvider provider = tabCompletionPlaceholders.get(name);
-        return provider == null ? new ArrayList<>() : provider.provide(player, args, draft);
+        TabCompletionProvider provider = tabCompletionPlaceholders.get(name);
+        return provider == null ? new ArrayList<>() : provider.provide(player, args, currentArgument);
     }
 }

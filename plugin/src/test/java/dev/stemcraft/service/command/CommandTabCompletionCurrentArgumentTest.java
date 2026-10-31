@@ -15,10 +15,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-class CommandDraftTabCompletionTest {
+class CommandTabCompletionCurrentArgumentTest {
 
     @Test
-    void passesCompletedProviderContextAndActiveDraftSeparately() {
+    void passesCompletedProviderContextAndCurrentArgumentSeparately() {
         var server = MockBukkit.mock();
         try {
             var commandPlugin = MockBukkit.createMockPlugin();
@@ -30,15 +30,15 @@ class CommandDraftTabCompletionTest {
 
             Player player = server.addPlayer("Alice");
             AtomicReference<List<String>> context = new AtomicReference<>();
-            AtomicReference<String> draft = new AtomicReference<>();
-            tabComplete.register("draft", (sender, args, currentDraft) -> {
+            AtomicReference<String> currentArgument = new AtomicReference<>();
+            tabComplete.register("current-argument", (sender, args, currentArgumentValue) -> {
                 context.set(List.of(args));
-                draft.set(currentDraft);
-                return List.of(currentDraft + "{entity}", currentDraft + "{causer}");
+                currentArgument.set(currentArgumentValue);
+                return List.of(currentArgumentValue + "{entity}", currentArgumentValue + "{causer}");
             });
 
-            var command = (CommandImpl) new CommandBuilderImpl(api, "drafttabtest")
-                .tabCompletion("message", "{draft:$0}")
+            var command = (CommandImpl) new CommandBuilderImpl(api, "currentargumenttest")
+                .tabCompletion("message", "{current-argument:$0}")
                 .register(commandPlugin);
 
             assertEquals(
@@ -46,12 +46,12 @@ class CommandDraftTabCompletionTest {
                 command.onTabComplete(
                     player,
                     command.getRegisteredBukkitCommand(),
-                    "drafttabtest",
+                    "currentargumenttest",
                     new String[]{"message", "He"}
                 )
             );
             assertEquals(List.of("message"), context.get());
-            assertEquals("He", draft.get());
+            assertEquals("He", currentArgument.get());
         } finally {
             InstanceHolder.set(null);
             MockBukkit.unmock();
