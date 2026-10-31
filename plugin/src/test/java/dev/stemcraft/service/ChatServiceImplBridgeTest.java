@@ -2,6 +2,7 @@ package dev.stemcraft.service;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import dev.stemcraft.api.service.web.WebServiceEvent;
 import org.junit.jupiter.api.Test;
 
 import java.net.URI;
@@ -15,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
 class ChatServiceImplBridgeTest {
-    private static final ChatServiceImpl.ChatBridgeSettings SETTINGS = new ChatServiceImpl.ChatBridgeSettings(
+    private static final WebServiceImpl.EventSubscriptionSettings SETTINGS = new WebServiceImpl.EventSubscriptionSettings(
         true,
         URI.create("https://bot.example.test/minecraft/event"),
         "token",
@@ -23,29 +24,20 @@ class ChatServiceImplBridgeTest {
         "global",
         Duration.ofSeconds(3),
         0,
-        true,
-        true,
-        true,
-        true,
-        true,
-        true,
-        true,
-        true,
-        true,
+        Map.of(),
         List.of("login", "register")
     );
 
     @Test
     void lifecyclePayloadUsesEventNameAndStructuredData() {
-        String payload = ChatServiceImpl.chatBridgePayload(new ChatServiceImpl.ChatBridgeEvent(
+        String payload = WebServiceImpl.eventPayload(new WebServiceEvent(
             UUID.fromString("7b5e1d0e-8d86-4a93-9ea2-92a57fb1b40e"),
             Instant.parse("2026-10-24T01:02:03Z"),
             "minecraft.minigame_end",
             null,
             null,
-            Map.of("minigame", "bedwars", "winner_team", "red"),
-            SETTINGS
-        ));
+            Map.of("minigame", "bedwars", "winner_team", "red")
+        ), SETTINGS);
 
         JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
         assertEquals("minecraft.minigame_end", json.get("event").getAsString());
@@ -58,22 +50,21 @@ class ChatServiceImplBridgeTest {
     void endpointNormalisationRemovesTrailingSlashes() {
         assertEquals(
             "https://bot.example.test/minecraft/event",
-            ChatServiceImpl.normalizeChatBridgeEndpoint("https://bot.example.test/minecraft/event///")
+            WebServiceImpl.normalizeEventEndpoint("https://bot.example.test/minecraft/event///")
         );
     }
 
     @Test
     void chatPayloadKeepsTheExistingTopLevelMessageShape() {
         UUID playerId = UUID.randomUUID();
-        String payload = ChatServiceImpl.chatBridgePayload(new ChatServiceImpl.ChatBridgeEvent(
+        String payload = WebServiceImpl.eventPayload(new WebServiceEvent(
             UUID.randomUUID(),
             Instant.parse("2026-10-24T01:02:03Z"),
             "minecraft.chat",
             playerId,
             "Alex",
-            Map.of("message", "Hello from Minecraft"),
-            SETTINGS
-        ));
+            Map.of("message", "Hello from Minecraft")
+        ), SETTINGS);
 
         JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
         assertEquals("Hello from Minecraft", json.get("message").getAsString());
@@ -94,11 +85,11 @@ class ChatServiceImplBridgeTest {
 
     @Test
     void commandsWithSensitiveArgumentsAreRedactedBeforeForwarding() {
-        assertEquals("/login <redacted>", ChatServiceImpl.redactCommand(
+        assertEquals("/login <redacted>", WebServiceImpl.redactCommand(
             "/login secret-value", List.of("login")));
-        assertEquals("/spawn home", ChatServiceImpl.redactCommand(
+        assertEquals("/spawn home", WebServiceImpl.redactCommand(
             "/spawn home", List.of("login")));
-        assertEquals("/minecraft:login <redacted>", ChatServiceImpl.redactCommand(
+        assertEquals("/minecraft:login <redacted>", WebServiceImpl.redactCommand(
             "/minecraft:login secret-value", List.of("login")));
     }
 }

@@ -46,6 +46,17 @@ public interface PlayerStatsService {
     /** Returns a stat total within a rolling period such as {@code 28d}, or all time when blank. */
     double total(@NotNull UUID playerUuid, @NotNull String key, @Nullable String period);
 
+    /**
+     * Return a read-only snapshot of all registered statistics for one player.
+     *
+     * <p>Unlike {@link #list(String, String, String, String)}, this method is
+     * intended for profile/API consumers and does not imply a global list or
+     * a save of every player's state.</p>
+     */
+    default @Nullable PlayerStatsRecord snapshot(@NotNull UUID playerUuid, @Nullable String period) {
+        return list(playerUuid.toString(), null, null, period).stream().findFirst().orElse(null);
+    }
+
     void captureOnlinePlayers();
 
     @NotNull List<PlayerStatsRecord> list(@Nullable String uuidText, @Nullable String username, @Nullable String statKey, @Nullable String period);

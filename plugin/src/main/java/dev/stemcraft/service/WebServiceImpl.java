@@ -31,11 +31,17 @@ import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.api.config.ConfigSectionView;
 import dev.stemcraft.api.service.mailbox.MailSendRequest;
 import dev.stemcraft.api.service.mailbox.MailSendResult;
 import dev.stemcraft.api.service.player.PlayerService;
+import dev.stemcraft.api.service.playerprofile.PlayerProfileSection;
+import dev.stemcraft.api.service.playerprofile.PlayerProfileSectionDefinition;
+import dev.stemcraft.api.service.playerprofile.PlayerProfileService;
+import dev.stemcraft.api.service.playerprofile.PlayerProfileSnapshot;
 import dev.stemcraft.api.service.web.WebService;
 import dev.stemcraft.api.service.web.WebServiceEndpointHandler;
+import dev.stemcraft.api.service.web.WebServiceEvent;
 import dev.stemcraft.api.service.web.WebServiceRequest;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -46,6 +52,7 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 import org.jspecify.annotations.NonNull;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -53,13 +60,20 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URLDecoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -68,12 +82,19 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -87,6 +108,10 @@ public class WebServiceImpl extends BaseService implements WebService {
     private static final String DEFAULT_ROBOTS_RESOURCE = "www/robots.txt";
     private static final String MAINTENANCE_MESSAGE = "Server is under maintenance. Please try again later.";
     private static final String SURVIVAL_MAIL_PATH = "/api/v1/survival/mail";
+    private static final String CAPABILITIES_PATH = "/api/v1/capabilities";
+    private static final String PLAYER_PROFILE_PATH_PREFIX = "/api/v1/players/";
+    private static final String PLAYER_PROFILE_SUFFIX = "/profile";
+    private static final String EVENT_SUBSCRIPTIONS_PATH = "event-subscriptions";
     private static final String BEARER_PREFIX = "Bearer ";
     private static final int MAX_HTTP_REQUEST_BODY_BYTES = 2 * 1024 * 1024;
     private static final int DEFAULT_MAIL_API_BODY_BYTES = 32 * 1024;
@@ -99,6 +124,37 @@ public class WebServiceImpl extends BaseService implements WebService {
     private static final int MAIL_API_MAX_IDEMPOTENCY_ENTRIES = 1024;
     private static final long MAIL_API_IDEMPOTENCY_RETENTION_MILLIS = 24L * 60L * 60L * 1000L;
     private static final long MAIL_API_SERVER_THREAD_TIMEOUT_SECONDS = 5L;
+    private static final long PLAYER_API_SERVER_THREAD_TIMEOUT_SECONDS = 5L;
+    private static final int PLAYER_API_KEY_BYTES = 32;
+    private static final List<String> DEFAULT_REDACTED_COMMAND_ROOTS = List.of(
+        "login", "register", "changepassword", "password"
+    );
+    private static final Map<String, String> LEGACY_EVENT_NAMES = Map.ofEntries(
+        Map.entry("chat", "minecraft.chat"),
+        Map.entry("player-join", "minecraft.player_join"),
+        Map.entry("player-quit", "minecraft.player_quit"),
+        Map.entry("minigame-start", "minecraft.minigame_start"),
+        Map.entry("minigame-end", "minecraft.minigame_end"),
+        Map.entry("player-death", "minecraft.player_death"),
+        Map.entry("player-command", "minecraft.player_command"),
+        Map.entry("server-start", "minecraft.server_start"),
+        Map.entry("server-stop", "minecraft.server_stop"),
+        Map.entry("server-message", "minecraft.server_message"),
+        Map.entry("player-skill-level-up", "minecraft.player_skill_level_up")
+    );
+    private static final List<String> DEFAULT_EVENT_TYPES = List.of(
+        "minecraft.chat",
+        "minecraft.player_join",
+        "minecraft.player_quit",
+        "minecraft.minigame_start",
+        "minecraft.minigame_end",
+        "minecraft.player_death",
+        "minecraft.player_command",
+        "minecraft.server_start",
+        "minecraft.server_stop",
+        "minecraft.server_message",
+        "minecraft.player_skill_level_up"
+    );
     private File wwwRoot;
     private HttpServer httpServer;
     private volatile Map<String, WebServiceEndpointHandler> endpointHandlers = Map.of();
@@ -115,6 +171,11 @@ public class WebServiceImpl extends BaseService implements WebService {
     private volatile int mailApiMaxItems = DEFAULT_MAIL_API_MAX_ITEMS;
     private volatile int mailApiMaxItemAmount = DEFAULT_MAIL_API_MAX_ITEM_AMOUNT;
     private volatile long mailApiMaxDelaySeconds = DEFAULT_MAIL_API_MAX_DELAY_SECONDS;
+    private volatile boolean playerApiEnabled;
+    private volatile String playerApiKey = "";
+    private volatile EventSubscriptionSettings eventSubscriptionSettings = EventSubscriptionSettings.disabled();
+    private volatile HttpClient eventSubscriptionHttpClient;
+    private volatile ThreadPoolExecutor eventSubscriptionExecutor;
     private boolean playerSnapshotListenersRegistered;
     private boolean playerSnapshotRefreshScheduled;
 
@@ -133,6 +194,9 @@ public class WebServiceImpl extends BaseService implements WebService {
      */
     public void onEnable() {
         loadSettings();
+        startEventSubscriptions();
+        registerEndpointHandler(CAPABILITIES_PATH, this::handleCapabilitiesEndpoint);
+        registerEndpointHandler(PLAYER_PROFILE_PATH_PREFIX, this::handlePlayerProfileEndpoint);
 
         if(getConfigSection().getBoolean("enabled", false)) {
             start();
@@ -281,9 +345,18 @@ public class WebServiceImpl extends BaseService implements WebService {
 
     @Override
     public void onDisable() {
+        shutdownEventSubscriptions(Bukkit.isStopping());
         stop();
         playerSnapshotRefreshScheduled = false;
         onlinePlayerNames = List.of();
+    }
+
+    @Override
+    public void onReload() {
+        shutdownEventSubscriptions(false);
+        super.onReload();
+        loadSettings();
+        startEventSubscriptions();
     }
 
     /**
@@ -294,6 +367,390 @@ public class WebServiceImpl extends BaseService implements WebService {
         updated.put(path, handler);
         endpointHandlers = Collections.unmodifiableMap(updated);
         api.messages().debug("WEB_SERVER_REGISTERED_ENDPOINT", "path", path);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void publishEvent(@NotNull WebServiceEvent event) {
+        EventSubscriptionSettings settings = eventSubscriptionSettings;
+        ThreadPoolExecutor executor = eventSubscriptionExecutor;
+        HttpClient client = eventSubscriptionHttpClient;
+        if (!settings.enabled() || executor == null || client == null || !settings.isEnabled(event.eventType())) {
+            return;
+        }
+
+        WebServiceEvent deliveredEvent = redactSensitiveEvent(event, settings);
+        try {
+            executor.execute(() -> deliverEvent(client, deliveredEvent, settings));
+        } catch (RejectedExecutionException ignored) {
+            eventSubscriptionWarning("[web] Event subscription queue is full; event '"
+                + event.eventType() + "' was not forwarded.");
+        }
+    }
+
+    private static @NotNull WebServiceEvent redactSensitiveEvent(
+        @NotNull WebServiceEvent event,
+        @NotNull EventSubscriptionSettings settings
+    ) {
+        if (!"minecraft.player_command".equals(event.eventType())) {
+            return event;
+        }
+        Object rawCommand = event.data().get("command");
+        if (!(rawCommand instanceof String command)) {
+            return event;
+        }
+
+        Map<String, Object> data = new LinkedHashMap<>(event.data());
+        data.put("command", redactCommand(command, settings.redactedCommandRoots()));
+        return new WebServiceEvent(
+            event.eventId(),
+            event.occurredAt(),
+            event.eventType(),
+            event.playerUuid(),
+            event.playerName(),
+            data
+        );
+    }
+
+    private void startEventSubscriptions() {
+        shutdownEventSubscriptions(false);
+
+        ConfigSectionView settings = eventSubscriptionSection();
+        if (settings == null || !settings.getBoolean("enabled", false)) {
+            return;
+        }
+
+        String endpointValue = normalizeEventEndpoint(firstConfiguredString(
+            settings, "url", "endpoint", ""));
+        String bearerToken = firstConfiguredString(settings, "bearer-token", "bearer_token", "");
+        String serverId = firstConfiguredString(settings, "server-id", "server_id", "survival");
+        String channel = firstConfiguredString(settings, "channel", "channel", "global");
+        String timeoutValue = firstConfiguredString(settings, "timeout", "timeout", "3s");
+        int queueSize = Math.clamp(firstConfiguredInt(settings, "queue-size", "queue_size", 256), 16, 4096);
+        int maxRetries = Math.clamp(firstConfiguredInt(settings, "max-retries", "max_retries", 3), 0, 5);
+
+        if (endpointValue.isBlank() || bearerToken.isBlank()) {
+            eventSubscriptionWarning("[web] Event subscriptions are enabled but their URL or bearer token is blank; subscriptions disabled.");
+            return;
+        }
+
+        URI endpoint;
+        try {
+            endpoint = new URI(endpointValue);
+        } catch (URISyntaxException exception) {
+            eventSubscriptionWarning("[web] Event subscription URL is invalid; subscriptions disabled.");
+            return;
+        }
+        if (!("http".equalsIgnoreCase(endpoint.getScheme()) || "https".equalsIgnoreCase(endpoint.getScheme()))
+                || endpoint.getHost() == null) {
+            eventSubscriptionWarning("[web] Event subscription URL must be an HTTP(S) URL with a host; subscriptions disabled.");
+            return;
+        }
+
+        long timeoutSeconds = parseEventDuration(timeoutValue, 3L, 1L, 30L);
+        EventSubscriptionSettings eventSettings = new EventSubscriptionSettings(
+            true,
+            endpoint,
+            bearerToken,
+            serverId.isBlank() ? "survival" : serverId,
+            channel.isBlank() ? "global" : channel,
+            Duration.ofSeconds(timeoutSeconds),
+            maxRetries,
+            configuredEventTypes(settings),
+            configuredStringList(settings, "redacted-commands", "redacted_commands", DEFAULT_REDACTED_COMMAND_ROOTS)
+        );
+
+        try {
+            eventSubscriptionHttpClient = HttpClient.newBuilder()
+                .connectTimeout(eventSettings.timeout())
+                .build();
+            eventSubscriptionExecutor = new ThreadPoolExecutor(
+                1,
+                1,
+                0L,
+                TimeUnit.MILLISECONDS,
+                new ArrayBlockingQueue<>(queueSize),
+                runnable -> {
+                    Thread thread = new Thread(runnable, "stemcraft-web-events");
+                    thread.setDaemon(true);
+                    return thread;
+                },
+                new ThreadPoolExecutor.AbortPolicy()
+            );
+            eventSubscriptionSettings = eventSettings;
+            eventSubscriptionInfo("[web] Event subscriptions enabled for " + endpoint + " (queue=" + queueSize + ").");
+        } catch (RuntimeException exception) {
+            eventSubscriptionSettings = EventSubscriptionSettings.disabled();
+            eventSubscriptionHttpClient = null;
+            eventSubscriptionExecutor = null;
+            eventSubscriptionWarning("[web] Could not start event subscriptions: " + exception.getMessage());
+        }
+    }
+
+    private void shutdownEventSubscriptions(boolean drainQueue) {
+        eventSubscriptionSettings = EventSubscriptionSettings.disabled();
+        ThreadPoolExecutor executor = eventSubscriptionExecutor;
+        eventSubscriptionExecutor = null;
+        eventSubscriptionHttpClient = null;
+        if (executor == null) {
+            return;
+        }
+
+        if (!drainQueue) {
+            executor.shutdownNow();
+            return;
+        }
+
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                eventSubscriptionWarning("[web] Event subscriptions did not drain before server shutdown; queued events may be lost.");
+                executor.shutdownNow();
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            executor.shutdownNow();
+        }
+    }
+
+    private void deliverEvent(@NotNull HttpClient client,
+                              @NotNull WebServiceEvent event,
+                              @NotNull EventSubscriptionSettings settings) {
+        String body = eventPayload(event, settings);
+        HttpRequest request = HttpRequest.newBuilder(settings.endpoint())
+            .timeout(settings.timeout())
+            .header("Authorization", "Bearer " + settings.bearerToken())
+            .header("Content-Type", "application/json; charset=utf-8")
+            .header("X-STEMCraft-Event-Id", event.eventId().toString())
+            .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
+            .build();
+
+        for (int attempt = 0; attempt <= settings.maxRetries(); attempt++) {
+            try {
+                HttpResponse<Void> response = client.send(request, HttpResponse.BodyHandlers.discarding());
+                int status = response.statusCode();
+                if (status >= 200 && status < 300) {
+                    return;
+                }
+                if (status >= 400 && status < 500) {
+                    eventSubscriptionWarning("[web] Event subscription rejected '" + event.eventType()
+                        + "' with HTTP " + status + ".");
+                    return;
+                }
+                if (attempt == settings.maxRetries()) {
+                    eventSubscriptionWarning("[web] Event subscription failed '" + event.eventType()
+                        + "' with HTTP " + status + ".");
+                    return;
+                }
+            } catch (IOException | InterruptedException exception) {
+                if (exception instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+                if (attempt == settings.maxRetries()) {
+                    eventSubscriptionWarning("[web] Event subscription request failed for '"
+                        + event.eventType() + "': " + exception.getMessage());
+                    return;
+                }
+            }
+
+            try {
+                Thread.sleep(Math.min(5_000L, 250L * (1L << attempt)));
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+    }
+
+    static String eventPayload(@NotNull WebServiceEvent event,
+                               @NotNull EventSubscriptionSettings settings) {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("event", event.eventType());
+        payload.addProperty("event_id", event.eventId().toString());
+        payload.addProperty("occurred_at", event.occurredAt().toString());
+        payload.addProperty("server", settings.serverId());
+        payload.addProperty("channel", settings.channel());
+        if (event.playerUuid() != null || event.playerName() != null) {
+            JsonObject player = new JsonObject();
+            if (event.playerName() != null) player.addProperty("name", event.playerName());
+            if (event.playerUuid() != null) player.addProperty("uuid", event.playerUuid().toString());
+            payload.add("player", player);
+        }
+        if ("minecraft.chat".equals(event.eventType())) {
+            payload.addProperty("message", Objects.toString(event.data().get("message"), ""));
+        } else {
+            payload.add("data", GSON.toJsonTree(event.data()));
+        }
+        return GSON.toJson(payload);
+    }
+
+    static String normalizeEventEndpoint(String endpoint) {
+        if (endpoint.isBlank()) return endpoint;
+        return endpoint.replaceFirst("/+$", "");
+    }
+
+    static String redactCommand(@NotNull String rawCommand, @NotNull List<String> redactedRoots) {
+        String command = rawCommand == null ? "" : rawCommand.trim();
+        if (command.isBlank() || !command.startsWith("/")) return "";
+
+        String withoutSlash = command.substring(1);
+        int end = 0;
+        while (end < withoutSlash.length() && !Character.isWhitespace(withoutSlash.charAt(end))) end++;
+        String root = withoutSlash.substring(0, end);
+        int namespace = root.lastIndexOf(':');
+        String normalizedRoot = (namespace >= 0 ? root.substring(namespace + 1) : root).toLowerCase(Locale.ROOT);
+        if (redactedRoots.contains(normalizedRoot) && end < withoutSlash.length()) {
+            return "/" + root + " <redacted>";
+        }
+        return command;
+    }
+
+    private ConfigSectionView eventSubscriptionSection() {
+        ConfigSectionView configured = getConfigSection().isSection(EVENT_SUBSCRIPTIONS_PATH)
+            ? getConfigSection().getSection(EVENT_SUBSCRIPTIONS_PATH)
+            : null;
+        ConfigSectionView chat = getRootConfigSection().isSection("chat")
+            ? getRootConfigSection().getSection("chat")
+            : null;
+        ConfigSectionView legacy = chat != null && chat.isSection("discord-bridge")
+            ? chat.getSection("discord-bridge")
+            : chat != null && chat.isSection("discord_bridge")
+                ? chat.getSection("discord_bridge")
+                : null;
+
+        if (legacy != null && legacy.getBoolean("enabled", false)
+                && !isNewEventSubscriptionConfigured(configured)) {
+            eventSubscriptionWarning("[web] Using legacy chat.discord-bridge settings for event subscriptions; migrate them to web-server.event-subscriptions.");
+            return legacy;
+        }
+        return configured;
+    }
+
+    private static boolean isNewEventSubscriptionConfigured(@Nullable ConfigSectionView section) {
+        if (section == null) return false;
+        if (section.getBoolean("enabled", false)) return true;
+        return !firstConfiguredString(section, "url", "endpoint", "").isBlank()
+            || !firstConfiguredString(section, "bearer-token", "bearer_token", "").isBlank();
+    }
+
+    private static String firstConfiguredString(@Nullable ConfigSectionView section,
+                                                @NotNull String primary,
+                                                @NotNull String fallback,
+                                                @NotNull String defaultValue) {
+        if (section == null) return defaultValue;
+        String value = section.getString(primary, "");
+        if (value != null && !value.isBlank()) return value.trim();
+        value = section.getString(fallback, defaultValue);
+        return Objects.requireNonNullElse(value, defaultValue).trim();
+    }
+
+    private static int firstConfiguredInt(@Nullable ConfigSectionView section,
+                                          @NotNull String primary,
+                                          @NotNull String fallback,
+                                          int defaultValue) {
+        if (section == null) return defaultValue;
+        if (section.contains(primary)) return section.getInt(primary, defaultValue);
+        return section.getInt(fallback, defaultValue);
+    }
+
+    private static List<String> configuredStringList(@Nullable ConfigSectionView section,
+                                                     @NotNull String primary,
+                                                     @NotNull String fallback,
+                                                     @NotNull List<String> defaultValue) {
+        if (section == null) return List.copyOf(defaultValue);
+        if (section.contains(primary)) return normalizeCommandRoots(section.getStringList(primary));
+        if (section.contains(fallback)) return normalizeCommandRoots(section.getStringList(fallback));
+        return List.copyOf(defaultValue);
+    }
+
+    private static Map<String, Boolean> configuredEventTypes(@Nullable ConfigSectionView section) {
+        Map<String, Boolean> events = new LinkedHashMap<>();
+        DEFAULT_EVENT_TYPES.forEach(event -> events.put(event, true));
+        if (section == null) return Collections.unmodifiableMap(events);
+
+        ConfigSectionView eventSection = section.isSection("events")
+            ? section.getSection("events")
+            : section.isSection("event-types") ? section.getSection("event-types") : null;
+        if (eventSection == null) return Collections.unmodifiableMap(events);
+
+        Map<String, Object> configured = section.getMap(
+            section.isSection("events") ? "events" : "event-types", false);
+        for (Map.Entry<String, Object> entry : configured.entrySet()) {
+            String eventType = normalizeConfiguredEventType(entry.getKey());
+            Object value = entry.getValue();
+            events.put(eventType, value instanceof Boolean bool ? bool : Boolean.parseBoolean(String.valueOf(value)));
+        }
+        return Collections.unmodifiableMap(events);
+    }
+
+    private static String normalizeConfiguredEventType(@NotNull String raw) {
+        String normalized = raw.trim().toLowerCase(Locale.ROOT);
+        if (normalized.startsWith("minecraft.")) return normalized;
+        if (normalized.startsWith("minecraft_")) return "minecraft." + normalized.substring("minecraft_".length());
+        if (normalized.contains("/")) return normalized.replace('/', '.');
+        String legacy = LEGACY_EVENT_NAMES.get(normalized);
+        if (legacy != null) return legacy;
+        legacy = LEGACY_EVENT_NAMES.get(normalized.replace('_', '-'));
+        return legacy == null ? normalized : legacy;
+    }
+
+    private static List<String> normalizeCommandRoots(List<String> roots) {
+        return roots.stream()
+            .map(String::trim)
+            .map(value -> value.startsWith("/") ? value.substring(1) : value)
+            .map(value -> {
+                int namespace = value.lastIndexOf(':');
+                return namespace >= 0 ? value.substring(namespace + 1) : value;
+            })
+            .map(value -> value.toLowerCase(Locale.ROOT))
+            .filter(value -> !value.isBlank())
+            .distinct()
+            .toList();
+    }
+
+    private static long parseEventDuration(String value, long fallback, long min, long max) {
+        try {
+            return Math.clamp(dev.stemcraft.api.util.TimeUtil.parseDuration(value), min, max);
+        } catch (RuntimeException ignored) {
+            return fallback;
+        }
+    }
+
+    private void eventSubscriptionInfo(@NotNull String message) {
+        if (plugin.getLogger() != null) plugin.getLogger().info(message);
+    }
+
+    private void eventSubscriptionWarning(@NotNull String message) {
+        if (plugin.getLogger() != null) plugin.getLogger().warning(message);
+    }
+
+    static record EventSubscriptionSettings(boolean enabled,
+                                            URI endpoint,
+                                            String bearerToken,
+                                            String serverId,
+                                            String channel,
+                                            Duration timeout,
+                                            int maxRetries,
+                                            Map<String, Boolean> events,
+                                            List<String> redactedCommandRoots) {
+        private static EventSubscriptionSettings disabled() {
+            return new EventSubscriptionSettings(
+                false,
+                null,
+                "",
+                "",
+                "",
+                Duration.ofSeconds(3),
+                0,
+                Map.of(),
+                List.of()
+            );
+        }
+
+        private boolean isEnabled(@NotNull String eventType) {
+            return events.getOrDefault(eventType.toLowerCase(Locale.ROOT), false);
+        }
     }
 
     Object handleStatusEndpoint(@NotNull WebServiceRequest request) {
@@ -318,6 +775,210 @@ public class WebServiceImpl extends BaseService implements WebService {
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("responseCode", 200);
         response.put("contentType", "application/json; charset=utf-8");
+        response.put("body", GSON.toJson(payload));
+        return response;
+    }
+
+    Object handleCapabilitiesEndpoint(@NotNull WebServiceRequest request) {
+        if (!CAPABILITIES_PATH.equals(request.path())) {
+            return null;
+        }
+
+        loadSettings();
+        if (!playerApiEnabled || playerApiKey.isBlank()) {
+            return playerApiError(404, "Not found");
+        }
+        if (!"GET".equalsIgnoreCase(request.method())) {
+            return playerApiResponse(405, Map.of("error", "Only GET is supported"), Map.of("Allow", "GET"));
+        }
+        if (!isBearerAuthorised(request, playerApiKey)) {
+            return playerApiResponse(
+                401,
+                Map.of("error", "Missing or invalid API key"),
+                Map.of("WWW-Authenticate", "Bearer")
+            );
+        }
+
+        PlayerProfileService profiles = api.playerProfiles();
+        boolean profilesAvailable = isProfileServiceAvailable(profiles);
+        List<Map<String, Object>> sections = !profilesAvailable
+            ? List.of()
+            : profiles.definitions().stream().map(WebServiceImpl::profileSectionDefinition).toList();
+        boolean skillsAvailable = profilesAvailable && profiles.definitions().stream()
+            .anyMatch(definition -> "skills".equals(definition.id()) && definition.available());
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("api_version", 1);
+        payload.put("player_profile", Map.of(
+            "available", profilesAvailable,
+            "sections", sections
+        ));
+        List<String> availableEvents = new ArrayList<>(DEFAULT_EVENT_TYPES);
+        if (!skillsAvailable) {
+            availableEvents.remove("minecraft.player_skill_level_up");
+        }
+        payload.put("events", availableEvents);
+        payload.put("checked_at", OffsetDateTime.now(ZoneId.systemDefault()).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
+        return playerApiResponse(200, payload, Map.of());
+    }
+
+    Object handlePlayerProfileEndpoint(@NotNull WebServiceRequest request) {
+        String path = request.path();
+        if (!path.startsWith(PLAYER_PROFILE_PATH_PREFIX) || !path.endsWith(PLAYER_PROFILE_SUFFIX)) {
+            return null;
+        }
+
+        loadSettings();
+        if (!playerApiEnabled || playerApiKey.isBlank()) {
+            return playerApiError(404, "Not found");
+        }
+        if (!"GET".equalsIgnoreCase(request.method())) {
+            return playerApiResponse(405, Map.of("error", "Only GET is supported"), Map.of("Allow", "GET"));
+        }
+        if (!isBearerAuthorised(request, playerApiKey)) {
+            return playerApiResponse(
+                401,
+                Map.of("error", "Missing or invalid API key"),
+                Map.of("WWW-Authenticate", "Bearer")
+            );
+        }
+
+        String uuidText = path.substring(
+            PLAYER_PROFILE_PATH_PREFIX.length(),
+            path.length() - PLAYER_PROFILE_SUFFIX.length()
+        );
+        if (uuidText.isBlank() || uuidText.endsWith("/") || uuidText.contains("/")) {
+            return playerApiError(400, "Player UUID is required");
+        }
+
+        UUID playerUuid;
+        try {
+            playerUuid = UUID.fromString(uuidText);
+        } catch (IllegalArgumentException exception) {
+            return playerApiError(400, "Player UUID is invalid");
+        }
+
+        Set<String> requestedSections;
+        try {
+            requestedSections = parseProfileSections(request.queryParam("include"));
+        } catch (IllegalArgumentException exception) {
+            return playerApiError(400, exception.getMessage());
+        }
+        String period = request.queryParam("period");
+        period = period == null || period.isBlank() ? "all" : period.trim();
+
+        PlayerProfileSnapshot profile;
+        try {
+            PlayerProfileService profiles = api.playerProfiles();
+            if (!isProfileServiceAvailable(profiles)) {
+                return playerApiError(503, "Player profile service is unavailable");
+            }
+            String requestedPeriod = period;
+            profile = callOnServerThread(() -> profiles.snapshot(playerUuid, requestedSections, requestedPeriod));
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            return playerApiError(503, "The server did not process the request in time");
+        } catch (TimeoutException exception) {
+            return playerApiError(503, "The server did not process the request in time");
+        } catch (ExecutionException exception) {
+            Throwable cause = exception.getCause();
+            if (cause instanceof IllegalArgumentException illegalArgumentException) {
+                return playerApiError(400, illegalArgumentException.getMessage());
+            }
+            return playerApiError(503, "The server could not process the request");
+        } catch (Exception exception) {
+            if (exception instanceof IllegalArgumentException illegalArgumentException) {
+                return playerApiError(400, illegalArgumentException.getMessage());
+            }
+            return playerApiError(503, "The server could not process the request");
+        }
+
+        if (profile == null) {
+            return playerApiError(404, "Player not found");
+        }
+        return playerApiResponse(200, profilePayload(profile), Map.of());
+    }
+
+    private <T> T callOnServerThread(@NotNull Callable<T> task)
+        throws Exception {
+        if (Bukkit.isPrimaryThread()) {
+            return task.call();
+        }
+        return plugin.getServer().getScheduler()
+            .callSyncMethod(plugin, task)
+            .get(PLAYER_API_SERVER_THREAD_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+    }
+
+    private static @NotNull Map<String, Object> profileSectionDefinition(
+        @NotNull PlayerProfileSectionDefinition definition
+    ) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("id", definition.id());
+        result.put("title", definition.title());
+        result.put("available", definition.available());
+        return result;
+    }
+
+    private static boolean isProfileServiceAvailable(@Nullable PlayerProfileService profiles) {
+        return profiles != null && profiles != PlayerProfileService.UNAVAILABLE;
+    }
+
+    private static @NotNull Map<String, Object> profilePayload(@NotNull PlayerProfileSnapshot profile) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("api_version", 1);
+        Map<String, Object> player = new LinkedHashMap<>();
+        player.put("uuid", profile.uuid().toString());
+        player.put("name", profile.username());
+        player.put("platform", profile.platform());
+        player.put("online", profile.online());
+        payload.put("player", player);
+        payload.put("generated_at", profile.generatedAt().toString());
+
+        Map<String, Object> sections = new LinkedHashMap<>();
+        for (PlayerProfileSection section : profile.sections()) {
+            Map<String, Object> sectionData = new LinkedHashMap<>(section.data());
+            sectionData.put("available", section.available());
+            sectionData.put("title", section.title());
+            sections.put(section.id(), sectionData);
+        }
+        payload.put("sections", sections);
+        return payload;
+    }
+
+    private static @NotNull Set<String> parseProfileSections(@Nullable String value) {
+        if (value == null || value.isBlank() || "all".equalsIgnoreCase(value.trim())) {
+            return Set.of();
+        }
+
+        Set<String> sections = new LinkedHashSet<>();
+        for (String raw : value.split(",")) {
+            String section = raw.trim().toLowerCase(Locale.ROOT);
+            if (section.isBlank()) {
+                continue;
+            }
+            if (!section.matches("[a-z0-9][a-z0-9._-]*")) {
+                throw new IllegalArgumentException("include contains an invalid section name");
+            }
+            sections.add(section);
+        }
+        return Set.copyOf(sections);
+    }
+
+    private static Map<String, Object> playerApiError(int responseCode, @NotNull String message) {
+        return playerApiResponse(responseCode, Map.of("error", message), Map.of());
+    }
+
+    private static Map<String, Object> playerApiResponse(
+        int responseCode,
+        @NotNull Map<String, ?> payload,
+        @NotNull Map<String, String> headers
+    ) {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("responseCode", responseCode);
+        response.put("contentType", "application/json; charset=utf-8");
+        if (!headers.isEmpty()) {
+            response.put("headers", headers);
+        }
         response.put("body", GSON.toJson(payload));
         return response;
     }
@@ -386,6 +1047,10 @@ public class WebServiceImpl extends BaseService implements WebService {
     }
 
     private boolean isMailApiAuthorised(@NotNull WebServiceRequest request) {
+        return isBearerAuthorised(request, mailApiKey);
+    }
+
+    private boolean isBearerAuthorised(@NotNull WebServiceRequest request, @NotNull String expectedKey) {
         String authorization = request.firstHeader("Authorization");
         if (authorization == null || !authorization.regionMatches(true, 0, BEARER_PREFIX, 0, BEARER_PREFIX.length())) {
             return false;
@@ -397,7 +1062,7 @@ public class WebServiceImpl extends BaseService implements WebService {
         }
 
         return MessageDigest.isEqual(
-            mailApiKey.getBytes(StandardCharsets.UTF_8),
+            expectedKey.getBytes(StandardCharsets.UTF_8),
             providedKey.getBytes(StandardCharsets.UTF_8)
         );
     }
@@ -797,6 +1462,22 @@ public class WebServiceImpl extends BaseService implements WebService {
             if (logger != null) {
                 logger.info(
                     "[web-server] Generated a new mail-api key and saved it to config.yml. Keep this key secret.");
+            }
+        }
+
+        playerApiEnabled = getConfigSection().getBoolean("player-api.enabled", false);
+        String configuredPlayerApiKey = Objects.requireNonNullElse(
+            getConfigSection().getString("player-api.key", ""), "").trim();
+        if (!configuredPlayerApiKey.isBlank()) {
+            playerApiKey = configuredPlayerApiKey;
+        } else if (playerApiEnabled && playerApiKey.isBlank()) {
+            playerApiKey = generateMailApiKey();
+            getConfigSection().set("player-api.key", playerApiKey);
+            saveConfig();
+            java.util.logging.Logger logger = plugin.getLogger();
+            if (logger != null) {
+                logger.info(
+                    "[web-server] Generated a new player-api key and saved it to config.yml. Keep this key secret.");
             }
         }
         mailApiSender = Objects.requireNonNullElse(

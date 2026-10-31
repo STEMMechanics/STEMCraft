@@ -3,13 +3,15 @@ package dev.stemcraft.service.minigame;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.minigame.MiniGameArena;
-import dev.stemcraft.service.ChatServiceImpl;
+import dev.stemcraft.api.service.web.WebService;
+import dev.stemcraft.api.service.web.WebServiceEndpointHandler;
+import org.jetbrains.annotations.NotNull;
 import org.bukkit.World;
-import org.bukkit.entity.Player;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
@@ -19,8 +21,9 @@ class MiniGameServiceImplChatBridgeTest {
     @Test
     void emitsOneStartAndOneEndEventAcrossActivePhaseTransitions() {
         STEMCraft plugin = mock(STEMCraft.class);
-        RecordingChatService chat = new RecordingChatService(plugin);
-        when(plugin.chat()).thenReturn(chat);
+        RecordingWebService web = new RecordingWebService();
+        STEMCraftAPI api = mock(STEMCraftAPI.class);
+        when(api.web()).thenReturn(web);
 
         MiniGameArena arena = mock(MiniGameArena.class);
         when(arena.namespace()).thenReturn("testgame");
@@ -31,24 +34,33 @@ class MiniGameServiceImplChatBridgeTest {
         when(arena.getSpectators()).thenReturn(List.of());
         when(arena.getTeams()).thenReturn(List.of());
 
-        MiniGameServiceImpl service = new MiniGameServiceImpl(plugin, mock(STEMCraftAPI.class));
+        MiniGameServiceImpl service = new MiniGameServiceImpl(plugin, api);
         service.notifyArenaStatusChanged(arena, MiniGameArena.ArenaStatus.STARTING, MiniGameArena.ArenaStatus.RUNNING);
         service.notifyArenaStatusChanged(arena, MiniGameArena.ArenaStatus.PREPARATION, MiniGameArena.ArenaStatus.RUNNING);
         service.notifyArenaStatusChanged(arena, MiniGameArena.ArenaStatus.RUNNING, MiniGameArena.ArenaStatus.ENDING);
 
-        assertEquals(List.of("minecraft.minigame_start", "minecraft.minigame_end"), chat.events);
+        assertEquals(List.of("minecraft.minigame_start", "minecraft.minigame_end"), web.events);
     }
 
-    private static final class RecordingChatService extends ChatServiceImpl {
+    private static final class RecordingWebService implements WebService {
         private final List<String> events = new java.util.ArrayList<>();
 
-        private RecordingChatService(STEMCraft plugin) {
-            super(plugin, mock(STEMCraftAPI.class));
+        @Override
+        public void start() {}
+
+        @Override
+        public void stop() {}
+
+        @Override
+        public void registerEndpointHandler(@NotNull String path, @NotNull WebServiceEndpointHandler handler) {}
+
+        @Override
+        public void publishEvent(@NotNull String eventType, UUID playerUuid, String playerName,
+                                 @NotNull Map<String, Object> data) {
+            events.add(eventType);
         }
 
         @Override
-        public void publishChatBridgeEvent(String eventType, Player player, Map<String, Object> data) {
-            events.add(eventType);
-        }
+        public @NotNull String getPublicUrl() { return ""; }
     }
 }

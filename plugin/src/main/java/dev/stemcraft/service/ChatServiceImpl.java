@@ -27,6 +27,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.api.event.player.PlayerSkillLevelUpEvent;
 import dev.stemcraft.api.service.profanity.ProfanityFilterResult;
 import dev.stemcraft.api.service.profanity.ProfanitySeverity;
 import dev.stemcraft.api.service.web.WebServiceRequest;
@@ -57,18 +58,11 @@ import org.bukkit.event.player.PlayerEditBookEvent;
 import org.bukkit.inventory.meta.BookMeta;
 
 import javax.annotation.Nullable;
-import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
@@ -79,11 +73,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import org.jetbrains.annotations.NotNull;
 
 public class ChatServiceImpl extends BaseService {
@@ -99,9 +89,6 @@ public class ChatServiceImpl extends BaseService {
     private static final String BOOK_PAGE_SEPARATOR = "\n\n---BOOK-PAGE---\n\n";
     private static final int MODERATION_DEFAULT_LIMIT = 20;
     private static final int MODERATION_MAX_LIMIT = 100;
-    private static final List<String> DEFAULT_REDACTED_COMMAND_ROOTS = List.of(
-        "login", "register", "changepassword", "password"
-    );
     private static final List<ModerationActionRule> DEFAULT_MODERATION_ACTION_RULES = List.of(
         new ModerationActionRule(3, "warn", 0L),
         new ModerationActionRule(5, "kick", 0L),
@@ -142,9 +129,6 @@ public class ChatServiceImpl extends BaseService {
     private List<ModerationActionRule> moderationActionRules = List.of();
 
     private boolean muted;
-    private volatile ChatBridgeSettings chatBridgeSettings = ChatBridgeSettings.disabled();
-    private volatile HttpClient chatBridgeHttpClient;
-    private volatile ThreadPoolExecutor chatBridgeExecutor;
     private volatile boolean discordChatInboundEnabled;
     private volatile String discordChatBearerToken = "";
     private volatile String discordChatFormat = TextUtil.colouriseToSection(DEFAULT_DISCORD_CHAT_FORMAT);
@@ -166,7 +150,6 @@ public class ChatServiceImpl extends BaseService {
 
         reloadSettings();
         api.web().registerEndpointHandler(DISCORD_CHAT_PATH, this::handleDiscordChatEndpoint);
-        startChatBridge();
         ensureModerationStorage();
         ensureReportStorage();
         registerModerationCommands();
@@ -274,15 +257,14 @@ public class ChatServiceImpl extends BaseService {
         });
 
         api.events().register(AsyncChatEvent.class, event -> {
-            if (!chatBridgeSettings.enabled()) return;
             if (plugin.stemBot() != null && plugin.stemBot().isPrivateChat(event)) return;
             if (plugin.firstJoin() != null && plugin.firstJoin().hasActiveSession(event.getPlayer().getUniqueId())) return;
-            enqueueChatBridgeEvent(event.getPlayer(), PLAIN.serialize(event.message()));
+            enqueueWebEvent(event.getPlayer(), PLAIN.serialize(event.message()));
         }, EventPriority.MONITOR, true);
 
         api.events().register(PlayerJoinEvent.class, event -> {
             Player player = event.getPlayer();
-            publishChatBridgeEvent("minecraft.player_join", player, Map.of(
+            publishWebEvent("minecraft.player_join", player, Map.of(
                 "online_players", Bukkit.getOnlinePlayers().size()
             ));
             // Let login messages and permission initialization finish before the reminder.
@@ -291,14 +273,26 @@ public class ChatServiceImpl extends BaseService {
 
         api.events().register(ServerLoadEvent.class, event -> {
             if (event.getType() == ServerLoadEvent.LoadType.STARTUP) {
-                publishChatBridgeEvent("minecraft.server_start", null, Map.of());
+                publishWebEvent("minecraft.server_start", null, Map.of());
             }
         });
+
+        api.events().register(PlayerSkillLevelUpEvent.class, event -> {
+            Player player = Bukkit.getPlayer(event.getPlayerUuid());
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("skill", event.getSkillKey());
+            data.put("skill_title", event.getSkillTitle());
+            data.put("previous_level", event.getPreviousLevel());
+            data.put("new_level", event.getNewLevel());
+            data.put("previous_xp", event.getPreviousXp());
+            data.put("new_xp", event.getNewXp());
+            publishWebEvent("minecraft.player_skill_level_up", player, data);
+        }, EventPriority.MONITOR, true);
 
         api.events().register(ServerCommandEvent.class, event -> {
             String message = serverMessageFromCommand(event.getCommand());
             if (message.isBlank()) return;
-            publishChatBridgeEvent("minecraft.server_message", null, Map.of("message", message));
+            publishWebEvent("minecraft.server_message", null, Map.of("message", message));
         }, EventPriority.MONITOR, true);
 
         api.events().register(SignChangeEvent.class, event -> {
@@ -344,7 +338,7 @@ public class ChatServiceImpl extends BaseService {
 
         api.events().register(PlayerQuitEvent.class, event -> {
             duplicateMessages.remove(event.getPlayer().getUniqueId());
-            publishChatBridgeEvent("minecraft.player_quit", event.getPlayer(), Map.of(
+            publishWebEvent("minecraft.player_quit", event.getPlayer(), Map.of(
                 "online_players", Math.max(0, Bukkit.getOnlinePlayers().size() - 1)
             ));
         });
@@ -361,14 +355,13 @@ public class ChatServiceImpl extends BaseService {
             data.put("world", player.getWorld().getName());
             Component deathMessage = event.deathMessage();
             data.put("message", deathMessage == null ? "" : PLAIN.serialize(deathMessage));
-            publishChatBridgeEvent("minecraft.player_death", player, data);
+            publishWebEvent("minecraft.player_death", player, data);
         }, EventPriority.MONITOR, true);
 
         api.events().register(PlayerCommandPreprocessEvent.class, event -> {
-            if (!chatBridgeSettings.enabled()) return;
-            String command = redactCommand(event.getMessage(), chatBridgeSettings.redactedCommandRoots());
+            String command = event.getMessage();
             if (command.isBlank()) return;
-            publishChatBridgeEvent("minecraft.player_command", event.getPlayer(), Map.of("command", command));
+            publishWebEvent("minecraft.player_command", event.getPlayer(), Map.of("command", command));
         }, EventPriority.MONITOR, true);
 
         api.events().register(PlayerEditBookEvent.class, event -> {
@@ -409,15 +402,8 @@ public class ChatServiceImpl extends BaseService {
 
     @Override
     public void onReload() {
-        shutdownChatBridge();
         super.onReload();
         reloadSettings();
-        startChatBridge();
-    }
-
-    @Override
-    public void onDisable() {
-        shutdownChatBridge(Bukkit.isStopping());
     }
 
     private void reloadSettings() {
@@ -547,7 +533,7 @@ public class ChatServiceImpl extends BaseService {
             synchronized (discordChatIdempotencyLock) {
                 processedDiscordChatIds.remove(chat.eventId());
             }
-            chatBridgeWarning("[chat] Could not deliver Discord chat to Minecraft: " + exception.getMessage());
+            chatWarning("[chat] Could not deliver Discord chat to Minecraft: " + exception.getMessage());
             return discordChatError(503, "The server could not process the request");
         }
 
@@ -581,7 +567,7 @@ public class ChatServiceImpl extends BaseService {
             formatted
         );
         Bukkit.getOnlinePlayers().forEach(player -> player.sendMessage(message));
-        chatBridgeInfo("[chat] Discord message delivered to Minecraft from " + chat.displayName() + ".");
+        chatInfo("[chat] Discord message delivered to Minecraft from " + chat.displayName() + ".");
     }
 
     static String formatDiscordChatMessage(@NotNull String format,
@@ -693,148 +679,27 @@ public class ChatServiceImpl extends BaseService {
         }
     }
 
-    private void startChatBridge() {
-        shutdownChatBridge();
-
-        boolean enabled = getConfigSection().getBoolean(
-                "discord-bridge.enabled",
-                getConfigSection().getBoolean("discord_bridge.enabled", false));
-        String endpointValue = normalizeChatBridgeEndpoint(
-                firstConfiguredString("discord-bridge.url", "discord_bridge.url", ""));
-        String bearerToken = firstConfiguredString("discord-bridge.bearer-token", "discord_bridge.bearer_token", "");
-        String serverId = firstConfiguredString("discord-bridge.server-id", "discord_bridge.server_id", "survival");
-        String channel = firstConfiguredString("discord-bridge.channel", "discord_bridge.channel", "global");
-        String timeoutValue = firstConfiguredString("discord-bridge.timeout", "discord_bridge.timeout", "3s");
-        boolean playerJoinEvents = firstConfiguredBoolean(
-            "discord-bridge.events.player-join", "discord_bridge.events.player_join", true);
-        boolean playerQuitEvents = firstConfiguredBoolean(
-            "discord-bridge.events.player-quit", "discord_bridge.events.player_quit", true);
-        boolean minigameStartEvents = firstConfiguredBoolean(
-            "discord-bridge.events.minigame-start", "discord_bridge.events.minigame_start", true);
-        boolean minigameEndEvents = firstConfiguredBoolean(
-            "discord-bridge.events.minigame-end", "discord_bridge.events.minigame_end", true);
-        boolean playerDeathEvents = firstConfiguredBoolean(
-            "discord-bridge.events.player-death", "discord_bridge.events.player_death", true);
-        boolean playerCommandEvents = firstConfiguredBoolean(
-            "discord-bridge.events.player-command", "discord_bridge.events.player_command", true);
-        boolean serverStartEvents = firstConfiguredBoolean(
-            "discord-bridge.events.server-start", "discord_bridge.events.server_start", true);
-        boolean serverStopEvents = firstConfiguredBoolean(
-            "discord-bridge.events.server-stop", "discord_bridge.events.server_stop", true);
-        boolean serverMessageEvents = firstConfiguredBoolean(
-            "discord-bridge.events.server-message", "discord_bridge.events.server_message", true);
-        List<String> redactedCommandRoots = firstConfiguredStringList(
-            "discord-bridge.redacted-commands", "discord_bridge.redacted_commands",
-            DEFAULT_REDACTED_COMMAND_ROOTS);
-
-        if (!enabled) return;
-        if (endpointValue.isBlank() || bearerToken.isBlank()) {
-            chatBridgeWarning("[chat] Discord bridge is enabled but its URL or bearer token is blank; bridge disabled.");
-            return;
-        }
-
-        URI endpoint;
-        try {
-            endpoint = new URI(endpointValue);
-        } catch (URISyntaxException exception) {
-            chatBridgeWarning("[chat] Discord bridge URL is invalid; bridge disabled.");
-            return;
-        }
-        if (!("http".equalsIgnoreCase(endpoint.getScheme()) || "https".equalsIgnoreCase(endpoint.getScheme()))
-                || endpoint.getHost() == null) {
-            chatBridgeWarning("[chat] Discord bridge URL must be an HTTP(S) URL with a host; bridge disabled.");
-            return;
-        }
-
-        long timeoutSeconds = parseChatBridgeDuration(timeoutValue, 3L, 1L, 30L);
-        int queueSize = Math.clamp(getConfigSection().getInt(
-                "discord-bridge.queue-size",
-                getConfigSection().getInt("discord_bridge.queue_size", 256)), 16, 4096);
-        int maxRetries = Math.clamp(getConfigSection().getInt(
-                "discord-bridge.max-retries",
-                getConfigSection().getInt("discord_bridge.max_retries", 3)), 0, 5);
-        ChatBridgeSettings settings = new ChatBridgeSettings(
-                true,
-                endpoint,
-                bearerToken,
-                serverId.isBlank() ? "survival" : serverId,
-                channel.isBlank() ? "global" : channel,
-                Duration.ofSeconds(timeoutSeconds),
-                maxRetries,
-                playerJoinEvents,
-                playerQuitEvents,
-                minigameStartEvents,
-                minigameEndEvents,
-                playerDeathEvents,
-                playerCommandEvents,
-                serverStartEvents,
-                serverStopEvents,
-                serverMessageEvents,
-                redactedCommandRoots
-        );
-
-        try {
-            chatBridgeHttpClient = HttpClient.newBuilder()
-                    .connectTimeout(settings.timeout())
-                    .build();
-            chatBridgeExecutor = new ThreadPoolExecutor(
-                    1,
-                    1,
-                    0L,
-                    TimeUnit.MILLISECONDS,
-                    new ArrayBlockingQueue<>(queueSize),
-                    runnable -> {
-                        Thread thread = new Thread(runnable, "stemcraft-chat-bridge");
-                        thread.setDaemon(true);
-                        return thread;
-                    },
-                    new ThreadPoolExecutor.AbortPolicy()
-            );
-            chatBridgeSettings = settings;
-            chatBridgeInfo("[chat] Discord bridge enabled for " + endpoint + " (queue=" + queueSize + ").");
-        } catch (RuntimeException exception) {
-            chatBridgeSettings = ChatBridgeSettings.disabled();
-            chatBridgeHttpClient = null;
-            chatBridgeExecutor = null;
-            chatBridgeWarning("[chat] Could not start the Discord bridge: " + exception.getMessage());
-        }
-    }
-
-    private void shutdownChatBridge() {
-        shutdownChatBridge(false);
-    }
-
-    private void shutdownChatBridge(boolean drainQueue) {
-        chatBridgeSettings = ChatBridgeSettings.disabled();
-        ThreadPoolExecutor executor = chatBridgeExecutor;
-        chatBridgeExecutor = null;
-        chatBridgeHttpClient = null;
-        if (executor == null) return;
-
-        if (!drainQueue) {
-            executor.shutdownNow();
-            return;
-        }
-
-        executor.shutdown();
-        try {
-            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
-                chatBridgeWarning("[chat] Discord bridge did not drain before server shutdown; queued events may be lost.");
-                executor.shutdownNow();
-            }
-        } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-            executor.shutdownNow();
-        }
-    }
-
-    private void enqueueChatBridgeEvent(@NotNull Player player, @NotNull String message) {
+    private void enqueueWebEvent(@NotNull Player player, @NotNull String message) {
         if (message.isBlank()) return;
-        publishChatBridgeEvent("minecraft.chat", player, Map.of("message", message));
+        publishWebEvent("minecraft.chat", player, Map.of("message", message));
+    }
+
+    private void publishWebEvent(@NotNull String eventType, @Nullable Player player,
+                                 @NotNull Map<String, Object> data) {
+        api.web().publishEvent(
+            eventType,
+            player == null ? null : player.getUniqueId(),
+            player == null ? null : player.getName(),
+            data
+        );
     }
 
     /**
-     * Queue a structured Minecraft event for the configured Discord bridge.
+     * Publish a structured Minecraft event through the generic web service.
+     *
+     * <p>This method remains as a source-compatible shim for integrations that
+     * previously called the chat service directly. New producers should call
+     * {@link dev.stemcraft.api.service.web.WebService#publishEvent(String, UUID, String, Map)}.</p>
      *
      * @param eventType event name, such as {@code minecraft.player_join}
      * @param player   the event player, or {@code null} for server-wide events
@@ -842,106 +707,7 @@ public class ChatServiceImpl extends BaseService {
      */
     public void publishChatBridgeEvent(@NotNull String eventType, @Nullable Player player,
                                        @NotNull Map<String, Object> data) {
-        ChatBridgeSettings settings = chatBridgeSettings;
-        ThreadPoolExecutor executor = chatBridgeExecutor;
-        HttpClient client = chatBridgeHttpClient;
-        if (!settings.enabled() || executor == null || client == null || !isChatBridgeEventEnabled(settings, eventType)) return;
-
-        ChatBridgeEvent event = new ChatBridgeEvent(
-                UUID.randomUUID(),
-                Instant.now(),
-                eventType,
-                player == null ? null : player.getUniqueId(),
-                player == null ? null : player.getName(),
-                Collections.unmodifiableMap(new LinkedHashMap<>(data)),
-                settings
-        );
-        try {
-            executor.execute(() -> deliverChatBridgeEvent(client, event));
-        } catch (RejectedExecutionException ignored) {
-            chatBridgeWarning("[chat] Discord bridge queue is full; a Minecraft event was not forwarded.");
-        }
-    }
-
-    private static boolean isChatBridgeEventEnabled(@NotNull ChatBridgeSettings settings, @NotNull String eventType) {
-        return switch (eventType) {
-            case "minecraft.chat" -> true;
-            case "minecraft.player_join" -> settings.playerJoinEvents();
-            case "minecraft.player_quit" -> settings.playerQuitEvents();
-            case "minecraft.minigame_start" -> settings.minigameStartEvents();
-            case "minecraft.minigame_end" -> settings.minigameEndEvents();
-            case "minecraft.player_death" -> settings.playerDeathEvents();
-            case "minecraft.player_command" -> settings.playerCommandEvents();
-            case "minecraft.server_start" -> settings.serverStartEvents();
-            case "minecraft.server_stop" -> settings.serverStopEvents();
-            case "minecraft.server_message" -> settings.serverMessageEvents();
-            default -> false;
-        };
-    }
-
-    private void deliverChatBridgeEvent(@NotNull HttpClient client, @NotNull ChatBridgeEvent event) {
-        ChatBridgeSettings settings = event.settings();
-        String body = chatBridgePayload(event);
-        HttpRequest request = HttpRequest.newBuilder(settings.endpoint())
-                .timeout(settings.timeout())
-                .header("Authorization", "Bearer " + settings.bearerToken())
-                .header("Content-Type", "application/json; charset=utf-8")
-                .header("X-STEMCraft-Event-Id", event.eventId().toString())
-                .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
-                .build();
-
-        for (int attempt = 0; attempt <= settings.maxRetries(); attempt++) {
-            try {
-                HttpResponse<Void> response = client.send(request, HttpResponse.BodyHandlers.discarding());
-                int status = response.statusCode();
-                if (status >= 200 && status < 300) return;
-                if (status >= 400 && status < 500) {
-                    chatBridgeWarning("[chat] Discord bridge rejected a Minecraft event with HTTP " + status + ".");
-                    return;
-                }
-                if (attempt == settings.maxRetries()) {
-                    chatBridgeWarning("[chat] Discord bridge failed a Minecraft event with HTTP " + status + ".");
-                    return;
-                }
-            } catch (IOException | InterruptedException exception) {
-                if (exception instanceof InterruptedException) {
-                    Thread.currentThread().interrupt();
-                    return;
-                }
-                if (attempt == settings.maxRetries()) {
-                    chatBridgeWarning("[chat] Discord bridge request failed: " + exception.getMessage());
-                    return;
-                }
-            }
-
-            try {
-                Thread.sleep(Math.min(5_000L, 250L * (1L << attempt)));
-            } catch (InterruptedException exception) {
-                Thread.currentThread().interrupt();
-                return;
-            }
-        }
-    }
-
-    static String chatBridgePayload(@NotNull ChatBridgeEvent event) {
-        JsonObject payload = new JsonObject();
-        payload.addProperty("event", event.eventType());
-        payload.addProperty("event_id", event.eventId().toString());
-        payload.addProperty("occurred_at", event.occurredAt().toString());
-        payload.addProperty("server", event.settings().serverId());
-        payload.addProperty("channel", event.settings().channel());
-        if (event.playerUuid() != null && event.playerName() != null) {
-            JsonObject player = new JsonObject();
-            player.addProperty("name", event.playerName());
-            player.addProperty("uuid", event.playerUuid().toString());
-            payload.add("player", player);
-        }
-        if ("minecraft.chat".equals(event.eventType())) {
-            payload.addProperty("message", Objects.toString(event.data().get("message"), ""));
-        } else {
-            payload.add("data", GSON.toJsonTree(event.data()));
-        }
-        return GSON.toJson(payload);
+        publishWebEvent(eventType, player, data);
     }
 
     private String firstConfiguredString(String primaryPath, String fallbackPath, String defaultValue) {
@@ -976,24 +742,11 @@ public class ChatServiceImpl extends BaseService {
     }
 
     static String redactCommand(@NotNull String rawCommand, @NotNull List<String> redactedRoots) {
-        String command = rawCommand == null ? "" : rawCommand.trim();
-        if (command.isBlank() || !command.startsWith("/")) return "";
-
-        String withoutSlash = command.substring(1);
-        int end = 0;
-        while (end < withoutSlash.length() && !Character.isWhitespace(withoutSlash.charAt(end))) end++;
-        String root = withoutSlash.substring(0, end);
-        int namespace = root.lastIndexOf(':');
-        String normalizedRoot = (namespace >= 0 ? root.substring(namespace + 1) : root).toLowerCase(Locale.ROOT);
-        if (redactedRoots.contains(normalizedRoot) && end < withoutSlash.length()) {
-            return "/" + root + " <redacted>";
-        }
-        return command;
+        return WebServiceImpl.redactCommand(rawCommand, redactedRoots);
     }
 
     static String normalizeChatBridgeEndpoint(String endpoint) {
-        if (endpoint.isBlank()) return endpoint;
-        return endpoint.replaceFirst("/+$", "");
+        return WebServiceImpl.normalizeEventEndpoint(endpoint);
     }
 
     static String serverMessageFromCommand(@Nullable String rawCommand) {
@@ -1010,46 +763,13 @@ public class ChatServiceImpl extends BaseService {
         return command.substring(end).trim();
     }
 
-    private boolean firstConfiguredBoolean(String primaryPath, String fallbackPath, boolean defaultValue) {
-        if (getConfigSection().contains(primaryPath)) {
-            return getConfigSection().getBoolean(primaryPath, defaultValue);
-        }
-        return getConfigSection().getBoolean(fallbackPath, defaultValue);
-    }
-
-    private static long parseChatBridgeDuration(String value, long fallback, long min, long max) {
-        try {
-            return Math.clamp(TimeUtil.parseDuration(value), min, max);
-        } catch (RuntimeException ignored) {
-            return fallback;
-        }
-    }
-
-    private void chatBridgeInfo(String message) {
+    private void chatInfo(String message) {
         if (plugin.getLogger() != null) plugin.getLogger().info(message);
     }
 
-    private void chatBridgeWarning(String message) {
+    private void chatWarning(String message) {
         if (plugin.getLogger() != null) plugin.getLogger().warning(message);
     }
-
-    static record ChatBridgeSettings(boolean enabled, URI endpoint, String bearerToken, String serverId,
-                                     String channel, Duration timeout, int maxRetries,
-                                     boolean playerJoinEvents, boolean playerQuitEvents,
-                                     boolean minigameStartEvents, boolean minigameEndEvents,
-                                     boolean playerDeathEvents, boolean playerCommandEvents,
-                                     boolean serverStartEvents, boolean serverStopEvents,
-                                     boolean serverMessageEvents,
-                                     List<String> redactedCommandRoots) {
-        private static ChatBridgeSettings disabled() {
-            return new ChatBridgeSettings(false, null, "", "", "", Duration.ofSeconds(3), 0,
-                false, false, false, false, false, false, false, false, false, List.of());
-        }
-    }
-
-    static record ChatBridgeEvent(UUID eventId, Instant occurredAt, String eventType,
-                                  UUID playerUuid, String playerName, Map<String, Object> data,
-                                  ChatBridgeSettings settings) { }
 
     boolean isDuplicateMessageBlocked(UUID playerId, String message) {
         if (duplicateMessageLimit <= 0) {
