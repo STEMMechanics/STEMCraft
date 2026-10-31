@@ -5,6 +5,7 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
+import dev.stemcraft.service.PlayerLoginMessageServiceImpl;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
@@ -33,6 +34,7 @@ import java.util.regex.Pattern;
 /** Reusable physical voting groups with personalized client-side levers. */
 public final class VotingFeature extends BaseFeature {
     private static final String ADMIN_PERMISSION = "stemcraft.command.vote.admin";
+    private static final String PLAYER_ACTIVITY_TABLE = "voting_player_activity";
     private final Map<String, VoteGroup> groups = new LinkedHashMap<>();
     private final Map<String, LinkedHashMap<String, VoteOption>> options = new HashMap<>();
     private final Map<String, LinkedHashMap<String, VoteTower>> towers = new HashMap<>();
@@ -48,7 +50,11 @@ public final class VotingFeature extends BaseFeature {
         loadTowerSchema(); ensureStorage(); loadAll(); registerCommand();
         api.events().register(PlayerInteractEvent.class, this::onInteract, EventPriority.HIGHEST, false);
         api.events().register(BlockBreakEvent.class, this::onBreak, EventPriority.HIGHEST, true);
-        api.events().register(PlayerJoinEvent.class, event -> api.tasks().runLater(10L, () -> refreshLevers(event.getPlayer())));
+        api.events().register(PlayerJoinEvent.class, event -> api.tasks().runLater(10L, () -> {
+            refreshLevers(event.getPlayer());
+            announceLoginVotes(event.getPlayer());
+        }));
+        api.events().register(PlayerQuitEvent.class, event -> recordPlayerActivity(event.getPlayer().getUniqueId(), Instant.now().getEpochSecond()));
         api.events().register(PlayerChangedWorldEvent.class, event -> api.tasks().runLater(1L, () -> refreshLevers(event.getPlayer())));
         api.events().register(PlayerMoveEvent.class, this::onMove, EventPriority.MONITOR, true);
         api.tasks().repeating("feature:voting-displays", 100L, this::refreshAllDisplays);
@@ -58,6 +64,8 @@ public final class VotingFeature extends BaseFeature {
     }
 
     @Override public void onDisable() {
+        long now = Instant.now().getEpochSecond();
+        for (Player player : Bukkit.getOnlinePlayers()) recordPlayerActivity(player.getUniqueId(), now);
         api.tasks().cancel("feature:voting-displays"); api.tasks().cancel("feature:voting-plot-sync");
         placements.clear(); removals.clear(); lastChunks.clear();
     }
@@ -89,6 +97,11 @@ public final class VotingFeature extends BaseFeature {
             CREATE TABLE IF NOT EXISTS voting_votes (
               group_id TEXT NOT NULL, voter_uuid TEXT NOT NULL, option_id TEXT NOT NULL, created_at INTEGER NOT NULL,
               PRIMARY KEY(group_id, voter_uuid, option_id)
+            );
+            """);
+        api.database().execute("""
+            CREATE TABLE IF NOT EXISTS voting_player_activity (
+              player_uuid TEXT PRIMARY KEY, last_seen_at INTEGER NOT NULL
             );
             """);
     }
@@ -126,6 +139,7 @@ public final class VotingFeature extends BaseFeature {
             .tabCompletion("status").tabCompletion("admin", "create")
             .tabCompletion("admin", "list")
             .tabCompletion("admin", "view", "{vote-group}")
+            .tabCompletion("admin", "title", "{vote-group}", "", "")
             .tabCompletion("admin", "option", "add", "{vote-group}", "", "")
             .tabCompletion("admin", "option", "remove", "{vote-group}", "{vote-option:$3}")
             .tabCompletion("admin", "option", "list", "{vote-group}")
@@ -160,11 +174,12 @@ public final class VotingFeature extends BaseFeature {
             case "remove" -> removeGroup(ctx);
             case "list" -> listGroups(ctx);
             case "view" -> showGroupMenu(ctx);
+            case "title" -> setTitle(ctx);
             default -> adminHelp(ctx);
         }
     }
 
-    private void adminHelp(CommandContext ctx) { ctx.returnInfo("Use /vote admin <create|remove|option|source|schedule|tower|pause|resume|reset|reset-player|list>."); }
+    private void adminHelp(CommandContext ctx) { ctx.returnInfo("Use /vote admin <create|title|remove|option|source|schedule|tower|pause|resume|reset|reset-player|list>."); }
 
     private void createGroup(CommandContext ctx) {
         if (ctx.args().size() < 3) { ctx.returnError("Usage: /vote admin create <id> [votes-per-player] [name]"); return; }
@@ -175,6 +190,23 @@ public final class VotingFeature extends BaseFeature {
         String name = ctx.args().size() > nameFrom ? String.join(" ", ctx.args().subList(nameFrom, ctx.args().size())) : id;
         VoteGroup group = new VoteGroup(id, name, allowance, 0, Long.MAX_VALUE, false, "STATIC", null);
         groups.put(id, group); saveGroup(group); ctx.returnSuccess("Created voting group " + id + " with " + allowance + " vote(s) per player.");
+    }
+
+    private void setTitle(CommandContext ctx) {
+        if (ctx.args().size() < 4) {
+            ctx.returnError("Usage: /vote admin title <group> <title>");
+            return;
+        }
+        VoteGroup group = requireGroup(ctx, 2);
+        if (group == null) return;
+        String title = String.join(" ", ctx.args().subList(3, ctx.args().size())).trim();
+        if (title.isEmpty()) {
+            ctx.returnError("The voting group title cannot be blank.");
+            return;
+        }
+        group.name = title;
+        saveGroup(group);
+        ctx.returnSuccess("Voting group title updated to " + title + ".");
     }
 
     private void optionCommand(CommandContext ctx) {
@@ -372,6 +404,109 @@ public final class VotingFeature extends BaseFeature {
             .append(Component.space()).append(suggestButton("[Remove towers]", "/vote admin tower remove " + group.id + " all", "Remove every physical tower but keep option slots"))
             .append(Component.space()).append(suggestButton("[Reset votes]", "/vote admin reset " + group.id, "Review before sending"))
             .append(Component.space()).append(suggestButton("[Remove group]", "/vote admin remove " + group.id, "Remove this group, all options, votes, and physical towers")));
+    }
+
+    private void announceLoginVotes(Player player) {
+        UUID playerId = player.getUniqueId();
+        Long previousLastSeenAt = loadPlayerActivity(playerId);
+        recordPlayerActivity(playerId, Instant.now().getEpochSecond());
+        if (!getConfigSection().getBoolean("login-announcement.enabled", true)) return;
+
+        List<String> summaries = new ArrayList<>();
+        for (VoteGroup group : groups.values()) {
+            if (!"open".equals(state(group))) continue;
+            GroupLoginSummary summary = loginSummary(group, playerId, previousLastSeenAt);
+            String message = formatLoginVoteSummary(group.name, summary.receivedVotes(), summary.totalVotes(), summary.bestRank());
+            if (!message.isEmpty()) summaries.add(message);
+        }
+        if (summaries.isEmpty()) return;
+
+        PlayerLoginMessageServiceImpl loginMessages = STEMCraft.getPlugin().playerLoginMessages();
+        loginMessages.queue(player, PlayerLoginMessageServiceImpl.Priority.OTHER, "voting", recipient -> {
+            for (String summary : summaries) recipient.sendMessage(Component.text(summary, NamedTextColor.GRAY));
+        });
+    }
+
+    private Long loadPlayerActivity(UUID playerId) {
+        return api.database().querySingleMapped(
+            "SELECT last_seen_at FROM " + PLAYER_ACTIVITY_TABLE + " WHERE player_uuid=?",
+            ps -> ps.setString(1, playerId.toString()),
+            rs -> rs.getLong(1)
+        );
+    }
+
+    private void recordPlayerActivity(UUID playerId, long lastSeenAt) {
+        api.database().update(
+            "INSERT INTO " + PLAYER_ACTIVITY_TABLE + " (player_uuid,last_seen_at) VALUES (?,?) " +
+                "ON CONFLICT(player_uuid) DO UPDATE SET last_seen_at=excluded.last_seen_at",
+            ps -> {
+                ps.setString(1, playerId.toString());
+                ps.setLong(2, lastSeenAt);
+            }
+        );
+    }
+
+    private GroupLoginSummary loginSummary(VoteGroup group, UUID playerId, Long previousLastSeenAt) {
+        int receivedVotes = previousLastSeenAt == null ? 0 : receivedVotes(group.id, playerId, previousLastSeenAt);
+        int totalVotes = 0;
+        Integer bestRank = null;
+        LinkedHashMap<String, VoteOption> groupOptions = options.getOrDefault(group.id, new LinkedHashMap<>());
+        for (VoteOption option : groupOptions.values()) {
+            if (!playerId.equals(option.owner)) continue;
+            int count = optionVotes(group.id, option.id);
+            totalVotes += count;
+            if (count <= 0) continue;
+            int rank = rank(group.id, option.id, count);
+            if (rank <= 3 && (bestRank == null || rank < bestRank)) bestRank = rank;
+        }
+        return new GroupLoginSummary(receivedVotes, totalVotes, bestRank);
+    }
+
+    private int receivedVotes(String groupId, UUID playerId, long previousLastSeenAt) {
+        return api.database().querySingleMapped(
+            "SELECT COUNT(*) FROM voting_votes vv " +
+                "JOIN voting_options vo ON vo.group_id=vv.group_id AND vo.option_id=vv.option_id " +
+                "WHERE vv.group_id=? AND vo.owner_uuid=? AND vv.created_at>?",
+            ps -> {
+                ps.setString(1, groupId);
+                ps.setString(2, playerId.toString());
+                ps.setLong(3, previousLastSeenAt);
+            },
+            rs -> rs.getInt(1),
+            0
+        );
+    }
+
+    private int rank(String groupId, String optionId, int optionVoteCount) {
+        int higherCount = 0;
+        for (VoteOption option : options.getOrDefault(groupId, new LinkedHashMap<>()).values()) {
+            if (optionVotes(groupId, option.id) > optionVoteCount) higherCount++;
+        }
+        return higherCount + 1;
+    }
+
+    static String formatLoginVoteSummary(String groupTitle, int receivedVotes, int totalVotes, Integer rank) {
+        if (receivedVotes <= 0 && rank == null) return "";
+        if (receivedVotes > 0) {
+            String message = groupTitle + ": +" + receivedVotes + " " + voteWord(receivedVotes) + ", " + totalVotes + " total";
+            return rank == null ? message : message + " — " + ordinal(rank);
+        }
+        return groupTitle + ": " + ordinal(rank) + " — " + totalVotes + " " + voteWord(totalVotes);
+    }
+
+    private static String voteWord(int count) {
+        return count == 1 ? "vote" : "votes";
+    }
+
+    static String ordinal(int value) {
+        int lastTwo = Math.abs(value) % 100;
+        String suffix = lastTwo >= 11 && lastTwo <= 13 ? "th" : switch (Math.abs(value) % 10) {
+            case 1 -> "st";
+            case 2 -> "nd";
+            case 3 -> "rd";
+            default -> "th";
+        };
+        return value + suffix;
     }
 
     private NamedTextColor stateColour(VoteGroup group) { return switch (state(group)) { case "open" -> NamedTextColor.GREEN; case "paused" -> NamedTextColor.YELLOW; default -> NamedTextColor.GRAY; }; }
@@ -803,7 +938,8 @@ public final class VotingFeature extends BaseFeature {
     private boolean isTowerPart(Location location) { for(var map:towers.values())for(VoteTower tower:map.values())for(TowerElement element:towerTemplate())if(elementLocations(tower,element).stream().anyMatch(l->same(l,location)))return true;return false; }
     private boolean same(Location a, Location b) { return a.getWorld()!=null&&b.getWorld()!=null&&a.getWorld().equals(b.getWorld())&&a.getBlockX()==b.getBlockX()&&a.getBlockY()==b.getBlockY()&&a.getBlockZ()==b.getBlockZ(); }
 
-    private static final class VoteGroup { final String id,name; final int votesPerPlayer; long startsAt,endsAt; boolean paused; String sourceType,sourceValue; VoteGroup(String id,String name,int votes,long start,long end,boolean paused,String source,String value){this.id=id;this.name=name;this.votesPerPlayer=votes;this.startsAt=start;this.endsAt=end;this.paused=paused;this.sourceType=source;this.sourceValue=value;} }
+    private static final class VoteGroup { final String id; String name; final int votesPerPlayer; long startsAt,endsAt; boolean paused; String sourceType,sourceValue; VoteGroup(String id,String name,int votes,long start,long end,boolean paused,String source,String value){this.id=id;this.name=name;this.votesPerPlayer=votes;this.startsAt=start;this.endsAt=end;this.paused=paused;this.sourceType=source;this.sourceValue=value;} }
+    private record GroupLoginSummary(int receivedVotes, int totalVotes, Integer bestRank) {}
     private record VoteOption(String id,String name,UUID owner) {}
     private record VoteTower(String groupId,String optionId,String world,int x,int y,int z,BlockFace facing) {}
     private record PendingPlacement(String groupId,String optionId,boolean continuous) {}

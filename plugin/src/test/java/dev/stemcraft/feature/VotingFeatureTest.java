@@ -23,6 +23,28 @@ class VotingFeatureTest {
         assertEquals(1, VotingFeature.lampCount(1, 25, 10));
     }
 
+    @Test void loginVoteSummaryIncludesNewVotesAndRank() {
+        assertEquals("Monthly Challenge: +3 votes, 12 total — 2nd",
+            VotingFeature.formatLoginVoteSummary("Monthly Challenge", 3, 12, 2));
+    }
+
+    @Test void loginVoteSummaryCanShowCurrentTopThreeWithoutNewVotes() {
+        assertEquals("Monthly Challenge: 2nd — 12 votes",
+            VotingFeature.formatLoginVoteSummary("Monthly Challenge", 0, 12, 2));
+    }
+
+    @Test void loginVoteSummaryOmitsPlayersOutsideTopThreeWithoutNewVotes() {
+        assertEquals("", VotingFeature.formatLoginVoteSummary("Monthly Challenge", 0, 12, null));
+    }
+
+    @Test void ordinalUsesEnglishSuffixes() {
+        assertEquals("1st", VotingFeature.ordinal(1));
+        assertEquals("2nd", VotingFeature.ordinal(2));
+        assertEquals("3rd", VotingFeature.ordinal(3));
+        assertEquals("11th", VotingFeature.ordinal(11));
+        assertEquals("22nd", VotingFeature.ordinal(22));
+    }
+
     @Test void bundledTowerSchemaUsesReadableVerticalLayout() {
         var stream = getClass().getResourceAsStream("/config.yml"); assertNotNull(stream);
         YamlConfiguration config = YamlConfiguration.loadConfiguration(new InputStreamReader(stream, StandardCharsets.UTF_8));
