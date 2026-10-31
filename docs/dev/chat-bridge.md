@@ -1,10 +1,10 @@
 # Chat HTTP bridge
 
-The chat bridge lets a small Discord bot receive accepted Minecraft global chat
-without making the Minecraft web server an inbound dependency for the bot. The
-bot exposes one HTTPS POST receiver, checks the bearer token, de-duplicates by
-`event_id`, and forwards the event through its Discord client or webhook. The
-plugin remains responsible for moderation; blocked messages are never queued.
+The chat bridge connects Minecraft global chat and a configured Discord channel
+in both directions. The bot exposes one HTTPS POST receiver for Minecraft
+events, while STEMCraft accepts Discord chat on its existing web server. Both
+directions use the same bearer token. The plugin remains responsible for
+moderation; blocked Minecraft messages are never queued.
 
 Enable it under `chat.discord-bridge`:
 
@@ -14,6 +14,8 @@ chat:
     enabled: true
     url: "https://bot.example.test/minecraft/event"
     bearer-token: "a-secret-known-by-both-sides"
+    inbound-enabled: true
+    inbound-format: "&1[DISCORD] {displayname}: {message} "
     server-id: survival
     channel: global
     timeout: 3s
@@ -28,6 +30,7 @@ chat:
       player-command: true
       server-start: true
       server-stop: true
+      server-message: true
     redacted-commands:
       - login
       - register
@@ -56,6 +59,12 @@ The bridge sends these event names:
 - `minecraft.player_command`
 - `minecraft.server_start`
 - `minecraft.server_stop`
+- `minecraft.server_message`
+
+`minecraft.server_message` is emitted for server-originated `say` and
+`minecraft:say` commands, including commands sent by Craftarr, RCON, scripts,
+and other server services. Its `data.message` contains the text after the
+command; the Discord bot renders that text as a compact amber embed.
 
 The token is separate from `web-server.mail-api.key`. Keep the receiver on
 HTTPS and set a different token for each server or bot. The bridge is disabled
@@ -90,9 +99,32 @@ X-STEMCraft-Event-Id: 7b5e1d0e-8d86-4a93-9ea2-92a57fb1b40e
 
 The bot should return any 2xx response after it has accepted the event. It can
 return 4xx for a permanent request problem or 5xx for a transient failure.
-Keeping Discord formatting in the bot makes the plugin payload useful for
-other consumers too and leaves room for a later Discord-to-Minecraft command
-without coupling the two directions.
+When `chat.discord-bridge.enabled` and `inbound-enabled` are true, STEMCraft
+accepts Discord chat at `POST /api/v1/chat/discord` on the configured web
+server. The bot sends only plain message text; Discord embeds, images,
+attachments, and messages sent by bots are ignored before a request is made.
+
+The inbound payload is:
+
+```http
+POST /api/v1/chat/discord HTTP/1.1
+Authorization: Bearer a-secret-known-by-both-sides
+Content-Type: application/json; charset=utf-8
+X-Discord-Message-Id: 123456789012345678
+```
+
+```json
+{
+  "event": "discord.chat",
+  "event_id": "123456789012345678",
+  "username": "alex",
+  "displayname": "Alex",
+  "message": "Hello from Discord"
+}
+```
+
+The `inbound-format` supports `{username}`, `{displayname}`, and `{message}`.
+Its default is `&1[DISCORD] {displayname}: {message} `.
 
 Player join and quit events include the player object at the top level and an
 `online_players` count in `data`. Player death events include the player

@@ -39,12 +39,12 @@ public class BedWarsCommand {
     }
 
     public void onEnable() {
-        api.tabComplete().register("bedwars-arenas", (sender, args) -> bedWars.minigame().arenas().stream()
+        api.tabComplete().register("bedwars-arenas", (sender, args, currentArgument) -> bedWars.minigame().arenas().stream()
             .map(MiniGameArena::id)
             .sorted()
             .toList());
-        api.tabComplete().register("bedwars-team-ids", (sender, args) -> bedWars.supportedTeamIds());
-        api.tabComplete().register("bedwars-arena-teams", (sender, args) -> {
+        api.tabComplete().register("bedwars-team-ids", (sender, args, currentArgument) -> bedWars.supportedTeamIds());
+        api.tabComplete().register("bedwars-arena-teams", (sender, args, currentArgument) -> {
             if (args.length < 1) {
                 return List.of();
             }

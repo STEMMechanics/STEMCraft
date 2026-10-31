@@ -32,7 +32,7 @@ public class SkyBlockCommand {
     }
 
     public void onEnable() {
-        api.tabComplete().register("skyblock-owners", (sender, args) -> skyBlock.minigame().arenas().stream()
+        api.tabComplete().register("skyblock-owners", (sender, args, currentArgument) -> skyBlock.minigame().arenas().stream()
             .map(skyBlock::ownerName)
             .sorted(String::compareToIgnoreCase)
             .toList());

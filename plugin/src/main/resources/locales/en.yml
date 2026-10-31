@@ -186,6 +186,12 @@ TPWORLD_USAGE: "/tpworld <world> [players]"
 TPWORLD_SUCCESS_LAST: "<green>Teleported to your last location in world <yellow>{world}<green>."
 TPWORLD_SUCCESS_SPAWN: "<green>No saved location for <yellow>{world}<green>; teleported to world spawn."
 
+# /tpworldat
+TPWORLDAT_DESCRIPTION: "Teleport a player to exact coordinates in another world."
+TPWORLDAT_USAGE: "/tpworldat <world> <x> <y> <z> [player]"
+TPWORLDAT_SUCCESS: "<green>Teleported <yellow>{player}<green> to <yellow>{world}<green> at <yellow>{x} {y} {z}<green>."
+TPWORLDAT_INVALID_COORDINATE: "<red>Invalid {axis} coordinate: <yellow>{coordinate}<red>."
+
 # /tpworldspawn
 TPWORLDSPAWN_DESCRIPTION: "Teleport a player to a world's spawn."
 TPWORLDSPAWN_USAGE: "/tpworldspawn <world> [players]"

@@ -421,6 +421,10 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
         }
 
         public static List<String> parseValue(String value, Player player, String[] commandArgs) {
+            return parseValue(value, player, commandArgs, "");
+        }
+
+        public static List<String> parseValue(String value, Player player, String[] commandArgs, String currentArgument) {
             List<String> list = new ArrayList<>();
 
             if (value.isEmpty()) {
@@ -442,7 +446,7 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
 
                 List<String> placeholderList = STEMCraftAPI.api()
                         .tabComplete()
-                        .getCompletionList(placeholder, player, args);
+                        .getCompletionList(placeholder, player, args, currentArgument);
 
                 list.addAll(placeholderList);
             } else {
@@ -552,6 +556,7 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
         Map<String, List<String>> valueOptionArgsAvailable = new HashMap<>();
         if (args.length == 0) args = new String[]{""};
         String[] fullArgs = new String[args.length - 1];
+        String currentArgument = args[args.length - 1];
 
         System.arraycopy(args, 0, fullArgs, 0, args.length - 1);
 
@@ -601,7 +606,12 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
                 TabCompleteArgParser.MatchResult nextMatches = argParser.nextMatches(listItem);
                 if (nextMatches == TabCompleteArgParser.MatchResult.EXHAUSTED) {
                     if(listItem != null && !listItem.isEmpty()) {
-                            tabCompletionResults.addAll(TabCompleteArgParser.parseValue(listItem, player, fullArgs));
+                            tabCompletionResults.addAll(TabCompleteArgParser.parseValue(
+                                listItem,
+                                player,
+                                fullArgs,
+                                currentArgument
+                            ));
                         }
 
                     break;

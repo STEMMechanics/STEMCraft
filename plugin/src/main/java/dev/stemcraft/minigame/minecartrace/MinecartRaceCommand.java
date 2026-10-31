@@ -23,7 +23,7 @@ final class MinecartRaceCommand {
 
     void register() {
         String id = MinecartRaceMiniGame.NAMESPACE;
-        api.tabComplete().register(id + "-arenas", (_, _) -> owner.game.arenas().stream().map(MiniGameArena::id).sorted().toList());
+        api.tabComplete().register(id + "-arenas", (_, _, _) -> owner.game.arenas().stream().map(MiniGameArena::id).sorted().toList());
         var command = api.commands().create(id).usage("/" + id + " <command> [arena]");
         for (String action : List.of("list", "leave", "create", "info", "join", "joinall", "spectate", "start", "stop", "save",
                 "validate", "enable", "disable", "delete", "addspawn", "removespawn", "addcheckpoint", "removecheckpoint")) {

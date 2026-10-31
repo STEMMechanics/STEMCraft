@@ -61,6 +61,7 @@ public class TabCompleteServiceImpl extends BaseService implements TabCompleteSe
      * @param name The name of the placeholder.
      * @param callback The callback to provide completions.
      */
+    @Override
     public void register(@NotNull String name, @NotNull TabCompletionProvider callback) {
         tabCompletionPlaceholders.put(name, callback);
     }
@@ -74,10 +75,26 @@ public class TabCompleteServiceImpl extends BaseService implements TabCompleteSe
      * @return A list of completion strings.
      */
     public @NotNull List<String> getCompletionList(@NotNull String name, @NotNull Player player, @NotNull String... args) {
-        if (tabCompletionPlaceholders.containsKey(name)) {
-            return tabCompletionPlaceholders.get(name).provide(player, args);
-        }
+        return getCompletionList(name, player, args, "");
+    }
 
-        return new ArrayList<>();
+    /**
+     * Get completions with the current argument separated from provider context.
+     *
+     * @param name The name of the tab completion provider.
+     * @param player The player requesting the completions.
+     * @param args Provider context resolved from completed command arguments.
+     * @param currentArgument The current argument being completed.
+     * @return A list of tab completions.
+     */
+    @Override
+    public @NotNull List<String> getCompletionList(
+        @NotNull String name,
+        @NotNull Player player,
+        @NotNull String[] args,
+        @NotNull String currentArgument
+    ) {
+        TabCompletionProvider provider = tabCompletionPlaceholders.get(name);
+        return provider == null ? new ArrayList<>() : provider.provide(player, args, currentArgument);
     }
 }
