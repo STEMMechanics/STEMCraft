@@ -27,6 +27,7 @@ import dev.stemcraft.api.service.playerstats.PlayerStatDefinition;
 import dev.stemcraft.api.service.playerstats.PlayerStatValue;
 import dev.stemcraft.api.service.playerstats.PlayerStatsRecord;
 import dev.stemcraft.api.service.playerstats.PlayerStatsService;
+import dev.stemcraft.api.service.playerprofile.PlayerProfileSectionProvider;
 import dev.stemcraft.api.service.playerreset.*;
 import dev.stemcraft.api.util.PatternUtil;
 import dev.stemcraft.api.util.PlayerUtil;
@@ -182,6 +183,7 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
         loadStatGroups();
         loadMilestones();
         loadTimeInDefinitions();
+        registerProfileProvider();
         registerEventCollectors();
         registerStatsCommand();
         api.playerResets().register(new PlayerResetHandler() {
@@ -205,6 +207,9 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
 
     @Override
     public void onDisable() {
+        if (api.playerProfiles() != null) {
+            api.playerProfiles().unregister("stats");
+        }
         captureOnlinePlayers();
     }
 
@@ -318,6 +323,20 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
     }
 
     @Override
+    public @Nullable PlayerStatsRecord snapshot(@NotNull UUID playerUuid, @Nullable String period) {
+        Player online = Bukkit.getPlayer(playerUuid);
+        if (online != null) {
+            capturePlayerStats(online);
+        }
+
+        PlayerStatsState state = players.get(playerUuid);
+        if (state == null) {
+            return null;
+        }
+        return toRecord(state, null, QueryWindow.parse(period));
+    }
+
+    @Override
     public void captureOnlinePlayers() {
         for (Player player : Bukkit.getOnlinePlayers()) {
             capturePlayerStats(player);
@@ -402,6 +421,52 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
         if (changed) {
             section.save();
         }
+    }
+
+    private void registerProfileProvider() {
+        if (api.playerProfiles() == null) {
+            return;
+        }
+
+        api.playerProfiles().register(new PlayerProfileSectionProvider() {
+            @Override
+            public @NotNull String id() {
+                return "stats";
+            }
+
+            @Override
+            public @NotNull String title() {
+                return "Statistics";
+            }
+
+            @Override
+            public @NotNull Map<String, Object> snapshot(
+                @NotNull UUID playerUuid,
+                @Nullable String period
+            ) {
+                PlayerStatsRecord record = PlayerStatsServiceImpl.this.snapshot(playerUuid, period);
+                List<Map<String, Object>> items = record == null
+                    ? List.of()
+                    : record.stats().stream().map(PlayerStatsServiceImpl::profileStat).toList();
+
+                Map<String, Object> data = new LinkedHashMap<>();
+                data.put("period", period == null || period.isBlank() ? "all" : period);
+                data.put("updated_at", record == null || record.updatedAt() == null
+                    ? null : record.updatedAt().toString());
+                data.put("items", items);
+                return data;
+            }
+        });
+    }
+
+    private static @NotNull Map<String, Object> profileStat(@NotNull PlayerStatValue stat) {
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("key", stat.key());
+        item.put("title", stat.title());
+        item.put("description", stat.description());
+        item.put("value", stat.value());
+        item.put("updated_at", stat.updatedAt() == null ? null : stat.updatedAt().toString());
+        return item;
     }
 
     private void loadBuiltInDefinitions() {

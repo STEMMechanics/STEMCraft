@@ -20,6 +20,17 @@ the killing blow against hostile mobs and is separated by direct player attacks 
 
 Profession XP is registered with player stats under `skill_<profession>_xp` keys.
 
+When the authenticated player profile API is enabled, the feature registers a
+`skills` profile section. It exposes each configured skill's lifetime XP,
+derived level, current level threshold, next level threshold, maximum level,
+and last update time. Consumers should use this derived section rather than
+reconstructing levels from the underlying `skill_*_xp` statistics.
+
+Crossing one or more skill thresholds fires the transport-neutral
+`PlayerSkillLevelUpEvent`. The WebService publishes it as
+`minecraft.player_skill_level_up` when that event is enabled in an outbound
+event subscription.
+
 Large lifetime-stat announcements are configured separately under `player_stats.milestones`. A broadcast happens
 only when a player's lifetime total crosses the configured value.
 

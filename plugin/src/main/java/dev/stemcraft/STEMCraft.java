@@ -124,6 +124,7 @@ public final class STEMCraft extends JavaPlugin {
     private PlacedObjectServiceImpl placedObjects;
     private PlayerServiceImpl players;
     private PlayerStatsServiceImpl playerStats;
+    private PlayerProfileServiceImpl playerProfiles;
     private EntitlementService entitlements;
     private PlayerResetServiceImpl playerResets;
     private ProtectionServiceImpl protections;
@@ -240,6 +241,7 @@ public final class STEMCraft extends JavaPlugin {
         placedObjects = new PlacedObjectServiceImpl(this, api);
         players = new PlayerServiceImpl(this, api);
         playerStats = new PlayerStatsServiceImpl(this, api);
+        playerProfiles = new PlayerProfileServiceImpl(this, api);
         entitlements = new EntitlementService(this, api);
         playerResets = new PlayerResetServiceImpl(this, api);
         protections = new ProtectionServiceImpl(this, api);
@@ -275,6 +277,7 @@ public final class STEMCraft extends JavaPlugin {
         placeholders.onEnable();
         placedObjects.onEnable();
         players.onEnable();
+        playerProfiles.onEnable();
         playerStats.onEnable();
         entitlements.onEnable();
         playerResets.onEnable();
@@ -378,8 +381,8 @@ public final class STEMCraft extends JavaPlugin {
     /** {@inheritDoc} */
     @Override
     public void onDisable() {
-        if (Bukkit.isStopping() && chat != null) {
-            chat.publishChatBridgeEvent("minecraft.server_stop", null, Map.of());
+        if (Bukkit.isStopping() && api != null && api.web() != null) {
+            api.web().publishEvent("minecraft.server_stop", null, null, Map.of());
         }
 
         if (saves != null) {
@@ -412,6 +415,7 @@ public final class STEMCraft extends JavaPlugin {
         disableService(entitlements);
         disableService(playerResets);
         disableService(playerStats);
+        disableService(playerProfiles);
         disableService(placeholders);
         disableService(placedObjects);
         disableService(players);
@@ -794,6 +798,9 @@ public final class STEMCraft extends JavaPlugin {
 
         if (!localesOnly && chat != null) {
             chat.onReload();
+        }
+        if (!localesOnly && web != null) {
+            web.onReload();
         }
         if (!localesOnly && playerLoginMessages != null) {
             playerLoginMessages.onReload();

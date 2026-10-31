@@ -20,6 +20,7 @@ import dev.stemcraft.service.ProfanityFilterServiceImpl;
 import dev.stemcraft.service.ProtectionServiceImpl;
 import dev.stemcraft.service.PlayerServiceImpl;
 import dev.stemcraft.service.PlayerStatsServiceImpl;
+import dev.stemcraft.service.PlayerProfileServiceImpl;
 import dev.stemcraft.service.PlayerResetServiceImpl;
 import dev.stemcraft.service.PunishmentServiceImpl;
 import dev.stemcraft.service.RecipeServiceImpl;
@@ -91,6 +92,7 @@ class STEMCraftAPIImplTest {
         "profanityFilter",
         "punishments",
         "playerStats",
+        "playerProfiles",
         "playerResets",
         "resourcePacks",
         "recipes",
@@ -145,6 +147,7 @@ class STEMCraftAPIImplTest {
         ProfanityFilterServiceImpl profanityFilter = mock(ProfanityFilterServiceImpl.class);
         PunishmentServiceImpl punishments = mock(PunishmentServiceImpl.class);
         PlayerStatsServiceImpl playerStats = mock(PlayerStatsServiceImpl.class);
+        PlayerProfileServiceImpl playerProfiles = mock(PlayerProfileServiceImpl.class);
         PlayerResetServiceImpl playerResets = mock(PlayerResetServiceImpl.class);
         ResourcePackServiceImpl resourcePacks = mock(ResourcePackServiceImpl.class);
         RecipeServiceImpl recipes = mock(RecipeServiceImpl.class);
@@ -181,6 +184,7 @@ class STEMCraftAPIImplTest {
         when(plugin.profanityFilter()).thenReturn(profanityFilter);
         when(plugin.punishments()).thenReturn(punishments);
         when(plugin.playerStats()).thenReturn(playerStats);
+        when(plugin.playerProfiles()).thenReturn(playerProfiles);
         when(plugin.playerResets()).thenReturn(playerResets);
         when(plugin.resourcePack()).thenReturn(resourcePacks);
         when(plugin.recipes()).thenReturn(recipes);
@@ -219,6 +223,7 @@ class STEMCraftAPIImplTest {
         expectedDelegates.put("profanityFilter", profanityFilter);
         expectedDelegates.put("punishments", punishments);
         expectedDelegates.put("playerStats", playerStats);
+        expectedDelegates.put("playerProfiles", playerProfiles);
         expectedDelegates.put("playerResets", playerResets);
         expectedDelegates.put("resourcePacks", resourcePacks);
         expectedDelegates.put("recipes", recipes);

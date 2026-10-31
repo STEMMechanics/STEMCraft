@@ -31,6 +31,7 @@ import dev.stemcraft.api.service.dialog.DialogService;
 import dev.stemcraft.api.service.event.EventService;
 import dev.stemcraft.api.service.motd.MotdService;
 import dev.stemcraft.api.service.player.PlayerService;
+import dev.stemcraft.api.service.playerprofile.PlayerProfileService;
 import dev.stemcraft.api.service.playerstats.PlayerStatsService;
 import dev.stemcraft.api.service.playerreset.PlayerResetService;
 import dev.stemcraft.api.service.placeholder.PlaceholderService;
@@ -241,6 +242,10 @@ public class STEMCraftAPIImpl extends HasMessagesImpl implements STEMCraftAPI {
      */
     @Override
     public PlayerStatsService playerStats() { return plugin.playerStats(); }
+
+    /** Get the aggregate player profile service. */
+    @Override
+    public PlayerProfileService playerProfiles() { return plugin.playerProfiles(); }
 
     @Override
     public PlayerResetService playerResets() { return plugin.playerResets(); }

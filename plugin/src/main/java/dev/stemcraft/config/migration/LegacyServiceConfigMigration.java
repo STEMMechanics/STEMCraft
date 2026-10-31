@@ -43,6 +43,7 @@ public final class LegacyServiceConfigMigration {
         changed |= mergeSection(yaml, "recipe-services", "recipes", UnaryOperator.identity());
         changed |= mergeSection(yaml, "world-services", "worlds", UnaryOperator.identity());
         changed |= mergeSection(yaml, "chat-services", "chat", LegacyServiceConfigMigration::normalizeLegacyChatKey);
+        changed |= migrateLegacyChatBridgeEvents(yaml);
 
         changed |= mergeSection(yaml, "auditing", "player_logs", LegacyServiceConfigMigration::normalizeLegacyAuditKey);
         changed |= mergeSection(yaml, "player_log", "player_logs", LegacyServiceConfigMigration::normalizeLegacyAuditKey);
@@ -122,6 +123,89 @@ public final class LegacyServiceConfigMigration {
             return "max_days";
         }
         return key;
+    }
+
+    private boolean migrateLegacyChatBridgeEvents(YamlConfiguration yaml) {
+        String sourcePath = yaml.isConfigurationSection("chat.discord-bridge")
+            ? "chat.discord-bridge"
+            : yaml.isConfigurationSection("chat.discord_bridge")
+                ? "chat.discord_bridge"
+                : null;
+        if (sourcePath == null) {
+            return false;
+        }
+
+        ConfigurationSection source = yaml.getConfigurationSection(sourcePath);
+        if (source == null || !hasConfiguredOutboundEndpoint(source)) {
+            return false;
+        }
+
+        String targetPath = "web-server.event-subscriptions";
+        boolean targetAlreadyConfigured = yaml.isConfigurationSection(targetPath)
+            && hasConfiguredOutboundEndpoint(yaml.getConfigurationSection(targetPath));
+        if (targetAlreadyConfigured) {
+            return false;
+        }
+
+        boolean changed = false;
+        for (Map.Entry<String, Object> entry : source.getValues(true).entrySet()) {
+            String key = entry.getKey();
+            if (source.isConfigurationSection(key) || isInboundChatBridgeKey(key) || "enabled".equals(key)) {
+                continue;
+            }
+
+            String normalizedKey = normalizeLegacyEventSubscriptionKey(key);
+            if (normalizedKey == null || normalizedKey.isBlank()) {
+                continue;
+            }
+            yaml.set(targetPath + "." + normalizedKey, entry.getValue());
+            yaml.set(sourcePath + "." + key, null);
+            changed = true;
+        }
+
+        if (changed) {
+            yaml.set(targetPath + ".enabled", true);
+            applied.add(sourcePath + " outbound settings -> " + targetPath);
+        }
+        return changed;
+    }
+
+    private static boolean hasConfiguredOutboundEndpoint(ConfigurationSection section) {
+        if (section == null) {
+            return false;
+        }
+        String url = firstConfiguredString(section, "url", "");
+        String token = firstConfiguredString(section, "bearer-token", "bearer_token");
+        return !url.isBlank() || !token.isBlank();
+    }
+
+    private static String firstConfiguredString(ConfigurationSection section, String primary, String fallback) {
+        String value = section.getString(primary, "");
+        if (value != null && !value.isBlank()) {
+            return value.trim();
+        }
+        return section.getString(fallback, "").trim();
+    }
+
+    private static boolean isInboundChatBridgeKey(String key) {
+        return key.equals("inbound-enabled")
+            || key.equals("inbound_enabled")
+            || key.equals("inbound-format")
+            || key.equals("inbound_format")
+            || key.startsWith("inbound-enabled.")
+            || key.startsWith("inbound_enabled.")
+            || key.startsWith("inbound-format.")
+            || key.startsWith("inbound_format.");
+    }
+
+    private static String normalizeLegacyEventSubscriptionKey(String key) {
+        String normalized = stripLeadingDots(key);
+        normalized = normalized.replace("bearer_token", "bearer-token")
+            .replace("server_id", "server-id")
+            .replace("queue_size", "queue-size")
+            .replace("max_retries", "max-retries")
+            .replace("redacted_commands", "redacted-commands");
+        return normalized;
     }
 
     private static String stripLeadingDots(String key) {
