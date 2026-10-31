@@ -71,7 +71,7 @@ public class CustomBooks extends BaseFeature {
         loadAllBooks();
         buildCacheList();
 
-        api.tabComplete().register("book", (player, args) -> this.bookNames);
+        api.tabComplete().register("book", (player, args, currentArgument) -> this.bookNames);
 
         api.commands().create("book")
                 .tabCompletion("new")

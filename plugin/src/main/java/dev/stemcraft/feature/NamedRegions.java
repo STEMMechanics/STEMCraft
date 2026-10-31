@@ -156,7 +156,7 @@ public final class NamedRegions extends BaseFeature {
 
         api.events().register(ChunkLoadEvent.class,event->discover(event.getChunk()));
         api.events().register(PlayerMoveEvent.class,this::onMove);
-        api.tabComplete().register("named-area",(player,args)->new ArrayList<>(areas.keySet()));
+        api.tabComplete().register("named-area",(player, args, currentArgument)->new ArrayList<>(areas.keySet()));
 
         api.commands().create("namedregion")
             .usage("/namedregion <info|list|find|nearby|teleport|rename|retired|fallbacks|release|regenerate>")

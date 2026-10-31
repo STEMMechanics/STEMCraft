@@ -114,8 +114,8 @@ public final class VotingFeature extends BaseFeature {
     }
 
     private void registerCommand() {
-        api.tabComplete().register("vote-group", (player, args) -> new ArrayList<>(groups.keySet()));
-        api.tabComplete().register("vote-option", (player, args) -> {
+        api.tabComplete().register("vote-group", (player, args, currentArgument) -> new ArrayList<>(groups.keySet()));
+        api.tabComplete().register("vote-option", (player, args, currentArgument) -> {
             if (args.length == 0) return List.of();
             LinkedHashMap<String, VoteOption> groupOptions = options.get(args[0].toLowerCase(Locale.ROOT));
             if (groupOptions == null) return List.of();

@@ -138,8 +138,8 @@ public class WorldGenerationImpl implements WorldGeneration {
      */
     public void onEnable() {
         api.events().register(PluginDisableEvent.class, event -> unregisterOwner(event.getPlugin()));
-        api.tabComplete().register("world-generators", (player, args) -> list());
-        api.tabComplete().register("world-generator-options", (player, args) -> {
+        api.tabComplete().register("world-generators", (player, args, currentArgument) -> list());
+        api.tabComplete().register("world-generator-options", (player, args, currentArgument) -> {
             if (args.length == 0 || args[0].isBlank()) {
                 return List.of();
             }

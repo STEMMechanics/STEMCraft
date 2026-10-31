@@ -67,14 +67,14 @@ public class WorldCommand {
      * Enable the world command.
      */
     public void onEnable() {
-        api.tabComplete().register("world-command-loaded", (player, args) -> {
+        api.tabComplete().register("world-command-loaded", (player, args, currentArgument) -> {
             List<String> worlds = new ArrayList<>(); worlds.add("~");
             Bukkit.getWorlds().stream().map(World::getName).forEach(worlds::add); return worlds;
         });
-        api.tabComplete().register("world-command-any", (player, args) -> {
+        api.tabComplete().register("world-command-any", (player, args, currentArgument) -> {
             List<String> worlds = new ArrayList<>(); worlds.add("~"); worlds.addAll(api.worlds().listWorlds()); return worlds;
         });
-        api.tabComplete().register("world-transition-command-index", (player, args) -> {
+        api.tabComplete().register("world-transition-command-index", (player, args, currentArgument) -> {
             if (args.length < 2) {
                 return List.of();
             }

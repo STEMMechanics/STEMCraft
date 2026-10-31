@@ -283,7 +283,7 @@ public class CustomPortals extends BaseFeature {
     }
 
     private void registerTabCompletions() {
-        api.tabComplete().register("custom-portal-id", (player, args) -> portalIds());
+        api.tabComplete().register("custom-portal-id", (player, args, currentArgument) -> portalIds());
     }
 
     private void registerCommand() {

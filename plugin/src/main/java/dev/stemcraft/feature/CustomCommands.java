@@ -168,13 +168,13 @@ public class CustomCommands extends BaseFeature {
     }
 
     private void registerTabCompletions() {
-        api.tabComplete().register("custom-command-id", (player, args) ->
+        api.tabComplete().register("custom-command-id", (player, args, currentArgument) ->
                 listEntries().stream()
                         .map(CustomCommandEntry::id)
                         .toList()
         );
 
-        api.tabComplete().register("custom-command-command-index", (player, args) -> {
+        api.tabComplete().register("custom-command-command-index", (player, args, currentArgument) -> {
             if (args.length == 0 || args[0] == null || args[0].isBlank()) {
                 return List.of();
             }
@@ -192,7 +192,7 @@ public class CustomCommands extends BaseFeature {
             return indexes;
         });
 
-        api.tabComplete().register("custom-command-message-index", (player, args) -> {
+        api.tabComplete().register("custom-command-message-index", (player, args, currentArgument) -> {
             if (args.length == 0 || args[0] == null || args[0].isBlank()) {
                 return List.of();
             }
