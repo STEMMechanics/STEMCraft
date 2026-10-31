@@ -340,9 +340,14 @@ public final class QuestFeature extends BaseFeature {
         }
         Entity citizensEntity = expectsCitizens
             ? CitizensQuestNpcSupport.spawnedEntity(profile) : null;
-        Entity preferred = citizensEntity != null ? citizensEntity
+        boolean knownCitizensEntity = citizensEntity != null && citizensEntity.isValid();
+        Entity preferred = knownCitizensEntity ? citizensEntity
             : profile.spawnedEntity() == null ? null : Bukkit.getEntity(profile.spawnedEntity());
-        if (preferred == null || !tagged.contains(preferred)) preferred = tagged.isEmpty() ? null : tagged.getFirst();
+        // Citizens keeps its own registry and older NPCs may not have STEMCraft's PDC tag yet.
+        // A Citizens entity resolved by the profile's registry id is authoritative even when it
+        // is absent from the tagged Bukkit entity scan; tag it below so future scans can find it.
+        if (preferred == null || (!tagged.contains(preferred) && !knownCitizensEntity))
+            preferred = tagged.isEmpty() ? null : tagged.getFirst();
         for (Entity duplicate : tagged) if (!duplicate.equals(preferred)) duplicate.remove();
         if (preferred != null) {
             preferred.getPersistentDataContainer().set(npcProfileKey, PersistentDataType.STRING, profile.id());
@@ -2146,8 +2151,21 @@ public final class QuestFeature extends BaseFeature {
     private void onNpcClick(PlayerInteractEntityEvent event) {
         if (!isPrimaryNpcInteraction(event.getHand())) return;
         Player player = event.getPlayer();
-        String clickedProfileId = event.getRightClicked().getPersistentDataContainer().get(npcProfileKey, PersistentDataType.STRING);
-        boolean managedQuestNpc = (clickedProfileId != null && npcProfiles.containsKey(clickedProfileId))
+        Entity clickedEntity = event.getRightClicked();
+        QuestNpcProfile clickedProfile = profileForEntity(clickedEntity);
+        if (clickedProfile != null) {
+            clickedEntity.getPersistentDataContainer().set(npcProfileKey, PersistentDataType.STRING, clickedProfile.id());
+            if (!clickedEntity.getUniqueId().equals(clickedProfile.spawnedEntity())) {
+                clickedProfile.spawnedEntity(clickedEntity.getUniqueId());
+                saveNpcProfiles();
+                registerMarkers();
+            }
+        }
+        String clickedProfileId = clickedProfile == null
+            ? clickedEntity.getPersistentDataContainer().get(npcProfileKey, PersistentDataType.STRING)
+            : clickedProfile.id();
+        boolean managedQuestNpc = clickedProfile != null
+            || (clickedProfileId != null && npcProfiles.containsKey(clickedProfileId))
             || npcProfiles.values().stream().anyMatch(profile -> event.getRightClicked().getUniqueId().equals(profile.spawnedEntity()));
         if (event.isCancelled() && !managedQuestNpc) return;
         if (clickedProfileId != null && npcLeavingSince.containsKey(clickedProfileId)) {
@@ -2238,6 +2256,22 @@ public final class QuestFeature extends BaseFeature {
             event.setCancelled(true);
             speakNpcProfileIdle(player, event.getRightClicked());
         }
+    }
+
+    private @Nullable QuestNpcProfile profileForEntity(Entity entity) {
+        String taggedId = entity.getPersistentDataContainer().get(npcProfileKey, PersistentDataType.STRING);
+        if (taggedId != null) {
+            QuestNpcProfile tagged = npcProfiles.get(taggedId);
+            if (tagged != null) return tagged;
+        }
+        for (QuestNpcProfile profile : npcProfiles.values()) {
+            if (entity.getUniqueId().equals(profile.spawnedEntity())) return profile;
+            if (profile.npcType() == EntityType.PLAYER && citizensAvailable() && profile.citizensNpcId() != null) {
+                Entity citizensEntity = CitizensQuestNpcSupport.spawnedEntity(profile);
+                if (entity.equals(citizensEntity)) return profile;
+            }
+        }
+        return null;
     }
 
     static boolean isPrimaryNpcInteraction(EquipmentSlot hand) {

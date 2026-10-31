@@ -31,6 +31,7 @@ import java.util.UUID;
 /** Craftable crates used to safely carry small passive animals. */
 public final class AnimalBarrels extends BaseFeature {
     private static final String ITEM_ID = "animal-crate";
+    private static final String LEGACY_ITEM_ID = "animal-barrel";
     private static final String TYPE = "animal-barrel-type";
     private static final String NAME = "animal-barrel-name";
     private static final String BABY = "animal-barrel-baby";
@@ -47,6 +48,7 @@ public final class AnimalBarrels extends BaseFeature {
     public void onEnable() {
         registerItem();
         api.items().registerCustomItemPropertyHandler(ITEM_ID, this::applyProperties);
+        api.items().registerCustomItemPropertyHandler(LEGACY_ITEM_ID, this::applyProperties);
         api.events().register(PlayerInteractEntityEvent.class, this::capture, EventPriority.HIGHEST, true);
         api.events().register(PlayerInteractEvent.class, this::release, EventPriority.HIGHEST, true);
         api.events().register(org.bukkit.event.block.BlockPlaceEvent.class, event -> {
@@ -57,6 +59,7 @@ public final class AnimalBarrels extends BaseFeature {
     @Override
     public void onDisable() {
         api.items().unregisterCustomItemPropertyHandler(ITEM_ID);
+        api.items().unregisterCustomItemPropertyHandler(LEGACY_ITEM_ID);
         api.recipes().remove("stemcraft:animal-barrel");
     }
 
@@ -67,6 +70,8 @@ public final class AnimalBarrels extends BaseFeature {
         meta.setMaxStackSize(1);
         crate.setItemMeta(meta);
         api.items().registerCustomItem(ITEM_ID, crate);
+        // Keep the old identifier registered so crates created before the rename remain usable.
+        api.items().registerCustomItem(LEGACY_ITEM_ID, crate);
         // Remove the earlier dedicated recipe: ordinary vanilla barrels are the empty carrier.
         api.recipes().remove("stemcraft:animal-barrel");
     }
@@ -184,7 +189,11 @@ public final class AnimalBarrels extends BaseFeature {
     }
 
     private boolean isAnimalCrate(ItemStack item) {
-        return api.items().isCustomItemId(ITEM_ID, item);
+        return item != null && isAnimalCrateId(api.items().getCustomItemId(item));
+    }
+
+    static boolean isAnimalCrateId(String id) {
+        return ITEM_ID.equalsIgnoreCase(id) || LEGACY_ITEM_ID.equalsIgnoreCase(id);
     }
 
     private net.kyori.adventure.text.Component itemName(String path, String fallback, String legacyValue) {

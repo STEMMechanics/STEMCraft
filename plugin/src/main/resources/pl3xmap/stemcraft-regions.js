@@ -179,25 +179,44 @@
     }
   }
 
-  function install(browser, document) {
+  function install(browser, document, request = fetch.bind(globalThis)) {
     const controllers = new Map();
-    browser.addEventListener("overlayadded", event => {
-      if (event.detail.key !== "stemcraft_named_regions") return;
+    const attach = layer => {
+      if (!layer || layer.key !== "stemcraft_named_regions") return;
       const map = browser.pl3xmap?.map, world = browser.pl3xmap?.worldManager.currentWorld;
-      if (!map || !world) return;
-      controllers.get(event.detail)?.destroy();
+      if (!map || !world || controllers.has(layer)) return;
       const directory = new URL(`tiles/${encodeURIComponent(world.name)}/stemcraft-regions/`, document.baseURI).href;
-      controllers.set(event.detail, new ViewportLayer(map, event.detail, world, directory, browser.L));
+      controllers.set(layer, new ViewportLayer(map, layer, world, directory, browser.L, request));
+    };
+    const detach = layer => {
+      const controller = controllers.get(layer);
+      if (!controller) return;
+      controller.destroy();
+      controllers.delete(layer);
+    };
+    browser.addEventListener("overlayadded", event => {
+      attach(event.detail);
     });
     browser.addEventListener("overlayremoved", event => {
-      controllers.get(event.detail)?.destroy(); controllers.delete(event.detail);
+      detach(event.detail);
     });
+    const map = browser.pl3xmap?.map;
+    const onLayerAdd = event => attach(event.layer);
+    const onLayerRemove = event => detach(event.layer);
+    if (map?.on) {
+      map.on("layeradd", onLayerAdd);
+      map.on("layerremove", onLayerRemove);
+      // The default-visible overlay may have been added before this script was loaded.
+      map.eachLayer?.(attach);
+    }
     browser.addEventListener("beforeunload", () => {
+      map?.off?.("layeradd", onLayerAdd);
+      map?.off?.("layerremove", onLayerRemove);
       for (const controller of controllers.values()) controller.destroy();
       controllers.clear();
     });
   }
   if (typeof module !== "undefined" && module.exports)
-    module.exports = {planTiles, drawTile, styleIndex, escapeHtml, ViewportLayer, MAX_TILES, MAX_REQUESTS};
+    module.exports = {planTiles, drawTile, styleIndex, escapeHtml, ViewportLayer, install, MAX_TILES, MAX_REQUESTS};
   if (typeof window !== "undefined" && typeof document !== "undefined") install(window, document);
 })();
