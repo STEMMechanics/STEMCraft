@@ -308,13 +308,13 @@ public class ItemServiceImpl extends BaseService implements ItemService {
     private record FoodBehavior(double heal, double damage, String returns, List<ConfiguredEffect> effects) { }
 
     private void registerGiveCommand() {
-        api.tabComplete().register("give-target", (player, args) -> {
+        api.tabComplete().register("give-target", (player, args, currentArgument) -> {
             java.util.List<String> targets = new java.util.ArrayList<>(
                 Bukkit.getOnlinePlayers().stream().map(org.bukkit.entity.Player::getName).toList());
             targets.addAll(java.util.List.of("@s", "@p", "@a", "@r", "@e"));
             return targets;
         });
-        api.tabComplete().register("item", (player, args) -> {
+        api.tabComplete().register("item", (player, args, currentArgument) -> {
             java.util.List<String> items = new java.util.ArrayList<>();
             for (Material material : Material.values()) {
                 if (material.isItem()) items.add("minecraft:" + material.getKey().getKey());

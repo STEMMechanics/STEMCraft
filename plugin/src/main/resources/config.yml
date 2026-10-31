@@ -1266,6 +1266,8 @@ leaf_decay_random_tick:
     candidate-lifetime-seconds: 600
 voting:
   enabled: true
+  login-announcement:
+    enabled: true
   # Leave blank to allow every player to vote.
   permission: ""
   tower:

@@ -31,7 +31,7 @@ public class ParkourCommand {
     }
 
     public void onEnable() {
-        api.tabComplete().register("parkour-arenas", (sender, args) -> parkour.minigame().arenas().stream()
+        api.tabComplete().register("parkour-arenas", (sender, args, currentArgument) -> parkour.minigame().arenas().stream()
             .map(MiniGameArena::id)
             .sorted()
             .toList());

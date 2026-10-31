@@ -110,9 +110,9 @@ public class WorldServiceImpl extends BaseService implements WorldService {
         worldCommand.onEnable();
         worldGeneration.onEnable();
 
-        api.tabComplete().register("world-any", (player, args) -> listWorlds());
+        api.tabComplete().register("world-any", (player, args, currentArgument) -> listWorlds());
 
-        api.tabComplete().register("world-offline", (player, args) -> {
+        api.tabComplete().register("world-offline", (player, args, currentArgument) -> {
             List<String> suggestions = new ArrayList<>();
             for (String worldName : listWorlds()) {
                 if (isWorldLoaded(worldName)) continue; // only offline

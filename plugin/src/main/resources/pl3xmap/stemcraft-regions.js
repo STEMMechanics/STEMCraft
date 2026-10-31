@@ -56,7 +56,7 @@
   }
 
   class ViewportLayer {
-    constructor(map, layer, world, directory, leaflet, request = fetch) {
+    constructor(map, layer, world, directory, leaflet, request = fetch.bind(globalThis)) {
       this.map = map; this.layer = layer; this.world = world; this.directory = directory;
       this.leaflet = leaflet; this.request = request;
       this.tiles = new Map(); this.active = new Map(); this.wanted = new Set(); this.queue = [];
