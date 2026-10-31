@@ -14,6 +14,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -118,6 +119,14 @@ class SurvivalQolFeatureTest {
         when(player.getGameMode()).thenReturn(GameMode.CREATIVE);
         assertFalse(SurvivalQolFeature.contextAllows(player,
             List.of(PatternUtil.globToRegex("survival*")), java.util.Set.of(GameMode.SURVIVAL)));
+    }
+
+    @Test
+    void poweredMinecartEligibilityIsCheckedBeforeWorldEntityEnumeration() {
+        List<Pattern> supported = List.of(PatternUtil.globToRegex("survival*"));
+        assertTrue(SurvivalQolFeature.supportsPoweredMinecartWorld("survival", supported));
+        assertTrue(SurvivalQolFeature.supportsPoweredMinecartWorld("survival-nether", supported));
+        assertFalse(SurvivalQolFeature.supportsPoweredMinecartWorld("creative", supported));
     }
 
     @Test

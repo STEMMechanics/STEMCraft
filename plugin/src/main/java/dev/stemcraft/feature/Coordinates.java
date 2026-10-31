@@ -50,6 +50,7 @@ public class Coordinates extends BaseFeature {
     public static class CoordData {
         public BossBar bossBar;
         public Boolean actionBar;
+        private Component lastBossBarTitle;
 
         // Constructor
         public CoordData() {
@@ -68,6 +69,7 @@ public class Coordinates extends BaseFeature {
      * A list of CoordData per player (if enabled).
      */
     private static final Map<Player, CoordData> coordBars = new HashMap<>();
+    private final Map<String, Component> staticSectionComponents = new HashMap<>();
 
     private NamespacedKey bossBarEnabledKey;
     private NamespacedKey actionBarEnabledKey;
@@ -94,6 +96,7 @@ public class Coordinates extends BaseFeature {
         actionBarEnabledKey = new NamespacedKey(STEMCraft.getPlugin(), "coordinate-action-bar-enabled");
         defaultBossBarEnabled = getConfigSection().getBoolean("defaults.boss-bar", false);
         defaultActionBarEnabled = getConfigSection().getBoolean("defaults.action-bar", false);
+        staticSectionComponents.clear();
 
         api.events().register(PlayerJoinEvent.class, event -> restoreCoordBars(event.getPlayer()));
         api.events().register(PlayerQuitEvent.class, event -> removeCoordBars(event.getPlayer()));
@@ -153,7 +156,10 @@ public class Coordinates extends BaseFeature {
                     for (Component addition : api.coordinateBar().render(player)) {
                         title = title.append(Component.text("  ", NamedTextColor.DARK_GRAY)).append(addition);
                     }
-                    coordData.bossBar.name(title);
+                    if (!title.equals(coordData.lastBossBarTitle)) {
+                        coordData.bossBar.name(title);
+                        coordData.lastBossBarTitle = title;
+                    }
                 }
 
                 if (coordData.actionBar == true) {
@@ -178,7 +184,8 @@ public class Coordinates extends BaseFeature {
     }
 
     private Component amendedSection(Player player, CoordinateBarSection section, String content) {
-        Component result = Component.text(api.messages().tokens().apply(api.locales().resolve(content)));
+        Component result = staticSectionComponents.computeIfAbsent(content,
+            value -> Component.text(api.messages().tokens().apply(api.locales().resolve(value))));
         for (Component amendment : api.coordinateBar().renderAmendments(section, player)) result = result.append(amendment);
         return result;
     }
@@ -225,6 +232,7 @@ public class Coordinates extends BaseFeature {
             if (bars.bossBar != null) {
                 player.hideBossBar(bars.bossBar);
                 bars.bossBar = null;
+                bars.lastBossBarTitle = null;
             }
         }
     }
@@ -322,6 +330,13 @@ public class Coordinates extends BaseFeature {
         for (var request : java.util.List.copyOf(guideRequests.values())) request.complete(false);
         guideRequests.clear();
         for (Player player : java.util.List.copyOf(coordBars.keySet())) removeCoordBars(player);
+        staticSectionComponents.clear();
+    }
+
+    @Override public void onReload() {
+        super.onReload();
+        staticSectionComponents.clear();
+        for (CoordData data : coordBars.values()) data.lastBossBarTitle = null;
     }
 
 }

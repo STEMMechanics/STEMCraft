@@ -53,24 +53,35 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 public final class PlayerStatsServiceImpl extends BaseService implements PlayerStatsService {
+    private static final String PERSISTENCE_TASK_ID = "service:player-stats-autosave";
+    private static final long PERSISTENCE_SHUTDOWN_TIMEOUT_SECONDS = 10L;
     private static final int MAX_BUCKET_DAYS = 370;
     private static final List<String> BUILT_IN_STATS = List.of(
         "damage_dealt",
@@ -165,8 +176,14 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
     private final ConcurrentMap<UUID, Instant> lastObservedAt = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, String> lastObservedWorld = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, StatMilestone> milestones = new ConcurrentHashMap<>();
+    private final ConcurrentMap<UUID,Long> dirtyRevisions = new ConcurrentHashMap<>();
+    private final ConcurrentMap<UUID,Long> queuedRevisions = new ConcurrentHashMap<>();
+    private final Set<UUID> pendingDeletes = ConcurrentHashMap.newKeySet();
+    private final Set<UUID> queuedDeletes = ConcurrentHashMap.newKeySet();
     private volatile List<StatGroup> statGroups = List.of();
     private List<String> enabledBuiltInKeys = List.of();
+    private volatile boolean definitionsDirty;
+    private volatile ExecutorService persistenceWriter;
 
     public PlayerStatsServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
@@ -182,6 +199,7 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
         loadStatGroups();
         loadMilestones();
         loadTimeInDefinitions();
+        startPersistenceWriter();
         registerEventCollectors();
         registerStatsCommand();
         api.playerResets().register(new PlayerResetHandler() {
@@ -194,23 +212,33 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
             public void reset(@NotNull PlayerResetContext context) {
                 UUID uuid = context.playerUuid();
                 players.remove(uuid); rawBaselines.remove(uuid); lastObservedAt.remove(uuid); lastObservedWorld.remove(uuid);
-                api.database().update("DELETE FROM player_stats_state WHERE player_uuid=?", ps -> ps.setString(1, uuid.toString()));
+                dirtyRevisions.remove(uuid);
+                pendingDeletes.add(uuid);
+                requestPersistence();
             }
         });
 
         long autosaveTicks = Math.max(20L, getConfigSection().getLong("autosave_ticks", 1200L));
-        api.tasks().repeating(autosaveTicks, this::captureOnlinePlayers);
+        api.tasks().repeating(PERSISTENCE_TASK_ID, autosaveTicks, () -> {
+            captureOnlinePlayers();
+            requestPersistence();
+        });
         captureOnlinePlayers();
+        requestPersistence();
     }
 
     @Override
     public void onDisable() {
+        api.tasks().cancel(PERSISTENCE_TASK_ID);
         captureOnlinePlayers();
+        requestPersistence();
+        stopPersistenceWriter();
     }
 
     @Override
     public void onSave() {
         captureOnlinePlayers();
+        requestPersistence();
     }
 
     @Override
@@ -219,21 +247,22 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
         if (key == null) {
             throw new IllegalArgumentException("Invalid player stat key: " + definition.key());
         }
-        definitions.put(key, new PlayerStatDefinition(
+        PlayerStatDefinition normalized = new PlayerStatDefinition(
             key,
             definition.title().trim(),
             definition.description().trim(),
             definition.namespace(),
             definition.scope(),
             definition.scopeId()
-        ));
+        );
+        if (!Objects.equals(definitions.put(key, normalized), normalized)) definitionsDirty = true;
     }
 
     @Override
     public void unregister(@NotNull String name) {
         String key = normalizeKey(name);
         if (key != null) {
-            definitions.remove(key);
+            if (definitions.remove(key) != null) definitionsDirty = true;
         }
     }
 
@@ -278,6 +307,7 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
         value.updatedAt = now;
         value.dailyBuckets.merge(bucketDate, amount, Double::sum);
         pruneBuckets(value.dailyBuckets, bucketDate.minusDays(MAX_BUCKET_DAYS));
+        markDirty(state);
         announceCrossedMilestone(username, normalizedKey, previousTotal, value.total);
         if (plugin.entitlements() != null) plugin.entitlements().onFactsChanged(playerUuid);
     }
@@ -298,6 +328,7 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
         if (value != 0.0d) {
             statValue.dailyBuckets.put(bucketDate, value);
         }
+        markDirty(state);
         if (plugin.entitlements() != null) plugin.entitlements().onFactsChanged(playerUuid);
     }
 
@@ -322,7 +353,6 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
         for (Player player : Bukkit.getOnlinePlayers()) {
             capturePlayerStats(player);
         }
-        saveStats();
     }
 
     @Override
@@ -551,7 +581,8 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
         }
         lastObservedWorld.put(uuid, currentWorld);
 
-        rawBaselines.computeIfAbsent(uuid, ignored -> new ConcurrentHashMap<>());
+        ConcurrentMap<String,Long> baseline = rawBaselines.computeIfAbsent(uuid, ignored -> new ConcurrentHashMap<>());
+        boolean rawChanged = false;
 
         for (String key : enabledBuiltInKeys) {
             RawStatisticDefinition definition = RAW_STAT_DEFINITIONS.get(key);
@@ -560,20 +591,25 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
             }
 
             long currentValue = player.getStatistic(definition.statistic);
-            Long previousValue = rawBaselines.get(uuid).put(key, currentValue);
+            Long previousValue = baseline.put(key, currentValue);
             if (previousValue == null) {
+                rawChanged = true;
                 continue;
             }
 
             long delta = currentValue - previousValue;
+            if (delta != 0L) rawChanged = true;
             if (delta > 0L) {
                 increment(uuid, username, key, delta * definition.multiplier);
             }
         }
 
         PlayerStatsState state = players.computeIfAbsent(uuid, ignored -> new PlayerStatsState(uuid));
+        String previousUsername = state.username;
+        Instant previousUpdatedAt = state.updatedAt;
         state.username = username;
         state.updatedAt = now;
+        if (rawChanged || !Objects.equals(previousUsername, username) || previousUpdatedAt == null) markDirty(state);
     }
 
     private void loadPersistedData() {
@@ -652,43 +688,189 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
         );
     }
 
-    private void saveStats() {
-        saveDefinitionsToConfig();
-        api.database().update("DELETE FROM player_stats_state", null);
-        List<PlayerStatsState> ordered = players.values().stream()
-            .sorted(Comparator.comparing(PlayerStatsState::username, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
-            .toList();
+    private void startPersistenceWriter() {
+        ExecutorService existing = persistenceWriter;
+        if (existing != null && !existing.isShutdown()) return;
+        persistenceWriter = Executors.newSingleThreadExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "stemcraft-player-stats-writer");
+            thread.setDaemon(true);
+            return thread;
+        });
+    }
 
-        for (PlayerStatsState state : ordered) {
-            YamlConfiguration persisted = new YamlConfiguration();
-            String basePath = "player";
-            persisted.set(basePath + ".username", state.username);
-            persisted.set(basePath + ".updated_at", state.updatedAt == null ? null : state.updatedAt.toString());
-            persisted.set(basePath + ".stats", null);
-            for (Map.Entry<String, StatValueState> entry : state.stats.entrySet()) {
-                String statBase = basePath + ".stats." + entry.getKey();
-                persisted.set(statBase + ".total", entry.getValue().total);
-                persisted.set(statBase + ".updated_at", entry.getValue().updatedAt == null ? null : entry.getValue().updatedAt.toString());
-                persisted.set(statBase + ".buckets", null);
-                for (Map.Entry<LocalDate, Double> bucket : entry.getValue().dailyBuckets.entrySet()) {
-                    persisted.set(statBase + ".buckets." + bucket.getKey(), bucket.getValue());
-                }
+    private void stopPersistenceWriter() {
+        ExecutorService writer = persistenceWriter;
+        if (writer == null) return;
+        writer.shutdown();
+        try {
+            if (!writer.awaitTermination(PERSISTENCE_SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                plugin.getLogger().warning("Player statistics writer did not finish before shutdown; unsaved changes remain queued in memory.");
+                writer.shutdownNow();
             }
-            persisted.set(basePath + ".raw", null);
-            Map<String, Long> rawValues = rawBaselines.getOrDefault(state.uuid, new ConcurrentHashMap<>());
-            for (Map.Entry<String, Long> rawEntry : rawValues.entrySet()) {
-                persisted.set(basePath + ".raw." + rawEntry.getKey(), rawEntry.getValue());
-            }
-            String stateYaml = persisted.saveToString();
-            api.database().update(
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            plugin.getLogger().warning("Interrupted while flushing player statistics; unsaved changes remain queued in memory.");
+            writer.shutdownNow();
+        } finally {
+            persistenceWriter = null;
+        }
+    }
+
+    private void requestPersistence() {
+        saveDefinitionsIfChanged();
+
+        List<PersistedStateSnapshot> snapshots=snapshotDirtyPlayers();
+        List<UUID> deletes=snapshotDeletes();
+        if (snapshots.isEmpty()&&deletes.isEmpty()) return;
+
+        ExecutorService writer=persistenceWriter;
+        if (writer==null||writer.isShutdown()) {
+            persistBatch(snapshots,deletes);
+            return;
+        }
+
+        try {
+            writer.execute(() -> persistBatch(snapshots,deletes));
+        } catch (RejectedExecutionException exception) {
+            for(PersistedStateSnapshot snapshot:snapshots)
+                queuedRevisions.remove(snapshot.uuid(),snapshot.revision());
+            for(UUID uuid:deletes) queuedDeletes.remove(uuid);
+            plugin.getLogger().warning("Could not queue player statistics persistence: "+exception.getMessage());
+        }
+    }
+
+    private List<PersistedStateSnapshot> snapshotDirtyPlayers() {
+        List<PersistedStateSnapshot> snapshots=new ArrayList<>();
+        for(Map.Entry<UUID,Long> entry:dirtyRevisions.entrySet()) {
+            UUID uuid=entry.getKey();
+            PlayerStatsState state=players.get(uuid);
+            if(state==null) continue;
+
+            long revision=state.revision;
+            Long queued=queuedRevisions.get(uuid);
+            if(queued!=null&&queued>=revision) continue;
+
+            queuedRevisions.put(uuid,revision);
+            snapshots.add(new PersistedStateSnapshot(
+                uuid,revision,snapshotState(state),System.currentTimeMillis()));
+        }
+        return List.copyOf(snapshots);
+    }
+
+    private List<UUID> snapshotDeletes() {
+        List<UUID> deletes=new ArrayList<>();
+        for(UUID uuid:pendingDeletes)
+            if(queuedDeletes.add(uuid)) deletes.add(uuid);
+        return List.copyOf(deletes);
+    }
+
+    private void persistBatch(List<PersistedStateSnapshot> snapshots,List<UUID> deletes) {
+        boolean success;
+        String failureMessage=null;
+        try {
+            success=api.database().transaction(connection -> writeBatch(connection,snapshots,deletes));
+        } catch(RuntimeException exception) {
+            success=false;
+            failureMessage=exception.getMessage();
+        }
+        if(!success) {
+            for(PersistedStateSnapshot snapshot:snapshots)
+                queuedRevisions.remove(snapshot.uuid(),snapshot.revision());
+            for(UUID uuid:deletes) queuedDeletes.remove(uuid);
+            plugin.getLogger().warning("Player statistics persistence failed; changes will be retained for a later retry."
+                + (failureMessage==null||failureMessage.isBlank()?"":" "+failureMessage));
+            return;
+        }
+
+        for(UUID uuid:deletes) {
+            pendingDeletes.remove(uuid);
+            queuedDeletes.remove(uuid);
+        }
+        for(PersistedStateSnapshot snapshot:snapshots) {
+            queuedRevisions.remove(snapshot.uuid(),snapshot.revision());
+            PlayerStatsState current=players.get(snapshot.uuid());
+            if(current==null||current.revision==snapshot.revision)
+                dirtyRevisions.remove(snapshot.uuid(),snapshot.revision());
+        }
+    }
+
+    private void writeBatch(Connection connection,List<PersistedStateSnapshot> snapshots,List<UUID> deletes) throws SQLException {
+        try(PreparedStatement delete=connection.prepareStatement(
+                "DELETE FROM player_stats_state WHERE player_uuid=?");
+            PreparedStatement upsert=connection.prepareStatement(
                 "INSERT INTO player_stats_state (player_uuid, state_yaml, updated_at) VALUES (?, ?, ?) " +
-                "ON CONFLICT(player_uuid) DO UPDATE SET state_yaml = excluded.state_yaml, updated_at = excluded.updated_at",
-                ps -> {
-                    ps.setString(1, state.uuid.toString());
-                    ps.setString(2, stateYaml);
-                    ps.setLong(3, System.currentTimeMillis());
-                }
-            );
+                    "ON CONFLICT(player_uuid) DO UPDATE SET state_yaml = excluded.state_yaml, updated_at = excluded.updated_at")) {
+            for(UUID uuid:deletes) {
+                delete.setString(1,uuid.toString());
+                delete.addBatch();
+            }
+            delete.executeBatch();
+
+            for(PersistedStateSnapshot snapshot:snapshots) {
+                upsert.setString(1,snapshot.uuid().toString());
+                upsert.setString(2,serializeState(snapshot.state()));
+                upsert.setLong(3,snapshot.persistedAt());
+                upsert.addBatch();
+            }
+            upsert.executeBatch();
+        }
+    }
+
+    private void markDirty(PlayerStatsState state) {
+        state.revision=Math.max(state.revision,queuedRevisions.getOrDefault(state.uuid,0L))+1L;
+        dirtyRevisions.put(state.uuid,state.revision);
+        pendingDeletes.remove(state.uuid);
+    }
+
+    private PlayerStatsSnapshot snapshotState(PlayerStatsState state) {
+        Map<String,StatValueSnapshot> stats=new LinkedHashMap<>();
+        for(Map.Entry<String,StatValueState> entry:state.stats.entrySet()) {
+            StatValueState value=entry.getValue();
+            stats.put(entry.getKey(),new StatValueSnapshot(
+                value.total,
+                value.updatedAt,
+                Collections.unmodifiableMap(new LinkedHashMap<>(value.dailyBuckets))
+            ));
+        }
+
+        Map<String,Long> rawValues=new LinkedHashMap<>();
+        ConcurrentMap<String,Long> rawBaseline=rawBaselines.get(state.uuid);
+        if(rawBaseline!=null) rawValues.putAll(rawBaseline);
+        return new PlayerStatsSnapshot(
+            state.username,
+            state.updatedAt,
+            Collections.unmodifiableMap(stats),
+            Collections.unmodifiableMap(rawValues)
+        );
+    }
+
+    private String serializeState(PlayerStatsSnapshot state) {
+        YamlConfiguration persisted=new YamlConfiguration();
+        String basePath="player";
+        persisted.set(basePath+".username",state.username);
+        persisted.set(basePath+".updated_at",state.updatedAt==null?null:state.updatedAt.toString());
+        persisted.set(basePath+".stats",null);
+        for(Map.Entry<String,StatValueSnapshot> entry:state.stats.entrySet()) {
+            String statBase=basePath+".stats."+entry.getKey();
+            persisted.set(statBase+".total",entry.getValue().total);
+            persisted.set(statBase+".updated_at",entry.getValue().updatedAt==null?null:entry.getValue().updatedAt.toString());
+            persisted.set(statBase+".buckets",null);
+            for(Map.Entry<LocalDate,Double> bucket:entry.getValue().dailyBuckets.entrySet())
+                persisted.set(statBase+".buckets."+bucket.getKey(),bucket.getValue());
+        }
+        persisted.set(basePath+".raw",null);
+        for(Map.Entry<String,Long> rawEntry:state.rawValues.entrySet())
+            persisted.set(basePath+".raw."+rawEntry.getKey(),rawEntry.getValue());
+        return persisted.saveToString();
+    }
+
+    private void saveDefinitionsIfChanged() {
+        if(!definitionsDirty) return;
+        try {
+            saveDefinitionsToConfig();
+            definitionsDirty=false;
+        } catch(RuntimeException exception) {
+            plugin.getLogger().warning("Could not save player-stat definitions: "+exception.getMessage());
         }
     }
 
@@ -1172,6 +1354,7 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
         private final UUID uuid;
         private String username;
         private Instant updatedAt;
+        private volatile long revision;
         private final Map<String, StatValueState> stats = new LinkedHashMap<>();
 
         private PlayerStatsState(UUID uuid) {
@@ -1182,6 +1365,21 @@ public final class PlayerStatsServiceImpl extends BaseService implements PlayerS
             return username;
         }
     }
+
+    private record PersistedStateSnapshot(UUID uuid, long revision, PlayerStatsSnapshot state, long persistedAt) { }
+
+    private record PlayerStatsSnapshot(
+        String username,
+        Instant updatedAt,
+        Map<String,StatValueSnapshot> stats,
+        Map<String,Long> rawValues
+    ) { }
+
+    private record StatValueSnapshot(
+        double total,
+        Instant updatedAt,
+        Map<LocalDate,Double> dailyBuckets
+    ) { }
 
     private static final class StatValueState {
         private double total;

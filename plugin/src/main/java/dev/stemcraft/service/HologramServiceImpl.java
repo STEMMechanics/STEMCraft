@@ -87,6 +87,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
     private static final int MAX_MINIGAME_LEADERBOARD_DELAY_SECONDS = 3600;
     private static final long DEFAULT_VISIBILITY_UPDATE_TICKS = 10L;
     private static final double DEFAULT_MAX_VISIBLE_DISTANCE = 32.0D;
+    private static final long LEADERBOARD_CACHE_NANOS = 250_000_000L;
     private static final DecimalFormat STAT_VALUE_FORMAT = new DecimalFormat("0.##");
 
     private final Map<Integer, HologramData> holograms = new HashMap<>();
@@ -94,6 +95,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
     private final Set<Integer> spawningIds = new HashSet<>();
     private final Map<String, HologramTypeHandler> handlers = new HashMap<>();
     private final Map<DynamicKey, DynamicHologram> dynamicHolograms = new HashMap<>();
+    private final Map<LeaderboardQuery, CachedLeaderboard> leaderboardCache = new HashMap<>();
     private final Map<UUID, Set<UUID>> hiddenExternalViewers = new HashMap<>();
     private boolean visibilityEnabled = true;
     private long visibilityUpdateTicks = DEFAULT_VISIBILITY_UPDATE_TICKS;
@@ -297,6 +299,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         restoreManagedVisibility();
         clearDynamicHolograms();
         despawnAll();
+        leaderboardCache.clear();
         saveAll();
     }
 
@@ -309,6 +312,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
     public void onReload() {
         super.onReload();
         reloadVisibilitySettings();
+        leaderboardCache.clear();
         despawnAll();
         spawnAll();
         startVisibilityController();
@@ -635,6 +639,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
      */
     @Override
     public void update(int id, @NotNull List<String> data) {
+        leaderboardCache.clear();
         HologramData hologram = holograms.get(id);
         if (hologram == null) {
             return;
@@ -642,7 +647,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
 
         hologram.data = new ArrayList<>(data);
         save(id);
-        respawn(hologram);
+        refresh(hologram);
     }
 
     /**
@@ -653,6 +658,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
      */
     @Override
     public void update(@NotNull String type, @Nullable String context) {
+        leaderboardCache.clear();
         for(HologramData data : holograms.values()) {
             if(!data.type.equals(type)) {
                 continue;
@@ -666,7 +672,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
                 continue;
             }
 
-            respawn(data);
+            refresh(data);
         }
     }
 
@@ -689,7 +695,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
 
         data.location = newLocation;
         save(id);
-        respawn(data);
+        refresh(data);
     }
 
     /**
@@ -770,7 +776,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         }
         DynamicHologram hologram = new DynamicHologram(key, anchor, visibility, content);
         dynamicHolograms.put(key, hologram);
-        syncDynamicHologram(hologram);
+        syncDynamicHologram(hologram, false);
     }
 
     @Override
@@ -779,8 +785,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         if (hologram == null) {
             return;
         }
-        removeDynamicInstances(hologram);
-        syncDynamicHologram(hologram);
+        syncDynamicHologram(hologram, true);
     }
 
     @Override
@@ -789,16 +794,14 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         if (hologram == null) {
             return;
         }
-        removeDynamicInstance(hologram, player.getUniqueId());
-        syncDynamicViewer(hologram, player, hologram.anchor.resolve());
+        syncDynamicViewer(hologram, player, hologram.anchor.resolve(), true);
     }
 
     @Override
     public void refreshDynamic() {
         for (DynamicHologram hologram : dynamicHolograms.values()) {
-            removeDynamicInstances(hologram);
+            syncDynamicHologram(hologram, true);
         }
-        tickDynamicHolograms();
     }
 
     @Override
@@ -896,17 +899,73 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         }
     }
 
-    /**
-     * Respawn a hologram by first despawning and then spawning it again.
-     *
-     * @param data The hologram data to respawn.
-     */
-    private void respawn(HologramData data) {
-        if (spawningIds.contains(data.id)) {
+    /** Refreshes rendered lines while retaining valid entities where possible. */
+    private void refresh(HologramData data) {
+        if (spawningIds.contains(data.id)) return;
+
+        List<String> lines;
+        try {
+            lines = renderLines(data);
+        } catch (RuntimeException exception) {
+            // Preserve the historical recovery behaviour: a failed render leaves
+            // no partial board, and the next refresh can rebuild it cleanly.
+            despawn(data.id);
+            throw exception;
+        }
+
+        World world=data.location.getWorld();
+        if(world==null||!world.isChunkLoaded(data.location.getBlockX()>>4,data.location.getBlockZ()>>4)) {
+            despawn(data.id);
             return;
         }
-        despawn(data.id);
-        spawn(data);
+
+        List<UUID> uuids=entitiesById.get(data.id);
+        if(uuids==null) {
+            spawn(data);
+            return;
+        }
+
+        for(UUID uuid:uuids) {
+            Entity entity=findEntity(uuid);
+            if(!(entity instanceof ArmorStand)||!entity.isValid()) {
+                despawn(data.id);
+                spawn(data);
+                return;
+            }
+        }
+
+        int shared=Math.min(uuids.size(),lines.size());
+        for(int index=0;index<shared;index++) {
+            ArmorStand stand=(ArmorStand)findEntity(uuids.get(index));
+            Location lineLocation=data.location.clone().add(0,-index*LINE_SPACING,0);
+            if(!stand.getWorld().equals(lineLocation.getWorld())
+                || stand.getLocation().distanceSquared(lineLocation)>0.0001D)
+                stand.teleport(lineLocation);
+            stand.customName(TextUtil.colourise(lines.get(index)));
+        }
+
+        for(int index=uuids.size()-1;index>=lines.size();index--) {
+            Entity entity=findEntity(uuids.remove(index));
+            if(entity!=null) entity.remove();
+        }
+
+        for(int index=shared;index<lines.size();index++) {
+            int lineIndex=index;
+            Location lineLocation=data.location.clone().add(0,-index*LINE_SPACING,0);
+            ArmorStand entity=world.spawn(lineLocation,ArmorStand.class,stand->{
+                uuids.add(stand.getUniqueId());
+                configureHologramEntity(stand,TextUtil.colourise(lines.get(lineIndex)));
+            });
+            if(visibilityEnabled) syncVisibility(entity,false);
+        }
+    }
+
+    private List<String> renderLines(HologramData hologram) {
+        HologramTypeHandler handler=handlers.get(hologram.type);
+        if(handler==null) return List.of();
+        return handler.lines(hologram.type,hologram.context,hologram.id,hologram.data).stream()
+            .map(api.placeholders()::apply)
+            .toList();
     }
 
     /**
@@ -928,22 +987,13 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         entitiesById.put(hologram.id, uuids);
         boolean complete = false;
         try {
-            List<String> lines = handler.lines(hologram.type, hologram.context, hologram.id, hologram.data);
+            List<String> lines = renderLines(hologram);
             double yOffset = 0;
             for (String line : lines) {
                 Location lineLoc = hologram.location.clone().add(0, yOffset, 0);
-                String renderedLine = api.placeholders().apply(line);
                 world.spawn(lineLoc, ArmorStand.class, entity -> {
                     uuids.add(entity.getUniqueId());
-                    entity.addScoreboardTag(STEMCRAFT_HOLOGRAM_TAG);
-                    entity.setPersistent(false);
-                    entity.setMarker(true);
-                    entity.setInvisible(true);
-                    entity.setGravity(false);
-                    entity.setSmall(true);
-                    entity.setCustomNameVisible(true);
-                    entity.customName(TextUtil.colourise(renderedLine));
-                    entity.setVisibleByDefault(!visibilityEnabled);
+                    configureHologramEntity(entity,TextUtil.colourise(line));
                 });
                 yOffset -= LINE_SPACING;
             }
@@ -963,6 +1013,18 @@ public class HologramServiceImpl extends BaseService implements HologramService 
                 despawn(hologram.id);
             }
         }
+    }
+
+    private void configureHologramEntity(ArmorStand entity,Component name) {
+        entity.addScoreboardTag(STEMCRAFT_HOLOGRAM_TAG);
+        entity.setPersistent(false);
+        entity.setMarker(true);
+        entity.setInvisible(true);
+        entity.setGravity(false);
+        entity.setSmall(true);
+        entity.setCustomNameVisible(true);
+        entity.customName(name);
+        entity.setVisibleByDefault(!visibilityEnabled);
     }
 
     /**
@@ -1021,6 +1083,10 @@ public class HologramServiceImpl extends BaseService implements HologramService 
     }
 
     private record DynamicKey(@NotNull String type, @NotNull String context) { }
+
+    private record LeaderboardQuery(@NotNull String statKey, int limit, @NotNull String period) { }
+
+    private record CachedLeaderboard(@NotNull List<PlayerStatsRecord> records, long expiresAtNanos) { }
 
     private record CycleButtonLocation(@NotNull String world, int x, int y, int z) { }
 
@@ -1158,7 +1224,7 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         }
 
         StatLeaderboardOptions options = parseStatLeaderboardOptions(definition, data);
-        List<PlayerStatsRecord> records = api.playerStats().top(definition.key(), options.limit(), options.period());
+        List<PlayerStatsRecord> records = cachedLeaderboard(definition.key(), options.limit(), options.period());
 
         List<String> lines = new ArrayList<>();
         lines.add(options.title());
@@ -1194,6 +1260,18 @@ public class HologramServiceImpl extends BaseService implements HologramService 
         }
         lines.addAll(LeaderboardLayout.align(rows));
         return lines;
+    }
+
+    private @NotNull List<PlayerStatsRecord> cachedLeaderboard(@NotNull String statKey, int limit,
+                                                                @NotNull String period) {
+        LeaderboardQuery query = new LeaderboardQuery(statKey, limit, period);
+        long now = System.nanoTime();
+        CachedLeaderboard cached = leaderboardCache.get(query);
+        if (cached != null && now < cached.expiresAtNanos()) return cached.records();
+
+        List<PlayerStatsRecord> records = List.copyOf(api.playerStats().top(statKey, limit, period));
+        leaderboardCache.put(query, new CachedLeaderboard(records, now + LEADERBOARD_CACHE_NANOS));
+        return records;
     }
 
     private @NotNull StatLeaderboardOptions parseStatLeaderboardOptions(@NotNull PlayerStatDefinition definition, @NotNull List<String> data) {
@@ -1561,16 +1639,16 @@ public class HologramServiceImpl extends BaseService implements HologramService 
 
     private void tickDynamicHolograms() {
         for (DynamicHologram hologram : dynamicHolograms.values()) {
-            syncDynamicHologram(hologram);
+            syncDynamicHologram(hologram, false);
         }
     }
 
-    private void syncDynamicHologram(@NotNull DynamicHologram hologram) {
+    private void syncDynamicHologram(@NotNull DynamicHologram hologram, boolean refreshContent) {
         Location anchor = hologram.anchor.resolve();
         Set<UUID> onlinePlayers = new HashSet<>();
         for (Player player : Bukkit.getOnlinePlayers()) {
             onlinePlayers.add(player.getUniqueId());
-            syncDynamicViewer(hologram, player, anchor);
+            syncDynamicViewer(hologram, player, anchor, refreshContent);
         }
         for (UUID viewerId : new HashSet<>(hologram.instances.keySet())) {
             if (!onlinePlayers.contains(viewerId)) {
@@ -1581,7 +1659,8 @@ public class HologramServiceImpl extends BaseService implements HologramService 
 
     private void syncDynamicViewer(@NotNull DynamicHologram hologram,
                                    @NotNull Player player,
-                                   @Nullable Location anchor) {
+                                   @Nullable Location anchor,
+                                   boolean refreshContent) {
         if (anchor == null || anchor.getWorld() == null
             || !anchor.getWorld().isChunkLoaded(anchor.getBlockX() >> 4, anchor.getBlockZ() >> 4)
             || !player.isOnline() || !player.getWorld().equals(anchor.getWorld())
@@ -1604,10 +1683,23 @@ public class HologramServiceImpl extends BaseService implements HologramService 
             hologram.instances.put(player.getUniqueId(),
                 new DynamicInstance(entity.getUniqueId(), bedrock, content));
         } else {
+            Component content = current.content;
+            if (refreshContent) {
+                content = dynamicContent(hologram, player);
+                if (content == null || content.equals(Component.empty())) {
+                    removeDynamicInstance(hologram, player.getUniqueId());
+                    return;
+                }
+            }
             Location target = bedrock ? anchor.clone().subtract(0.0D, 0.7D, 0.0D) : anchor;
             if (!entity.getWorld().equals(target.getWorld())
-                || entity.getLocation().distanceSquared(target) > 0.0001D) {
-                updateDynamicEntity(entity, anchor, current.content, bedrock);
+                || entity.getLocation().distanceSquared(target) > 0.0001D
+                || !content.equals(current.content)) {
+                updateDynamicEntity(entity, anchor, content, bedrock);
+            }
+            if (refreshContent && !content.equals(current.content)) {
+                hologram.instances.put(player.getUniqueId(),
+                    new DynamicInstance(entity.getUniqueId(), bedrock, content));
             }
         }
 

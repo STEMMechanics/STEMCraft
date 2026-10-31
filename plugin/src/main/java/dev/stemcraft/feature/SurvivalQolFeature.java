@@ -346,6 +346,10 @@ public final class SurvivalQolFeature extends BaseFeature {
     }
 
     private boolean supportsWorld(String world) {
+        return supportsPoweredMinecartWorld(world, supportedWorlds);
+    }
+
+    static boolean supportsPoweredMinecartWorld(String world, List<Pattern> supportedWorlds) {
         return supportedWorlds.stream().anyMatch(pattern -> pattern.matcher(world.toLowerCase(Locale.ROOT)).matches());
     }
 
@@ -382,11 +386,12 @@ public final class SurvivalQolFeature extends BaseFeature {
 
     private void accelerateMinecarts() {
         if (!enabled("powered-minecarts", true)) return;
-        double maximum = getConfigSection().getDouble("powered-minecarts.max-speed", 0.8D);
-        double multiplier = getConfigSection().getDouble("powered-minecarts.multiplier", 1.08D);
-        for (org.bukkit.World world : org.bukkit.Bukkit.getWorlds()) for (Minecart cart : world.getEntitiesByClass(Minecart.class)) {
+        double maximum=getConfigSection().getDouble("powered-minecarts.max-speed",0.8D);
+        double multiplier=getConfigSection().getDouble("powered-minecarts.multiplier",1.08D);
+        String permission=getConfigSection().getString("powered-minecarts.permission","").trim();
+        for (org.bukkit.World world : org.bukkit.Bukkit.getWorlds()) {
             if (!supportsWorld(world.getName())) continue;
-            String permission = getConfigSection().getString("powered-minecarts.permission", "").trim();
+            for (Minecart cart : world.getEntitiesByClass(Minecart.class)) {
             List<Player> passengers = cart.getPassengers().stream().filter(Player.class::isInstance).map(Player.class::cast).toList();
             if (!passengers.isEmpty() && passengers.stream().noneMatch(player -> contextAllows(player, supportedWorlds, supportedGameModes)
                 && permissionAllows(permission, player))) continue;
@@ -397,6 +402,7 @@ public final class SurvivalQolFeature extends BaseFeature {
             Vector velocity = cart.getVelocity();
             double horizontal = Math.hypot(velocity.getX(), velocity.getZ());
             if (horizontal > 0.01D && horizontal < maximum) cart.setVelocity(velocity.multiply(Math.min(multiplier, maximum / horizontal)));
+            }
         }
     }
 

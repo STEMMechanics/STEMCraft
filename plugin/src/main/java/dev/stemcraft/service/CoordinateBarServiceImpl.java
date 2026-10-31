@@ -16,6 +16,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -26,6 +27,9 @@ import java.util.Objects;
 public final class CoordinateBarServiceImpl extends BaseService implements CoordinateBarService {
     private final Map<Key, Registration> providers = new LinkedHashMap<>();
     private final Map<AmendmentKey, Registration> amendments = new LinkedHashMap<>();
+    private final EnumMap<CoordinateBarSection, List<Registration>> orderedAmendments =
+        new EnumMap<>(CoordinateBarSection.class);
+    private List<Registration> orderedProviders = List.of();
 
     public CoordinateBarServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api);
@@ -38,11 +42,13 @@ public final class CoordinateBarServiceImpl extends BaseService implements Coord
         String normalized = normalizeId(id);
         providers.put(new Key(owner, normalized),
             new Registration(owner, normalized, priority, Objects.requireNonNull(provider, "provider")));
+        invalidateOrdering();
     }
 
     @Override
     public synchronized void unregister(@NotNull Plugin owner, @NotNull String id) {
-        providers.remove(new Key(Objects.requireNonNull(owner, "owner"), normalizeId(id)));
+        if (providers.remove(new Key(Objects.requireNonNull(owner, "owner"), normalizeId(id))) != null)
+            invalidateOrdering();
     }
 
     @Override
@@ -53,13 +59,15 @@ public final class CoordinateBarServiceImpl extends BaseService implements Coord
         String normalized = normalizeId(id);
         amendments.put(new AmendmentKey(owner, normalized, section),
             new Registration(owner, normalized, priority, Objects.requireNonNull(provider, "provider")));
+        invalidateOrdering();
     }
 
     @Override
     public synchronized void unregisterAmendment(@NotNull Plugin owner, @NotNull String id,
                                                  @NotNull CoordinateBarSection section) {
-        amendments.remove(new AmendmentKey(Objects.requireNonNull(owner, "owner"), normalizeId(id),
-            Objects.requireNonNull(section, "section")));
+        if (amendments.remove(new AmendmentKey(Objects.requireNonNull(owner, "owner"), normalizeId(id),
+            Objects.requireNonNull(section, "section"))) != null)
+            invalidateOrdering();
     }
 
     @Override
@@ -68,9 +76,13 @@ public final class CoordinateBarServiceImpl extends BaseService implements Coord
         Objects.requireNonNull(section, "section"); Objects.requireNonNull(player, "player");
         List<Registration> snapshot;
         synchronized (this) {
-            amendments.entrySet().removeIf(entry -> !entry.getValue().owner().isEnabled());
-            snapshot = amendments.entrySet().stream().filter(entry -> entry.getKey().section() == section)
-                .map(Map.Entry::getValue).toList();
+            pruneDisabled();
+            snapshot = orderedAmendments.computeIfAbsent(section, ignored -> ordered(
+                amendments.entrySet().stream()
+                    .filter(entry -> entry.getKey().section() == section)
+                    .map(Map.Entry::getValue)
+                    .toList()
+            ));
         }
         return render(snapshot, player);
     }
@@ -80,20 +92,37 @@ public final class CoordinateBarServiceImpl extends BaseService implements Coord
         Objects.requireNonNull(player, "player");
         List<Registration> snapshot;
         synchronized (this) {
-            providers.entrySet().removeIf(entry -> !entry.getValue().owner().isEnabled());
-            snapshot = new ArrayList<>(providers.values());
+            pruneDisabled();
+            if (orderedProviders.isEmpty() && !providers.isEmpty())
+                orderedProviders = ordered(new ArrayList<>(providers.values()));
+            snapshot = orderedProviders;
         }
         return render(snapshot, player);
     }
 
-    private List<Component> render(List<Registration> registrations, Player player) {
-        List<Registration> snapshot = new ArrayList<>(registrations);
-        snapshot.sort(Comparator.comparingInt(Registration::priority)
+    private boolean pruneDisabled() {
+        boolean changed = providers.entrySet().removeIf(entry -> !entry.getValue().owner().isEnabled());
+        changed |= amendments.entrySet().removeIf(entry -> !entry.getValue().owner().isEnabled());
+        if (changed) invalidateOrdering();
+        return changed;
+    }
+
+    private List<Registration> ordered(List<Registration> registrations) {
+        List<Registration> result = new ArrayList<>(registrations);
+        result.sort(Comparator.comparingInt(Registration::priority)
             .thenComparing(registration -> registration.owner().getName())
             .thenComparing(Registration::id));
+        return List.copyOf(result);
+    }
 
+    private void invalidateOrdering() {
+        orderedProviders = List.of();
+        orderedAmendments.clear();
+    }
+
+    private List<Component> render(List<Registration> registrations, Player player) {
         List<Component> rendered = new ArrayList<>();
-        for (Registration registration : snapshot) {
+        for (Registration registration : registrations) {
             try {
                 Component component = registration.provider().render(player);
                 if (component != null && !component.equals(Component.empty())) rendered.add(component);

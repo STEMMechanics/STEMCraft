@@ -180,6 +180,23 @@ class HologramLifecycleTest {
     }
 
     @Test
+    void updatingLineTextRetainsExistingEntities() throws Exception {
+        int id = service.create(TYPE, null, new Location(world, 1, 70, 1), List.of());
+        var field = HologramServiceImpl.class.getDeclaredField("entitiesById");
+        field.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        List<UUID> before = List.copyOf(((Map<Integer, List<UUID>>) field.get(service)).get(id));
+
+        page.set(List.of("Arena B", "Player 5"));
+        service.update(id, List.of());
+
+        @SuppressWarnings("unchecked")
+        List<UUID> after = ((Map<Integer, List<UUID>>) field.get(service)).get(id);
+        assertEquals(before, after);
+        assertEquals(page.get(), rowTexts());
+    }
+
+    @Test
     void rotationDoesNotLoadAnUnattendedChunkAndReturningRendersOnlyOnce() throws Exception {
         service.create(TYPE, null, new Location(world, 1, 70, 1), List.of());
         fire(new ChunkUnloadEvent(world.getChunkAt(0, 0), true));
