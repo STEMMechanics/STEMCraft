@@ -20,6 +20,7 @@
 
 package dev.stemcraft.api.service.database;
 
+import dev.stemcraft.api.database.DatabaseTransaction;
 import dev.stemcraft.api.database.DatabaseResultSetHandler;
 import dev.stemcraft.api.database.DatabaseResultSetMapper;
 import dev.stemcraft.api.database.DatabaseStatementBinder;
@@ -45,6 +46,14 @@ public interface DatabaseService {
      * @return The number of affected rows.
      */
     int update(@NotNull String sql, @Nullable DatabaseStatementBinder binder);
+
+    /**
+     * Executes a serialized transaction against the shared database connection.
+     *
+     * @param transaction the statements to execute
+     * @return true when the transaction committed successfully
+     */
+    boolean transaction(@NotNull DatabaseTransaction transaction);
 
     /**
      * Executes a query statement and maps the result set.

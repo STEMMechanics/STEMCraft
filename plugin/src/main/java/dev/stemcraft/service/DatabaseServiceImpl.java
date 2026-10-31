@@ -21,6 +21,7 @@
 package dev.stemcraft.service;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
+import dev.stemcraft.api.database.DatabaseTransaction;
 import dev.stemcraft.api.database.DatabaseResultSetHandler;
 import dev.stemcraft.api.database.DatabaseResultSetMapper;
 import dev.stemcraft.api.database.DatabaseStatementBinder;
@@ -153,7 +154,7 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
      * Called when the service is disabled.
      */
     @Override
-    public void onDisable() {
+    public synchronized void onDisable() {
         close();
     }
 
@@ -161,7 +162,7 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
      * Returns the active database connection.
      */
     @Override
-    public void close() {
+    public synchronized void close() {
         if (connection != null) {
             try {
                 connection.close();
@@ -180,7 +181,7 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
      * @return The number of affected rows.
      */
     @Override
-    public int update(@NotNull String sql, @Nullable DatabaseStatementBinder binder) {
+    public synchronized int update(@NotNull String sql, @Nullable DatabaseStatementBinder binder) {
         if (connection != null) {
             try (PreparedStatement ps = connection.prepareStatement(sql)) {
                 if (binder != null) {
@@ -198,6 +199,38 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
         return 0;
     }
 
+    @Override
+    public synchronized boolean transaction(@NotNull DatabaseTransaction transaction) {
+        Objects.requireNonNull(transaction, "transaction");
+        if (connection == null) {
+            api.messages().error("Cannot execute transaction; database connection is null.");
+            return false;
+        }
+
+        try {
+            boolean autoCommit = connection.getAutoCommit();
+            connection.setAutoCommit(false);
+            try {
+                transaction.execute(connection);
+                connection.commit();
+                return true;
+            } catch (SQLException | RuntimeException exception) {
+                try {
+                    connection.rollback();
+                } catch (SQLException rollbackException) {
+                    plugin.getLogger().warning("Failed to roll back database transaction: " + rollbackException.getMessage());
+                }
+                api.messages().error("Failed to execute database transaction.", exception);
+                return false;
+            } finally {
+                connection.setAutoCommit(autoCommit);
+            }
+        } catch (SQLException exception) {
+            api.messages().error("Failed to configure database transaction.", exception);
+            return false;
+        }
+    }
+
     /**
      * Executes a query statement and maps the result set.
      *
@@ -205,7 +238,7 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
      * @param binder The binder to set parameters on the prepared statement.
      * @param handler The handler to process the result set.
      */
-    public void query(@NotNull String sql, @Nullable DatabaseStatementBinder binder, @NotNull DatabaseResultSetHandler handler) {
+    public synchronized void query(@NotNull String sql, @Nullable DatabaseStatementBinder binder, @NotNull DatabaseResultSetHandler handler) {
         if (connection == null) {
             throw new IllegalStateException("Database connection is not initialized.");
         }
@@ -232,7 +265,7 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
      * @param binder The binder to set parameters on the prepared statement.
      * @param handler The handler to process each row of the result set.
      */
-    public void queryEach(@NotNull String sql, @Nullable DatabaseStatementBinder binder, @NotNull DatabaseResultSetHandler handler) {
+    public synchronized void queryEach(@NotNull String sql, @Nullable DatabaseStatementBinder binder, @NotNull DatabaseResultSetHandler handler) {
         if (connection == null) {
             throw new IllegalStateException("Database connection is not initialized.");
         }
@@ -261,7 +294,7 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
      * @param binder The binder to set parameters on the prepared statement.
      * @param handler The handler to process the single row of the result set.
      */
-    public void querySingle(@NotNull String sql, @Nullable DatabaseStatementBinder binder, @NotNull DatabaseResultSetHandler handler) {
+    public synchronized void querySingle(@NotNull String sql, @Nullable DatabaseStatementBinder binder, @NotNull DatabaseResultSetHandler handler) {
         if (connection == null) {
             throw new IllegalStateException("Database connection is not initialized.");
         }
@@ -292,7 +325,7 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
      * @param <T> The type of the object to map to.
      * @return The mapped object of type T, or null if no result was found.
      */
-    public <T> @Nullable T querySingleMapped(
+    public synchronized <T> @Nullable T querySingleMapped(
             @NotNull String sql,
             @Nullable DatabaseStatementBinder binder,
             @Nullable DatabaseResultSetMapper<T> mapper
@@ -320,7 +353,7 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
         }
     }
 
-    public <T> @NotNull T querySingleMapped(
+    public synchronized <T> @NotNull T querySingleMapped(
             @NotNull String sql,
             @Nullable DatabaseStatementBinder binder,
             @Nullable DatabaseResultSetMapper<T> mapper,
@@ -335,7 +368,7 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
      *
      * @param sql The SQL statement to execute.
      */
-    public boolean execute(@NotNull String sql) {
+    public synchronized boolean execute(@NotNull String sql) {
         try (Statement st = connection.createStatement()) {
             st.execute(sql);
             return true;
@@ -352,7 +385,7 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
      * @param name The name of the migration.
      * @return The migration version, or 0 if not found.
      */
-    public int migrationVersion(@NotNull String name) {
+    public synchronized int migrationVersion(@NotNull String name) {
         return querySingleMapped(
             "SELECT version FROM migrations WHERE name = ?;",
             ps -> ps.setString(1, name),
@@ -367,7 +400,7 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
      * @param name The name of the migration.
      * @param version The migration version to set.
      */
-    public void setMigrationVersion(@NotNull String name, int version) {
+    public synchronized void setMigrationVersion(@NotNull String name, int version) {
         String sql = "INSERT INTO migrations (name, version) VALUES (?, ?) " +
                         "ON CONFLICT(name) DO UPDATE SET version = excluded.version;";
 
@@ -382,7 +415,7 @@ public class DatabaseServiceImpl extends BaseService implements DatabaseService,
      *
      * @param name The name of the migration.
      */
-    public void clearMigration(@NotNull String name) {
+    public synchronized void clearMigration(@NotNull String name) {
         update("DELETE FROM migrations WHERE name = ?;", ps -> ps.setString(1, name));
     }
 }

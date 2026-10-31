@@ -18,6 +18,7 @@ import org.bukkit.*;
 import org.bukkit.block.Biome;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.generator.structure.GeneratedStructure;
 import org.bukkit.plugin.Plugin;
@@ -46,7 +47,7 @@ public final class NamedRegions extends BaseFeature {
         "#40B983E3","#404CC9C0","#40ED8F4A","#4088B04B"
     );
 
-    private record Area(
+    static record Area(
         String id,
         String world,
         String kind,
@@ -63,7 +64,7 @@ public final class NamedRegions extends BaseFeature {
         boolean discovered
     ) {
         boolean contains(Location l) {
-            return world.equals(l.getWorld().getName())
+            return l != null && l.getWorld() != null && world.equals(l.getWorld().getName())
                 && l.getX() >= minX && l.getX() <= maxX
                 && l.getY() >= minY && l.getY() <= maxY
                 && l.getZ() >= minZ && l.getZ() <= maxZ;
@@ -73,6 +74,7 @@ public final class NamedRegions extends BaseFeature {
     private static final String REGION="region",STRUCTURE="structure";
     private static final String COORDINATE_PROVIDER_ID="named-region";
     private static final int SAMPLE_SIZE=4;
+    private static final int STRUCTURE_INDEX_CHUNK_SIZE=16;
     private static final Pattern REGION_FILE=Pattern.compile("r\\.(-?\\d+)\\.(-?\\d+)\\.mca");
 
     private static final class ScanCursor {
@@ -89,10 +91,93 @@ public final class NamedRegions extends BaseFeature {
         }
     }
 
+    /**
+     * Indexes structure IDs by every chunk touched by their bounding box. The
+     * index is deliberately independent of biome-region storage: structures
+     * always get first refusal in {@link #areaAt(Location)}.
+     */
+    static final class StructureIndex {
+        private final Map<StructureChunk,Set<String>> byChunk=new HashMap<>();
+        private final Map<String,Set<StructureChunk>> chunksByArea=new HashMap<>();
+
+        void clear() {
+            byChunk.clear();
+            chunksByArea.clear();
+        }
+
+        void add(Area area) {
+            if(!STRUCTURE.equals(area.kind)) return;
+            remove(area.id);
+
+            Set<StructureChunk> chunks=new HashSet<>();
+            int minChunkX=Math.floorDiv(area.minX,STRUCTURE_INDEX_CHUNK_SIZE);
+            int maxChunkX=Math.floorDiv(area.maxX,STRUCTURE_INDEX_CHUNK_SIZE);
+            int minChunkZ=Math.floorDiv(area.minZ,STRUCTURE_INDEX_CHUNK_SIZE);
+            int maxChunkZ=Math.floorDiv(area.maxZ,STRUCTURE_INDEX_CHUNK_SIZE);
+            for(int chunkX=minChunkX;chunkX<=maxChunkX;chunkX++) {
+                for(int chunkZ=minChunkZ;chunkZ<=maxChunkZ;chunkZ++) {
+                    StructureChunk chunk=new StructureChunk(area.world,chunkX,chunkZ);
+                    byChunk.computeIfAbsent(chunk,ignored->new HashSet<>()).add(area.id);
+                    chunks.add(chunk);
+                }
+            }
+            chunksByArea.put(area.id,chunks);
+        }
+
+        void remove(String areaId) {
+            Set<StructureChunk> chunks=chunksByArea.remove(areaId);
+            if(chunks==null) return;
+            for(StructureChunk chunk:chunks) {
+                Set<String> ids=byChunk.get(chunk);
+                if(ids==null) continue;
+                ids.remove(areaId);
+                if(ids.isEmpty()) byChunk.remove(chunk);
+            }
+        }
+
+        Set<String> candidates(String world,int blockX,int blockZ) {
+            Set<String> ids=byChunk.get(new StructureChunk(
+                world,
+                Math.floorDiv(blockX,STRUCTURE_INDEX_CHUNK_SIZE),
+                Math.floorDiv(blockZ,STRUCTURE_INDEX_CHUNK_SIZE)
+            ));
+            return ids==null?Set.of():Set.copyOf(ids);
+        }
+
+        int bucketCount() {
+            return byChunk.size();
+        }
+    }
+
+    private record StructureChunk(String world,int x,int z) { }
+
+    private static final class AreaLookupCache {
+        private final String world;
+        private final int x,y,z;
+        private final Area area;
+        private Component coordinateLabel;
+
+        private AreaLookupCache(Location location,Area area) {
+            this.world=location.getWorld()==null?null:location.getWorld().getName();
+            this.x=location.getBlockX();
+            this.y=location.getBlockY();
+            this.z=location.getBlockZ();
+            this.area=area;
+        }
+
+        private boolean matches(Location location) {
+            return location!=null && location.getWorld()!=null
+                && Objects.equals(world,location.getWorld().getName())
+                && x==location.getBlockX() && y==location.getBlockY() && z==location.getBlockZ();
+        }
+    }
+
     private final Map<String,Area> areas=new ConcurrentHashMap<>();
+    private final StructureIndex structureIndex=new StructureIndex();
     private final Set<String> activeNames=ConcurrentHashMap.newKeySet();
     private final Map<String,Long> retiredNames=new ConcurrentHashMap<>();
     private final Map<UUID,String> playerArea=new HashMap<>();
+    private final Map<UUID,AreaLookupCache> areaLookupCache=new HashMap<>();
     private final Set<String> worlds=new HashSet<>();
     private NamedRegionStorage regionStorage;
 
@@ -156,6 +241,11 @@ public final class NamedRegions extends BaseFeature {
 
         api.events().register(ChunkLoadEvent.class,event->discover(event.getChunk()));
         api.events().register(PlayerMoveEvent.class,this::onMove);
+        api.events().register(PlayerQuitEvent.class,event->{
+            UUID playerId=event.getPlayer().getUniqueId();
+            playerArea.remove(playerId);
+            areaLookupCache.remove(playerId);
+        });
         api.tabComplete().register("named-area",(player, args, currentArgument)->new ArrayList<>(areas.keySet()));
 
         api.commands().create("namedregion")
@@ -220,9 +310,11 @@ public final class NamedRegions extends BaseFeature {
         backfillTask=null;
         regenerationTask=null;
         areas.clear();
+        structureIndex.clear();
         activeNames.clear();
         retiredNames.clear();
         playerArea.clear();
+        areaLookupCache.clear();
         worlds.clear();
         if(regionStorage!=null) regionStorage.clear();
 
@@ -307,8 +399,10 @@ public final class NamedRegions extends BaseFeature {
 
     private void loadAreas() {
         areas.clear();
+        structureIndex.clear();
         activeNames.clear();
         retiredNames.clear();
+        areaLookupCache.clear();
 
         api.database().queryEach(
             "SELECT id,world_name,kind,type,name,min_x,min_y,min_z,max_x,max_y,max_z,"
@@ -321,12 +415,27 @@ public final class NamedRegions extends BaseFeature {
             }
         );
 
+        for(Area area:areas.values()) structureIndex.add(area);
+
         long now=System.currentTimeMillis();
         api.database().queryEach(
             "SELECT name,available_at FROM named_region_name_history WHERE available_at>?",
             ps->ps.setLong(1,now),
             rs->retiredNames.merge(normaliseName(rs.getString(1)),rs.getLong(2),Math::max)
         );
+    }
+
+    private void replaceArea(Area area) {
+        Area previous=areas.put(area.id,area);
+        if(previous!=null&&STRUCTURE.equals(previous.kind)) structureIndex.remove(previous.id);
+        structureIndex.add(area);
+        areaLookupCache.clear();
+    }
+
+    private void removeArea(String id) {
+        Area previous=areas.remove(id);
+        if(previous!=null&&STRUCTURE.equals(previous.kind)) structureIndex.remove(previous.id);
+        areaLookupCache.clear();
     }
 
     private Area read(ResultSet r) throws SQLException {
@@ -365,7 +474,7 @@ public final class NamedRegions extends BaseFeature {
                 false,old.createdAt,old.discovered
             );
 
-            areas.put(updated.id,updated);
+            replaceArea(updated);
             activeNames.add(normaliseName(updated.name));
 
             api.database().update(
@@ -407,7 +516,7 @@ public final class NamedRegions extends BaseFeature {
                 false,old.createdAt,old.discovered
             );
 
-            areas.put(updated.id,updated);
+            replaceArea(updated);
             activeNames.add(normaliseName(updated.name));
 
             api.database().update(
@@ -603,7 +712,7 @@ public final class NamedRegions extends BaseFeature {
                 Math.max(area.maxX,maxX),area.maxY,Math.max(area.maxZ,maxZ),
                 area.locked,area.createdAt,area.discovered
             );
-            areas.put(area.id,area);
+            replaceArea(area);
             updateBounds(area);
         }
 
@@ -674,8 +783,8 @@ public final class NamedRegions extends BaseFeature {
                 ps->ps.setString(1,loser.id)
             );
 
-            areas.remove(loser.id);
-            areas.put(winner.id,expanded);
+            removeArea(loser.id);
+            replaceArea(expanded);
             updateBounds(expanded);
             winner=expanded;
         }
@@ -783,34 +892,54 @@ public final class NamedRegions extends BaseFeature {
         );
 
         if(inserted>0) {
-            areas.put(area.id,area);
+            replaceArea(area);
             activeNames.add(normaliseName(area.name));
             invalidateMapSnapshot();
         }
     }
 
     private void onMove(PlayerMoveEvent event) {
-        if(!event.hasChangedBlock()||!enabled(event.getTo().getWorld())) return;
+        Location from=event.getFrom();
+        Location to=event.getTo();
+        if(to==null||to.getWorld()==null) return;
 
-        Area area=areaAt(event.getTo());
+        boolean changedWorld=from.getWorld()==null||!from.getWorld().equals(to.getWorld());
+        if(!changedWorld&&!event.hasChangedBlock()) return;
+        if(!enabled(to.getWorld())) {
+            UUID playerId=event.getPlayer().getUniqueId();
+            playerArea.remove(playerId);
+            areaLookupCache.remove(playerId);
+            return;
+        }
+
+        Area area=areaAt(to);
         if(area==null)
             area=ensureCell(
-                event.getTo().getWorld(),
-                Math.floorDiv(event.getTo().getBlockX(),SAMPLE_SIZE),
-                Math.floorDiv(event.getTo().getBlockZ(),SAMPLE_SIZE)
+                to.getWorld(),
+                Math.floorDiv(to.getBlockX(),SAMPLE_SIZE),
+                Math.floorDiv(to.getBlockZ(),SAMPLE_SIZE)
             );
 
         if(STRUCTURE.equals(area.kind)&&!area.discovered)
             area=markDiscovered(area);
 
-        String previous=playerArea.put(event.getPlayer().getUniqueId(),area.id);
+        UUID playerId=event.getPlayer().getUniqueId();
+        areaLookupCache.put(playerId,new AreaLookupCache(to,area));
+        String previous=playerArea.put(playerId,area.id);
         if(!area.id.equals(previous))
             announce(event.getPlayer(),area);
     }
 
     private @Nullable Area areaAt(Location location) {
-        Area structure=areas.values().stream()
-            .filter(a->STRUCTURE.equals(a.kind)&&a.contains(location))
+        if(location==null||location.getWorld()==null) return null;
+
+        Area structure=structureIndex.candidates(
+                location.getWorld().getName(),location.getBlockX(),location.getBlockZ())
+            .stream()
+            .map(areas::get)
+            .filter(Objects::nonNull)
+            .filter(a->a.contains(location))
+            .sorted(Comparator.comparingLong(Area::createdAt).thenComparing(Area::id))
             .findFirst()
             .orElse(null);
 
@@ -826,6 +955,17 @@ public final class NamedRegions extends BaseFeature {
         return id==null?null:areas.get(id);
     }
 
+    private @Nullable Area areaForPlayer(Player player) {
+        Location location=player.getLocation();
+        UUID playerId=player.getUniqueId();
+        AreaLookupCache cached=areaLookupCache.get(playerId);
+        if(cached!=null&&cached.matches(location)) return cached.area;
+
+        Area area=areaAt(location);
+        areaLookupCache.put(playerId,new AreaLookupCache(location,area));
+        return area;
+    }
+
     private Area markDiscovered(Area old) {
         Area found=new Area(
             old.id,old.world,old.kind,old.type,old.name,
@@ -833,7 +973,7 @@ public final class NamedRegions extends BaseFeature {
             old.locked,old.createdAt,true
         );
 
-        areas.put(found.id,found);
+        replaceArea(found);
         api.database().update(
             "UPDATE named_areas SET discovered=1 WHERE id=?",
             ps->ps.setString(1,found.id)
@@ -862,14 +1002,21 @@ public final class NamedRegions extends BaseFeature {
     private @Nullable Component renderCoordinateBar(Player player) {
         if(!enabled(player.getWorld())) return null;
 
-        Area area=areaAt(player.getLocation());
+        AreaLookupCache cached=areaLookupCache.get(player.getUniqueId());
+        Area area=areaForPlayer(player);
         if(area==null) return null;
 
-        return Component.text(
-            getConfigSection().getString("coordbar.format"," ({name})")
-                .replace("{name}",area.name)
-                .replace("{type}",friendly(area.type))
-        );
+        if(cached!=null&&cached==areaLookupCache.get(player.getUniqueId())&&cached.coordinateLabel!=null)
+            return cached.coordinateLabel;
+
+        AreaLookupCache current=areaLookupCache.get(player.getUniqueId());
+        Component label=Component.text(
+                getConfigSection().getString("coordbar.format"," ({name})")
+                    .replace("{name}",area.name)
+                    .replace("{type}",friendly(area.type))
+            );
+        if(current!=null) current.coordinateLabel=label;
+        return label;
     }
 
     private String render(String template,Area area) {
@@ -1280,7 +1427,7 @@ public final class NamedRegions extends BaseFeature {
                 );
 
                 activeNames.add(normaliseName(chosenName));
-                areas.put(id,renamed);
+                replaceArea(renamed);
 
                 api.database().update(
                     "UPDATE named_areas SET name=?,locked=1 WHERE id=?",
@@ -1493,7 +1640,7 @@ public final class NamedRegions extends BaseFeature {
             old.locked,old.createdAt,old.discovered
         );
 
-        areas.put(updated.id,updated);
+        replaceArea(updated);
         activeNames.add(normaliseName(replacement));
 
         api.database().update(
