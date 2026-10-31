@@ -34,6 +34,7 @@ From `STEMCraftAPI`, you can access:
 - `minigames()` - minigame framework
 - `motd()` - MOTD control
 - `players()` - player utilities/logging service
+- `playerProfiles()` - aggregate player identity, statistics, and feature sections
 - `placedObjects()` - persistent placed block/entity assemblies
 - `punishments()` - punishment records/actions
 - `playerStats()` - stat recording/query/export
@@ -41,7 +42,7 @@ From `STEMCraftAPI`, you can access:
 - `regions()` - region registration/listeners
 - `tabComplete()` - tab completion providers
 - `tasks()` - sync/async scheduling + persistent timers
-- `web()` - lightweight web endpoint service
+- `web()` - lightweight web endpoint service, player profiles, and outbound event subscriptions
 - `worlds()` - world load/settings/generation services
 
 ## Command Registration Example

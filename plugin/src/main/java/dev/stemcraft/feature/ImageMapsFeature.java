@@ -69,8 +69,8 @@ public final class ImageMapsFeature extends BaseFeature {
     }
 
     private void registerCommand() {
-        api.tabComplete().register("image-map-file", (player, args) -> availableImages());
-        api.tabComplete().register("image-map-id", (player, args) -> displays.keySet().stream().sorted().toList());
+        api.tabComplete().register("image-map-file", (player, args, currentArgument) -> availableImages());
+        api.tabComplete().register("image-map-id", (player, args, currentArgument) -> displays.keySet().stream().sorted().toList());
         api.commands().create("imagemap")
             .description("Create and manage PNG map displays")
             .usage("/imagemap <place <png-file> [scale]|delete <id>|list>")

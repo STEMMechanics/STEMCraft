@@ -340,7 +340,7 @@ public class Mailboxes extends BaseFeature implements MailboxService {
     }
 
     private void registerCommands() {
-        api.tabComplete().register("mail-quantity", (_, _) -> List.of("1", "2", "4", "8", "16", "32", "64"));
+        api.tabComplete().register("mail-quantity", (_, _, _) -> List.of("1", "2", "4", "8", "16", "32", "64"));
         api.commands().create("mail")
             .description("Compose and send server mail")
             .usage("/mail compose <player> | /mail message [text] | /mail message -a <text> | /mail message save | /mail item <add|remove|list> ... | /mail preview | /mail send | /mail cancel")

@@ -23,6 +23,8 @@ package dev.stemcraft.api.service.web;
 import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
+import java.util.Map;
+import java.util.UUID;
 
 /**
  * Service for managing a webserver within the STEMCraft plugin.
@@ -51,6 +53,31 @@ public interface WebService {
      * @param handler The handler to call for matching requests.
      */
     void registerEndpointHandler(@NotNull String path, @NotNull WebServiceEndpointHandler handler);
+
+    /**
+     * Publish an event to the web service's configured external subscriptions.
+     *
+     * <p>The default implementation is a no-op so API implementations which do
+     * not provide outbound subscriptions remain source-compatible.</p>
+     *
+     * @param event event to publish
+     */
+    default void publishEvent(@NotNull WebServiceEvent event) {}
+
+    /**
+     * Publish an event with a generated id and timestamp.
+     *
+     * @param eventType stable event name
+     * @param playerUuid optional player UUID
+     * @param playerName optional player name
+     * @param data event-specific JSON-compatible data
+     */
+    default void publishEvent(@NotNull String eventType,
+                               @Nullable UUID playerUuid,
+                               @Nullable String playerName,
+                               @NotNull Map<String, Object> data) {
+        publishEvent(new WebServiceEvent(eventType, playerUuid, playerName, data));
+    }
 
     /**
      * Escape HTML special characters in a string.

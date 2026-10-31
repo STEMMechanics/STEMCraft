@@ -33,7 +33,7 @@ public class MinefieldCommand {
     }
 
     public void onEnable() {
-        api.tabComplete().register("minefield-arenas", (sender, args) -> minefield.minigame().arenas().stream()
+        api.tabComplete().register("minefield-arenas", (sender, args, currentArgument) -> minefield.minigame().arenas().stream()
             .map(MiniGameArena::id)
             .sorted()
             .toList());

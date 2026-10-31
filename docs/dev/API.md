@@ -28,6 +28,7 @@ The public integration surface is `dev.stemcraft.api.STEMCraftAPI`.
 - `minigames()`
 - `motd()`
 - `players()`
+- `playerProfiles()`
 - `placedObjects()`
 - `placeholders()`
 - `protections()`
@@ -124,6 +125,75 @@ Keep the web service bound to loopback and put an HTTPS reverse proxy in front
 of it when another service such as STEMBot connects over a network. Existing
 administrative and write endpoints continue to enforce their endpoint-specific
 authentication.
+
+### Player profile API
+
+The authenticated player profile API is served by the web service when
+`web-server.player-api.enabled` is `true`. A blank key is generated and saved
+to `config.yml` when the API is enabled. Keep the key in the external
+integration's secret store and send it as a bearer token.
+
+`GET /api/v1/capabilities` reports the profile sections currently registered by
+core services and enabled features. `GET /api/v1/players/<uuid>/profile`
+returns the resolved player identity and the requested profile sections. The
+default includes all sections; use `?include=stats,skills` to select sections
+and `?period=28d` for a rolling statistics period. Skill progress is always
+lifetime-based.
+
+```json
+{
+  "api_version": 1,
+  "player": {
+    "uuid": "01234567-89ab-cdef-0123-456789abcdef",
+    "name": "Alex",
+    "platform": "java",
+    "online": true
+  },
+  "sections": {
+    "stats": {
+      "available": true,
+      "period": "all",
+      "items": []
+    },
+    "skills": {
+      "available": true,
+      "period": "lifetime",
+      "items": []
+    }
+  }
+}
+```
+
+The profile aggregator is transport-neutral: `PlayerStatsService` registers
+the `stats` section and optional features register their own sections. The web
+service only exposes the aggregate and does not depend on individual feature
+classes. Unknown requested sections are ignored for compatibility with older
+servers.
+
+### WebService event subscriptions
+
+Game and feature services publish transport-neutral `WebServiceEvent` values
+through `api.web().publishEvent(...)`. The WebService owns filtering, queueing,
+authentication, retries, and JSON delivery, so an external consumer does not
+need to be Discord-specific. Configure one HTTP subscription with:
+
+```yaml
+web-server:
+  event-subscriptions:
+    enabled: true
+    url: "https://consumer.example.test/minecraft/event"
+    bearer-token: "a-secret-known-by-both-sides"
+    server-id: survival
+    channel: global
+    events:
+      minecraft.player_skill_level_up: true
+```
+
+The existing `chat.discord-bridge` outbound settings are still read as a
+fallback and log a migration warning. Move those settings to
+`web-server.event-subscriptions`; keep the `chat.discord-bridge` section only
+for the Discord inbound chat endpoint. Consumers should acknowledge accepted
+events with any 2xx response and use `event_id` for idempotency.
 
 ### Workshops
 

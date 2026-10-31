@@ -3,8 +3,13 @@ package dev.stemcraft.feature;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigSection;
+import dev.stemcraft.api.event.player.PlayerSkillLevelUpEvent;
+import dev.stemcraft.api.service.playerprofile.PlayerProfileSectionProvider;
+import dev.stemcraft.api.service.playerstats.PlayerStatValue;
+import dev.stemcraft.api.service.playerstats.PlayerStatsRecord;
 import dev.stemcraft.api.service.playerstats.PlayerStatDefinition;
 import dev.stemcraft.api.util.PatternUtil;
+import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -24,9 +29,12 @@ import org.bukkit.event.player.PlayerFishEvent;
 import org.bukkit.projectiles.ProjectileSource;
 
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 /** World-scoped survival profession progression backed by persistent player stats. */
@@ -77,6 +85,7 @@ public final class ProfessionsFeature extends BaseFeature {
             "PRIMARY KEY(world_name,x,y,z));");
         SKILLS.forEach(skill -> api.playerStats().register(new PlayerStatDefinition(
             statKey(skill.key()), skill.title() + " XP", "Lifetime experience earned in " + skill.title() + ".")));
+        registerProfileProvider();
         registerSkillsCommand();
         api.events().register(BlockPlaceEvent.class, this::onPlace, EventPriority.MONITOR, true);
         api.events().register(BlockBreakEvent.class, this::onBreak, EventPriority.MONITOR, true);
@@ -88,6 +97,11 @@ public final class ProfessionsFeature extends BaseFeature {
 
     @Override
     public void onReload() { super.onReload(); loadConfig(); }
+
+    @Override
+    public void onDisable() {
+        api.playerProfiles().unregister("skills");
+    }
 
     private void loadConfig() {
         ConfigSection config = getConfigSection();
@@ -170,8 +184,72 @@ public final class ProfessionsFeature extends BaseFeature {
         int oldLevel = levelForXp(before);
         api.playerStats().increment(player.getUniqueId(), player.getName(), key, amount);
         int newLevel = levelForXp(before + amount);
-        if (newLevel > oldLevel) api.messages().send(player, levelMessage,
+        if (newLevel <= oldLevel) return;
+
+        Bukkit.getPluginManager().callEvent(new PlayerSkillLevelUpEvent(
+            player.getUniqueId(),
+            player.getName(),
+            skill,
+            skill(skill).title(),
+            oldLevel,
+            newLevel,
+            before,
+            before + amount
+        ));
+        api.messages().send(player, levelMessage,
             "skill", skill(skill).title(), "level", newLevel);
+    }
+
+    private void registerProfileProvider() {
+        api.playerProfiles().register(new PlayerProfileSectionProvider() {
+            @Override
+            public String id() {
+                return "skills";
+            }
+
+            @Override
+            public String title() {
+                return "Skills";
+            }
+
+            @Override
+            public Map<String, Object> snapshot(UUID playerUuid, String period) {
+                PlayerStatsRecord record = api.playerStats().snapshot(playerUuid, "all");
+                Map<String, PlayerStatValue> stats = record == null
+                    ? Map.of()
+                    : record.stats().stream().collect(java.util.stream.Collectors.toMap(
+                        PlayerStatValue::key,
+                        value -> value,
+                        (left, right) -> right
+                    ));
+
+                List<Map<String, Object>> items = SKILLS.stream()
+                    .map(skill -> profileSkill(skill, stats.get(statKey(skill.key()))))
+                    .toList();
+                Map<String, Object> data = new LinkedHashMap<>();
+                data.put("period", "lifetime");
+                data.put("items", items);
+                return data;
+            }
+        });
+    }
+
+    private static Map<String, Object> profileSkill(SkillDefinition skill, PlayerStatValue stat) {
+        double xp = stat == null ? 0.0d : stat.value();
+        int level = levelForXp(xp);
+        long currentLevelXp = xpForLevel(level);
+        long nextLevelXp = level >= MAX_LEVEL ? currentLevelXp : xpForLevel(level + 1);
+
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("key", skill.key());
+        item.put("title", skill.title());
+        item.put("level", level);
+        item.put("xp", xp);
+        item.put("current_level_xp", currentLevelXp);
+        item.put("next_level_xp", nextLevelXp);
+        item.put("max_level", MAX_LEVEL);
+        item.put("updated_at", stat == null || stat.updatedAt() == null ? null : stat.updatedAt().toString());
+        return item;
     }
 
     private void registerSkillsCommand() {

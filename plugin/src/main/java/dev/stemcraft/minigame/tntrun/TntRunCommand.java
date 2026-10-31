@@ -34,7 +34,7 @@ public class TntRunCommand {
     }
 
     public void onEnable() {
-        api.tabComplete().register("tntrun-arenas", (sender, args) -> tntRun.minigame().arenas().stream()
+        api.tabComplete().register("tntrun-arenas", (sender, args, currentArgument) -> tntRun.minigame().arenas().stream()
             .map(MiniGameArena::id)
             .sorted()
             .toList());

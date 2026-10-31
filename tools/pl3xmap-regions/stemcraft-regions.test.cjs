@@ -86,6 +86,26 @@ test('hidden layers fetch nothing; hiding aborts requests and rejects late respo
   assert.equal(f.layer.children.size, 0); assert.equal(controller.active.size, 0);
   assert.equal(calls.length, 1 + MAX_REQUESTS);
 });
+test('default requests retain the global fetch receiver', async t => {
+  const f = fixture(true, 128), calls = [];
+  const originalFetch = globalThis.fetch;
+  let controller;
+  globalThis.fetch = async function (url, options) {
+    assert.equal(this, globalThis);
+    calls.push({url, options});
+    return new URL(url).pathname.endsWith('/metadata.json')
+      ? {ok: true, json: async () => settings}
+      : {ok: true, json: async () => ({regions: []})};
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+    controller?.destroy();
+  });
+  controller = new ViewportLayer(f.map, f.layer, f.world,
+    'https://map.test/world-map/tiles/survival/stemcraft-regions/', f.leaflet);
+  await flush();
+  assert.equal(calls.length, 2);
+});
 test('SSE invalidates visible tiles only when revision changes', async t => {
   const f = fixture(true, 128), calls = [];
   let revision = 1;

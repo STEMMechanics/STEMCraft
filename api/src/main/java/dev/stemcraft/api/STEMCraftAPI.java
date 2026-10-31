@@ -40,6 +40,7 @@ import dev.stemcraft.api.service.message.MessageService;
 import dev.stemcraft.api.service.minigame.MiniGameService;
 import dev.stemcraft.api.service.motd.MotdService;
 import dev.stemcraft.api.service.player.PlayerService;
+import dev.stemcraft.api.service.playerprofile.PlayerProfileService;
 import dev.stemcraft.api.service.playerstats.PlayerStatsService;
 import dev.stemcraft.api.service.playerreset.PlayerResetService;
 import dev.stemcraft.api.service.placeholder.PlaceholderService;
@@ -197,6 +198,13 @@ public interface STEMCraftAPI {
      * Get the player stats service.
      */
     PlayerStatsService playerStats();
+
+    /**
+     * Get the aggregate player profile service.
+     */
+    default PlayerProfileService playerProfiles() {
+        return PlayerProfileService.UNAVAILABLE;
+    }
 
     /** Coordinates safe, previewed resets of player-owned data. */
     PlayerResetService playerResets();

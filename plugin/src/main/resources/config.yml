@@ -477,6 +477,39 @@ web-server:
     max-item-amount: 1024
     # delay_seconds may be 0 through this value. Omitted delay uses mailboxes.delivery.base-delay.
     max-delay-seconds: 604800
+  player-api:
+    # Authenticated read-only player profiles for external integrations.
+    enabled: false
+    # A blank key is replaced with a secure, persistent bearer token when enabled.
+    key: ""
+  event-subscriptions:
+    # Generic outbound event delivery for Discord bots and other HTTP consumers.
+    enabled: false
+    # The consumer owns its own transport integrations and receives POST requests here.
+    url: ""
+    bearer-token: ""
+    server-id: survival
+    channel: global
+    timeout: 3s
+    queue-size: 256
+    max-retries: 3
+    events:
+      minecraft.chat: true
+      minecraft.player_join: true
+      minecraft.player_quit: true
+      minecraft.minigame_start: true
+      minecraft.minigame_end: true
+      minecraft.player_death: true
+      minecraft.player_command: true
+      minecraft.server_start: true
+      minecraft.server_stop: true
+      minecraft.server_message: true
+      minecraft.player_skill_level_up: true
+    redacted-commands:
+      - login
+      - register
+      - changepassword
+      - password
   status:
     players:
       # When enabled, /status includes current usernames in the players array.
@@ -911,9 +944,10 @@ chat:
   filter_command: ""
   duplicate_message_limit: 2
   duplicate_message_warning: "Please do not repeat the same message"
-  # Optional outbound bridge for a Discord bot (or another HTTP consumer).
-  # The bot owns the Discord SDK/webhook and only needs to expose this small
-  # bearer-authenticated JSON receiver. Chat is queued off the event thread.
+  # Legacy Discord chat settings. Outbound event delivery moved to
+  # web-server.event-subscriptions; these outbound values are still read as a
+  # migration fallback. The bot owns the Discord SDK/webhook and only needs to
+  # expose this small bearer-authenticated JSON receiver.
   discord-bridge:
     enabled: false
     # Set this to the bot's public receiver URL, for example:
@@ -940,6 +974,7 @@ chat:
       server-start: true
       server-stop: true
       server-message: true
+      player-skill-level-up: true
     # Commands whose arguments may contain passwords or other private values
     # are sent to the bridge with their arguments removed.
     redacted-commands:
@@ -1231,6 +1266,8 @@ leaf_decay_random_tick:
     candidate-lifetime-seconds: 600
 voting:
   enabled: true
+  login-announcement:
+    enabled: true
   # Leave blank to allow every player to vote.
   permission: ""
   tower:

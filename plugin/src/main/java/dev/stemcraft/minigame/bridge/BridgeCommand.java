@@ -59,11 +59,11 @@ public class BridgeCommand {
     }
 
     public void onEnable() {
-        api.tabComplete().register("bridge-arenas", (sender, args) -> bridge.minigame().arenas().stream()
+        api.tabComplete().register("bridge-arenas", (sender, args, currentArgument) -> bridge.minigame().arenas().stream()
             .map(MiniGameArena::id)
             .sorted()
             .toList());
-        api.tabComplete().register("bridge-teams", (sender, args) -> List.of("red", "blue"));
+        api.tabComplete().register("bridge-teams", (sender, args, currentArgument) -> List.of("red", "blue"));
 
         api.commands().create("bridge")
             .access((sender, args) -> dev.stemcraft.permission.PlayerCommandAccess.minigame(sender, args, "bridge"))

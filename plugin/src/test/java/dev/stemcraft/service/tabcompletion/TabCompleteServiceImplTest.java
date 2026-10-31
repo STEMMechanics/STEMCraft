@@ -46,10 +46,22 @@ class TabCompleteServiceImplTest {
     @Test
     void registersCustomCompletionsAndReturnsEmptyListForUnknownProviders() {
         Player viewer = viewer();
-        service.register("custom", (player, args) -> List.of("one", "two"));
+        service.register("custom", (player, args, currentArgument) -> List.of("one", "two"));
 
         assertEquals(List.of("one", "two"), service.getCompletionList("custom", viewer));
         assertEquals(List.of(), service.getCompletionList("missing", viewer));
+    }
+
+    @Test
+    void providersReceiveContextAndCurrentArgument() {
+        Player viewer = viewer();
+        service.register("current-argument", (player, args, currentArgument) ->
+            List.of(String.join("/", args) + ":" + currentArgument));
+
+        assertEquals(
+            List.of("arena:partial"),
+            service.getCompletionList("current-argument", viewer, new String[]{"arena"}, "partial")
+        );
     }
 
     @Test
@@ -140,9 +152,9 @@ class TabCompleteServiceImplTest {
         assertEquals(List.of("peaceful", "easy", "normal", "hard"), service.getCompletionList("difficulty", viewer()));
         assertEquals(service.getCompletionList("int", viewer()), service.getCompletionList("number", viewer()));
 
-        service.register("int", (player, args) -> List.of("64"));
+        service.register("int", (player, args, currentArgument) -> List.of("64"));
         assertEquals(List.of("64"), service.getCompletionList("number", viewer()));
-        service.register("item", (player, args) -> List.of("minecraft:chest", "stemcraft:gift"));
+        service.register("item", (player, args, currentArgument) -> List.of("minecraft:chest", "stemcraft:gift"));
         assertEquals(List.of("minecraft:chest", "stemcraft:gift"), service.getCompletionList("item", viewer()));
     }
 

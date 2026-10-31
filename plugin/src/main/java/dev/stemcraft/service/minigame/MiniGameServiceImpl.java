@@ -483,7 +483,7 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
     void notifyArenaStatusChanged(@NotNull MiniGameArena arena,
                                   @Nullable MiniGameArena.ArenaStatus oldStatus,
                                   @NotNull MiniGameArena.ArenaStatus newStatus) {
-        if (plugin == null || plugin.chat() == null) {
+        if (plugin == null || api == null || api.web() == null) {
             return;
         }
 
@@ -497,12 +497,12 @@ public class MiniGameServiceImpl extends BaseService implements MiniGameService 
             && oldStatus != MiniGameArena.ArenaStatus.ENDING;
 
         if (started) {
-            plugin.chat().publishChatBridgeEvent(
-                "minecraft.minigame_start", null, buildChatBridgeArenaData(arena, newStatus, false));
+            api.web().publishEvent(
+                "minecraft.minigame_start", null, null, buildChatBridgeArenaData(arena, newStatus, false));
         }
         if (ended) {
-            plugin.chat().publishChatBridgeEvent(
-                "minecraft.minigame_end", null, buildChatBridgeArenaData(arena, newStatus, true));
+            api.web().publishEvent(
+                "minecraft.minigame_end", null, null, buildChatBridgeArenaData(arena, newStatus, true));
         }
     }
 

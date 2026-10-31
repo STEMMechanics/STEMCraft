@@ -580,8 +580,8 @@ public final class EntitlementService extends BaseService {
     }
 
     private void registerCommands() {
-        api.tabComplete().register("entitlement-id", (player, args) -> entitlements.keySet().stream().sorted().toList());
-        api.tabComplete().register("badge-id", (player, args) -> badges.keySet().stream().sorted().toList());
+        api.tabComplete().register("entitlement-id", (player, args, currentArgument) -> entitlements.keySet().stream().sorted().toList());
+        api.tabComplete().register("badge-id", (player, args, currentArgument) -> badges.keySet().stream().sorted().toList());
         api.commands().create("badges").description("View applied player badges.").usage("/badges [player]")
             .tabCompletion("{offline-player}").tabCompletion("{offline-player}", "{number}")
             .executor((unused, command, ctx) -> showBadges(ctx)).register(plugin);

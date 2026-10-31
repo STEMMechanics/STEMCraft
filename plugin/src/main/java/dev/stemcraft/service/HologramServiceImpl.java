@@ -228,14 +228,14 @@ public class HologramServiceImpl extends BaseService implements HologramService 
             EventPriority.MONITOR, true);
 
 
-        api.tabComplete().register("hologram_type", (player, args) ->
+        api.tabComplete().register("hologram_type", (player, args, currentArgument) ->
                 new ArrayList<>(handlers.keySet())
         );
 
-        api.tabComplete().register("hologram_id", (player, args) -> holograms.keySet().stream()
+        api.tabComplete().register("hologram_id", (player, args, currentArgument) -> holograms.keySet().stream()
             .sorted().map(String::valueOf).toList());
 
-        api.tabComplete().register("hologram_context", (player, args) -> {
+        api.tabComplete().register("hologram_context", (player, args, currentArgument) -> {
             if (args.length < 1) {
                 return Collections.emptyList();
             }

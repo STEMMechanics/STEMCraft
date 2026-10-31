@@ -955,8 +955,8 @@ public final class QuestFeature extends BaseFeature {
     }
 
     void registerQuestCommand() {
-        api.tabComplete().register("quest", (player, args) -> new ArrayList<>(quests.keySet()));
-        api.tabComplete().register("active-quest", (player, args) ->
+        api.tabComplete().register("quest", (player, args, currentArgument) -> new ArrayList<>(quests.keySet()));
+        api.tabComplete().register("active-quest", (player, args, currentArgument) ->
             new ArrayList<>(active.getOrDefault(player.getUniqueId(), Map.of()).keySet()));
         api.commands().create("quest")
             .description("Manage and play book quests.")

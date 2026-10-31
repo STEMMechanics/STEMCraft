@@ -246,7 +246,7 @@ public final class NamedRegions extends BaseFeature {
             playerArea.remove(playerId);
             areaLookupCache.remove(playerId);
         });
-        api.tabComplete().register("named-area",(player,args)->new ArrayList<>(areas.keySet()));
+        api.tabComplete().register("named-area",(player, args, currentArgument)->new ArrayList<>(areas.keySet()));
 
         api.commands().create("namedregion")
             .usage("/namedregion <info|list|find|nearby|teleport|rename|retired|fallbacks|release|regenerate>")
