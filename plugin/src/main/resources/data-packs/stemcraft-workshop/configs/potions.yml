@@ -1,0 +1,13 @@
+potions:
+  explorers-tonic:
+    color: "4FA3FF"
+    effects:
+      - type: SPEED
+        duration-seconds: 90
+        level: 1
+      - type: WATER_BREATHING
+        duration-seconds: 90
+        level: 1
+      - type: NIGHT_VISION
+        duration-seconds: 60
+        level: 1

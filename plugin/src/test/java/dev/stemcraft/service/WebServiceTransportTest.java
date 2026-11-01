@@ -115,7 +115,7 @@ class WebServiceTransportTest {
 
         assertEquals(200, response.statusCode());
         assertTrue(response.body().contains("play.stemcraft.com.au"));
-        assertTrue(response.body().contains("Connect to the server"));
+        assertTrue(response.body().contains("Join the server"));
     }
 
     @Test

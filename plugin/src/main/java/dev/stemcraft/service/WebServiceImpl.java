@@ -308,6 +308,9 @@ public class WebServiceImpl extends BaseService implements WebService {
             return;
         }
 
+        // Keep bundled website assets available from the configured web root
+        // without overwriting files that an operator has customised.
+        plugin.exportBundledDirectory("www/assets", wwwPath + "/assets");
         ensureDefaultWebFile(DEFAULT_INDEX_RESOURCE, "index.html");
         ensureDefaultWebFile(DEFAULT_ROBOTS_RESOURCE, "robots.txt");
 
@@ -1666,10 +1669,13 @@ public class WebServiceImpl extends BaseService implements WebService {
         }
 
         private static String redactSensitivePath(String path) {
-            if (!path.startsWith("/quests/editor/")) return path;
-            String remainder = path.substring("/quests/editor/".length());
+            String prefix;
+            if (path.startsWith("/editor/")) prefix = "/editor/";
+            else if (path.startsWith("/quests/editor/")) prefix = "/quests/editor/";
+            else return path;
+            String remainder = path.substring(prefix.length());
             int slash = remainder.indexOf('/');
-            return "/quests/editor/[redacted]" + (slash < 0 ? "" : remainder.substring(slash));
+            return prefix + "[redacted]" + (slash < 0 ? "" : remainder.substring(slash));
         }
 
         private void writeEndpointResponse(HttpExchange exchange, Object result) throws IOException {

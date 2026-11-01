@@ -9,6 +9,9 @@ import dev.stemcraft.api.service.mailbox.MailSendRequest;
 import dev.stemcraft.api.service.playerstats.PlayerStatDefinition;
 import dev.stemcraft.api.service.playerreset.*;
 import dev.stemcraft.api.service.mailbox.MailSendResult;
+import dev.stemcraft.api.service.editor.EditorWebContext;
+import dev.stemcraft.api.service.editor.EditorWebModule;
+import dev.stemcraft.api.service.editor.EditorWebResponse;
 import dev.stemcraft.api.service.web.WebServiceRequest;
 import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
 import dev.stemcraft.api.util.PlayerUtil;
@@ -189,6 +192,23 @@ public final class QuestFeature extends BaseFeature {
         registerCommands();
         registerQuestCommand();
         api.web().registerEndpointHandler("/quests/editor", this::handleWebEditor);
+        if (api.editorWeb() != null) api.editorWeb().registerModule(new EditorWebModule() {
+            @Override public @NotNull String id() { return "quests"; }
+            @Override public @NotNull String title() { return "Quests"; }
+            @Override public @NotNull String icon() { return "Q"; }
+            @Override public @NotNull String description() { return "Create and manage quests."; }
+            @Override public @NotNull String readPermission() { return PERMISSION_ADMIN; }
+            @Override public @NotNull String writePermission() { return PERMISSION_ADMIN; }
+            @Override public @NotNull EditorWebResponse handle(@NotNull EditorWebContext context, @NotNull String path,
+                                                                 @NotNull WebServiceRequest request) {
+                if (!"/data".equals(path) || !"GET".equalsIgnoreCase(request.method()))
+                    return new EditorWebResponse(405, "text/plain; charset=utf-8", "The quest studio is opened in its workspace.");
+                String token = createEditorToken();
+                String url = api.web().getPublicUrl() + EDITOR_PATH + token;
+                return new EditorWebResponse(200, "application/json; charset=utf-8", EDITOR_GSON.toJson(Map.of(
+                    "kind", "iframe", "title", "Quest studio", "url", url)));
+            }
+        });
         registerMarkers();
         startNpcLifecycle();
         api.tasks().repeating(TIMEOUT_TASK, 20L, 20L, this::expireTimedQuests);
@@ -979,7 +999,6 @@ public final class QuestFeature extends BaseFeature {
             .tabCompletion("admin", "npc-spawned")
             .tabCompletion("admin", "player")
             .tabCompletion("admin", "reload")
-            .tabCompletion("admin", "editor")
             .executor((unused, command, context) -> execute(context))
             .register(STEMCraft.getPlugin());
     }
@@ -1090,16 +1109,12 @@ public final class QuestFeature extends BaseFeature {
             .hoverEvent(HoverEvent.showText(Component.text(hover)));
     }
 
-    private void openWebEditor(CommandContext ctx) {
+    private String createEditorToken() {
         byte[] bytes = new byte[12];
         SECURE_RANDOM.nextBytes(bytes);
         String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
         editorTokens.put(token, System.currentTimeMillis() + EDITOR_TOKEN_LIFETIME_MS);
-        String url = api.web().getPublicUrl() + EDITOR_PATH + token;
-        ctx.getSender().sendMessage(Component.text("Quest editor: ", NamedTextColor.YELLOW)
-            .append(Component.text(url, NamedTextColor.AQUA).clickEvent(ClickEvent.openUrl(url))
-                .hoverEvent(HoverEvent.showText(Component.text("Open the private quest editor")))));
-        ctx.getSender().sendMessage(Component.text("This private link expires in 24 hours or when the server restarts.", NamedTextColor.GRAY));
+        return token;
     }
 
     Object handleWebEditor(WebServiceRequest request) {
@@ -1364,9 +1379,9 @@ public final class QuestFeature extends BaseFeature {
     }
 
     private static final String QUEST_EDITOR_HTML = """
-        <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>STEMCraft Quest Editor</title><style>
-        :root{color-scheme:dark;--bg:#0d1218;--panel:#151d27;--line:#2e3b4b;--muted:#9aa9b9;--gold:#e3aa3c;--blue:#69b7ff}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:#edf2f7;font:14px system-ui,sans-serif}button,input,select,textarea{font:inherit}button{border:0;border-radius:6px;padding:8px 12px;background:#2a394a;color:#edf2f7;cursor:pointer}button.primary{background:var(--gold);color:#1b1408;font-weight:700}button.danger{background:#66343a}.top{height:62px;display:flex;align-items:center;gap:10px;padding:0 16px;background:var(--panel);border-bottom:1px solid var(--line)}.top h1{font-size:18px;margin-right:auto}.status{color:var(--muted)}.error{color:#ff9292}.app{display:grid;grid-template-columns:380px 1fr;height:calc(100vh - 62px)}aside{border-right:1px solid var(--line);background:#111821;display:flex;flex-direction:column;min-width:0}.tabs{display:flex;padding:12px;gap:6px}.tabs button{flex:1}.tabs .active{background:#34506d}.search{margin:0 12px 10px;width:calc(100% - 24px)}input,select,textarea{width:100%;background:#0d141c;border:1px solid #344354;border-radius:6px;color:#edf2f7;padding:8px}textarea{min-height:90px;resize:vertical}.list{overflow:auto;flex:1}.item{width:100%;text-align:left;border-bottom:1px solid #202b38;background:transparent;padding:7px 9px}.item.active{background:#243446}.item-main{display:block;width:100%;text-align:left;background:transparent;padding:4px 5px}.item-main small{display:block;color:var(--muted);margin-top:3px}.tree-mark{color:#607891;white-space:pre;font:12px ui-monospace,monospace;margin-right:5px}.tree-mark.root{color:#c8a85b}.flow{display:flex;align-items:baseline;gap:4px;padding:2px 5px 4px 24px;color:#8fa2b5;font-size:11px;font-style:italic;line-height:1.35}.flow button{display:inline;padding:0;background:transparent;color:#79bfff;font-size:11px;font-style:italic;text-align:left}.flow button:hover{text-decoration:underline}.flow-icon{width:13px;flex:0 0 13px;color:#c8a85b}.dot{color:#67d28a;margin-right:6px}.dot.off{color:#657383}.side-actions{display:flex;gap:6px;padding:12px;border-top:1px solid var(--line)}main{overflow:auto;padding:22px}.empty{color:var(--muted);padding:50px;text-align:center}.head{display:flex;align-items:center;gap:8px;margin-bottom:18px}.head h2{margin:0 auto 0 0}.card{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:16px;margin-bottom:15px}.card h3{margin:0 0 14px;font-size:15px;color:#bcd5ed}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}.wide{grid-column:1/-1}label{display:block;color:var(--muted);font-size:12px}label input,label select,label textarea{margin-top:5px;color:#edf2f7}.checks{display:flex;gap:20px;align-items:center}.checks label{font-size:14px}.checks input{width:auto;margin-right:7px}.row{border:1px solid #334253;border-radius:7px;padding:12px;margin:9px 0}.row-head{display:flex;gap:8px;align-items:center;margin-bottom:10px}.row-head strong{margin-right:auto}.small{width:auto}.advanced{display:none;height:calc(100vh - 105px)}.advanced textarea{height:calc(100% - 50px);font:13px/1.5 ui-monospace,monospace}.advanced-bar{display:flex;gap:8px;margin-bottom:10px}.advanced-bar select{max-width:180px}@media(max-width:800px){.app{grid-template-columns:1fr}aside{height:300px;border-right:0;border-bottom:1px solid var(--line)}main{padding:12px}.grid,.grid.three{grid-template-columns:1fr}}
-        </style></head><body><header class="top"><h1>STEMCraft Quest Editor</h1><button id="structured">Structured</button><button id="advanced">Advanced YAML</button><span id="status" class="status">Loading…</span><button id="discard">Discard</button><button id="save" class="primary">Save all</button></header><div class="app" id="structuredView"><aside><div class="tabs"><button data-kind="quests" class="active">Quests</button><button data-kind="npcs">NPCs</button></div><input id="search" class="search" placeholder="Search…"><div id="list" class="list"></div><div class="side-actions"><button id="new" class="primary">+ New</button><button id="duplicate">Duplicate</button></div></aside><main id="form"><div class="empty">Select a quest or NPC</div></main></div><main id="advancedView" class="advanced"><div class="advanced-bar"><select id="yamlFile"><option value="quests">quests.yml</option><option value="npcs">npcs.yml</option></select><button id="yamlReload">Reload</button><button id="yamlSave" class="primary">Save YAML</button></div><textarea id="yaml" spellcheck="false"></textarea></main><script>
+        <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>STEMCraft Quests</title><style>
+        :root{color-scheme:dark;--bg:#101827;--panel:#16263b;--line:#385779;--muted:#a8b7ca;--gold:#7dd3fc;--blue:#7dd3fc}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:#e8eef7;font:14px system-ui,sans-serif}button,input,select,textarea{font:inherit}button{border:0;border-radius:5px;padding:8px 12px;background:#1b344f;color:#e8eef7;cursor:pointer}button.primary{background:var(--gold);color:#06111d;font-weight:700}button.danger{background:#512c37}.top{height:62px;display:flex;align-items:center;gap:10px;padding:0 16px;background:var(--panel);border-bottom:1px solid var(--line)}.top h1{font-size:18px;margin-right:auto}.status{color:var(--muted)}.error{color:#ff9a9a}.app{display:grid;grid-template-columns:380px 1fr;height:calc(100vh - 62px)}aside{border-right:1px solid var(--line);background:#0f1b2a;display:flex;flex-direction:column;min-width:0}.tabs{display:flex;padding:12px;gap:6px}.tabs button{flex:1}.tabs .active{background:#1b3855}.search{margin:0 12px 10px;width:calc(100% - 24px)}input,select,textarea{width:100%;background:#0e1a2a;border:1px solid #456681;border-radius:5px;color:#e8eef7;padding:8px}textarea{min-height:90px;resize:vertical}.list{overflow:auto;flex:1}.item{width:100%;text-align:left;border-bottom:1px solid #21364d;background:transparent;padding:7px 9px}.item.active{background:#1b3855}.item-main{display:block;width:100%;text-align:left;background:transparent;padding:4px 5px}.item-main small{display:block;color:var(--muted);margin-top:3px}.tree-mark{color:#607891;white-space:pre;font:12px ui-monospace,monospace;margin-right:5px}.tree-mark.root{color:#7dd3fc}.flow{display:flex;align-items:baseline;gap:4px;padding:2px 5px 4px 24px;color:#8fa2b5;font-size:11px;font-style:italic;line-height:1.35}.flow button{display:inline;padding:0;background:transparent;color:#7dd3fc;font-size:11px;font-style:italic;text-align:left}.flow button:hover{text-decoration:underline}.flow-icon{width:13px;flex:0 0 13px;color:#7dd3fc}.dot{color:#67d28a;margin-right:6px}.dot.off{color:#657383}.side-actions{display:flex;gap:6px;padding:12px;border-top:1px solid var(--line)}main{overflow:auto;padding:22px}.empty{color:var(--muted);padding:50px;text-align:center}.head{display:flex;align-items:center;gap:8px;margin-bottom:18px}.head h2{margin:0 auto 0 0}.card{background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:16px;margin-bottom:15px}.card h3{margin:0 0 14px;font-size:15px;color:#cfe0f0}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}.wide{grid-column:1/-1}label{display:block;color:var(--muted);font-size:12px}label input,label select,label textarea{margin-top:5px;color:#e8eef7}.checks{display:flex;gap:20px;align-items:center}.checks label{font-size:14px}.checks input{width:auto;margin-right:7px}.row{border:1px solid #334e69;border-radius:5px;padding:12px;margin:9px 0}.row-head{display:flex;gap:8px;align-items:center;margin-bottom:10px}.row-head strong{margin-right:auto}.small{width:auto}.advanced{display:none;height:calc(100vh - 105px)}.advanced textarea{height:calc(100% - 50px);font:13px/1.5 ui-monospace,monospace}.advanced-bar{display:flex;gap:8px;margin-bottom:10px}.advanced-bar select{max-width:180px}@media(max-width:800px){.app{grid-template-columns:1fr}aside{height:300px;border-right:0;border-bottom:1px solid var(--line)}main{padding:12px}.grid,.grid.three{grid-template-columns:1fr}}
+        </style></head><body><header class="top"><h1>STEMCraft Quests</h1><button id="structured">Structured</button><button id="advanced">Advanced YAML</button><span id="status" class="status">Loading…</span><button id="discard">Discard</button><button id="save" class="primary">Save all</button></header><div class="app" id="structuredView"><aside><div class="tabs"><button data-kind="quests" class="active">Quests</button><button data-kind="npcs">NPCs</button></div><input id="search" class="search" placeholder="Search…"><div id="list" class="list"></div><div class="side-actions"><button id="new" class="primary">+ New</button><button id="duplicate">Duplicate</button></div></aside><main id="form"><div class="empty">Select a quest or NPC</div></main></div><main id="advancedView" class="advanced"><div class="advanced-bar"><select id="yamlFile"><option value="quests">quests.yml</option><option value="npcs">npcs.yml</option></select><button id="yamlReload">Reload</button><button id="yamlSave" class="primary">Save YAML</button></div><textarea id="yaml" spellcheck="false"></textarea></main><script>
         const base=location.pathname,dataUrl=base+'/data',apiUrl=base+'/api',q=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));let data,kind='quests',selected=null,dirty=false;
         const status=(text,error=false)=>{q('#status').textContent=text;q('#status').className=error?'status error':'status'};const mark=()=>{dirty=true;status('Unsaved changes')};const lines=s=>String(s??'').split('\\n').map(x=>x.trim()).filter(Boolean);const options=(values,current,blank=true)=>(blank?'<option value="">None</option>':'')+values.map(v=>`<option ${v===current?'selected':''}>${esc(v)}</option>`).join('');
         async function loadData(){status('Loading…');const r=await fetch(dataUrl,{cache:'no-store'});if(!r.ok)throw Error(await r.text());data=await r.json();dirty=false;if(!selected||!data[kind].some(x=>x.id===selected))selected=data[kind][0]?.id||null;render();status('Ready')}
@@ -1534,7 +1549,6 @@ public final class QuestFeature extends BaseFeature {
             case "npc" -> adminNpc(ctx);
             case "npc-spawned" -> showSpawnedNpcs(ctx);
             case "player" -> showPlayerQuestState(ctx);
-            case "editor" -> openWebEditor(ctx);
             case "reload" -> { reloadDefinitions(); registerMarkers(); ctx.success("Quest definitions reloaded."); }
             default -> showAdminMenu(ctx);
         }
@@ -1559,7 +1573,7 @@ public final class QuestFeature extends BaseFeature {
         ctx.getSender().sendMessage(button("[＋ Create]", "/quest admin create new-quest New Quest", "Create a quest")
             .append(Component.space()).append(button("[NPC profiles]", "/quest admin npcs", "Manage conditional NPCs"))
             .append(Component.space()).append(button("[Spawned NPCs]", "/quest admin npc-spawned", "Inspect spawned quest NPCs"))
-            .append(Component.space()).append(button("[Web editor]", "/quest admin editor", "Create a private editor link"))
+            .append(Component.space()).append(button("[Workshop]", "/editor", "Open the shared STEMCraft Workshop"))
             .append(Component.space()).append(button("[↻ Reload]", "/quest admin reload", "Reload quests.yml")));
     }
 

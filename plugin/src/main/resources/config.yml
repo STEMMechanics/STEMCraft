@@ -936,8 +936,11 @@ dragon-respawn:
   worlds: []
 
 distance_difficulty:
-  range: 500
+  range: 1000
   multiplier: 0.25
+  # Optional explicit selections. A profile is registered by a content pack
+  # and is never selected merely because that pack was loaded.
+  world-profiles: {}
 
 chat:
   format: "{prefix}{player}: {message}{suffix}"

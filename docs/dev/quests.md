@@ -49,7 +49,7 @@ Administrators with `stemcraft.quest.admin` use `/quest admin`. It displays clic
 
 `/quest admin npc-spawned [radius] [player]` lists currently spawned quest NPCs. With no radius it lists every spawned profile; with a radius it measures from the command caller or the named online player. Each result provides clickable teleport and linked-quest actions. `/quest admin player <online-player>` groups that player's quests into active, ready, available, cooldown, completed, locked, and disabled states.
 
-`/quest admin editor` creates a private web-editor URL valid for 24 hours or until the server restarts. Requests without a currently issued code receive `403 Not permitted`. The structured editor provides searchable quest and NPC lists; story, dialogue and spawn forms; NPC/material/entity dropdowns; repeatable objective and reward rows; prerequisite selection; enable/repeat switches; create, duplicate, delete, reorder, save and discard controls. Its quest list is displayed as a progression forest: starting quests are roots and chained quests are nested beneath their first prerequisite. Quests with multiple prerequisites appear once beneath their primary path and retain clickable join links to every prerequisite; forks, continuations and endings are also annotated. Siblings are ordered by the starting NPC's minimum player level and then title. The original YAML editor remains under **Advanced YAML**. Saves are validated, keep `.bak` copies, and reload immediately. Treat the URL as a password and do not share it.
+`/editor` creates one private STEMCraft editor URL valid for 24 hours or until the server restarts. Administrators with `stemcraft.quest.admin` see Quests in the shared sidebar. Requests without a currently issued code receive `403 Not permitted`. The structured editor provides searchable quest and NPC lists; story, dialogue and spawn forms; NPC/material/entity dropdowns; repeatable objective and reward rows; prerequisite selection; enable/repeat switches; create, duplicate, delete, reorder, save and discard controls. Its quest list is displayed as a progression forest: starting quests are roots and chained quests are nested beneath their first prerequisite. Quests with multiple prerequisites appear once beneath their primary path and retain clickable join links to every prerequisite; forks, continuations and endings are also annotated. Siblings are ordered by the starting NPC's minimum player level and then title. The original YAML editor remains under **Advanced YAML**. Saves are validated, keep `.bak` copies, and reload immediately. Treat the URL as a password and do not share it.
 
 Conditional quest NPCs may be killed, but drop no items or experience. A killed profile is recorded for the current Minecraft day and cannot respawn until the following day, when its normal relevance, timing, spacing, biome, level, and daily-chance rules apply again.
 
@@ -86,7 +86,7 @@ A completed collect objective that requires its items at hand-in is only conside
 /quest admin edit <id> spawnnpc <start|end> [radius]
 /quest admin delete <id> confirm
 /quest admin reload
-/quest admin editor
+/editor
 ```
 
 `startnpc`, `endnpc`, and NPC objectives bind the living entity the administrator is looking at within eight blocks. `spawnnpc` creates a persistent, invulnerable, stationary villager at the administrator when the radius is zero; a positive radius chooses a random surface position around the administrator. Existing or externally managed NPC entities may be bound instead.

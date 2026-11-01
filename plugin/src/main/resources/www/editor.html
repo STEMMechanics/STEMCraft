@@ -1,0 +1,822 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>STEMCraft Editor</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            --page: #101827;
+            --page-deep: #0b1320;
+            --panel: #16263b;
+            --panel-alt: #172d46;
+            --line: #385779;
+            --line-soft: #29445f;
+            --text: #e8eef7;
+            --muted: #a8b7ca;
+            --accent: #7dd3fc;
+            --accent-strong: #38bdf8;
+            --good: #8be0b0;
+            --warn: #f3c969;
+            --danger: #ff9a9a;
+            background: var(--page);
+            color: var(--text);
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: radial-gradient(circle at top, #1e3a5f, var(--page) 54%);
+            color: var(--text);
+        }
+        body, button, input, select, textarea { font: inherit; }
+        button { cursor: pointer; }
+        button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+        }
+        .app {
+            min-height: 100vh;
+            display: grid;
+            grid-template-columns: 15.5rem minmax(0, 1fr);
+            transition: grid-template-columns .18s ease;
+        }
+        .sidebar {
+            min-width: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 1.15rem;
+            padding: 1.15rem;
+            background: rgb(9 16 27 / 94%);
+            border-right: 1px solid var(--line);
+            transition: padding .18s ease, opacity .18s ease;
+        }
+        .sidebar-brand {
+            display: flex;
+            align-items: center;
+            gap: .7rem;
+            white-space: nowrap;
+        }
+        .brand-mark {
+            display: grid;
+            place-items: center;
+            width: 2.3rem;
+            height: 2.3rem;
+            border: 1px solid #5c86ad;
+            border-radius: .45rem;
+            color: var(--accent);
+            background: #172d46;
+            font-size: .74rem;
+            font-weight: 800;
+            letter-spacing: .04em;
+        }
+        .sidebar-brand strong { display: block; font-size: 1rem; }
+        .sidebar-brand small { display: block; margin-top: .1rem; color: var(--muted); }
+        .sidebar-close { margin-left: auto; }
+        .sidebar-note { margin: 0; color: var(--muted); font-size: .82rem; line-height: 1.45; }
+        .module-nav { display: grid; gap: .3rem; }
+        .module-nav button {
+            display: flex;
+            align-items: center;
+            gap: .65rem;
+            width: 100%;
+            min-width: 0;
+            padding: .65rem .7rem;
+            border: 1px solid transparent;
+            border-radius: .38rem;
+            color: var(--muted);
+            background: transparent;
+            text-align: left;
+        }
+        .module-nav button:hover { color: var(--text); background: rgb(125 211 252 / 8%); }
+        .module-nav button.active {
+            color: var(--text);
+            border-color: #4b7195;
+            background: #1b3855;
+        }
+        .module-icon {
+            display: grid;
+            place-items: center;
+            flex: 0 0 1.55rem;
+            height: 1.55rem;
+            border: 1px solid #53799b;
+            border-radius: .32rem;
+            color: var(--accent);
+            font-size: .75rem;
+            font-weight: 800;
+        }
+        .sidebar-footer {
+            margin-top: auto;
+            padding-top: .9rem;
+            border-top: 1px solid var(--line-soft);
+            color: var(--muted);
+            font-size: .76rem;
+            line-height: 1.5;
+        }
+        body.sidebar-closed .app { grid-template-columns: 0 minmax(0, 1fr); }
+        body.sidebar-closed .sidebar { padding-inline: 0; border-right: 0; opacity: 0; }
+        .main { min-width: 0; padding: 1.35rem clamp(1rem, 4vw, 3.5rem) 3rem; }
+        .topbar {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            max-width: 82rem;
+            margin: 0 auto 1.5rem;
+        }
+        .topbar-content { min-width: 0; flex: 1; }
+        .topbar-actions { display: flex; align-items: center; gap: .65rem; }
+        .eyebrow {
+            margin: 0 0 .35rem;
+            color: var(--accent);
+            font-size: .74rem;
+            font-weight: 750;
+            letter-spacing: .16em;
+            text-transform: uppercase;
+        }
+        h1, h2, h3, p { margin-top: 0; }
+        h1 { margin-bottom: .35rem; font-size: clamp(1.55rem, 3vw, 2.35rem); }
+        h2 { margin-bottom: .35rem; font-size: 1.35rem; }
+        h3 { margin-bottom: .65rem; font-size: 1rem; }
+        .subtitle { max-width: 50rem; margin-bottom: 0; color: var(--muted); line-height: 1.5; }
+        .button, button.button {
+            border: 1px solid #52789b;
+            border-radius: .35rem;
+            padding: .54rem .78rem;
+            color: var(--text);
+            background: #1b344f;
+            font-weight: 650;
+        }
+        .button:hover { border-color: var(--accent); background: #214361; }
+        .button.primary { border-color: #6eb9df; color: #06111d; background: var(--accent); }
+        .button.primary:hover { background: #a5e5ff; }
+        .button.good { border-color: #63b58c; background: #1c4f42; }
+        .button.warn { border-color: #c8a65d; background: #4d4125; }
+        .button.danger { border-color: #c27078; background: #512c37; }
+        .button.small { padding: .4rem .6rem; font-size: .82rem; }
+        .icon-button {
+            display: grid;
+            place-items: center;
+            width: 2.15rem;
+            height: 2.15rem;
+            padding: 0;
+            border: 1px solid var(--line);
+            border-radius: .35rem;
+            color: var(--text);
+            background: var(--panel);
+        }
+        .icon-button:hover { border-color: var(--accent); }
+        .status { color: var(--muted); font-size: .82rem; white-space: nowrap; }
+        .status.good { color: var(--good); }
+        .status.bad { color: var(--danger); }
+        .workspace, .notice { max-width: 82rem; margin-inline: auto; }
+        .notice {
+            display: none;
+            margin-bottom: 1rem;
+            padding: .72rem .85rem;
+            border: 1px solid var(--warn);
+            border-radius: .35rem;
+            color: #ffe9a8;
+            background: #3b321e;
+        }
+        .notice.show { display: block; }
+        .page-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-bottom: 1.1rem;
+        }
+        .page-head p:last-child { max-width: 54rem; margin-bottom: 0; color: var(--muted); line-height: 1.5; }
+        .access {
+            flex: 0 0 auto;
+            padding: .32rem .55rem;
+            border: 1px solid var(--line);
+            border-radius: .3rem;
+            color: var(--muted);
+            font-size: .76rem;
+            white-space: nowrap;
+        }
+        .access.write { color: var(--good); border-color: #4f8f72; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); gap: 1rem; }
+        .card {
+            min-width: 0;
+            padding: 1rem;
+            border: 1px solid var(--line);
+            border-radius: .42rem;
+            background: rgb(22 38 59 / 94%);
+        }
+        .card p { color: var(--muted); line-height: 1.5; }
+        .card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; margin-top: .85rem; }
+        .document-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: .75rem;
+            margin-bottom: .7rem;
+        }
+        .document-head small { display: block; margin-top: .2rem; }
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            padding: .2rem .45rem;
+            border: 1px solid var(--line);
+            border-radius: .25rem;
+            color: var(--muted);
+            font-size: .75rem;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .pill.good { color: var(--good); border-color: #4f8f72; }
+        .pill.bad { color: var(--danger); border-color: #a35562; }
+        .pill.warn { color: var(--warn); border-color: #9c8042; }
+        .muted, .tiny { color: var(--muted); }
+        .tiny { font-size: .8rem; }
+        .list { display: grid; gap: .45rem; max-height: 32rem; overflow: auto; }
+        .list-button {
+            width: 100%;
+            padding: .65rem .7rem;
+            border: 1px solid var(--line-soft);
+            border-radius: .32rem;
+            color: var(--text);
+            background: #14253a;
+            text-align: left;
+        }
+        .list-button:hover, .list-button.active { border-color: var(--accent); background: #1b3855; }
+        .list-button strong, .list-button small { display: block; }
+        .list-button small { margin-top: .18rem; color: var(--muted); }
+        .field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: .8rem; }
+        label { display: grid; gap: .32rem; color: #d7e3f0; font-size: .83rem; font-weight: 650; }
+        label.wide { grid-column: 1 / -1; }
+        input, select, textarea {
+            width: 100%;
+            border: 1px solid #456681;
+            border-radius: .3rem;
+            padding: .55rem .62rem;
+            color: var(--text);
+            background: #0e1a2a;
+        }
+        input:disabled, select:disabled, textarea:disabled, fieldset:disabled { opacity: .66; }
+        textarea {
+            min-height: 17rem;
+            resize: vertical;
+            font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+            font-size: .84rem;
+            line-height: 1.5;
+        }
+        textarea.small-area { min-height: 5.5rem; }
+        fieldset { min-width: 0; padding: 0; border: 0; }
+        .split { display: grid; grid-template-columns: minmax(14rem, 20rem) minmax(0, 1fr); gap: 1rem; align-items: start; }
+        .document-panel { margin-top: 1rem; }
+        .empty {
+            padding: 1.8rem;
+            border: 1px dashed #496a88;
+            border-radius: .35rem;
+            color: var(--muted);
+            text-align: center;
+        }
+        .errors { margin: .6rem 0 0; padding-left: 1.1rem; color: #ffc7c7; font-size: .82rem; line-height: 1.45; }
+        .table-summary { display: grid; gap: .5rem; }
+        .rule-summary {
+            padding: .65rem;
+            border: 1px solid var(--line-soft);
+            border-radius: .3rem;
+            background: #14253a;
+        }
+        .rule-summary strong { display: block; margin-bottom: .2rem; }
+        .rule-summary div { color: var(--muted); font-size: .8rem; line-height: 1.45; }
+        .sim-result { margin-top: .8rem; padding: .7rem; border: 1px solid var(--line-soft); border-radius: .3rem; background: #0e1a2a; }
+        .sim-drop { display: flex; justify-content: space-between; gap: 1rem; padding: .35rem 0; border-bottom: 1px solid #29405a; }
+        .sim-drop:last-child { border-bottom: 0; }
+        .frame-wrap { overflow: hidden; border: 1px solid var(--line); border-radius: .42rem; background: var(--page); }
+        iframe { display: block; width: 100%; min-height: 76vh; border: 0; background: var(--page); }
+        .hidden { display: none !important; }
+        .backdrop { display: none; }
+        @media (max-width: 56rem) {
+            .app { display: block; }
+            .sidebar {
+                position: fixed;
+                z-index: 20;
+                inset: 0 auto 0 0;
+                width: 15.5rem;
+                box-shadow: 1rem 0 3rem rgb(0 0 0 / 28%);
+                transform: translateX(-105%);
+                transition: transform .18s ease;
+            }
+            body.sidebar-open .sidebar { transform: translateX(0); }
+            body.sidebar-closed .sidebar { padding: 1.15rem; opacity: 1; }
+            .backdrop { position: fixed; z-index: 10; inset: 0; background: rgb(0 0 0 / 52%); }
+            body.sidebar-open .backdrop { display: block; }
+            .main { padding-top: 1rem; }
+            .split { grid-template-columns: 1fr; }
+        }
+        @media (min-width: 57rem) {
+            .sidebar-close { display: none; }
+        }
+        @media (max-width: 38rem) {
+            .topbar, .page-head { display: block; }
+            .topbar-actions { margin-top: .9rem; }
+            .page-head .access { display: inline-flex; margin-top: .75rem; }
+        }
+    </style>
+    <link rel="stylesheet" href="/assets/site.css">
+</head>
+<body class="editor-page sidebar-open">
+<div class="app">
+    <aside class="sidebar" aria-label="Editor navigation">
+        <div class="sidebar-brand">
+            <a class="sidebar-logo-link" href="/" aria-label="STEMCraft home">
+                <img class="sidebar-logo" src="/assets/branding/stemcraft-logo.svg" alt="STEMCraft">
+            </a>
+            <button id="sidebarClose" class="icon-button sidebar-close" type="button" aria-label="Close navigation">×</button>
+        </div>
+        <p class="sidebar-kicker">Private server editor</p>
+        <p class="sidebar-note">Configure the server from one place. Changes are checked before they are loaded.</p>
+        <nav id="moduleNav" class="module-nav"></nav>
+        <div class="sidebar-footer">Use the sidebar to move between server editors. Access is limited to the permissions in your private link.</div>
+    </aside>
+    <div id="sidebarBackdrop" class="backdrop"></div>
+    <main class="main">
+        <header class="topbar">
+            <button id="sidebarToggle" class="icon-button" type="button" aria-label="Toggle navigation" aria-expanded="true">☰</button>
+            <div class="topbar-content">
+                <p class="eyebrow">STEMMechanics / private workspace</p>
+                <h1 id="pageTitle">STEMCraft Editor</h1>
+                <p id="pageSubtitle" class="subtitle">Choose an editor.</p>
+            </div>
+            <div class="topbar-actions">
+                <span id="status" class="status">Starting…</span>
+                <button id="refresh" class="button small" type="button">Refresh</button>
+            </div>
+        </header>
+        <div id="notice" class="notice" role="status"></div>
+        <section id="workspace" class="workspace"><div class="empty">Loading editor…</div></section>
+    </main>
+</div>
+<script>
+(() => {
+    const base = location.pathname.replace(/\/$/, '');
+    const q = selector => document.querySelector(selector);
+    const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    const apiUrl = (module, endpoint) => base + '/api/' + module + '/' + (endpoint || 'data');
+    let modules = [];
+    let activeId = null;
+    let activeData = null;
+    let currentDocument = null;
+    let selectedItem = null;
+    let selectedLoot = null;
+
+    function setSidebar(open) {
+        document.body.classList.toggle('sidebar-open', open);
+        document.body.classList.toggle('sidebar-closed', !open);
+        q('#sidebarToggle').setAttribute('aria-expanded', String(open));
+        localStorage.setItem('stemcraft-editor-sidebar', open ? 'open' : 'closed');
+    }
+
+    const storedSidebar = localStorage.getItem('stemcraft-editor-sidebar');
+    setSidebar(storedSidebar !== 'closed');
+    q('#sidebarToggle').onclick = () => setSidebar(document.body.classList.contains('sidebar-closed'));
+    q('#sidebarClose').onclick = () => setSidebar(false);
+    q('#sidebarBackdrop').onclick = () => setSidebar(false);
+
+    async function request(url, options = {}) {
+        const response = await fetch(url, options);
+        const type = response.headers.get('content-type') || '';
+        const value = type.includes('json') ? await response.json() : await response.text();
+        if (!response.ok) {
+            const message = typeof value === 'object' ? (value.message || value.error || JSON.stringify(value)) : value;
+            throw new Error(message || ('Request failed (' + response.status + ')'));
+        }
+        return value;
+    }
+
+    function setStatus(message, bad = false) {
+        const element = q('#status');
+        element.textContent = message;
+        element.className = 'status ' + (bad ? 'bad' : 'good');
+    }
+
+    function notice(message, bad = false) {
+        const element = q('#notice');
+        element.textContent = message;
+        element.className = 'notice ' + (message ? 'show ' : '') + (bad ? 'bad' : '');
+    }
+
+    function moduleInfo() { return modules.find(module => module.id === activeId); }
+
+    function pageHead(title, description) {
+        const info = moduleInfo();
+        const writable = Boolean(info && info.writable);
+        return '<div class="page-head"><div><p class="eyebrow">Editor</p><h2>' + esc(title) +
+            '</h2><p>' + esc(description) + '</p></div><span class="access ' + (writable ? 'write' : '') + '">' +
+            (writable ? 'Editable' : 'Read only') + '</span></div>';
+    }
+
+    function renderNav() {
+        q('#moduleNav').innerHTML = modules.map(module =>
+            '<button class="' + (module.id === activeId ? 'active' : '') + '" data-module="' + esc(module.id) +
+            '" type="button"><span class="module-icon">' + esc(module.icon || module.title.slice(0, 1)) +
+            '</span><span>' + esc(module.title) + '</span></button>').join('');
+        q('#moduleNav').querySelectorAll('[data-module]').forEach(button => {
+            button.onclick = () => { setSidebar(false); openModule(button.dataset.module); };
+        });
+    }
+
+    async function openModule(id) {
+        activeId = id;
+        currentDocument = null;
+        selectedItem = null;
+        selectedLoot = null;
+        renderNav();
+        const info = moduleInfo();
+        q('#pageTitle').textContent = info?.title || 'STEMCraft Editor';
+        q('#pageSubtitle').textContent = info?.description || '';
+        q('#workspace').innerHTML = '<div class="empty">Opening editor…</div>';
+        notice('');
+        try {
+            activeData = await request(apiUrl(id, 'data'));
+            renderModule();
+            setStatus('Ready');
+        } catch (error) {
+            q('#workspace').innerHTML = '<div class="empty">' + esc(error.message) + '</div>';
+            setStatus('Could not open', true);
+        }
+    }
+
+    function renderModule() {
+        if (!activeData) return;
+        if (activeData.kind === 'iframe') return renderQuestFrame(activeData);
+        if (activeData.kind === 'packs') return renderPacks(activeData);
+        if (activeData.kind === 'items') return renderItems(activeData);
+        if (activeData.kind === 'loot') return renderLoot(activeData);
+        q('#workspace').innerHTML = '<div class="empty">This editor is not available yet.</div>';
+    }
+
+    function renderQuestFrame(data) {
+        q('#workspace').innerHTML = pageHead('Quests', 'Create and manage quests.') +
+            '<div class="frame-wrap"><iframe title="Quests" src="' + esc(data.url) + '"></iframe></div>';
+        const frame = q('iframe');
+        frame.onload = () => {
+            try {
+                const style = frame.contentDocument.createElement('style');
+                style.textContent = 'body{font-family:"Poppins","Avenir Next","Segoe UI",sans-serif!important;background:#eef7ff!important;color:#0f2742!important}button,input,select,textarea{font-family:inherit!important;border-radius:9px!important;border-color:#d8e5f0!important;background:#fff!important;color:#0f2742!important}';
+                frame.contentDocument.head.appendChild(style);
+            } catch (ignored) { }
+        };
+    }
+
+    function renderPacks(data) {
+        const writable = Boolean(moduleInfo()?.writable);
+        const cards = (data.packs || []).map(pack => {
+            const state = pack.valid ? (pack.enabled ? '<span class="pill good">Valid</span>' : '<span class="pill">Disabled</span>') :
+                '<span class="pill bad">Invalid</span>';
+            const errors = (pack.errors || []).slice(0, 4).map(error => '<li>' + esc(error) + '</li>').join('');
+            const actions = writable ?
+                '<button class="button small" data-pack-action="reload" data-pack="' + esc(pack.id) + '">Reload</button>' +
+                (pack.enabled ? '<button class="button small warn" data-pack-action="disable" data-pack="' + esc(pack.id) + '">Disable</button>' :
+                    '<button class="button small good" data-pack-action="enable" data-pack="' + esc(pack.id) + '">Enable</button>') +
+                '<button class="button small danger" data-pack-action="delete" data-pack="' + esc(pack.id) + '">Delete</button>' :
+                '<span class="pill">Read only</span>';
+            return '<article class="card"><div class="document-head"><div><h3>' + esc(pack.id) +
+                '</h3><small class="muted">' + esc(pack.description || 'Content pack') + '</small></div>' + state +
+                '</div><p class="tiny">' + (pack.dependencies?.length ? 'Dependencies: ' + esc(pack.dependencies.join(', ')) : 'No dependencies.') +
+                (pack.resourcePackRebuildRequired ? ' Resource pack rebuild required.' : '') + '</p>' +
+                (errors ? '<ul class="errors">' + errors + '</ul>' : '') +
+                '<div class="card-actions"><button class="button small" data-pack-action="validate" data-pack="' +
+                esc(pack.id) + '">Validate</button>' + actions + '<button class="button small" data-pack-doc="' +
+                esc(pack.id) + '">Open files</button></div></article>';
+        }).join('');
+        const options = (data.documents || []).map(document =>
+            '<option value="' + esc(document.pack + '|' + document.file) + '">' + esc(document.label) + '</option>').join('');
+        const create = writable ?
+            '<form id="pack-create" class="card-actions"><input name="id" placeholder="my-pack" pattern="[a-z0-9][a-z0-9_-]*" required>' +
+            '<select name="template"><option value="">Blank pack</option><option value="workshop">Workshop example</option></select>' +
+            '<button class="button primary" type="submit">Create pack</button></form>' :
+            '<span class="access">Read only</span>';
+        q('#workspace').innerHTML = pageHead('Packs', 'Manage content packs and their files.') +
+            '<div class="grid">' + (cards || '<div class="empty">No content packs found.</div>') + '</div>' +
+            '<section class="card document-panel"><div class="document-head"><div><h3>New pack</h3>' +
+            '<p class="tiny">Create a blank pack or copy the workshop example.</p></div>' + create + '</div></section>' +
+            '<section class="card document-panel"><div class="document-head"><div><h3>Pack files</h3>' +
+            '<p class="tiny">Use the source editor for detailed YAML changes.</p></div><div class="card-actions">' +
+            '<select id="pack-doc"><option value="">Choose a file</option>' + options + '</select>' +
+            '<button id="pack-doc-open" class="button small primary" type="button">Open</button></div></div>' +
+            '<div id="document-panel"><div class="empty">Choose a file to inspect it.</div></div></section>';
+        bindPackActions();
+        const createForm = q('#pack-create');
+        if (createForm) createForm.onsubmit = async event => {
+            event.preventDefault();
+            const form = new FormData(event.target);
+            try {
+                const result = await request(apiUrl('packs', 'action'), {method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({action: 'create', id: form.get('id'), template: form.get('template')})});
+                notice(result.message || 'Pack created.');
+                await openModule('packs');
+            } catch (error) { notice(error.message, true); setStatus('Needs attention', true); }
+        };
+        bindDocumentPicker('packs', 'pack-doc', 'pack-doc-open');
+        q('#workspace').querySelectorAll('[data-pack-doc]').forEach(button => button.onclick = () => {
+            const packId = button.dataset.packDoc;
+            const option = [...q('#pack-doc').options].find(value => value.value.startsWith(packId + '|'));
+            if (option) {
+                q('#pack-doc').value = option.value;
+                openSelectedDocument('packs', 'pack-doc');
+                return;
+            }
+            notice('This pack has no editable configuration files.', true);
+        });
+    }
+
+    function bindPackActions() {
+        q('#workspace').querySelectorAll('[data-pack-action]').forEach(button => button.onclick = async () => {
+            const action = button.dataset.packAction;
+            const id = button.dataset.pack;
+            if (action === 'delete' && !confirm('Delete ' + id + '? It will be moved to recoverable trash.')) return;
+            try {
+                setStatus('Working…');
+                const result = await request(apiUrl('packs', 'action'), {method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({action, id})});
+                notice(result.message || 'Pack updated.');
+                await openModule('packs');
+            } catch (error) { notice(error.message, true); setStatus('Needs attention', true); }
+        });
+    }
+
+    function renderItems(data) {
+        const items = data.items || [];
+        const writable = Boolean(moduleInfo()?.writable);
+        const defaultPack = (data.packs || []).find(pack => pack.enabled)?.id || data.packs?.[0]?.id || '';
+        const packOptions = (data.packs || []).map(pack => '<option value="' + esc(pack.id) + '"' +
+            (pack.id === defaultPack ? ' selected' : '') + '>' + esc(pack.id) + (pack.enabled ? '' : ' (disabled)') + '</option>').join('');
+        const materialOptions = (data.materials || []).map(material => '<option value="' + esc(material) + '"></option>').join('');
+        const list = items.map(item => '<button class="list-button ' + (selectedItem === item.id ? 'active' : '') +
+            '" data-item="' + esc(item.id) + '" type="button"><strong>' + esc(item.displayName) +
+            '</strong><small>' + esc(item.id) + ' · ' + esc(item.material) + '</small></button>').join('');
+        const create = writable ? '<form id="item-create"><div class="field-grid"><label>Pack<select name="pack">' + packOptions +
+            '</select></label><label>File<input name="file" value="configs/items.yml"></label><label>Item ID<input name="id" pattern="[a-z0-9][a-z0-9_-]*" placeholder="forest-shard" required></label>' +
+            '<label>Material<input name="material" list="item-materials" placeholder="AMETHYST_SHARD" required></label><label class="wide">Name (optional)<input name="name" placeholder="Forest Shard"></label></div>' +
+            '<div class="card-actions"><button class="button primary" type="submit">Create item</button></div></form>' :
+            '<div class="empty">This link can view items but cannot publish them.</div>';
+        q('#workspace').innerHTML = pageHead('Items', 'Edit custom item definitions.') +
+            '<section class="card"><div class="document-head"><div><h3>New item</h3><p class="tiny">Create a definition, then edit its details below.</p></div></div>' +
+            create + '<datalist id="item-materials">' + materialOptions + '</datalist></section>' +
+            '<div class="split"><section class="card"><h3>Custom items</h3><div class="list">' +
+            (list || '<div class="empty">No custom items found.</div>') + '</div></section>' +
+            '<section id="item-form" class="card"><div class="empty">Choose an item.</div></section></div>';
+        const createForm = q('#item-create');
+        if (createForm) createForm.onsubmit = async event => {
+            event.preventDefault();
+            const values = new FormData(createForm);
+            try {
+                setStatus('Creating item…');
+                const result = await request(apiUrl('items', 'create'), {method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(Object.fromEntries(values.entries()))});
+                notice(result.message || 'Item created.');
+                await openModule('items');
+            } catch (error) { notice(error.message, true); setStatus('Needs attention', true); }
+        };
+        q('#workspace').querySelectorAll('[data-item]').forEach(button => button.onclick = () => {
+            selectedItem = button.dataset.item;
+            renderItems(data);
+        });
+        if (selectedItem) renderItemForm(items.find(item => item.id === selectedItem));
+    }
+
+    function renderItemForm(item) {
+        if (!item) return;
+        const canWrite = Boolean(moduleInfo()?.writable);
+        const values = item.values || {};
+        const stats = values.stats || {};
+        const enchantments = values.enchantments && typeof values.enchantments === 'object' ?
+            Object.entries(values.enchantments).map(([key, value]) => key + '=' + value).join(',') : '';
+        const lore = Array.isArray(values.lore) ? values.lore.join('\n') : (values.lore || '');
+        const save = canWrite ? '<button class="button primary" type="submit">Save item</button>' : '';
+        q('#item-form').innerHTML = '<div class="document-head"><div><h3>' + esc(item.displayName) +
+            '</h3><small class="muted">' + esc(item.pack) + ' / ' + esc(item.file) + '</small></div><span class="pill ' +
+            (canWrite ? 'good">Editable' : '">Read only') + '</span></div><form id="item-editor-form"><fieldset' +
+            (canWrite ? '' : ' disabled') + '><div class="field-grid"><label>Name<input name="name" value="' +
+            esc(values.name || '') + '"></label><label>Material<input name="material" value="' +
+            esc(values.material || item.material) + '"></label><label>Colour<input name="color" value="' +
+            esc(values.color || '') + '"></label><label>Texture<input name="texture" value="' +
+            esc(values.texture || '') + '"></label><label>Durability<input name="durability" type="number" min="1" value="' +
+            esc(values['max-damage'] || '') + '"></label><label>Attack damage<input name="attack-damage" type="number" step="any" value="' +
+            esc(stats['attack-damage'] || '') + '"></label><label>Attack speed<input name="attack-speed" type="number" step="any" value="' +
+            esc(stats['attack-speed'] || '') + '"></label><label>Armour<input name="armor" type="number" step="any" value="' +
+            esc(stats.armor || '') + '"></label><label>Armour toughness<input name="toughness" type="number" step="any" value="' +
+            esc(stats.toughness || '') + '"></label><label class="wide">Lore<textarea class="small-area" name="lore">' +
+            esc(lore) + '</textarea></label><label class="wide">Enchantments<input name="enchantments" value="' +
+            esc(enchantments) + '" placeholder="sharpness=2,unbreaking=1"></label></div><details><summary>Abilities JSON</summary>' +
+            '<textarea class="small-area" name="abilities">' + esc(JSON.stringify(values.abilities || {}, null, 2)) +
+            '</textarea></details><div class="card-actions">' + save + '<button class="button" id="item-reload" type="button">Reload</button>' +
+            '</div></fieldset></form>' + (canWrite ? '' : '<p class="tiny">This link can view items but cannot publish them.</p>');
+        q('#item-editor-form').onsubmit = async event => {
+            event.preventDefault();
+            if (!canWrite) return;
+            const form = new FormData(event.target);
+            const fields = Object.fromEntries(['name','material','color','texture','durability','attack-damage','attack-speed','armor','toughness','lore','enchantments']
+                .map(key => [key, form.get(key) || '']));
+            try { fields.abilities = JSON.parse(form.get('abilities') || '{}'); }
+            catch (error) { notice('Abilities must be valid JSON.', true); return; }
+            try {
+                setStatus('Saving item…');
+                const result = await request(apiUrl('items', 'save'), {method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({id: item.id, revision: item.revision, fields})});
+                notice(result.message || 'Item saved.');
+                await openModule('items');
+            } catch (error) { notice(error.message, true); setStatus('Needs attention', true); }
+        };
+        q('#item-reload').onclick = () => openModule('items');
+    }
+
+    function renderLoot(data) {
+        const writable = Boolean(moduleInfo()?.writable);
+        const definitions = data.definitions || [];
+        if (!selectedLoot && definitions.length) selectedLoot = lootKey(definitions[0]);
+        const selected = definitions.find(definition => lootKey(definition) === selectedLoot);
+        const defaultPack = (data.packs || []).find(pack => pack.enabled)?.id || data.packs?.[0]?.id || '';
+        const packs = (data.packs || []).map(pack => '<option value="' + esc(pack.id) + '"' +
+            (pack.id === defaultPack ? ' selected' : '') + '>' + esc(pack.id) +
+            (pack.enabled ? '' : ' (disabled)') + '</option>').join('');
+        const files = (data.documents || []).map(document => '<option value="' + esc(document.pack + '|' + document.file) + '">' +
+            esc(document.pack + ' / ' + document.file) + '</option>').join('');
+        const items = (data.items || []).map(item => '<option value="' + esc(item) + '"></option>').join('');
+        const blocks = (data.blocks || []).map(block => '<option value="' + esc(block) + '"></option>').join('');
+        const tableList = definitions.map(definition => '<button class="list-button ' +
+            (lootKey(definition) === selectedLoot ? 'active' : '') + '" type="button" data-loot-table="' +
+            esc(lootKey(definition)) + '"><strong>' + esc(definition.id) + '</strong><small>' +
+            esc(definition.pack + ' / ' + definition.file) + '</small></button>').join('');
+        const summary = selected ? renderLootSummary(selected) : '<div class="empty">Create a rule to make the first table.</div>';
+        const createForm = writable ? '<form id="loot-create"><div class="field-grid"><label>Pack<select name="pack">' +
+            packs + '</select></label><label>File<input name="file" list="loot-files" value="configs/loot.yml">' +
+            '</label><label>Table ID<input name="table" placeholder="tree-drops" pattern="[a-z0-9][a-z0-9-]*" required></label>' +
+            '<label>Trigger<select name="target"><option value="block-break">Block broken</option><option value="mob-death">Mob defeated</option></select></label>' +
+            '<label id="loot-block-field" class="wide">Block type(s)<input name="block" list="block-types" placeholder="OAK_LOG, BIRCH_LOG">' +
+            '</label><label id="loot-entity-field" class="wide hidden">Entity type<input name="entity" placeholder="ZOMBIE"></label>' +
+            '<label class="wide">Drop item<input name="item" list="loot-items" placeholder="DIAMOND or pack:item-id" required></label>' +
+            '<label>Chance<input name="chance" type="number" min="0" max="1" step="0.01" value="1"></label>' +
+            '<label>Minimum amount<input name="min" type="number" min="1" value="1"></label><label>Maximum amount<input name="max" type="number" min="1" value="1"></label>' +
+            '<label>World (optional)<input name="world" placeholder="survival"></label><label>Biome (optional)<input name="biome" placeholder="minecraft:forest"></label>' +
+            '</div><div class="card-actions"><button class="button primary" type="submit">Add loot rule</button></div>' +
+            '<p class="tiny">Add a rule to an existing table or create a new one. Use a Minecraft material or a custom item ID.</p></form>' :
+            '<div class="empty">This link can view loot but cannot save it.</div>';
+        q('#workspace').innerHTML = pageHead('Loot', 'Define drops for mobs and block breaks.') +
+            '<div class="grid"><section class="card"><div class="document-head"><div><h3>Add loot rule</h3>' +
+            '<p class="tiny">Choose the event, the block or mob, and the item that should drop.</p></div></div>' + createForm +
+            '<datalist id="loot-files">' + files + '</datalist><datalist id="loot-items">' + items +
+            '</datalist><datalist id="block-types">' + blocks + '</datalist></section>' +
+            '<section class="card"><h3>Tables</h3><div class="list">' + (tableList || '<div class="empty">No tables found.</div>') +
+            '</div></section></div><div class="grid document-panel"><section class="card"><h3>Selected table</h3>' +
+            '<div id="loot-summary">' + summary + '</div></section><section class="card"><h3>Test a table</h3>' +
+            '<form id="loot-sim"><div class="field-grid"><label>Table<select name="table">' +
+            (data.tables || []).map(table => '<option value="' + esc(table) + '">' + esc(table) + '</option>').join('') +
+            '</select></label><label>Rolls<input name="rolls" type="number" min="1" max="100000" value="10"></label>' +
+            '<label>Mob (optional)<input name="entity" placeholder="ZOMBIE"></label><label>Block (optional)<input name="block" placeholder="OAK_LOG"></label>' +
+            '<label>Biome (optional)<input name="biome" placeholder="minecraft:forest"></label><label>World (optional)<input name="world" placeholder="survival"></label>' +
+            '</div><div class="card-actions"><button class="button" type="submit">Run test</button></div></form>' +
+            '<div id="loot-result" class="sim-result"><span class="muted">Results appear here.</span></div></section></div>' +
+            '<section class="card document-panel"><div class="document-head"><div><h3>Loot source</h3>' +
+            '<p class="tiny">Open the YAML when you need to review or make an advanced change.</p></div><div class="card-actions">' +
+            '<select id="loot-doc"><option value="">Choose a file</option>' + files + '</select><button id="loot-doc-open" class="button small primary" type="button">Open</button>' +
+            '</div></div><div id="document-panel"><div class="empty">Choose a file to inspect it.</div></div></section>';
+        bindLootForm();
+        q('#workspace').querySelectorAll('[data-loot-table]').forEach(button => button.onclick = () => {
+            selectedLoot = button.dataset.lootTable;
+            renderLoot(data);
+        });
+        bindDocumentPicker('loot', 'loot-doc', 'loot-doc-open');
+    }
+
+    function lootKey(definition) { return definition.pack + '|' + definition.file + '|' + definition.id; }
+
+    function renderLootSummary(definition) {
+        const table = definition.table || {};
+        const rules = Array.isArray(table.rules) ? table.rules : [];
+        const rows = rules.map(rule => {
+            const conditions = rule.conditions && typeof rule.conditions === 'object' ?
+                Object.entries(rule.conditions).map(([key, value]) => key + ': ' + (Array.isArray(value) ? value.join(', ') : value)).join(' · ') :
+                'No conditions';
+            const entries = Array.isArray(rule.entries) ? rule.entries : [];
+            const drops = entries.map(entry => entry.item + ' × ' + (entry.min ?? 1) + '-' + (entry.max ?? entry.min ?? 1) +
+                ' (' + ((Number(entry.chance ?? 1) * 100).toFixed(0)) + '%)').join(', ');
+            return '<div class="rule-summary"><strong>' + esc(rule.operation || 'APPEND') + ' · ' + esc(drops || 'No entries') +
+                '</strong><div>' + esc(conditions || 'Always') + '</div></div>';
+        }).join('');
+        return '<div class="document-head"><div><strong>' + esc(definition.id) + '</strong><small class="muted">' +
+            esc(definition.pack + ' / ' + definition.file + ' · ' + (table.target || 'MOB_DEATH')) + '</small></div>' +
+            '<button class="button small" type="button" data-summary-doc="' + esc(definition.pack + '|' + definition.file) + '">Edit source</button></div>' +
+            '<div class="table-summary">' + (rows || '<div class="empty">This table has no rules.</div>') + '</div>';
+    }
+
+    function bindLootForm() {
+        const form = q('#loot-create');
+        if (form) {
+            const target = form.elements.target;
+            const block = q('#loot-block-field');
+            const entity = q('#loot-entity-field');
+            const updateTrigger = () => {
+                const isBlock = target.value === 'block-break';
+                block.classList.toggle('hidden', !isBlock);
+                entity.classList.toggle('hidden', isBlock);
+            };
+            target.onchange = updateTrigger;
+            updateTrigger();
+            form.onsubmit = async event => {
+                event.preventDefault();
+                const values = new FormData(form);
+                try {
+                    setStatus('Saving loot rule…');
+                    const result = await request(apiUrl('loot', 'create'), {method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(Object.fromEntries(values.entries()))});
+                    notice(result.message || 'Loot rule saved.');
+                    await openModule('loot');
+                } catch (error) { notice(error.message, true); setStatus('Needs attention', true); }
+            };
+        }
+        const simulation = q('#loot-sim');
+        if (simulation) simulation.onsubmit = async event => {
+            event.preventDefault();
+            const values = new FormData(simulation);
+            try {
+                const result = await request(apiUrl('loot', 'simulate'), {method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({table: values.get('table'), rolls: Number(values.get('rolls')), entity: values.get('entity'),
+                        block: values.get('block'), biome: values.get('biome'), world: values.get('world'), tier: 0, playerKill: false})});
+                q('#loot-result').innerHTML = result.drops?.length ? result.drops.map(drop =>
+                    '<div class="sim-drop"><span>' + esc(drop.item) + '</span><strong>×' + esc(drop.amount) +
+                    '</strong></div>').join('') : '<span class="muted">No drops.</span>';
+            } catch (error) { q('#loot-result').innerHTML = '<span class="status bad">' + esc(error.message) + '</span>'; }
+        };
+        q('#workspace').querySelectorAll('[data-summary-doc]').forEach(button => button.onclick = () => {
+            const select = q('#loot-doc');
+            const option = [...select.options].find(value => value.value === button.dataset.summaryDoc);
+            if (option) { select.value = option.value; openSelectedDocument('loot', 'loot-doc'); }
+        });
+    }
+
+    function bindDocumentPicker(module, selectId, buttonId) {
+        const button = q('#' + buttonId);
+        if (button) button.onclick = () => openSelectedDocument(module, selectId);
+    }
+
+    function openSelectedDocument(module, selectId) {
+        const value = q('#' + selectId)?.value || '';
+        if (!value) return notice('Choose a file first.');
+        const separator = value.indexOf('|');
+        const pack = separator >= 0 ? value.slice(0, separator) : '';
+        const file = separator >= 0 ? value.slice(separator + 1) : value;
+        openDocument(module, pack, file);
+    }
+
+    async function openDocument(module, pack, file) {
+        try {
+            setStatus('Opening file…');
+            const document = await request(apiUrl(module, 'document') + '?pack=' + encodeURIComponent(pack) + '&file=' + encodeURIComponent(file));
+            currentDocument = {module, pack, file, revision: document.revision};
+            const canWrite = Boolean(modules.find(value => value.id === module)?.writable);
+            const save = canWrite ? '<button id="document-save" class="button primary" type="button">Save and reload</button>' :
+                '<span class="pill">Read only</span>';
+            q('#document-panel').innerHTML = '<div class="document-head"><div><strong>' + esc(pack) + ' / ' + esc(file) +
+                '</strong><small class="muted">Revision ' + esc(document.revision) + '</small></div>' + save +
+                '</div><textarea id="document-text" spellcheck="false"' + (canWrite ? '' : ' readonly') + '>' +
+                esc(document.content) + '</textarea>';
+            if (canWrite) q('#document-save').onclick = saveDocument;
+            setStatus('Ready');
+        } catch (error) { notice(error.message, true); setStatus('Could not open', true); }
+    }
+
+    async function saveDocument() {
+        if (!currentDocument) return;
+        try {
+            setStatus('Saving file…');
+            const result = await request(apiUrl(currentDocument.module, 'document') + '?pack=' +
+                encodeURIComponent(currentDocument.pack) + '&file=' + encodeURIComponent(currentDocument.file), {
+                    method: 'PUT', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({content: q('#document-text').value, revision: currentDocument.revision})
+                });
+            currentDocument.revision = result.revision;
+            notice(result.message || 'File saved and reloaded.');
+            setStatus('Ready');
+            activeData = await request(apiUrl(activeId, 'data'));
+        } catch (error) { notice(error.message, true); setStatus('Needs attention', true); }
+    }
+
+    q('#refresh').onclick = () => activeId ? openModule(activeId) : boot();
+
+    async function boot() {
+        try {
+            modules = await request(base + '/api/modules');
+            if (!modules.length) throw new Error('No editors are available for this link.');
+            activeId = modules[0].id;
+            renderNav();
+            await openModule(activeId);
+        } catch (error) {
+            q('#workspace').innerHTML = '<div class="empty">' + esc(error.message) + '</div>';
+            setStatus('Could not start', true);
+        }
+    }
+    boot();
+})();
+</script>
+</body>
+</html>
