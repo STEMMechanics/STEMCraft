@@ -505,6 +505,8 @@ web-server:
       minecraft.server_stop: true
       minecraft.server_message: true
       minecraft.player_skill_level_up: true
+      stemcraft.voting.reminder: true
+      stemcraft.voting.closed: true
     redacted-commands:
       - login
       - register
@@ -1267,6 +1269,10 @@ leaf_decay_random_tick:
 voting:
   enabled: true
   login-announcement:
+    enabled: true
+  # Per-vote reminders are configured with `/vote admin reminder`; this controls
+  # the scheduled in-game broadcast in addition to the login reminder.
+  announcements:
     enabled: true
   # Leave blank to allow every player to vote.
   permission: ""

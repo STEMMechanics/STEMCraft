@@ -15,7 +15,9 @@ You can also use `/survival` or `/creative`. Read the local signs: the monthly c
 
 The [noticeboard](survival/notice-boards.md) helps players find projects, trades and requests. Keep notices friendly and never include personal information.
 
-When challenge voting is open, right-click a choice's lever to vote; click it again to retract that vote. You cannot vote for your own entry. `/vote status` shows voting status and your allowance. Visit the entries before deciding: votes recognise the effort other builders put into their work.
+When challenge voting is open, right-click a choice's lever to vote; click it again to retract that vote. You cannot vote for your own entry. `/vote status` shows voting status and your allowance. Visit the entries before deciding: votes recognise the effort other builders put into their work. Voting closes at the configured end date; after that point the levers cannot change the tally.
+
+Staff can review a live or closed result with `/vote tally [group]`. Vote reminders and close rewards are configured per group by an administrator, and the server can forward `stemcraft.voting.reminder` and `stemcraft.voting.closed` events to external integrations such as Discord.
 
 <figure><img src=".gitbook/assets/2026-09-14_16.50.46 (1).png" alt=""><figcaption></figcaption></figure>
 
