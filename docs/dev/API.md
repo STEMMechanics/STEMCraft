@@ -209,7 +209,8 @@ reminder` and `/vote admin reward`. Direct winner badges may use a duration such
 as `30d`; the entitlement service removes them automatically when they expire.
 Use `/vote admin schedule <group> <start> <finish>` for the window; a date-only
 finish such as `2026-11-30` closes the vote at the start of that server-local
-date.
+date. In-game `/vote tally [group]` and `/vote admin tally [group]` use paginated
+chat menus; unclaimed PlotSquared slots are omitted from tally and winner results.
 For example, a group can use `/vote admin reminder <group> set 3 Vote for
 {group} — {days} days remaining!` and `/vote admin reward <group> add
 grant-badge challenge-winner 30d`. Reminder messages support `{group}`, `{days}`, `{days-remaining}`,

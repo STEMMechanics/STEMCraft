@@ -284,25 +284,60 @@ public final class VotingFeature extends BaseFeature {
     }
 
     private void showTally(CommandContext ctx) {
-        showTally(ctx, 1);
+        showTally(ctx, 1, "vote tally");
     }
 
     private void showTally(CommandContext ctx, int groupIndex) {
+        showTally(ctx, groupIndex, "vote admin tally");
+    }
+
+    private void showTally(CommandContext ctx, int groupIndex, String paginationCommand) {
+        String requestedId = ctx.args().size() > groupIndex ? ctx.getArgLower(groupIndex) : null;
+        VoteGroup requested = requestedId == null ? null : groups.get(requestedId);
+        if (requestedId != null && requested == null && !requestedId.matches("\\d+")) {
+            ctx.returnError("Unknown voting group.");
+            return;
+        }
+
         List<VoteGroup> selected;
-        if (ctx.args().size() > groupIndex) {
-            VoteGroup group = requireGroup(ctx, groupIndex);
-            if (group == null) return;
-            selected = List.of(group);
+        if (requested != null) {
+            selected = List.of(requested);
         } else {
             selected = new ArrayList<>(groups.values());
         }
         if (selected.isEmpty()) { ctx.returnInfo("No voting groups exist."); return; }
 
+        if (ctx.isConsole()) {
+            renderTallyText(ctx, selected);
+            return;
+        }
+
+        if (requested != null) {
+            renderTallyGroup(ctx, requested, ChatMenuUtil.getPageFromArgs(ctx.args(), groupIndex + 1, 1), paginationCommand);
+            return;
+        }
+
+        int page = boundedTallyPage(ChatMenuUtil.getPageFromArgs(ctx.args(), groupIndex, 1), selected.size());
+        ChatMenuUtil.render(ctx.getSender(), "Voting tallies", paginationCommand, page, selected.size(), (start, count, interactive) -> {
+            List<Component> lines = new ArrayList<>();
+            for (VoteGroup group : selected.subList(start, start + count)) {
+                int resultVotes = resultTotalVotes(group.id);
+                Component line = Component.text("● ", stateColour(group)).append(Component.text(group.name, NamedTextColor.WHITE))
+                    .append(Component.text(" (" + group.id + ") — " + resultVotes + " " + voteWord(resultVotes), NamedTextColor.GRAY));
+                if (interactive) line = line.clickEvent(ClickEvent.runCommand("/" + paginationCommand + " " + group.id))
+                    .hoverEvent(HoverEvent.showText(Component.text("View this voting tally")));
+                lines.add(line);
+            }
+            return lines;
+        }, "No voting groups exist.");
+    }
+
+    private void renderTallyText(CommandContext ctx, List<VoteGroup> selected) {
         for (VoteGroup group : selected) {
             ctx.info("Tally for " + group.name + " (" + group.id + ") — " + state(group) + ":");
             List<VoteTallyRow> rows = tallyRows(group.id);
             if (rows.isEmpty()) {
-                ctx.info("  No vote options configured.");
+                ctx.info("  No claimed vote options configured.");
                 continue;
             }
             for (int index = 0; index < rows.size(); index++) {
@@ -311,12 +346,44 @@ public final class VotingFeature extends BaseFeature {
                 ctx.info("  " + (index + 1) + ". " + row.optionName() + " [" + row.optionId() + "]: "
                     + row.votes() + " " + voteWord(row.votes()) + owner);
             }
-            ctx.info("  Total: " + totalVotes(group.id) + " " + voteWord(totalVotes(group.id)));
+            int resultVotes = resultTotalVotes(group.id);
+            ctx.info("  Total: " + resultVotes + " " + voteWord(resultVotes));
         }
+    }
+
+    private void renderTallyGroup(CommandContext ctx, VoteGroup group, int requestedPage, String paginationCommand) {
+        List<VoteTallyRow> rows = tallyRows(group.id);
+        if (rows.isEmpty()) {
+            ctx.returnInfo("No claimed vote options configured for " + group.name + ".");
+            return;
+        }
+        int page = boundedTallyPage(requestedPage, rows.size());
+        ChatMenuUtil.render(ctx.getSender(), "Tally: " + group.name + " (" + group.id + ") — " + state(group),
+            paginationCommand + " " + group.id, page, rows.size(), (start, count, interactive) -> {
+                List<Component> lines = new ArrayList<>();
+                for (int index = start; index < start + count; index++) {
+                    VoteTallyRow row = rows.get(index);
+                    String owner = row.owner() == null ? "" : " — "
+                        + Optional.ofNullable(Bukkit.getOfflinePlayer(row.owner()).getName()).orElse(row.owner().toString());
+                    lines.add(Component.text((index + 1) + ". " + row.optionName(), NamedTextColor.WHITE)
+                        .append(Component.text(" [" + row.optionId() + "] — " + row.votes() + " " + voteWord(row.votes()) + owner,
+                            NamedTextColor.GRAY)));
+                }
+                return lines;
+            }, "No claimed vote options configured.");
+        int resultVotes = resultTotalVotes(group.id);
+        ctx.getSender().sendMessage(Component.text("Total: " + resultVotes + " " + voteWord(resultVotes), NamedTextColor.GRAY));
+        ctx.getSender().sendMessage(button("[← All groups]", "/" + paginationCommand, "Select another voting group"));
+    }
+
+    private int boundedTallyPage(int page, int count) {
+        int maxPage = Math.max(1, (count + 7) / 8);
+        return Math.max(1, Math.min(page, maxPage));
     }
 
     private List<VoteTallyRow> tallyRows(String groupId) {
         return options.getOrDefault(groupId, new LinkedHashMap<>()).values().stream()
+            .filter(option -> includedInResults(groupId, option))
             .map(option -> new VoteTallyRow(option.id, option.name, option.owner, optionVotes(groupId, option.id)))
             .sorted(java.util.Comparator.comparingInt(VoteTallyRow::votes).reversed()
                 .thenComparing(VoteTallyRow::optionName, String.CASE_INSENSITIVE_ORDER)
@@ -825,6 +892,7 @@ public final class VotingFeature extends BaseFeature {
         int maximum = maximumVotes(groupId);
         if (maximum <= 0) return List.of();
         return options.getOrDefault(groupId, new LinkedHashMap<>()).values().stream()
+            .filter(option -> includedInResults(groupId, option))
             .filter(option -> optionVotes(groupId, option.id()) == maximum)
             .map(option -> new ClosedWinner(option.id(), option.name(), option.owner, maximum))
             .toList();
@@ -844,7 +912,7 @@ public final class VotingFeature extends BaseFeature {
         data.put("group", group.name);
         data.put("closed_at", now);
         data.put("ends_at", group.endsAt);
-        data.put("total_votes", totalVotes(group.id));
+        data.put("total_votes", resultTotalVotes(group.id));
         data.put("winners", winnerData);
         api.web().publishEvent("stemcraft.voting.closed", null, null, data);
     }
@@ -1255,7 +1323,22 @@ public final class VotingFeature extends BaseFeature {
     }
     private int optionVotes(String group, String option) { return (int) votes.getOrDefault(group, Map.of()).values().stream().filter(set -> set.contains(option)).count(); }
     private int totalVotes(String group) { return votes.getOrDefault(group, Map.of()).values().stream().mapToInt(Set::size).sum(); }
-    private int maximumVotes(String group) { return options.getOrDefault(group, new LinkedHashMap<>()).keySet().stream().mapToInt(id -> optionVotes(group, id)).max().orElse(0); }
+    private int resultTotalVotes(String groupId) {
+        return options.getOrDefault(groupId, new LinkedHashMap<>()).values().stream()
+            .filter(option -> includedInResults(groupId, option))
+            .mapToInt(option -> optionVotes(groupId, option.id))
+            .sum();
+    }
+    private int maximumVotes(String group) {
+        return options.getOrDefault(group, new LinkedHashMap<>()).values().stream()
+            .filter(option -> includedInResults(group, option))
+            .mapToInt(option -> optionVotes(group, option.id))
+            .max().orElse(0);
+    }
+    private boolean includedInResults(String groupId, VoteOption option) {
+        VoteGroup group = groups.get(groupId);
+        return group == null || !isPlotSource(group) || option.owner != null;
+    }
 
     private String state(VoteGroup group) {
         long now = Instant.now().getEpochSecond();
