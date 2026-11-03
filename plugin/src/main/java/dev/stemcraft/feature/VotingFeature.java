@@ -195,6 +195,8 @@ public final class VotingFeature extends BaseFeature {
             List<String> result = new ArrayList<>(groupOptions.keySet()); result.add("next"); return result;
         });
         api.tabComplete().register("vote-date", (player, args, currentArgument) -> dateCompletions(currentArgument));
+        api.tabComplete().register("vote-reward-duration", (player, args, currentArgument) -> List.of(
+            "permanent", "7d", "14d", "30d", "60d", "90d", "12h", "24h"));
         api.commands().create("vote").description("View and administer physical voting groups.")
             .usage("/vote <help|status|tally|admin> ...")
             .tabCompletion("help").tabCompletion("status").tabCompletion("tally", "{vote-group}").tabCompletion("admin", "create")
@@ -212,8 +214,8 @@ public final class VotingFeature extends BaseFeature {
             .tabCompletion("admin", "reminder", "{vote-group}", "set", "", "")
             .tabCompletion("admin", "reminder", "{vote-group}", "clear", "")
             .tabCompletion("admin", "reminder", "{vote-group}", "list")
-            .tabCompletion("admin", "reward", "{vote-group}", "add", "grant-badge", "", "")
-            .tabCompletion("admin", "reward", "{vote-group}", "add", "revoke-badge", "")
+            .tabCompletion("admin", "reward", "{vote-group}", "add", "grant-badge", "{badge-id}", "{vote-reward-duration}")
+            .tabCompletion("admin", "reward", "{vote-group}", "add", "revoke-badge", "{badge-id}")
             .tabCompletion("admin", "reward", "{vote-group}", "add", "mail", "", "")
             .tabCompletion("admin", "reward", "{vote-group}", "list")
             .tabCompletion("admin", "reward", "{vote-group}", "clear")
@@ -278,6 +280,7 @@ public final class VotingFeature extends BaseFeature {
         ctx.info("  /vote admin source plots <group> <world>");
         ctx.info("  /vote admin reminder <group> <set|clear|list> ...");
         ctx.info("  /vote admin reward <group> <add|remove|clear|list> ...");
+        ctx.info("    mail <message> sends a letter from STEMCraft; its title is generated and item attachments are not configured here.");
         ctx.info("  /vote admin view <group> | list | title <group> <title>");
         ctx.info("  /vote admin pause|resume|reset|reset-player|remove <group>");
         ctx.info("  /vote admin tower place/remove ... — Requires an in-game player.");
@@ -343,9 +346,8 @@ public final class VotingFeature extends BaseFeature {
             }
             for (int index = 0; index < rows.size(); index++) {
                 VoteTallyRow row = rows.get(index);
-                String owner = row.owner() == null ? "" : " — " + Optional.ofNullable(Bukkit.getOfflinePlayer(row.owner()).getName()).orElse(row.owner().toString());
-                ctx.info("  " + (index + 1) + ". " + row.optionName() + " [" + row.optionId() + "]: "
-                    + row.votes() + " " + voteWord(row.votes()) + owner);
+                ctx.info("  " + (index + 1) + ". " + row.optionName() + ": "
+                    + row.votes() + " " + voteWord(row.votes()));
             }
             int resultVotes = resultTotalVotes(group.id);
             ctx.info("  Total: " + resultVotes + " " + voteWord(resultVotes));
@@ -364,10 +366,8 @@ public final class VotingFeature extends BaseFeature {
                 List<Component> lines = new ArrayList<>();
                 for (int index = start; index < start + count; index++) {
                     VoteTallyRow row = rows.get(index);
-                    String owner = row.owner() == null ? "" : " — "
-                        + Optional.ofNullable(Bukkit.getOfflinePlayer(row.owner()).getName()).orElse(row.owner().toString());
                     lines.add(Component.text((index + 1) + ". " + row.optionName(), NamedTextColor.WHITE)
-                        .append(Component.text(" [" + row.optionId() + "] — " + row.votes() + " " + voteWord(row.votes()) + owner,
+                        .append(Component.text(" — " + row.votes() + " " + voteWord(row.votes()),
                             NamedTextColor.GRAY)));
                 }
                 return lines;
@@ -385,7 +385,7 @@ public final class VotingFeature extends BaseFeature {
     private List<VoteTallyRow> tallyRows(String groupId) {
         return options.getOrDefault(groupId, new LinkedHashMap<>()).values().stream()
             .filter(option -> includedInResults(groupId, option))
-            .map(option -> new VoteTallyRow(option.id, option.name, option.owner, optionVotes(groupId, option.id)))
+            .map(option -> new VoteTallyRow(option.id, option.name, optionVotes(groupId, option.id)))
             .sorted(java.util.Comparator.comparingInt(VoteTallyRow::votes).reversed()
                 .thenComparing(VoteTallyRow::optionName, String.CASE_INSENSITIVE_ORDER)
                 .thenComparing(VoteTallyRow::optionId))
@@ -543,7 +543,7 @@ public final class VotingFeature extends BaseFeature {
             ctx.returnSuccess("Removed winner reward #" + id + " from " + group.name + ".");
             return;
         }
-        if (!action.equals("add") || ctx.args().size() < 6) {
+        if (!action.equals("add") || ctx.args().size() < 5) {
             ctx.returnError("Usage: /vote admin reward <group> add <grant-badge <badge> [duration]|revoke-badge <badge>|mail <message>>");
             return;
         }
@@ -567,6 +567,10 @@ public final class VotingFeature extends BaseFeature {
                 }
             }
             case "mail" -> {
+                if (ctx.args().size() < 6) {
+                    showMailRewardHelp(ctx);
+                    return;
+                }
                 value = String.join(" ", ctx.args().subList(5, ctx.args().size())).trim();
                 if (value.isBlank()) { ctx.returnError("The winner mail message cannot be blank."); return; }
             }
@@ -586,6 +590,13 @@ public final class VotingFeature extends BaseFeature {
         });
         groupRewards.add(reward);
         ctx.returnSuccess("Added winner reward #" + id + " to " + group.name + ": " + describeReward(reward));
+    }
+
+    private void showMailRewardHelp(CommandContext ctx) {
+        ctx.info("Usage: /vote admin reward <group> add mail <message>");
+        ctx.info("Winner mail sends a letter from STEMCraft through Survival Mail.");
+        ctx.info("The mailbox system generates the letter title; custom sender names and item attachments are not supported by voting rewards.");
+        ctx.info("Message placeholders: {group}, {group-id}, {player}, {option}, {votes}.");
     }
 
     private int parseNonNegativeInt(String value, String error, CommandContext ctx) {
@@ -751,24 +762,22 @@ public final class VotingFeature extends BaseFeature {
 
     private void showGroupMenu(CommandContext ctx) {
         VoteGroup group = requireGroup(ctx, 2); if (group == null) return;
-        List<VoteOption> values = new ArrayList<>(options.getOrDefault(group.id, new LinkedHashMap<>()).values());
         ctx.getSender().sendMessage(Component.text("Voting group: " + group.name + " (" + group.id + ")", NamedTextColor.AQUA));
-        ctx.getSender().sendMessage(Component.text("State: ", NamedTextColor.GRAY)
-            .append(Component.text(state(group), stateColour(group)))
-            .append(Component.text(" • Votes per player: " + group.votesPerPlayer, NamedTextColor.GRAY)));
-        ctx.getSender().sendMessage(Component.text("Schedule: " + formatTime(group.startsAt) + " → " + formatTime(group.endsAt), NamedTextColor.GRAY));
-        ctx.getSender().sendMessage(Component.text("Source: " + group.sourceType
-            + (group.sourceValue == null ? "" : " (" + group.sourceValue + ")"), NamedTextColor.GRAY));
-        ctx.getSender().sendMessage(Component.text("Reminders: " + reminders.getOrDefault(group.id, Map.of()).size()
-            + " • Winner rewards: " + rewards.getOrDefault(group.id, List.of()).size(), NamedTextColor.GRAY));
+        sendAdminField(ctx, "State", state(group), stateColour(group));
+        sendAdminField(ctx, "Votes per player", Integer.toString(group.votesPerPlayer), NamedTextColor.WHITE);
+        sendAdminField(ctx, "Schedule", formatTime(group.startsAt) + " → " + formatTime(group.endsAt), NamedTextColor.WHITE);
+        sendAdminField(ctx, "Source", group.sourceType + (group.sourceValue == null ? "" : " (" + group.sourceValue + ")"), NamedTextColor.WHITE);
+        sendAdminField(ctx, "Reminders", Integer.toString(reminders.getOrDefault(group.id, Map.of()).size()), NamedTextColor.WHITE);
+        sendAdminField(ctx, "Winner rewards", Integer.toString(rewards.getOrDefault(group.id, List.of()).size()), NamedTextColor.WHITE);
 
         List<VoteTallyRow> topRows = tallyRows(group.id).stream().limit(3).toList();
         if (!topRows.isEmpty()) {
-            ctx.getSender().sendMessage(Component.text("Top 3 — use /vote admin tally " + group.id + " for the full tally:", NamedTextColor.YELLOW));
+            ctx.getSender().sendMessage(Component.text("Top 3", NamedTextColor.YELLOW));
             for (int index = 0; index < topRows.size(); index++) {
                 VoteTallyRow row = topRows.get(index);
-                ctx.getSender().sendMessage(Component.text("  " + (index + 1) + ". " + row.optionName()
-                    + " — " + row.votes() + " " + voteWord(row.votes()), NamedTextColor.GRAY));
+                ctx.getSender().sendMessage(Component.text("  " + (index + 1) + ". ", NamedTextColor.DARK_GRAY)
+                    .append(Component.text(row.optionName(), NamedTextColor.WHITE))
+                    .append(Component.text(" — " + row.votes() + " " + voteWord(row.votes()), NamedTextColor.GRAY)));
             }
         }
 
@@ -778,36 +787,15 @@ public final class VotingFeature extends BaseFeature {
             .append(Component.space()).append(button(group.paused ? "[Resume]" : "[Pause]", toggleCommand, group.paused ? "Resume voting" : "Pause voting"))
             .append(Component.space()).append(suggestButton("[Schedule]", "/vote admin schedule " + group.id + " now ", "Set start and finish"))
             .append(Component.space()).append(suggestButton("[＋ Entry]", "/vote admin option add " + group.id + " ", "Enter <option-id> <display name>")));
-
-        int page = boundedTallyPage(ChatMenuUtil.getPageFromArgs(ctx.args(), 3, 1), values.size());
-        int renderedCount = Math.max(1, values.size());
-        ChatMenuUtil.render(ctx.getSender(), "Entries", "vote admin view " + group.id, page, renderedCount,
-            (start, count, interactive) -> {
-                List<Component> lines = new ArrayList<>();
-                if (values.isEmpty()) {
-                    lines.add(Component.text("No entries configured. Add a static entry or load PlotSquared creators.", NamedTextColor.GRAY));
-                    return lines;
-                }
-                for (VoteOption option : values.subList(start, start + count)) {
-                    boolean placed = towers.getOrDefault(group.id, new LinkedHashMap<>()).containsKey(option.id);
-                    Component line = Component.text(option.name + " [" + option.id + "]", NamedTextColor.WHITE)
-                        .append(Component.space()).append(placed
-                            ? Component.text("[Placed]", NamedTextColor.GREEN)
-                            : interactive
-                                ? button("[Place]", "/vote admin tower place " + group.id + " " + option.id, "Place this entry's tower")
-                                : Component.text("[Not placed]", NamedTextColor.GRAY));
-                    if (interactive) line = line.append(Component.space()).append(suggestButton("[Remove]",
-                        "/vote admin option remove " + group.id + " " + option.id,
-                        "Remove this entry, its tower, and its votes"));
-                    lines.add(line);
-                }
-                return lines;
-            }, "This group has no entries.");
-
-        ctx.getSender().sendMessage(button("[Place next]", "/vote admin tower place " + group.id + " next", "Place the next unplaced entry")
+        ctx.getSender().sendMessage(button("[Place next]", "/vote admin tower place " + group.id + " next", "Place the next entry")
             .append(Component.space()).append(suggestButton("[Plot source]", "/vote admin source plots " + group.id + " ", "Load PlotSquared creators"))
             .append(Component.space()).append(suggestButton("[Reset votes]", "/vote admin reset " + group.id, "Review before sending"))
             .append(Component.space()).append(suggestButton("[Remove group]", "/vote admin remove " + group.id, "Remove this group, all options, votes, and physical towers")));
+    }
+
+    private void sendAdminField(CommandContext ctx, String label, String value, NamedTextColor valueColor) {
+        ctx.getSender().sendMessage(Component.text(label + ": ", NamedTextColor.GRAY)
+            .append(Component.text(value, valueColor)));
     }
 
     private void announceLoginVotes(Player player) {
@@ -1651,7 +1639,7 @@ public final class VotingFeature extends BaseFeature {
 
     private static final class VoteGroup { final String id; String name; final int votesPerPlayer; long startsAt,endsAt; boolean paused; String sourceType,sourceValue; VoteGroup(String id,String name,int votes,long start,long end,boolean paused,String source,String value){this.id=id;this.name=name;this.votesPerPlayer=votes;this.startsAt=start;this.endsAt=end;this.paused=paused;this.sourceType=source;this.sourceValue=value;} }
     private record GroupLoginSummary(int receivedVotes, int totalVotes, Integer bestRank) {}
-    private record VoteTallyRow(String optionId, String optionName, UUID owner, int votes) {}
+    private record VoteTallyRow(String optionId, String optionName, int votes) {}
     private record VoteReminder(int daysRemaining, String message) {}
     private record VoteReward(int id, String action, String value, long durationSeconds) {}
     private record ClosureStatus(long closedAt, Long processedAt) {}
