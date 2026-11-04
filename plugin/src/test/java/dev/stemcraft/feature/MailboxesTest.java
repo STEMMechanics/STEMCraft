@@ -14,6 +14,7 @@ import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.BookMeta;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import net.kyori.adventure.text.Component;
 import org.jetbrains.annotations.NotNull;
@@ -113,6 +114,21 @@ class MailboxesTest {
             .collect(java.util.stream.Collectors.joining("\n"));
         assertTrue(contents.contains("1x Gift"));
         assertFalse(contents.contains("1x Stick"));
+    }
+
+    @Test
+    void mailLetterUsesExplicitTitleWhenProvided() throws Exception {
+        STEMCraftAPI api = mock(STEMCraftAPI.class);
+        Mailboxes mailboxes = new Mailboxes(api);
+
+        ItemStack letter = (ItemStack) invokePrivate(
+            mailboxes,
+            "createMailLetter",
+            new Class<?>[] { String.class, String.class, String.class, java.util.List.class },
+            "STEMCraft", "Challenge winner", "Congratulations!", java.util.List.of()
+        );
+
+        assertEquals("Challenge winner", ((BookMeta) letter.getItemMeta()).getTitle());
     }
 
     @AfterEach

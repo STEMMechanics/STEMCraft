@@ -195,6 +195,36 @@ fallback and log a migration warning. Move those settings to
 for the Discord inbound chat endpoint. Consumers should acknowledge accepted
 events with any 2xx response and use `event_id` for idempotency.
 
+Voting publishes two feature events when enabled in the subscription list:
+
+- `stemcraft.voting.reminder` when a configured reminder becomes due. Its data
+  includes the group, actual and configured days remaining, end timestamp, and
+  rendered message.
+- `stemcraft.voting.closed` when a scheduled vote closes. Its data includes the
+  group, end timestamp, total votes, and every tied winning option, including
+  the player UUID when the option belongs to a player.
+
+Configure a group's reminders and close rewards in-game with `/vote admin
+reminder` and `/vote admin reward`. Direct winner badges may use a duration such
+as `30d`; the entitlement service removes them automatically when they expire.
+Use `/vote admin schedule <group> <start> <finish>` for the window; a date-only
+finish such as `2026-11-30` closes the vote at the start of that server-local
+date. In-game `/vote tally [group]` and `/vote admin tally [group]` use paginated
+chat menus; unclaimed PlotSquared slots are omitted from tally and winner results.
+Mail rewards use `/vote admin reward <group> add mail title=<title>
+message=<message> [from=<sender>] [items=<item>@<amount>,...]`. Quote only
+values containing spaces; `:` is also accepted instead of `=`. The `from=` and
+`items=` sections are optional; item IDs may be vanilla `minecraft:<material>`
+IDs or registered custom item IDs. The older `mail <message>` form remains
+supported and uses a generated title, `STEMCraft` as sender, and no
+attachments. Winner mail placeholders work in the title, sender, and message:
+`{group}`, `{group-id}`, `{player}`, `{option}`, and `{votes}`.
+For example, a group can use `/vote admin reminder <group> set 3 Vote for
+{group} — {days} days remaining!` and `/vote admin reward <group> add
+grant-badge challenge-winner 30d`. Reminder messages support `{group}`, `{days}`, `{days-remaining}`,
+`{end}`, and `{votes}`; winner mail also supports `{player}`, `{option}`, and
+`{votes}`.
+
 ### Workshops
 
 `WorkshopService` is the internal catalogue boundary for website and manual

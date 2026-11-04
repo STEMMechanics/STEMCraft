@@ -49,6 +49,12 @@ public final class AnimalBarrels extends BaseFeature {
         registerItem();
         api.items().registerCustomItemPropertyHandler(ITEM_ID, this::applyProperties);
         api.items().registerCustomItemPropertyHandler(LEGACY_ITEM_ID, this::applyProperties);
+        java.util.List<String> animals = ALLOWED.stream()
+            .map(type -> type.name().toLowerCase(java.util.Locale.ROOT))
+            .sorted()
+            .toList();
+        api.items().registerCustomItemPropertySuggestions(ITEM_ID, java.util.Map.of("animal", animals));
+        api.items().registerCustomItemPropertySuggestions(LEGACY_ITEM_ID, java.util.Map.of("animal", animals));
         api.events().register(PlayerInteractEntityEvent.class, this::capture, EventPriority.HIGHEST, true);
         api.events().register(PlayerInteractEvent.class, this::release, EventPriority.HIGHEST, true);
         api.events().register(org.bukkit.event.block.BlockPlaceEvent.class, event -> {

@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -43,6 +44,29 @@ class VotingFeatureTest {
         assertEquals("3rd", VotingFeature.ordinal(3));
         assertEquals("11th", VotingFeature.ordinal(11));
         assertEquals("22nd", VotingFeature.ordinal(22));
+    }
+
+    @Test void reminderDaysRoundUpUntilTheCutoff() {
+        long now = 1_000_000L;
+        assertEquals(3, VotingFeature.daysRemaining(now + 3 * 86_400L, now));
+        assertEquals(1, VotingFeature.daysRemaining(now + 1, now));
+        assertEquals(0, VotingFeature.daysRemaining(now, now));
+    }
+
+    @Test void reminderMessagesRenderConfiguredPlaceholders() {
+        assertEquals("Vote for Monthly Challenge — 2 days left, closes at 2026-11-05, 12 votes so far.",
+            VotingFeature.formatReminderMessage(
+                "Vote for {group} — {days} days left, closes at {end}, {votes} votes so far.",
+                "Monthly Challenge", 2, "2026-11-05", 12));
+    }
+
+    @Test void dateCompletionBuildsTheDateInStages() {
+        assertEquals(List.of(LocalDate.now().toString()), VotingFeature.dateCompletions(""));
+        assertEquals(12, VotingFeature.dateCompletions("2026-").size());
+        assertEquals(28, VotingFeature.dateCompletions("2027-02-").size());
+        assertEquals(List.of("2027-02-20", "2027-02-21", "2027-02-22", "2027-02-23", "2027-02-24",
+            "2027-02-25", "2027-02-26", "2027-02-27", "2027-02-28"), VotingFeature.dateCompletions("2027-02-2"));
+        assertEquals(List.of(), VotingFeature.dateCompletions("2027-02-28"));
     }
 
     @Test void bundledTowerSchemaUsesReadableVerticalLayout() {

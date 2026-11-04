@@ -25,7 +25,6 @@ import dev.stemcraft.api.util.FontUtil;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
@@ -39,6 +38,18 @@ public final class ChatMenuUtil {
 
     private ChatMenuUtil() { }
 
+    /** Creates text using a semantic chat-menu style. */
+    public static Component text(String value, ChatMenuStyle style) {
+        return Component.text(value, style.color());
+    }
+
+    /** Creates a consistently styled chat-menu action button. */
+    public static Component actionButton(String label, ChatMenuStyle style, ClickEvent<?> clickEvent, String hoverText) {
+        return text(label, style)
+            .clickEvent(clickEvent)
+            .hoverEvent(HoverEvent.showText(Component.text(hoverText)));
+    }
+
     /**
      * Render a chat menu for the player.
      *
@@ -51,7 +62,7 @@ public final class ChatMenuUtil {
      * @param noneText The text to display if there are no items.
      */
     public static void render(CommandSender sender, String title, String command, int page, int count, ChatMenuRenderer rendererFunc, String noneText) {
-        render(sender, Component.text(title, NamedTextColor.AQUA), command, page, count, rendererFunc, noneText);
+        render(sender, text(title, ChatMenuStyle.TITLE), command, page, count, rendererFunc, noneText);
     }
 
     /**
@@ -67,6 +78,8 @@ public final class ChatMenuUtil {
      */
     public static void render(CommandSender sender, Component title, String command, int page, int count, ChatMenuRenderer rendererFunc, String noneText) {
         if (count <= 0) {
+            // Keep the heading visible so title actions such as [Create] remain available.
+            sender.sendMessage(createSeparatorString(title));
             STEMCraftAPI.api().messages().error(sender, noneText);
             return;
         }
@@ -90,17 +103,17 @@ public final class ChatMenuUtil {
         }
 
         // Pagination.
-        Component prev = Component.text("<<< ", (page <= 1 ? NamedTextColor.GRAY : NamedTextColor.GOLD));
+        Component prev = text("<<< ", page <= 1 ? ChatMenuStyle.DISABLED : ChatMenuStyle.ACTION_NAVIGATION);
         if (page > 1) {
             prev = prev.clickEvent(ClickEvent.runCommand("/" + command + " " + (page - 1)))
                     .hoverEvent(HoverEvent.showText(Component.text("Previous page")));
         }
 
-        Component pageInfo = Component.text("Page ", NamedTextColor.YELLOW)
-                .append(Component.text(page, NamedTextColor.GOLD)
-                        .append(Component.text(" of " + maxPages, NamedTextColor.YELLOW)));
+        Component pageInfo = text("Page ", ChatMenuStyle.KEY)
+                .append(text(Integer.toString(page), ChatMenuStyle.ACTION_NAVIGATION)
+                        .append(text(" of " + maxPages, ChatMenuStyle.KEY)));
 
-        Component next = Component.text(" >>>", (page >= maxPages ? NamedTextColor.GRAY : NamedTextColor.GOLD));
+        Component next = text(" >>>", page >= maxPages ? ChatMenuStyle.DISABLED : ChatMenuStyle.ACTION_NAVIGATION);
         if (page < maxPages) {
             next = next.clickEvent(ClickEvent.runCommand("/" + command + " " + (page + 1)))
                     .hoverEvent(HoverEvent.showText(Component.text("Next page")));
@@ -136,9 +149,9 @@ public final class ChatMenuUtil {
         String separatorStr = separator.repeat(separatorCount);
 
         // Build and return the component.
-        return Component.text(separatorStr + " ", NamedTextColor.YELLOW)
+        return text(separatorStr + " ", ChatMenuStyle.TITLE)
                 .append(title)
-                .append(Component.text(" " + separatorStr, NamedTextColor.YELLOW));
+                .append(text(" " + separatorStr, ChatMenuStyle.TITLE));
     }
 
     /**

@@ -116,7 +116,8 @@ public interface CommandContext {
     default boolean hasFlag(String flag) { return hasFlag(flag, false); }
 
     /**
-     * Get the value of the given option, or the default value if not present.
+     * Get the value of the given {@code key:value} or {@code key=value} option,
+     * or the default value if not present.
      *
      * @param option The option to get.
      * @param def The default value if not present.

@@ -27,6 +27,7 @@ import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.util.StringUtil;
 import dev.stemcraft.api.util.WorldUtil;
+import dev.stemcraft.api.util.chatmenu.ChatMenuStyle;
 import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
 import dev.stemcraft.api.service.task.TaskService;
 import dev.stemcraft.api.service.world.WorldBaseSetting;
@@ -524,32 +525,26 @@ public class WorldCommand {
                         String worldName = worlds.get(i);
                         boolean loaded = api.worlds().isWorldLoaded(worldName);
 
-                        NamedTextColor statusColor = loaded ? NamedTextColor.GREEN : NamedTextColor.RED;
-
-                        Component status = Component.text(loaded ? "loaded" : "unloaded", statusColor);
+                        Component status = ChatMenuUtil.text(loaded ? "loaded" : "unloaded",
+                            loaded ? ChatMenuStyle.ACTION_ADD : ChatMenuStyle.ACTION_DELETE);
 
                         Component loadToggle = loaded
-                                ? Component.text("[Unload]", NamedTextColor.GOLD)
-                                .clickEvent(ClickEvent.runCommand("/world unload " + worldName))
-                                .hoverEvent(HoverEvent.showText(Component.text("Unload this world")))
-                                : Component.text("[Load]", NamedTextColor.GOLD)
-                                .clickEvent(ClickEvent.runCommand("/world load " + worldName))
-                                .hoverEvent(HoverEvent.showText(Component.text("Load this world")));
+                                ? ChatMenuUtil.actionButton("[Unload]", ChatMenuStyle.ACTION_WARNING,
+                                    ClickEvent.runCommand("/world unload " + worldName), "Unload this world")
+                                : ChatMenuUtil.actionButton("[Load]", ChatMenuStyle.ACTION_ADD,
+                                    ClickEvent.runCommand("/world load " + worldName), "Load this world");
 
-                        Component delete = Component.text("[Del]", NamedTextColor.RED)
-                                .clickEvent(ClickEvent.runCommand("/world delete " + worldName))
-                                .hoverEvent(HoverEvent.showText(Component.text("Delete this world")));
+                        Component delete = ChatMenuUtil.actionButton("[Del]", ChatMenuStyle.ACTION_DELETE,
+                            ClickEvent.runCommand("/world delete " + worldName), "Delete this world");
 
-                        Component joinCommands = Component.text("[Join]", NamedTextColor.GOLD)
-                                .clickEvent(ClickEvent.runCommand("/world joincommands " + worldName))
-                                .hoverEvent(HoverEvent.showText(Component.text("Edit join commands")));
+                        Component joinCommands = ChatMenuUtil.actionButton("[Join]", ChatMenuStyle.ACTION_EDIT,
+                            ClickEvent.runCommand("/world joincommands " + worldName), "Edit join commands");
 
-                        Component leaveCommands = Component.text("[Leave]", NamedTextColor.GOLD)
-                                .clickEvent(ClickEvent.runCommand("/world leavecommands " + worldName))
-                                .hoverEvent(HoverEvent.showText(Component.text("Edit leave commands")));
+                        Component leaveCommands = ChatMenuUtil.actionButton("[Leave]", ChatMenuStyle.ACTION_EDIT,
+                            ClickEvent.runCommand("/world leavecommands " + worldName), "Edit leave commands");
 
-                        Component line = Component.text(worldName, NamedTextColor.YELLOW)
-                                .append(Component.text(" - ", NamedTextColor.GRAY))
+                        Component line = ChatMenuUtil.text(worldName, ChatMenuStyle.KEY)
+                                .append(ChatMenuUtil.text(" - ", ChatMenuStyle.MUTED))
                                 .append(status);
 
                         if (isPlayer) {
@@ -1104,8 +1099,8 @@ public class WorldCommand {
     ) {
         List<Component> lines = new ArrayList<>();
 
-        Component worldLine = Component.text("World: ", NamedTextColor.GRAY)
-            .append(Component.text(worldName, NamedTextColor.YELLOW));
+        Component worldLine = ChatMenuUtil.text("World: ", ChatMenuStyle.KEY)
+            .append(ChatMenuUtil.text(worldName, ChatMenuStyle.VALUE));
         if (interactive) {
             worldLine = worldLine.append(Component.text(" "))
                 .append(action("[Info]", "/world info " + worldName, "Show world details"))
@@ -1116,8 +1111,8 @@ public class WorldCommand {
         }
         lines.add(worldLine);
 
-        Component commandsLine = Component.text("Commands: ", NamedTextColor.GRAY)
-            .append(Component.text("default player, use player: or server: prefixes", NamedTextColor.DARK_GRAY));
+        Component commandsLine = ChatMenuUtil.text("Commands: ", ChatMenuStyle.KEY)
+            .append(ChatMenuUtil.text("default player, use player: or server: prefixes", ChatMenuStyle.MUTED));
         if (interactive) {
             commandsLine = commandsLine.append(Component.text(" "))
                 .append(suggest(
@@ -1130,13 +1125,13 @@ public class WorldCommand {
 
         List<IndexedTransitionCommand> commands = indexedTransitionCommands(worldName, phase);
         if (commands.isEmpty()) {
-            lines.add(Component.text("None configured.", NamedTextColor.DARK_GRAY));
+            lines.add(ChatMenuUtil.text("None configured.", ChatMenuStyle.DISABLED));
             return lines;
         }
 
         for (IndexedTransitionCommand indexedCommand : commands) {
-            Component line = Component.text("#" + indexedCommand.index() + " ", NamedTextColor.GRAY)
-                .append(Component.text(indexedCommand.command(), NamedTextColor.YELLOW));
+            Component line = ChatMenuUtil.text("#" + indexedCommand.index() + " ", ChatMenuStyle.MUTED)
+                .append(ChatMenuUtil.text(indexedCommand.command(), ChatMenuStyle.VALUE));
             if (interactive) {
                 line = line.append(Component.text(" "))
                     .append(suggest(
@@ -1212,21 +1207,18 @@ public class WorldCommand {
     }
 
     private Component action(String label, String command, String hover) {
-        return Component.text(label, NamedTextColor.GOLD)
-            .clickEvent(ClickEvent.runCommand(command))
-            .hoverEvent(HoverEvent.showText(Component.text(hover)));
+        return ChatMenuUtil.actionButton(label, ChatMenuStyle.ACTION_VIEW,
+            ClickEvent.runCommand(command), hover);
     }
 
     private Component deleteAction(String command, String hover) {
-        return Component.text("[Del]", NamedTextColor.RED)
-            .clickEvent(ClickEvent.runCommand(command))
-            .hoverEvent(HoverEvent.showText(Component.text(hover)));
+        return ChatMenuUtil.actionButton("[Del]", ChatMenuStyle.ACTION_DELETE,
+            ClickEvent.runCommand(command), hover);
     }
 
     private Component suggest(String label, String command, String hover) {
-        return Component.text(label, NamedTextColor.GOLD)
-            .clickEvent(ClickEvent.suggestCommand(command))
-            .hoverEvent(HoverEvent.showText(Component.text(hover)));
+        return ChatMenuUtil.actionButton(label, ChatMenuStyle.ACTION_EDIT,
+            ClickEvent.suggestCommand(command), hover);
     }
 
     private @NotNull String yesNo(boolean value) {

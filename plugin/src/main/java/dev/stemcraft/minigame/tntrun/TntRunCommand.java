@@ -7,6 +7,7 @@ import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.minigame.ArenaValidationResult;
 import dev.stemcraft.api.minigame.MiniGameArena;
 import dev.stemcraft.api.model.SCRegion;
+import dev.stemcraft.api.util.chatmenu.ChatMenuStyle;
 import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
 import dev.stemcraft.exception.MiniGameInvalidArenaConfigException;
 import net.kyori.adventure.text.Component;
@@ -138,32 +139,28 @@ public class TntRunCommand {
                 int end = Math.min(start + count, arenas.size());
                 for (int i = start; i < end; i++) {
                     MiniGameArena arena = arenas.get(i);
-                    Component line = Component.text(arena.id(), NamedTextColor.YELLOW)
-                        .hoverEvent(HoverEvent.showText(Component.text("Show info for " + arena.id())))
-                        .clickEvent(ClickEvent.runCommand("/tntrun info " + arena.id()))
+                    Component line = ChatMenuUtil.actionButton(arena.id(), ChatMenuStyle.KEY,
+                        ClickEvent.runCommand("/tntrun info " + arena.id()), "Show info for " + arena.id())
                         .append(Component.text(" [" + arena.getStatus().name().toLowerCase(Locale.ROOT) + "] ", statusColour(arena)))
-                        .append(Component.text(arena.getName(), NamedTextColor.GRAY))
-                        .append(Component.text(" " + arena.numPlayers() + "/" + arena.getMaxPlayers(), NamedTextColor.AQUA));
+                        .append(ChatMenuUtil.text(arena.getName(), ChatMenuStyle.VALUE))
+                        .append(ChatMenuUtil.text(" " + arena.numPlayers() + "/" + arena.getMaxPlayers(), ChatMenuStyle.ACCENT));
 
                     if (isPlayer) {
                         line = line
                             .append(Component.text(" "))
-                            .append(Component.text("[Info]", NamedTextColor.GOLD)
-                                .clickEvent(ClickEvent.runCommand("/tntrun info " + arena.id()))
-                                .hoverEvent(HoverEvent.showText(Component.text("Show arena details"))));
+                                .append(ChatMenuUtil.actionButton("[Info]", ChatMenuStyle.ACTION_VIEW,
+                                    ClickEvent.runCommand("/tntrun info " + arena.id()), "Show arena details"));
 
                         if (arena.isJoinable()) {
                             line = line
                                 .append(Component.text(" "))
-                                .append(Component.text("[Join]", NamedTextColor.GREEN)
-                                    .clickEvent(ClickEvent.runCommand("/tntrun join " + arena.id()))
-                                    .hoverEvent(HoverEvent.showText(Component.text("Join this arena"))));
+                                .append(ChatMenuUtil.actionButton("[Join]", ChatMenuStyle.ACTION_ADD,
+                                    ClickEvent.runCommand("/tntrun join " + arena.id()), "Join this arena"));
                         } else if (arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING || arena.getStatus() == MiniGameArena.ArenaStatus.ENDING) {
                             line = line
                                 .append(Component.text(" "))
-                                .append(Component.text("[Spectate]", NamedTextColor.AQUA)
-                                    .clickEvent(ClickEvent.runCommand("/tntrun spectate " + arena.id()))
-                                    .hoverEvent(HoverEvent.showText(Component.text("Spectate this arena"))));
+                                .append(ChatMenuUtil.actionButton("[Spectate]", ChatMenuStyle.ACTION_VIEW,
+                                    ClickEvent.runCommand("/tntrun spectate " + arena.id()), "Spectate this arena"));
                         }
                     }
 

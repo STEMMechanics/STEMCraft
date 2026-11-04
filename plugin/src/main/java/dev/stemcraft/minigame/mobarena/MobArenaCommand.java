@@ -7,6 +7,7 @@ import dev.stemcraft.api.minigame.ArenaValidationResult;
 import dev.stemcraft.api.minigame.MiniGameArena;
 import dev.stemcraft.api.minigame.MiniGameArena.ArenaStatus;
 import dev.stemcraft.api.model.SCRegion;
+import dev.stemcraft.api.util.chatmenu.ChatMenuStyle;
 import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
 import dev.stemcraft.exception.MiniGameInvalidArenaConfigException;
 import dev.stemcraft.minigame.mobarena.MobArenaArenaHandler.MobDeathReason;
@@ -625,40 +626,35 @@ final class MobArenaCommand {
                     final int end = Math.min(start + count, arenas.size());
                     for (int i = start; i < end; i++) {
                         final MiniGameArena arena = arenas.get(i);
-                        Component line = Component.text(arena.id(), NamedTextColor.YELLOW)
-                                .hoverEvent(HoverEvent.showText(Component.text("Show info for " + arena.id())))
-                                .clickEvent(ClickEvent.runCommand("/mobarena info " + arena.id()))
+                        Component line = ChatMenuUtil.actionButton(arena.id(), ChatMenuStyle.KEY,
+                                ClickEvent.runCommand("/mobarena info " + arena.id()), "Show info for " + arena.id())
                                 .append(Component.text(" [" + arena.getStatus().name().toLowerCase(Locale.ROOT) + "] ", statusColour(arena))
                                         .hoverEvent(HoverEvent.showText(Component.text("Show info for " + arena.id())))
                                         .clickEvent(ClickEvent.runCommand("/mobarena info " + arena.id())))
-                                .append(Component.text(arena.getName(), NamedTextColor.GRAY))
-                                .append(Component.text(" " + arena.numPlayers() + "/" + arena.getMaxPlayers(), NamedTextColor.AQUA));
+                                .append(ChatMenuUtil.text(arena.getName(), ChatMenuStyle.VALUE))
+                                .append(ChatMenuUtil.text(" " + arena.numPlayers() + "/" + arena.getMaxPlayers(), ChatMenuStyle.ACCENT));
 
                         if (isPlayer) {
                             line = line
                                     .append(Component.text(" "))
-                                    .append(Component.text("[Info]", NamedTextColor.GOLD)
-                                            .clickEvent(ClickEvent.runCommand("/mobarena info " + arena.id()))
-                                            .hoverEvent(HoverEvent.showText(Component.text("Show arena details"))));
+                                    .append(ChatMenuUtil.actionButton("[Info]", ChatMenuStyle.ACTION_VIEW,
+                                            ClickEvent.runCommand("/mobarena info " + arena.id()), "Show arena details"));
 
                             if (arena.isJoinable()) {
                                 line = line
                                         .append(Component.text(" "))
-                                        .append(Component.text("[Join]", NamedTextColor.GREEN)
-                                                .clickEvent(ClickEvent.runCommand("/mobarena join " + arena.id()))
-                                                .hoverEvent(HoverEvent.showText(Component.text("Join this arena"))));
+                                        .append(ChatMenuUtil.actionButton("[Join]", ChatMenuStyle.ACTION_ADD,
+                                                ClickEvent.runCommand("/mobarena join " + arena.id()), "Join this arena"));
                             } else if (arena.getStatus() == ArenaStatus.RUNNING || arena.getStatus() == ArenaStatus.ENDING) {
                                 line = line
                                         .append(Component.text(" "))
-                                        .append(Component.text("[Spectate]", NamedTextColor.AQUA)
-                                                .clickEvent(ClickEvent.runCommand("/mobarena spectate " + arena.id()))
-                                                .hoverEvent(HoverEvent.showText(Component.text("Spectate this arena"))));
+                                        .append(ChatMenuUtil.actionButton("[Spectate]", ChatMenuStyle.ACTION_VIEW,
+                                                ClickEvent.runCommand("/mobarena spectate " + arena.id()), "Spectate this arena"));
                             } else {
                                 line = line
                                         .append(Component.text(" "))
-                                        .append(Component.text("[Validate]", NamedTextColor.BLUE)
-                                                .clickEvent(ClickEvent.runCommand("/mobarena validate " + arena.id()))
-                                                .hoverEvent(HoverEvent.showText(Component.text("Validate this arena"))));
+                                        .append(ChatMenuUtil.actionButton("[Validate]", ChatMenuStyle.ACTION_EDIT,
+                                                ClickEvent.runCommand("/mobarena validate " + arena.id()), "Validate this arena"));
                             }
                         }
 

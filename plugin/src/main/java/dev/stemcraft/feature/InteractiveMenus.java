@@ -31,6 +31,7 @@ import dev.stemcraft.api.util.PlaceholderUtil;
 import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.api.util.TextUtil;
 import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
+import dev.stemcraft.api.util.chatmenu.ChatMenuStyle;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
@@ -179,8 +180,8 @@ public class InteractiveMenus extends BaseFeature {
             List<Component> lines = new ArrayList<>();
             for (int i = 0; i < count; i++) {
                 HelpEntry entry = entries.get(start + i);
-                Component line = Component.text(entry.command(), NamedTextColor.YELLOW)
-                    .append(Component.text(" - " + entry.description(), NamedTextColor.GRAY));
+                Component line = ChatMenuUtil.text(entry.command(), ChatMenuStyle.KEY)
+                    .append(ChatMenuUtil.text(" - " + entry.description(), ChatMenuStyle.MUTED));
                 if (isPlayer && entry.command().startsWith("/")) {
                     line = line.clickEvent(ClickEvent.suggestCommand(entry.command()))
                         .hoverEvent(HoverEvent.showText(Component.text("Suggest command")));
@@ -229,8 +230,8 @@ public class InteractiveMenus extends BaseFeature {
             List<Component> lines = new ArrayList<>();
             for (int i = 0; i < count; i++) {
                 MenuDefinition menu = menuList.get(start + i);
-                Component line = Component.text(menu.id(), NamedTextColor.YELLOW)
-                    .append(Component.text(" (" + menu.items().size() + " items)", NamedTextColor.GRAY));
+                Component line = ChatMenuUtil.text(menu.id(), ChatMenuStyle.KEY)
+                    .append(ChatMenuUtil.text(" (" + menu.items().size() + " items)", ChatMenuStyle.MUTED));
                 if (isPlayer) {
                     line = line.append(Component.text(" "))
                         .append(action("[Items]", "/imenu items " + menu.id(), "Manage menu items"))
@@ -245,7 +246,7 @@ public class InteractiveMenus extends BaseFeature {
                 }
                 lines.add(line);
 
-                Component title = Component.text("  Title: ", NamedTextColor.GRAY)
+                Component title = ChatMenuUtil.text("  Title: ", ChatMenuStyle.KEY)
                     .append(TextUtil.colourise(menu.title()));
                 if (isPlayer && ctx.hasPermission(EDIT_PERMISSION)) {
                     title = title.append(Component.text(" "))
@@ -253,8 +254,8 @@ public class InteractiveMenus extends BaseFeature {
                 }
                 lines.add(title);
 
-                Component body = Component.text("  Body: ", NamedTextColor.GRAY)
-                    .append(menu.body().isBlank() ? Component.text("(empty)", NamedTextColor.DARK_GRAY) : TextUtil.colourise(menu.body()));
+                Component body = ChatMenuUtil.text("  Body: ", ChatMenuStyle.KEY)
+                    .append(menu.body().isBlank() ? ChatMenuUtil.text("(empty)", ChatMenuStyle.DISABLED) : TextUtil.colourise(menu.body()));
                 if (isPlayer && ctx.hasPermission(EDIT_PERMISSION)) {
                     body = body.append(Component.text(" "))
                         .append(suggest("[Edit]", "/imenu set " + menu.id() + " body " + menu.body(), "Edit body"));
@@ -631,8 +632,8 @@ public class InteractiveMenus extends BaseFeature {
 
         for (MenuItem item : menu.items().values()) {
             String command = "/imenu select " + menu.id() + " " + item.id() + (testMode ? " -test" : "");
-            Component line = Component.text(command, NamedTextColor.AQUA)
-                .append(Component.text(" - ", NamedTextColor.DARK_GRAY))
+            Component line = ChatMenuUtil.text(command, ChatMenuStyle.ACCENT)
+                .append(ChatMenuUtil.text(" - ", ChatMenuStyle.MUTED))
                 .append(TextUtil.colourise(item.title()));
             player.sendMessage(line);
         }
@@ -780,14 +781,14 @@ public class InteractiveMenus extends BaseFeature {
     private List<Component> buildItemLines(MenuDefinition menu, MenuItem item, boolean canEdit) {
         List<Component> lines = new ArrayList<>();
 
-        Component line = Component.text(item.id(), NamedTextColor.YELLOW);
+        Component line = ChatMenuUtil.text(item.id(), ChatMenuStyle.KEY);
         if (canEdit) {
             line = line.append(Component.text(" "))
                 .append(deleteAction("[Del]", "/imenu item remove " + menu.id() + " " + item.id(), "Delete item"));
         }
         lines.add(line);
 
-        Component title = Component.text("  Title: ", NamedTextColor.GRAY)
+        Component title = ChatMenuUtil.text("  Title: ", ChatMenuStyle.KEY)
             .append(TextUtil.colourise(item.title()));
         if (canEdit) {
             title = title.append(Component.text(" "))
@@ -795,32 +796,33 @@ public class InteractiveMenus extends BaseFeature {
         }
         lines.add(title);
 
-        Component description = Component.text("  Description: ", NamedTextColor.GRAY)
+        Component description = ChatMenuUtil.text("  Description: ", ChatMenuStyle.KEY)
             .append(item.description().isBlank()
-                ? Component.text("(empty)", NamedTextColor.DARK_GRAY)
-                : Component.text(TextUtil.stripColour(item.description()), NamedTextColor.GRAY));
+                ? ChatMenuUtil.text("(empty)", ChatMenuStyle.DISABLED)
+                : ChatMenuUtil.text(TextUtil.stripColour(item.description()), ChatMenuStyle.MUTED));
         if (canEdit) {
             description = description.append(Component.text(" "))
                 .append(suggest("[Edit]", "/imenu item set " + menu.id() + " " + item.id() + " description " + item.description(), "Edit item description"));
         }
         lines.add(description);
 
-        Component commandsHeader = Component.text("  Commands:", NamedTextColor.GRAY);
+        Component commandsHeader = ChatMenuUtil.text("  Commands:", ChatMenuStyle.KEY);
         if (canEdit) {
             commandsHeader = commandsHeader.append(Component.text(" "))
-                .append(suggest("[Add]", "/imenu item command add " + menu.id() + " " + item.id() + " ", "Add item command"));
+                .append(suggest("[Add]", ChatMenuStyle.ACTION_ADD,
+                    "/imenu item command add " + menu.id() + " " + item.id() + " ", "Add item command"));
         }
         lines.add(commandsHeader);
 
         if (item.commands().isEmpty()) {
-            lines.add(Component.text("    (none)", NamedTextColor.DARK_GRAY));
+            lines.add(ChatMenuUtil.text("    (none)", ChatMenuStyle.DISABLED));
             return lines;
         }
 
         for (int commandIndex = 0; commandIndex < item.commands().size(); commandIndex++) {
             int oneBasedIndex = commandIndex + 1;
             String command = item.commands().get(commandIndex);
-            Component commandLine = Component.text("    #" + oneBasedIndex + " " + command, NamedTextColor.DARK_GRAY);
+            Component commandLine = ChatMenuUtil.text("    #" + oneBasedIndex + " " + command, ChatMenuStyle.VALUE);
             if (canEdit) {
                 commandLine = commandLine.append(Component.text(" "))
                     .append(suggest(
@@ -858,21 +860,22 @@ public class InteractiveMenus extends BaseFeature {
     }
 
     private Component action(String label, String command, String hover) {
-        return Component.text(label, NamedTextColor.GOLD)
-            .clickEvent(ClickEvent.runCommand(command))
-            .hoverEvent(HoverEvent.showText(Component.text(hover)));
+        return ChatMenuUtil.actionButton(label, ChatMenuStyle.ACTION_VIEW,
+            ClickEvent.runCommand(command), hover);
     }
 
     private Component deleteAction(String label, String command, String hover) {
-        return Component.text(label, NamedTextColor.RED)
-            .clickEvent(ClickEvent.runCommand(command))
-            .hoverEvent(HoverEvent.showText(Component.text(hover)));
+        return ChatMenuUtil.actionButton(label, ChatMenuStyle.ACTION_DELETE,
+            ClickEvent.runCommand(command), hover);
     }
 
     private Component suggest(String label, String command, String hover) {
-        return Component.text(label, NamedTextColor.GOLD)
-            .clickEvent(ClickEvent.suggestCommand(command))
-            .hoverEvent(HoverEvent.showText(Component.text(hover)));
+        return ChatMenuUtil.actionButton(label, ChatMenuStyle.ACTION_EDIT,
+            ClickEvent.suggestCommand(command), hover);
+    }
+
+    private Component suggest(String label, ChatMenuStyle style, String command, String hover) {
+        return ChatMenuUtil.actionButton(label, style, ClickEvent.suggestCommand(command), hover);
     }
 
     private Component bookClickableLabel(Component label, String command, String hover) {

@@ -7,6 +7,7 @@ import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.service.dialog.DialogResponse;
 import dev.stemcraft.api.util.TimeUtil;
 import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
+import dev.stemcraft.api.util.chatmenu.ChatMenuStyle;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
@@ -411,26 +412,26 @@ public final class NoticeBoards extends BaseFeature {
         List<NoticePost> posts = loadPosts("WHERE expires_at = -1 OR expires_at > ? ORDER BY created_at DESC",
             statement -> statement.setLong(1, System.currentTimeMillis()));
         ChatMenuUtil.render(ctx.getSender(),
-            Component.text(configured("commands.list-title", "Notice board posts"), NamedTextColor.AQUA),
+            ChatMenuUtil.text(configured("commands.list-title", "Notice board posts"), ChatMenuStyle.TITLE),
             "noticeboard list", page, posts.size(), (start, count, isPlayer) -> {
                 List<Component> lines = new ArrayList<>();
                 for (int index = start; index < Math.min(start + count, posts.size()); index++) {
                     NoticePost post = posts.get(index);
                     String id = post.id().toString().substring(0, 8);
-                    Component line = Component.text(id, NamedTextColor.YELLOW)
-                        .append(Component.text(" " + post.authorName() + " — ", NamedTextColor.GRAY))
-                        .append(Component.text(post.header(), NamedTextColor.WHITE))
-                        .append(Component.text(" (" + formatExpiry(post.expiresAt()) + ")", NamedTextColor.DARK_GRAY));
+                    Component line = ChatMenuUtil.text(id, ChatMenuStyle.KEY)
+                        .append(ChatMenuUtil.text(" " + post.authorName() + " — ", ChatMenuStyle.MUTED))
+                        .append(ChatMenuUtil.text(post.header(), ChatMenuStyle.VALUE))
+                        .append(ChatMenuUtil.text(" (" + formatExpiry(post.expiresAt()) + ")", ChatMenuStyle.MUTED));
                     if (isPlayer && canEditSilently(ctx.getSender(), post)) {
                         line = line.append(Component.text(" "))
-                            .append(actionButton("[Edit]", NamedTextColor.BLUE,
+                            .append(actionButton("[Edit]", ChatMenuStyle.ACTION_EDIT,
                                 ClickEvent.runCommand("/noticeboard edit " + id), "Edit this post"))
                             .append(Component.text(" "))
-                            .append(actionButton("[Del]", NamedTextColor.RED,
+                            .append(actionButton("[Del]", ChatMenuStyle.ACTION_DELETE,
                                 ClickEvent.runCommand("/noticeboard remove " + id), "Remove this post"));
                         if (ctx.hasPermission("stemcraft.noticeboard.admin")) {
                             line = line.append(Component.space())
-                                .append(actionButton("[Expiry]", NamedTextColor.GOLD,
+                                .append(actionButton("[Expiry]", ChatMenuStyle.ACTION_WARNING,
                                     ClickEvent.suggestCommand("/noticeboard expiry " + id + " "), "Set expiry, e.g. 1d or -1"));
                         }
                     }
@@ -538,10 +539,8 @@ public final class NoticeBoards extends BaseFeature {
         return TimeUtil.formatShortDuration(Math.max(0L, (expiresAt - System.currentTimeMillis() + 999L) / 1000L));
     }
 
-    @SuppressWarnings("rawtypes") // Adventure is non-generic on supported proxy/runtime versions.
-    private Component actionButton(String text, NamedTextColor color, ClickEvent clickEvent, String hoverText) {
-        return Component.text(text, color).clickEvent(clickEvent)
-            .hoverEvent(HoverEvent.showText(Component.text(hoverText)));
+    private Component actionButton(String text, ChatMenuStyle style, ClickEvent<?> clickEvent, String hoverText) {
+        return ChatMenuUtil.actionButton(text, style, clickEvent, hoverText);
     }
 
     private void removePost(CommandContext ctx) {

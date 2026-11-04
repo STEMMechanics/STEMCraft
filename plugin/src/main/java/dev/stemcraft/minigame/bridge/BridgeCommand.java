@@ -30,6 +30,7 @@ import dev.stemcraft.api.minigame.MiniGameTeam;
 import dev.stemcraft.api.minigame.MiniGameTeamSelectionInput;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.util.StringUtil;
+import dev.stemcraft.api.util.chatmenu.ChatMenuStyle;
 import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
 import dev.stemcraft.exception.MiniGameInvalidArenaConfigException;
 import net.kyori.adventure.text.Component;
@@ -182,40 +183,35 @@ public class BridgeCommand {
                 int end = Math.min(start + count, arenas.size());
                 for (int i = start; i < end; i++) {
                     MiniGameArena arena = arenas.get(i);
-                    Component line = Component.text(arena.id(), NamedTextColor.YELLOW)
-                        .hoverEvent(HoverEvent.showText(Component.text("Show info for " + arena.id())))
-                        .clickEvent(ClickEvent.runCommand("/bridge info " + arena.id()))
+                    Component line = ChatMenuUtil.actionButton(arena.id(), ChatMenuStyle.KEY,
+                        ClickEvent.runCommand("/bridge info " + arena.id()), "Show info for " + arena.id())
                         .append(Component.text(" [" + arena.getStatus().name().toLowerCase(Locale.ROOT) + "] ", statusColour(arena))
                             .hoverEvent(HoverEvent.showText(Component.text("Show info for " + arena.id())))
                             .clickEvent(ClickEvent.runCommand("/bridge info " + arena.id())))
-                        .append(Component.text(arena.getName(), NamedTextColor.GRAY))
-                        .append(Component.text(" " + arena.numPlayers() + "/" + arena.getMaxPlayers(), NamedTextColor.AQUA));
+                        .append(ChatMenuUtil.text(arena.getName(), ChatMenuStyle.VALUE))
+                        .append(ChatMenuUtil.text(" " + arena.numPlayers() + "/" + arena.getMaxPlayers(), ChatMenuStyle.ACCENT));
 
                     if (isPlayer) {
                         line = line
                             .append(Component.text(" "))
-                            .append(Component.text("[Info]", NamedTextColor.GOLD)
-                                .clickEvent(ClickEvent.runCommand("/bridge info " + arena.id()))
-                                .hoverEvent(HoverEvent.showText(Component.text("Show arena details"))));
+                            .append(ChatMenuUtil.actionButton("[Info]", ChatMenuStyle.ACTION_VIEW,
+                                ClickEvent.runCommand("/bridge info " + arena.id()), "Show arena details"));
 
                         if (arena.isJoinable()) {
                             line = line
                                 .append(Component.text(" "))
-                                .append(Component.text("[Join]", NamedTextColor.GREEN)
-                                    .clickEvent(ClickEvent.runCommand("/bridge join " + arena.id()))
-                                    .hoverEvent(HoverEvent.showText(Component.text("Join this arena"))));
+                                .append(ChatMenuUtil.actionButton("[Join]", ChatMenuStyle.ACTION_ADD,
+                                    ClickEvent.runCommand("/bridge join " + arena.id()), "Join this arena"));
                         } else if (arena.getStatus() == MiniGameArena.ArenaStatus.RUNNING || arena.getStatus() == MiniGameArena.ArenaStatus.ENDING) {
                             line = line
                                 .append(Component.text(" "))
-                                .append(Component.text("[Spectate]", NamedTextColor.AQUA)
-                                    .clickEvent(ClickEvent.runCommand("/bridge spectate " + arena.id()))
-                                    .hoverEvent(HoverEvent.showText(Component.text("Spectate this arena"))));
+                                .append(ChatMenuUtil.actionButton("[Spectate]", ChatMenuStyle.ACTION_VIEW,
+                                    ClickEvent.runCommand("/bridge spectate " + arena.id()), "Spectate this arena"));
                         } else if (dev.stemcraft.permission.PlayerCommandAccess.gameAdmin(ctx.getSender(), "bridge")) {
                             line = line
                                 .append(Component.text(" "))
-                                .append(Component.text("[Validate]", NamedTextColor.BLUE)
-                                    .clickEvent(ClickEvent.runCommand("/bridge validate " + arena.id()))
-                                    .hoverEvent(HoverEvent.showText(Component.text("Validate this arena"))));
+                                .append(ChatMenuUtil.actionButton("[Validate]", ChatMenuStyle.ACTION_EDIT,
+                                    ClickEvent.runCommand("/bridge validate " + arena.id()), "Validate this arena"));
                         }
                     }
 
@@ -718,13 +714,13 @@ public class BridgeCommand {
                 for (int i = start; i < end; i++) {
                     Material item = dropItems.get(i);
                     int index = i + 1;
-                    Component line = Component.text("#" + index + " ", NamedTextColor.DARK_GRAY)
-                        .append(Component.text(describeDropItem(item), NamedTextColor.GOLD));
+                    Component line = ChatMenuUtil.text("#" + index + " ", ChatMenuStyle.MUTED)
+                        .append(ChatMenuUtil.text(describeDropItem(item), ChatMenuStyle.VALUE));
                     if (isPlayer) {
                         line = line.append(Component.text(" "))
-                            .append(Component.text("[Remove]", NamedTextColor.RED)
-                                .clickEvent(ClickEvent.runCommand("/bridge removedropitem " + arena.id() + " " + index))
-                                .hoverEvent(HoverEvent.showText(Component.text("Remove this drop item"))));
+                            .append(ChatMenuUtil.actionButton("[Remove]", ChatMenuStyle.ACTION_DELETE,
+                                ClickEvent.runCommand("/bridge removedropitem " + arena.id() + " " + index),
+                                "Remove this drop item"));
                     }
                     lines.add(line);
                 }
