@@ -781,20 +781,28 @@ public final class EntitlementService extends BaseService {
         List<EntitlementDefinition> values = new ArrayList<>(entitlements.values());
         int page = ChatMenuUtil.getPageFromArgs(ctx.args(), 1, 1);
         page = boundedPage(page, values.size());
-        ChatMenuUtil.render(ctx.getSender(), "Ability administration", "entitlements menu", page, values.size(),
-            (start, count, interactive) -> values.subList(start, start + count).stream().map(definition -> {
-                Component line = Component.text(definition.manual() ? "○ " : "● ",
-                        definition.manual() ? NamedTextColor.GRAY : NamedTextColor.GREEN)
-                    .append(Component.text(definition.name(), NamedTextColor.WHITE))
-                    .append(Component.text(" (" + definition.id() + ")", NamedTextColor.DARK_GRAY));
-                return interactive ? line.clickEvent(ClickEvent.runCommand("/entitlements edit " + definition.id()))
-                    .hoverEvent(HoverEvent.showText(Component.text("Open ability editor"))) : line;
-            }).toList(), "No abilities are configured.");
-        ctx.getSender().sendMessage(suggestButton("[＋ Create]", "/entitlements create new-ability",
-            "Click, replace the ID, then send").append(Component.space())
-            .append(button("[Badges]", "/entitlements badges", "Browse badge definitions")).append(Component.space())
-            .append(suggestButton("[Manage player]", "/entitlements player ", "Enter an online or offline player name")).append(Component.space())
-            .append(button("[↻ Reload]", "/entitlements reload", "Reload and recalculate")));
+        Component title = Component.text("Ability administration", NamedTextColor.AQUA);
+        if (ctx.getSender() instanceof org.bukkit.entity.Player) title = title.append(Component.space())
+            .append(suggestButton("[Create]", NamedTextColor.GREEN, "/entitlements create new-ability",
+                "Click, replace the ID, then send"));
+        ChatMenuUtil.render(ctx.getSender(), title, "entitlements menu", page, values.size(),
+            (start, count, interactive) -> {
+                List<Component> lines = new ArrayList<>();
+                if (interactive) lines.add(button("[Badges]", NamedTextColor.GOLD, "/entitlements badges",
+                    "Browse badge definitions").append(Component.space())
+                    .append(suggestButton("[Manage player]", NamedTextColor.BLUE, "/entitlements player ",
+                        "Enter an online or offline player name")).append(Component.space())
+                    .append(button("[Reload]", NamedTextColor.YELLOW, "/entitlements reload", "Reload and recalculate")));
+                lines.addAll(values.subList(start, start + count).stream().map(definition -> {
+                    Component line = Component.text(definition.name(), NamedTextColor.WHITE)
+                        .append(Component.text(" (" + definition.id() + ") — ", NamedTextColor.GRAY))
+                        .append(Component.text(definition.manual() ? "manual" : "automatic",
+                            definition.manual() ? NamedTextColor.GRAY : NamedTextColor.GREEN));
+                    return interactive ? line.append(Component.space()).append(button("[Edit]", NamedTextColor.BLUE,
+                        "/entitlements edit " + definition.id(), "Open ability editor")) : line;
+                }).toList());
+                return lines;
+            }, "No abilities are configured.");
     }
 
     private void showBadgeMenu(CommandContext ctx, int requestedPage) {
@@ -802,23 +810,31 @@ public final class EntitlementService extends BaseService {
             .sorted(Comparator.comparingInt(BadgeDefinition::priority).reversed().thenComparing(BadgeDefinition::id))
             .toList();
         int page = boundedPage(requestedPage, values.size());
-        ChatMenuUtil.render(ctx.getSender(), "Badge administration", "entitlements badges", page, values.size(),
-            (start, count, interactive) -> values.subList(start, start + count).stream().map(badge -> {
-                Component line = Component.text(badge.id(), NamedTextColor.YELLOW)
-                    .append(Component.text(" — ", NamedTextColor.DARK_GRAY))
-                    .append(miniMessage.deserialize(renderBadgeDisplay(badge)))
-                    .append(Component.text(" " + badge.description(), NamedTextColor.GRAY));
-                if (interactive) line = line.append(Component.space())
-                    .append(suggestButton("[Edit]", "/entitlements badge set " + badge.id() + " display " + badge.display(),
-                        "Edit this badge's display token"))
-                    .append(Component.space()).append(suggestButton("[Delete]", "/entitlements badge delete " + badge.id(),
-                        "Delete this badge definition"));
-                return line;
-            }).toList(), "No badges are configured.");
-        ctx.getSender().sendMessage(suggestButton("[＋ Create badge]", "/entitlements badge create new-badge",
-            "Click, replace the ID, then send").append(Component.space())
-            .append(suggestButton("[Manage player]", "/entitlements player ", "Enter an online or offline player name")).append(Component.space())
-            .append(button("[Abilities]", "/entitlements menu", "Browse entitlement definitions")));
+        Component title = Component.text("Badge administration", NamedTextColor.AQUA);
+        if (ctx.getSender() instanceof org.bukkit.entity.Player) title = title.append(Component.space())
+            .append(suggestButton("[Create badge]", NamedTextColor.GREEN, "/entitlements badge create new-badge",
+                "Click, replace the ID, then send"));
+        ChatMenuUtil.render(ctx.getSender(), title, "entitlements badges", page, values.size(),
+            (start, count, interactive) -> {
+                List<Component> lines = new ArrayList<>();
+                if (interactive) lines.add(suggestButton("[Manage player]", NamedTextColor.BLUE, "/entitlements player ",
+                    "Enter an online or offline player name").append(Component.space())
+                    .append(button("[Abilities]", NamedTextColor.GOLD, "/entitlements menu",
+                        "Browse entitlement definitions")));
+                lines.addAll(values.subList(start, start + count).stream().map(badge -> {
+                    Component line = Component.text(badge.id(), NamedTextColor.YELLOW)
+                        .append(Component.text(" — ", NamedTextColor.GRAY))
+                        .append(miniMessage.deserialize(renderBadgeDisplay(badge)))
+                        .append(Component.text(" " + badge.description(), NamedTextColor.GRAY));
+                    if (interactive) line = line.append(Component.space())
+                        .append(suggestButton("[Edit]", NamedTextColor.BLUE, "/entitlements badge set " + badge.id() + " display " + badge.display(),
+                            "Edit this badge's display token"))
+                        .append(Component.space()).append(suggestButton("[Delete]", NamedTextColor.RED, "/entitlements badge delete " + badge.id(),
+                            "Delete this badge definition"));
+                    return line;
+                }).toList());
+                return lines;
+            }, "No badges are configured.");
     }
 
     private void showPlayerManagementMenu(CommandContext ctx, ResolvedPlayer target, int requestedPage) {
@@ -833,26 +849,34 @@ public final class EntitlementService extends BaseService {
 
         int page = boundedPage(requestedPage, values.size());
         String targetArg = commandPlayerArgument(target.name());
-        ChatMenuUtil.render(ctx.getSender(), "Awards for " + target.name(), "entitlements player " + targetArg,
-            page, values.size(), (start, count, interactive) -> values.subList(start, start + count).stream().map(entry -> {
-                String label = entry.badge() ? "Badge " + entry.name() : entry.name();
-                Component line = Component.text(entry.granted() ? "● " : "○ ",
-                        entry.granted() ? NamedTextColor.GREEN : NamedTextColor.GRAY)
-                    .append(Component.text(label, NamedTextColor.WHITE))
-                    .append(Component.text(" — " + entry.description(), NamedTextColor.GRAY));
-                if (interactive) {
-                    String verb = entry.granted() ? "revoke" : "grant";
-                    String command = entry.badge()
-                        ? "/entitlements badge " + verb + " " + targetArg + " " + entry.id()
-                        : "/entitlements " + verb + " " + targetArg + " " + entry.id();
-                    line = line.append(Component.space()).append(button(entry.granted() ? "[Revoke]" : "[Grant]", command,
-                        (entry.granted() ? "Revoke " : "Grant ") + entry.name() + " for " + target.name()));
-                }
-                return line;
-            }).toList(), "No entitlements or badges are configured.");
-        ctx.getSender().sendMessage(button("[Recalculate]", "/entitlements recalculate " + targetArg,
-            "Recalculate this player's automatic entitlements").append(Component.space())
-            .append(button("[Definitions]", "/entitlements menu", "Back to entitlement definitions")));
+        Component title = Component.text("Awards for " + target.name(), NamedTextColor.AQUA);
+        if (ctx.getSender() instanceof org.bukkit.entity.Player) title = title.append(Component.space())
+            .append(button("[Recalculate]", NamedTextColor.YELLOW, "/entitlements recalculate " + targetArg,
+                "Recalculate this player's automatic entitlements"));
+        ChatMenuUtil.render(ctx.getSender(), title, "entitlements player " + targetArg,
+            page, values.size(), (start, count, interactive) -> {
+                List<Component> lines = new ArrayList<>();
+                if (interactive) lines.add(button("[Definitions]", NamedTextColor.GOLD, "/entitlements menu",
+                    "Back to entitlement definitions"));
+                lines.addAll(values.subList(start, start + count).stream().map(entry -> {
+                    String label = entry.badge() ? "Badge " + entry.name() : entry.name();
+                    Component line = Component.text(label, NamedTextColor.WHITE)
+                        .append(Component.text(" — " + entry.description(), NamedTextColor.GRAY));
+                    if (interactive) {
+                        String verb = entry.granted() ? "revoke" : "grant";
+                        String command = entry.badge()
+                            ? "/entitlements badge " + verb + " " + targetArg + " " + entry.id()
+                            : "/entitlements " + verb + " " + targetArg + " " + entry.id();
+                        line = line.append(Component.space()).append(Component.text(entry.granted() ? "granted" : "not granted",
+                            entry.granted() ? NamedTextColor.GREEN : NamedTextColor.YELLOW))
+                            .append(Component.space()).append(button(entry.granted() ? "[Revoke]" : "[Grant]",
+                            entry.granted() ? NamedTextColor.RED : NamedTextColor.GREEN, command,
+                            (entry.granted() ? "Revoke " : "Grant ") + entry.name() + " for " + target.name()));
+                    }
+                    return line;
+                }).toList());
+                return lines;
+            }, "No entitlements or badges are configured.");
     }
 
     private static int boundedPage(int requestedPage, int count) {
@@ -870,7 +894,7 @@ public final class EntitlementService extends BaseService {
         EntitlementDefinition definition = entitlements.get(ctx.getArgLower(1));
         if (definition == null) { ctx.returnError("Unknown entitlement '" + ctx.getArg(1) + "'."); return; }
         String base = "/entitlements set " + definition.id() + " ";
-        ctx.getSender().sendMessage(Component.text("--- Ability: " + definition.name() + " ---", NamedTextColor.AQUA));
+        ctx.getSender().sendMessage(Component.text("Ability: " + definition.name(), NamedTextColor.AQUA));
         ctx.getSender().sendMessage(editField("Name", definition.name(), base + "name "));
         ctx.getSender().sendMessage(editField("Description", definition.description(), base + "description "));
         ctx.getSender().sendMessage(editField("Granted permissions", String.join(", ", definition.permissions()), base + "permissions "));
@@ -880,19 +904,22 @@ public final class EntitlementService extends BaseService {
         if (root == null) ctx.getSender().sendMessage(Component.text("  Manual grant only", NamedTextColor.GRAY));
         else renderCondition(ctx, definition.id(), root, "root", 0);
         if (!(root instanceof ConditionGroup)) ctx.getSender().sendMessage(conditionAddButtons(definition.id(), "root"));
-        ctx.getSender().sendMessage(button("[← All abilities]", "/entitlements menu", "Back to ability list")
-            .append(Component.space()).append(button("[Make manual]", "/entitlements set " + definition.id() + " manual true", "Remove all conditions"))
-            .append(Component.space()).append(suggestButton("[Delete]", "/entitlements delete " + definition.id(), "Delete this ability")));
+        ctx.getSender().sendMessage(button("[Back]", NamedTextColor.GOLD, "/entitlements menu", "Back to ability list")
+            .append(Component.space()).append(button("[Make manual]", NamedTextColor.YELLOW,
+                "/entitlements set " + definition.id() + " manual true", "Remove all conditions"))
+            .append(Component.space()).append(suggestButton("[Delete]", NamedTextColor.RED,
+                "/entitlements delete " + definition.id(), "Delete this ability")));
     }
 
     private void renderCondition(CommandContext ctx, String id, Condition condition, String path, int depth) {
         String indent = "  ".repeat(depth);
         Component controls = path.equals("root") ? Component.empty()
-            : Component.space().append(button("[×]", "/entitlements condition " + id + " remove " + path, "Remove condition"));
+            : Component.space().append(button("[Remove]", NamedTextColor.RED,
+                "/entitlements condition " + id + " remove " + path, "Remove condition"));
         if (condition instanceof ConditionGroup group) {
             String operator = group.all() ? "ALL (AND)" : "ANY (OR)";
             ctx.getSender().sendMessage(Component.text(indent + operator, NamedTextColor.GOLD)
-                .append(Component.space()).append(button("[toggle]", "/entitlements condition " + id + " operator " + path
+                .append(Component.space()).append(button("[Toggle]", NamedTextColor.YELLOW, "/entitlements condition " + id + " operator " + path
                     + " " + (group.all() ? "any" : "all"), "Change AND/OR")).append(controls));
             for (int i = 0; i < group.conditions().size(); i++)
                 renderCondition(ctx, id, group.conditions().get(i), childPath(path, i), depth + 1);
@@ -900,7 +927,7 @@ public final class EntitlementService extends BaseService {
             return;
         }
         String label = conditionLabel(condition);
-        Component line = Component.text(indent + "• " + label, NamedTextColor.WHITE).append(controls);
+        Component line = Component.text(indent + label, NamedTextColor.WHITE).append(controls);
         if (!(condition instanceof NotCondition)) line = line.append(Component.space())
             .append(button("[AND]", "/entitlements condition " + id + " wrap " + path + " all", "Wrap in an AND group"))
             .append(Component.space()).append(button("[OR]", "/entitlements condition " + id + " wrap " + path + " any", "Wrap in an OR group"))
@@ -911,10 +938,13 @@ public final class EntitlementService extends BaseService {
 
     private Component conditionAddButtons(String id, String path) {
         String base = "/entitlements condition " + id + " add " + path + " ";
-        return suggestButton("[＋ stat]", base + "stat skill_mining_xp 400", "Add a skill/stat threshold")
-            .append(Component.space()).append(suggestButton("[＋ permission]", base + "permission stemcraft.permission", "Require a permission"))
-            .append(Component.space()).append(suggestButton("[＋ NOT permission]", base + "not-permission stemcraft.permission", "Require a missing permission"))
-            .append(Component.space()).append(suggestButton("[＋ quest]", base + "quest quest-id", "Require a completed quest"));
+        return suggestButton("[Add stat]", NamedTextColor.GREEN, base + "stat skill_mining_xp 400", "Add a skill/stat threshold")
+            .append(Component.space()).append(suggestButton("[Add permission]", NamedTextColor.GREEN,
+                base + "permission stemcraft.permission", "Require a permission"))
+            .append(Component.space()).append(suggestButton("[Add NOT permission]", NamedTextColor.GREEN,
+                base + "not-permission stemcraft.permission", "Require a missing permission"))
+            .append(Component.space()).append(suggestButton("[Add quest]", NamedTextColor.GREEN,
+                base + "quest quest-id", "Require a completed quest"));
     }
 
     private String conditionLabel(Condition condition) {
@@ -1087,16 +1117,25 @@ public final class EntitlementService extends BaseService {
 
     private Component editField(String label, String value, String command) {
         return Component.text(label + ": ", NamedTextColor.GRAY).append(Component.text(value.isBlank() ? "(none)" : value, NamedTextColor.WHITE))
-            .append(Component.space()).append(suggestButton("[edit]", command, "Click, edit the command, then send"));
+            .append(Component.space()).append(suggestButton("[Edit]", NamedTextColor.BLUE, command,
+                "Click, edit the command, then send"));
     }
 
     private Component button(String text, String command, String hover) {
-        return Component.text(text, NamedTextColor.GOLD).clickEvent(ClickEvent.runCommand(command))
+        return button(text, NamedTextColor.GOLD, command, hover);
+    }
+
+    private Component button(String text, NamedTextColor color, String command, String hover) {
+        return Component.text(text, color).clickEvent(ClickEvent.runCommand(command))
             .hoverEvent(HoverEvent.showText(Component.text(hover)));
     }
 
     private Component suggestButton(String text, String command, String hover) {
-        return Component.text(text, NamedTextColor.GOLD).clickEvent(ClickEvent.suggestCommand(command))
+        return suggestButton(text, NamedTextColor.GOLD, command, hover);
+    }
+
+    private Component suggestButton(String text, NamedTextColor color, String command, String hover) {
+        return Component.text(text, color).clickEvent(ClickEvent.suggestCommand(command))
             .hoverEvent(HoverEvent.showText(Component.text(hover)));
     }
 

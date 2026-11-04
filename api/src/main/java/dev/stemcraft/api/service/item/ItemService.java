@@ -25,6 +25,8 @@ import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
 import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Service for managing item attributes and custom items.
@@ -102,6 +104,36 @@ public interface ItemService {
 
     /** Removes a previously registered bracket-property handler. */
     void unregisterCustomItemPropertyHandler(@NotNull String id);
+
+    /**
+     * Registers tab-completion values for bracket properties supported by a custom item.
+     * The property names and values are metadata only; validation remains the responsibility
+     * of the registered property handler.
+     *
+     * @param id custom item identifier
+     * @param suggestions property names mapped to their suggested values
+     */
+    void registerCustomItemPropertySuggestions(@NotNull String id,
+                                               @NotNull Map<String, ? extends Collection<String>> suggestions);
+
+    /**
+     * Returns the registered bracket-property completion metadata for a custom item.
+     *
+     * @param id custom item identifier
+     * @return immutable property-to-values metadata, or an empty map
+     */
+    @NotNull Map<String, List<String>> customItemPropertySuggestions(@NotNull String id);
+
+    /**
+     * Returns item-specification completions, including registered custom-item properties.
+     * When {@code includeAmount} is true, an item amount suffix such as {@code @1} is
+     * completed when the current input has reached an amount separator.
+     *
+     * @param currentArgument current item argument, optionally including comma-separated items
+     * @param includeAmount whether item amount syntax should be completed
+     * @return item-specification completion candidates
+     */
+    @NotNull List<String> itemCompletionSuggestions(@NotNull String currentArgument, boolean includeAmount);
 
     /**
      * Registers a richer custom item definition, including placement and

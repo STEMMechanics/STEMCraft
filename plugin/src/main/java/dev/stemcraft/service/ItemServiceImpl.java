@@ -61,10 +61,12 @@ import org.bukkit.potion.PotionEffectType;
 import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.io.File;
@@ -81,6 +83,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
     private final Map<String, ItemStack> itemTemplates = new HashMap<>();
     private final Map<String, CustomItemDefinition> itemDefinitions = new LinkedHashMap<>();
     private final Map<String, CustomItemPropertyHandler> propertyHandlers = new HashMap<>();
+    private final Map<String, Map<String, List<String>>> propertySuggestions = new HashMap<>();
     private final Set<Integer> configuredModelData = new HashSet<>();
     private final Map<String, FoodBehavior> foodBehaviors = new HashMap<>();
     private dev.stemcraft.api.command.Command giveCommand;
@@ -315,12 +318,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
             return targets;
         });
         api.tabComplete().register("item", (player, args, currentArgument) -> {
-            java.util.List<String> items = new java.util.ArrayList<>();
-            for (Material material : Material.values()) {
-                if (material.isItem()) items.add("minecraft:" + material.getKey().getKey());
-            }
-            itemTemplates.keySet().stream().map(id -> "stemcraft:" + id.replace('-', '_')).forEach(items::add);
-            return items;
+            return itemCompletionSuggestions(currentArgument, false);
         });
         var builder = api.commands().create("give")
             .description("Give an item to one or more players")
@@ -743,7 +741,85 @@ public class ItemServiceImpl extends BaseService implements ItemService {
 
     @Override
     public void unregisterCustomItemPropertyHandler(@NotNull String id) {
-        propertyHandlers.remove(normaliseCustomItemId(id));
+        String normalizedId = normaliseCustomItemId(id);
+        propertyHandlers.remove(normalizedId);
+        propertySuggestions.remove(normalizedId);
+    }
+
+    @Override
+    public void registerCustomItemPropertySuggestions(@NotNull String id,
+                                                      @NotNull Map<String, ? extends Collection<String>> suggestions) {
+        Map<String, List<String>> normalized = new LinkedHashMap<>();
+        for (Map.Entry<String, ? extends Collection<String>> entry : suggestions.entrySet()) {
+            String property = entry.getKey() == null ? "" : entry.getKey().trim().toLowerCase(Locale.ROOT);
+            if (property.isBlank()) continue;
+            Collection<String> values = entry.getValue();
+            List<String> normalizedValues = values == null ? List.of() : values.stream()
+                .filter(value -> value != null && !value.isBlank())
+                .map(String::trim)
+                .distinct()
+                .sorted(String.CASE_INSENSITIVE_ORDER)
+                .toList();
+            normalized.put(property, normalizedValues);
+        }
+        propertySuggestions.put(normaliseCustomItemId(id), Collections.unmodifiableMap(normalized));
+    }
+
+    @Override
+    public @NotNull Map<String, List<String>> customItemPropertySuggestions(@NotNull String id) {
+        return propertySuggestions.getOrDefault(normaliseCustomItemId(id), Map.of());
+    }
+
+    @Override
+    public @NotNull List<String> itemCompletionSuggestions(@NotNull String currentArgument, boolean includeAmount) {
+        String current = currentArgument == null ? "" : currentArgument;
+        int comma = current.lastIndexOf(',');
+        String listPrefix = comma < 0 ? "" : current.substring(0, comma + 1);
+        String itemPrefix = comma < 0 ? current : current.substring(comma + 1);
+        boolean amountRequested = includeAmount && itemPrefix.indexOf('@') >= 0;
+
+        LinkedHashSet<String> candidates = new LinkedHashSet<>();
+        for (Material material : Material.values()) {
+            if (material.isItem()) candidates.add("minecraft:" + material.getKey().getKey());
+        }
+
+        Map<String, String> customIds = customItemCompletionIds();
+        candidates.addAll(customIds.keySet());
+        for (Map.Entry<String, String> entry : customIds.entrySet()) {
+            Map<String, List<String>> suggestions = propertySuggestions.get(entry.getValue());
+            if (suggestions == null || suggestions.isEmpty()) continue;
+            for (Map.Entry<String, List<String>> property : suggestions.entrySet()) {
+                String prefix = entry.getKey() + "[" + property.getKey() + "=";
+                candidates.add(prefix);
+                for (String value : property.getValue()) {
+                    candidates.add(prefix + value + "]");
+                }
+            }
+        }
+
+        List<String> results = new ArrayList<>();
+        for (String candidate : candidates) {
+            results.add(listPrefix + candidate + (amountRequested ? "@1" : ""));
+        }
+        return results;
+    }
+
+    private Map<String, String> customItemCompletionIds() {
+        Map<String, String> result = new LinkedHashMap<>();
+        for (String id : itemTemplates.keySet()) {
+            result.putIfAbsent(formatCustomItemCompletionId(id), normaliseCustomItemId(id));
+        }
+        for (CustomItemDefinition definition : itemDefinitions.values()) {
+            result.putIfAbsent(formatCustomItemCompletionId(definition.id()), normaliseCustomItemId(definition.id()));
+        }
+        return result;
+    }
+
+    private static String formatCustomItemCompletionId(String id) {
+        int separator = id.indexOf(':');
+        String namespace = separator < 0 ? "stemcraft" : id.substring(0, separator);
+        String path = separator < 0 ? id : id.substring(separator + 1);
+        return namespace + ":" + path.replace('-', '_');
     }
 
     private static String normaliseCustomItemId(String id) {

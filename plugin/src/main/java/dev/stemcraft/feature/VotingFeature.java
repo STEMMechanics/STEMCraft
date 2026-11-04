@@ -220,14 +220,16 @@ public final class VotingFeature extends BaseFeature {
         api.tabComplete().register("vote-reward-duration", (player, args, currentArgument) -> List.of(
             "permanent", "7d", "14d", "30d", "60d", "90d", "12h", "24h"));
         api.tabComplete().register("vote-mail-item", (player, args, currentArgument) -> {
-            List<String> items = new ArrayList<>();
-            for (Material material : Material.values()) {
-                if (material.isItem()) items.add("minecraft:" + material.getKey().getKey());
-            }
-            if (api.items() != null) {
-                api.items().customItemDefinitions().stream().map(definition -> definition.id()).sorted().forEach(items::add);
-            }
-            return items;
+            return api.items() == null ? List.of() : api.items().itemCompletionSuggestions(currentArgument, true);
+        });
+        api.tabComplete().register("vote-mail-option", (player, args, currentArgument) -> {
+            String optionPrefix = optionPrefix(currentArgument, "title", "message", "from", "items");
+            if (optionPrefix == null) return List.of("title=", "message=", "from=", "items=");
+            String itemValue = currentArgument.substring(optionPrefix.length());
+            if (api.items() == null) return List.of();
+            return api.items().itemCompletionSuggestions(itemValue, true).stream()
+                .map(candidate -> optionPrefix + candidate)
+                .toList();
         });
         api.commands().create("vote").description("View and administer physical voting groups.")
             .usage("/vote <help|status|tally|admin> ...")
@@ -248,8 +250,7 @@ public final class VotingFeature extends BaseFeature {
             .tabCompletion("admin", "reminder", "{vote-group}", "list")
             .tabCompletion("admin", "reward", "{vote-group}", "add", "grant-badge", "{badge-id}", "{vote-reward-duration}")
             .tabCompletion("admin", "reward", "{vote-group}", "add", "revoke-badge", "{badge-id}")
-            .tabCompletion("admin", "reward", "{vote-group}", "add", "mail", "", "")
-            .tabCompletion("admin", "reward", "{vote-group}", "add", "mail", "", "|", "", "|", "items=", "{vote-mail-item}")
+            .tabCompletion("admin", "reward", "{vote-group}", "add", "mail", "{vote-mail-option}")
             .tabCompletion("admin", "reward", "{vote-group}", "list")
             .tabCompletion("admin", "reward", "{vote-group}", "clear")
             .tabCompletion("admin", "tower", "place", "{vote-group}", "{vote-option:$3}")
@@ -359,10 +360,11 @@ public final class VotingFeature extends BaseFeature {
             List<Component> lines = new ArrayList<>();
             for (VoteGroup group : selected.subList(start, start + count)) {
                 int resultVotes = resultTotalVotes(group.id);
-                Component line = Component.text("● ", stateColour(group)).append(Component.text(group.name, NamedTextColor.WHITE))
+                Component line = Component.text(group.name, NamedTextColor.WHITE)
                     .append(Component.text(" (" + group.id + ") — " + resultVotes + " " + voteWord(resultVotes), NamedTextColor.GRAY));
-                if (interactive) line = line.clickEvent(ClickEvent.runCommand("/" + paginationCommand + " " + group.id))
-                    .hoverEvent(HoverEvent.showText(Component.text("View this voting tally")));
+                if (interactive) line = line.append(Component.space())
+                    .append(button("[View]", NamedTextColor.GOLD, "/" + paginationCommand + " " + group.id,
+                        "View this voting tally"));
                 lines.add(line);
             }
             return lines;
@@ -394,7 +396,12 @@ public final class VotingFeature extends BaseFeature {
             return;
         }
         int page = boundedTallyPage(requestedPage, rows.size());
-        ChatMenuUtil.render(ctx.getSender(), "Tally: " + group.name + " (" + group.id + ") — " + state(group),
+        int resultVotes = resultTotalVotes(group.id);
+        Component title = Component.text("Tally: " + group.name + " (" + group.id + ") — " + state(group), NamedTextColor.AQUA)
+            .append(Component.text(" — " + resultVotes + " " + voteWord(resultVotes), NamedTextColor.GRAY))
+            .append(Component.space()).append(button("[Back]", NamedTextColor.GOLD, "/" + paginationCommand,
+                "Select another voting group"));
+        ChatMenuUtil.render(ctx.getSender(), title,
             paginationCommand + " " + group.id, page, rows.size(), (start, count, interactive) -> {
                 List<Component> lines = new ArrayList<>();
                 for (int index = start; index < start + count; index++) {
@@ -405,9 +412,6 @@ public final class VotingFeature extends BaseFeature {
                 }
                 return lines;
             }, "No claimed vote options configured.");
-        int resultVotes = resultTotalVotes(group.id);
-        ctx.getSender().sendMessage(Component.text("Total: " + resultVotes + " " + voteWord(resultVotes), NamedTextColor.GRAY));
-        ctx.getSender().sendMessage(button("[← All groups]", "/" + paginationCommand, "Select another voting group"));
     }
 
     private int boundedTallyPage(int page, int count) {
@@ -913,15 +917,13 @@ public final class VotingFeature extends BaseFeature {
             List<Component> lines = new ArrayList<>();
             for (VoteGroup group : values.subList(start, start + count)) {
                 int used = uuid == null ? 0 : votes.getOrDefault(group.id, Map.of()).getOrDefault(uuid, Set.of()).size();
-                Component line = button("[" + group.name + "]", "/vote status " + group.id,
-                        "View this voting group's status")
-                    .append(Component.space())
-                    .append(Component.text("(" + group.id + ") — ", NamedTextColor.DARK_GRAY))
+                Component line = Component.text(group.name, NamedTextColor.WHITE)
+                    .append(Component.text(" (" + group.id + ") — ", NamedTextColor.GRAY))
                     .append(Component.text(state(group), stateColour(group)))
                     .append(Component.text(" — " + used + "/" + group.votesPerPlayer + " used", NamedTextColor.GRAY));
-                if (!interactive) line = Component.text(group.name + " (" + group.id + ") — ", NamedTextColor.WHITE)
-                    .append(Component.text(state(group), stateColour(group)))
-                    .append(Component.text(" — " + used + "/" + group.votesPerPlayer + " used", NamedTextColor.GRAY));
+                if (interactive) line = line.append(Component.space())
+                    .append(button("[View]", NamedTextColor.GOLD, "/vote status " + group.id,
+                        "View this voting group's status"));
                 lines.add(line);
             }
             return lines;
@@ -931,65 +933,67 @@ public final class VotingFeature extends BaseFeature {
     private void showGroupStatus(CommandContext ctx, VoteGroup group) {
         UUID uuid = ctx.getSender() instanceof Player player ? player.getUniqueId() : null;
         int used = uuid == null ? 0 : votes.getOrDefault(group.id, Map.of()).getOrDefault(uuid, Set.of()).size();
-        ChatMenuUtil.render(ctx.getSender(), "Voting: " + group.name + " (" + group.id + ")", "vote status " + group.id,
-            1, 1, (start, count, interactive) -> List.of(
-                statusField("State", state(group), stateColour(group)),
-                statusField("Votes", used + "/" + group.votesPerPlayer + " used", NamedTextColor.WHITE),
-                statusField("Schedule", formatTime(group.startsAt) + " → " + formatTime(group.endsAt), NamedTextColor.WHITE),
-                statusField("Source", group.sourceType + (group.sourceValue == null ? "" : " (" + group.sourceValue + ")"), NamedTextColor.WHITE),
-                statusField("Reminders", reminders.getOrDefault(group.id, Map.of()).size() + " configured", NamedTextColor.WHITE),
-                statusField("Winner rewards", rewards.getOrDefault(group.id, List.of()).size() + " configured", NamedTextColor.WHITE)
-            ), "Voting group not found.");
-        if (!ctx.hasPermission(ADMIN_PERMISSION)) return;
-
-        ctx.getSender().sendMessage(
-            suggestButton("[Edit schedule]", "/vote admin schedule " + group.id + " now ",
+        List<Component> lines = new ArrayList<>(List.of(
+            statusField("State", state(group), stateColour(group)),
+            statusField("Votes", used + "/" + group.votesPerPlayer + " used", NamedTextColor.WHITE),
+            statusField("Schedule", formatTime(group.startsAt) + " → " + formatTime(group.endsAt), NamedTextColor.WHITE),
+            statusField("Source", group.sourceType + (group.sourceValue == null ? "" : " (" + group.sourceValue + ")"), NamedTextColor.WHITE),
+            statusField("Reminders", reminders.getOrDefault(group.id, Map.of()).size() + " configured", NamedTextColor.WHITE),
+            statusField("Winner rewards", rewards.getOrDefault(group.id, List.of()).size() + " configured", NamedTextColor.WHITE)
+        ));
+        if (ctx.hasPermission(ADMIN_PERMISSION)) {
+            lines.add(suggestButton("[Edit schedule]", NamedTextColor.BLUE, "/vote admin schedule " + group.id + " now ",
                 "Set the start and finish dates; use YYYY-MM-DD or a timestamp")
                 .append(Component.space())
-                .append(button(group.paused ? "[Resume]" : "[Pause]",
+                .append(button(group.paused ? "[Resume]" : "[Pause]", group.paused ? NamedTextColor.GREEN : NamedTextColor.YELLOW,
                     "/vote admin " + (group.paused ? "resume " : "pause ") + group.id,
                     group.paused ? "Resume voting" : "Pause voting")));
-        ctx.getSender().sendMessage(
-            button("[View entries]", "/vote admin option list " + group.id,
-                "View the configured voting entries")
+            lines.add(button("[View entries]", NamedTextColor.GOLD, "/vote admin option list " + group.id,
+                    "View the configured voting entries")
                 .append(Component.space())
-                .append(suggestButton("[Edit source]", "/vote admin source plots " + group.id + " " ,
+                .append(suggestButton("[Edit source]", NamedTextColor.BLUE, "/vote admin source plots " + group.id + " ",
                     "Load PlotSquared creators from a plot world")));
-        ctx.getSender().sendMessage(
-            button("[View reminders]", "/vote admin reminder " + group.id + " list",
-                "View configured voting reminders")
+            lines.add(button("[View reminders]", NamedTextColor.GOLD, "/vote admin reminder " + group.id + " list",
+                    "View configured voting reminders")
                 .append(Component.space())
-                .append(suggestButton("[＋ Add reminder]", "/vote admin reminder " + group.id + " set ",
+                .append(suggestButton("[Add reminder]", NamedTextColor.GREEN, "/vote admin reminder " + group.id + " set ",
                     "Add a reminder: <days> <message>")));
-        ctx.getSender().sendMessage(
-            button("[View rewards]", "/vote admin reward " + group.id + " list",
-                "View configured winner rewards")
+            lines.add(button("[View rewards]", NamedTextColor.GOLD, "/vote admin reward " + group.id + " list",
+                    "View configured winner rewards")
                 .append(Component.space())
-                .append(suggestButton("[＋ Add reward]", "/vote admin reward " + group.id + " add ",
+                .append(suggestButton("[Add reward]", NamedTextColor.GREEN, "/vote admin reward " + group.id + " add ",
                     "Add grant-badge, revoke-badge, or mail reward")));
+        }
+        ChatMenuUtil.render(ctx.getSender(), "Voting: " + group.name + " (" + group.id + ")", "vote status " + group.id,
+            1, 1, (start, count, interactive) -> lines, "Voting group not found.");
     }
 
     private void showAdminMenu(CommandContext ctx) {
         List<VoteGroup> values = new ArrayList<>(groups.values());
         int page = ChatMenuUtil.getPageFromArgs(ctx.args(), 1, 1);
-        ChatMenuUtil.render(ctx.getSender(), "Voting administration", "vote admin", page, values.size(), (start, count, interactive) -> {
+        Component title = Component.text("Voting administration", NamedTextColor.AQUA);
+        if (ctx.getSender() instanceof Player) title = title.append(Component.space())
+            .append(suggestButton("[Create]", NamedTextColor.GREEN, "/vote admin create new-vote 1 New Vote", "Create a voting group"));
+        ChatMenuUtil.render(ctx.getSender(), title, "vote admin", page, values.size(), (start, count, interactive) -> {
             List<Component> lines = new ArrayList<>();
             for (VoteGroup group : values.subList(start, start + count)) {
-                Component line = Component.text("● ", stateColour(group)).append(Component.text(group.name, NamedTextColor.WHITE))
-                    .append(Component.text(" (" + group.id + ")", NamedTextColor.DARK_GRAY))
+                Component line = Component.text(group.name, NamedTextColor.WHITE)
+                    .append(Component.text(" (" + group.id + ") — ", NamedTextColor.GRAY))
+                    .append(Component.text(state(group), stateColour(group)))
                     .append(Component.text(" — " + totalVotes(group.id) + " votes", NamedTextColor.GRAY));
-                if (interactive) line = line.clickEvent(ClickEvent.runCommand("/vote admin view " + group.id))
-                    .hoverEvent(HoverEvent.showText(Component.text("Manage this voting group")));
+                if (interactive) line = line.append(Component.space())
+                    .append(button("[View]", NamedTextColor.GOLD, "/vote admin view " + group.id,
+                        "Manage this voting group"));
                 lines.add(line);
             }
             return lines;
         }, "No voting groups exist.");
-        ctx.getSender().sendMessage(suggestButton("[＋ Create]", "/vote admin create new-vote 1 New Vote", "Create a voting group"));
     }
 
     private void showGroupMenu(CommandContext ctx) {
         VoteGroup group = requireGroup(ctx, 2); if (group == null) return;
-        ctx.getSender().sendMessage(Component.text("Voting group: " + group.name + " (" + group.id + ")", NamedTextColor.AQUA));
+        ctx.getSender().sendMessage(Component.text("Voting group: " + group.name + " (" + group.id + ")", NamedTextColor.AQUA)
+            .append(Component.space()).append(button("[Back]", NamedTextColor.GOLD, "/vote admin", "Back to voting groups")));
         sendAdminField(ctx, "State", state(group), stateColour(group));
         sendAdminField(ctx, "Votes per player", Integer.toString(group.votesPerPlayer), NamedTextColor.WHITE);
         sendAdminField(ctx, "Schedule", formatTime(group.startsAt) + " → " + formatTime(group.endsAt), NamedTextColor.WHITE);
@@ -1002,22 +1006,22 @@ public final class VotingFeature extends BaseFeature {
             ctx.getSender().sendMessage(Component.text("Top 3", NamedTextColor.YELLOW));
             for (int index = 0; index < topRows.size(); index++) {
                 VoteTallyRow row = topRows.get(index);
-                ctx.getSender().sendMessage(Component.text("  " + (index + 1) + ". ", NamedTextColor.DARK_GRAY)
+                ctx.getSender().sendMessage(Component.text("  " + (index + 1) + ". ", NamedTextColor.GRAY)
                     .append(Component.text(row.optionName(), NamedTextColor.WHITE))
                     .append(Component.text(" — " + row.votes() + " " + voteWord(row.votes()), NamedTextColor.GRAY)));
             }
         }
 
         String toggleCommand = "/vote admin " + (group.paused ? "resume " : "pause ") + group.id;
-        ctx.getSender().sendMessage(button("[← Groups]", "/vote admin", "Back to voting groups")
-            .append(Component.space()).append(button("[Full tally]", "/vote admin tally " + group.id, "Open the full voting tally"))
-            .append(Component.space()).append(button(group.paused ? "[Resume]" : "[Pause]", toggleCommand, group.paused ? "Resume voting" : "Pause voting"))
-            .append(Component.space()).append(suggestButton("[Schedule]", "/vote admin schedule " + group.id + " now ", "Set start and finish"))
-            .append(Component.space()).append(suggestButton("[＋ Entry]", "/vote admin option add " + group.id + " ", "Enter <option-id> <display name>")));
-        ctx.getSender().sendMessage(button("[Place next]", "/vote admin tower place " + group.id + " next", "Place the next entry")
-            .append(Component.space()).append(suggestButton("[Plot source]", "/vote admin source plots " + group.id + " ", "Load PlotSquared creators"))
-            .append(Component.space()).append(suggestButton("[Reset votes]", "/vote admin reset " + group.id, "Review before sending"))
-            .append(Component.space()).append(suggestButton("[Remove group]", "/vote admin remove " + group.id, "Remove this group, all options, votes, and physical towers")));
+        ctx.getSender().sendMessage(button("[Tally]", NamedTextColor.GOLD, "/vote admin tally " + group.id, "Open the full voting tally")
+            .append(Component.space()).append(button(group.paused ? "[Resume]" : "[Pause]", group.paused ? NamedTextColor.GREEN : NamedTextColor.YELLOW,
+                toggleCommand, group.paused ? "Resume voting" : "Pause voting"))
+            .append(Component.space()).append(suggestButton("[Schedule]", NamedTextColor.BLUE, "/vote admin schedule " + group.id + " now ", "Set start and finish"))
+            .append(Component.space()).append(suggestButton("[Add entry]", NamedTextColor.GREEN, "/vote admin option add " + group.id + " ", "Enter <option-id> <display name>")));
+        ctx.getSender().sendMessage(button("[Place next]", NamedTextColor.GREEN, "/vote admin tower place " + group.id + " next", "Place the next entry")
+            .append(Component.space()).append(suggestButton("[Plot source]", NamedTextColor.BLUE, "/vote admin source plots " + group.id + " ", "Load PlotSquared creators"))
+            .append(Component.space()).append(suggestButton("[Reset votes]", NamedTextColor.YELLOW, "/vote admin reset " + group.id, "Review before sending"))
+            .append(Component.space()).append(suggestButton("[Remove group]", NamedTextColor.RED, "/vote admin remove " + group.id, "Remove this group, all options, votes, and physical towers")));
     }
 
     private void sendAdminField(CommandContext ctx, String label, String value, NamedTextColor valueColor) {
@@ -1375,9 +1379,33 @@ public final class VotingFeature extends BaseFeature {
     private NamedTextColor stateColour(VoteGroup group) { return switch (state(group)) { case "open" -> NamedTextColor.GREEN; case "paused" -> NamedTextColor.YELLOW; default -> NamedTextColor.GRAY; }; }
     private String formatTime(long epochSecond) { return epochSecond == Long.MAX_VALUE ? "none" : Instant.ofEpochSecond(epochSecond)
         .atZone(ZoneId.systemDefault()).toLocalDateTime().toString().replace('T', ' '); }
-    private Component button(String text, String command, String hover) { return Component.text(text, NamedTextColor.GOLD)
+    private String optionPrefix(String currentArgument, String... optionNames) {
+        if (currentArgument == null) return null;
+        for (String optionName : optionNames) {
+            for (String separator : List.of("=", ":")) {
+                String prefix = optionName + separator;
+                if (currentArgument.regionMatches(true, 0, prefix, 0, prefix.length())) {
+                    return currentArgument.substring(0, prefix.length());
+                }
+            }
+        }
+        return null;
+    }
+
+    private Component button(String text, String command, String hover) {
+        return button(text, NamedTextColor.GOLD, command, hover);
+    }
+
+    private Component button(String text, NamedTextColor color, String command, String hover) {
+        return Component.text(text, color)
         .clickEvent(ClickEvent.runCommand(command)).hoverEvent(HoverEvent.showText(Component.text(hover))); }
-    private Component suggestButton(String text, String command, String hover) { return Component.text(text, NamedTextColor.GOLD)
+
+    private Component suggestButton(String text, String command, String hover) {
+        return suggestButton(text, NamedTextColor.GOLD, command, hover);
+    }
+
+    private Component suggestButton(String text, NamedTextColor color, String command, String hover) {
+        return Component.text(text, color)
         .clickEvent(ClickEvent.suggestCommand(command)).hoverEvent(HoverEvent.showText(Component.text(hover))); }
 
     private void onInteract(PlayerInteractEvent event) {

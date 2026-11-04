@@ -1086,7 +1086,11 @@ public final class QuestFeature extends BaseFeature {
     }
 
     private Component button(String text, String command, String hover) {
-        return Component.text(text, NamedTextColor.GOLD).clickEvent(ClickEvent.runCommand(command))
+        return button(text, NamedTextColor.GOLD, command, hover);
+    }
+
+    private Component button(String text, NamedTextColor color, String command, String hover) {
+        return Component.text(text, color).clickEvent(ClickEvent.runCommand(command))
             .hoverEvent(HoverEvent.showText(Component.text(hover)));
     }
 
@@ -1543,24 +1547,27 @@ public final class QuestFeature extends BaseFeature {
     private void showAdminMenu(CommandContext ctx) {
         List<QuestDefinition> values = new ArrayList<>(quests.values());
         int page = ChatMenuUtil.getPageFromArgs(ctx.args(), 1, 1);
-        ChatMenuUtil.render(ctx.getSender(), Component.text("Quest administration", NamedTextColor.AQUA),
+        Component title = Component.text("Quest administration", NamedTextColor.AQUA);
+        if (ctx.getSender() instanceof Player) title = title.append(Component.space())
+            .append(suggestButton("[Create]", NamedTextColor.GREEN, "/quest admin create new-quest New Quest", "Create a quest"));
+        ChatMenuUtil.render(ctx.getSender(), title,
             "quest admin", page, values.size(), (start, count, interactive) -> {
                 List<Component> lines = new ArrayList<>();
+                if (interactive) lines.add(button("[NPC profiles]", NamedTextColor.GOLD, "/quest admin npcs", "Manage conditional NPCs")
+                    .append(Component.space()).append(button("[Spawned NPCs]", NamedTextColor.GOLD, "/quest admin npc-spawned", "Inspect spawned quest NPCs"))
+                    .append(Component.space()).append(button("[Web editor]", NamedTextColor.BLUE, "/quest admin editor", "Create a private editor link"))
+                    .append(Component.space()).append(button("[Reload]", NamedTextColor.YELLOW, "/quest admin reload", "Reload quests.yml")));
                 for (QuestDefinition quest : values.subList(start, start + count)) {
-                    Component state = Component.text(quest.enabled() ? "● " : "○ ", quest.enabled() ? NamedTextColor.GREEN : NamedTextColor.GRAY);
-                    Component line = state.append(Component.text(quest.title(), NamedTextColor.WHITE))
-                        .append(Component.text(" (" + quest.id() + ")", NamedTextColor.DARK_GRAY));
-                    if (interactive) line = line.clickEvent(ClickEvent.runCommand("/quest admin edit " + quest.id()))
-                        .hoverEvent(HoverEvent.showText(Component.text("Open quest editor")));
+                    Component line = Component.text(quest.title(), NamedTextColor.WHITE)
+                        .append(Component.text(" (" + quest.id() + ") — ", NamedTextColor.GRAY))
+                        .append(Component.text(quest.enabled() ? "enabled" : "disabled",
+                            quest.enabled() ? NamedTextColor.GREEN : NamedTextColor.GRAY));
+                    if (interactive) line = line.append(Component.space()).append(button("[Edit]", NamedTextColor.BLUE,
+                        "/quest admin edit " + quest.id(), "Open quest editor"));
                     lines.add(line);
                 }
                 return lines;
             }, "No quests are configured.");
-        ctx.getSender().sendMessage(button("[＋ Create]", "/quest admin create new-quest New Quest", "Create a quest")
-            .append(Component.space()).append(button("[NPC profiles]", "/quest admin npcs", "Manage conditional NPCs"))
-            .append(Component.space()).append(button("[Spawned NPCs]", "/quest admin npc-spawned", "Inspect spawned quest NPCs"))
-            .append(Component.space()).append(button("[Web editor]", "/quest admin editor", "Create a private editor link"))
-            .append(Component.space()).append(button("[↻ Reload]", "/quest admin reload", "Reload quests.yml")));
     }
 
     private void adminCreate(CommandContext ctx) {
@@ -1616,9 +1623,9 @@ public final class QuestFeature extends BaseFeature {
 
     private void showEditMenu(CommandContext ctx, QuestDefinition quest) {
         String base = "/quest admin edit " + quest.id() + " ";
-        ctx.getSender().sendMessage(Component.text("──────── Quest Editor ────────", NamedTextColor.AQUA));
+        ctx.getSender().sendMessage(Component.text("Quest editor", NamedTextColor.AQUA));
         ctx.getSender().sendMessage(Component.text(quest.title(), NamedTextColor.GOLD)
-            .append(Component.text("  " + quest.id(), NamedTextColor.DARK_GRAY)));
+            .append(Component.text("  " + quest.id(), NamedTextColor.GRAY)));
         ctx.getSender().sendMessage(editField("Title", quest.title(), base + "title "));
         ctx.getSender().sendMessage(editField("Author", quest.author(), base + "author "));
         ctx.getSender().sendMessage(editField("Description", quest.description(), base + "description "));
@@ -1647,51 +1654,53 @@ public final class QuestFeature extends BaseFeature {
         for (int i = 0; i < quest.objectives().size(); i++) {
             QuestObjective objective = quest.objectives().get(i);
             ctx.getSender().sendMessage(Component.text("  " + (i + 1) + ". " + objective.label(), NamedTextColor.WHITE)
-                .append(Component.space()).append(button("[remove]", base + "objective remove " + (i + 1), "Remove objective")));
+                .append(Component.space()).append(button("[Remove]", NamedTextColor.RED, base + "objective remove " + (i + 1), "Remove objective")));
         }
-        ctx.getSender().sendMessage(suggestButton("[＋ Collect]", base + "objective add collect OAK_LOG 8 consume Gather 8 oak logs", "Add item objective")
-            .append(Component.space()).append(suggestButton("[＋ Kill]", base + "objective add kill ZOMBIE 3 Defeat 3 zombies", "Add kill objective"))
-            .append(Component.space()).append(suggestButton("[＋ Location]", base + "objective add location 8 Visit this location", "Uses your current location"))
-            .append(Component.space()).append(suggestButton("[＋ NPC]", base + "objective add npc Speak to this NPC", "Look at the NPC before sending")));
+        ctx.getSender().sendMessage(suggestButton("[Collect]", NamedTextColor.GREEN, base + "objective add collect OAK_LOG 8 consume Gather 8 oak logs", "Add item objective")
+            .append(Component.space()).append(suggestButton("[Kill]", NamedTextColor.GREEN, base + "objective add kill ZOMBIE 3 Defeat 3 zombies", "Add kill objective"))
+            .append(Component.space()).append(suggestButton("[Location]", NamedTextColor.GREEN, base + "objective add location 8 Visit this location", "Uses your current location"))
+            .append(Component.space()).append(suggestButton("[NPC]", NamedTextColor.GREEN, base + "objective add npc Speak to this NPC", "Look at the NPC before sending")));
 
         ctx.getSender().sendMessage(Component.text("Prerequisites", NamedTextColor.YELLOW));
         if (quest.requirements().isEmpty()) ctx.getSender().sendMessage(Component.text("  None", NamedTextColor.GRAY));
         for (String requirement : quest.requirements()) ctx.getSender().sendMessage(Component.text("  " + requirement, NamedTextColor.WHITE)
-            .append(Component.space()).append(button("[remove]", base + "require remove " + requirement, "Remove prerequisite")));
-        ctx.getSender().sendMessage(suggestButton("[＋ prerequisite]", base + "require add ", "Add required quest ID"));
+            .append(Component.space()).append(button("[Remove]", NamedTextColor.RED, base + "require remove " + requirement, "Remove prerequisite")));
+        ctx.getSender().sendMessage(suggestButton("[Add prerequisite]", NamedTextColor.GREEN, base + "require add ", "Add required quest ID"));
 
         ctx.getSender().sendMessage(Component.text("Reward commands", NamedTextColor.YELLOW));
         if (quest.rewardCommands().isEmpty()) ctx.getSender().sendMessage(Component.text("  None", NamedTextColor.GRAY));
         for (int i = 0; i < quest.rewardCommands().size(); i++) ctx.getSender().sendMessage(Component.text("  /" + quest.rewardCommands().get(i), NamedTextColor.WHITE)
-            .append(Component.space()).append(button("[remove]", base + "reward remove " + (i + 1), "Remove reward command")));
-        ctx.getSender().sendMessage(suggestButton("[＋ reward command]", base + "reward add give {player} emerald 1", "Command runs as console"));
+            .append(Component.space()).append(button("[Remove]", NamedTextColor.RED, base + "reward remove " + (i + 1), "Remove reward command")));
+        ctx.getSender().sendMessage(suggestButton("[Add reward command]", NamedTextColor.GREEN, base + "reward add give {player} emerald 1", "Command runs as console"));
         ctx.getSender().sendMessage(Component.text("Reward items", NamedTextColor.YELLOW));
         if (quest.rewardItems().isEmpty()) ctx.getSender().sendMessage(Component.text("  None", NamedTextColor.GRAY));
         for (int i = 0; i < quest.rewardItems().size(); i++) {
             QuestRewardItem item = quest.rewardItems().get(i);
-            ctx.getSender().sendMessage(Component.text("  " + item.amount() + " × " + item.material().name().toLowerCase(Locale.ROOT).replace('_', ' '), NamedTextColor.WHITE)
-                .append(Component.space()).append(button("[remove]", base + "rewarditem remove " + (i + 1), "Remove reward item")));
+            ctx.getSender().sendMessage(Component.text("  " + item.amount() + " x " + item.material().name().toLowerCase(Locale.ROOT).replace('_', ' '), NamedTextColor.WHITE)
+                .append(Component.space()).append(button("[Remove]", NamedTextColor.RED, base + "rewarditem remove " + (i + 1), "Remove reward item")));
         }
-        ctx.getSender().sendMessage(suggestButton("[＋ reward item]", base + "rewarditem add EMERALD 1", "Safely delivered; overflow goes to mail"));
+        ctx.getSender().sendMessage(suggestButton("[Add reward item]", NamedTextColor.GREEN, base + "rewarditem add EMERALD 1", "Safely delivered; overflow goes to mail"));
         ctx.getSender().sendMessage(Component.text("NPC dialogue", NamedTextColor.YELLOW));
         for (String state : List.of("offer", "idle", "incomplete", "objective", "complete")) {
             List<String> lines = quest.dialogue(state);
             ctx.getSender().sendMessage(Component.text("  " + state + ": ", NamedTextColor.GRAY)
                 .append(Component.text(lines.isEmpty() ? "None" : lines.size() + " line(s)", NamedTextColor.WHITE))
-                .append(Component.space()).append(suggestButton("[add]", base + "dialogue add " + state + " ", "Add a random " + state + " line")));
+                .append(Component.space()).append(suggestButton("[Add]", NamedTextColor.GREEN, base + "dialogue add " + state + " ", "Add a random " + state + " line")));
             for (int i = 0; i < lines.size(); i++) {
-                ctx.getSender().sendMessage(Component.text("    “" + lines.get(i) + "”", NamedTextColor.DARK_GRAY)
-                    .append(Component.space()).append(button("[remove]", base + "dialogue remove " + state + " " + (i + 1), "Remove line")));
+                ctx.getSender().sendMessage(Component.text("    “" + lines.get(i) + "”", NamedTextColor.GRAY)
+                    .append(Component.space()).append(button("[Remove]", NamedTextColor.RED, base + "dialogue remove " + state + " " + (i + 1), "Remove line")));
             }
         }
-        ctx.getSender().sendMessage(button("[← All quests]", "/quest admin", "Back to quest list")
-            .append(Component.space()).append(button("[Delete]", "/quest admin delete " + quest.id() + " confirm", "Delete permanently")));
+        ctx.getSender().sendMessage(button("[Back]", NamedTextColor.GOLD, "/quest admin", "Back to quest list")
+            .append(Component.space()).append(button("[Delete]", NamedTextColor.RED,
+                "/quest admin delete " + quest.id() + " confirm", "Delete permanently")));
     }
 
     private Component editField(String label, String value, String command) {
         return Component.text(label + ": ", NamedTextColor.GRAY)
             .append(Component.text(value, NamedTextColor.WHITE))
-            .append(Component.space()).append(suggestButton("[edit]", command, "Click, edit the command, then send"));
+            .append(Component.space()).append(suggestButton("[Edit]", NamedTextColor.BLUE, command,
+                "Click, edit the command, then send"));
     }
 
     private Component toggle(boolean enabled, String command) {
@@ -1700,7 +1709,11 @@ public final class QuestFeature extends BaseFeature {
     }
 
     private Component suggestButton(String text, String command, String hover) {
-        return Component.text(text, NamedTextColor.GOLD).clickEvent(ClickEvent.suggestCommand(command))
+        return suggestButton(text, NamedTextColor.GOLD, command, hover);
+    }
+
+    private Component suggestButton(String text, NamedTextColor color, String command, String hover) {
+        return Component.text(text, color).clickEvent(ClickEvent.suggestCommand(command))
             .hoverEvent(HoverEvent.showText(Component.text(hover)));
     }
 
@@ -1754,19 +1767,27 @@ public final class QuestFeature extends BaseFeature {
     private void showNpcProfiles(CommandContext ctx) {
         List<QuestNpcProfile> profiles = new ArrayList<>(npcProfiles.values());
         int page = ChatMenuUtil.getPageFromArgs(ctx.args(), 2, 1);
-        ChatMenuUtil.render(ctx.getSender(), "Quest NPC profiles", "quest admin npcs", page, profiles.size(), (start, count, interactive) -> {
+        Component title = Component.text("Quest NPC profiles", NamedTextColor.AQUA);
+        if (ctx.getSender() instanceof Player) title = title.append(Component.space())
+            .append(suggestButton("[Create]", NamedTextColor.GREEN, "/quest admin npc create new-npc New NPC", "Create profile"));
+        ChatMenuUtil.render(ctx.getSender(), title, "quest admin npcs", page, profiles.size(), (start, count, interactive) -> {
             List<Component> lines = new ArrayList<>();
             for (QuestNpcProfile profile : profiles.subList(start, start + count)) {
                 Entity entity = reconcileProfileEntities(profile);
-                lines.add(Component.text((entity != null ? "● " : "○ ") + profile.name() + " (" + profile.id() + ")", NamedTextColor.WHITE)
-                    .append(Component.space()).append(button("[Edit]", "/quest admin npc edit " + profile.id(), "Edit profile"))
+                Component line = Component.text(profile.name() + " (" + profile.id() + ") — ", NamedTextColor.WHITE)
+                    .append(Component.text(entity == null ? "not spawned" : "spawned",
+                        entity == null ? NamedTextColor.GRAY : NamedTextColor.GREEN));
+                if (interactive) line = line.append(Component.space()).append(button("[Edit]", NamedTextColor.BLUE,
+                    "/quest admin npc edit " + profile.id(), "Edit profile"))
                     .append(Component.space()).append(button(entity == null ? "[Spawn]" : "[Despawn]",
+                        entity == null ? NamedTextColor.GREEN : NamedTextColor.YELLOW,
                         "/quest admin npc " + (entity == null ? "spawn " : "despawn ") + profile.id(), "Manage entity"))
-                    .append(Component.space()).append(button("[Quests]", "/quest admin npc quests " + profile.id(), "View linked quests")));
+                    .append(Component.space()).append(button("[Quests]", NamedTextColor.GOLD,
+                        "/quest admin npc quests " + profile.id(), "View linked quests"));
+                lines.add(line);
             }
             return lines;
         }, "No NPC profiles are configured.");
-        ctx.getSender().sendMessage(suggestButton("[＋ Create]", "/quest admin npc create new-npc New NPC", "Create profile"));
     }
 
     private void showNpcSpawnResult(CommandContext ctx, QuestNpcProfile profile, Entity entity, String message) {
@@ -1984,8 +2005,8 @@ public final class QuestFeature extends BaseFeature {
             .append(suggestButton("[time " + p.timeFrom() + "-" + p.timeUntil() + "]", base + "time ", "Minecraft ticks")).append(Component.space())
             .append(suggestButton("[lifetime " + p.lifetimeSeconds() + "s]", base + "lifetime ", "Maximum appearance; 0 means unlimited")).append(Component.space())
             .append(suggestButton("[biome]", base + "biome ", "Add biome or clear")));
-        ctx.getSender().sendMessage(suggestButton("[＋ idle saying]", base + "idle ", "Add random idle dialogue"));
-        ctx.getSender().sendMessage(button("[← Profiles]", "/quest admin npcs", "Back"));
+        ctx.getSender().sendMessage(suggestButton("[Add idle saying]", NamedTextColor.GREEN, base + "idle ", "Add random idle dialogue"));
+        ctx.getSender().sendMessage(button("[Profiles]", NamedTextColor.GOLD, "/quest admin npcs", "Back"));
     }
 
     private boolean bindNpc(CommandContext ctx, QuestDefinition quest, boolean start) {
