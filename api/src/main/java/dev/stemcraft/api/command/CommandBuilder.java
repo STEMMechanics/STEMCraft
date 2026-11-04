@@ -67,7 +67,7 @@ public interface CommandBuilder {
     /**
      * Marks zero-based argument positions that the context parser must ignore.
      * Ignored arguments remain in the positional argument list without being
-     * interpreted as flags or {@code key:value} options.
+     * interpreted as flags or {@code key:value}/{@code key=value} options.
      *
      * @param positions zero-based argument positions
      * @return The command builder.

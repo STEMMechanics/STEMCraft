@@ -91,11 +91,11 @@ public class CommandContextImpl implements CommandContext {
                 continue;
             }
 
-            // Key-value option: key:value
-            int colonIndex = arg.indexOf(':');
-            if (colonIndex > 0 && colonIndex < arg.length() - 1) {
-                String key = arg.substring(0, colonIndex).toLowerCase(Locale.ROOT);
-                String value = arg.substring(colonIndex + 1);
+            // Key-value option: key:value or key=value
+            int separatorIndex = firstOptionSeparator(arg);
+            if (separatorIndex > 0 && separatorIndex < arg.length() - 1) {
+                String key = arg.substring(0, separatorIndex).toLowerCase(Locale.ROOT);
+                String value = arg.substring(separatorIndex + 1);
                 optionMap.put(key, value);
                 continue;
             }
@@ -107,6 +107,14 @@ public class CommandContextImpl implements CommandContext {
         this.args = positional;
         this.flags = java.util.Collections.unmodifiableSet(flagSet);
         this.options = java.util.Collections.unmodifiableMap(optionMap);
+    }
+
+    private static int firstOptionSeparator(String argument) {
+        int colonIndex = argument.indexOf(':');
+        int equalsIndex = argument.indexOf('=');
+        if (colonIndex < 0) return equalsIndex;
+        if (equalsIndex < 0) return colonIndex;
+        return Math.min(colonIndex, equalsIndex);
     }
 
     /**
@@ -197,11 +205,12 @@ public class CommandContextImpl implements CommandContext {
     }
 
     /**
-     * Returns the value for a key-value option in the form key:value.
+     * Returns the value for a key-value option in the form key:value or key=value.
      * Keys are case-insensitive.
 
      * Example:
      *   /cmd something course:parkour1
+     *   /cmd something course=parkour1
      *   getOption("course") -> "parkour1".
      *
      *   @param key The option key to retrieve.

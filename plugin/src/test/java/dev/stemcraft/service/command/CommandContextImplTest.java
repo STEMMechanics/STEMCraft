@@ -152,6 +152,18 @@ class CommandContextImplTest {
     }
 
     @Test
+    void acceptsEqualsSeparatedOptionsAndPreservesColonsInValues() {
+        Command command = mock(Command.class);
+
+        CommandContextImpl ctx = new CommandContextImpl(command, sender, "example",
+            List.of("title=Challenge", "items=minecraft:diamond@3,stemcraft:token@1"));
+
+        assertTrue(ctx.args().isEmpty());
+        assertEquals("Challenge", ctx.getOption("title"));
+        assertEquals("minecraft:diamond@3,stemcraft:token@1", ctx.getOption("items"));
+    }
+
+    @Test
     void checkMethodsAndReturnMethodsUseCommandExceptions() {
         Command command = mock(Command.class);
         when(command.getUsage()).thenReturn("/root <player>");

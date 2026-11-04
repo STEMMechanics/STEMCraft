@@ -386,9 +386,13 @@ public class CommandImpl extends HasMessagesImpl implements Command, TabComplete
         }
 
         public static TabCompleteValueOption getStringAsValueOption(String arg) {
-            if (arg.matches("^[a-zA-Z0-9_-]+:.*")) {
-                String option = arg.substring(0, arg.indexOf(':')).toLowerCase();
-                String value = arg.substring(arg.indexOf(':') + 1);
+            if (arg.matches("^[a-zA-Z0-9_-]+[:=].*")) {
+                int colonIndex = arg.indexOf(':');
+                int equalsIndex = arg.indexOf('=');
+                int separatorIndex = colonIndex < 0 ? equalsIndex
+                    : equalsIndex < 0 ? colonIndex : Math.min(colonIndex, equalsIndex);
+                String option = arg.substring(0, separatorIndex).toLowerCase();
+                String value = arg.substring(separatorIndex + 1);
 
                 return new TabCompleteValueOption(option, value);
             }

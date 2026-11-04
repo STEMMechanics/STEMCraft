@@ -313,7 +313,7 @@ public final class VotingFeature extends BaseFeature {
         ctx.info("  /vote admin source plots <group> <world>");
         ctx.info("  /vote admin reminder <group> <set|clear|list> ...");
         ctx.info("  /vote admin reward <group> <add|remove|clear|list> ...");
-        ctx.info("    mail <message> sends a basic letter; use <title> | <message> | from=<sender> | items=<item>@<amount>,... for a configured mail reward.");
+        ctx.info("    mail <message> or mail title=<title> message=<message> [from=<sender>] [items=<item>@<amount>,...] .");
         ctx.info("  /vote admin view <group> | list | title <group> <title>");
         ctx.info("  /vote admin pause|resume|reset|reset-player|remove <group>");
         ctx.info("  /vote admin tower place/remove ... — Requires an in-game player.");
@@ -633,21 +633,43 @@ public final class VotingFeature extends BaseFeature {
     }
 
     private void showMailRewardHelp(CommandContext ctx) {
-        ctx.info("Usage: /vote admin reward <group> add mail <title> | <message> | from=<sender> | items=<item>@<amount>,...");
-        ctx.info("Example: /vote admin reward challenge add mail Challenge winner | Congratulations {player}! | from=STEMCraft | items=minecraft:diamond@3,stemcraft:token@1");
-        ctx.info("Use quotes around a title or message when entering it in chat. The from= and items= sections are optional.");
+        ctx.info("Usage: /vote admin reward <group> add mail title=<title> message=<message> [from=<sender>] [items=<item>@<amount>,...]");
+        ctx.info("Example: /vote admin reward challenge add mail title=\"Challenge winner\" message=\"Congratulations {player}!\" from=STEMCraft items=minecraft:diamond@3,stemcraft:token@1");
+        ctx.info("Use quotes only around values containing spaces. ':' may be used instead of '=' for key-value options.");
         ctx.info("Item IDs may be minecraft:<material> or a registered custom item; amount defaults to 1.");
         ctx.info("Legacy mail <message> syntax remains supported and uses the generated title, STEMCraft sender, and no attachments.");
         ctx.info("Placeholders: {group}, {group-id}, {player}, {option}, {votes} work in the title, sender, and message.");
     }
 
     private MailRewardConfig parseMailReward(CommandContext ctx) {
-        if (ctx.args().size() < 6) {
+        String titleOption = ctx.getOption("title");
+        String messageOption = ctx.getOption("message");
+        String senderOption = ctx.getOption("from", ctx.getOption("sender"));
+        String itemOption = ctx.getOption("items", ctx.getOption("item"));
+        List<String> rawTokens = mailRewardRawTokens(ctx);
+        boolean structured = !rawTokens.contains("|")
+            && (titleOption != null || messageOption != null || senderOption != null || itemOption != null);
+
+        if (structured) {
+            if (messageOption == null || messageOption.isBlank()) {
+                showMailRewardHelp(ctx);
+                return null;
+            }
+            try {
+                String sender = senderOption == null || senderOption.isBlank() ? "STEMCraft" : senderOption.trim();
+                return new MailRewardConfig(blankToNull(titleOption), messageOption.trim(), sender,
+                    normalizeMailItemSpecs(itemOption));
+            } catch (IllegalArgumentException exception) {
+                ctx.returnError(exception.getMessage());
+                return null;
+            }
+        }
+
+        List<String> tokens = rawTokens;
+        if (tokens.isEmpty()) {
             showMailRewardHelp(ctx);
             return null;
         }
-
-        List<String> tokens = ctx.args().subList(5, ctx.args().size());
         int firstSeparator = tokens.indexOf("|");
         if (firstSeparator < 0) {
             String message = String.join(" ", tokens).trim();
@@ -702,6 +724,16 @@ public final class VotingFeature extends BaseFeature {
             ctx.returnError(exception.getMessage());
             return null;
         }
+    }
+
+    private List<String> mailRewardRawTokens(CommandContext ctx) {
+        List<String> raw = ctx.rawArgs();
+        if (raw.size() <= 5 || !"mail".equalsIgnoreCase(raw.get(4))) return List.of();
+        return raw.subList(5, raw.size());
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private int indexOf(List<String> values, String target, int fromIndex) {
