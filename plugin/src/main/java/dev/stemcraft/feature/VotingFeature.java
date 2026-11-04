@@ -25,6 +25,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.player.*;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 
 import java.lang.reflect.Method;
@@ -136,9 +137,11 @@ public final class VotingFeature extends BaseFeature {
             CREATE TABLE IF NOT EXISTS voting_rewards (
               group_id TEXT NOT NULL, reward_id INTEGER NOT NULL, action TEXT NOT NULL,
               value TEXT NOT NULL, duration_seconds INTEGER NOT NULL DEFAULT -1,
+              mail_title TEXT, mail_sender TEXT, mail_items TEXT NOT NULL DEFAULT '',
               PRIMARY KEY(group_id, reward_id)
             );
             """);
+        migrateRewardMailColumns();
         api.database().execute("""
             CREATE TABLE IF NOT EXISTS voting_group_closures (
               group_id TEXT PRIMARY KEY, closed_at INTEGER NOT NULL, processed_at INTEGER
@@ -181,9 +184,28 @@ public final class VotingFeature extends BaseFeature {
         api.database().queryEach("SELECT group_id,days_remaining,message FROM voting_reminders ORDER BY days_remaining", null, rs ->
             reminders.computeIfAbsent(rs.getString("group_id"), key -> new TreeMap<>()).put(
                 rs.getInt("days_remaining"), new VoteReminder(rs.getInt("days_remaining"), rs.getString("message"))));
-        api.database().queryEach("SELECT group_id,reward_id,action,value,duration_seconds FROM voting_rewards ORDER BY reward_id", null, rs ->
+        api.database().queryEach("SELECT group_id,reward_id,action,value,duration_seconds,mail_title,mail_sender,mail_items FROM voting_rewards ORDER BY reward_id", null, rs ->
             rewards.computeIfAbsent(rs.getString("group_id"), key -> new ArrayList<>()).add(new VoteReward(
-                rs.getInt("reward_id"), rs.getString("action"), rs.getString("value"), rs.getLong("duration_seconds"))));
+                rs.getInt("reward_id"), rs.getString("action"), rs.getString("value"), rs.getLong("duration_seconds"),
+                rs.getString("mail_title"), rs.getString("mail_sender"), Objects.requireNonNullElse(rs.getString("mail_items"), ""))));
+    }
+
+    private void migrateRewardMailColumns() {
+        if (!tableHasColumn("voting_rewards", "mail_title")) {
+            api.database().execute("ALTER TABLE voting_rewards ADD COLUMN mail_title TEXT;");
+        }
+        if (!tableHasColumn("voting_rewards", "mail_sender")) {
+            api.database().execute("ALTER TABLE voting_rewards ADD COLUMN mail_sender TEXT;");
+        }
+        if (!tableHasColumn("voting_rewards", "mail_items")) {
+            api.database().execute("ALTER TABLE voting_rewards ADD COLUMN mail_items TEXT NOT NULL DEFAULT '';");
+        }
+    }
+
+    private boolean tableHasColumn(String tableName, String columnName) {
+        List<String> columns = new ArrayList<>();
+        api.database().queryEach("PRAGMA table_info(" + tableName + ")", null, rs -> columns.add(rs.getString("name")));
+        return columns.stream().anyMatch(columnName::equalsIgnoreCase);
     }
 
     private void registerCommand() {
@@ -197,6 +219,16 @@ public final class VotingFeature extends BaseFeature {
         api.tabComplete().register("vote-date", (player, args, currentArgument) -> dateCompletions(currentArgument));
         api.tabComplete().register("vote-reward-duration", (player, args, currentArgument) -> List.of(
             "permanent", "7d", "14d", "30d", "60d", "90d", "12h", "24h"));
+        api.tabComplete().register("vote-mail-item", (player, args, currentArgument) -> {
+            List<String> items = new ArrayList<>();
+            for (Material material : Material.values()) {
+                if (material.isItem()) items.add("minecraft:" + material.getKey().getKey());
+            }
+            if (api.items() != null) {
+                api.items().customItemDefinitions().stream().map(definition -> definition.id()).sorted().forEach(items::add);
+            }
+            return items;
+        });
         api.commands().create("vote").description("View and administer physical voting groups.")
             .usage("/vote <help|status|tally|admin> ...")
             .tabCompletion("help").tabCompletion("status").tabCompletion("tally", "{vote-group}").tabCompletion("admin", "create")
@@ -217,6 +249,7 @@ public final class VotingFeature extends BaseFeature {
             .tabCompletion("admin", "reward", "{vote-group}", "add", "grant-badge", "{badge-id}", "{vote-reward-duration}")
             .tabCompletion("admin", "reward", "{vote-group}", "add", "revoke-badge", "{badge-id}")
             .tabCompletion("admin", "reward", "{vote-group}", "add", "mail", "", "")
+            .tabCompletion("admin", "reward", "{vote-group}", "add", "mail", "", "|", "", "|", "items=", "{vote-mail-item}")
             .tabCompletion("admin", "reward", "{vote-group}", "list")
             .tabCompletion("admin", "reward", "{vote-group}", "clear")
             .tabCompletion("admin", "tower", "place", "{vote-group}", "{vote-option:$3}")
@@ -280,7 +313,7 @@ public final class VotingFeature extends BaseFeature {
         ctx.info("  /vote admin source plots <group> <world>");
         ctx.info("  /vote admin reminder <group> <set|clear|list> ...");
         ctx.info("  /vote admin reward <group> <add|remove|clear|list> ...");
-        ctx.info("    mail <message> sends a letter from STEMCraft; its title is generated and item attachments are not configured here.");
+        ctx.info("    mail <message> sends a basic letter; use <title> | <message> | from=<sender> | items=<item>@<amount>,... for a configured mail reward.");
         ctx.info("  /vote admin view <group> | list | title <group> <title>");
         ctx.info("  /vote admin pause|resume|reset|reset-player|remove <group>");
         ctx.info("  /vote admin tower place/remove ... — Requires an in-game player.");
@@ -550,6 +583,9 @@ public final class VotingFeature extends BaseFeature {
         String rewardType = ctx.getArgLower(4);
         String value;
         long duration = -1L;
+        String mailTitle = null;
+        String mailSender = null;
+        String mailItems = "";
         switch (rewardType) {
             case "revoke-badge" -> {
                 if (ctx.args().size() < 6) { ctx.returnError("Usage: /vote admin reward <group> add revoke-badge <badge>"); return; }
@@ -567,12 +603,12 @@ public final class VotingFeature extends BaseFeature {
                 }
             }
             case "mail" -> {
-                if (ctx.args().size() < 6) {
-                    showMailRewardHelp(ctx);
-                    return;
-                }
-                value = String.join(" ", ctx.args().subList(5, ctx.args().size())).trim();
-                if (value.isBlank()) { ctx.returnError("The winner mail message cannot be blank."); return; }
+                MailRewardConfig mail = parseMailReward(ctx);
+                if (mail == null) return;
+                value = mail.message();
+                mailTitle = mail.title();
+                mailSender = mail.sender();
+                mailItems = mail.itemSpecs();
             }
             default -> { ctx.returnError("Reward actions are grant-badge, revoke-badge, and mail."); return; }
         }
@@ -583,20 +619,142 @@ public final class VotingFeature extends BaseFeature {
             default -> "MAIL_WINNER";
         };
         long savedDuration = duration;
-        VoteReward reward = new VoteReward(id, normalizedAction, value, savedDuration);
-        api.database().update("INSERT INTO voting_rewards(group_id,reward_id,action,value,duration_seconds) VALUES(?,?,?,?,?)", ps -> {
+        String savedMailTitle = mailTitle;
+        String savedMailSender = mailSender;
+        String savedMailItems = mailItems;
+        VoteReward reward = new VoteReward(id, normalizedAction, value, savedDuration, savedMailTitle, savedMailSender, savedMailItems);
+        api.database().update("INSERT INTO voting_rewards(group_id,reward_id,action,value,duration_seconds,mail_title,mail_sender,mail_items) VALUES(?,?,?,?,?,?,?,?)", ps -> {
             ps.setString(1, group.id); ps.setInt(2, id); ps.setString(3, normalizedAction);
             ps.setString(4, value); ps.setLong(5, savedDuration);
+            ps.setString(6, savedMailTitle); ps.setString(7, savedMailSender); ps.setString(8, savedMailItems);
         });
         groupRewards.add(reward);
         ctx.returnSuccess("Added winner reward #" + id + " to " + group.name + ": " + describeReward(reward));
     }
 
     private void showMailRewardHelp(CommandContext ctx) {
-        ctx.info("Usage: /vote admin reward <group> add mail <message>");
-        ctx.info("Winner mail sends a letter from STEMCraft through Survival Mail.");
-        ctx.info("The mailbox system generates the letter title; custom sender names and item attachments are not supported by voting rewards.");
-        ctx.info("Message placeholders: {group}, {group-id}, {player}, {option}, {votes}.");
+        ctx.info("Usage: /vote admin reward <group> add mail <title> | <message> | from=<sender> | items=<item>@<amount>,...");
+        ctx.info("Example: /vote admin reward challenge add mail Challenge winner | Congratulations {player}! | from=STEMCraft | items=minecraft:diamond@3,stemcraft:token@1");
+        ctx.info("Use quotes around a title or message when entering it in chat. The from= and items= sections are optional.");
+        ctx.info("Item IDs may be minecraft:<material> or a registered custom item; amount defaults to 1.");
+        ctx.info("Legacy mail <message> syntax remains supported and uses the generated title, STEMCraft sender, and no attachments.");
+        ctx.info("Placeholders: {group}, {group-id}, {player}, {option}, {votes} work in the title, sender, and message.");
+    }
+
+    private MailRewardConfig parseMailReward(CommandContext ctx) {
+        if (ctx.args().size() < 6) {
+            showMailRewardHelp(ctx);
+            return null;
+        }
+
+        List<String> tokens = ctx.args().subList(5, ctx.args().size());
+        int firstSeparator = tokens.indexOf("|");
+        if (firstSeparator < 0) {
+            String message = String.join(" ", tokens).trim();
+            if (message.isBlank()) {
+                ctx.returnError("The winner mail message cannot be blank.");
+                return null;
+            }
+            return new MailRewardConfig(null, message, "STEMCraft", "");
+        }
+
+        int secondSeparator = indexOf(tokens, "|", firstSeparator + 1);
+        int messageEnd = secondSeparator < 0 ? tokens.size() : secondSeparator;
+        if (firstSeparator == 0 || messageEnd <= firstSeparator + 1) {
+            ctx.returnError("Mail rewards need a title and message separated by '|'.");
+            showMailRewardHelp(ctx);
+            return null;
+        }
+
+        String title = String.join(" ", tokens.subList(0, firstSeparator)).trim();
+        String message = String.join(" ", tokens.subList(firstSeparator + 1, messageEnd)).trim();
+        String sender = "STEMCraft";
+        String itemSpecs = "";
+        for (int start = secondSeparator < 0 ? tokens.size() : secondSeparator + 1; start < tokens.size();) {
+            int end = indexOf(tokens, "|", start);
+            if (end < 0) end = tokens.size();
+            String section = String.join(" ", tokens.subList(start, end)).trim();
+            if (section.startsWith("from=") || section.startsWith("sender=")) {
+                sender = section.substring(section.indexOf('=') + 1).trim();
+                if (sender.isBlank()) {
+                    ctx.returnError("The mail sender cannot be blank.");
+                    return null;
+                }
+            } else if (section.startsWith("items=") || section.startsWith("item=")) {
+                String sectionItems = section.substring(section.indexOf('=') + 1).trim();
+                itemSpecs = itemSpecs.isBlank() ? sectionItems : itemSpecs + "," + sectionItems;
+            } else if (!section.isBlank()) {
+                ctx.returnError("Mail sections after the message must use from=<sender> or items=<item>@<amount>,... .");
+                showMailRewardHelp(ctx);
+                return null;
+            }
+            start = end + 1;
+        }
+
+        if (title.isBlank() || message.isBlank()) {
+            ctx.returnError("The mail title and message cannot be blank.");
+            return null;
+        }
+        try {
+            String normalizedItems = normalizeMailItemSpecs(itemSpecs);
+            return new MailRewardConfig(title, message, sender, normalizedItems);
+        } catch (IllegalArgumentException exception) {
+            ctx.returnError(exception.getMessage());
+            return null;
+        }
+    }
+
+    private int indexOf(List<String> values, String target, int fromIndex) {
+        for (int index = Math.max(0, fromIndex); index < values.size(); index++) {
+            if (target.equals(values.get(index))) return index;
+        }
+        return -1;
+    }
+
+    private String normalizeMailItemSpecs(String itemSpecs) {
+        if (itemSpecs == null || itemSpecs.isBlank()) return "";
+        List<String> normalized = new ArrayList<>();
+        for (String raw : itemSpecs.split(",")) {
+            if (raw.isBlank()) throw new IllegalArgumentException("Mail attachment item IDs cannot be blank.");
+            normalized.add(resolveMailItem(raw.trim()).spec());
+        }
+        return String.join(",", normalized);
+    }
+
+    private List<ItemStack> resolveMailItems(String itemSpecs) {
+        if (itemSpecs == null || itemSpecs.isBlank()) return List.of();
+        List<ItemStack> items = new ArrayList<>();
+        for (String raw : itemSpecs.split(",")) {
+            if (raw.isBlank()) throw new IllegalArgumentException("Mail attachment item IDs cannot be blank.");
+            items.add(resolveMailItem(raw.trim()).item());
+        }
+        return items;
+    }
+
+    private MailItemResolution resolveMailItem(String raw) {
+        int separator = raw.lastIndexOf('@');
+        String id = (separator < 0 ? raw : raw.substring(0, separator)).trim();
+        String amountText = separator < 0 ? "1" : raw.substring(separator + 1).trim();
+        if (id.isBlank()) throw new IllegalArgumentException("Mail attachment item IDs cannot be blank.");
+        int amount;
+        try {
+            amount = Integer.parseInt(amountText);
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException("Mail attachment amounts must be positive whole numbers.");
+        }
+        if (amount <= 0) throw new IllegalArgumentException("Mail attachment amounts must be positive whole numbers.");
+
+        ItemStack item = api.items() == null ? null : api.items().createCustomItem(id, amount);
+        if (item == null) {
+            String materialId = id.regionMatches(true, 0, "minecraft:", 0, "minecraft:".length())
+                ? id.substring("minecraft:".length()) : id;
+            Material material = Material.matchMaterial(materialId.toUpperCase(Locale.ROOT));
+            if (material != null && material.isItem()) item = new ItemStack(material, amount);
+        }
+        if (item == null || item.getType().isAir()) {
+            throw new IllegalArgumentException("Unknown mail attachment item '" + id + "'.");
+        }
+        return new MailItemResolution(item, id + "@" + amount);
     }
 
     private int parseNonNegativeInt(String value, String error, CommandContext ctx) {
@@ -620,7 +778,9 @@ public final class VotingFeature extends BaseFeature {
             case "GRANT_BADGE_WINNER" -> "grant badge " + reward.value()
                 + (reward.durationSeconds() < 0 ? " permanently" : " for " + TimeUtil.formatDuration(reward.durationSeconds()));
             case "REVOKE_BADGE_ALL" -> "revoke badge " + reward.value() + " from all players";
-            case "MAIL_WINNER" -> "mail winners: " + reward.value();
+            case "MAIL_WINNER" -> "mail winners: " + reward.value()
+                + (reward.mailTitle() == null ? " (generated title)" : " [title: " + reward.mailTitle() + "]")
+                + (reward.mailItems().isBlank() ? "" : " [items: " + reward.mailItems() + "]");
             default -> reward.action() + " " + reward.value();
         };
     }
@@ -721,10 +881,15 @@ public final class VotingFeature extends BaseFeature {
             List<Component> lines = new ArrayList<>();
             for (VoteGroup group : values.subList(start, start + count)) {
                 int used = uuid == null ? 0 : votes.getOrDefault(group.id, Map.of()).getOrDefault(uuid, Set.of()).size();
-                Component line = Component.text("● ", stateColour(group)).append(Component.text(group.name, NamedTextColor.WHITE))
-                    .append(Component.text(" — " + state(group) + " — " + used + "/" + group.votesPerPlayer + " used", NamedTextColor.GRAY));
-                if (interactive) line = line.clickEvent(ClickEvent.runCommand("/vote status " + group.id))
-                    .hoverEvent(HoverEvent.showText(Component.text("View this voting group's status")));
+                Component line = button("[" + group.name + "]", "/vote status " + group.id,
+                        "View this voting group's status")
+                    .append(Component.space())
+                    .append(Component.text("(" + group.id + ") — ", NamedTextColor.DARK_GRAY))
+                    .append(Component.text(state(group), stateColour(group)))
+                    .append(Component.text(" — " + used + "/" + group.votesPerPlayer + " used", NamedTextColor.GRAY));
+                if (!interactive) line = Component.text(group.name + " (" + group.id + ") — ", NamedTextColor.WHITE)
+                    .append(Component.text(state(group), stateColour(group)))
+                    .append(Component.text(" — " + used + "/" + group.votesPerPlayer + " used", NamedTextColor.GRAY));
                 lines.add(line);
             }
             return lines;
@@ -736,10 +901,40 @@ public final class VotingFeature extends BaseFeature {
         int used = uuid == null ? 0 : votes.getOrDefault(group.id, Map.of()).getOrDefault(uuid, Set.of()).size();
         ChatMenuUtil.render(ctx.getSender(), "Voting: " + group.name + " (" + group.id + ")", "vote status " + group.id,
             1, 1, (start, count, interactive) -> List.of(
-                Component.text("State: " + state(group) + " — " + used + "/" + group.votesPerPlayer + " votes used", NamedTextColor.GRAY),
-                Component.text("Schedule: " + formatTime(group.startsAt) + " → " + formatTime(group.endsAt), NamedTextColor.GRAY)
+                statusField("State", state(group), stateColour(group)),
+                statusField("Votes", used + "/" + group.votesPerPlayer + " used", NamedTextColor.WHITE),
+                statusField("Schedule", formatTime(group.startsAt) + " → " + formatTime(group.endsAt), NamedTextColor.WHITE),
+                statusField("Source", group.sourceType + (group.sourceValue == null ? "" : " (" + group.sourceValue + ")"), NamedTextColor.WHITE),
+                statusField("Reminders", reminders.getOrDefault(group.id, Map.of()).size() + " configured", NamedTextColor.WHITE),
+                statusField("Winner rewards", rewards.getOrDefault(group.id, List.of()).size() + " configured", NamedTextColor.WHITE)
             ), "Voting group not found.");
-        ctx.getSender().sendMessage(button("[← All groups]", "/vote status", "Back to voting groups"));
+        if (!ctx.hasPermission(ADMIN_PERMISSION)) return;
+
+        ctx.getSender().sendMessage(
+            suggestButton("[Edit schedule]", "/vote admin schedule " + group.id + " now ",
+                "Set the start and finish dates; use YYYY-MM-DD or a timestamp")
+                .append(Component.space())
+                .append(button(group.paused ? "[Resume]" : "[Pause]",
+                    "/vote admin " + (group.paused ? "resume " : "pause ") + group.id,
+                    group.paused ? "Resume voting" : "Pause voting")));
+        ctx.getSender().sendMessage(
+            button("[View entries]", "/vote admin option list " + group.id,
+                "View the configured voting entries")
+                .append(Component.space())
+                .append(suggestButton("[Edit source]", "/vote admin source plots " + group.id + " " ,
+                    "Load PlotSquared creators from a plot world")));
+        ctx.getSender().sendMessage(
+            button("[View reminders]", "/vote admin reminder " + group.id + " list",
+                "View configured voting reminders")
+                .append(Component.space())
+                .append(suggestButton("[＋ Add reminder]", "/vote admin reminder " + group.id + " set ",
+                    "Add a reminder: <days> <message>")));
+        ctx.getSender().sendMessage(
+            button("[View rewards]", "/vote admin reward " + group.id + " list",
+                "View configured winner rewards")
+                .append(Component.space())
+                .append(suggestButton("[＋ Add reward]", "/vote admin reward " + group.id + " add ",
+                    "Add grant-badge, revoke-badge, or mail reward")));
     }
 
     private void showAdminMenu(CommandContext ctx) {
@@ -794,8 +989,12 @@ public final class VotingFeature extends BaseFeature {
     }
 
     private void sendAdminField(CommandContext ctx, String label, String value, NamedTextColor valueColor) {
-        ctx.getSender().sendMessage(Component.text(label + ": ", NamedTextColor.GRAY)
-            .append(Component.text(value, valueColor)));
+        ctx.getSender().sendMessage(statusField(label, value, valueColor));
+    }
+
+    private Component statusField(String label, String value, NamedTextColor valueColor) {
+        return Component.text(label + ": ", NamedTextColor.GRAY)
+            .append(Component.text(value, valueColor));
     }
 
     private void announceLoginVotes(Player player) {
@@ -992,13 +1191,27 @@ public final class VotingFeature extends BaseFeature {
                 }
                 case "MAIL_WINNER" -> {
                     if (api.mailboxes() == null) return false;
+                    List<ItemStack> attachments;
+                    try {
+                        attachments = resolveMailItems(reward.mailItems());
+                    } catch (IllegalArgumentException exception) {
+                        STEMCraft.getPlugin().getLogger().warning("Could not resolve voting reward mail attachments for "
+                            + group.id + ": " + exception.getMessage());
+                        return false;
+                    }
                     for (ClosedWinner winner : winners) {
                         UUID playerUuid = winner.playerUuid();
                         if (playerUuid == null || deliveryExists(group.id, reward.id(), playerUuid)) continue;
                         OfflinePlayer player = Bukkit.getOfflinePlayer(playerUuid);
                         String playerName = Objects.requireNonNullElse(player.getName(), playerUuid.toString());
                         String message = formatWinnerMessage(reward.value(), group, winner, playerName);
-                        if (!api.mailboxes().send(new MailSendRequest("STEMCraft", playerUuid, message, List.of())).queued()) {
+                        String title = reward.mailTitle() == null ? null
+                            : formatWinnerMessage(reward.mailTitle(), group, winner, playerName);
+                        String sender = formatWinnerMessage(Objects.requireNonNullElse(reward.mailSender(), "STEMCraft"),
+                            group, winner, playerName);
+                        MailSendRequest request = new MailSendRequest(sender, playerUuid, message, attachments)
+                            .withTitle(title);
+                        if (!api.mailboxes().send(request).queued()) {
                             STEMCraft.getPlugin().getLogger().warning("Could not send voting reward mail to "
                                 + playerName + " while closing " + group.id + ".");
                             continue;
@@ -1641,7 +1854,10 @@ public final class VotingFeature extends BaseFeature {
     private record GroupLoginSummary(int receivedVotes, int totalVotes, Integer bestRank) {}
     private record VoteTallyRow(String optionId, String optionName, int votes) {}
     private record VoteReminder(int daysRemaining, String message) {}
-    private record VoteReward(int id, String action, String value, long durationSeconds) {}
+    private record VoteReward(int id, String action, String value, long durationSeconds,
+                              String mailTitle, String mailSender, String mailItems) {}
+    private record MailRewardConfig(String title, String message, String sender, String itemSpecs) {}
+    private record MailItemResolution(ItemStack item, String spec) {}
     private record ClosureStatus(long closedAt, Long processedAt) {}
     private record ClosedWinner(String optionId, String optionName, UUID playerUuid, int votes) {}
     private record VoteOption(String id,String name,UUID owner) {}

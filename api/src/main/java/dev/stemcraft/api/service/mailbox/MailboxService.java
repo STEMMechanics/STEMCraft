@@ -26,6 +26,8 @@ public interface MailboxService {
     /**
      * Queues mail for delivery. A written letter is generated automatically and
      * included with any supplied items; an empty item list sends a letter only.
+     * Use {@link MailSendRequest#withTitle(String)} or the explicit-title
+     * constructor when the generated letter should use a custom title.
      *
      * @param request sender, recipient, message, items, and optional delivery delay
      * @return whether the delivery was queued and an explanatory failure message

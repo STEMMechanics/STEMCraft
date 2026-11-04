@@ -1561,7 +1561,7 @@ public class Mailboxes extends BaseFeature implements MailboxService {
         for (int i = 0; i < suppliedItems.size(); i++) {
             outgoingItems[i] = suppliedItems.get(i);
         }
-        outgoingItems[suppliedItems.size()] = createMailLetter(senderName, message, suppliedItems);
+        outgoingItems[suppliedItems.size()] = createMailLetter(senderName, request.title(), message, suppliedItems);
         if (!canFitAll(new ItemStack[MAILBOX_INVENTORY_SIZE], outgoingItems)) {
             return MailSendResult.failure("Mail items and their accompanying letter do not fit in a mailbox.");
         }
@@ -1592,10 +1592,19 @@ public class Mailboxes extends BaseFeature implements MailboxService {
     private @NotNull ItemStack createMailLetter(@NotNull String senderName,
                                                 @NotNull String message,
                                                 @NotNull List<ItemStack> suppliedItems) {
+        return createMailLetter(senderName, null, message, suppliedItems);
+    }
+
+    private @NotNull ItemStack createMailLetter(@NotNull String senderName,
+                                                @Nullable String title,
+                                                @NotNull String message,
+                                                @NotNull List<ItemStack> suppliedItems) {
         ItemStack letter = new ItemStack(Material.WRITTEN_BOOK);
         BookMeta meta = (BookMeta) letter.getItemMeta();
         String safeSender = senderName.isBlank() ? "STEMCraft" : senderName;
-        meta.setTitle("Mail from " + safeSender.substring(0, Math.min(20, safeSender.length())));
+        String safeTitle = TextUtil.stripColour(Objects.requireNonNullElse(title, "")).trim();
+        if (safeTitle.isBlank()) safeTitle = "Mail from " + safeSender.substring(0, Math.min(20, safeSender.length()));
+        meta.setTitle(safeTitle.substring(0, Math.min(32, safeTitle.length())));
         meta.setAuthor(safeSender.substring(0, Math.min(16, safeSender.length())));
 
         List<Component> pages = buildMailLetterPages(safeSender, message, suppliedItems);

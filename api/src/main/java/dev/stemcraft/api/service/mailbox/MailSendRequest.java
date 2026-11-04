@@ -33,7 +33,8 @@ public record MailSendRequest(@Nullable UUID senderUuid,
                               @NotNull String message,
                               @NotNull List<ItemStack> items,
                               @Nullable Location sourceLocation,
-                              long deliveryDelayTicks) {
+                              long deliveryDelayTicks,
+                              @Nullable String title) {
     public MailSendRequest {
         recipientUuid = Objects.requireNonNull(recipientUuid, "recipientUuid");
         senderName = senderName == null ? null : senderName.trim();
@@ -41,6 +42,7 @@ public record MailSendRequest(@Nullable UUID senderUuid,
             throw new IllegalArgumentException("Provide either a sender UUID or sender name");
         }
         message = Objects.requireNonNullElse(message, "");
+        title = title == null || title.isBlank() ? null : title.trim();
         items = Objects.requireNonNull(items, "items");
         items = items.stream().filter(Objects::nonNull).map(ItemStack::clone).toList();
         sourceLocation = sourceLocation == null ? null : sourceLocation.clone();
@@ -55,7 +57,7 @@ public record MailSendRequest(@Nullable UUID senderUuid,
                            @NotNull String message,
                            @NotNull List<ItemStack> items,
                            @Nullable Location sourceLocation) {
-        this(senderUuid, senderName, recipientUuid, message, items, sourceLocation, -1L);
+        this(senderUuid, senderName, recipientUuid, message, items, sourceLocation, -1L, null);
     }
 
     public MailSendRequest(@NotNull UUID senderUuid,
@@ -79,7 +81,7 @@ public record MailSendRequest(@Nullable UUID senderUuid,
                            @NotNull String message,
                            @NotNull List<ItemStack> items,
                            long deliveryDelayTicks) {
-        this(senderUuid, null, recipientUuid, message, items, null, deliveryDelayTicks);
+        this(senderUuid, null, recipientUuid, message, items, null, deliveryDelayTicks, null);
     }
 
     public MailSendRequest(@NotNull String senderName,
@@ -87,7 +89,7 @@ public record MailSendRequest(@Nullable UUID senderUuid,
                            @NotNull String message,
                            @NotNull List<ItemStack> items,
                            long deliveryDelayTicks) {
-        this(null, senderName, recipientUuid, message, items, null, deliveryDelayTicks);
+        this(null, senderName, recipientUuid, message, items, null, deliveryDelayTicks, null);
     }
 
     public MailSendRequest(@NotNull UUID senderUuid,
@@ -102,6 +104,34 @@ public record MailSendRequest(@Nullable UUID senderUuid,
                            @NotNull String message,
                            @NotNull List<ItemStack> items) {
         this(senderName, recipientUuid, message, items, null);
+    }
+
+    /**
+     * Creates a system-sender request with an explicit written-letter title.
+     *
+     * @param senderName sender shown on the letter
+     * @param recipientUuid recipient UUID
+     * @param message letter message
+     * @param title written-book title; blank values use the mailbox default
+     * @param items item attachments
+     */
+    public MailSendRequest(@NotNull String senderName,
+                           @NotNull UUID recipientUuid,
+                           @NotNull String message,
+                           @Nullable String title,
+                           @NotNull List<ItemStack> items) {
+        this(null, senderName, recipientUuid, message, items, null, -1L, title);
+    }
+
+    /**
+     * Returns a copy of this request with a different written-letter title.
+     *
+     * @param title written-book title; blank values use the mailbox default
+     * @return request copy
+     */
+    public @NotNull MailSendRequest withTitle(@Nullable String title) {
+        return new MailSendRequest(senderUuid, senderName, recipientUuid, message, items,
+            sourceLocation, deliveryDelayTicks, title);
     }
 
     @Override
