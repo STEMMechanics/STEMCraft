@@ -933,37 +933,42 @@ public final class VotingFeature extends BaseFeature {
     private void showGroupStatus(CommandContext ctx, VoteGroup group) {
         UUID uuid = ctx.getSender() instanceof Player player ? player.getUniqueId() : null;
         int used = uuid == null ? 0 : votes.getOrDefault(group.id, Map.of()).getOrDefault(uuid, Set.of()).size();
-        List<Component> lines = new ArrayList<>(List.of(
-            statusField("State", state(group), stateColour(group)),
-            statusField("Votes", used + "/" + group.votesPerPlayer + " used", NamedTextColor.WHITE),
-            statusField("Schedule", formatTime(group.startsAt) + " → " + formatTime(group.endsAt), NamedTextColor.WHITE),
-            statusField("Source", group.sourceType + (group.sourceValue == null ? "" : " (" + group.sourceValue + ")"), NamedTextColor.WHITE),
-            statusField("Reminders", reminders.getOrDefault(group.id, Map.of()).size() + " configured", NamedTextColor.WHITE),
-            statusField("Winner rewards", rewards.getOrDefault(group.id, List.of()).size() + " configured", NamedTextColor.WHITE)
-        ));
-        if (ctx.hasPermission(ADMIN_PERMISSION)) {
-            lines.add(suggestButton("[Edit schedule]", NamedTextColor.BLUE, "/vote admin schedule " + group.id + " now ",
-                "Set the start and finish dates; use YYYY-MM-DD or a timestamp")
-                .append(Component.space())
-                .append(button(group.paused ? "[Resume]" : "[Pause]", group.paused ? NamedTextColor.GREEN : NamedTextColor.YELLOW,
-                    "/vote admin " + (group.paused ? "resume " : "pause ") + group.id,
-                    group.paused ? "Resume voting" : "Pause voting")));
-            lines.add(button("[View entries]", NamedTextColor.GOLD, "/vote admin option list " + group.id,
-                    "View the configured voting entries")
-                .append(Component.space())
-                .append(suggestButton("[Edit source]", NamedTextColor.BLUE, "/vote admin source plots " + group.id + " ",
-                    "Load PlotSquared creators from a plot world")));
-            lines.add(button("[View reminders]", NamedTextColor.GOLD, "/vote admin reminder " + group.id + " list",
-                    "View configured voting reminders")
-                .append(Component.space())
-                .append(suggestButton("[Add reminder]", NamedTextColor.GREEN, "/vote admin reminder " + group.id + " set ",
-                    "Add a reminder: <days> <message>")));
-            lines.add(button("[View rewards]", NamedTextColor.GOLD, "/vote admin reward " + group.id + " list",
-                    "View configured winner rewards")
-                .append(Component.space())
-                .append(suggestButton("[Add reward]", NamedTextColor.GREEN, "/vote admin reward " + group.id + " add ",
-                    "Add grant-badge, revoke-badge, or mail reward")));
+        boolean playerInteractive = ctx.getSender() instanceof Player;
+        boolean admin = ctx.hasPermission(ADMIN_PERMISSION);
+        Component stateLine = statusField("State", state(group), stateColour(group));
+        Component scheduleLine = statusField("Schedule", formatTime(group.startsAt) + " → " + formatTime(group.endsAt), NamedTextColor.WHITE);
+        Component sourceLine = statusField("Source", group.sourceType + (group.sourceValue == null ? "" : " (" + group.sourceValue + ")"), NamedTextColor.WHITE);
+        Component remindersLine = statusField("Reminders", reminders.getOrDefault(group.id, Map.of()).size() + " configured", NamedTextColor.WHITE);
+        Component rewardsLine = statusField("Winner rewards", rewards.getOrDefault(group.id, List.of()).size() + " configured", NamedTextColor.WHITE);
+        if (admin && playerInteractive) {
+            stateLine = stateLine.append(Component.space()).append(button(group.paused ? "[Resume]" : "[Pause]",
+                group.paused ? NamedTextColor.GREEN : NamedTextColor.YELLOW,
+                "/vote admin " + (group.paused ? "resume " : "pause ") + group.id,
+                group.paused ? "Resume voting" : "Pause voting"));
+            scheduleLine = scheduleLine.append(Component.space()).append(suggestButton("[Edit]", NamedTextColor.BLUE,
+                "/vote admin schedule " + group.id + " now ",
+                "Set the start and finish dates; use YYYY-MM-DD or a timestamp"));
+            sourceLine = sourceLine.append(Component.space()).append(button("[View]", NamedTextColor.GOLD,
+                "/vote admin option list " + group.id, "View the configured voting entries"))
+                .append(Component.space()).append(suggestButton("[Edit]", NamedTextColor.BLUE,
+                    "/vote admin source plots " + group.id + " ", "Load PlotSquared creators from a plot world"));
+            remindersLine = remindersLine.append(Component.space()).append(button("[View]", NamedTextColor.GOLD,
+                "/vote admin reminder " + group.id + " list", "View configured voting reminders"))
+                .append(Component.space()).append(suggestButton("[Add]", NamedTextColor.GREEN,
+                    "/vote admin reminder " + group.id + " set ", "Add a reminder: <days> <message>"));
+            rewardsLine = rewardsLine.append(Component.space()).append(button("[View]", NamedTextColor.GOLD,
+                "/vote admin reward " + group.id + " list", "View configured winner rewards"))
+                .append(Component.space()).append(suggestButton("[Add]", NamedTextColor.GREEN,
+                    "/vote admin reward " + group.id + " add ", "Add grant-badge, revoke-badge, or mail reward"));
         }
+        List<Component> lines = List.of(
+            stateLine,
+            statusField("Votes", used + "/" + group.votesPerPlayer + " used", NamedTextColor.WHITE),
+            scheduleLine,
+            sourceLine,
+            remindersLine,
+            rewardsLine
+        );
         ChatMenuUtil.render(ctx.getSender(), "Voting: " + group.name + " (" + group.id + ")", "vote status " + group.id,
             1, 1, (start, count, interactive) -> lines, "Voting group not found.");
     }
