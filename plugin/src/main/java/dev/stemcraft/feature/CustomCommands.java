@@ -25,6 +25,7 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.Command;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.util.PlaceholderUtil;
+import dev.stemcraft.api.util.chatmenu.ChatMenuStyle;
 import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
 import dev.stemcraft.service.command.CommandImpl;
 import org.bukkit.Bukkit;
@@ -266,28 +267,28 @@ public class CustomCommands extends BaseFeature {
 
                     for (int i = start; i < end; i++) {
                         if (entries.isEmpty()) {
-                            lines.add(Component.text("No custom commands are configured.", NamedTextColor.GRAY));
+                            lines.add(ChatMenuUtil.text("No custom commands are configured.", ChatMenuStyle.MUTED));
                             continue;
                         }
 
                         CustomCommandEntry entry = entries.get(i);
                         String commandSummary = entry.runCommands().size()
                                 + pluralize(entry.runCommands().size(), " action", " actions");
-                        Component line = Component.text(entry.id(), NamedTextColor.YELLOW)
-                                .append(Component.text(" - ", NamedTextColor.GRAY))
-                                .append(Component.text(" " + commandSummary, NamedTextColor.AQUA));
+                        Component line = ChatMenuUtil.text(entry.id(), ChatMenuStyle.KEY)
+                                .append(ChatMenuUtil.text(" - ", ChatMenuStyle.MUTED))
+                                .append(ChatMenuUtil.text(" " + commandSummary, ChatMenuStyle.ACCENT));
 
                         if (isPlayer) {
                             line = line.append(Component.text(" "))
-                                    .append(actionButton("[Info]", NamedTextColor.GOLD,
+                                    .append(actionButton("[Info]", ChatMenuStyle.ACTION_VIEW,
                                             ClickEvent.runCommand("/" + EDITOR_LABEL + " info " + entry.id()),
                                             "Show command details"))
                                     .append(Component.text(" "))
-                                    .append(actionButton("[Run]", NamedTextColor.GREEN,
+                                    .append(actionButton("[Run]", ChatMenuStyle.ACTION_ADD,
                                             ClickEvent.runCommand("/" + entry.label()),
                                             "Run /" + entry.label()))
                                     .append(Component.text(" "))
-                                    .append(actionButton("[Del]", NamedTextColor.RED,
+                                    .append(actionButton("[Del]", ChatMenuStyle.ACTION_DELETE,
                                             ClickEvent.runCommand("/" + EDITOR_LABEL + " delete " + entry.id()),
                                             "Delete this custom command"));
                         }
@@ -302,11 +303,11 @@ public class CustomCommands extends BaseFeature {
     }
 
     private Component buildListTitle(boolean isPlayer) {
-        Component title = Component.text("Custom Commands", NamedTextColor.AQUA);
+        Component title = ChatMenuUtil.text("Custom Commands", ChatMenuStyle.TITLE);
 
         if (isPlayer) {
             title = title.append(Component.text(" "))
-                    .append(actionButton("[Create]", NamedTextColor.GREEN,
+                    .append(actionButton("[Create]", ChatMenuStyle.ACTION_CREATE,
                             ClickEvent.suggestCommand("/" + EDITOR_LABEL + " create id"),
                             "Create a new custom command"));
         }
@@ -323,7 +324,7 @@ public class CustomCommands extends BaseFeature {
         ctx.getSender().sendMessage(buildInfoCommandsHeaderLine(entry, ctx.isPlayer()));
 
         if (entry.runCommands().isEmpty()) {
-            ctx.getSender().sendMessage(Component.text("No actions are configured.", NamedTextColor.RED));
+            ctx.getSender().sendMessage(ChatMenuUtil.text("No actions are configured.", ChatMenuStyle.MUTED));
         } else {
             for (int i = 0; i < entry.runCommands().size(); i++) {
                 ctx.getSender().sendMessage(buildInfoConfiguredCommandLine(entry, i, ctx.isPlayer()));
@@ -332,21 +333,21 @@ public class CustomCommands extends BaseFeature {
     }
 
     private Component buildInfoIdLine(CustomCommandEntry entry, boolean isPlayer) {
-        return Component.text("ID: ", NamedTextColor.GRAY)
-                .append(Component.text(entry.id(), NamedTextColor.YELLOW));
+        return ChatMenuUtil.text("ID: ", ChatMenuStyle.KEY)
+                .append(ChatMenuUtil.text(entry.id(), ChatMenuStyle.VALUE));
     }
 
     private Component buildInfoCommandLine(CustomCommandEntry entry, boolean isPlayer) {
-        Component line = Component.text("Command: ", NamedTextColor.GRAY)
-                .append(Component.text("/" + entry.label(), NamedTextColor.YELLOW));
+        Component line = ChatMenuUtil.text("Command: ", ChatMenuStyle.KEY)
+                .append(ChatMenuUtil.text("/" + entry.label(), ChatMenuStyle.VALUE));
 
         if (isPlayer) {
             line = line.append(Component.text(" "))
-                    .append(actionButton("[Edit]", NamedTextColor.BLUE,
+                    .append(actionButton("[Edit]", ChatMenuStyle.ACTION_EDIT,
                             ClickEvent.suggestCommand("/" + EDITOR_LABEL + " setlabel " + entry.id() + " " + entry.label()),
                             "Change the command label"))
                     .append(Component.text(" "))
-                    .append(actionButton("[Run]", NamedTextColor.GREEN,
+                    .append(actionButton("[Run]", ChatMenuStyle.ACTION_ADD,
                             ClickEvent.runCommand("/" + entry.label()),
                             "Run /" + entry.label()));
         }
@@ -355,16 +356,16 @@ public class CustomCommands extends BaseFeature {
     }
 
     private Component buildInfoPermissionLine(CustomCommandEntry entry, boolean isPlayer) {
-        Component line = Component.text("Permission: ", NamedTextColor.GRAY)
+        Component line = ChatMenuUtil.text("Permission: ", ChatMenuStyle.KEY)
                 .append(formatPermissionComponent(entry));
 
         if (isPlayer) {
             line = line.append(Component.text(" "))
-                    .append(actionButton("[Edit]", NamedTextColor.BLUE,
+                    .append(actionButton("[Edit]", ChatMenuStyle.ACTION_EDIT,
                             ClickEvent.suggestCommand("/" + EDITOR_LABEL + " setpermission " + entry.id() + " " + entry.permission()),
                             "Change the permission node"))
                     .append(Component.text(" "))
-                    .append(actionButton("[Del]", NamedTextColor.RED,
+                    .append(actionButton("[Del]", ChatMenuStyle.ACTION_DELETE,
                             ClickEvent.runCommand("/" + EDITOR_LABEL + " clearpermission " + entry.id()),
                             "Clear the permission requirement"));
         }
@@ -373,15 +374,15 @@ public class CustomCommands extends BaseFeature {
     }
 
     private Component buildInfoCommandsHeaderLine(CustomCommandEntry entry, boolean isPlayer) {
-        Component line = Component.text("Actions:", NamedTextColor.GRAY);
+        Component line = ChatMenuUtil.text("Actions:", ChatMenuStyle.KEY);
 
         if (isPlayer) {
             line = line.append(Component.text(" "))
-                    .append(actionButton("[Add]", NamedTextColor.GREEN,
+                    .append(actionButton("[Add]", ChatMenuStyle.ACTION_ADD,
                             ClickEvent.suggestCommand("/" + EDITOR_LABEL + " addcommand " + entry.id() + " "),
                             "Add a configured command"))
                     .append(Component.text(" "))
-                    .append(actionButton("[Message]", NamedTextColor.AQUA,
+                    .append(actionButton("[Message]", ChatMenuStyle.ACCENT,
                             ClickEvent.suggestCommand("/" + EDITOR_LABEL + " addmessage " + entry.id() + " "),
                             "Add a response message"));
         }
@@ -393,16 +394,16 @@ public class CustomCommands extends BaseFeature {
         int oneBasedIndex = zeroBasedIndex + 1;
         String configuredCommand = entry.runCommands().get(zeroBasedIndex);
 
-        Component line = Component.text("#" + oneBasedIndex + " ", NamedTextColor.DARK_GRAY)
-                .append(Component.text(configuredCommand, NamedTextColor.GOLD));
+        Component line = ChatMenuUtil.text("#" + oneBasedIndex + " ", ChatMenuStyle.MUTED)
+                .append(ChatMenuUtil.text(configuredCommand, ChatMenuStyle.VALUE));
 
         if (isPlayer) {
             line = line.append(Component.text(" "))
-                    .append(actionButton("[Edit]", NamedTextColor.BLUE,
+                    .append(actionButton("[Edit]", ChatMenuStyle.ACTION_EDIT,
                             ClickEvent.suggestCommand("/" + EDITOR_LABEL + " setcommand " + entry.id() + " " + oneBasedIndex + " " + configuredCommand),
                             "Replace this configured command"))
                     .append(Component.text(" "))
-                    .append(actionButton("[Del]", NamedTextColor.RED,
+                    .append(actionButton("[Del]", ChatMenuStyle.ACTION_DELETE,
                             ClickEvent.runCommand("/" + EDITOR_LABEL + " removecommand " + entry.id() + " " + oneBasedIndex),
                             "Remove this configured command"));
         }
@@ -837,24 +838,21 @@ public class CustomCommands extends BaseFeature {
         return String.join(" ", ctx.rawArgs().subList(start, ctx.rawArgs().size()));
     }
 
-    @SuppressWarnings("rawtypes") // Adventure is non-generic on supported proxy/runtime versions.
-    private Component actionButton(String text, NamedTextColor color, ClickEvent clickEvent, String hoverText) {
-        return Component.text(text, color)
-                .clickEvent(clickEvent)
-                .hoverEvent(HoverEvent.showText(Component.text(hoverText)));
+    private Component actionButton(String text, ChatMenuStyle style, ClickEvent<?> clickEvent, String hoverText) {
+        return ChatMenuUtil.actionButton(text, style, clickEvent, hoverText);
     }
 
     private Component formatPermissionComponent(CustomCommandEntry entry) {
         if (!entry.explicitPermission()) {
-            return Component.text(entry.permission(), NamedTextColor.AQUA)
-                    .append(Component.text(" default", NamedTextColor.DARK_GRAY));
+            return ChatMenuUtil.text(entry.permission(), ChatMenuStyle.ACCENT)
+                    .append(ChatMenuUtil.text(" default", ChatMenuStyle.MUTED));
         }
 
         if (entry.permission().isBlank()) {
-            return Component.text("<public>", NamedTextColor.GREEN);
+            return ChatMenuUtil.text("<public>", ChatMenuStyle.ACTION_ADD);
         }
 
-        return Component.text(entry.permission(), NamedTextColor.AQUA);
+        return ChatMenuUtil.text(entry.permission(), ChatMenuStyle.ACCENT);
     }
 
     private String describePermission(String label, String permission, boolean explicitPermission) {

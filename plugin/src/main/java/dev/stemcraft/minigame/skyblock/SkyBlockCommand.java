@@ -5,6 +5,7 @@ import dev.stemcraft.minigame.MiniGameCommandSupport;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.minigame.MiniGameArena;
+import dev.stemcraft.api.util.chatmenu.ChatMenuStyle;
 import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
@@ -89,19 +90,19 @@ public class SkyBlockCommand {
                 int end = Math.min(start + count, arenas.size());
                 for (int i = start; i < end; i++) {
                     MiniGameArena arena = arenas.get(i);
-                    Component line = Component.text(skyBlock.ownerName(arena), NamedTextColor.GREEN)
-                        .hoverEvent(HoverEvent.showText(Component.text("Show info for " + skyBlock.ownerName(arena))))
-                        .clickEvent(ClickEvent.runCommand("/skyblock info " + skyBlock.ownerName(arena)))
+                    Component line = ChatMenuUtil.actionButton(skyBlock.ownerName(arena), ChatMenuStyle.KEY,
+                        ClickEvent.runCommand("/skyblock info " + skyBlock.ownerName(arena)),
+                        "Show info for " + skyBlock.ownerName(arena))
                         .append(Component.text(" [" + arena.getStatus().name().toLowerCase(Locale.ROOT) + "] ", statusColour(arena)))
-                        .append(Component.text(arena.world().getName(), NamedTextColor.GRAY))
-                        .append(Component.text(" " + arena.numPlayers() + "/" + arena.getMaxPlayers(), NamedTextColor.AQUA));
+                        .append(ChatMenuUtil.text(arena.world().getName(), ChatMenuStyle.VALUE))
+                        .append(ChatMenuUtil.text(" " + arena.numPlayers() + "/" + arena.getMaxPlayers(), ChatMenuStyle.ACCENT));
 
                     if (isPlayer) {
                         line = line
                             .append(Component.text(" "))
-                            .append(Component.text("[Info]", NamedTextColor.GOLD)
-                                .clickEvent(ClickEvent.runCommand("/skyblock info " + skyBlock.ownerName(arena)))
-                                .hoverEvent(HoverEvent.showText(Component.text("Show island details"))));
+                            .append(ChatMenuUtil.actionButton("[Info]", ChatMenuStyle.ACTION_VIEW,
+                                ClickEvent.runCommand("/skyblock info " + skyBlock.ownerName(arena)),
+                                "Show island details"));
                     }
 
                     lines.add(line);

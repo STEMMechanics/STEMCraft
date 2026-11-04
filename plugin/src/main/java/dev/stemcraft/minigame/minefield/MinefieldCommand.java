@@ -7,6 +7,7 @@ import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.minigame.ArenaValidationResult;
 import dev.stemcraft.api.minigame.MiniGameArena;
 import dev.stemcraft.api.model.SCRegion;
+import dev.stemcraft.api.util.chatmenu.ChatMenuStyle;
 import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
 import dev.stemcraft.exception.MiniGameInvalidArenaConfigException;
 import net.kyori.adventure.text.Component;
@@ -140,10 +141,10 @@ public class MinefieldCommand {
                 int end = Math.min(start + count, arenas.size());
                 for (int i = start; i < end; i++) {
                     MiniGameArena arena = arenas.get(i);
-                    lines.add(Component.text(arena.id(), NamedTextColor.YELLOW)
+                    lines.add(ChatMenuUtil.text(arena.id(), ChatMenuStyle.KEY)
                         .append(Component.text(" [" + arena.getStatus().name().toLowerCase(Locale.ROOT) + "] ", statusColour(arena)))
-                        .append(Component.text(arena.getName(), NamedTextColor.GRAY))
-                        .append(Component.text(" " + arena.numPlayers() + "/" + arena.getMaxPlayers(), NamedTextColor.AQUA)));
+                        .append(ChatMenuUtil.text(arena.getName(), ChatMenuStyle.VALUE))
+                        .append(ChatMenuUtil.text(" " + arena.numPlayers() + "/" + arena.getMaxPlayers(), ChatMenuStyle.ACCENT)));
                 }
                 return lines;
             },

@@ -21,6 +21,7 @@ import dev.stemcraft.api.service.placedobject.PlacedObjectBlockLink;
 import dev.stemcraft.api.service.placedobject.PlacedObjectCreateRequest;
 import dev.stemcraft.api.service.placedobject.PlacedObjectEntityLink;
 import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
+import dev.stemcraft.api.util.chatmenu.ChatMenuStyle;
 import dev.stemcraft.api.util.PlaceholderUtil;
 import dev.stemcraft.api.util.PlayerUtil;
 import dev.stemcraft.api.util.TextUtil;
@@ -914,7 +915,7 @@ public class Mailboxes extends BaseFeature implements MailboxService {
         List<QueuedMail> queue = listQueuedMail();
         ChatMenuUtil.render(
             ctx.getSender(),
-            Component.text("Mailbox Queue", NamedTextColor.AQUA),
+            ChatMenuUtil.text("Mailbox Queue", ChatMenuStyle.TITLE),
             "mailbox queue",
             Math.max(1, page),
             queue.size(),
@@ -923,31 +924,31 @@ public class Mailboxes extends BaseFeature implements MailboxService {
                 int end = Math.min(start + count, queue.size());
                 for (int i = start; i < end; i++) {
                     QueuedMail queuedMail = queue.get(i);
-                    Component line = Component.text(shortQueueId(queuedMail.id()), NamedTextColor.YELLOW)
-                        .append(Component.text(" ", NamedTextColor.GRAY))
-                        .append(Component.text(Objects.requireNonNullElse(queuedMail.senderName(), "someone"), NamedTextColor.AQUA))
-                        .append(Component.text(" -> ", NamedTextColor.GRAY))
-                        .append(Component.text(queuedMail.recipientName(), NamedTextColor.GOLD))
-                        .append(Component.text(" ", NamedTextColor.GRAY))
-                        .append(Component.text("(" + summarizeInventory(deserializeInventory(queuedMail.payloadBase64(), MAILBOX_INVENTORY_SIZE)) + ")", NamedTextColor.GRAY))
-                        .append(Component.text(" ", NamedTextColor.GRAY))
+                    Component line = ChatMenuUtil.text(shortQueueId(queuedMail.id()), ChatMenuStyle.KEY)
+                        .append(Component.space())
+                        .append(ChatMenuUtil.text(Objects.requireNonNullElse(queuedMail.senderName(), "someone"), ChatMenuStyle.ACCENT))
+                        .append(ChatMenuUtil.text(" -> ", ChatMenuStyle.MUTED))
+                        .append(ChatMenuUtil.text(queuedMail.recipientName(), ChatMenuStyle.VALUE))
+                        .append(Component.space())
+                        .append(ChatMenuUtil.text("(" + summarizeInventory(deserializeInventory(queuedMail.payloadBase64(), MAILBOX_INVENTORY_SIZE)) + ")", ChatMenuStyle.MUTED))
+                        .append(Component.space())
                         .append(Component.text(formatQueueStatus(queuedMail), queueStatusColor(queuedMail)));
 
                     if (isPlayer) {
                         line = line.append(Component.text(" "))
-                            .append(actionButton("[View]", NamedTextColor.BLUE,
+                            .append(actionButton("[View]", ChatMenuStyle.ACTION_VIEW,
                                 ClickEvent.runCommand("/mailbox view " + queuedMail.id()),
                                 "View queued items"))
                             .append(Component.text(" "))
-                            .append(actionButton("[Release]", NamedTextColor.GREEN,
+                            .append(actionButton("[Release]", ChatMenuStyle.ACTION_ADD,
                                 ClickEvent.runCommand("/mailbox release " + queuedMail.id()),
                                 "Release immediately"))
                             .append(Component.text(" "))
-                            .append(actionButton("[Hold]", NamedTextColor.GOLD,
+                            .append(actionButton("[Hold]", ChatMenuStyle.ACTION_WARNING,
                                 ClickEvent.suggestCommand("/mailbox hold " + queuedMail.id() + " " + deliveryBaseDelayTicks),
                                 "Hold this mail for more ticks"))
                             .append(Component.text(" "))
-                            .append(actionButton("[Del]", NamedTextColor.RED,
+                            .append(actionButton("[Del]", ChatMenuStyle.ACTION_DELETE,
                                 ClickEvent.runCommand("/mailbox delete " + queuedMail.id()),
                                 "Delete this queued mail"));
                     }
@@ -983,7 +984,7 @@ public class Mailboxes extends BaseFeature implements MailboxService {
 
         ChatMenuUtil.render(
             ctx.getSender(),
-            Component.text("Queued Mail " + shortQueueId(queueId), NamedTextColor.AQUA),
+            ChatMenuUtil.text("Queued Mail " + shortQueueId(queueId), ChatMenuStyle.TITLE),
             "mailbox view " + queueId,
             Math.max(1, page),
             slots.size(),
@@ -992,16 +993,16 @@ public class Mailboxes extends BaseFeature implements MailboxService {
                 int end = Math.min(start + count, slots.size());
                 for (int i = start; i < end; i++) {
                     QueuedMailSlot slot = slots.get(i);
-                    Component line = Component.text("#" + (slot.slotIndex() + 1), NamedTextColor.YELLOW)
-                        .append(Component.text(" - ", NamedTextColor.GRAY))
-                        .append(Component.text(describeItem(slot.item()), NamedTextColor.AQUA));
+                    Component line = ChatMenuUtil.text("#" + (slot.slotIndex() + 1), ChatMenuStyle.KEY)
+                        .append(ChatMenuUtil.text(" - ", ChatMenuStyle.MUTED))
+                        .append(ChatMenuUtil.text(describeItem(slot.item()), ChatMenuStyle.VALUE));
                     if (isPlayer) {
                         line = line.append(Component.text(" "))
-                            .append(actionButton("[Del]", NamedTextColor.RED,
+                            .append(actionButton("[Del]", ChatMenuStyle.ACTION_DELETE,
                                 ClickEvent.runCommand("/mailbox item delete " + queueId + " " + (slot.slotIndex() + 1)),
                                 "Delete this queued item"))
                             .append(Component.text(" "))
-                            .append(actionButton("[Amt]", NamedTextColor.GOLD,
+                            .append(actionButton("[Amt]", ChatMenuStyle.ACTION_EDIT,
                                 ClickEvent.suggestCommand("/mailbox item amount " + queueId + " " + (slot.slotIndex() + 1) + " " + slot.item().getAmount()),
                                 "Edit queued item amount"));
                     }
@@ -1307,14 +1308,11 @@ public class Mailboxes extends BaseFeature implements MailboxService {
         return queuedMail.deliverAfter() <= System.currentTimeMillis() ? NamedTextColor.GREEN : NamedTextColor.GRAY;
     }
 
-    @SuppressWarnings("rawtypes") // Adventure is non-generic on supported proxy/runtime versions.
     private @NotNull Component actionButton(@NotNull String label,
-                                            @NotNull NamedTextColor color,
-                                            @NotNull ClickEvent clickEvent,
+                                            @NotNull ChatMenuStyle style,
+                                            @NotNull ClickEvent<?> clickEvent,
                                             @NotNull String hoverText) {
-        return Component.text(label, color)
-            .clickEvent(clickEvent)
-            .hoverEvent(HoverEvent.showText(Component.text(hoverText)));
+        return ChatMenuUtil.actionButton(label, style, clickEvent, hoverText);
     }
 
     private void logSentMail(@NotNull Player sender, @NotNull OutgoingMailResult result) {
