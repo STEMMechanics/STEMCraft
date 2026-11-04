@@ -30,7 +30,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
  */
 public enum ChatMenuStyle {
     /** Menu title and separator text. */
-    TITLE(NamedTextColor.AQUA),
+    TITLE(NamedTextColor.YELLOW),
     /** Key/label text in a {@code Key: value} line. */
     KEY(NamedTextColor.GOLD),
     /** Normal readable value text. */

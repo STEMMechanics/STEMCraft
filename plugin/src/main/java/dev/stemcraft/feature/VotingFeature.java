@@ -914,7 +914,7 @@ public final class VotingFeature extends BaseFeature {
         UUID uuid = ctx.getSender() instanceof Player player ? player.getUniqueId() : null;
         List<VoteGroup> values = new ArrayList<>(groups.values());
         int page = ChatMenuUtil.getPageFromArgs(ctx.args(), 1, 1);
-        ChatMenuUtil.render(ctx.getSender(), "Voting", "vote status", page, values.size(), (start, count, interactive) -> {
+        ChatMenuUtil.render(ctx.getSender(), buildListTitle(ctx.isPlayer()), "vote status", page, values.size(), (start, count, interactive) -> {
             List<Component> lines = new ArrayList<>();
             for (VoteGroup group : values.subList(start, start + count)) {
                 int used = uuid == null ? 0 : votes.getOrDefault(group.id, Map.of()).getOrDefault(uuid, Set.of()).size();
@@ -929,6 +929,19 @@ public final class VotingFeature extends BaseFeature {
             }
             return lines;
         }, "No voting groups exist.");
+    }
+
+    private Component buildListTitle(boolean isPlayer) {
+        Component title = ChatMenuUtil.text("Voting", ChatMenuStyle.TITLE);
+
+        if (isPlayer) {
+            title = title.append(Component.text(" "))
+                    .append(ChatMenuUtil.actionButton("[Create]", ChatMenuStyle.ACTION_CREATE,
+                            ClickEvent.suggestCommand("/vote admin create id"),
+                            "Create a new voting group"));
+        }
+
+        return title;
     }
 
     private void showGroupStatus(CommandContext ctx, VoteGroup group) {

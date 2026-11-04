@@ -275,8 +275,8 @@ public class CustomCommands extends BaseFeature {
                         String commandSummary = entry.runCommands().size()
                                 + pluralize(entry.runCommands().size(), " action", " actions");
                         Component line = ChatMenuUtil.text(entry.id(), ChatMenuStyle.KEY)
-                                .append(ChatMenuUtil.text(" - ", ChatMenuStyle.MUTED))
-                                .append(ChatMenuUtil.text(" " + commandSummary, ChatMenuStyle.ACCENT));
+                                .append(ChatMenuUtil.text(" -", ChatMenuStyle.MUTED))
+                                .append(ChatMenuUtil.text(" " + commandSummary, ChatMenuStyle.MUTED));
 
                         if (isPlayer) {
                             line = line.append(Component.text(" "))
