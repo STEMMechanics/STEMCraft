@@ -336,20 +336,20 @@
             <a class="sidebar-logo-link" href="/" aria-label="STEMCraft home">
                 <img class="sidebar-logo" src="/assets/logo.png" alt="STEMCraft">
             </a>
-            <button id="sidebarClose" class="icon-button sidebar-close" type="button" aria-label="Close navigation">×</button>
+            <button id="sidebarClose" class="icon-button sidebar-close" type="button" aria-label="Close navigation"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
         </div>
         <nav id="moduleNav" class="module-nav"></nav>
     </aside>
     <div id="sidebarBackdrop" class="backdrop"></div>
     <main class="main">
         <header class="topbar">
-            <button id="sidebarToggle" class="icon-button" type="button" aria-label="Toggle navigation" aria-expanded="true">☰</button>
+            <button id="sidebarToggle" class="icon-button" type="button" aria-label="Open navigation" aria-expanded="true"><i class="fa-solid fa-bars" aria-hidden="true"></i></button>
             <div class="topbar-content">
                 <h1 id="pageTitle">STEMCraft Editor</h1>
             </div>
         </header>
         <div id="notice" class="notice" role="status"></div>
-        <section id="workspace" class="workspace"><div class="empty">Loading editor…</div></section>
+        <section id="workspace" class="workspace"><div class="loading" role="status"><span class="loading-spinner" aria-hidden="true"></span><span>Loading editor…</span></div></section>
     </main>
 </div>
 <script>
@@ -369,11 +369,13 @@
         document.body.classList.toggle('sidebar-open', open);
         document.body.classList.toggle('sidebar-closed', !open);
         q('#sidebarToggle').setAttribute('aria-expanded', String(open));
+        q('#sidebarToggle').setAttribute('aria-label', open ? 'Close navigation' : 'Open navigation');
         localStorage.setItem('stemcraft-editor-sidebar', open ? 'open' : 'closed');
     }
 
     const storedSidebar = localStorage.getItem('stemcraft-editor-sidebar');
-    setSidebar(storedSidebar !== 'closed');
+    const defaultSidebarOpen = !window.matchMedia('(max-width: 56rem)').matches;
+    setSidebar(storedSidebar ? storedSidebar === 'open' : defaultSidebarOpen);
     q('#sidebarToggle').onclick = () => setSidebar(document.body.classList.contains('sidebar-closed'));
     q('#sidebarClose').onclick = () => setSidebar(false);
     q('#sidebarBackdrop').onclick = () => setSidebar(false);
@@ -391,6 +393,10 @@
 
     function setStatus(message, bad = false) {
         // Operation feedback is shown in the affected panel or notice area.
+    }
+
+    function loading(message) {
+        return '<div class="loading" role="status"><span class="loading-spinner" aria-hidden="true"></span><span>' + esc(message) + '</span></div>';
     }
 
     function notice(message, bad = false) {
@@ -433,7 +439,7 @@
         renderNav();
         const info = moduleInfo();
         q('#pageTitle').textContent = info?.title || 'STEMCraft Editor';
-        q('#workspace').innerHTML = '<div class="empty">Opening editor…</div>';
+        q('#workspace').innerHTML = loading('Opening editor…');
         notice('');
         try {
             activeData = await request(apiUrl(id, 'data'));
@@ -606,7 +612,7 @@
             esc(lore) + '</textarea></label><label class="wide">Enchantments<input name="enchantments" value="' +
             esc(enchantments) + '" placeholder="sharpness=2,unbreaking=1"></label></div><details><summary>Abilities JSON</summary>' +
             '<textarea class="small-area" name="abilities">' + esc(JSON.stringify(values.abilities || {}, null, 2)) +
-            '</textarea></details><div class="card-actions">' + save + '<button class="button" id="item-reload" type="button">Reload</button>' +
+            '</textarea></details><div class="card-actions">' + save +
             '</div></fieldset></form>';
         q('#item-editor-form').onsubmit = async event => {
             event.preventDefault();
@@ -624,7 +630,6 @@
                 await openModule('items');
             } catch (error) { notice(error.message, true); setStatus('Needs attention', true); }
         };
-        q('#item-reload').onclick = () => openModule('items');
     }
 
     function renderLoot(data) {
@@ -765,10 +770,11 @@
     async function openDocument(module, pack, file) {
         try {
             setStatus('Opening file…');
+            q('#document-panel').innerHTML = loading('Opening file…');
             const document = await request(apiUrl(module, 'document') + '?pack=' + encodeURIComponent(pack) + '&file=' + encodeURIComponent(file));
             currentDocument = {module, pack, file, revision: document.revision};
             const canWrite = Boolean(modules.find(value => value.id === module)?.writable);
-            const save = canWrite ? '<button id="document-save" class="button primary" type="button">Save and reload</button>' : '';
+            const save = canWrite ? '<button id="document-save" class="button primary" type="button">Save</button>' : '';
             q('#document-panel').innerHTML = '<div class="document-head"><div><strong>' + esc(pack) + ' / ' + esc(file) +
                 '</strong><small class="muted">Revision ' + esc(document.revision) + '</small></div>' + save +
                 '</div><textarea id="document-text" spellcheck="false"' + (canWrite ? '' : ' readonly') + '>' +
@@ -788,7 +794,7 @@
                     body: JSON.stringify({content: q('#document-text').value, revision: currentDocument.revision})
                 });
             currentDocument.revision = result.revision;
-            notice(result.message || 'File saved and reloaded.');
+            notice(result.message || 'File saved.');
             setStatus('Ready');
             activeData = await request(apiUrl(activeId, 'data'));
         } catch (error) { notice(error.message, true); setStatus('Needs attention', true); }

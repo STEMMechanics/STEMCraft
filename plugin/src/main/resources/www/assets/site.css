@@ -40,7 +40,7 @@ body {
     background-size: cover;
     background-attachment: fixed;
     color: var(--text);
-    font-family: Poppins, Roboto, "Open Sans", ui-sans-serif, system-ui, sans-serif;
+    font-family: "Poppins", Roboto, "Open Sans", ui-sans-serif, system-ui, sans-serif;
     font-size: 14px;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
@@ -50,6 +50,11 @@ body {
 body.landing-page {
     overflow-x: hidden;
     background-color: var(--page);
+}
+
+body.editor-page, body.quest-editor {
+    background-color: var(--page);
+    background-image: none;
 }
 
 body, button, input, select, textarea { font-family: inherit; }
@@ -157,13 +162,17 @@ label { color: var(--text); }
 input, select, textarea { border-color: var(--line-strong); border-radius: 9px; color: var(--text); background: var(--surface); }
 input:hover, select:hover, textarea:hover { border-color: #7dd3fc; }
 .empty { border-color: var(--line-strong); border-radius: 11px; color: var(--muted); background: var(--surface-soft); }
+.loading { display: flex; min-height: 5rem; align-items: center; justify-content: center; gap: .65rem; color: var(--muted); }
+.loading-spinner { width: 1rem; height: 1rem; border: 2px solid var(--line-strong); border-top-color: var(--accent-strong); border-radius: 50%; animation: stemcraft-spin .7s linear infinite; }
+@keyframes stemcraft-spin { to { transform: rotate(360deg); } }
 .errors { color: var(--danger); }
 .rule-summary, .sim-result { border-color: var(--line); border-radius: 10px; background: var(--surface-soft); }
 .sim-drop { border-color: var(--line); }
 .frame-wrap { border-color: var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--card-shadow); }
 iframe { background: var(--page); }
-.editor-page .workspace { display: grid; gap: 1.1rem; }
-.grid, .split { gap: 1.1rem; }
+.editor-page .workspace { display: grid; align-content: start; gap: 1.25rem; }
+.editor-page .workspace > .grid, .editor-page .workspace > .split { row-gap: 1.25rem; }
+.grid, .split { column-gap: 1.25rem; row-gap: 1.25rem; }
 .document-panel { margin-top: 0; }
 .card-actions { margin-top: .85rem; }
 .sim-result:empty, #document-panel:empty, #item-form:empty { display: none; }
@@ -172,7 +181,8 @@ iframe { background: var(--page); }
 body.quest-editor {
     min-height: 100vh;
     color: var(--text);
-    font-family: Poppins, Roboto, "Open Sans", ui-sans-serif, system-ui, sans-serif;
+    font-family: "Poppins", Roboto, "Open Sans", ui-sans-serif, system-ui, sans-serif;
+    color-scheme: light;
 }
 .quest-editor .top {
     height: auto;
@@ -211,6 +221,7 @@ body.quest-editor {
 .quest-editor .tabs { gap: .5rem; padding: 1rem 1rem .75rem; }
 .quest-editor .tabs .active { border-color: #bae6fd; color: var(--accent-strong); background: var(--accent-soft); }
 .quest-editor .search { margin: 0 1rem 1rem; width: calc(100% - 2rem); }
+.quest-editor .list { min-width: 0; padding: 0 .65rem 1rem; }
 .quest-editor input, .quest-editor select, .quest-editor textarea {
     border-color: var(--line-strong);
     border-radius: 9px;
@@ -218,11 +229,13 @@ body.quest-editor {
     background: var(--surface);
 }
 .quest-editor input:hover, .quest-editor select:hover, .quest-editor textarea:hover { border-color: var(--focus); }
-.quest-editor .item { margin: 0 .65rem .2rem; width: calc(100% - 1.3rem); border: 1px solid transparent; border-radius: 10px; background: transparent; }
+.quest-editor .item { margin: 0 0 .2rem; width: 100%; border: 1px solid transparent; border-radius: 10px; background: transparent; }
 .quest-editor .item.active { background: var(--accent-soft); }
 .quest-editor .item-main { color: var(--text); }
 .quest-editor .item-main small, .quest-editor .flow { color: var(--muted); }
 .quest-editor .tree-mark, .quest-editor .flow button, .quest-editor .flow-icon { color: var(--accent-strong); }
+.quest-editor .item-main { border-radius: 8px; }
+.quest-editor .flow { padding-left: 1.5rem; }
 .quest-editor .dot { color: var(--good); }
 .quest-editor .dot.off { color: var(--muted); }
 .quest-editor .side-actions { border-color: var(--line); }
@@ -241,13 +254,46 @@ body.quest-editor {
 .quest-editor .advanced-bar { margin-bottom: 1rem; }
 .quest-editor .side-actions { background: var(--surface); }
 
+.editor-page #sidebarToggle { display: none; }
+.editor-page .sidebar-close { display: none; }
+
 @media (max-width: 56rem) {
-    .editor-page .sidebar { inset: 0 auto 0 0; width: 258px; height: 100vh; box-shadow: var(--pop-shadow); }
-    body.sidebar-open .sidebar { transform: translateX(0); }
-    body.sidebar-closed .sidebar { padding-inline: .85rem; border-width: 1px; opacity: 1; }
-    .backdrop { background: rgb(15 23 42 / 28%); }
+    .editor-page .app { display: block; }
+    .editor-page .sidebar {
+        position: fixed;
+        z-index: 100;
+        inset: 0 auto 0 0;
+        width: min(18rem, calc(100vw - 1.5rem));
+        height: 100dvh;
+        padding: 1rem .85rem;
+        border-right: 1px solid var(--line);
+        box-shadow: var(--pop-shadow);
+        opacity: 1;
+        transform: translate3d(-105%, 0, 0);
+        transition: transform .22s ease;
+    }
+    body.editor-page.sidebar-open .sidebar { transform: translate3d(0, 0, 0); }
+    body.editor-page.sidebar-closed .sidebar { padding-inline: .85rem; border-right: 1px solid var(--line); opacity: 1; transform: translate3d(-105%, 0, 0); }
+    .editor-page #sidebarToggle, .editor-page .sidebar-close { display: grid; }
+    .editor-page .backdrop {
+        display: block;
+        position: fixed;
+        z-index: 90;
+        inset: 0;
+        background: rgb(15 23 42 / 28%);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .22s ease;
+    }
+    body.editor-page.sidebar-open .backdrop { opacity: 1; pointer-events: auto; }
+    body.editor-page.sidebar-open { overflow: hidden; }
     .quest-editor .app { grid-template-columns: 1fr; height: auto; min-height: calc(100vh - 70px); }
     .quest-editor aside { min-height: 18rem; border-right: 0; border-bottom: 1px solid var(--line); }
+}
+
+@media (min-width: 57rem) {
+    body.editor-page.sidebar-closed .app { grid-template-columns: 15.5rem minmax(0, 1fr); }
+    body.editor-page.sidebar-closed .sidebar { padding-inline: .85rem; border-right: 1px solid var(--line); opacity: 1; transform: none; }
 }
 
 @media (max-width: 38rem) {
