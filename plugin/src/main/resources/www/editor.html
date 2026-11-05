@@ -4,12 +4,6 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>STEMCraft Editor</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,700;1,400;1,700&display=swap">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
-          integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJA9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A=="
-          crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
         :root {
             color-scheme: dark;
@@ -336,14 +330,14 @@
             <a class="sidebar-logo-link" href="/" aria-label="STEMCraft home">
                 <img class="sidebar-logo" src="/assets/logo.png" alt="STEMCraft">
             </a>
-            <button id="sidebarClose" class="icon-button sidebar-close" type="button" aria-label="Close navigation"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+            <button id="sidebarClose" class="icon-button sidebar-close" type="button" aria-label="Close navigation"><svg class="icon-button-svg" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button>
         </div>
         <nav id="moduleNav" class="module-nav"></nav>
     </aside>
     <div id="sidebarBackdrop" class="backdrop"></div>
     <main class="main">
         <header class="topbar">
-            <button id="sidebarToggle" class="icon-button" type="button" aria-label="Open navigation" aria-expanded="true"><i class="fa-solid fa-bars" aria-hidden="true"></i></button>
+            <button id="sidebarToggle" class="icon-button" type="button" aria-label="Open navigation" aria-expanded="true"><svg class="icon-button-svg" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg></button>
             <div class="topbar-content">
                 <h1 id="pageTitle">STEMCraft Editor</h1>
             </div>
@@ -364,6 +358,7 @@
     let currentDocument = null;
     let selectedItem = null;
     let selectedLoot = null;
+    let selectedPack = null;
 
     function setSidebar(open) {
         document.body.classList.toggle('sidebar-open', open);
@@ -410,21 +405,25 @@
     function pageHead() { return ''; }
 
     const moduleIcons = {
-        items: 'fa-cube',
-        loot: 'fa-gem',
-        packs: 'fa-box-open',
-        quests: 'fa-scroll'
+        items: 'M12 3 3.5 7.5 12 12l8.5-4.5L12 3Z M3.5 7.5V16.5L12 21v-9 M20.5 7.5V16.5L12 21',
+        loot: 'M6 3h12l4 6-10 12L2 9l4-6Z M2 9h20 M12 21 8 9l4-6 4 6-4 12Z',
+        packs: 'M3 7.5 12 3l9 4.5-9 4.5-9-4.5Z M3 7.5V17l9 4 9-4V7.5 M12 12v9',
+        quests: 'M6 4h12v16H6a3 3 0 0 1 0-6h12 M6 14h12 M9 8h6 M9 11h6',
+        default: 'M4 4h6v2a2 2 0 1 0 4 0V4h6v6h-2a2 2 0 1 0 0 4h2v6h-6v-2a2 2 0 1 0-4 0v2H4v-6h2a2 2 0 1 0 0-4H4V4Z'
     };
 
     function moduleIcon(module) {
-        const supplied = String(module.icon || '');
-        return moduleIcons[module.id] || (supplied.startsWith('fa-') ? supplied : 'fa-puzzle-piece');
+        return moduleIcons[module.id] || moduleIcons.default;
+    }
+
+    function iconSvg(path, className = '') {
+        return '<svg class="ui-icon ' + esc(className) + '" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="' + esc(path) + '"></path></svg>';
     }
 
     function renderNav() {
         q('#moduleNav').innerHTML = modules.map(module =>
             '<button class="' + (module.id === activeId ? 'active' : '') + '" data-module="' + esc(module.id) +
-            '" type="button"><span class="module-icon" aria-hidden="true"><i class="fa-solid ' + esc(moduleIcon(module)) + '"></i>' +
+            '" type="button"><span class="module-icon" aria-hidden="true">' + iconSvg(moduleIcon(module), 'module-icon-svg') +
             '</span><span>' + esc(module.title) + '</span></button>').join('');
         q('#moduleNav').querySelectorAll('[data-module]').forEach(button => {
             button.onclick = () => { setSidebar(false); openModule(button.dataset.module); };
@@ -436,6 +435,7 @@
         currentDocument = null;
         selectedItem = null;
         selectedLoot = null;
+        selectedPack = null;
         renderNav();
         const info = moduleInfo();
         q('#pageTitle').textContent = info?.title || 'STEMCraft Editor';
@@ -462,7 +462,7 @@
 
     function renderQuestFrame(data) {
         q('#workspace').innerHTML = pageHead('Quests') +
-            '<div class="frame-wrap"><iframe title="Quests" src="' + esc(data.url) + '"></iframe></div>';
+            '<div class="frame-wrap quest-frame"><iframe title="Quests" src="' + esc(data.url) + '"></iframe></div>';
         const frame = q('iframe');
         frame.onload = () => {
             try { frame.contentDocument.body.classList.add('quest-editor'); }
@@ -472,41 +472,67 @@
 
     function renderPacks(data) {
         const writable = Boolean(moduleInfo()?.writable);
-        const cards = (data.packs || []).map(pack => {
-            const state = pack.valid ? (pack.enabled ? '<span class="pack-state good">Enabled</span>' : '<span class="pack-state">Disabled</span>') :
-                '<span class="pack-state bad">Invalid</span>';
-            const errors = (pack.errors || []).slice(0, 4).map(error => '<li>' + esc(error) + '</li>').join('');
-            const actions = writable ?
-                '<button class="button small" data-pack-action="reload" data-pack="' + esc(pack.id) + '">Reload</button>' +
-                (pack.enabled ? '<button class="button small warn" data-pack-action="disable" data-pack="' + esc(pack.id) + '">Disable</button>' :
-                    '<button class="button small good" data-pack-action="enable" data-pack="' + esc(pack.id) + '">Enable</button>') +
-                '<button class="button small danger" data-pack-action="delete" data-pack="' + esc(pack.id) + '">Delete</button>' : '';
-            const details = [
-                pack.dependencies?.length ? 'Dependencies: ' + esc(pack.dependencies.join(', ')) : '',
-                pack.resourcePackRebuildRequired ? 'Resource pack rebuild required.' : ''
-            ].filter(Boolean).join(' · ');
-            return '<article class="card"><div class="document-head"><div><h3>' + esc(pack.id) +
-                '</h3><small class="muted">' + esc(pack.description || 'Content pack') + '</small></div>' + state +
-                '</div>' + (details ? '<p class="tiny">' + details + '</p>' : '') +
-                (errors ? '<ul class="errors">' + errors + '</ul>' : '') +
-                '<div class="card-actions"><button class="button small" data-pack-action="validate" data-pack="' +
-                esc(pack.id) + '">Validate</button>' + actions + '<button class="button small" data-pack-doc="' +
-                esc(pack.id) + '">Open files</button></div></article>';
+        const packs = data.packs || [];
+        if (selectedPack && !packs.some(pack => pack.id === selectedPack)) selectedPack = null;
+        const selected = packs.find(pack => pack.id === selectedPack);
+        const cards = packs.map(pack => {
+            const errorCount = (pack.errors || []).length;
+            const state = pack.valid
+                ? (pack.enabled ? '<span class="pack-state good">Enabled</span>' : '<span class="pack-state">Disabled</span>')
+                : '<span class="pack-state bad">Needs attention</span>';
+            const issueText = errorCount ? errorCount + ' validation issue' + (errorCount === 1 ? '' : 's') : 'No validation issues';
+            return '<article class="card pack-card ' + (selectedPack === pack.id ? 'selected' : '') + '">' +
+                '<div class="pack-card-icon" aria-hidden="true">' + iconSvg(moduleIcons.packs) + '</div>' +
+                '<div class="pack-card-main"><div class="pack-card-title"><h3>' + esc(pack.id) + '</h3></div>' +
+                '<p class="pack-card-description">' + esc(pack.description || 'Content pack') + '</p>' +
+                '<div class="pack-card-meta">' + state + '<span>' + esc(issueText) + '</span></div></div>' +
+                '<button class="button small pack-card-action" type="button" data-pack-open="' + esc(pack.id) + '">' +
+                (selectedPack === pack.id ? 'Opened' : 'Open') + '</button></article>';
         }).join('');
-        const options = (data.documents || []).map(document =>
+        const selectedDocuments = selected ? (data.documents || []).filter(document => document.pack === selected.id) : [];
+        const options = selectedDocuments.map(document =>
             '<option value="' + esc(document.pack + '|' + document.file) + '">' + esc(document.label) + '</option>').join('');
+        const selectedErrors = selected ? (selected.errors || []) : [];
+        const selectedState = selected ? (selected.valid
+            ? (selected.enabled ? '<span class="pack-state good">Enabled</span>' : '<span class="pack-state">Disabled</span>')
+            : '<span class="pack-state bad">Needs attention</span>') : '';
+        const selectedDetails = selected ? [
+            selected.dependencies?.length ? '<div><dt>Dependencies</dt><dd>' + esc(selected.dependencies.join(', ')) + '</dd></div>' : '',
+            selected.resourcePackRebuildRequired ? '<div><dt>Resource pack</dt><dd>Rebuild required after changes.</dd></div>' : ''
+        ].filter(Boolean).join('') : '';
+        const selectedActions = selected && writable ?
+            '<div class="pack-detail-actions"><button class="button small" data-pack-action="validate" data-pack="' + esc(selected.id) + '">Validate</button>' +
+            '<button class="button small" data-pack-action="reload" data-pack="' + esc(selected.id) + '">Reload pack</button>' +
+            (selected.enabled ? '<button class="button small warn" data-pack-action="disable" data-pack="' + esc(selected.id) + '">Disable</button>' :
+                '<button class="button small good" data-pack-action="enable" data-pack="' + esc(selected.id) + '">Enable</button>') +
+            '<button class="button small danger" data-pack-action="delete" data-pack="' + esc(selected.id) + '">Delete</button></div>' : '';
+        const selectedPanel = selected ?
+            '<section class="card pack-detail"><div class="pack-detail-header"><div><div class="pack-detail-title"><h2>' + esc(selected.id) +
+            '</h2>' + selectedState + '</div><p>' + esc(selected.description || 'Content pack') + '</p></div>' +
+            '<button class="button small" type="button" data-pack-open="' + esc(selected.id) + '">Close</button></div>' +
+            (selectedDetails ? '<dl class="pack-detail-meta">' + selectedDetails + '</dl>' : '') +
+            (selectedErrors.length ? '<div class="pack-detail-section"><h3>Validation issues</h3><ul class="errors pack-error-list">' +
+                selectedErrors.map(error => '<li>' + esc(error) + '</li>').join('') + '</ul></div>' :
+                '<p class="pack-valid">No validation issues found.</p>') +
+            selectedActions +
+            '<div class="pack-files"><div><h3>Pack files</h3><p class="tiny">Open a configuration file to inspect or edit it.</p></div>' +
+            (selectedDocuments.length ? '<div class="card-actions"><select id="pack-doc"><option value="">Choose a file</option>' + options +
+                '</select><button id="pack-doc-open" class="button small primary" type="button">Open file</button></div>' :
+                '<span class="tiny">No editable files</span>') + '</div><div id="document-panel"></div></section>' :
+            '<div class="empty pack-empty">Open a pack to inspect its validation results and files.</div>';
         const create = writable ?
             '<form id="pack-create" class="card-actions"><input name="id" placeholder="my-pack" pattern="[a-z0-9][a-z0-9_-]*" required>' +
             '<select name="template"><option value="">Blank pack</option><option value="workshop">Workshop example</option></select>' +
             '<button class="button primary" type="submit">Create pack</button></form>' : '';
-        const createPanel = writable ? '<section class="card document-panel"><div class="document-head"><h3>New pack</h3>' + create + '</div></section>' : '';
+        const createPanel = writable ? '<section class="card pack-create"><div class="section-heading"><h3>New pack</h3>' +
+            '<span class="tiny">Add a content pack</span></div>' + create + '</section>' : '';
         q('#workspace').innerHTML = pageHead('Packs') +
-            '<div class="grid">' + (cards || '<div class="empty">No content packs found.</div>') + '</div>' +
+            '<div class="section-heading editor-section-heading"><div><h2>Content packs</h2><p class="tiny">Manage the packs available to the server.</p></div>' +
+            '<span class="tiny">' + packs.length + ' pack' + (packs.length === 1 ? '' : 's') + '</span></div>' +
+            '<div class="pack-grid">' + (cards || '<div class="empty">No content packs found.</div>') + '</div>' +
+            selectedPanel +
             createPanel +
-            '<section class="card document-panel"><div class="document-head"><h3>Pack files</h3><div class="card-actions">' +
-            '<select id="pack-doc"><option value="">Choose a file</option>' + options + '</select>' +
-            '<button id="pack-doc-open" class="button small primary" type="button">Open</button></div></div>' +
-            '<div id="document-panel"></div></section>';
+            '';
         bindPackActions();
         const createForm = q('#pack-create');
         if (createForm) createForm.onsubmit = async event => {
@@ -520,15 +546,9 @@
             } catch (error) { notice(error.message, true); setStatus('Needs attention', true); }
         };
         bindDocumentPicker('packs', 'pack-doc', 'pack-doc-open');
-        q('#workspace').querySelectorAll('[data-pack-doc]').forEach(button => button.onclick = () => {
-            const packId = button.dataset.packDoc;
-            const option = [...q('#pack-doc').options].find(value => value.value.startsWith(packId + '|'));
-            if (option) {
-                q('#pack-doc').value = option.value;
-                openSelectedDocument('packs', 'pack-doc');
-                return;
-            }
-            notice('This pack has no editable configuration files.', true);
+        q('#workspace').querySelectorAll('[data-pack-open]').forEach(button => button.onclick = () => {
+            selectedPack = selectedPack === button.dataset.packOpen ? null : button.dataset.packOpen;
+            renderPacks(data);
         });
     }
 
@@ -562,11 +582,15 @@
             '<label>Material<input name="material" list="item-materials" placeholder="AMETHYST_SHARD" required></label><label class="wide">Name (optional)<input name="name" placeholder="Forest Shard"></label></div>' +
             '<div class="card-actions"><button class="button primary" type="submit">Create item</button></div></form>' :
             '';
-        const createPanel = writable ? '<section class="card"><h3>New item</h3>' + create +
+        const createPanel = writable ? '<section class="card"><div class="section-heading"><h3>' + iconSvg(moduleIcons.items, 'section-icon') +
+            'New item</h3></div>' + create +
             '<datalist id="item-materials">' + materialOptions + '</datalist></section>' : '';
         q('#workspace').innerHTML = pageHead('Items') +
             createPanel +
-            '<div class="split"><section class="card"><h3>Custom items</h3><div class="list">' +
+            '<div class="section-heading editor-section-heading"><div><h2>Custom items</h2><p class="tiny">Choose an item to inspect or edit it.</p></div>' +
+            '<span class="tiny">' + items.length + ' item' + (items.length === 1 ? '' : 's') + '</span></div>' +
+            '<div class="split"><section class="card"><div class="section-heading"><h3>' + iconSvg(moduleIcons.items, 'section-icon') +
+            'Items</h3></div><div class="list">' +
             (list || '<div class="empty">No custom items found.</div>') + '</div></section>' +
             '<section id="item-form" class="card"></section></div>';
         const createForm = q('#item-create');
@@ -636,6 +660,7 @@
         const writable = Boolean(moduleInfo()?.writable);
         const definitions = data.definitions || [];
         if (!selectedLoot && definitions.length) selectedLoot = lootKey(definitions[0]);
+        if (selectedLoot && !definitions.some(definition => lootKey(definition) === selectedLoot)) selectedLoot = null;
         const selected = definitions.find(definition => lootKey(definition) === selectedLoot);
         const defaultPack = (data.packs || []).find(pack => pack.enabled)?.id || data.packs?.[0]?.id || '';
         const packs = (data.packs || []).map(pack => '<option value="' + esc(pack.id) + '"' +
@@ -649,7 +674,7 @@
             (lootKey(definition) === selectedLoot ? 'active' : '') + '" type="button" data-loot-table="' +
             esc(lootKey(definition)) + '"><strong>' + esc(definition.id) + '</strong><small>' +
             esc(definition.pack + ' / ' + definition.file) + '</small></button>').join('');
-        const summary = selected ? renderLootSummary(selected) : '';
+        const summary = selected ? renderLootSummary(selected) : '<div class="empty">Select a table to see its rules and drops.</div>';
         const createForm = writable ? '<form id="loot-create"><div class="field-grid"><label>Pack<select name="pack">' +
             packs + '</select></label><label>File<input name="file" list="loot-files" value="configs/loot.yml">' +
             '</label><label>Table ID<input name="table" placeholder="tree-drops" pattern="[a-z0-9][a-z0-9-]*" required></label>' +
@@ -661,24 +686,30 @@
             '<label>Minimum amount<input name="min" type="number" min="1" value="1"></label><label>Maximum amount<input name="max" type="number" min="1" value="1"></label>' +
             '<label>World (optional)<input name="world" placeholder="survival"></label><label>Biome (optional)<input name="biome" placeholder="minecraft:forest"></label>' +
             '</div><div class="card-actions"><button class="button primary" type="submit">Add loot rule</button></div></form>' : '';
-        const createPanel = writable ? '<section class="card"><h3>Add loot rule</h3>' + createForm +
+        const createPanel = writable ? '<details class="card disclosure" id="loot-create-panel"><summary>' +
+            iconSvg(moduleIcons.default, 'section-icon') + '<span>Add loot rule</span></summary><div class="disclosure-content">' + createForm +
             '<datalist id="loot-files">' + files + '</datalist><datalist id="loot-items">' + items +
-            '</datalist><datalist id="block-types">' + blocks + '</datalist></section>' : '';
-        q('#workspace').innerHTML = pageHead('Loot') +
-            '<div class="grid">' + createPanel +
-            '<section class="card"><h3>Tables</h3><div class="list">' + (tableList || '<div class="empty">No tables found.</div>') +
-            '</div></section></div><div class="grid document-panel"><section class="card"><h3>Selected table</h3>' +
-            '<div id="loot-summary">' + summary + '</div></section><section class="card"><h3>Test a table</h3>' +
-            '<form id="loot-sim"><div class="field-grid"><label>Table<select name="table">' +
+            '</datalist><datalist id="block-types">' + blocks + '</datalist></div></details>' : '';
+        const simulation = '<form id="loot-sim"><div class="field-grid"><label>Table<select name="table">' +
             (data.tables || []).map(table => '<option value="' + esc(table) + '">' + esc(table) + '</option>').join('') +
             '</select></label><label>Rolls<input name="rolls" type="number" min="1" max="100000" value="10"></label>' +
             '<label>Mob (optional)<input name="entity" placeholder="ZOMBIE"></label><label>Block (optional)<input name="block" placeholder="OAK_LOG"></label>' +
             '<label>Biome (optional)<input name="biome" placeholder="minecraft:forest"></label><label>World (optional)<input name="world" placeholder="survival"></label>' +
-            '</div><div class="card-actions"><button class="button" type="submit">Run test</button></div></form>' +
-            '<div id="loot-result" class="sim-result"></div></section></div>' +
-            '<section class="card document-panel"><div class="document-head"><h3>Loot source</h3><div class="card-actions">' +
-            '<select id="loot-doc"><option value="">Choose a file</option>' + files + '</select><button id="loot-doc-open" class="button small primary" type="button">Open</button>' +
-            '</div></div><div id="document-panel"></div></section>';
+            '</div><div class="card-actions"><button class="button" type="submit">Run test</button></div></form>';
+        const sourcePanel = '<details class="card disclosure" id="loot-source-panel"><summary>' + iconSvg(moduleIcons.packs, 'section-icon') +
+            '<span>Open source file</span></summary><div class="disclosure-content"><div class="card-actions source-picker">' +
+            '<select id="loot-doc"><option value="">Choose a file</option>' + files + '</select><button id="loot-doc-open" class="button small primary" type="button">Open file</button>' +
+            '</div><div id="document-panel"></div></div></details>';
+        q('#workspace').innerHTML = pageHead('Loot') +
+            '<div class="section-heading editor-section-heading"><div><h2>Loot tables</h2><p class="tiny">Choose a table to review what it can drop and when it applies.</p></div>' +
+            '<span class="tiny">' + definitions.length + ' table' + (definitions.length === 1 ? '' : 's') + '</span></div>' +
+            '<div class="split loot-layout"><section class="card loot-tables"><div class="section-heading"><h3>' + iconSvg(moduleIcons.loot, 'section-icon') +
+            'Tables</h3></div><div class="list">' + (tableList || '<div class="empty">No loot tables found.</div>') +
+            '</div></section><section class="card loot-selection"><div class="section-heading"><h3>' + iconSvg(moduleIcons.default, 'section-icon') +
+            'Selected table</h3></div><div id="loot-summary">' + summary + '</div></section></div>' +
+            '<div class="loot-tools">' + createPanel + '<details class="card disclosure" id="loot-test-panel"><summary>' +
+            iconSvg(moduleIcons.quests, 'section-icon') + '<span>Test drops</span></summary><div class="disclosure-content">' + simulation +
+            '<div id="loot-result" class="sim-result"></div></div></details>' + sourcePanel + '</div>';
         bindLootForm();
         q('#workspace').querySelectorAll('[data-loot-table]').forEach(button => button.onclick = () => {
             selectedLoot = button.dataset.lootTable;
@@ -699,12 +730,15 @@
             const entries = Array.isArray(rule.entries) ? rule.entries : [];
             const drops = entries.map(entry => entry.item + ' × ' + (entry.min ?? 1) + '-' + (entry.max ?? entry.min ?? 1) +
                 ' (' + ((Number(entry.chance ?? 1) * 100).toFixed(0)) + '%)').join(', ');
-            return '<div class="rule-summary"><strong>' + esc(rule.operation || 'APPEND') + ' · ' + esc(drops || 'No entries') +
-                '</strong><div>' + esc(conditions || 'Always') + '</div></div>';
+            const operation = rule.operation && rule.operation !== 'APPEND' ? ' · ' + esc(rule.operation) : '';
+            return '<div class="rule-summary"><div class="rule-summary-head"><strong>' + esc(drops || 'No drops') +
+                '</strong><span class="tiny">Drop' + operation + '</span></div><div><span class="rule-condition-label">When</span> ' +
+                esc(conditions && conditions !== 'No conditions' ? conditions : 'Always') + '</div></div>';
         }).join('');
+        const target = String(table.target || 'MOB_DEATH').toLowerCase().replace(/[_-]+/g, ' ');
         return '<div class="document-head"><div><strong>' + esc(definition.id) + '</strong><small class="muted">' +
-            esc(definition.pack + ' / ' + definition.file + ' · ' + (table.target || 'MOB_DEATH')) + '</small></div>' +
-            '<button class="button small" type="button" data-summary-doc="' + esc(definition.pack + '|' + definition.file) + '">Edit source</button></div>' +
+            esc(definition.pack + ' / ' + definition.file) + '</small><div class="loot-trigger"><span>Trigger</span> ' + esc(target) + '</div></div>' +
+            '<button class="button small" type="button" data-summary-doc="' + esc(definition.pack + '|' + definition.file) + '">Open source</button></div>' +
             '<div class="table-summary">' + (rows || '<div class="empty">This table has no rules.</div>') + '</div>';
     }
 
@@ -749,7 +783,12 @@
         q('#workspace').querySelectorAll('[data-summary-doc]').forEach(button => button.onclick = () => {
             const select = q('#loot-doc');
             const option = [...select.options].find(value => value.value === button.dataset.summaryDoc);
-            if (option) { select.value = option.value; openSelectedDocument('loot', 'loot-doc'); }
+            if (option) {
+                const sourcePanel = q('#loot-source-panel');
+                if (sourcePanel) sourcePanel.open = true;
+                select.value = option.value;
+                openSelectedDocument('loot', 'loot-doc');
+            }
         });
     }
 

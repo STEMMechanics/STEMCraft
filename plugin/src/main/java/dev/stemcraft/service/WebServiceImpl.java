@@ -1664,6 +1664,9 @@ public class WebServiceImpl extends BaseService implements WebService {
                 else if (name.endsWith(".svg")) contentType = "image/svg+xml";
                 else if (name.endsWith(".css")) contentType = "text/css; charset=utf-8";
                 else if (name.endsWith(".js")) contentType = "text/javascript; charset=utf-8";
+                else if (name.endsWith(".woff2")) contentType = "font/woff2";
+                else if (name.endsWith(".woff")) contentType = "font/woff";
+                else if (name.endsWith(".ttf")) contentType = "font/ttf";
                 else if (contentType == null) contentType = "application/octet-stream";
             }
 

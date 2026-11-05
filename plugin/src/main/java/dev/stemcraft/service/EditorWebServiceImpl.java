@@ -26,8 +26,12 @@ import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
+import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -38,6 +42,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -46,31 +51,48 @@ import java.util.stream.Collectors;
 /** Shared private web editor hub and module registry. */
 public final class EditorWebServiceImpl extends BaseService implements EditorWebService {
     private static final String EDITOR_PATH = "/editor";
+    private static final String SESSION_FILE_NAME = "editor-sessions.yml";
     private static final long SESSION_LIFETIME_MILLIS = TimeUnit.HOURS.toMillis(24);
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final Gson GSON = new GsonBuilder().serializeNulls().create();
     private final Map<String, EditorWebModule> modules = new ConcurrentHashMap<>();
     private final Map<String, Session> sessions = new ConcurrentHashMap<>();
+    private final Map<UUID, PersistentSession> playerSessions = new ConcurrentHashMap<>();
+    private final File sessionFile;
     private String editorHtml;
 
     public EditorWebServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api, "editor-web");
+        sessionFile = new File(plugin.getDataFolder(), SESSION_FILE_NAME);
     }
 
     @Override
     public void onEnable() {
         editorHtml = loadEditorHtml();
+        loadPersistentSessions();
         api.web().registerEndpointHandler(EDITOR_PATH, this::handleRequest);
         api.commands().create("editor")
             .description("Open the STEMCraft editor")
-            .usage("/editor")
-            .executor((unused, command, context) -> openEditor(context))
+            .usage("/editor [logout]")
+            .tabCompletion("logout")
+            .executor((unused, command, context) -> {
+                if (!context.args().isEmpty()) {
+                    if (context.args().size() == 1 && "logout".equalsIgnoreCase(context.args().getFirst())) {
+                        logoutEditor(context);
+                    } else {
+                        context.returnError("Usage: /editor [logout]");
+                    }
+                    return;
+                }
+                openEditor(context);
+            })
             .register(plugin);
     }
 
     @Override
     public void onDisable() {
         sessions.clear();
+        playerSessions.clear();
         modules.clear();
     }
 
@@ -88,18 +110,22 @@ public final class EditorWebServiceImpl extends BaseService implements EditorWeb
             .map(module -> normalizeModuleId(module.id()))
             .sorted()
             .toList();
-        if (visible.isEmpty()) return "";
+        if (visible.isEmpty()) {
+            if (sender instanceof Player player) revokePlayerSession(player.getUniqueId());
+            return "";
+        }
         Set<String> writable = modules.values().stream()
             .filter(module -> visible.contains(normalizeModuleId(module.id())))
             .filter(module -> hasPermission(sender, module.writePermission()))
             .map(module -> normalizeModuleId(module.id()))
             .collect(Collectors.toUnmodifiableSet());
-        byte[] bytes = new byte[18];
-        SECURE_RANDOM.nextBytes(bytes);
-        String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+        if (sender instanceof Player player) {
+            return createPlayerSession(player.getUniqueId(), Set.copyOf(visible), writable);
+        }
+        String token = newToken();
         sessions.put(token, new Session(System.currentTimeMillis() + SESSION_LIFETIME_MILLIS,
-            Set.copyOf(visible), writable));
-        return api.web().getPublicUrl() + EDITOR_PATH + "/" + token;
+            null, Set.copyOf(visible), writable));
+        return editorUrl(token);
     }
 
     private void openEditor(CommandContext context) {
@@ -112,8 +138,25 @@ public final class EditorWebServiceImpl extends BaseService implements EditorWeb
             .append(Component.text(url, NamedTextColor.AQUA)
                 .clickEvent(ClickEvent.openUrl(url))
                 .hoverEvent(HoverEvent.showText(Component.text("Open the STEMCraft editor")))));
-        context.getSender().sendMessage(Component.text(
-            "This private link expires in 24 hours or when the server restarts.", NamedTextColor.GRAY));
+        if (context.getSender() instanceof Player) {
+            context.getSender().sendMessage(Component.text(
+                "This link stays logged in until you use /editor logout.", NamedTextColor.GRAY));
+        } else {
+            context.getSender().sendMessage(Component.text(
+                "This private link expires in 24 hours or when the server restarts.", NamedTextColor.GRAY));
+        }
+    }
+
+    private void logoutEditor(CommandContext context) {
+        if (!(context.getSender() instanceof Player player)) {
+            context.returnError("Only players have persistent editor sessions.");
+            return;
+        }
+        if (!revokePlayerSession(player.getUniqueId())) {
+            context.returnInfo("You do not have a persistent editor session.");
+            return;
+        }
+        context.returnSuccess("Your editor session has been logged out. Use /editor to create a new link.");
     }
 
     private Object handleRequest(WebServiceRequest request) {
@@ -187,6 +230,98 @@ public final class EditorWebServiceImpl extends BaseService implements EditorWeb
         sessions.entrySet().removeIf(entry -> entry.getValue().expiresAt() < now);
     }
 
+    private String createPlayerSession(UUID playerId, Set<String> visible, Set<String> writable) {
+        PersistentSession existing = playerSessions.get(playerId);
+        String token = existing == null ? newToken() : existing.token();
+        PersistentSession updated = new PersistentSession(token, Set.copyOf(visible), Set.copyOf(writable));
+        playerSessions.put(playerId, updated);
+        sessions.put(token, new Session(Long.MAX_VALUE, playerId, updated.modules(), updated.writable()));
+        savePersistentSessions();
+        return editorUrl(token);
+    }
+
+    private boolean revokePlayerSession(UUID playerId) {
+        PersistentSession removed = playerSessions.remove(playerId);
+        if (removed == null) return false;
+        sessions.remove(removed.token());
+        savePersistentSessions();
+        return true;
+    }
+
+    private String newToken() {
+        String token;
+        do {
+            byte[] bytes = new byte[24];
+            SECURE_RANDOM.nextBytes(bytes);
+            token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+        } while (sessions.containsKey(token));
+        return token;
+    }
+
+    private String editorUrl(String token) {
+        return api.web().getPublicUrl() + EDITOR_PATH + "/" + token;
+    }
+
+    private void loadPersistentSessions() {
+        if (!sessionFile.isFile()) return;
+        YamlConfiguration config = YamlConfiguration.loadConfiguration(sessionFile);
+        ConfigurationSection players = config.getConfigurationSection("players");
+        if (players == null) return;
+        for (String rawId : players.getKeys(false)) {
+            UUID playerId;
+            try {
+                playerId = UUID.fromString(rawId);
+            } catch (IllegalArgumentException ignored) {
+                continue;
+            }
+            String path = "players." + rawId;
+            String token = config.getString(path + ".token", "");
+            if (!isToken(token)) continue;
+            Set<String> visible = storedModules(config.getStringList(path + ".modules"));
+            Set<String> writable = storedModules(config.getStringList(path + ".writable"));
+            if (visible.isEmpty()) continue;
+            PersistentSession persistent = new PersistentSession(token, visible, writable);
+            playerSessions.put(playerId, persistent);
+            sessions.put(token, new Session(Long.MAX_VALUE, playerId, visible, writable));
+        }
+    }
+
+    private void savePersistentSessions() {
+        YamlConfiguration config = new YamlConfiguration();
+        playerSessions.forEach((playerId, session) -> {
+            String path = "players." + playerId;
+            config.set(path + ".token", session.token());
+            config.set(path + ".modules", session.modules().stream().sorted().toList());
+            config.set(path + ".writable", session.writable().stream().sorted().toList());
+        });
+        try {
+            File parent = sessionFile.getParentFile();
+            if (parent != null && !parent.exists() && !parent.mkdirs()) {
+                plugin.getLogger().warning("Could not create the editor session directory.");
+                return;
+            }
+            config.save(sessionFile);
+        } catch (IOException exception) {
+            plugin.getLogger().warning("Could not save editor sessions: " + exception.getMessage());
+        }
+    }
+
+    private static Set<String> storedModules(List<String> values) {
+        Set<String> result = new java.util.LinkedHashSet<>();
+        for (String value : values) {
+            try {
+                result.add(normalizeModuleId(value));
+            } catch (IllegalArgumentException ignored) {
+                // Ignore invalid module IDs from a manually edited session file.
+            }
+        }
+        return Set.copyOf(result);
+    }
+
+    private static boolean isToken(String token) {
+        return token != null && token.length() >= 24 && token.matches("[A-Za-z0-9_-]+");
+    }
+
     private static boolean hasPermission(CommandSender sender, String permission) {
         return permission == null || permission.isBlank() || sender.hasPermission(permission);
     }
@@ -204,7 +339,7 @@ public final class EditorWebServiceImpl extends BaseService implements EditorWeb
         response.put("body", result.body());
         response.put("headers", Map.of("Cache-Control", "no-store",
             "X-Content-Type-Options", "nosniff",
-            "Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; img-src 'self' data:; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com"));
+            "Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:"));
         return response;
     }
 
@@ -227,5 +362,6 @@ public final class EditorWebServiceImpl extends BaseService implements EditorWeb
         return Bukkit.getScheduler().callSyncMethod(plugin, task).get(10, TimeUnit.SECONDS);
     }
 
-    private record Session(long expiresAt, Set<String> modules, Set<String> writable) { }
+    private record Session(long expiresAt, UUID playerId, Set<String> modules, Set<String> writable) { }
+    private record PersistentSession(String token, Set<String> modules, Set<String> writable) { }
 }

@@ -1,3 +1,32 @@
+@font-face {
+    font-family: "Poppins";
+    src: url("/assets/fonts/Poppins-Regular.ttf") format("truetype");
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+}
+@font-face {
+    font-family: "Poppins";
+    src: url("/assets/fonts/Poppins-Medium.ttf") format("truetype");
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+}
+@font-face {
+    font-family: "Poppins";
+    src: url("/assets/fonts/Poppins-SemiBold.ttf") format("truetype");
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+}
+@font-face {
+    font-family: "Poppins";
+    src: url("/assets/fonts/Poppins-Bold.ttf") format("truetype");
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+}
+
 * { box-sizing: border-box; }
 
 :root {
@@ -125,7 +154,8 @@ h3 { font-size: 1.02rem; }
 .module-nav button:hover { color: var(--accent-strong); background: var(--surface-subtle); }
 .module-nav button.active { border-color: #bae6fd; color: var(--accent-strong); background: var(--accent-soft); font-weight: 700; }
 .module-icon { display: grid; place-items: center; width: 1.35rem; height: 1.35rem; flex-basis: 1.35rem; border: 0; border-radius: 0; color: var(--muted); background: transparent; font-size: 1rem; }
-.module-icon i { line-height: 1; }
+.ui-icon { width: 1.05rem; height: 1.05rem; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+.module-icon-svg { width: 1.1rem; height: 1.1rem; }
 .module-nav button.active .module-icon { color: var(--accent-strong); }
 .editor-page .main { padding: 1.4rem clamp(1rem, 3vw, 2.75rem) 2.75rem; }
 .topbar { min-height: 70px; margin: 0 0 1.35rem; padding: 0 0 1rem; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; box-shadow: none; }
@@ -144,6 +174,7 @@ h3 { font-size: 1.02rem; }
 .button.small { min-height: 32px; padding: .38rem .62rem; font-size: .78rem; }
 .icon-button { border-color: var(--line); border-radius: 9px; color: var(--accent-strong); background: var(--surface-soft); }
 .icon-button:hover { border-color: #7dd3fc; background: var(--accent-soft); }
+.icon-button-svg { width: 1.1rem; height: 1.1rem; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
 .status { color: var(--good); font-size: .78rem; font-weight: 700; }
 .status.bad { color: var(--danger); }
 .notice { border-color: #edc579; border-radius: 10px; color: var(--warn); background: var(--warn-soft); }
@@ -153,6 +184,11 @@ h3 { font-size: 1.02rem; }
 .card { padding: 1.05rem; border-color: var(--line); border-radius: 12px; background: var(--surface); box-shadow: none; }
 .card p { color: var(--muted); }
 .document-head small, .muted, .tiny { color: var(--muted); }
+.editor-section-heading { align-items: center; margin: 0; }
+.editor-section-heading h2 { display: flex; align-items: center; gap: .55rem; margin: 0; }
+.editor-section-heading p { margin: .35rem 0 0; }
+.section-heading h3 { display: flex; align-items: center; gap: .55rem; margin: 0; }
+.section-icon { color: var(--accent-strong); }
 .pack-state { color: var(--muted); font-size: .76rem; font-weight: 750; }
 .pack-state.good { color: var(--good); }
 .pack-state.bad { color: var(--danger); }
@@ -167,8 +203,15 @@ input:hover, select:hover, textarea:hover { border-color: #7dd3fc; }
 @keyframes stemcraft-spin { to { transform: rotate(360deg); } }
 .errors { color: var(--danger); }
 .rule-summary, .sim-result { border-color: var(--line); border-radius: 10px; background: var(--surface-soft); }
+.rule-summary-head { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; }
+.rule-summary-head strong { min-width: 0; overflow-wrap: anywhere; }
+.rule-summary-head .tiny { flex: 0 0 auto; color: var(--accent-strong); }
+.rule-condition-label, .loot-trigger span { color: var(--accent-strong); font-weight: 750; }
+.loot-trigger { margin-top: .35rem; color: var(--text); font-size: .78rem; }
 .sim-drop { border-color: var(--line); }
 .frame-wrap { border-color: var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--card-shadow); }
+.quest-frame { border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.quest-frame iframe { min-height: calc(100vh - 8rem); }
 iframe { background: var(--page); }
 .editor-page .workspace { display: grid; align-content: start; gap: 1.25rem; }
 .editor-page .workspace > .grid, .editor-page .workspace > .split { row-gap: 1.25rem; }
@@ -176,6 +219,57 @@ iframe { background: var(--page); }
 .document-panel { margin-top: 0; }
 .card-actions { margin-top: .85rem; }
 .sim-result:empty, #document-panel:empty, #item-form:empty { display: none; }
+
+/* Content pack and loot views keep actions in the selected detail panel. */
+.pack-grid { display: grid; gap: .85rem; }
+.pack-card { display: flex; align-items: center; gap: .9rem; min-width: 0; padding: .95rem 1rem; }
+.pack-card.selected { border-color: var(--focus); box-shadow: 0 0 0 2px rgb(125 211 252 / 24%); }
+.pack-card-icon { display: grid; flex: 0 0 2.35rem; width: 2.35rem; height: 2.35rem; place-items: center; border: 1px solid #bae6fd; border-radius: 10px; color: var(--accent-strong); background: var(--accent-soft); }
+.pack-card-icon .ui-icon { width: 1.2rem; height: 1.2rem; }
+.pack-card-main { min-width: 0; flex: 1; }
+.pack-card-title h3 { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pack-card-description { overflow: hidden; margin: .25rem 0 .4rem !important; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+.pack-card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: .65rem; color: var(--muted); font-size: .76rem; }
+.pack-card-action { flex: 0 0 auto; }
+.pack-detail { display: grid; gap: 1rem; }
+.pack-detail-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.pack-detail-title { display: flex; align-items: center; flex-wrap: wrap; gap: .7rem; }
+.pack-detail-title h2 { margin: 0; }
+.pack-detail-header p { margin: .3rem 0 0; }
+.pack-detail-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .7rem 1.2rem; margin: 0; padding-top: .85rem; border-top: 1px solid var(--line); }
+.pack-detail-meta div { min-width: 0; }
+.pack-detail-meta dt { color: var(--accent-strong); font-size: .75rem; font-weight: 750; }
+.pack-detail-meta dd { margin: .2rem 0 0; color: var(--text); overflow-wrap: anywhere; }
+.pack-detail-section { padding-top: .85rem; border-top: 1px solid var(--line); }
+.pack-detail-section h3 { margin-bottom: .45rem; }
+.pack-error-list { margin: 0; padding-left: 1.25rem; }
+.pack-valid { margin: 0; padding: .65rem .8rem; border: 1px solid #bbebca; border-radius: 9px; color: var(--good) !important; background: var(--good-soft); }
+.pack-detail-actions { display: flex; flex-wrap: wrap; gap: .45rem; padding-top: .85rem; border-top: 1px solid var(--line); }
+.pack-files { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding-top: .85rem; border-top: 1px solid var(--line); }
+.pack-files h3 { margin: 0; }
+.pack-files p { margin: .25rem 0 0; }
+.pack-files .card-actions { margin-top: 0; }
+.pack-empty { margin: 0; }
+.pack-create { padding-bottom: 1rem; }
+.pack-create .section-heading { align-items: baseline; margin-bottom: -.15rem; }
+.pack-create .section-heading h3 { margin: 0; }
+.pack-create .card-actions { margin-top: .75rem; }
+.pack-create input { flex: 1 1 12rem; }
+.loot-layout { grid-template-columns: minmax(15rem, 22rem) minmax(0, 1fr); align-items: start; }
+.loot-tables, .loot-selection { min-width: 0; }
+.loot-tables .list { max-height: 35rem; }
+.loot-selection { min-height: 13rem; }
+.loot-tools { display: grid; gap: 1.25rem; }
+.disclosure { overflow: hidden; padding: 0; }
+.disclosure > summary { display: flex; align-items: center; gap: .65rem; padding: 1rem 1.05rem; cursor: pointer; list-style: none; font-weight: 750; }
+.disclosure > summary::-webkit-details-marker { display: none; }
+.disclosure > summary::after { margin-left: auto; color: var(--accent-strong); content: '+'; font-size: 1.15rem; }
+.disclosure[open] > summary::after { content: '–'; }
+.disclosure-content { padding: 0 1.05rem 1.05rem; }
+.source-picker { margin-top: 0; }
+.loot-selection .section-heading { align-items: center; }
+.loot-selection .document-head { margin-top: .25rem; }
+.loot-selection .table-summary { margin-top: .9rem; }
 
 /* Embedded quest editor: keep its older markup, but give it the shared theme. */
 body.quest-editor {
@@ -210,11 +304,15 @@ body.quest-editor {
 .quest-editor .status.error { color: var(--danger); }
 .quest-editor .app {
     grid-template-columns: minmax(15rem, 18rem) minmax(0, 1fr);
+    gap: 1.25rem;
     height: calc(100vh - 70px);
     background: transparent;
 }
 .quest-editor aside {
     min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
     border-color: var(--line);
     background: var(--surface);
 }
@@ -239,7 +337,7 @@ body.quest-editor {
 .quest-editor .dot { color: var(--good); }
 .quest-editor .dot.off { color: var(--muted); }
 .quest-editor .side-actions { border-color: var(--line); }
-.quest-editor main { padding: 1.25rem clamp(1rem, 3vw, 2.5rem) 2.5rem; color: var(--text); }
+.quest-editor main { padding: 0 0 2.5rem; color: var(--text); }
 .quest-editor #form { display: grid; align-content: start; gap: 1rem; }
 .quest-editor .head { margin-bottom: 0; }
 .quest-editor .empty { border-color: var(--line-strong); color: var(--muted); }

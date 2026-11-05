@@ -23,6 +23,6 @@ public interface EditorWebService {
     /** Register or replace a service-owned editor module. */
     void registerModule(@NotNull EditorWebModule module);
 
-    /** Create a private expiring editor URL containing only permitted modules. */
+    /** Create or reuse a private editor URL containing only the sender's permitted modules. */
     @NotNull String createSession(@NotNull CommandSender sender);
 }
