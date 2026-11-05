@@ -28,7 +28,7 @@
         body {
             margin: 0;
             min-height: 100vh;
-            background: radial-gradient(circle at top, #1e3a5f, var(--page) 54%);
+            background: var(--page);
             color: var(--text);
         }
         body, button, input, select, textarea { font: inherit; }
@@ -332,10 +332,7 @@
             </a>
             <button id="sidebarClose" class="icon-button sidebar-close" type="button" aria-label="Close navigation">×</button>
         </div>
-        <p class="sidebar-kicker">Private server editor</p>
-        <p class="sidebar-note">Configure the server from one place. Changes are checked before they are loaded.</p>
         <nav id="moduleNav" class="module-nav"></nav>
-        <div class="sidebar-footer">Use the sidebar to move between server editors. Access is limited to the permissions in your private link.</div>
     </aside>
     <div id="sidebarBackdrop" class="backdrop"></div>
     <main class="main">
@@ -344,10 +341,8 @@
             <div class="topbar-content">
                 <p class="eyebrow">STEMMechanics / private workspace</p>
                 <h1 id="pageTitle">STEMCraft Editor</h1>
-                <p id="pageSubtitle" class="subtitle">Choose an editor.</p>
             </div>
             <div class="topbar-actions">
-                <span id="status" class="status">Starting…</span>
                 <button id="refresh" class="button small" type="button">Refresh</button>
             </div>
         </header>
@@ -393,9 +388,7 @@
     }
 
     function setStatus(message, bad = false) {
-        const element = q('#status');
-        element.textContent = message;
-        element.className = 'status ' + (bad ? 'bad' : 'good');
+        // Operation feedback is shown in the affected panel or notice area.
     }
 
     function notice(message, bad = false) {
@@ -406,12 +399,8 @@
 
     function moduleInfo() { return modules.find(module => module.id === activeId); }
 
-    function pageHead(title, description) {
-        const info = moduleInfo();
-        const writable = Boolean(info && info.writable);
-        return '<div class="page-head"><div><p class="eyebrow">Editor</p><h2>' + esc(title) +
-            '</h2><p>' + esc(description) + '</p></div><span class="access ' + (writable ? 'write' : '') + '">' +
-            (writable ? 'Editable' : 'Read only') + '</span></div>';
+    function pageHead(title) {
+        return '<div class="page-head"><p class="eyebrow">Editor</p><h2>' + esc(title) + '</h2></div>';
     }
 
     function renderNav() {
@@ -432,7 +421,6 @@
         renderNav();
         const info = moduleInfo();
         q('#pageTitle').textContent = info?.title || 'STEMCraft Editor';
-        q('#pageSubtitle').textContent = info?.description || '';
         q('#workspace').innerHTML = '<div class="empty">Opening editor…</div>';
         notice('');
         try {
@@ -455,7 +443,7 @@
     }
 
     function renderQuestFrame(data) {
-        q('#workspace').innerHTML = pageHead('Quests', 'Create and manage quests.') +
+        q('#workspace').innerHTML = pageHead('Quests') +
             '<div class="frame-wrap"><iframe title="Quests" src="' + esc(data.url) + '"></iframe></div>';
         const frame = q('iframe');
         frame.onload = () => {
@@ -467,19 +455,21 @@
     function renderPacks(data) {
         const writable = Boolean(moduleInfo()?.writable);
         const cards = (data.packs || []).map(pack => {
-            const state = pack.valid ? (pack.enabled ? '<span class="pill good">Valid</span>' : '<span class="pill">Disabled</span>') :
-                '<span class="pill bad">Invalid</span>';
+            const state = pack.valid ? (pack.enabled ? '<span class="pack-state good">Enabled</span>' : '<span class="pack-state">Disabled</span>') :
+                '<span class="pack-state bad">Invalid</span>';
             const errors = (pack.errors || []).slice(0, 4).map(error => '<li>' + esc(error) + '</li>').join('');
             const actions = writable ?
                 '<button class="button small" data-pack-action="reload" data-pack="' + esc(pack.id) + '">Reload</button>' +
                 (pack.enabled ? '<button class="button small warn" data-pack-action="disable" data-pack="' + esc(pack.id) + '">Disable</button>' :
                     '<button class="button small good" data-pack-action="enable" data-pack="' + esc(pack.id) + '">Enable</button>') +
-                '<button class="button small danger" data-pack-action="delete" data-pack="' + esc(pack.id) + '">Delete</button>' :
-                '<span class="pill">Read only</span>';
+                '<button class="button small danger" data-pack-action="delete" data-pack="' + esc(pack.id) + '">Delete</button>' : '';
+            const details = [
+                pack.dependencies?.length ? 'Dependencies: ' + esc(pack.dependencies.join(', ')) : '',
+                pack.resourcePackRebuildRequired ? 'Resource pack rebuild required.' : ''
+            ].filter(Boolean).join(' · ');
             return '<article class="card"><div class="document-head"><div><h3>' + esc(pack.id) +
                 '</h3><small class="muted">' + esc(pack.description || 'Content pack') + '</small></div>' + state +
-                '</div><p class="tiny">' + (pack.dependencies?.length ? 'Dependencies: ' + esc(pack.dependencies.join(', ')) : 'No dependencies.') +
-                (pack.resourcePackRebuildRequired ? ' Resource pack rebuild required.' : '') + '</p>' +
+                '</div>' + (details ? '<p class="tiny">' + details + '</p>' : '') +
                 (errors ? '<ul class="errors">' + errors + '</ul>' : '') +
                 '<div class="card-actions"><button class="button small" data-pack-action="validate" data-pack="' +
                 esc(pack.id) + '">Validate</button>' + actions + '<button class="button small" data-pack-doc="' +
@@ -490,17 +480,15 @@
         const create = writable ?
             '<form id="pack-create" class="card-actions"><input name="id" placeholder="my-pack" pattern="[a-z0-9][a-z0-9_-]*" required>' +
             '<select name="template"><option value="">Blank pack</option><option value="workshop">Workshop example</option></select>' +
-            '<button class="button primary" type="submit">Create pack</button></form>' :
-            '<span class="access">Read only</span>';
-        q('#workspace').innerHTML = pageHead('Packs', 'Manage content packs and their files.') +
+            '<button class="button primary" type="submit">Create pack</button></form>' : '';
+        const createPanel = writable ? '<section class="card document-panel"><div class="document-head"><h3>New pack</h3>' + create + '</div></section>' : '';
+        q('#workspace').innerHTML = pageHead('Packs') +
             '<div class="grid">' + (cards || '<div class="empty">No content packs found.</div>') + '</div>' +
-            '<section class="card document-panel"><div class="document-head"><div><h3>New pack</h3>' +
-            '<p class="tiny">Create a blank pack or copy the workshop example.</p></div>' + create + '</div></section>' +
-            '<section class="card document-panel"><div class="document-head"><div><h3>Pack files</h3>' +
-            '<p class="tiny">Use the source editor for detailed YAML changes.</p></div><div class="card-actions">' +
+            createPanel +
+            '<section class="card document-panel"><div class="document-head"><h3>Pack files</h3><div class="card-actions">' +
             '<select id="pack-doc"><option value="">Choose a file</option>' + options + '</select>' +
             '<button id="pack-doc-open" class="button small primary" type="button">Open</button></div></div>' +
-            '<div id="document-panel"><div class="empty">Choose a file to inspect it.</div></div></section>';
+            '<div id="document-panel"></div></section>';
         bindPackActions();
         const createForm = q('#pack-create');
         if (createForm) createForm.onsubmit = async event => {
@@ -555,13 +543,14 @@
             '</select></label><label>File<input name="file" value="configs/items.yml"></label><label>Item ID<input name="id" pattern="[a-z0-9][a-z0-9_-]*" placeholder="forest-shard" required></label>' +
             '<label>Material<input name="material" list="item-materials" placeholder="AMETHYST_SHARD" required></label><label class="wide">Name (optional)<input name="name" placeholder="Forest Shard"></label></div>' +
             '<div class="card-actions"><button class="button primary" type="submit">Create item</button></div></form>' :
-            '<div class="empty">This link can view items but cannot publish them.</div>';
-        q('#workspace').innerHTML = pageHead('Items', 'Edit custom item definitions.') +
-            '<section class="card"><div class="document-head"><div><h3>New item</h3><p class="tiny">Create a definition, then edit its details below.</p></div></div>' +
-            create + '<datalist id="item-materials">' + materialOptions + '</datalist></section>' +
+            '';
+        const createPanel = writable ? '<section class="card"><h3>New item</h3>' + create +
+            '<datalist id="item-materials">' + materialOptions + '</datalist></section>' : '';
+        q('#workspace').innerHTML = pageHead('Items') +
+            createPanel +
             '<div class="split"><section class="card"><h3>Custom items</h3><div class="list">' +
             (list || '<div class="empty">No custom items found.</div>') + '</div></section>' +
-            '<section id="item-form" class="card"><div class="empty">Choose an item.</div></section></div>';
+            '<section id="item-form" class="card"></section></div>';
         const createForm = q('#item-create');
         if (createForm) createForm.onsubmit = async event => {
             event.preventDefault();
@@ -591,8 +580,7 @@
         const lore = Array.isArray(values.lore) ? values.lore.join('\n') : (values.lore || '');
         const save = canWrite ? '<button class="button primary" type="submit">Save item</button>' : '';
         q('#item-form').innerHTML = '<div class="document-head"><div><h3>' + esc(item.displayName) +
-            '</h3><small class="muted">' + esc(item.pack) + ' / ' + esc(item.file) + '</small></div><span class="pill ' +
-            (canWrite ? 'good">Editable' : '">Read only') + '</span></div><form id="item-editor-form"><fieldset' +
+            '</h3><small class="muted">' + esc(item.pack) + ' / ' + esc(item.file) + '</small></div></div><form id="item-editor-form"><fieldset' +
             (canWrite ? '' : ' disabled') + '><div class="field-grid"><label>Name<input name="name" value="' +
             esc(values.name || '') + '"></label><label>Material<input name="material" value="' +
             esc(values.material || item.material) + '"></label><label>Colour<input name="color" value="' +
@@ -607,7 +595,7 @@
             esc(enchantments) + '" placeholder="sharpness=2,unbreaking=1"></label></div><details><summary>Abilities JSON</summary>' +
             '<textarea class="small-area" name="abilities">' + esc(JSON.stringify(values.abilities || {}, null, 2)) +
             '</textarea></details><div class="card-actions">' + save + '<button class="button" id="item-reload" type="button">Reload</button>' +
-            '</div></fieldset></form>' + (canWrite ? '' : '<p class="tiny">This link can view items but cannot publish them.</p>');
+            '</div></fieldset></form>';
         q('#item-editor-form').onsubmit = async event => {
             event.preventDefault();
             if (!canWrite) return;
@@ -644,7 +632,7 @@
             (lootKey(definition) === selectedLoot ? 'active' : '') + '" type="button" data-loot-table="' +
             esc(lootKey(definition)) + '"><strong>' + esc(definition.id) + '</strong><small>' +
             esc(definition.pack + ' / ' + definition.file) + '</small></button>').join('');
-        const summary = selected ? renderLootSummary(selected) : '<div class="empty">Create a rule to make the first table.</div>';
+        const summary = selected ? renderLootSummary(selected) : '';
         const createForm = writable ? '<form id="loot-create"><div class="field-grid"><label>Pack<select name="pack">' +
             packs + '</select></label><label>File<input name="file" list="loot-files" value="configs/loot.yml">' +
             '</label><label>Table ID<input name="table" placeholder="tree-drops" pattern="[a-z0-9][a-z0-9-]*" required></label>' +
@@ -655,14 +643,12 @@
             '<label>Chance<input name="chance" type="number" min="0" max="1" step="0.01" value="1"></label>' +
             '<label>Minimum amount<input name="min" type="number" min="1" value="1"></label><label>Maximum amount<input name="max" type="number" min="1" value="1"></label>' +
             '<label>World (optional)<input name="world" placeholder="survival"></label><label>Biome (optional)<input name="biome" placeholder="minecraft:forest"></label>' +
-            '</div><div class="card-actions"><button class="button primary" type="submit">Add loot rule</button></div>' +
-            '<p class="tiny">Add a rule to an existing table or create a new one. Use a Minecraft material or a custom item ID.</p></form>' :
-            '<div class="empty">This link can view loot but cannot save it.</div>';
-        q('#workspace').innerHTML = pageHead('Loot', 'Define drops for mobs and block breaks.') +
-            '<div class="grid"><section class="card"><div class="document-head"><div><h3>Add loot rule</h3>' +
-            '<p class="tiny">Choose the event, the block or mob, and the item that should drop.</p></div></div>' + createForm +
+            '</div><div class="card-actions"><button class="button primary" type="submit">Add loot rule</button></div></form>' : '';
+        const createPanel = writable ? '<section class="card"><h3>Add loot rule</h3>' + createForm +
             '<datalist id="loot-files">' + files + '</datalist><datalist id="loot-items">' + items +
-            '</datalist><datalist id="block-types">' + blocks + '</datalist></section>' +
+            '</datalist><datalist id="block-types">' + blocks + '</datalist></section>' : '';
+        q('#workspace').innerHTML = pageHead('Loot') +
+            '<div class="grid">' + createPanel +
             '<section class="card"><h3>Tables</h3><div class="list">' + (tableList || '<div class="empty">No tables found.</div>') +
             '</div></section></div><div class="grid document-panel"><section class="card"><h3>Selected table</h3>' +
             '<div id="loot-summary">' + summary + '</div></section><section class="card"><h3>Test a table</h3>' +
@@ -672,11 +658,10 @@
             '<label>Mob (optional)<input name="entity" placeholder="ZOMBIE"></label><label>Block (optional)<input name="block" placeholder="OAK_LOG"></label>' +
             '<label>Biome (optional)<input name="biome" placeholder="minecraft:forest"></label><label>World (optional)<input name="world" placeholder="survival"></label>' +
             '</div><div class="card-actions"><button class="button" type="submit">Run test</button></div></form>' +
-            '<div id="loot-result" class="sim-result"><span class="muted">Results appear here.</span></div></section></div>' +
-            '<section class="card document-panel"><div class="document-head"><div><h3>Loot source</h3>' +
-            '<p class="tiny">Open the YAML when you need to review or make an advanced change.</p></div><div class="card-actions">' +
+            '<div id="loot-result" class="sim-result"></div></section></div>' +
+            '<section class="card document-panel"><div class="document-head"><h3>Loot source</h3><div class="card-actions">' +
             '<select id="loot-doc"><option value="">Choose a file</option>' + files + '</select><button id="loot-doc-open" class="button small primary" type="button">Open</button>' +
-            '</div></div><div id="document-panel"><div class="empty">Choose a file to inspect it.</div></div></section>';
+            '</div></div><div id="document-panel"></div></section>';
         bindLootForm();
         q('#workspace').querySelectorAll('[data-loot-table]').forEach(button => button.onclick = () => {
             selectedLoot = button.dataset.lootTable;
@@ -771,8 +756,7 @@
             const document = await request(apiUrl(module, 'document') + '?pack=' + encodeURIComponent(pack) + '&file=' + encodeURIComponent(file));
             currentDocument = {module, pack, file, revision: document.revision};
             const canWrite = Boolean(modules.find(value => value.id === module)?.writable);
-            const save = canWrite ? '<button id="document-save" class="button primary" type="button">Save and reload</button>' :
-                '<span class="pill">Read only</span>';
+            const save = canWrite ? '<button id="document-save" class="button primary" type="button">Save and reload</button>' : '';
             q('#document-panel').innerHTML = '<div class="document-head"><div><strong>' + esc(pack) + ' / ' + esc(file) +
                 '</strong><small class="muted">Revision ' + esc(document.revision) + '</small></div>' + save +
                 '</div><textarea id="document-text" spellcheck="false"' + (canWrite ? '' : ' readonly') + '>' +
