@@ -328,7 +328,7 @@
     <aside class="sidebar" aria-label="Editor navigation">
         <div class="sidebar-brand">
             <a class="sidebar-logo-link" href="/" aria-label="STEMCraft home">
-                <img class="sidebar-logo" src="/assets/branding/stemcraft-logo.svg" alt="STEMCraft">
+                <img class="sidebar-logo" src="/assets/logo.png" alt="STEMCraft">
             </a>
             <button id="sidebarClose" class="icon-button sidebar-close" type="button" aria-label="Close navigation">×</button>
         </div>
@@ -459,11 +459,8 @@
             '<div class="frame-wrap"><iframe title="Quests" src="' + esc(data.url) + '"></iframe></div>';
         const frame = q('iframe');
         frame.onload = () => {
-            try {
-                const style = frame.contentDocument.createElement('style');
-                style.textContent = 'body{font-family:"Poppins","Avenir Next","Segoe UI",sans-serif!important;background:#eef7ff!important;color:#0f2742!important}button,input,select,textarea{font-family:inherit!important;border-radius:9px!important;border-color:#d8e5f0!important;background:#fff!important;color:#0f2742!important}';
-                frame.contentDocument.head.appendChild(style);
-            } catch (ignored) { }
+            try { frame.contentDocument.body.classList.add('quest-editor'); }
+            catch (ignored) { }
         };
     }
 

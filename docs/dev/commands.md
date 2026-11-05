@@ -66,6 +66,14 @@ custom landing page in the configured web-server directory. STEMCraft also
 creates a default `robots.txt` that asks all crawlers not to index the server.
 An existing custom `robots.txt` is preserved.
 
+The bundled pages use `www/assets/logo.png` for STEMCraft branding. Replace that
+file in the configured web directory to use a different logo. The shared theme
+also looks for an optional `www/assets/background.webp`, then
+`www/assets/background.png`; either file can be supplied as the page artwork.
+The theme adds a light readability overlay, so the same artwork can be used by
+the public landing page, the shared editor, and the embedded quest editor. WebP
+is preferred when both files are present.
+
 The read-only `GET /status` endpoint does not require Discord role
 authorisation. Existing status fields remain available to callers. To include
 current online Minecraft usernames, set

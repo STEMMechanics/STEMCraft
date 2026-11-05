@@ -1657,7 +1657,15 @@ public class WebServiceImpl extends BaseService implements WebService {
 
             // Serve the requested file (streaming, not readAllBytes)
             String contentType = Files.probeContentType(requested);
-            if (contentType == null) contentType = "application/octet-stream";
+            if (contentType == null || "application/octet-stream".equals(contentType)) {
+                String name = requested.getFileName().toString().toLowerCase(Locale.ROOT);
+                if (name.endsWith(".png")) contentType = "image/png";
+                else if (name.endsWith(".webp")) contentType = "image/webp";
+                else if (name.endsWith(".svg")) contentType = "image/svg+xml";
+                else if (name.endsWith(".css")) contentType = "text/css; charset=utf-8";
+                else if (name.endsWith(".js")) contentType = "text/javascript; charset=utf-8";
+                else if (contentType == null) contentType = "application/octet-stream";
+            }
 
             exchange.getResponseHeaders().set("Content-Type", contentType);
             long size = Files.size(requested);
