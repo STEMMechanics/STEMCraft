@@ -4,6 +4,12 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>STEMCraft Editor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,700;1,400;1,700&display=swap">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+          integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJA9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A=="
+          crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
         :root {
             color-scheme: dark;
@@ -339,11 +345,7 @@
         <header class="topbar">
             <button id="sidebarToggle" class="icon-button" type="button" aria-label="Toggle navigation" aria-expanded="true">☰</button>
             <div class="topbar-content">
-                <p class="eyebrow">STEMMechanics / private workspace</p>
                 <h1 id="pageTitle">STEMCraft Editor</h1>
-            </div>
-            <div class="topbar-actions">
-                <button id="refresh" class="button small" type="button">Refresh</button>
             </div>
         </header>
         <div id="notice" class="notice" role="status"></div>
@@ -399,14 +401,24 @@
 
     function moduleInfo() { return modules.find(module => module.id === activeId); }
 
-    function pageHead(title) {
-        return '<div class="page-head"><p class="eyebrow">Editor</p><h2>' + esc(title) + '</h2></div>';
+    function pageHead() { return ''; }
+
+    const moduleIcons = {
+        items: 'fa-cube',
+        loot: 'fa-gem',
+        packs: 'fa-box-open',
+        quests: 'fa-scroll'
+    };
+
+    function moduleIcon(module) {
+        const supplied = String(module.icon || '');
+        return moduleIcons[module.id] || (supplied.startsWith('fa-') ? supplied : 'fa-puzzle-piece');
     }
 
     function renderNav() {
         q('#moduleNav').innerHTML = modules.map(module =>
             '<button class="' + (module.id === activeId ? 'active' : '') + '" data-module="' + esc(module.id) +
-            '" type="button"><span class="module-icon">' + esc(module.icon || module.title.slice(0, 1)) +
+            '" type="button"><span class="module-icon" aria-hidden="true"><i class="fa-solid ' + esc(moduleIcon(module)) + '"></i>' +
             '</span><span>' + esc(module.title) + '</span></button>').join('');
         q('#moduleNav').querySelectorAll('[data-module]').forEach(button => {
             button.onclick = () => { setSidebar(false); openModule(button.dataset.module); };
@@ -781,8 +793,6 @@
             activeData = await request(apiUrl(activeId, 'data'));
         } catch (error) { notice(error.message, true); setStatus('Needs attention', true); }
     }
-
-    q('#refresh').onclick = () => activeId ? openModule(activeId) : boot();
 
     async function boot() {
         try {

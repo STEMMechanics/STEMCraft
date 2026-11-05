@@ -204,7 +204,7 @@ public final class EditorWebServiceImpl extends BaseService implements EditorWeb
         response.put("body", result.body());
         response.put("headers", Map.of("Cache-Control", "no-store",
             "X-Content-Type-Options", "nosniff",
-            "Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:"));
+            "Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; img-src 'self' data:; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com"));
         return response;
     }
 
