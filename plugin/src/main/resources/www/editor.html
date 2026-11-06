@@ -293,8 +293,24 @@
         .sim-result { margin-top: .8rem; padding: .7rem; border: 1px solid var(--line-soft); border-radius: .3rem; background: #0e1a2a; }
         .sim-drop { display: flex; justify-content: space-between; gap: 1rem; padding: .35rem 0; border-bottom: 1px solid #29405a; }
         .sim-drop:last-child { border-bottom: 0; }
-        .frame-wrap { overflow: hidden; border: 1px solid var(--line); border-radius: .42rem; background: var(--page); }
-        iframe { display: block; width: 100%; min-height: 76vh; border: 0; background: var(--page); }
+        .subview-head { display: flex; align-items: center; gap: .8rem; margin-bottom: 1.1rem; }
+        .subview-head h2 { margin: 0 auto 0 0; }
+        .subview-back { display: inline-flex; align-items: center; gap: .35rem; }
+        .stack { display: grid; gap: 1rem; }
+        .table-wrap { overflow-x: auto; }
+        .data-table { width: 100%; border-collapse: collapse; }
+        .data-table th, .data-table td { padding: .7rem .75rem; border-bottom: 1px solid var(--line-soft); text-align: left; vertical-align: top; }
+        .data-table th { color: var(--muted); font-size: .76rem; letter-spacing: .04em; text-transform: uppercase; }
+        .data-table tbody tr:last-child td { border-bottom: 0; }
+        .component-showcase { display: grid; gap: 1rem; }
+        .component-demo { display: grid; gap: .7rem; }
+        .component-demo h3 { margin-bottom: 0; }
+        .component-demo .demo-row { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+        .component-demo .demo-row > * { max-width: 100%; }
+        .component-label { color: var(--muted); font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+        .component-demo .list { max-height: none; }
+        .component-demo .notice { display: block; margin: 0; }
+        .component-demo .loading { margin: 0; }
         .hidden { display: none !important; }
         .backdrop { display: none; }
         @media (max-width: 56rem) {
@@ -362,8 +378,12 @@
     let selectedItem = null;
     let selectedLoot = null;
     let selectedPack = null;
+    let selectedQuest = null;
+    let selectedNpc = null;
+    let questListKind = 'quests';
     let configEvents = null;
     let configEventsRetry = null;
+    let documentReturn = null;
 
     function setSidebar(open) {
         document.body.classList.toggle('sidebar-open', open);
@@ -456,6 +476,9 @@
         selectedItem = null;
         selectedLoot = null;
         selectedPack = null;
+        selectedQuest = null;
+        selectedNpc = null;
+        questListKind = 'quests';
         renderNav();
         const info = moduleInfo();
         q('#pageTitle').textContent = info?.title || 'STEMCraft Editor';
@@ -473,73 +496,418 @@
 
     function renderModule() {
         if (!activeData) return;
-        if (activeData.kind === 'iframe') return renderQuestFrame(activeData);
+        if (activeData.kind === 'components') return renderComponents();
+        if (activeData.kind === 'quests') return renderQuests(activeData);
         if (activeData.kind === 'packs') return renderPacks(activeData);
         if (activeData.kind === 'items') return renderItems(activeData);
         if (activeData.kind === 'loot') return renderLoot(activeData);
         q('#workspace').innerHTML = '<div class="empty">This editor is not available yet.</div>';
     }
 
-    function renderQuestFrame(data) {
-        q('#workspace').innerHTML = pageHead('Quests') +
-            '<div class="frame-wrap quest-frame"><iframe title="Quests" src="' + esc(data.url) + '"></iframe></div>';
-        const frame = q('iframe');
-        frame.onload = () => {
-            try { frame.contentDocument.body.classList.add('quest-editor'); }
-            catch (ignored) { }
+    function subviewHead(title, backLabel = 'Back') {
+        return '<div class="subview-head"><button class="button subview-back" type="button" data-subview-back>← ' +
+            esc(backLabel) + '</button><h2>' + esc(title) + '</h2></div>';
+    }
+
+    function renderComponents() {
+        q('#workspace').innerHTML = pageHead('Components') +
+            '<div class="component-showcase">' +
+            '<section class="card component-demo"><h3>Actions and status</h3><div class="demo-row"><span class="component-label">Buttons</span>' +
+            '<button class="button primary" type="button">Primary action</button><button class="button" type="button">Secondary action</button>' +
+            '<button class="button small" type="button">Small action</button><button class="button good" type="button">Enabled</button>' +
+            '<button class="button warn" type="button">Warning</button><button class="button danger" type="button">Delete</button></div>' +
+            '<div class="demo-row"><span class="component-label">Status</span><span class="pill good">Saved</span><span class="pill warn">Draft</span><span class="pill bad">Needs attention</span><span class="status">Supporting text</span></div></section>' +
+            '<section class="card component-demo"><h3>Forms</h3><div class="field-grid"><label>Text field<input value="Example value"></label>' +
+            '<label>Select<select><option>First option</option><option>Second option</option></select></label>' +
+            '<label class="wide">Long text<textarea class="small-area">A shared editor field with the site theme.</textarea></label></div></section>' +
+            '<section class="card component-demo"><h3>Lists and tables</h3><div class="grid"><div><span class="component-label">List</span><div class="list">' +
+            '<button class="list-button active" type="button"><strong>Selected item</strong><small>items/example</small></button>' +
+            '<button class="list-button" type="button"><strong>Another item</strong><small>items/another</small></button></div></div>' +
+            '<div class="table-wrap"><span class="component-label">Table</span><table class="data-table"><thead><tr><th>Name</th><th>State</th><th>Action</th></tr></thead><tbody>' +
+            '<tr><td>Example row</td><td><span class="pill good">Ready</span></td><td><button class="button small" type="button">Open</button></td></tr>' +
+            '<tr><td>Another row</td><td><span class="pill">Draft</span></td><td><button class="button small" type="button">Open</button></td></tr></tbody></table></div></div></section>' +
+            '<section class="card component-demo"><h3>Feedback and states</h3><div class="notice show">A non-blocking notice with an optional action.</div>' +
+            '<div class="loading"><span class="loading-spinner" aria-hidden="true"></span><span>Loading state</span></div>' +
+            '<div class="empty">Empty state content appears here when there is nothing to show.</div></section></div>';
+    }
+
+    function questOptions(values, current, blank = true) {
+        return (blank ? '<option value="">None</option>' : '') + values.map(value =>
+            '<option value="' + esc(value) + '"' + (value === current ? ' selected' : '') + '>' + esc(value) + '</option>').join('');
+    }
+
+    function questField(label, name, value, type = 'text', wide = false) {
+        return '<label' + (wide ? ' class="wide"' : '') + '>' + esc(label) + '<input name="' + esc(name) + '" type="' +
+            esc(type) + '" value="' + esc(value) + '"></label>';
+    }
+
+    function questArea(label, name, value, wide = true) {
+        return '<label' + (wide ? ' class="wide"' : '') + '>' + esc(label) + '<textarea name="' + esc(name) + '">' +
+            esc(value) + '</textarea></label>';
+    }
+
+    function questObjectField(label, prop, value, type = 'text') {
+        return '<label>' + esc(label) + '<input data-prop="' + esc(prop) + '" type="' + esc(type) + '" value="' + esc(value) + '"></label>';
+    }
+
+    function questObjectArea(label, prop, value) {
+        return '<label class="wide">' + esc(label) + '<textarea data-prop="' + esc(prop) + '">' + esc(value) + '</textarea></label>';
+    }
+
+    function questDepth(data, quest, seen = new Set()) {
+        if (!quest || seen.has(quest.id)) return 0;
+        seen.add(quest.id);
+        const parents = (quest.requirements || []).map(id => data.quests.find(value => value.id === id)).filter(Boolean);
+        return parents.length ? 1 + Math.max(...parents.map(parent => questDepth(data, parent, new Set(seen)))) : 0;
+    }
+
+    function questLevel(data, quest) {
+        return data.npcs.find(npc => npc.id === quest.startNpcProfile)?.minimumLevel ?? 0;
+    }
+
+    function questSort(data, first, second) {
+        return questLevel(data, first) - questLevel(data, second) || String(first.title).localeCompare(String(second.title));
+    }
+
+    function orderedQuestValues(data) {
+        const visited = new Set();
+        const result = [];
+        const primaryParent = quest => data.quests.find(value => value.id === (quest.requirements || [])[0]);
+        const visit = quest => {
+            if (!quest || visited.has(quest.id)) return;
+            visited.add(quest.id);
+            result.push(quest);
+            data.quests.filter(child => primaryParent(child)?.id === quest.id).sort((a, b) => questSort(data, a, b)).forEach(visit);
         };
+        data.quests.filter(quest => !primaryParent(quest)).sort((a, b) => questSort(data, a, b)).forEach(visit);
+        data.quests.filter(quest => !visited.has(quest.id)).sort((a, b) => questSort(data, a, b)).forEach(visit);
+        return result;
+    }
+
+    function questObjectiveTarget(data, objective) {
+        if (objective.type === 'COLLECT') return '<label>Material<select data-prop="target">' +
+            questOptions(data.materials || [], objective.target, false) + '</select></label>';
+        if (['KILL', 'INTERACT'].includes(objective.type)) return '<label>Entity type<select data-prop="target">' +
+            questOptions(data.entityTypes || [], objective.target, false) + '</select></label>';
+        if (objective.type === 'NPC') return '<label>NPC profile<select data-prop="target">' +
+            questOptions((data.npcs || []).map(npc => 'profile:' + npc.id), objective.target, false) + '</select></label>';
+        if (objective.type === 'STRUCTURE') return '<label>Structure<select data-prop="target">' +
+            questOptions(['SHIPWRECK', 'SHIPWRECK_BEACHED', 'PILLAGER_OUTPOST', 'OCEAN_RUIN_COLD', 'OCEAN_RUIN_WARM', 'RUINED_PORTAL', 'MINESHAFT', 'BURIED_TREASURE'], objective.target, false) + '</select></label>';
+        if (['ALTITUDE_ABOVE', 'ALTITUDE_BELOW', 'UNDERWATER'].includes(objective.type)) return questObjectField('Y level', 'target', objective.target, 'number');
+        if (objective.type === 'BIOME') return questObjectField('Biome key', 'target', objective.target);
+        return '<label>Target<input value="Automatic" disabled></label>';
+    }
+
+    function questObjectiveRow(data, objective, index) {
+        const types = ['COLLECT', 'KILL', 'LOCATION', 'NPC', 'BIOME', 'ALTITUDE_ABOVE', 'ALTITUDE_BELOW', 'STRUCTURE', 'SLEEP', 'INTERACT', 'UNDERWATER', 'NIGHT'];
+        return '<div class="card" data-objective="' + index + '"><div class="document-head"><strong>Objective ' + (index + 1) + '</strong>' +
+            '<div class="card-actions"><button data-up="objective" class="button small" type="button">↑</button><button data-down="objective" class="button small" type="button">↓</button>' +
+            '<button data-remove="objective" class="button danger small" type="button">Remove</button></div></div><div class="field-grid">' +
+            '<label>Type<select data-prop="type">' + questOptions(types, objective.type, false) + '</select></label>' + questObjectiveTarget(data, objective) +
+            questObjectField('Amount', 'amount', objective.amount, 'number') + questObjectField('Player-facing objective', 'label', objective.label) +
+            '<label>Consume collected items<input data-prop="consume" type="checkbox"' + (objective.consume ? ' checked' : '') + '></label>' +
+            questObjectField('World', 'world', objective.world || 'survival') + questObjectField('X', 'x', objective.x, 'number') + questObjectField('Y', 'y', objective.y, 'number') +
+            questObjectField('Z', 'z', objective.z, 'number') + questObjectField('Radius', 'radius', objective.radius, 'number') + '</div></div>';
+    }
+
+    function questRewardRow(reward, index) {
+        return '<div class="card" data-reward="' + index + '"><div class="document-head"><strong>Item ' + (index + 1) + '</strong>' +
+            '<button data-remove="reward" class="button danger small" type="button">Remove</button></div><div class="field-grid">' +
+            questObjectField('Material', 'material', reward.material) + questObjectField('Amount', 'amount', reward.amount, 'number') +
+            questObjectField('Name', 'name', reward.name || '') + questObjectArea('Lore — one line per entry', 'lore', (reward.lore || []).join('\n')) +
+            '<label><input data-prop="unbreakable" type="checkbox"' + (reward.unbreakable ? ' checked' : '') + '>Unbreakable</label></div></div>';
+    }
+
+    function defaultQuestTarget(data, type) {
+        return {COLLECT: 'OAK_LOG', KILL: 'ZOMBIE', NPC: data.npcs[0] ? 'profile:' + data.npcs[0].id : '', BIOME: 'plains',
+            ALTITUDE_ABOVE: '120', ALTITUDE_BELOW: '0', UNDERWATER: '50', STRUCTURE: 'SHIPWRECK', INTERACT: 'IRON_GOLEM'}[type] || '';
+    }
+
+    function renderQuests(data) {
+        if (selectedQuest) {
+            const quest = (data.quests || []).find(value => value.id === selectedQuest);
+            if (quest) return renderQuestSubview(data, quest);
+            selectedQuest = null;
+        }
+        if (selectedNpc) {
+            const npc = (data.npcs || []).find(value => value.id === selectedNpc);
+            if (npc) return renderNpcSubview(data, npc);
+            selectedNpc = null;
+        }
+        const list = questListKind === 'npcs' ? (data.npcs || []) : orderedQuestValues(data);
+        const search = q('#quest-search-value')?.value?.toLowerCase() || '';
+        const filtered = list.filter(value => String(value.title || value.name || '').toLowerCase().includes(search) || value.id.toLowerCase().includes(search));
+        const entries = filtered.map(value => {
+            const isQuest = questListKind === 'quests';
+            const label = isQuest ? value.title : value.name;
+            const detail = isQuest ? value.id + ' · level ' + questLevel(data, value) : value.id + ' · ' + value.entityType;
+            return '<button class="list-button" type="button" data-quest-select="' + esc(value.id) + '"><strong>' + esc(label) +
+                '</strong><small>' + esc(detail) + '</small></button>';
+        }).join('');
+        const writable = Boolean(moduleInfo()?.writable);
+        q('#workspace').innerHTML = pageHead('Quests') +
+            '<div class="section-heading editor-section-heading"><div><h2>Quest definitions</h2><p class="tiny">Open a quest or NPC in its own editor view.</p></div>' +
+            '<div class="card-actions"><button id="quest-yaml" class="button small" type="button">Advanced YAML</button><span class="tiny">' + filtered.length + ' shown</span></div></div>' +
+            '<div class="tabs card-actions"><button class="button small' + (questListKind === 'quests' ? ' primary' : '') + '" data-quest-list="quests" type="button">Quests</button>' +
+            '<button class="button small' + (questListKind === 'npcs' ? ' primary' : '') + '" data-quest-list="npcs" type="button">NPCs</button></div>' +
+            '<section class="card"><div class="field-grid"><label class="wide">Search<input id="quest-search-value" value="' + esc(search) + '" placeholder="Search quests and NPCs"></label></div>' +
+            '<div class="list">' + (entries || '<div class="empty">No quest definitions found.</div>') + '</div>' +
+            (writable ? '<div class="card-actions"><button id="quest-new" class="button primary" type="button">+ New ' + (questListKind === 'quests' ? 'quest' : 'NPC') + '</button></div>' : '') +
+            '</section>';
+        q('#quest-search-value').oninput = event => {
+            const value = event.target.value;
+            renderQuests({...data, _search: value});
+            const searchInput = q('#quest-search-value');
+            if (searchInput) { searchInput.focus(); searchInput.setSelectionRange(value.length, value.length); }
+        };
+        q('#workspace').querySelectorAll('[data-quest-list]').forEach(button => button.onclick = () => {
+            questListKind = button.dataset.questList;
+            selectedQuest = null;
+            selectedNpc = null;
+            renderQuests(activeData);
+        });
+        q('#workspace').querySelectorAll('[data-quest-select]').forEach(button => button.onclick = () => {
+            selectedQuest = questListKind === 'quests' ? button.dataset.questSelect : null;
+            selectedNpc = questListKind === 'npcs' ? button.dataset.questSelect : null;
+            renderQuests(activeData);
+        });
+        q('#quest-yaml').onclick = () => openQuestDocument('quests.yml');
+        const create = q('#quest-new');
+        if (create) create.onclick = () => createQuestEditorEntry();
+    }
+
+    function createQuestEditorEntry() {
+        const id = prompt('New ' + (questListKind === 'quests' ? 'quest' : 'NPC') + ' ID (lowercase):');
+        if (!id) return;
+        const values = questListKind === 'quests' ? activeData.quests : activeData.npcs;
+        if (values.some(value => value.id === id)) return notice('That ID already exists.', true);
+        if (questListKind === 'quests') {
+            activeData.quests.push({id, title: 'New Quest', author: 'Quest Giver', description: 'Tell this quest as a story.', shortDescription: '',
+                rewardText: 'A reward awaits.', enabled: false, repeatable: false, timeLimitSeconds: 0, restartCooldownSeconds: 0, globalMaxCompletions: 0,
+                startNpcProfile: null, endNpcProfile: null, startNpcName: 'Quest Giver', endNpcName: 'Quest Contact',
+                dialogue: {offer: [], idle: [], incomplete: [], objective: [], complete: []}, requirements: [], objectives: [], rewardItems: [], rewardCommands: []});
+            selectedQuest = id;
+            selectedNpc = null;
+        } else {
+            activeData.npcs.push({id, name: 'New NPC', entityType: 'VILLAGER', ai: true, world: 'survival', minDistance: 30, maxDistance: 100,
+                uniquenessRadius: 1200, despawnRadius: 150, minimumLevel: 0, timeFrom: 0, timeUntil: 24000, dailyChance: .25, lifetimeSeconds: 0, biomes: [], idleDialogue: []});
+            selectedNpc = id;
+            selectedQuest = null;
+        }
+        notice('New definition added. Save it from the editor view.');
+        renderQuests(activeData);
+    }
+
+    async function saveQuestData() {
+        try {
+            setStatus('Saving quest data…');
+            const result = await request(apiUrl('quests', 'data'), {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(activeData)});
+            notice(result.message || 'Quest data saved.');
+            activeData = await request(apiUrl('quests', 'data'));
+            selectedQuest = null;
+            selectedNpc = null;
+            renderQuests(activeData);
+            setStatus('Ready');
+        } catch (error) {
+            notice(error.message, true);
+            setStatus('Needs attention', true);
+        }
+    }
+
+    function renderQuestSubview(data, quest) {
+        const profiles = (data.npcs || []).map(npc => npc.id);
+        const otherQuests = (data.quests || []).filter(value => value.id !== quest.id).map(value => value.id);
+        const dialogue = quest.dialogue || {};
+        q('#workspace').innerHTML = subviewHead(quest.title || quest.id) +
+            '<form id="quest-editor-form" class="stack"><section class="card"><h3>Story</h3><div class="field-grid">' +
+            questField('Quest ID', 'id', quest.id) + questField('Title', 'title', quest.title) + questField('Author / giver', 'author', quest.author) +
+            '<label><input name="enabled" type="checkbox"' + (quest.enabled ? ' checked' : '') + '>Enabled</label><label><input name="repeatable" type="checkbox"' +
+            (quest.repeatable ? ' checked' : '') + '>Repeatable</label>' + questArea('Quest-giver story', 'description', quest.description) +
+            questArea('Short description', 'shortDescription', quest.shortDescription || '') + '</div></section>' +
+            '<section class="card"><h3>Characters</h3><div class="field-grid"><label>Starting NPC<select name="startNpcProfile">' + questOptions(profiles, quest.startNpcProfile) +
+            '</select></label><label>Turn-in NPC<select name="endNpcProfile">' + questOptions(profiles, quest.endNpcProfile) + '</select></label>' +
+            questField('Starting NPC display name', 'startNpcName', quest.startNpcName) + questField('Turn-in NPC display name', 'endNpcName', quest.endNpcName) + '</div></section>' +
+            '<section class="card"><h3>Availability and failure</h3><div class="field-grid">' + questField('Time limit in seconds (0 = none)', 'timeLimitSeconds', quest.timeLimitSeconds || 0, 'number') +
+            questField('Restart cooldown in seconds', 'restartCooldownSeconds', quest.restartCooldownSeconds || 0, 'number') + questField('Global completion limit (0 = unlimited)', 'globalMaxCompletions', quest.globalMaxCompletions || 0, 'number') + '</div></section>' +
+            '<section class="card"><h3>Requirements</h3><label>Required quests<select name="requirements" multiple size="' + Math.min(8, Math.max(3, otherQuests.length)) + '">' +
+            otherQuests.map(id => '<option value="' + esc(id) + '"' + ((quest.requirements || []).includes(id) ? ' selected' : '') + '>' + esc(id) + '</option>').join('') + '</select></label></section>' +
+            '<section class="card"><div class="document-head"><h3>Objectives</h3><button data-add="objective" class="button small" type="button">+ Objective</button></div><div class="stack">' +
+            (quest.objectives || []).map((objective, index) => questObjectiveRow(data, objective, index)).join('') + '</div></section>' +
+            '<section class="card"><h3>Rewards</h3>' + questArea('Reward description', 'rewardText', quest.rewardText, false) +
+            '<div id="quest-rewards" class="stack">' + (quest.rewardItems || []).map((reward, index) => questRewardRow(reward, index)).join('') + '</div>' +
+            '<div class="card-actions"><button data-add="reward" class="button small" type="button">+ Item reward</button></div>' +
+            questArea('Console commands — one per line', 'rewardCommands', (quest.rewardCommands || []).join('\n')) + '</section>' +
+            '<section class="card"><h3>Dialogue</h3><div class="field-grid">' +
+            ['offer', 'idle', 'incomplete', 'objective', 'complete'].map(state => questArea(state[0].toUpperCase() + state.slice(1) + ' — one saying per line', 'dialogue.' + state, (dialogue[state] || []).join('\n'), state === 'complete')).join('') +
+            '</div></section><div class="card-actions"><button class="button primary" type="submit">Save quest</button><button id="quest-duplicate" class="button" type="button">Duplicate</button>' +
+            '<button id="quest-delete" class="button danger" type="button">Delete quest</button></div></form>';
+        bindQuestSubview(data, quest, true);
+    }
+
+    function renderNpcSubview(data, npc) {
+        const starts = (data.quests || []).filter(quest => quest.startNpcProfile === npc.id);
+        const ends = (data.quests || []).filter(quest => quest.endNpcProfile === npc.id);
+        const linked = values => values.length ? values.map(quest => '<button class="button small" data-open-quest="' + esc(quest.id) + '" type="button">' +
+            esc(quest.title) + '</button>').join(' ') : '<span class="muted">None</span>';
+        q('#workspace').innerHTML = subviewHead(npc.name || npc.id) +
+            '<form id="npc-editor-form" class="stack"><section class="card"><h3>Identity</h3><div class="field-grid">' + questField('NPC ID', 'id', npc.id) +
+            questField('Visible name', 'name', npc.name) + '<label>Entity type<select name="entityType">' + questOptions(data.entityTypes || [], npc.entityType, false) +
+            '</select></label><label><input name="ai" type="checkbox"' + (npc.ai ? ' checked' : '') + '>Can walk around</label></div></section>' +
+            '<section class="card"><h3>Linked quests</h3><div class="field-grid"><div><span class="component-label">Starts here</span><div class="card-actions">' + linked(starts) +
+            '</div></div><div><span class="component-label">Handed in here</span><div class="card-actions">' + linked(ends) + '</div></div></div></section>' +
+            '<section class="card"><h3>Spawn conditions</h3><div class="field-grid">' + questField('World', 'world', npc.world) + questField('Minimum player level', 'minimumLevel', npc.minimumLevel, 'number') +
+            questField('Daily chance (0–1)', 'dailyChance', npc.dailyChance, 'number') + questField('Minimum distance', 'minDistance', npc.minDistance, 'number') +
+            questField('Maximum distance', 'maxDistance', npc.maxDistance, 'number') + questField('Uniqueness radius', 'uniquenessRadius', npc.uniquenessRadius, 'number') +
+            questField('Despawn radius', 'despawnRadius', npc.despawnRadius, 'number') + questField('Time from (ticks)', 'timeFrom', npc.timeFrom, 'number') +
+            questField('Time until (ticks)', 'timeUntil', npc.timeUntil, 'number') + questField('Maximum appearance in seconds (0 = unlimited)', 'lifetimeSeconds', npc.lifetimeSeconds || 0, 'number') +
+            questArea('Biomes — one per line', 'biomes', (npc.biomes || []).join('\n')) + '</div></section>' +
+            '<section class="card"><h3>Dialogue</h3>' + questArea('Idle sayings — one per line', 'idleDialogue', (npc.idleDialogue || []).join('\n'), false) +
+            '</section><div class="card-actions"><button class="button primary" type="submit">Save NPC</button><button id="npc-delete" class="button danger" type="button">Delete NPC</button></div></form>';
+        bindQuestSubview(data, npc, false);
+        q('#workspace').querySelectorAll('[data-open-quest]').forEach(button => button.onclick = () => {
+            selectedNpc = null;
+            selectedQuest = button.dataset.openQuest;
+            renderQuests(activeData);
+        });
+    }
+
+    function bindQuestSubview(data, value, isQuest) {
+        q('[data-subview-back]').onclick = () => {
+            selectedQuest = null;
+            selectedNpc = null;
+            renderQuests(activeData);
+        };
+        const form = q(isQuest ? '#quest-editor-form' : '#npc-editor-form');
+        form.oninput = event => {
+            const element = event.target;
+            if (element.name) {
+                if (element.name === 'requirements') value.requirements = [...element.selectedOptions].map(option => option.value);
+                else if (element.name.startsWith('dialogue.')) {
+                    value.dialogue ??= {};
+                    value.dialogue[element.name.slice(9)] = String(element.value).split('\n').map(line => line.trim()).filter(Boolean);
+                } else if (['rewardCommands', 'biomes', 'idleDialogue'].includes(element.name)) {
+                    value[element.name] = String(element.value).split('\n').map(line => line.trim()).filter(Boolean);
+                } else value[element.name] = element.type === 'checkbox' ? element.checked : element.type === 'number' ? Number(element.value) : element.value;
+            } else if (element.dataset.prop) {
+                const row = element.closest('[data-objective], [data-reward]');
+                const values = row.hasAttribute('data-objective') ? value.objectives : value.rewardItems;
+                const index = Number(row.dataset.objective ?? row.dataset.reward);
+                values[index][element.dataset.prop] = element.dataset.prop === 'lore'
+                    ? String(element.value).split('\n').map(line => line.trim()).filter(Boolean)
+                    : element.type === 'checkbox' ? element.checked : element.type === 'number' ? Number(element.value) : element.value;
+            }
+        };
+        form.onchange = event => {
+            const element = event.target;
+            if (element.dataset.prop !== 'type') return;
+            const row = element.closest('[data-objective]');
+            const index = Number(row.dataset.objective);
+            value.objectives[index].target = defaultQuestTarget(data, element.value);
+            renderQuests(activeData);
+        };
+        form.onclick = event => {
+            const button = event.target.closest('button');
+            if (!button) return;
+            if (button.dataset.add === 'objective') value.objectives.push({type: 'COLLECT', target: 'OAK_LOG', amount: 1, consume: false, label: 'Collect an item', world: 'survival', x: 0, y: 64, z: 0, radius: 2});
+            if (button.dataset.add === 'reward') value.rewardItems.push({material: 'EMERALD', amount: 1, name: '', lore: [], unbreakable: false});
+            if (button.dataset.remove) {
+                const row = button.closest('[data-objective], [data-reward]');
+                const values = button.dataset.remove === 'objective' ? value.objectives : value.rewardItems;
+                values.splice(Number(row.dataset.objective ?? row.dataset.reward), 1);
+            }
+            if (button.dataset.up || button.dataset.down) {
+                const row = button.closest('[data-objective]');
+                const index = Number(row.dataset.objective);
+                const target = index + (button.dataset.up ? -1 : 1);
+                if (target >= 0 && target < value.objectives.length) [value.objectives[index], value.objectives[target]] = [value.objectives[target], value.objectives[index]];
+            }
+            if (button.id === 'quest-duplicate') {
+                const id = prompt('ID for duplicate:', value.id + '-copy');
+                if (!id || activeData.quests.some(quest => quest.id === id)) return;
+                const copy = structuredClone(value);
+                copy.id = id;
+                copy.title += ' Copy';
+                activeData.quests.push(copy);
+                selectedQuest = id;
+            }
+            if (button.id === 'quest-delete' || button.id === 'npc-delete') {
+                if (!confirm('Delete ' + value.id + '?')) return;
+                const values = isQuest ? activeData.quests : activeData.npcs;
+                values.splice(values.indexOf(value), 1);
+                selectedQuest = null;
+                selectedNpc = null;
+                saveQuestData();
+                return;
+            }
+            if (button.dataset.add || button.dataset.remove || button.dataset.up || button.dataset.down || button.id === 'quest-duplicate') {
+                event.preventDefault();
+                renderQuests(activeData);
+            }
+        };
+        form.onsubmit = event => {
+            event.preventDefault();
+            saveQuestData();
+        };
+    }
+
+    function openQuestDocument(file) {
+        selectedQuest = null;
+        selectedNpc = null;
+        q('#workspace').innerHTML = subviewHead(file) + '<section class="card"><div id="document-panel"></div></section>';
+        q('[data-subview-back]').onclick = () => renderQuests(activeData);
+        openDocument('quests', '', file);
     }
 
     function renderPacks(data) {
         const writable = Boolean(moduleInfo()?.writable);
         const packs = data.packs || [];
         if (selectedPack && !packs.some(pack => pack.id === selectedPack)) selectedPack = null;
-        const selected = packs.find(pack => pack.id === selectedPack);
+        if (selectedPack) {
+            const selected = packs.find(pack => pack.id === selectedPack);
+            const selectedDocuments = (data.documents || []).filter(document => document.pack === selected.id);
+            const options = selectedDocuments.map(document =>
+                '<option value="' + esc(document.pack + '|' + document.file) + '">' + esc(document.label) + '</option>').join('');
+            const selectedState = selected.valid
+                ? (selected.enabled ? '<span class="pill good">Enabled</span>' : '<span class="pill">Disabled</span>')
+                : '<span class="pill bad">Needs attention</span>';
+            const selectedDetails = [
+                selected.dependencies?.length ? '<div><dt>Dependencies</dt><dd>' + esc(selected.dependencies.join(', ')) + '</dd></div>' : '',
+                selected.resourcePackRebuildRequired ? '<div><dt>Resource pack</dt><dd>Rebuild required after changes.</dd></div>' : ''
+            ].filter(Boolean).join('');
+            const actions = writable ?
+                '<div class="card-actions"><button class="button small" data-pack-action="validate" data-pack="' + esc(selected.id) + '">Validate</button>' +
+                '<button class="button small" data-pack-action="reload" data-pack="' + esc(selected.id) + '">Reload pack</button>' +
+                (selected.enabled ? '<button class="button small warn" data-pack-action="disable" data-pack="' + esc(selected.id) + '">Disable</button>' :
+                    '<button class="button small good" data-pack-action="enable" data-pack="' + esc(selected.id) + '">Enable</button>') +
+                '<button class="button small danger" data-pack-action="delete" data-pack="' + esc(selected.id) + '">Delete</button></div>' : '';
+            q('#workspace').innerHTML = subviewHead(selected.id) +
+                '<div class="stack"><section class="card"><div class="document-head"><div><h3>' + esc(selected.id) + '</h3>' +
+                '<p>' + esc(selected.description || 'Content pack') + '</p></div>' + selectedState + '</div>' +
+                (selectedDetails ? '<dl class="pack-detail-meta">' + selectedDetails + '</dl>' : '') +
+                (selected.errors?.length ? '<h3>Validation issues</h3><ul class="errors pack-error-list">' +
+                    selected.errors.map(error => '<li>' + esc(error) + '</li>').join('') + '</ul>' :
+                    '<p class="muted">No validation issues found.</p>') + actions + '</section>' +
+                '<section class="card"><div class="document-head"><div><h3>Pack files</h3><p class="tiny">Open a configuration file in its own editor view.</p></div></div>' +
+                (selectedDocuments.length ? '<div class="card-actions"><select id="pack-doc"><option value="">Choose a file</option>' + options +
+                    '</select><button id="pack-doc-open" class="button small primary" type="button">Open file</button></div>' :
+                    '<span class="tiny">No editable files</span>') + '</section></div>';
+            bindPackActions();
+            bindDocumentPicker('packs', 'pack-doc', 'pack-doc-open');
+            q('[data-subview-back]').onclick = () => { selectedPack = null; renderPacks(activeData); };
+            return;
+        }
         const cards = packs.map(pack => {
             const errorCount = (pack.errors || []).length;
             const state = pack.valid
-                ? (pack.enabled ? '<span class="pack-state good">Enabled</span>' : '<span class="pack-state">Disabled</span>')
-                : '<span class="pack-state bad">Needs attention</span>';
+                ? (pack.enabled ? '<span class="pill good">Enabled</span>' : '<span class="pill">Disabled</span>')
+                : '<span class="pill bad">Needs attention</span>';
             const issueText = errorCount ? errorCount + ' validation issue' + (errorCount === 1 ? '' : 's') : 'No validation issues';
-            return '<article class="card pack-card ' + (selectedPack === pack.id ? 'selected' : '') + '">' +
-                '<div class="pack-card-icon" aria-hidden="true">' + iconSvg(moduleIcons.packs) + '</div>' +
+            return '<article class="card pack-card"><div class="pack-card-icon" aria-hidden="true">' + iconSvg(moduleIcons.packs) + '</div>' +
                 '<div class="pack-card-main"><div class="pack-card-title"><h3>' + esc(pack.id) + '</h3></div>' +
                 '<p class="pack-card-description">' + esc(pack.description || 'Content pack') + '</p>' +
                 '<div class="pack-card-meta">' + state + '<span>' + esc(issueText) + '</span></div></div>' +
-                '<button class="button small pack-card-action" type="button" data-pack-open="' + esc(pack.id) + '">' +
-                (selectedPack === pack.id ? 'Opened' : 'Open') + '</button></article>';
+                '<button class="button small pack-card-action" type="button" data-pack-open="' + esc(pack.id) + '">Open</button></article>';
         }).join('');
-        const selectedDocuments = selected ? (data.documents || []).filter(document => document.pack === selected.id) : [];
-        const options = selectedDocuments.map(document =>
-            '<option value="' + esc(document.pack + '|' + document.file) + '">' + esc(document.label) + '</option>').join('');
-        const selectedErrors = selected ? (selected.errors || []) : [];
-        const selectedState = selected ? (selected.valid
-            ? (selected.enabled ? '<span class="pack-state good">Enabled</span>' : '<span class="pack-state">Disabled</span>')
-            : '<span class="pack-state bad">Needs attention</span>') : '';
-        const selectedDetails = selected ? [
-            selected.dependencies?.length ? '<div><dt>Dependencies</dt><dd>' + esc(selected.dependencies.join(', ')) + '</dd></div>' : '',
-            selected.resourcePackRebuildRequired ? '<div><dt>Resource pack</dt><dd>Rebuild required after changes.</dd></div>' : ''
-        ].filter(Boolean).join('') : '';
-        const selectedActions = selected && writable ?
-            '<div class="pack-detail-actions"><button class="button small" data-pack-action="validate" data-pack="' + esc(selected.id) + '">Validate</button>' +
-            '<button class="button small" data-pack-action="reload" data-pack="' + esc(selected.id) + '">Reload pack</button>' +
-            (selected.enabled ? '<button class="button small warn" data-pack-action="disable" data-pack="' + esc(selected.id) + '">Disable</button>' :
-                '<button class="button small good" data-pack-action="enable" data-pack="' + esc(selected.id) + '">Enable</button>') +
-            '<button class="button small danger" data-pack-action="delete" data-pack="' + esc(selected.id) + '">Delete</button></div>' : '';
-        const selectedPanel = selected ?
-            '<section class="card pack-detail"><div class="pack-detail-header"><div><div class="pack-detail-title"><h2>' + esc(selected.id) +
-            '</h2>' + selectedState + '</div><p>' + esc(selected.description || 'Content pack') + '</p></div>' +
-            '<button class="button small" type="button" data-pack-open="' + esc(selected.id) + '">Close</button></div>' +
-            (selectedDetails ? '<dl class="pack-detail-meta">' + selectedDetails + '</dl>' : '') +
-            (selectedErrors.length ? '<div class="pack-detail-section"><h3>Validation issues</h3><ul class="errors pack-error-list">' +
-                selectedErrors.map(error => '<li>' + esc(error) + '</li>').join('') + '</ul></div>' :
-                '<p class="pack-valid">No validation issues found.</p>') +
-            selectedActions +
-            '<div class="pack-files"><div><h3>Pack files</h3><p class="tiny">Open a configuration file to inspect or edit it.</p></div>' +
-            (selectedDocuments.length ? '<div class="card-actions"><select id="pack-doc"><option value="">Choose a file</option>' + options +
-                '</select><button id="pack-doc-open" class="button small primary" type="button">Open file</button></div>' :
-                '<span class="tiny">No editable files</span>') + '</div><div id="document-panel"></div></section>' :
-            '<div class="empty pack-empty">Open a pack to inspect its validation results and files.</div>';
         const create = writable ?
             '<form id="pack-create" class="card-actions"><input name="id" placeholder="my-pack" pattern="[a-z0-9][a-z0-9_-]*" required>' +
             '<select name="template"><option value="">Blank pack</option><option value="workshop">Workshop example</option></select>' +
@@ -547,12 +915,9 @@
         const createPanel = writable ? '<section class="card pack-create"><div class="section-heading"><h3>New pack</h3>' +
             '<span class="tiny">Add a content pack</span></div>' + create + '</section>' : '';
         q('#workspace').innerHTML = pageHead('Packs') +
-            '<div class="section-heading editor-section-heading"><div><h2>Content packs</h2><p class="tiny">Manage the packs available to the server.</p></div>' +
+            '<div class="section-heading editor-section-heading"><div><h2>Content packs</h2><p class="tiny">Open a pack to inspect its validation results and files.</p></div>' +
             '<span class="tiny">' + packs.length + ' pack' + (packs.length === 1 ? '' : 's') + '</span></div>' +
-            '<div class="pack-grid">' + (cards || '<div class="empty">No content packs found.</div>') + '</div>' +
-            selectedPanel +
-            createPanel +
-            '';
+            '<div class="pack-grid">' + (cards || '<div class="empty">No content packs found.</div>') + '</div>' + createPanel;
         bindPackActions();
         const createForm = q('#pack-create');
         if (createForm) createForm.onsubmit = async event => {
@@ -565,12 +930,12 @@
                 await openModule('packs');
             } catch (error) { notice(error.message, true); setStatus('Needs attention', true); }
         };
-        bindDocumentPicker('packs', 'pack-doc', 'pack-doc-open');
         q('#workspace').querySelectorAll('[data-pack-open]').forEach(button => button.onclick = () => {
-            selectedPack = selectedPack === button.dataset.packOpen ? null : button.dataset.packOpen;
-            renderPacks(data);
+            selectedPack = button.dataset.packOpen;
+            renderPacks(activeData);
         });
     }
+
 
     function bindPackActions() {
         q('#workspace').querySelectorAll('[data-pack-action]').forEach(button => button.onclick = async () => {
@@ -590,29 +955,30 @@
     function renderItems(data) {
         const items = data.items || [];
         const writable = Boolean(moduleInfo()?.writable);
+        if (selectedItem) {
+            const item = items.find(value => value.id === selectedItem);
+            if (!item) { selectedItem = null; return renderItems(data); }
+            q('#workspace').innerHTML = subviewHead(item.displayName || item.id) + '<section id="item-form" class="card"></section>';
+            q('[data-subview-back]').onclick = () => { selectedItem = null; renderItems(activeData); };
+            renderItemForm(item);
+            return;
+        }
         const defaultPack = (data.packs || []).find(pack => pack.enabled)?.id || data.packs?.[0]?.id || '';
         const packOptions = (data.packs || []).map(pack => '<option value="' + esc(pack.id) + '"' +
             (pack.id === defaultPack ? ' selected' : '') + '>' + esc(pack.id) + (pack.enabled ? '' : ' (disabled)') + '</option>').join('');
         const materialOptions = (data.materials || []).map(material => '<option value="' + esc(material) + '"></option>').join('');
-        const list = items.map(item => '<button class="list-button ' + (selectedItem === item.id ? 'active' : '') +
-            '" data-item="' + esc(item.id) + '" type="button"><strong>' + esc(item.displayName) +
-            '</strong><small>' + esc(item.id) + ' · ' + esc(item.material) + '</small></button>').join('');
+        const list = items.map(item => '<button class="list-button" data-item="' + esc(item.id) + '" type="button"><strong>' +
+            esc(item.displayName) + '</strong><small>' + esc(item.id) + ' · ' + esc(item.material) + '</small></button>').join('');
         const create = writable ? '<form id="item-create"><div class="field-grid"><label>Pack<select name="pack">' + packOptions +
             '</select></label><label>File<input name="file" value="configs/items.yml"></label><label>Item ID<input name="id" pattern="[a-z0-9][a-z0-9_-]*" placeholder="forest-shard" required></label>' +
             '<label>Material<input name="material" list="item-materials" placeholder="AMETHYST_SHARD" required></label><label class="wide">Name (optional)<input name="name" placeholder="Forest Shard"></label></div>' +
-            '<div class="card-actions"><button class="button primary" type="submit">Create item</button></div></form>' :
-            '';
+            '<div class="card-actions"><button class="button primary" type="submit">Create item</button></div></form>' : '';
         const createPanel = writable ? '<section class="card"><div class="section-heading"><h3>' + iconSvg(moduleIcons.items, 'section-icon') +
-            'New item</h3></div>' + create +
-            '<datalist id="item-materials">' + materialOptions + '</datalist></section>' : '';
-        q('#workspace').innerHTML = pageHead('Items') +
-            createPanel +
-            '<div class="section-heading editor-section-heading"><div><h2>Custom items</h2><p class="tiny">Choose an item to inspect or edit it.</p></div>' +
+            'New item</h3></div>' + create + '<datalist id="item-materials">' + materialOptions + '</datalist></section>' : '';
+        q('#workspace').innerHTML = pageHead('Items') + createPanel +
+            '<div class="section-heading editor-section-heading"><div><h2>Custom items</h2><p class="tiny">Open an item in its own editor view.</p></div>' +
             '<span class="tiny">' + items.length + ' item' + (items.length === 1 ? '' : 's') + '</span></div>' +
-            '<div class="split"><section class="card"><div class="section-heading"><h3>' + iconSvg(moduleIcons.items, 'section-icon') +
-            'Items</h3></div><div class="list">' +
-            (list || '<div class="empty">No custom items found.</div>') + '</div></section>' +
-            '<section id="item-form" class="card"></section></div>';
+            '<section class="card"><div class="list">' + (list || '<div class="empty">No custom items found.</div>') + '</div></section>';
         const createForm = q('#item-create');
         if (createForm) createForm.onsubmit = async event => {
             event.preventDefault();
@@ -627,10 +993,10 @@
         };
         q('#workspace').querySelectorAll('[data-item]').forEach(button => button.onclick = () => {
             selectedItem = button.dataset.item;
-            renderItems(data);
+            renderItems(activeData);
         });
-        if (selectedItem) renderItemForm(items.find(item => item.id === selectedItem));
     }
+
 
     function renderItemForm(item) {
         if (!item) return;
@@ -679,28 +1045,24 @@
     function renderLoot(data) {
         const writable = Boolean(moduleInfo()?.writable);
         const definitions = data.definitions || [];
-        if (!selectedLoot && definitions.length) selectedLoot = lootKey(definitions[0]);
         if (selectedLoot && !definitions.some(definition => lootKey(definition) === selectedLoot)) selectedLoot = null;
         const selected = definitions.find(definition => lootKey(definition) === selectedLoot);
         const defaultPack = (data.packs || []).find(pack => pack.enabled)?.id || data.packs?.[0]?.id || '';
         const packs = (data.packs || []).map(pack => '<option value="' + esc(pack.id) + '"' +
-            (pack.id === defaultPack ? ' selected' : '') + '>' + esc(pack.id) +
-            (pack.enabled ? '' : ' (disabled)') + '</option>').join('');
+            (pack.id === defaultPack ? ' selected' : '') + '>' + esc(pack.id) + (pack.enabled ? '' : ' (disabled)') + '</option>').join('');
         const files = (data.documents || []).map(document => '<option value="' + esc(document.pack + '|' + document.file) + '">' +
             esc(document.pack + ' / ' + document.file) + '</option>').join('');
         const items = (data.items || []).map(item => '<option value="' + esc(item) + '"></option>').join('');
         const blocks = (data.blocks || []).map(block => '<option value="' + esc(block) + '"></option>').join('');
-        const tableList = definitions.map(definition => '<button class="list-button ' +
-            (lootKey(definition) === selectedLoot ? 'active' : '') + '" type="button" data-loot-table="' +
+        const tableList = definitions.map(definition => '<button class="list-button" type="button" data-loot-table="' +
             esc(lootKey(definition)) + '"><strong>' + esc(definition.id) + '</strong><small>' +
             esc(definition.pack + ' / ' + definition.file) + '</small></button>').join('');
-        const summary = selected ? renderLootSummary(selected) : '<div class="empty">Select a table to see its rules and drops.</div>';
         const createForm = writable ? '<form id="loot-create"><div class="field-grid"><label>Pack<select name="pack">' +
-            packs + '</select></label><label>File<input name="file" list="loot-files" value="configs/loot.yml">' +
-            '</label><label>Table ID<input name="table" placeholder="tree-drops" pattern="[a-z0-9][a-z0-9-]*" required></label>' +
-            '<label>Trigger<select name="target"><option value="block-break">Block broken</option><option value="mob-death">Mob defeated</option></select></label>' +
-            '<label id="loot-block-field" class="wide">Block type(s)<input name="block" list="block-types" placeholder="OAK_LOG, BIRCH_LOG">' +
-            '</label><label id="loot-entity-field" class="wide hidden">Entity type<input name="entity" placeholder="ZOMBIE"></label>' +
+            packs + '</select></label><label>File<input name="file" list="loot-files" value="configs/loot.yml"></label>' +
+            '<label>Table ID<input name="table" placeholder="tree-drops" pattern="[a-z0-9][a-z0-9-]*" required></label>' +
+            '<label>Trigger<select name="target\"><option value="block-break">Block broken</option><option value="mob-death">Mob defeated</option></select></label>' +
+            '<label id="loot-block-field" class="wide">Block type(s)<input name="block" list="block-types" placeholder="OAK_LOG, BIRCH_LOG"></label>' +
+            '<label id="loot-entity-field" class="wide hidden">Entity type<input name="entity" placeholder="ZOMBIE"></label>' +
             '<label class="wide">Drop item<input name="item" list="loot-items" placeholder="DIAMOND or pack:item-id" required></label>' +
             '<label>Chance<input name="chance" type="number" min="0" max="1" step="0.01" value="1"></label>' +
             '<label>Minimum amount<input name="min" type="number" min="1" value="1"></label><label>Maximum amount<input name="max" type="number" min="1" value="1"></label>' +
@@ -716,27 +1078,31 @@
             '<label>Mob (optional)<input name="entity" placeholder="ZOMBIE"></label><label>Block (optional)<input name="block" placeholder="OAK_LOG"></label>' +
             '<label>Biome (optional)<input name="biome" placeholder="minecraft:forest"></label><label>World (optional)<input name="world" placeholder="survival"></label>' +
             '</div><div class="card-actions"><button class="button" type="submit">Run test</button></div></form>';
-        const sourcePanel = '<details class="card disclosure" id="loot-source-panel"><summary>' + iconSvg(moduleIcons.packs, 'section-icon') +
-            '<span>Open source file</span></summary><div class="disclosure-content"><div class="card-actions source-picker">' +
-            '<select id="loot-doc"><option value="">Choose a file</option>' + files + '</select><button id="loot-doc-open" class="button small primary" type="button">Open file</button>' +
-            '</div><div id="document-panel"></div></div></details>';
+        if (selected) {
+            const source = '<details class="card disclosure" id="loot-source-panel"><summary><span>Open source file</span></summary><div class="disclosure-content"><div class="card-actions source-picker">' +
+                '<select id="loot-doc"><option value="">Choose a file</option>' + files + '</select><button id="loot-doc-open" class="button small primary" type="button">Open file</button></div></div></details>';
+            q('#workspace').innerHTML = subviewHead(selected.id) +
+                '<div class="stack"><section class="card\"><div id="loot-summary">' + renderLootSummary(selected) + '</div></section>' +
+                '<details class="card disclosure" id="loot-test-panel"><summary><span>Test drops</span></summary><div class="disclosure-content">' + simulation +
+                '<div id="loot-result" class="sim-result"></div></div></details>' + source + '</div>';
+            bindLootForm();
+            bindDocumentPicker('loot', 'loot-doc', 'loot-doc-open');
+            q('[data-subview-back]').onclick = () => { selectedLoot = null; renderLoot(activeData); };
+            return;
+        }
         q('#workspace').innerHTML = pageHead('Loot') +
-            '<div class="section-heading editor-section-heading"><div><h2>Loot tables</h2><p class="tiny">Choose a table to review what it can drop and when it applies.</p></div>' +
+            '<div class="section-heading editor-section-heading"><div><h2>Loot tables</h2><p class="tiny">Open a table to review its rules and drops.</p></div>' +
             '<span class="tiny">' + definitions.length + ' table' + (definitions.length === 1 ? '' : 's') + '</span></div>' +
-            '<div class="split loot-layout"><section class="card loot-tables"><div class="section-heading"><h3>' + iconSvg(moduleIcons.loot, 'section-icon') +
-            'Tables</h3></div><div class="list">' + (tableList || '<div class="empty">No loot tables found.</div>') +
-            '</div></section><section class="card loot-selection"><div class="section-heading"><h3>' + iconSvg(moduleIcons.default, 'section-icon') +
-            'Selected table</h3></div><div id="loot-summary">' + summary + '</div></section></div>' +
-            '<div class="loot-tools">' + createPanel + '<details class="card disclosure" id="loot-test-panel"><summary>' +
-            iconSvg(moduleIcons.quests, 'section-icon') + '<span>Test drops</span></summary><div class="disclosure-content">' + simulation +
-            '<div id="loot-result" class="sim-result"></div></div></details>' + sourcePanel + '</div>';
+            '<section class="card\"><div class="list">' + (tableList || '<div class="empty">No loot tables found.</div>') + '</div></section>' +
+            '<div class="loot-tools">' + createPanel + '<details class="card disclosure" id="loot-test-panel"><summary><span>Test drops</span></summary><div class="disclosure-content">' + simulation +
+            '<div id="loot-result" class="sim-result"></div></div></details></div>';
         bindLootForm();
         q('#workspace').querySelectorAll('[data-loot-table]').forEach(button => button.onclick = () => {
             selectedLoot = button.dataset.lootTable;
-            renderLoot(data);
+            renderLoot(activeData);
         });
-        bindDocumentPicker('loot', 'loot-doc', 'loot-doc-open');
     }
+
 
     function lootKey(definition) { return definition.pack + '|' + definition.file + '|' + definition.id; }
 
@@ -823,18 +1189,31 @@
         const separator = value.indexOf('|');
         const pack = separator >= 0 ? value.slice(0, separator) : '';
         const file = separator >= 0 ? value.slice(separator + 1) : value;
+        documentReturn = module === 'packs'
+            ? () => { selectedPack = pack; renderPacks(activeData); }
+            : () => renderLoot(activeData);
+        q('#workspace').innerHTML = subviewHead([pack, file].filter(Boolean).join(' / ')) +
+            '<section class="card"><div id="document-panel"></div></section>';
+        q('[data-subview-back]').onclick = () => {
+            currentDocument = null;
+            const returnTo = documentReturn;
+            documentReturn = null;
+            if (returnTo) returnTo();
+        };
         openDocument(module, pack, file);
     }
 
     async function openDocument(module, pack, file) {
         try {
             setStatus('Opening file…');
+            if (!q('#document-panel')) throw new Error('Document view is not available.');
             q('#document-panel').innerHTML = loading('Opening file…');
             const document = await request(apiUrl(module, 'document') + '?pack=' + encodeURIComponent(pack) + '&file=' + encodeURIComponent(file));
             currentDocument = {module, pack, file, revision: document.revision, content: document.content, dirty: false};
             const canWrite = Boolean(modules.find(value => value.id === module)?.writable);
             const save = canWrite ? '<button id="document-save" class="button primary" type="button">Save</button>' : '';
-            q('#document-panel').innerHTML = '<div class="document-head"><div><strong>' + esc(pack) + ' / ' + esc(file) +
+            const documentLabel = [pack, file].filter(Boolean).join(' / ');
+            q('#document-panel').innerHTML = '<div class="document-head"><div><strong>' + esc(documentLabel) +
                 '</strong><small class="muted">Revision ' + esc(document.revision) + '</small></div>' + save +
                 '</div><textarea id="document-text" spellcheck="false"' + (canWrite ? '' : ' readonly') + '>' +
                 esc(document.content) + '</textarea>';

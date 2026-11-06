@@ -209,6 +209,8 @@ revision check.
 The shared web editor is opened in-game with `/editor`. The first private link
 contains the bootstrap key, then exchanges it for an HttpOnly cookie and
 redirects to the clean `/editor` URL. It provides common controls for Quests,
-Items, Loot, and Packs. Each module keeps its own validation and revision-safe
-save path, while the shared editor controls the private link, sidebar,
-permissions, status messages, and styling.
+Items, Loot, Packs, and a Components showcase. Modules return data and actions
+through `EditorWebModule`; they do not serve their own HTML or token-bearing
+routes. Lists and editable tables open records in dedicated subviews, while the
+shared editor controls the private link, cookie session, sidebar, permissions,
+status messages, and styling.

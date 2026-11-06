@@ -295,6 +295,11 @@ class WebServiceTransportTest {
         HttpResponse<String> moduleResponse = client.send(modules, HttpResponse.BodyHandlers.ofString());
         assertEquals(200, moduleResponse.statusCode());
         assertTrue(moduleResponse.body().contains("packs"));
+        assertTrue(moduleResponse.body().contains("components"));
+
+        HttpRequest tokenApi = HttpRequest.newBuilder(URI.create(tokenUrl + "/api/packs/data"))
+            .header("Cookie", cookie).timeout(Duration.ofSeconds(3)).GET().build();
+        assertEquals(404, client.send(tokenApi, HttpResponse.BodyHandlers.ofString()).statusCode());
 
         editor.onDisable();
     }

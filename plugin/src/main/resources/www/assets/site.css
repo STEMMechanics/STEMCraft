@@ -225,10 +225,6 @@ input:hover, select:hover, textarea:hover { border-color: #7dd3fc; }
 .rule-condition-label, .loot-trigger span { color: var(--accent-strong); font-weight: 750; }
 .loot-trigger { margin-top: .35rem; color: var(--text); font-size: .78rem; }
 .sim-drop { border-color: var(--line); }
-.frame-wrap { border-color: var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--card-shadow); }
-.quest-frame { border: 0; border-radius: 0; background: transparent; box-shadow: none; }
-.quest-frame iframe { min-height: calc(100vh - 8rem); }
-iframe { background: var(--page); }
 .editor-page .workspace { display: grid; align-content: start; gap: 1.25rem; }
 .editor-page .workspace > .grid, .editor-page .workspace > .split { row-gap: 1.25rem; }
 .grid, .split { column-gap: 1.25rem; row-gap: 1.25rem; }
@@ -236,7 +232,7 @@ iframe { background: var(--page); }
 .card-actions { margin-top: .85rem; }
 .sim-result:empty, #document-panel:empty, #item-form:empty { display: none; }
 
-/* Content pack and loot views keep actions in the selected detail panel. */
+/* Shared list views open their editable records in dedicated subviews. */
 .pack-grid { display: grid; gap: .85rem; }
 .pack-card { display: flex; align-items: center; gap: .9rem; min-width: 0; padding: .95rem 1rem; }
 .pack-card.selected { border-color: var(--focus); box-shadow: 0 0 0 2px rgb(125 211 252 / 24%); }

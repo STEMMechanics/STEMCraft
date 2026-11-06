@@ -1729,10 +1729,8 @@ public class WebServiceImpl extends BaseService implements WebService {
         }
 
         private static String redactSensitivePath(String path) {
-            String prefix;
-            if (path.startsWith("/editor/")) prefix = "/editor/";
-            else if (path.startsWith("/quests/editor/")) prefix = "/quests/editor/";
-            else return path;
+            if (!path.startsWith("/editor/")) return path;
+            String prefix = "/editor/";
             String remainder = path.substring(prefix.length());
             int slash = remainder.indexOf('/');
             return prefix + "[redacted]" + (slash < 0 ? "" : remainder.substring(slash));

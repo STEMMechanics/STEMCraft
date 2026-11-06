@@ -79,6 +79,7 @@ public final class EditorWebServiceImpl extends BaseService implements EditorWeb
     public void onEnable() {
         editorHtml = loadEditorHtml();
         loadPersistentSessions();
+        registerComponentsModule();
         api.web().registerEndpointHandler(EDITOR_PATH, this::handleRequest);
         api.web().registerStreamingEndpointHandler(EDITOR_PATH, this::handleConfigStream);
         configChangeSubscription = api.config().onAnyChange(this::publishConfigChange);
@@ -114,6 +115,23 @@ public final class EditorWebServiceImpl extends BaseService implements EditorWeb
     public void registerModule(@NotNull EditorWebModule module) {
         String id = normalizeModuleId(module.id());
         modules.put(id, module);
+    }
+
+    private void registerComponentsModule() {
+        registerModule(new EditorWebModule() {
+            @Override public @NotNull String id() { return "components"; }
+            @Override public @NotNull String title() { return "Components"; }
+            @Override public @NotNull String icon() { return "C"; }
+            @Override public @NotNull String description() { return "Review the shared editor building blocks."; }
+            @Override public @NotNull String readPermission() { return ""; }
+            @Override public @NotNull EditorWebResponse handle(@NotNull EditorWebContext context, @NotNull String path,
+                                                                 @NotNull WebServiceRequest request) {
+                if (!"/data".equals(path) || !"GET".equalsIgnoreCase(request.method())) {
+                    return new EditorWebResponse(405, "text/plain; charset=utf-8", "Method not allowed");
+                }
+                return jsonResponse(200, Map.of("kind", "components"));
+            }
+        });
     }
 
     @Override
@@ -194,23 +212,26 @@ public final class EditorWebServiceImpl extends BaseService implements EditorWeb
             return response(new EditorWebResponse(404, "text/plain; charset=utf-8", "Open a private editor link."));
         }
 
-        boolean tokenInPath = !"api".equalsIgnoreCase(parts[0]);
-        String token = tokenInPath ? parts[0] : cookieToken(request);
-        Session session = validSession(token);
-        if (session == null) return response(new EditorWebResponse(403, "text/plain; charset=utf-8", "Not permitted"));
-
-        if (tokenInPath && (parts.length == 1 || (parts.length == 2 && parts[1].isBlank()))) {
+        if (!"api".equalsIgnoreCase(parts[0])) {
+            if (parts.length > 1 && !(parts.length == 2 && parts[1].isBlank())) {
+                return response(new EditorWebResponse(404, "text/plain; charset=utf-8", "Not found"));
+            }
+            Session loginSession = validSession(parts[0]);
+            if (loginSession == null) return response(new EditorWebResponse(403, "text/plain; charset=utf-8", "Not permitted"));
             return "GET".equalsIgnoreCase(request.method())
-                ? redirectToCleanEditor(request, token)
+                ? redirectToCleanEditor(request, parts[0])
                 : response(new EditorWebResponse(405, "text/plain; charset=utf-8", "Method not allowed"));
         }
 
-        int apiIndex = tokenInPath ? 1 : 0;
-        if (parts.length <= apiIndex || !"api".equalsIgnoreCase(parts[apiIndex])) {
+        String token = cookieToken(request);
+        Session session = validSession(token);
+        if (session == null) return response(new EditorWebResponse(403, "text/plain; charset=utf-8", "Not permitted"));
+
+        if (parts.length == 0 || !"api".equalsIgnoreCase(parts[0])) {
             return response(new EditorWebResponse(404, "text/plain; charset=utf-8", "Not found"));
         }
 
-        int moduleIndex = apiIndex + 1;
+        int moduleIndex = 1;
         if (parts.length == moduleIndex + 1 && "modules".equalsIgnoreCase(parts[moduleIndex])) {
             return response(jsonResponse(200, visibleModules(session)));
         }
@@ -241,15 +262,8 @@ public final class EditorWebServiceImpl extends BaseService implements EditorWeb
         String path = request.path();
         if (!path.startsWith(EDITOR_PATH + "/")) return false;
         String[] parts = path.substring((EDITOR_PATH + "/").length()).split("/", -1);
-        String token;
-        if (parts.length == 2 && "api".equalsIgnoreCase(parts[0]) && "events".equalsIgnoreCase(parts[1])) {
-            token = cookieToken(request);
-        } else if (parts.length == 3 && "api".equalsIgnoreCase(parts[1]) && "events".equalsIgnoreCase(parts[2])) {
-            // Keep old token-in-path links working while clients migrate to the cookie-backed URL.
-            token = parts[0];
-        } else {
-            return false;
-        }
+        if (parts.length != 2 || !"api".equalsIgnoreCase(parts[0]) || !"events".equalsIgnoreCase(parts[1])) return false;
+        String token = cookieToken(request);
         if (validSession(token) == null) return false;
 
         EditorEventClient client = new EditorEventClient();
@@ -356,12 +370,14 @@ public final class EditorWebServiceImpl extends BaseService implements EditorWeb
             String path = "players." + rawId;
             String token = config.getString(path + ".token", "");
             if (!isToken(token)) continue;
-            Set<String> visible = storedModules(config.getStringList(path + ".modules"));
+            Set<String> storedVisible = storedModules(config.getStringList(path + ".modules"));
             Set<String> writable = storedModules(config.getStringList(path + ".writable"));
-            if (visible.isEmpty()) continue;
-            PersistentSession persistent = new PersistentSession(token, visible, writable);
+            if (storedVisible.isEmpty()) continue;
+            Set<String> visible = new java.util.LinkedHashSet<>(storedVisible);
+            visible.add("components");
+            PersistentSession persistent = new PersistentSession(token, Set.copyOf(visible), writable);
             playerSessions.put(playerId, persistent);
-            sessions.put(token, new Session(Long.MAX_VALUE, playerId, visible, writable));
+            sessions.put(token, new Session(Long.MAX_VALUE, playerId, persistent.modules(), writable));
         }
     }
 
