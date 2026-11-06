@@ -108,6 +108,7 @@ public class BedWarsMiniGame extends BaseMiniGame {
 
         new BedWarsCommand(api, this).onEnable();
         loadArenas();
+        watchConfigWhenSafe(configFile, minigame, this::reloadFromConfig);
     }
 
     private @NotNull Map<MiniGameArena.ArenaStatus, MiniGameHudConfigSupport.HudDefinition> defaultHudDefinitions() {

@@ -7,6 +7,8 @@ import dev.stemcraft.api.command.CommandBuilder;
 import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.command.CommandExecutor;
 import dev.stemcraft.api.config.ConfigSection;
+import dev.stemcraft.api.service.editor.EditorWebModule;
+import dev.stemcraft.api.service.editor.EditorWebResponse;
 import org.bukkit.entity.Player;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,6 +27,10 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -106,28 +112,28 @@ class WebServiceTransportTest {
     }
 
     @Test
-    void rootServesTheBundledLandingPageWhenNoCustomIndexExists() throws Exception {
-        when(plugin.getResource("www/index.html"))
-            .thenAnswer(invocation -> getClass().getResourceAsStream("/www/index.html"));
+    void rootServesTheGeneratedLandingPage() throws Exception {
         service.start();
 
         HttpResponse<String> response = get("/");
 
         assertEquals(200, response.statusCode());
-        assertTrue(response.body().contains("play.stemcraft.com.au"));
-        assertTrue(response.body().contains("Connect to the server"));
+        assertTrue(response.body().contains("Join the server"));
+        assertTrue(response.body().contains("Connection details are not configured"));
     }
 
     @Test
-    void rootServesACustomIndexInsteadOfRejectingTheDirectory() throws Exception {
+    void rootDoesNotServeCustomHtmlDocuments() throws Exception {
         Path root = Files.createDirectories(dataFolder.resolve("www"));
         Files.writeString(root.resolve("index.html"), "<html>custom landing page</html>");
         service.start();
 
         HttpResponse<String> response = get("/");
+        HttpResponse<String> directFile = get("/index.html");
 
         assertEquals(200, response.statusCode());
-        assertEquals("<html>custom landing page</html>", response.body());
+        assertTrue(response.body().contains("Join the server"));
+        assertEquals(404, directFile.statusCode());
     }
 
     @Test
@@ -218,6 +224,87 @@ class WebServiceTransportTest {
         assertEquals(200, response.statusCode());
         assertEquals("application/octet-stream", response.headers().firstValue("Content-Type").orElseThrow());
         assertEquals("download body", response.body());
+    }
+
+    @Test
+    void longLivedStreamingEndpointDoesNotBlockNormalRequests() throws Exception {
+        CountDownLatch opened = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        service.registerStreamingEndpointHandler("/stream", (request, stream) -> {
+            stream.send("ready", "{}");
+            opened.countDown();
+            try {
+                release.await(5, TimeUnit.SECONDS);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+            }
+            return true;
+        });
+        service.start();
+
+        HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build();
+        CompletableFuture<HttpResponse<String>> streamResponse = client.sendAsync(
+            HttpRequest.newBuilder(URI.create(service.getPublicUrl() + "/stream"))
+                .timeout(Duration.ofSeconds(5)).GET().build(),
+            HttpResponse.BodyHandlers.ofString());
+
+        assertTrue(opened.await(2, TimeUnit.SECONDS));
+        assertEquals(200, get("/status").statusCode());
+
+        release.countDown();
+        assertEquals(200, streamResponse.get(3, TimeUnit.SECONDS).statusCode());
+    }
+
+    @Test
+    void editorExchangesTokenUrlForCookieAndUsesCleanApiUrls() throws Exception {
+        when(api.web()).thenReturn(service);
+        when(plugin.getLogger()).thenReturn(Logger.getLogger("web-service-test"));
+        EditorWebServiceImpl editor = new EditorWebServiceImpl(plugin, api);
+        editor.registerModule(new EditorWebModule() {
+            @Override public String id() { return "packs"; }
+            @Override public String title() { return "Packs"; }
+            @Override public String icon() { return "P"; }
+            @Override public String description() { return "Test packs"; }
+            @Override public String readPermission() { return ""; }
+            @Override public String writePermission() { return ""; }
+            @Override public EditorWebResponse handle(dev.stemcraft.api.service.editor.EditorWebContext context,
+                                                       String path, dev.stemcraft.api.service.web.WebServiceRequest request) {
+                return new EditorWebResponse(200, "text/plain; charset=utf-8", "ok");
+            }
+        });
+        editor.onEnable();
+        service.start();
+
+        Player player = server.addPlayer("EditorUser");
+        String tokenUrl = editor.createSession(player);
+        HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build();
+        HttpResponse<String> login = client.send(
+            HttpRequest.newBuilder(URI.create(tokenUrl)).timeout(Duration.ofSeconds(3)).GET().build(),
+            HttpResponse.BodyHandlers.ofString());
+
+        assertEquals(303, login.statusCode());
+        String cookie = login.headers().firstValue("Set-Cookie").orElseThrow().split(";", 2)[0];
+        assertEquals("/editor", login.headers().firstValue("Location").orElseThrow());
+
+        HttpRequest cleanPage = HttpRequest.newBuilder(URI.create(service.getPublicUrl() + "/editor"))
+            .header("Cookie", cookie).timeout(Duration.ofSeconds(3)).GET().build();
+        HttpResponse<String> editorPage = client.send(cleanPage, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, editorPage.statusCode());
+        assertTrue(editorPage.body().contains("/assets/editor.js"));
+        assertFalse(editorPage.body().contains("editor.html"));
+
+        HttpRequest modules = HttpRequest.newBuilder(URI.create(service.getPublicUrl() + "/editor/api/modules"))
+            .header("Cookie", cookie).timeout(Duration.ofSeconds(3)).GET().build();
+        HttpResponse<String> moduleResponse = client.send(modules, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, moduleResponse.statusCode());
+        assertTrue(moduleResponse.body().contains("packs"));
+        assertTrue(moduleResponse.body().contains("components"));
+
+        HttpRequest tokenApi = HttpRequest.newBuilder(URI.create(tokenUrl + "/api/packs/data"))
+            .header("Cookie", cookie).timeout(Duration.ofSeconds(3)).GET().build();
+        assertEquals(404, client.send(tokenApi, HttpResponse.BodyHandlers.ofString()).statusCode());
+
+        editor.onDisable();
     }
 
     @Test

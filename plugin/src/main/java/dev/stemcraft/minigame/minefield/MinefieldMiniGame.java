@@ -86,6 +86,7 @@ public class MinefieldMiniGame extends BaseMiniGame {
 
         new MinefieldCommand(api, this).onEnable();
         loadArenas();
+        watchConfigWhenSafe(configFile, minigame, this::reloadFromConfig);
     }
 
     private @NotNull Map<MiniGameArena.ArenaStatus, MiniGameHudConfigSupport.HudDefinition> defaultHudDefinitions() {

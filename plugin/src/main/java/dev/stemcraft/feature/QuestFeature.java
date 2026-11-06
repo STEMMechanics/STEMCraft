@@ -9,6 +9,9 @@ import dev.stemcraft.api.service.mailbox.MailSendRequest;
 import dev.stemcraft.api.service.playerstats.PlayerStatDefinition;
 import dev.stemcraft.api.service.playerreset.*;
 import dev.stemcraft.api.service.mailbox.MailSendResult;
+import dev.stemcraft.api.service.editor.EditorWebContext;
+import dev.stemcraft.api.service.editor.EditorWebModule;
+import dev.stemcraft.api.service.editor.EditorWebResponse;
 import dev.stemcraft.api.service.web.WebServiceRequest;
 import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
 import dev.stemcraft.api.util.PlayerUtil;
@@ -80,7 +83,6 @@ import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
-import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -92,9 +94,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import java.util.Base64;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Matcher;
@@ -115,11 +115,8 @@ public final class QuestFeature extends BaseFeature {
     private static final int NPC_OVERHEAD_CLEARANCE_BLOCKS = 3;
     private static final int NPC_OPEN_AREA_RADIUS = 5;
     private static final int NPC_INTERACTED_RELOCATION_RADIUS = 250;
-    private static final String EDITOR_PATH = "/quests/editor/";
-    private static final long EDITOR_TOKEN_LIFETIME_MS = TimeUnit.HOURS.toMillis(24);
     private static final long AUTO_TRACK_ACTIVITY_MS = TimeUnit.SECONDS.toMillis(5);
     private static final long URGENT_TIMED_QUEST_SECONDS = TimeUnit.MINUTES.toSeconds(5);
-    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final Pattern EXPERIENCE_REWARD = Pattern.compile("(?i)^(?:experience|xp)\\s+add\\s+\\{player}\\s+(\\d+)\\s+points$");
     private static final Gson EDITOR_GSON = new GsonBuilder().serializeNulls().create();
     private final Map<String, QuestDefinition> quests = new LinkedHashMap<>();
@@ -144,7 +141,6 @@ public final class QuestFeature extends BaseFeature {
     private final Set<UUID> autoTrackPlayers = new HashSet<>();
     private final Set<UUID> trackingPreferencePlayers = new HashSet<>();
     private final Map<UUID, BossBar> trackingBossBars = new HashMap<>();
-    private final Map<String, Long> editorTokens = new ConcurrentHashMap<>();
     private List<String> npcNames = List.of("Rokar", "Tailor", "Mira", "Bram", "Elowen", "Tobin", "Nessa", "Orin");
     private List<Pattern> trackingWorlds = List.of(PatternUtil.globToRegex("survival*"));
     private int npcLeavingRandomDelayTicks = 500;
@@ -188,7 +184,18 @@ public final class QuestFeature extends BaseFeature {
         registerEvents();
         registerCommands();
         registerQuestCommand();
-        api.web().registerEndpointHandler("/quests/editor", this::handleWebEditor);
+        if (api.editorWeb() != null) api.editorWeb().registerModule(new EditorWebModule() {
+            @Override public @NotNull String id() { return "quests"; }
+            @Override public @NotNull String title() { return "Quests"; }
+            @Override public @NotNull String icon() { return "Q"; }
+            @Override public @NotNull String description() { return "Create and manage quests."; }
+            @Override public @NotNull String readPermission() { return PERMISSION_ADMIN; }
+            @Override public @NotNull String writePermission() { return PERMISSION_ADMIN; }
+            @Override public @NotNull EditorWebResponse handle(@NotNull EditorWebContext context, @NotNull String path,
+                                                                 @NotNull WebServiceRequest request) {
+                return handleEditorRequest(context, path, request);
+            }
+        });
         registerMarkers();
         startNpcLifecycle();
         api.tasks().repeating(TIMEOUT_TASK, 20L, 20L, this::expireTimedQuests);
@@ -979,7 +986,6 @@ public final class QuestFeature extends BaseFeature {
             .tabCompletion("admin", "npc-spawned")
             .tabCompletion("admin", "player")
             .tabCompletion("admin", "reload")
-            .tabCompletion("admin", "editor")
             .executor((unused, command, context) -> execute(context))
             .register(STEMCraft.getPlugin());
     }
@@ -1090,65 +1096,66 @@ public final class QuestFeature extends BaseFeature {
             .hoverEvent(HoverEvent.showText(Component.text(hover)));
     }
 
-    private void openWebEditor(CommandContext ctx) {
-        byte[] bytes = new byte[12];
-        SECURE_RANDOM.nextBytes(bytes);
-        String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-        editorTokens.put(token, System.currentTimeMillis() + EDITOR_TOKEN_LIFETIME_MS);
-        String url = api.web().getPublicUrl() + EDITOR_PATH + token;
-        ctx.getSender().sendMessage(Component.text("Quest editor: ", NamedTextColor.YELLOW)
-            .append(Component.text(url, NamedTextColor.AQUA).clickEvent(ClickEvent.openUrl(url))
-                .hoverEvent(HoverEvent.showText(Component.text("Open the private quest editor")))));
-        ctx.getSender().sendMessage(Component.text("This private link expires in 24 hours or when the server restarts.", NamedTextColor.GRAY));
-    }
-
-    Object handleWebEditor(WebServiceRequest request) {
-        String path = request.path();
-        if (!path.startsWith(EDITOR_PATH)) return webResponse(403, "text/plain; charset=utf-8", "Not permitted");
-        String tail = path.substring(EDITOR_PATH.length());
-        String[] parts = tail.split("/", -1);
-        if (parts.length == 0 || !validEditorToken(parts[0])) return webResponse(403, "text/plain; charset=utf-8", "Not permitted");
-        if (parts.length == 1 && "GET".equalsIgnoreCase(request.method()))
-            return webResponse(200, "text/html; charset=utf-8", QUEST_EDITOR_HTML);
-        if (parts.length == 2 && "data".equals(parts[1])) {
+    private EditorWebResponse handleEditorRequest(EditorWebContext context, String path, WebServiceRequest request) {
+        if ("/data".equals(path)) {
             if ("GET".equalsIgnoreCase(request.method())) {
-                try { return webResponse(200, "application/json; charset=utf-8", onServerThread(() -> EDITOR_GSON.toJson(editorData()))); }
-                catch (Exception ex) { return webResponse(500, "text/plain; charset=utf-8", "Could not load editor data: " + ex.getMessage()); }
+                return editorJson(200, editorData());
             }
             if ("PUT".equalsIgnoreCase(request.method())) {
-                if (request.body().length > 2_000_000) return webResponse(413, "text/plain; charset=utf-8", "Editor data is too large");
+                if (!context.writable()) return new EditorWebResponse(403, "text/plain; charset=utf-8", "This editor is read-only.");
+                if (request.body().length > 2_000_000) return new EditorWebResponse(413, "text/plain; charset=utf-8", "Editor data is too large");
                 try {
                     String result = onServerThread(() -> saveStructuredEditor(request.bodyAsString()));
-                    return webResponse(200, "text/plain; charset=utf-8", result);
-                } catch (Exception ex) { return webResponse(400, "text/plain; charset=utf-8", "Not saved: " + ex.getMessage()); }
-            }
-            return webResponse(405, "text/plain; charset=utf-8", "Method not allowed");
-        }
-        if (parts.length == 2 && "api".equals(parts[1])) {
-            boolean editingNpcs = "npcs".equalsIgnoreCase(request.queryParam("file"));
-            if ("GET".equalsIgnoreCase(request.method())) {
-                try { return webResponse(200, "text/yaml; charset=utf-8", onServerThread(() -> Files.readString((editingNpcs ? npcFile : questFile).toPath()))); }
-                catch (Exception ex) { return webResponse(500, "text/plain; charset=utf-8", "Could not read configuration: " + ex.getMessage()); }
-            }
-            if ("PUT".equalsIgnoreCase(request.method())) {
-                if (request.body().length > 1_000_000) return webResponse(413, "text/plain; charset=utf-8", "Quest configuration is too large");
-                try {
-                    String result = onServerThread(() -> editingNpcs ? saveWebNpcYaml(request.bodyAsString()) : saveWebQuestYaml(request.bodyAsString()));
-                    return webResponse(200, "text/plain; charset=utf-8", result);
+                    return editorJson(200, Map.of("message", result));
                 } catch (Exception ex) {
-                    return webResponse(400, "text/plain; charset=utf-8", "Not saved: " + ex.getMessage());
+                    return new EditorWebResponse(400, "text/plain; charset=utf-8", "Not saved: " + ex.getMessage());
                 }
             }
-            return webResponse(405, "text/plain; charset=utf-8", "Method not allowed");
+            return new EditorWebResponse(405, "text/plain; charset=utf-8", "Method not allowed");
         }
-        return webResponse(404, "text/plain; charset=utf-8", "Not found");
+        if ("/document".equals(path)) {
+            boolean editingNpcs = isNpcDocument(request.queryParam("file"));
+            File file = editingNpcs ? npcFile : questFile;
+            if ("GET".equalsIgnoreCase(request.method())) {
+                try {
+                    String content = onServerThread(() -> Files.readString(file.toPath()));
+                    return editorJson(200, Map.of("revision", editorRevision(file), "content", content));
+                } catch (Exception ex) {
+                    return new EditorWebResponse(500, "text/plain; charset=utf-8", "Could not read configuration: " + ex.getMessage());
+                }
+            }
+            if ("PUT".equalsIgnoreCase(request.method())) {
+                if (!context.writable()) return new EditorWebResponse(403, "text/plain; charset=utf-8", "This editor is read-only.");
+                if (request.body().length > 1_000_000) return new EditorWebResponse(413, "text/plain; charset=utf-8", "Quest configuration is too large");
+                try {
+                    EditorDocument document = EDITOR_GSON.fromJson(request.bodyAsString(), EditorDocument.class);
+                    if (document == null || document.content() == null) throw new IllegalArgumentException("Document content is required");
+                    if (!document.revision().isBlank() && !document.revision().equals(editorRevision(file))) {
+                        throw new IllegalStateException("The configuration changed elsewhere. Reload it before saving.");
+                    }
+                    String result = onServerThread(() -> editingNpcs
+                        ? saveWebNpcYaml(document.content())
+                        : saveWebQuestYaml(document.content()));
+                    return editorJson(200, Map.of("message", result, "revision", editorRevision(file)));
+                } catch (Exception ex) {
+                    return new EditorWebResponse(400, "text/plain; charset=utf-8", "Not saved: " + ex.getMessage());
+                }
+            }
+            return new EditorWebResponse(405, "text/plain; charset=utf-8", "Method not allowed");
+        }
+        return new EditorWebResponse(404, "text/plain; charset=utf-8", "Not found");
     }
 
-    private boolean validEditorToken(String token) {
-        long now = System.currentTimeMillis();
-        editorTokens.entrySet().removeIf(entry -> entry.getValue() < now);
-        Long expires = editorTokens.get(token);
-        return expires != null && expires >= now;
+    private static boolean isNpcDocument(String file) {
+        return "npcs".equalsIgnoreCase(file) || "npcs.yml".equalsIgnoreCase(file);
+    }
+
+    private static String editorRevision(File file) {
+        return file.exists() ? file.lastModified() + ":" + file.length() : "0:0";
+    }
+
+    private EditorWebResponse editorJson(int status, Object value) {
+        return new EditorWebResponse(status, "application/json; charset=utf-8", EDITOR_GSON.toJson(value));
     }
 
     private EditorData editorData() {
@@ -1167,7 +1174,7 @@ public final class QuestFeature extends BaseFeature {
             profile.dailyChance(), profile.lifetimeSeconds(), new ArrayList<>(profile.biomes()), new ArrayList<>(profile.idleDialogue()))).toList();
         List<String> materials = java.util.Arrays.stream(Material.values()).filter(Material::isItem).map(Enum::name).toList();
         List<String> entities = java.util.Arrays.stream(EntityType.values()).filter(EntityType::isAlive).map(Enum::name).toList();
-        return new EditorData(questValues, npcValues, materials, entities);
+        return new EditorData("quests", questValues, npcValues, materials, entities);
     }
 
     private String saveStructuredEditor(String json) throws IOException {
@@ -1305,7 +1312,12 @@ public final class QuestFeature extends BaseFeature {
         return profile;
     }
 
-    private record EditorData(List<EditorQuest> quests, List<EditorNpc> npcs, List<String> materials, List<String> entityTypes) { }
+    private record EditorData(String kind, List<EditorQuest> quests, List<EditorNpc> npcs, List<String> materials, List<String> entityTypes) { }
+    private record EditorDocument(String content, String revision) {
+        private EditorDocument {
+            if (revision == null) revision = "";
+        }
+    }
     private record EditorQuest(String id, String title, String author, String description, String shortDescription, String rewardText, boolean enabled,
         boolean repeatable, long timeLimitSeconds, long restartCooldownSeconds, int globalMaxCompletions,
         @Nullable String startNpcProfile, @Nullable String endNpcProfile, String startNpcName, String endNpcName,
@@ -1357,36 +1369,6 @@ public final class QuestFeature extends BaseFeature {
         return Bukkit.getScheduler().callSyncMethod(STEMCraft.getPlugin(), task).get(10, TimeUnit.SECONDS);
     }
 
-    private Map<String, Object> webResponse(int code, String contentType, String body) {
-        return Map.of("responseCode", code, "contentType", contentType, "body", body,
-            "headers", Map.of("Cache-Control", "no-store", "X-Content-Type-Options", "nosniff",
-                "Content-Security-Policy", "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'"));
-    }
-
-    private static final String QUEST_EDITOR_HTML = """
-        <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>STEMCraft Quest Editor</title><style>
-        :root{color-scheme:dark;--bg:#0d1218;--panel:#151d27;--line:#2e3b4b;--muted:#9aa9b9;--gold:#e3aa3c;--blue:#69b7ff}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:#edf2f7;font:14px system-ui,sans-serif}button,input,select,textarea{font:inherit}button{border:0;border-radius:6px;padding:8px 12px;background:#2a394a;color:#edf2f7;cursor:pointer}button.primary{background:var(--gold);color:#1b1408;font-weight:700}button.danger{background:#66343a}.top{height:62px;display:flex;align-items:center;gap:10px;padding:0 16px;background:var(--panel);border-bottom:1px solid var(--line)}.top h1{font-size:18px;margin-right:auto}.status{color:var(--muted)}.error{color:#ff9292}.app{display:grid;grid-template-columns:380px 1fr;height:calc(100vh - 62px)}aside{border-right:1px solid var(--line);background:#111821;display:flex;flex-direction:column;min-width:0}.tabs{display:flex;padding:12px;gap:6px}.tabs button{flex:1}.tabs .active{background:#34506d}.search{margin:0 12px 10px;width:calc(100% - 24px)}input,select,textarea{width:100%;background:#0d141c;border:1px solid #344354;border-radius:6px;color:#edf2f7;padding:8px}textarea{min-height:90px;resize:vertical}.list{overflow:auto;flex:1}.item{width:100%;text-align:left;border-bottom:1px solid #202b38;background:transparent;padding:7px 9px}.item.active{background:#243446}.item-main{display:block;width:100%;text-align:left;background:transparent;padding:4px 5px}.item-main small{display:block;color:var(--muted);margin-top:3px}.tree-mark{color:#607891;white-space:pre;font:12px ui-monospace,monospace;margin-right:5px}.tree-mark.root{color:#c8a85b}.flow{display:flex;align-items:baseline;gap:4px;padding:2px 5px 4px 24px;color:#8fa2b5;font-size:11px;font-style:italic;line-height:1.35}.flow button{display:inline;padding:0;background:transparent;color:#79bfff;font-size:11px;font-style:italic;text-align:left}.flow button:hover{text-decoration:underline}.flow-icon{width:13px;flex:0 0 13px;color:#c8a85b}.dot{color:#67d28a;margin-right:6px}.dot.off{color:#657383}.side-actions{display:flex;gap:6px;padding:12px;border-top:1px solid var(--line)}main{overflow:auto;padding:22px}.empty{color:var(--muted);padding:50px;text-align:center}.head{display:flex;align-items:center;gap:8px;margin-bottom:18px}.head h2{margin:0 auto 0 0}.card{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:16px;margin-bottom:15px}.card h3{margin:0 0 14px;font-size:15px;color:#bcd5ed}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}.wide{grid-column:1/-1}label{display:block;color:var(--muted);font-size:12px}label input,label select,label textarea{margin-top:5px;color:#edf2f7}.checks{display:flex;gap:20px;align-items:center}.checks label{font-size:14px}.checks input{width:auto;margin-right:7px}.row{border:1px solid #334253;border-radius:7px;padding:12px;margin:9px 0}.row-head{display:flex;gap:8px;align-items:center;margin-bottom:10px}.row-head strong{margin-right:auto}.small{width:auto}.advanced{display:none;height:calc(100vh - 105px)}.advanced textarea{height:calc(100% - 50px);font:13px/1.5 ui-monospace,monospace}.advanced-bar{display:flex;gap:8px;margin-bottom:10px}.advanced-bar select{max-width:180px}@media(max-width:800px){.app{grid-template-columns:1fr}aside{height:300px;border-right:0;border-bottom:1px solid var(--line)}main{padding:12px}.grid,.grid.three{grid-template-columns:1fr}}
-        </style></head><body><header class="top"><h1>STEMCraft Quest Editor</h1><button id="structured">Structured</button><button id="advanced">Advanced YAML</button><span id="status" class="status">Loading…</span><button id="discard">Discard</button><button id="save" class="primary">Save all</button></header><div class="app" id="structuredView"><aside><div class="tabs"><button data-kind="quests" class="active">Quests</button><button data-kind="npcs">NPCs</button></div><input id="search" class="search" placeholder="Search…"><div id="list" class="list"></div><div class="side-actions"><button id="new" class="primary">+ New</button><button id="duplicate">Duplicate</button></div></aside><main id="form"><div class="empty">Select a quest or NPC</div></main></div><main id="advancedView" class="advanced"><div class="advanced-bar"><select id="yamlFile"><option value="quests">quests.yml</option><option value="npcs">npcs.yml</option></select><button id="yamlReload">Reload</button><button id="yamlSave" class="primary">Save YAML</button></div><textarea id="yaml" spellcheck="false"></textarea></main><script>
-        const base=location.pathname,dataUrl=base+'/data',apiUrl=base+'/api',q=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));let data,kind='quests',selected=null,dirty=false;
-        const status=(text,error=false)=>{q('#status').textContent=text;q('#status').className=error?'status error':'status'};const mark=()=>{dirty=true;status('Unsaved changes')};const lines=s=>String(s??'').split('\\n').map(x=>x.trim()).filter(Boolean);const options=(values,current,blank=true)=>(blank?'<option value="">None</option>':'')+values.map(v=>`<option ${v===current?'selected':''}>${esc(v)}</option>`).join('');
-        async function loadData(){status('Loading…');const r=await fetch(dataUrl,{cache:'no-store'});if(!r.ok)throw Error(await r.text());data=await r.json();dirty=false;if(!selected||!data[kind].some(x=>x.id===selected))selected=data[kind][0]?.id||null;render();status('Ready')}
-        function questDepth(x,seen=new Set()){if(seen.has(x.id))return 0;seen.add(x.id);const parents=(x.requirements||[]).map(id=>data.quests.find(q=>q.id===id)).filter(Boolean);return parents.length?1+Math.max(...parents.map(p=>questDepth(p,new Set(seen)))):0}function questLevel(x){return data.npcs.find(n=>n.id===x.startNpcProfile)?.minimumLevel??0}function questSort(a,b){return questLevel(a)-questLevel(b)||a.title.localeCompare(b.title)}function primaryParent(x){return data.quests.find(q=>q.id===(x.requirements||[])[0])}function treeDepth(x,seen=new Set()){if(!x||seen.has(x.id))return 0;seen.add(x.id);const parent=primaryParent(x);return parent?1+treeDepth(parent,seen):0}function treeOrderedValues(){if(kind!=='quests')return data.npcs;const visited=new Set(),result=[],visit=x=>{if(!x||visited.has(x.id))return;visited.add(x.id);result.push(x);data.quests.filter(child=>primaryParent(child)?.id===x.id).sort(questSort).forEach(visit)};data.quests.filter(x=>!primaryParent(x)).sort(questSort).forEach(visit);data.quests.filter(x=>!visited.has(x.id)).sort(questSort).forEach(visit);return result}function treeMark(x){const depth=treeDepth(x);return depth?'<span class="tree-mark">'+('│  '.repeat(Math.max(0,depth-1)))+'├─</span>':'<span class="tree-mark root">○</span>'}function orderedValues(){if(kind!=='quests')return data.npcs;return [...data.quests].sort((a,b)=>questDepth(a)-questDepth(b)||questSort(a,b))}function flowLink(x){return `<button data-open-quest="${esc(x.id)}">${esc(x.title)}</button>`}function questFlow(x){const parents=(x.requirements||[]).map(id=>data.quests.find(q=>q.id===id)).filter(Boolean),children=data.quests.filter(q=>(q.requirements||[]).includes(x.id));let rows=[];if(!parents.length)rows.push('<div class="flow"><span class="flow-icon">○</span><span>Start of a quest path</span></div>');else if(parents.length>1)rows.push(`<div class="flow"><span class="flow-icon">⋈</span><span>Joins ${parents.length} paths from ${parents.slice(0,2).map(flowLink).join(', ')}${parents.length>2?` +${parents.length-2} more`:''}</span></div>`);if(children.length===1)rows.push(`<div class="flow"><span class="flow-icon">↳</span><span>Continues to ${flowLink(children[0])}</span></div>`);else if(children.length>1)rows.push(`<div class="flow"><span class="flow-icon">⑂</span><span>Branches to ${children.slice(0,2).map(flowLink).join(', ')}${children.length>2?` +${children.length-2} more`:''}</span></div>`);else rows.push('<div class="flow"><span class="flow-icon">◆</span><span>End of this quest path</span></div>');return rows.join('')}function render(){document.querySelectorAll('[data-kind]').forEach(b=>b.classList.toggle('active',b.dataset.kind===kind));const term=q('#search').value.toLowerCase(),values=treeOrderedValues().filter(x=>(x.title||x.name||'').toLowerCase().includes(term)||x.id.includes(term));q('#list').innerHTML=values.map(x=>`<div class="item ${x.id===selected?'active':''}"><button class="item-main" data-id="${esc(x.id)}" style="padding-left:${kind==='quests'?5+treeDepth(x)*13:5}px">${kind==='quests'?treeMark(x):''}<span class="dot ${kind==='quests'&&!x.enabled?'off':''}">●</span>${esc(x.title||x.name)}<small>${esc(x.id)}${kind==='quests'?` · depth ${questDepth(x)} · level ${questLevel(x)}`:''}</small></button>${kind==='quests'?questFlow(x):''}</div>`).join('');q('#list').querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>{selected=b.dataset.id;render()});q('#list').querySelectorAll('[data-open-quest]').forEach(b=>b.onclick=e=>{e.stopPropagation();kind='quests';selected=b.dataset.openQuest;render()});renderForm()}
-        function field(label,name,value,type='text',wide=''){return `<label class="${wide}">${label}<input name="${name}" type="${type}" value="${esc(value)}"></label>`}function area(label,name,value,wide='wide'){return `<label class="${wide}">${label}<textarea name="${name}">${esc(value)}</textarea></label>`}
-        function renderForm(){const x=data[kind].find(v=>v.id===selected);if(!x){q('#form').innerHTML='<div class="empty">Nothing selected</div>';return}if(kind==='quests'){renderQuest(x);addCharacterLinks(x);addQuestRules(x)}else{renderNpc(x);addNpcRules(x)}bindForm(x)}
-        function addCharacterLinks(x){for(const [field,id] of [['startNpcProfile',x.startNpcProfile],['endNpcProfile',x.endNpcProfile]]){const select=q(`[name="${field}"]`);if(!select)continue;select.onchange=()=>setTimeout(renderForm,0);if(id)select.insertAdjacentHTML('afterend',`<button type="button" data-open-npc="${esc(id)}" class="small">Go to NPC ↗</button>`)}}
-        function addQuestRules(x){q('#form .card').insertAdjacentHTML('beforeend',`<h3 style="margin-top:18px">Availability and failure</h3><div class="grid three">${field('Time limit in seconds (0 = none)','timeLimitSeconds',x.timeLimitSeconds||0,'number')}${field('Restart cooldown in seconds','restartCooldownSeconds',x.restartCooldownSeconds||0,'number')}${field('Global completion limit (0 = unlimited)','globalMaxCompletions',x.globalMaxCompletions||0,'number')}</div>`)}function addNpcRules(x){const cards=q('#form').querySelectorAll('.card');if(cards[2])cards[2].insertAdjacentHTML('beforeend',`<div class="grid">${field('Maximum appearance in seconds (0 = unlimited)','lifetimeSeconds',x.lifetimeSeconds||0,'number')}</div>`)}
-        function renderQuest(x){const profiles=data.npcs.map(n=>n.id),quests=data.quests.filter(v=>v.id!==x.id).map(v=>v.id);q('#form').innerHTML=`<div class="head"><h2>${esc(x.title)}</h2><button id="delete" class="danger">Delete</button></div><section class="card"><h3>Story</h3><div class="grid">${field('Quest ID','id',x.id)}${field('Title','title',x.title)}${field('Author / giver','author',x.author)}<div class="checks"><label><input name="enabled" type="checkbox" ${x.enabled?'checked':''}>Enabled</label><label><input name="repeatable" type="checkbox" ${x.repeatable?'checked':''}>Repeatable</label></div>${area('Quest-giver story','description',x.description)}</div></section><section class="card"><h3>Characters</h3><div class="grid"><label>Starting NPC<select name="startNpcProfile">${options(profiles,x.startNpcProfile)}</select></label><label>Turn-in NPC<select name="endNpcProfile">${options(profiles,x.endNpcProfile)}</select></label>${field('Starting NPC display name','startNpcName',x.startNpcName)}${field('Turn-in NPC display name','endNpcName',x.endNpcName)}</div></section><section class="card"><h3>Requirements</h3><label>Required quests<select name="requirements" multiple size="${Math.min(8,Math.max(3,quests.length))}">${quests.map(v=>`<option value="${esc(v)}" ${x.requirements.includes(v)?'selected':''}>${esc(v)}</option>`).join('')}</select></label></section><section class="card"><h3>Objectives</h3><div id="objectives">${x.objectives.map(objectiveRow).join('')}</div><button data-add="objective">+ Objective</button></section><section class="card"><h3>Rewards</h3>${area('Reward description','rewardText',x.rewardText,'')}<div id="rewards">${x.rewardItems.map(rewardRow).join('')}</div><button data-add="reward">+ Item reward</button>${area('Console commands — one per line','rewardCommands',x.rewardCommands.join('\\n'))}</section><section class="card"><h3>Dialogue</h3><div class="grid">${['offer','idle','incomplete','objective','complete'].map(s=>area(s[0].toUpperCase()+s.slice(1)+' — one saying per line','dialogue.'+s,(x.dialogue[s]||[]).join('\\n'),s==='complete'?'wide':'')).join('')}</div></section>`}
-        function objectiveTarget(o){if(o.type==='COLLECT')return `<label>Material<select data-prop="target">${options(data.materials,o.target,false)}</select></label>`;if(['KILL','INTERACT'].includes(o.type))return `<label>Entity type<select data-prop="target">${options(data.entityTypes,o.target,false)}</select></label>`;if(o.type==='NPC')return `<label>NPC profile<select data-prop="target">${options(data.npcs.map(n=>'profile:'+n.id),o.target,false)}</select></label>`;if(o.type==='STRUCTURE')return `<label>Structure<select data-prop="target">${options(['SHIPWRECK','SHIPWRECK_BEACHED','PILLAGER_OUTPOST','OCEAN_RUIN_COLD','OCEAN_RUIN_WARM','RUINED_PORTAL','MINESHAFT','BURIED_TREASURE'],o.target,false)}</select></label>`;if(['ALTITUDE_ABOVE','ALTITUDE_BELOW','UNDERWATER'].includes(o.type))return fieldObj('Y level','target',o.target,'number');if(o.type==='BIOME')return fieldObj('Biome key','target',o.target);return '<label>Target<input value="Automatic" disabled></label>'}function objectiveRow(o,i){return `<div class="row" data-objective="${i}"><div class="row-head"><strong>Objective ${i+1}</strong><button data-up="objective" class="small">↑</button><button data-down="objective" class="small">↓</button><button data-remove="objective" class="danger small">Remove</button></div><div class="grid three"><label>Type<select data-prop="type">${options(['COLLECT','KILL','LOCATION','NPC','BIOME','ALTITUDE_ABOVE','ALTITUDE_BELOW','STRUCTURE','SLEEP','INTERACT','UNDERWATER','NIGHT'],o.type,false)}</select></label>${objectiveTarget(o)}${fieldObj('Amount','amount',o.amount,'number')}${fieldObj('Player-facing objective','label',o.label)}<label>Consume collected items<input data-prop="consume" type="checkbox" ${o.consume?'checked':''}></label>${fieldObj('World','world',o.world||'survival')}${fieldObj('X','x',o.x,'number')}${fieldObj('Y','y',o.y,'number')}${fieldObj('Z','z',o.z,'number')}${fieldObj('Radius','radius',o.radius,'number')}</div></div>`}function fieldObj(label,prop,value,type='text'){return `<label>${label}<input data-prop="${prop}" type="${type}" value="${esc(value)}"></label>`}
-        function rewardRow(r,i){return `<div class="row" data-reward="${i}"><div class="row-head"><strong>Item ${i+1}</strong><button data-remove="reward" class="danger small">Remove</button></div><div class="grid"><label>Material<select data-prop="material">${options(data.materials,r.material,false)}</select></label>${fieldObj('Amount','amount',r.amount,'number')}</div></div>`}
-        function questLinks(values,empty){return values.length?values.map(v=>`<button data-quest-id="${esc(v.id)}">${esc(v.title)} <small>(${esc(v.id)})</small></button>`).join(' '):`<span class="status">${empty}</span>`}function renderNpc(x){const starts=data.quests.filter(v=>v.startNpcProfile===x.id),ends=data.quests.filter(v=>v.endNpcProfile===x.id);q('#form').innerHTML=`<div class="head"><h2>${esc(x.name)}</h2><button id="delete" class="danger">Delete</button></div><section class="card"><h3>Identity</h3><div class="grid">${field('NPC ID','id',x.id)}${field('Visible name','name',x.name)}<label>Entity type<select name="entityType">${options(data.entityTypes,x.entityType,false)}</select></label><div class="checks"><label><input name="ai" type="checkbox" ${x.ai?'checked':''}>Can walk around</label></div></div></section><section class="card"><h3>Linked quests</h3><div class="grid"><div><label>Quests started here</label><div class="row">${questLinks(starts,'No quests start at this NPC.')}</div></div><div><label>Quests handed in here</label><div class="row">${questLinks(ends,'No quests end at this NPC.')}</div></div></div></section><section class="card"><h3>Spawn conditions</h3><div class="grid three">${field('World','world',x.world)}${field('Minimum player level','minimumLevel',x.minimumLevel,'number')}${field('Daily chance (0–1)','dailyChance',x.dailyChance,'number')}${field('Minimum distance','minDistance',x.minDistance,'number')}${field('Maximum distance','maxDistance',x.maxDistance,'number')}${field('Uniqueness radius','uniquenessRadius',x.uniquenessRadius,'number')}${field('Despawn radius','despawnRadius',x.despawnRadius,'number')}${field('Time from (ticks)','timeFrom',x.timeFrom,'number')}${field('Time until (ticks)','timeUntil',x.timeUntil,'number')}${area('Biomes — one per line','biomes',x.biomes.join('\\n'))}</div></section><section class="card"><h3>Dialogue</h3>${area('Idle sayings — one per line','idleDialogue',x.idleDialogue.join('\\n'),'')}</section>`}
-        function defaultObjectiveTarget(type){return {COLLECT:'OAK_LOG',KILL:'ZOMBIE',NPC:data.npcs[0]?'profile:'+data.npcs[0].id:'',BIOME:'plains',ALTITUDE_ABOVE:'120',ALTITUDE_BELOW:'0',UNDERWATER:'50',STRUCTURE:'SHIPWRECK',INTERACT:'IRON_GOLEM'}[type]||''}
-        function bindForm(x){q('#delete').onclick=()=>{if(confirm(`Delete ${x.id}?`)){data[kind]=data[kind].filter(v=>v!==x);selected=data[kind][0]?.id||null;mark();render()}};q('#form').oninput=e=>{const el=e.target;if(el.name){if(el.name==='requirements')x.requirements=[...el.selectedOptions].map(o=>o.value);else if(el.name.startsWith('dialogue.'))x.dialogue[el.name.slice(9)]=lines(el.value);else if(['rewardCommands','biomes','idleDialogue'].includes(el.name))x[el.name]=lines(el.value);else x[el.name]=el.type==='checkbox'?el.checked:el.type==='number'?Number(el.value):el.value;mark()}else if(el.dataset.prop){const row=el.closest('[data-objective],[data-reward]'),arr=row.hasAttribute('data-objective')?x.objectives:x.rewardItems,index=Number(row.dataset.objective??row.dataset.reward);arr[index][el.dataset.prop]=el.type==='checkbox'?el.checked:el.type==='number'?Number(el.value):el.value;mark();if(el.dataset.prop==='type'){arr[index].target=defaultObjectiveTarget(el.value);renderForm()}}};q('#form').onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.questId){kind='quests';selected=b.dataset.questId;render();return}if(b.dataset.openNpc){kind='npcs';selected=b.dataset.openNpc;render();return}if(b.dataset.add==='objective')x.objectives.push({type:'COLLECT',target:'OAK_LOG',amount:1,consume:false,label:'Collect an item',world:'survival',x:0,y:64,z:0,radius:2});if(b.dataset.add==='reward')x.rewardItems.push({material:'EMERALD',amount:1});if(b.dataset.remove){const row=b.closest('[data-objective],[data-reward]'),arr=b.dataset.remove==='objective'?x.objectives:x.rewardItems;arr.splice(Number(row.dataset.objective??row.dataset.reward),1)}if(b.dataset.up||b.dataset.down){const row=b.closest('[data-objective]'),i=Number(row.dataset.objective),j=i+(b.dataset.up?-1:1);if(j>=0&&j<x.objectives.length)[x.objectives[i],x.objectives[j]]=[x.objectives[j],x.objectives[i]]}if(b.dataset.add||b.dataset.remove||b.dataset.up||b.dataset.down){mark();renderForm()}}}
-        document.querySelectorAll('[data-kind]').forEach(b=>b.onclick=()=>{kind=b.dataset.kind;selected=data[kind][0]?.id||null;render()});q('#search').oninput=render;q('#new').onclick=()=>{const id=prompt('New '+(kind==='quests'?'quest':'NPC')+' ID (lowercase):');if(!id)return;if(data[kind].some(x=>x.id===id))return alert('That ID already exists');const x=kind==='quests'?{id,title:'New Quest',author:'Quest Giver',description:'Tell this quest as a story.',rewardText:'A reward awaits.',enabled:false,repeatable:false,startNpcProfile:null,endNpcProfile:null,startNpcName:'Quest Giver',endNpcName:'Quest Contact',dialogue:{offer:[],idle:[],incomplete:[],objective:[],complete:[]},requirements:[],objectives:[],rewardItems:[],rewardCommands:[]}:{id,name:'New NPC',entityType:'VILLAGER',ai:true,world:'survival',minDistance:30,maxDistance:100,uniquenessRadius:1200,despawnRadius:150,minimumLevel:0,timeFrom:0,timeUntil:24000,dailyChance:.25,biomes:[],idleDialogue:[]};data[kind].push(x);selected=id;mark();render()};q('#duplicate').onclick=()=>{const source=data[kind].find(x=>x.id===selected);if(!source)return;const id=prompt('ID for duplicate:',source.id+'-copy');if(!id||data[kind].some(x=>x.id===id))return;const copy=structuredClone(source);copy.id=id;if(kind==='quests')copy.title+=' Copy';else copy.name+=' Copy';data[kind].push(copy);selected=id;mark();render()};
-        q('#save').onclick=async()=>{status('Saving…');try{const r=await fetch(dataUrl,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}),t=await r.text();if(!r.ok)throw Error(t);dirty=false;status(t);await loadData()}catch(e){status(e.message,true)}};q('#discard').onclick=()=>{if(!dirty||confirm('Discard all unsaved changes?'))loadData().catch(e=>status(e.message,true))};window.onbeforeunload=e=>{if(dirty)e.preventDefault()};
-        const showAdvanced=async()=>{q('#structuredView').style.display='none';q('#advancedView').style.display='block';await loadYaml()};q('#advanced').onclick=()=>showAdvanced().catch(e=>status(e.message,true));q('#structured').onclick=()=>{q('#advancedView').style.display='none';q('#structuredView').style.display='grid'};const yamlEndpoint=()=>apiUrl+'?file='+q('#yamlFile').value;async function loadYaml(){status('Loading YAML…');const r=await fetch(yamlEndpoint(),{cache:'no-store'});if(!r.ok)throw Error(await r.text());q('#yaml').value=await r.text();status('Ready')}q('#yamlReload').onclick=()=>loadYaml().catch(e=>status(e.message,true));q('#yamlFile').onchange=q('#yamlReload').onclick;q('#yamlSave').onclick=async()=>{const r=await fetch(yamlEndpoint(),{method:'PUT',headers:{'Content-Type':'text/yaml'},body:q('#yaml').value}),t=await r.text();if(!r.ok)return status(t,true);status(t);await loadData()};
-        loadData().catch(e=>status(e.message,true));
-        </script></body></html>
-        """;
 
     private void cancelCommand(CommandContext ctx) {
         if (!ctx.isPlayer()) { ctx.error("This command is player-only."); return; }
@@ -1534,7 +1516,6 @@ public final class QuestFeature extends BaseFeature {
             case "npc" -> adminNpc(ctx);
             case "npc-spawned" -> showSpawnedNpcs(ctx);
             case "player" -> showPlayerQuestState(ctx);
-            case "editor" -> openWebEditor(ctx);
             case "reload" -> { reloadDefinitions(); registerMarkers(); ctx.success("Quest definitions reloaded."); }
             default -> showAdminMenu(ctx);
         }
@@ -1559,7 +1540,7 @@ public final class QuestFeature extends BaseFeature {
         ctx.getSender().sendMessage(button("[＋ Create]", "/quest admin create new-quest New Quest", "Create a quest")
             .append(Component.space()).append(button("[NPC profiles]", "/quest admin npcs", "Manage conditional NPCs"))
             .append(Component.space()).append(button("[Spawned NPCs]", "/quest admin npc-spawned", "Inspect spawned quest NPCs"))
-            .append(Component.space()).append(button("[Web editor]", "/quest admin editor", "Create a private editor link"))
+            .append(Component.space()).append(button("[Workshop]", "/editor", "Open the shared STEMCraft Workshop"))
             .append(Component.space()).append(button("[↻ Reload]", "/quest admin reload", "Reload quests.yml")));
     }
 

@@ -1,0 +1,36 @@
+recipes:
+  shaped:
+    forest_shard:
+      result: "stemcraft_workshop:forest-shard"
+      amount: 2
+      shape: [" S ", "SLS", " S "]
+      ingredients:
+        S: AMETHYST_SHARD
+        L: OAK_LEAVES
+    frost_blade:
+      result: "stemcraft_workshop:frost-blade"
+      amount: 1
+      shape: [" I ", " I ", " S "]
+      ingredients:
+        I: ICE
+        S: STICK
+    guardian_chestplate:
+      result: "stemcraft_workshop:guardian-chestplate"
+      amount: 1
+      shape: ["I I", "III", "III"]
+      ingredients:
+        I: IRON_INGOT
+    meadow_boots:
+      result: "stemcraft_workshop:meadow-boots"
+      amount: 1
+      shape: ["L L", "L L"]
+      ingredients:
+        L: LEATHER
+  brewing:
+    explorers_tonic:
+      input: AWKWARD
+      ingredient: "stemcraft_workshop:forest-shard"
+      effect: SPEED
+      duration-ticks: 1800
+      amplifier: 0
+      result: "stemcraft_workshop:explorers-tonic"

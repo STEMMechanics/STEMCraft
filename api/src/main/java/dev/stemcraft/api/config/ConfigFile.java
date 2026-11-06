@@ -20,6 +20,12 @@
 
 package dev.stemcraft.api.config;
 
+import dev.stemcraft.api.service.config.ConfigChangeEvent;
+import dev.stemcraft.api.service.config.ConfigSaveResult;
+import dev.stemcraft.api.service.config.ConfigSubscription;
+
+import java.util.function.Consumer;
+
 /**
  * Represents a configuration file.
  */
@@ -65,6 +71,36 @@ public interface ConfigFile extends ConfigSection {
      */
     void save(boolean pruneEmptySections);
     default void save() { save(true); }
+
+    /** Performs a conflict-aware save and returns its structured result. */
+    default ConfigSaveResult saveChecked(boolean pruneEmptySections) {
+        return ConfigSaveResult.failure("", "This configuration implementation does not support checked saves.");
+    }
+
+    default ConfigSaveResult saveChecked() { return saveChecked(true); }
+
+    /**
+     * Replaces this file from YAML supplied by an editor, preserving the
+     * server-side conflict checks and path-level merge rules.
+     */
+    default ConfigSaveResult saveYaml(String yaml, String expectedRevision) {
+        return ConfigSaveResult.failure(revision(), "This configuration implementation does not support YAML editor saves.");
+    }
+
+    /** Returns the revision of the last successfully loaded or saved disk contents. */
+    default String revision() { return ""; }
+
+    /** Registers a listener for effective changes to this file. */
+    default ConfigSubscription onChange(Consumer<ConfigChangeEvent> listener) {
+        return ConfigSubscription.noop();
+    }
+
+    /** Registers a listener for changes affecting a path in this file. */
+    default ConfigSubscription onChange(String path, Consumer<ConfigChangeEvent> listener) {
+        return onChange(event -> {
+            if (event.affects(path)) listener.accept(event);
+        });
+    }
 
     /**
      * Saves the configuration file under a new name.

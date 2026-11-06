@@ -43,6 +43,9 @@ import dev.stemcraft.api.service.web.WebService;
 import dev.stemcraft.api.service.web.WebServiceEndpointHandler;
 import dev.stemcraft.api.service.web.WebServiceEvent;
 import dev.stemcraft.api.service.web.WebServiceRequest;
+import dev.stemcraft.api.service.web.WebServiceStream;
+import dev.stemcraft.api.service.web.WebServiceStreamingEndpointHandler;
+import dev.stemcraft.service.web.WebPageComponents;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -93,6 +96,8 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -104,7 +109,6 @@ import java.util.concurrent.TimeoutException;
 public class WebServiceImpl extends BaseService implements WebService {
     private static final Gson GSON = new GsonBuilder().serializeNulls().create();
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
-    private static final String DEFAULT_INDEX_RESOURCE = "www/index.html";
     private static final String DEFAULT_ROBOTS_RESOURCE = "www/robots.txt";
     private static final String MAINTENANCE_MESSAGE = "Server is under maintenance. Please try again later.";
     private static final String SURVIVAL_MAIL_PATH = "/api/v1/survival/mail";
@@ -157,7 +161,9 @@ public class WebServiceImpl extends BaseService implements WebService {
     );
     private File wwwRoot;
     private HttpServer httpServer;
+    private ExecutorService httpExecutor;
     private volatile Map<String, WebServiceEndpointHandler> endpointHandlers = Map.of();
+    private volatile Map<String, WebServiceStreamingEndpointHandler> streamingEndpointHandlers = Map.of();
     private volatile List<String> onlinePlayerNames = List.of();
     private final Object mailApiIdempotencyLock = new Object();
     private final Map<String, MailApiIdempotencyEntry> mailApiIdempotency = new LinkedHashMap<>();
@@ -308,7 +314,9 @@ public class WebServiceImpl extends BaseService implements WebService {
             return;
         }
 
-        ensureDefaultWebFile(DEFAULT_INDEX_RESOURCE, "index.html");
+        // Keep bundled website assets available from the configured web root
+        // without overwriting files that an operator has customised.
+        plugin.exportBundledDirectory("www/assets", wwwPath + "/assets");
         ensureDefaultWebFile(DEFAULT_ROBOTS_RESOURCE, "robots.txt");
 
         port = getConfigSection().getInt("port", 8950);
@@ -317,7 +325,13 @@ public class WebServiceImpl extends BaseService implements WebService {
         try {
             httpServer = HttpServer.create(new InetSocketAddress(ip, port), 0);
             httpServer.createContext("/", new WebServiceHandler());
-            httpServer.setExecutor(null);
+            httpExecutor = Executors.newCachedThreadPool(runnable -> {
+                Thread thread = new Thread(runnable, "stemcraft-web-http");
+                thread.setDaemon(true);
+                return thread;
+            });
+            httpServer.setExecutor(httpExecutor);
+            registerEndpointHandler("/", this::handleHomepageEndpoint);
             registerEndpointHandler("/status", this::handleStatusEndpoint);
             registerEndpointHandler(SURVIVAL_MAIL_PATH, this::handleSurvivalMailEndpoint);
             httpServer.start();
@@ -328,6 +342,7 @@ public class WebServiceImpl extends BaseService implements WebService {
                 httpServer.stop(0);
             }
             httpServer = null;
+            shutdownHttpExecutor();
             api.messages().error("WEB_SERVER_START_FAILED", e, "error", e.getMessage());
         }
     }
@@ -336,10 +351,24 @@ public class WebServiceImpl extends BaseService implements WebService {
      * Stop the web server.
      */
     public void stop() {
-        if (httpServer != null) {
-            httpServer.stop(0);
-            httpServer = null;
+        HttpServer server = httpServer;
+        httpServer = null;
+        if (server != null) {
+            server.stop(0);
             api.messages().info("WEB_SERVER_STOPPED");
+        }
+        shutdownHttpExecutor();
+    }
+
+    private void shutdownHttpExecutor() {
+        ExecutorService executor = httpExecutor;
+        httpExecutor = null;
+        if (executor == null) return;
+        executor.shutdownNow();
+        try {
+            executor.awaitTermination(2, TimeUnit.SECONDS);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -367,6 +396,15 @@ public class WebServiceImpl extends BaseService implements WebService {
         updated.put(path, handler);
         endpointHandlers = Collections.unmodifiableMap(updated);
         api.messages().debug("WEB_SERVER_REGISTERED_ENDPOINT", "path", path);
+    }
+
+    @Override
+    public synchronized void registerStreamingEndpointHandler(@NotNull String path,
+                                                               @NotNull WebServiceStreamingEndpointHandler handler) {
+        Map<String, WebServiceStreamingEndpointHandler> updated = new LinkedHashMap<>(streamingEndpointHandlers);
+        updated.put(path, handler);
+        streamingEndpointHandlers = Collections.unmodifiableMap(updated);
+        api.messages().debug("WEB_SERVER_REGISTERED_ENDPOINT", "path", path + " (stream)");
     }
 
     /** {@inheritDoc} */
@@ -751,6 +789,31 @@ public class WebServiceImpl extends BaseService implements WebService {
         private boolean isEnabled(@NotNull String eventType) {
             return events.getOrDefault(eventType.toLowerCase(Locale.ROOT), false);
         }
+    }
+
+    Object handleHomepageEndpoint(@NotNull WebServiceRequest request) {
+        if (!"/".equals(request.path())) return null;
+        if (!"GET".equalsIgnoreCase(request.method()) && !"HEAD".equalsIgnoreCase(request.method())) {
+            return Map.of(
+                "responseCode", 405,
+                "contentType", "text/plain; charset=utf-8",
+                "body", "Method not allowed"
+            );
+        }
+
+        String javaAddress = configuredHomepageValue("java-address");
+        String bedrockAddress = configuredHomepageValue("bedrock-address");
+        String aboutUrl = configuredHomepageValue("about-url");
+        String discordUrl = configuredHomepageValue("discord-url");
+        return Map.of(
+            "responseCode", 200,
+            "contentType", "text/html; charset=utf-8",
+            "body", WebPageComponents.landingPage(javaAddress, bedrockAddress, aboutUrl, discordUrl)
+        );
+    }
+
+    private @NotNull String configuredHomepageValue(@NotNull String key) {
+        return Objects.requireNonNullElse(getConfigSection().getString("homepage." + key, ""), "").trim();
     }
 
     Object handleStatusEndpoint(@NotNull WebServiceRequest request) {
@@ -1629,6 +1692,11 @@ public class WebServiceImpl extends BaseService implements WebService {
                 return;
             }
 
+            for (var e : streamingEndpointHandlers.entrySet()) {
+                if (request.path().startsWith(e.getKey())
+                    && handleStreamingRequest(exchange, request, e.getValue())) return;
+            }
+
             for (var e : endpointHandlers.entrySet()) {
                 if (request.path().startsWith(e.getKey())) {
                     Object result = e.getValue().handle(request);
@@ -1639,12 +1707,15 @@ public class WebServiceImpl extends BaseService implements WebService {
             }
 
             if (Files.isDirectory(requested, LinkOption.NOFOLLOW_LINKS)) {
-                Path index = requested.resolve("index.html").normalize();
-                if (!index.startsWith(root) || !Files.isRegularFile(index, LinkOption.NOFOLLOW_LINKS)) {
-                    sendErrorResponse(exchange, 403, "Directory listing not permitted");
-                    return;
-                }
-                requested = index;
+                sendErrorResponse(exchange, 403, "Directory listing not permitted");
+                return;
+            }
+
+            String requestedName = requested.getFileName() == null
+                ? "" : requested.getFileName().toString().toLowerCase(Locale.ROOT);
+            if (requestedName.endsWith(".html") || requestedName.endsWith(".htm")) {
+                sendErrorResponse(exchange, 404, "HTML documents are rendered by the web service.");
+                return;
             }
 
             if (!Files.exists(requested, LinkOption.NOFOLLOW_LINKS)) {
@@ -1654,7 +1725,18 @@ public class WebServiceImpl extends BaseService implements WebService {
 
             // Serve the requested file (streaming, not readAllBytes)
             String contentType = Files.probeContentType(requested);
-            if (contentType == null) contentType = "application/octet-stream";
+            if (contentType == null || "application/octet-stream".equals(contentType)) {
+                String name = requested.getFileName().toString().toLowerCase(Locale.ROOT);
+                if (name.endsWith(".png")) contentType = "image/png";
+                else if (name.endsWith(".webp")) contentType = "image/webp";
+                else if (name.endsWith(".svg")) contentType = "image/svg+xml";
+                else if (name.endsWith(".css")) contentType = "text/css; charset=utf-8";
+                else if (name.endsWith(".js")) contentType = "text/javascript; charset=utf-8";
+                else if (name.endsWith(".woff2")) contentType = "font/woff2";
+                else if (name.endsWith(".woff")) contentType = "font/woff";
+                else if (name.endsWith(".ttf")) contentType = "font/ttf";
+                else if (contentType == null) contentType = "application/octet-stream";
+            }
 
             exchange.getResponseHeaders().set("Content-Type", contentType);
             long size = Files.size(requested);
@@ -1665,11 +1747,21 @@ public class WebServiceImpl extends BaseService implements WebService {
             }
         }
 
+        private boolean handleStreamingRequest(HttpExchange exchange,
+                                               WebServiceRequest request,
+                                               WebServiceStreamingEndpointHandler handler) throws IOException {
+            ExchangeStream stream = new ExchangeStream(exchange);
+            boolean handled = handler.handle(request, stream);
+            if (handled) stream.close();
+            return handled;
+        }
+
         private static String redactSensitivePath(String path) {
-            if (!path.startsWith("/quests/editor/")) return path;
-            String remainder = path.substring("/quests/editor/".length());
+            if (!path.startsWith("/editor/")) return path;
+            String prefix = "/editor/";
+            String remainder = path.substring(prefix.length());
             int slash = remainder.indexOf('/');
-            return "/quests/editor/[redacted]" + (slash < 0 ? "" : remainder.substring(slash));
+            return prefix + "[redacted]" + (slash < 0 ? "" : remainder.substring(slash));
         }
 
         private void writeEndpointResponse(HttpExchange exchange, Object result) throws IOException {
@@ -1765,6 +1857,62 @@ public class WebServiceImpl extends BaseService implements WebService {
             }
             exchange.sendResponseHeaders(statusCode, length == 0 ? -1 : length);
             return length > 0;
+        }
+    }
+
+    /** Lazy response writer so an authenticated streaming handler can decline a request. */
+    private static final class ExchangeStream implements WebServiceStream {
+        private final HttpExchange exchange;
+        private OutputStream output;
+        private boolean started;
+        private boolean open = true;
+
+        private ExchangeStream(HttpExchange exchange) {
+            this.exchange = exchange;
+        }
+
+        @Override
+        public synchronized void send(@NotNull String event, @NotNull String data) throws IOException {
+            if (!open) throw new IOException("SSE connection is closed");
+            try {
+                if (!started) {
+                    exchange.getResponseHeaders().set("Content-Type", "text/event-stream; charset=utf-8");
+                    exchange.getResponseHeaders().set("Cache-Control", "no-cache, no-store");
+                    exchange.getResponseHeaders().set("Connection", "keep-alive");
+                    exchange.getResponseHeaders().set("X-Accel-Buffering", "no");
+                    exchange.getResponseHeaders().set("X-Content-Type-Options", "nosniff");
+                    exchange.sendResponseHeaders(200, 0);
+                    output = exchange.getResponseBody();
+                    started = true;
+                }
+
+                String safeEvent = event.replace("\r", "").replace("\n", "");
+                String safeData = data == null ? "" : data.replace("\r", "");
+                StringBuilder payload = new StringBuilder("event: ").append(safeEvent).append('\n');
+                for (String line : safeData.split("\n", -1)) payload.append("data: ").append(line).append('\n');
+                payload.append('\n');
+                output.write(payload.toString().getBytes(StandardCharsets.UTF_8));
+                output.flush();
+            } catch (IOException exception) {
+                open = false;
+                throw exception;
+            }
+        }
+
+        @Override
+        public boolean isOpen() {
+            return open;
+        }
+
+        private synchronized void close() {
+            open = false;
+            if (output != null) {
+                try {
+                    output.close();
+                } catch (IOException ignored) {
+                    // The HTTP exchange is closing already.
+                }
+            }
         }
     }
 

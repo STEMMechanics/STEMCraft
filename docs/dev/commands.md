@@ -17,6 +17,7 @@ The list below reflects the active built-in command roots in source.
 | `/maintenance` | `STEMCraft.java` | Toggles server maintenance mode |
 | `/debug` | `DebugServiceImpl` | List and run registered feature/service diagnostics; requires `stemcraft.command.debug` |
 | `/webserver` | `WebServiceImpl` | Embedded web server control, status and a clickable HTTP diagnostic URL |
+| `/editor` | `EditorWebServiceImpl` | Opens the private STEMCraft editor; modules are filtered by permission |
 | `/world` | `WorldCommand` | World lifecycle, inspection, settings, and join/leave command editing |
 | `/resourcepack` | `ResourcePackCommand` | Pack delivery, pack builds and a clickable download URL |
 | `/glyph` | `GlyphCommand` | Browse and search registered resource-pack glyphs |
@@ -64,6 +65,14 @@ An existing `index.html` is preserved, so the page can be replaced with a
 custom landing page in the configured web-server directory. STEMCraft also
 creates a default `robots.txt` that asks all crawlers not to index the server.
 An existing custom `robots.txt` is preserved.
+
+The bundled pages use `www/assets/logo.png` for STEMCraft branding. Replace that
+file in the configured web directory to use a different logo. The shared theme
+also looks for an optional `www/assets/background.webp`, then
+`www/assets/background.png`; either file can be supplied as the page artwork.
+The theme adds a light readability overlay, so the same artwork can be used by
+the public landing page, the shared editor, and the embedded quest editor. WebP
+is preferred when both files are present.
 
 The read-only `GET /status` endpoint does not require Discord role
 authorisation. Existing status fields remain available to callers. To include

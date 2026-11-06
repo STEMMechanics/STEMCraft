@@ -41,6 +41,7 @@ import dev.stemcraft.service.resourcepack.generators.GlyphGenerator;
 import dev.stemcraft.service.resourcepack.generators.MinecraftPackGenerator;
 import dev.stemcraft.service.resourcepack.generators.PackMetaGenerator;
 import dev.stemcraft.service.resourcepack.generators.CustomItemGenerator;
+import dev.stemcraft.service.resourcepack.generators.ContentPackTextureGenerator;
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.resource.ResourcePackInfo;
 import net.kyori.adventure.resource.ResourcePackRequest;
@@ -180,6 +181,7 @@ public class ResourcePackServiceImpl extends BaseService implements ResourcePack
         registerGenerator(new PackMetaGenerator(this));
         registerGenerator(new GlyphGenerator(this));
         registerGenerator(new MinecraftPackGenerator(this));
+        registerGenerator(new ContentPackTextureGenerator());
         registerGenerator(new CustomItemGenerator());
         attemptPendingGeneratorRegistrations();
         logPendingGenerators();

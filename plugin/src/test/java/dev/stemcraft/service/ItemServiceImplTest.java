@@ -7,6 +7,8 @@ import dev.stemcraft.api.service.item.CustomItemClientDefinition;
 import dev.stemcraft.api.service.item.JavaItemVisualDefinition;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Material;
+import org.bukkit.attribute.Attribute;
+import org.bukkit.inventory.EquipmentSlotGroup;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
@@ -139,6 +141,16 @@ class ItemServiceImplTest {
 
         assertEquals("Gift", service.getItemName(gift));
         assertEquals("Cobblestone Wall", service.getItemName(new ItemStack(Material.COBBLESTONE_WALL)));
+    }
+
+    @Test
+    void workshopStatsUseReadableTotalsAndTheMaterialEquipmentSlot() {
+        assertEquals(-4D, ItemServiceImpl.configuredModifierValue(
+            Material.DIAMOND_SWORD, Attribute.ATTACK_DAMAGE, 3D));
+        assertEquals(0D, ItemServiceImpl.configuredModifierValue(
+            Material.DIAMOND_SWORD, Attribute.ATTACK_SPEED, 1.6D));
+        assertEquals(EquipmentSlotGroup.CHEST, ItemServiceImpl.equipmentGroup(Material.DIAMOND_CHESTPLATE));
+        assertEquals(EquipmentSlotGroup.FEET, ItemServiceImpl.equipmentGroup(Material.LEATHER_BOOTS));
     }
 
     @Test

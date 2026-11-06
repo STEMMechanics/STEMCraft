@@ -1,0 +1,99 @@
+loot:
+  tables:
+    workshop-mob-death:
+      target: MOB_DEATH
+      rules:
+        # All rules below are deliberately restricted to the test world.
+        - priority: 10
+          operation: APPEND
+          conditions:
+            world: workshop-test
+            entity-type: ZOMBIE
+            biome: [minecraft:forest, minecraft:birch_forest]
+          entries:
+            - item: "stemcraft_workshop:forest-shard"
+              chance: 0.35
+              min: 1
+              max: 2
+
+        - priority: 20
+          operation: REMOVE
+          match: ROTTEN_FLESH
+          quantity: 1
+          chance: 0.25
+          conditions:
+            world: workshop-test
+            entity-type: ZOMBIE
+
+        - priority: 30
+          operation: REPLACE
+          match: ROTTEN_FLESH
+          quantity: 1
+          conditions:
+            world: workshop-test
+            entity-type: ZOMBIE
+            biome-source: MOB_DEATH
+            biome: minecraft:dark_forest
+          entries:
+            - item: "stemcraft_workshop:forest-shard"
+              chance: 0.50
+              min: 1
+              max: 3
+
+        - priority: 40
+          operation: APPEND
+          conditions:
+            world: workshop-test
+            entity-type: ZOMBIE
+            distance-tier:
+              min: 2
+          entries:
+            - item: "stemcraft_workshop:forest-shard"
+              chance: 0.75
+              min: 2
+              max: 4
+
+        - priority: 50
+          operation: REPLACE_ALL
+          chance: 0.10
+          conditions:
+            world: workshop-test
+            entity-type: SKELETON
+            player-kill: true
+          entries:
+            - item: "stemcraft_workshop:venom-arrow"
+              chance: 1.0
+              min: 2
+              max: 5
+
+    workshop-spawn-biome-example:
+      target: MOB_DEATH
+      rules:
+        - priority: 5
+          operation: APPEND
+          biome-source: MOB_SPAWN
+          conditions:
+            world: workshop-test
+            biome: minecraft:plains
+            spawn-reason: NATURAL
+          entries:
+            - item: "stemcraft_workshop:forest-shard"
+              chance: 0.20
+              min: 1
+              max: 1
+
+    workshop-killer-biome-example:
+      target: MOB_DEATH
+      rules:
+        - priority: 5
+          operation: APPEND
+          biome-source: KILLER
+          conditions:
+            world: workshop-test
+            biome: minecraft:meadow
+            player-kill: true
+          entries:
+            - item: "stemcraft_workshop:forest-shard"
+              chance: 0.20
+              min: 1
+              max: 2

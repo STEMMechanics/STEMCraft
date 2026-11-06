@@ -463,6 +463,13 @@ web-server:
   path: www
   # Direct connections use HTTP. HTTPS requires an external TLS reverse proxy.
   public-url: ""
+  # Values shown on the generated STEMCraft landing page. Leave blank to hide
+  # a connection target rather than displaying a stale hard-coded address.
+  homepage:
+    java-address: ""
+    bedrock-address: ""
+    about-url: ""
+    discord-url: ""
   mail-api:
     # A blank key is replaced with a secure, persistent bearer token on startup.
     # The generated value is saved here and announced in the console without printing the secret.
@@ -936,8 +943,11 @@ dragon-respawn:
   worlds: []
 
 distance_difficulty:
-  range: 500
+  range: 1000
   multiplier: 0.25
+  # Optional explicit selections. A profile is registered by a content pack
+  # and is never selected merely because that pack was loaded.
+  world-profiles: {}
 
 chat:
   format: "{prefix}{player}: {message}{suffix}"

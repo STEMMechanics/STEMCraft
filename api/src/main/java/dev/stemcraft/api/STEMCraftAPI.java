@@ -58,6 +58,13 @@ import dev.stemcraft.api.service.tabcomplete.TabCompleteService;
 import dev.stemcraft.api.service.web.WebService;
 import dev.stemcraft.api.service.world.WorldService;
 import dev.stemcraft.api.service.workshop.WorkshopService;
+import dev.stemcraft.api.service.contentpack.ContentPackService;
+import dev.stemcraft.api.service.condition.ConditionService;
+import dev.stemcraft.api.service.distance.DistanceDifficultyService;
+import dev.stemcraft.api.service.loot.LootService;
+import dev.stemcraft.api.service.ability.ItemAbilityService;
+import dev.stemcraft.api.service.itemeditor.ItemEditorService;
+import dev.stemcraft.api.service.editor.EditorWebService;
 
 import java.io.File;
 
@@ -247,6 +254,9 @@ public interface STEMCraftAPI {
      */
     WebService web();
 
+    /** Get the shared private web-editor hub. */
+    default EditorWebService editorWeb() { return EditorWebService.UNAVAILABLE; }
+
     /**
      * Get the world service.
      */
@@ -254,6 +264,24 @@ public interface STEMCraftAPI {
 
     /** Get the optional STEMMechanics workshop catalogue service. */
     default WorkshopService workshops() { return WorkshopService.UNAVAILABLE; }
+
+    /** Get the central STEMCraft content-pack lifecycle service. */
+    default ContentPackService contentPacks() { return ContentPackService.UNAVAILABLE; }
+
+    /** Get the shared condition provider registry. */
+    default ConditionService conditions() { return ConditionService.UNAVAILABLE; }
+
+    /** Get distance-tier and stored multiplier information. */
+    default DistanceDifficultyService distanceDifficulty() { return DistanceDifficultyService.UNAVAILABLE; }
+
+    /** Get reusable loot-table evaluation and simulation. */
+    default LootService loot() { return LootService.UNAVAILABLE; }
+
+    /** Runtime triggers and actions for configuration-backed item abilities. */
+    default ItemAbilityService itemAbilities() { return ItemAbilityService.UNAVAILABLE; }
+
+    /** Per-player item drafts and immediate preview updates. */
+    default ItemEditorService itemEditor() { return ItemEditorService.UNAVAILABLE; }
 
     /**
      * Static access to the STEMCraft API instance.

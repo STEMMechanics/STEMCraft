@@ -5,7 +5,6 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.CommandBuilder;
 import dev.stemcraft.api.service.command.CommandService;
 import dev.stemcraft.api.service.tabcomplete.TabCompleteService;
-import dev.stemcraft.api.service.web.WebServiceRequest;
 import dev.stemcraft.feature.quest.QuestObjective;
 import dev.stemcraft.feature.quest.QuestDefinition;
 import dev.stemcraft.feature.quest.QuestRewardItem;
@@ -20,7 +19,6 @@ import org.mockito.MockedStatic;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 
-import java.util.Map;
 import java.util.List;
 import java.util.regex.Pattern;
 
@@ -196,16 +194,6 @@ class QuestFeatureTest {
         assertTrue(QuestFeature.matchesTrackingWorld(worlds, "Survival_The_End"));
         assertFalse(QuestFeature.matchesTrackingWorld(worlds, "world"));
         assertFalse(QuestFeature.matchesTrackingWorld(worlds, "bw_castle"));
-    }
-
-    @Test
-    void webEditorDeniesAccessWithoutAnIssuedCode() {
-        QuestFeature feature = new QuestFeature(mock(STEMCraftAPI.class));
-        Object response = feature.handleWebEditor(new WebServiceRequest("GET", "/quests/editor/nope",
-            "/quests/editor/nope", Map.of(), Map.of(), new byte[0], "test"));
-
-        assertEquals(403, ((Map<?, ?>) response).get("responseCode"));
-        assertEquals("Not permitted", ((Map<?, ?>) response).get("body"));
     }
 
     @Test
