@@ -95,6 +95,8 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -159,6 +161,7 @@ public class WebServiceImpl extends BaseService implements WebService {
     );
     private File wwwRoot;
     private HttpServer httpServer;
+    private ExecutorService httpExecutor;
     private volatile Map<String, WebServiceEndpointHandler> endpointHandlers = Map.of();
     private volatile Map<String, WebServiceStreamingEndpointHandler> streamingEndpointHandlers = Map.of();
     private volatile List<String> onlinePlayerNames = List.of();
@@ -323,7 +326,12 @@ public class WebServiceImpl extends BaseService implements WebService {
         try {
             httpServer = HttpServer.create(new InetSocketAddress(ip, port), 0);
             httpServer.createContext("/", new WebServiceHandler());
-            httpServer.setExecutor(null);
+            httpExecutor = Executors.newCachedThreadPool(runnable -> {
+                Thread thread = new Thread(runnable, "stemcraft-web-http");
+                thread.setDaemon(true);
+                return thread;
+            });
+            httpServer.setExecutor(httpExecutor);
             registerEndpointHandler("/status", this::handleStatusEndpoint);
             registerEndpointHandler(SURVIVAL_MAIL_PATH, this::handleSurvivalMailEndpoint);
             httpServer.start();
@@ -334,6 +342,7 @@ public class WebServiceImpl extends BaseService implements WebService {
                 httpServer.stop(0);
             }
             httpServer = null;
+            shutdownHttpExecutor();
             api.messages().error("WEB_SERVER_START_FAILED", e, "error", e.getMessage());
         }
     }
@@ -342,10 +351,24 @@ public class WebServiceImpl extends BaseService implements WebService {
      * Stop the web server.
      */
     public void stop() {
-        if (httpServer != null) {
-            httpServer.stop(0);
-            httpServer = null;
+        HttpServer server = httpServer;
+        httpServer = null;
+        if (server != null) {
+            server.stop(0);
             api.messages().info("WEB_SERVER_STOPPED");
+        }
+        shutdownHttpExecutor();
+    }
+
+    private void shutdownHttpExecutor() {
+        ExecutorService executor = httpExecutor;
+        httpExecutor = null;
+        if (executor == null) return;
+        executor.shutdownNow();
+        try {
+            executor.awaitTermination(2, TimeUnit.SECONDS);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -1830,6 +1853,7 @@ public class WebServiceImpl extends BaseService implements WebService {
                     exchange.getResponseHeaders().set("Content-Type", "text/event-stream; charset=utf-8");
                     exchange.getResponseHeaders().set("Cache-Control", "no-cache, no-store");
                     exchange.getResponseHeaders().set("Connection", "keep-alive");
+                    exchange.getResponseHeaders().set("X-Accel-Buffering", "no");
                     exchange.getResponseHeaders().set("X-Content-Type-Options", "nosniff");
                     exchange.sendResponseHeaders(200, 0);
                     output = exchange.getResponseBody();

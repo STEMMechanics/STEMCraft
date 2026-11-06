@@ -56,6 +56,8 @@ import java.util.stream.Collectors;
 /** Shared private web editor hub and module registry. */
 public final class EditorWebServiceImpl extends BaseService implements EditorWebService {
     private static final String EDITOR_PATH = "/editor";
+    private static final String SESSION_COOKIE_NAME = "stemcraft_editor_session";
+    private static final long SESSION_COOKIE_MAX_AGE_SECONDS = TimeUnit.DAYS.toSeconds(30);
     private static final String SESSION_FILE_NAME = "editor-sessions.yml";
     private static final long SESSION_LIFETIME_MILLIS = TimeUnit.HOURS.toMillis(24);
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
@@ -173,8 +175,15 @@ public final class EditorWebServiceImpl extends BaseService implements EditorWeb
 
     private Object handleRequest(WebServiceRequest request) {
         String path = request.path();
-        if (path.equals(EDITOR_PATH)) {
-            return response(new EditorWebResponse(404, "text/plain; charset=utf-8", "Open a private editor link."));
+        if (path.equals(EDITOR_PATH) || path.equals(EDITOR_PATH + "/")) {
+            Session session = validSession(cookieToken(request));
+            if (session == null) {
+                return response(new EditorWebResponse(403, "text/plain; charset=utf-8",
+                    "Open your private editor link to sign in."));
+            }
+            return "GET".equalsIgnoreCase(request.method())
+                ? response(new EditorWebResponse(200, "text/html; charset=utf-8", editorHtml))
+                : response(new EditorWebResponse(405, "text/plain; charset=utf-8", "Method not allowed"));
         }
         if (!path.startsWith(EDITOR_PATH + "/")) {
             return response(new EditorWebResponse(404, "text/plain; charset=utf-8", "Not found"));
@@ -184,27 +193,39 @@ public final class EditorWebServiceImpl extends BaseService implements EditorWeb
         if (parts.length == 0 || parts[0].isBlank()) {
             return response(new EditorWebResponse(404, "text/plain; charset=utf-8", "Open a private editor link."));
         }
-        Session session = validSession(parts[0]);
+
+        boolean tokenInPath = !"api".equalsIgnoreCase(parts[0]);
+        String token = tokenInPath ? parts[0] : cookieToken(request);
+        Session session = validSession(token);
         if (session == null) return response(new EditorWebResponse(403, "text/plain; charset=utf-8", "Not permitted"));
-        if (parts.length == 1 || (parts.length == 2 && parts[1].isBlank())) {
+
+        if (tokenInPath && (parts.length == 1 || (parts.length == 2 && parts[1].isBlank()))) {
             return "GET".equalsIgnoreCase(request.method())
-                ? response(new EditorWebResponse(200, "text/html; charset=utf-8", editorHtml))
+                ? redirectToCleanEditor(request, token)
                 : response(new EditorWebResponse(405, "text/plain; charset=utf-8", "Method not allowed"));
         }
-        if (!"api".equalsIgnoreCase(parts[1])) {
+
+        int apiIndex = tokenInPath ? 1 : 0;
+        if (parts.length <= apiIndex || !"api".equalsIgnoreCase(parts[apiIndex])) {
             return response(new EditorWebResponse(404, "text/plain; charset=utf-8", "Not found"));
         }
-        if (parts.length == 3 && "modules".equalsIgnoreCase(parts[2])) {
+
+        int moduleIndex = apiIndex + 1;
+        if (parts.length == moduleIndex + 1 && "modules".equalsIgnoreCase(parts[moduleIndex])) {
             return response(jsonResponse(200, visibleModules(session)));
         }
-        if (parts.length < 4) return response(new EditorWebResponse(404, "text/plain; charset=utf-8", "Module required"));
-        String moduleId = normalizeModuleId(parts[2]);
+
+        int relativePathIndex = moduleIndex + 1;
+        if (parts.length <= relativePathIndex) {
+            return response(new EditorWebResponse(404, "text/plain; charset=utf-8", "Module required"));
+        }
+        String moduleId = normalizeModuleId(parts[moduleIndex]);
         if (!session.modules().contains(moduleId))
             return response(new EditorWebResponse(403, "text/plain; charset=utf-8", "This editor is not available in this link"));
         EditorWebModule module = modules.get(moduleId);
         if (module == null) return response(new EditorWebResponse(404, "text/plain; charset=utf-8", "Editor module not found"));
-        String relativePath = "/" + String.join("/", java.util.Arrays.copyOfRange(parts, 3, parts.length));
-        EditorWebContext context = new EditorWebContext(parts[0], session.writable().contains(moduleId));
+        String relativePath = "/" + String.join("/", java.util.Arrays.copyOfRange(parts, relativePathIndex, parts.length));
+        EditorWebContext context = new EditorWebContext(token, session.writable().contains(moduleId));
         try {
             EditorWebResponse result = onServerThread(() -> module.handle(context, relativePath, request));
             return response(result);
@@ -220,8 +241,15 @@ public final class EditorWebServiceImpl extends BaseService implements EditorWeb
         String path = request.path();
         if (!path.startsWith(EDITOR_PATH + "/")) return false;
         String[] parts = path.substring((EDITOR_PATH + "/").length()).split("/", -1);
-        if (parts.length != 3 || !"api".equalsIgnoreCase(parts[1]) || !"events".equalsIgnoreCase(parts[2])) return false;
-        String token = parts[0];
+        String token;
+        if (parts.length == 2 && "api".equalsIgnoreCase(parts[0]) && "events".equalsIgnoreCase(parts[1])) {
+            token = cookieToken(request);
+        } else if (parts.length == 3 && "api".equalsIgnoreCase(parts[1]) && "events".equalsIgnoreCase(parts[2])) {
+            // Keep old token-in-path links working while clients migrate to the cookie-backed URL.
+            token = parts[0];
+        } else {
+            return false;
+        }
         if (validSession(token) == null) return false;
 
         EditorEventClient client = new EditorEventClient();
@@ -394,14 +422,63 @@ public final class EditorWebServiceImpl extends BaseService implements EditorWeb
         return id.trim().toLowerCase(java.util.Locale.ROOT).replace('_', '-');
     }
 
+    private Map<String, Object> redirectToCleanEditor(WebServiceRequest request, String token) {
+        return response(new EditorWebResponse(303, "text/plain; charset=utf-8", "Editor session established."),
+            Map.of(
+                "Location", EDITOR_PATH,
+                "Set-Cookie", sessionCookie(request, token)
+            ));
+    }
+
+    private String sessionCookie(WebServiceRequest request, String token) {
+        StringBuilder cookie = new StringBuilder(SESSION_COOKIE_NAME)
+            .append('=').append(token)
+            .append("; Path=").append(EDITOR_PATH)
+            .append("; Max-Age=").append(SESSION_COOKIE_MAX_AGE_SECONDS)
+            .append("; HttpOnly; SameSite=Lax");
+        if (isSecureRequest(request)) cookie.append("; Secure");
+        return cookie.toString();
+    }
+
+    private boolean isSecureRequest(WebServiceRequest request) {
+        String forwarded = request.firstHeader("X-Forwarded-Proto");
+        if (forwarded != null && forwarded.toLowerCase(java.util.Locale.ROOT).startsWith("https")) return true;
+        if (request.uri().toLowerCase(java.util.Locale.ROOT).startsWith("https://")) return true;
+        try {
+            return api.web().getPublicUrl().toLowerCase(java.util.Locale.ROOT).startsWith("https://");
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    private static String cookieToken(WebServiceRequest request) {
+        String cookieHeader = request.firstHeader("Cookie");
+        if (cookieHeader == null) return "";
+        for (String part : cookieHeader.split(";")) {
+            String[] pair = part.trim().split("=", 2);
+            if (pair.length == 2 && SESSION_COOKIE_NAME.equals(pair[0].trim())) {
+                String token = pair[1].trim();
+                return isToken(token) ? token : "";
+            }
+        }
+        return "";
+    }
+
     private static Map<String, Object> response(EditorWebResponse result) {
+        return response(result, Map.of());
+    }
+
+    private static Map<String, Object> response(EditorWebResponse result, Map<String, String> additionalHeaders) {
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("responseCode", result.status());
         response.put("contentType", result.contentType());
         response.put("body", result.body());
-        response.put("headers", Map.of("Cache-Control", "no-store",
-            "X-Content-Type-Options", "nosniff",
-            "Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:"));
+        Map<String, String> headers = new LinkedHashMap<>();
+        headers.put("Cache-Control", "no-store");
+        headers.put("X-Content-Type-Options", "nosniff");
+        headers.put("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:");
+        headers.putAll(additionalHeaders);
+        response.put("headers", headers);
         return response;
     }
 

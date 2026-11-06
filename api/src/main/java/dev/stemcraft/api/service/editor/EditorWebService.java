@@ -23,6 +23,10 @@ public interface EditorWebService {
     /** Register or replace a service-owned editor module. */
     void registerModule(@NotNull EditorWebModule module);
 
-    /** Create or reuse a private editor URL containing only the sender's permitted modules. */
+    /**
+     * Create or reuse a private editor bootstrap URL containing only the
+     * sender's permitted modules. Opening it exchanges the token for an
+     * HttpOnly cookie and redirects to the clean {@code /editor} URL.
+     */
     @NotNull String createSession(@NotNull CommandSender sender);
 }

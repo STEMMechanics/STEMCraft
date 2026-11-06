@@ -34,8 +34,10 @@ public interface EditorWebModule {
     default @NotNull String writePermission() { return readPermission(); }
 
     /**
-     * Handle a request below {@code /editor/<token>/api/<module-id>}.
-     * The path is relative to the module and starts with {@code /}.
+     * Handle a request below {@code /editor/api/<module-id>} after the private
+     * bootstrap link has exchanged its token for an HttpOnly session cookie.
+     * Legacy token-in-path requests remain supported. The path is relative to
+     * the module and starts with {@code /}.
      */
     @NotNull EditorWebResponse handle(@NotNull EditorWebContext context, @NotNull String path,
                                       @NotNull WebServiceRequest request);

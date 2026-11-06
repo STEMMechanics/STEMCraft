@@ -206,7 +206,9 @@ proposed YAML document, publish only the owned definition, then call the same
 reload/reconcile path. It should not write the whole pack or bypass the
 revision check.
 
-The shared web editor is opened in-game with `/editor`. It provides common
-controls for Quests, Items, Loot, and Packs. Each module keeps its own validation
-and revision-safe save path, while the shared editor controls the private link,
-sidebar, permissions, status messages, and styling.
+The shared web editor is opened in-game with `/editor`. The first private link
+contains the bootstrap key, then exchanges it for an HttpOnly cookie and
+redirects to the clean `/editor` URL. It provides common controls for Quests,
+Items, Loot, and Packs. Each module keeps its own validation and revision-safe
+save path, while the shared editor controls the private link, sidebar,
+permissions, status messages, and styling.
