@@ -158,3 +158,67 @@ be converted to supported values first. This validation does not guarantee the
 correctness of a custom `ConfigurationSerializable.serialize()` implementation;
 those objects must provide valid supported values and register their class with
 Bukkit before loading. Java's `Serializable` alone is insufficient.
+
+## Live configuration and conflict-safe saves
+
+`ConfigService` is the common owner of YAML monitoring and persistence. Services
+must not create their own `WatchService`, poller, or YAML merge implementation.
+External monitoring is opt-in:
+
+```java
+ConfigFile file = api.config().load("minigames.yml", false);
+api.config().watch(file);
+ConfigSubscription subscription = api.config().onChange(file, event -> {
+    if (event.origin() == ConfigChangeOrigin.EXTERNAL && event.affects("games.spleef")) {
+        applySpleefSettingsAtTheNextSafePoint();
+    }
+});
+```
+
+Close subscriptions when the owning service is disabled. The ConfigService also
+clears registrations during shutdown. Path subscriptions use parent/child
+overlap, so a listener for `games.spleef` receives a replacement of that whole
+section as well as a leaf edit.
+
+Change events are emitted only after a valid YAML tree is active. Their origin is
+`INTERNAL` for `ConfigSection.set`/`remove` and related mutations, `EXTERNAL`
+for a monitored disk edit, and `RELOAD` for an explicit `ConfigFile.reload()`.
+Events include changed paths, old/new value snapshots, and the accepted disk
+revision. Invalid external YAML is logged and ignored; the last valid active tree
+remains in use.
+
+### Save policy
+
+`ConfigFileImpl` keeps three pieces of state:
+
+1. the last successfully loaded or saved baseline;
+2. the current active tree; and
+3. local dirty paths.
+
+`saveChecked()` reads the file again and performs a three-way merge. Unrelated
+external edits are preserved, identical concurrent values are accepted, and
+overlapping parent/child or same-path edits return a `ConfigSaveResult` with
+conflicting paths. No file is replaced when conflicts are present. A successful
+save is written to a temporary file in the same directory and atomically replaces
+the original where the filesystem supports it. The legacy `void save()` method
+remains source-compatible, but throws `ConfigSaveException` when the checked save
+fails; it cannot silently report a conflict as success.
+
+`ConfigFileImpl` also serialises writes within the JVM. The final disk revision is
+checked immediately before replacement and verified afterwards; if another writer
+wins that race, the result is a failed save, the local paths remain dirty, and no
+automatic retry or success event is emitted.
+
+The editor-facing `ConfigFile.saveYaml(yaml, expectedRevision)` method uses the
+same server-side merge and revision check. Browser drafts therefore remain a UI
+concern: a stale revision is rejected, while unrelated disk edits can still be
+merged for path-level changes. Editor modules should keep the draft visible and
+offer reload/discard after a conflict instead of replacing it with the server
+value.
+
+Content Packs opt in to monitoring and run their existing validation/reconciliation
+lifecycle after an external event. A syntactically valid but semantically invalid
+pack change is restored through ConfigService. Minigames with live monitoring use
+`BaseMiniGame.watchConfigWhenSafe`; a reload waits until all arenas are empty so an
+active round is not interrupted. Other services remain on their existing manual
+reload or restart lifecycle until they explicitly opt in.

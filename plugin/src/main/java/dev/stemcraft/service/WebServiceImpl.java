@@ -43,6 +43,8 @@ import dev.stemcraft.api.service.web.WebService;
 import dev.stemcraft.api.service.web.WebServiceEndpointHandler;
 import dev.stemcraft.api.service.web.WebServiceEvent;
 import dev.stemcraft.api.service.web.WebServiceRequest;
+import dev.stemcraft.api.service.web.WebServiceStream;
+import dev.stemcraft.api.service.web.WebServiceStreamingEndpointHandler;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -158,6 +160,7 @@ public class WebServiceImpl extends BaseService implements WebService {
     private File wwwRoot;
     private HttpServer httpServer;
     private volatile Map<String, WebServiceEndpointHandler> endpointHandlers = Map.of();
+    private volatile Map<String, WebServiceStreamingEndpointHandler> streamingEndpointHandlers = Map.of();
     private volatile List<String> onlinePlayerNames = List.of();
     private final Object mailApiIdempotencyLock = new Object();
     private final Map<String, MailApiIdempotencyEntry> mailApiIdempotency = new LinkedHashMap<>();
@@ -370,6 +373,15 @@ public class WebServiceImpl extends BaseService implements WebService {
         updated.put(path, handler);
         endpointHandlers = Collections.unmodifiableMap(updated);
         api.messages().debug("WEB_SERVER_REGISTERED_ENDPOINT", "path", path);
+    }
+
+    @Override
+    public synchronized void registerStreamingEndpointHandler(@NotNull String path,
+                                                               @NotNull WebServiceStreamingEndpointHandler handler) {
+        Map<String, WebServiceStreamingEndpointHandler> updated = new LinkedHashMap<>(streamingEndpointHandlers);
+        updated.put(path, handler);
+        streamingEndpointHandlers = Collections.unmodifiableMap(updated);
+        api.messages().debug("WEB_SERVER_REGISTERED_ENDPOINT", "path", path + " (stream)");
     }
 
     /** {@inheritDoc} */
@@ -1632,6 +1644,11 @@ public class WebServiceImpl extends BaseService implements WebService {
                 return;
             }
 
+            for (var e : streamingEndpointHandlers.entrySet()) {
+                if (request.path().startsWith(e.getKey())
+                    && handleStreamingRequest(exchange, request, e.getValue())) return;
+            }
+
             for (var e : endpointHandlers.entrySet()) {
                 if (request.path().startsWith(e.getKey())) {
                     Object result = e.getValue().handle(request);
@@ -1677,6 +1694,15 @@ public class WebServiceImpl extends BaseService implements WebService {
             try (OutputStream os = exchange.getResponseBody()) {
                 Files.copy(requested, os);
             }
+        }
+
+        private boolean handleStreamingRequest(HttpExchange exchange,
+                                               WebServiceRequest request,
+                                               WebServiceStreamingEndpointHandler handler) throws IOException {
+            ExchangeStream stream = new ExchangeStream(exchange);
+            boolean handled = handler.handle(request, stream);
+            if (handled) stream.close();
+            return handled;
         }
 
         private static String redactSensitivePath(String path) {
@@ -1782,6 +1808,61 @@ public class WebServiceImpl extends BaseService implements WebService {
             }
             exchange.sendResponseHeaders(statusCode, length == 0 ? -1 : length);
             return length > 0;
+        }
+    }
+
+    /** Lazy response writer so an authenticated streaming handler can decline a request. */
+    private static final class ExchangeStream implements WebServiceStream {
+        private final HttpExchange exchange;
+        private OutputStream output;
+        private boolean started;
+        private boolean open = true;
+
+        private ExchangeStream(HttpExchange exchange) {
+            this.exchange = exchange;
+        }
+
+        @Override
+        public synchronized void send(@NotNull String event, @NotNull String data) throws IOException {
+            if (!open) throw new IOException("SSE connection is closed");
+            try {
+                if (!started) {
+                    exchange.getResponseHeaders().set("Content-Type", "text/event-stream; charset=utf-8");
+                    exchange.getResponseHeaders().set("Cache-Control", "no-cache, no-store");
+                    exchange.getResponseHeaders().set("Connection", "keep-alive");
+                    exchange.getResponseHeaders().set("X-Content-Type-Options", "nosniff");
+                    exchange.sendResponseHeaders(200, 0);
+                    output = exchange.getResponseBody();
+                    started = true;
+                }
+
+                String safeEvent = event.replace("\r", "").replace("\n", "");
+                String safeData = data == null ? "" : data.replace("\r", "");
+                StringBuilder payload = new StringBuilder("event: ").append(safeEvent).append('\n');
+                for (String line : safeData.split("\n", -1)) payload.append("data: ").append(line).append('\n');
+                payload.append('\n');
+                output.write(payload.toString().getBytes(StandardCharsets.UTF_8));
+                output.flush();
+            } catch (IOException exception) {
+                open = false;
+                throw exception;
+            }
+        }
+
+        @Override
+        public boolean isOpen() {
+            return open;
+        }
+
+        private synchronized void close() {
+            open = false;
+            if (output != null) {
+                try {
+                    output.close();
+                } catch (IOException ignored) {
+                    // The HTTP exchange is closing already.
+                }
+            }
         }
     }
 

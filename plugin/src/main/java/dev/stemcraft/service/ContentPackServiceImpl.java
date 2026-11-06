@@ -19,6 +19,9 @@ import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.service.contentpack.ContentPackInfo;
 import dev.stemcraft.api.service.contentpack.ContentPackService;
 import dev.stemcraft.api.service.contentpack.ContentPackValidation;
+import dev.stemcraft.api.service.config.ConfigChangeOrigin;
+import dev.stemcraft.api.service.config.ConfigSaveResult;
+import dev.stemcraft.api.service.config.ConfigSubscription;
 import dev.stemcraft.api.service.editor.EditorWebContext;
 import dev.stemcraft.api.service.editor.EditorWebModule;
 import dev.stemcraft.api.service.editor.EditorWebResponse;
@@ -62,8 +65,11 @@ public final class ContentPackServiceImpl extends BaseService implements Content
     private final Map<String, Boolean> state = new LinkedHashMap<>();
     private final Map<String, Boolean> resourcePackChanges = new HashMap<>();
     private final Map<String, Handler> handlers = new LinkedHashMap<>();
+    private final Map<String, ConfigSubscription> configSubscriptions = new LinkedHashMap<>();
+    private final Map<String, Map<String, Object>> pendingExternalChanges = new LinkedHashMap<>();
     private ConfigFile stateConfig;
     private File packRoot;
+    private boolean reloadQueued;
 
     public ContentPackServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api, "content-packs");
@@ -93,6 +99,7 @@ public final class ContentPackServiceImpl extends BaseService implements Content
     public void onReload() {
         super.onReload();
         Map<String, Pack> previous = new LinkedHashMap<>(packs);
+        Map<String, String> previousContents = snapshotPackContents(previous.values());
         discover();
         Map<String, Pack> proposed = new LinkedHashMap<>(packs);
         Set<String> ids = new LinkedHashSet<>(previous.keySet());
@@ -101,15 +108,18 @@ public final class ContentPackServiceImpl extends BaseService implements Content
             Pack oldPack = previous.get(id);
             Pack newPack = proposed.get(id);
             if (newPack == null) {
+                rollbackPendingChanges(oldPack);
                 if (oldPack != null && oldPack.enabled) unloadPack(oldPack);
                 continue;
             }
             if (!newPack.enabled) {
+                clearPendingChanges(newPack);
                 if (oldPack != null && oldPack.enabled) unloadPack(oldPack);
                 continue;
             }
             ContentPackValidation validation = fullValidation(newPack);
             if (!validation.valid()) {
+                if (!rollbackPendingChanges(newPack)) restorePackContents(newPack, previousContents);
                 if (oldPack != null && oldPack.enabled) {
                     // Keep both the old metadata and old specialist registrations.
                     packs.put(id, oldPack);
@@ -117,18 +127,24 @@ public final class ContentPackServiceImpl extends BaseService implements Content
                 continue;
             }
             if (!applyPackReload(newPack)) {
+                if (!rollbackPendingChanges(newPack)) restorePackContents(newPack, previousContents);
                 if (oldPack != null && oldPack.enabled) {
                     packs.put(id, oldPack);
                     applyPackReload(oldPack);
                 } else {
                     unloadPack(newPack);
                 }
+            } else {
+                clearPendingChanges(newPack);
             }
         }
     }
 
     @Override
     public void onDisable() {
+        configSubscriptions.values().forEach(ConfigSubscription::close);
+        configSubscriptions.clear();
+        pendingExternalChanges.clear();
         saveState();
         packs.clear();
         resourcePackChanges.clear();
@@ -167,16 +183,22 @@ public final class ContentPackServiceImpl extends BaseService implements Content
         String normalized = normalizeId(id);
         Pack existing = packs.get(normalized);
         if (existing == null) return false;
+        Map<String, String> previousContents = snapshotPackContents(List.of(existing));
         Pack candidate = readPack(existing.directory);
         packs.put(normalized, candidate);
         ContentPackValidation validation = fullValidation(candidate);
         if (!validation.valid()) {
+            restorePackContents(candidate, previousContents);
             packs.put(normalized, existing);
             plugin.getLogger().warning("[content-packs] Refusing to reload '" + normalized
                 + "'; previous working state retained: " + String.join(" | ", validation.errors()));
             return false;
         }
-        if (applyPackReload(candidate)) return true;
+        if (applyPackReload(candidate)) {
+            clearPendingChanges(candidate);
+            return true;
+        }
+        restorePackContents(candidate, previousContents);
         packs.put(normalized, existing);
         applyPackReload(existing);
         return false;
@@ -335,7 +357,7 @@ public final class ContentPackServiceImpl extends BaseService implements Content
         if (document == null || !document.file().isFile()) return null;
         try {
             return new DocumentSnapshot(document.packId(), documentPath(document),
-                Files.readString(document.file().toPath()), revision(document.file()));
+                Files.readString(document.file().toPath()), document.config().revision());
         } catch (IOException exception) {
             return null;
         }
@@ -346,27 +368,30 @@ public final class ContentPackServiceImpl extends BaseService implements Content
                                           @NotNull String content, String expectedRevision) {
         ContentPackDocument document = findDocument(packId, relativePath);
         if (document == null || !document.file().isFile()) return new DocumentSaveResult(false, "Document not found.", null);
-        String currentRevision = revision(document.file());
+        String currentRevision = document.config().revision();
         if (expectedRevision != null && !expectedRevision.isBlank() && !expectedRevision.equals(currentRevision))
             return new DocumentSaveResult(false, "This document changed elsewhere. Reload it before saving.", currentRevision);
-        byte[] previous;
+
+        String previous;
         try {
-            previous = Files.readAllBytes(document.file().toPath());
-            Files.writeString(document.file().toPath(), content, StandardCharsets.UTF_8);
+            previous = Files.readString(document.file().toPath());
         } catch (IOException exception) {
             return new DocumentSaveResult(false, "Could not write the document: " + exception.getMessage(), currentRevision);
         }
-        if (!reload(packId)) {
-            try {
-                Files.write(document.file().toPath(), previous);
-                reload(packId);
-            } catch (IOException restoreFailure) {
-                plugin.getLogger().warning("[content-packs] Could not restore '" + document.file()
-                    + "' after a failed web save: " + restoreFailure.getMessage());
-            }
-            return new DocumentSaveResult(false, "The document was rejected; the previous working version was restored.", revision(document.file()));
+
+        ConfigSaveResult saveResult = document.config().saveYaml(content, expectedRevision);
+        if (!saveResult.success()) {
+            return new DocumentSaveResult(false, saveResult.message(), saveResult.currentDiskRevision());
         }
-        return new DocumentSaveResult(true, "Saved and reloaded " + documentPath(document) + ".", revision(document.file()));
+        if (!reload(packId)) {
+            ConfigSaveResult restoreResult = document.config().saveYaml(previous, "");
+            if (!restoreResult.success()) plugin.getLogger().warning("[content-packs] Could not restore '"
+                + document.file() + "' after a failed web save: " + restoreResult.message());
+            reload(packId);
+            return new DocumentSaveResult(false, "The document was rejected; the previous working version was restored.",
+                document.config().revision());
+        }
+        return new DocumentSaveResult(true, "Saved and reloaded " + documentPath(document) + ".", document.config().revision());
     }
 
     /** Return a mutable configuration value for a structured editor operation. */
@@ -414,28 +439,30 @@ public final class ContentPackServiceImpl extends BaseService implements Content
                                        String expectedRevision) {
         ContentPackDocument document = findDocument(packId, relativePath);
         if (document == null || !document.file().isFile()) return new DocumentSaveResult(false, "Document not found.", null);
-        String currentRevision = revision(document.file());
+        String currentRevision = document.config().revision();
         if (expectedRevision != null && !expectedRevision.isBlank() && !expectedRevision.equals(currentRevision))
             return new DocumentSaveResult(false, "This document changed elsewhere. Reload it before saving.", currentRevision);
-        byte[] previous;
+        String previous;
         try {
-            previous = Files.readAllBytes(document.file().toPath());
+            previous = Files.readString(document.file().toPath());
             document.config().set(path, value);
-            document.config().save();
         } catch (IOException | RuntimeException exception) {
             return new DocumentSaveResult(false, "Could not write the document: " + exception.getMessage(), currentRevision);
         }
-        if (!reload(packId)) {
-            try {
-                Files.write(document.file().toPath(), previous);
-                reload(packId);
-            } catch (IOException restoreFailure) {
-                plugin.getLogger().warning("[content-packs] Could not restore '" + document.file()
-                    + "' after a failed structured save: " + restoreFailure.getMessage());
-            }
-            return new DocumentSaveResult(false, "The change was rejected; the previous working version was restored.", revision(document.file()));
+        ConfigSaveResult saveResult = document.config().saveChecked();
+        if (!saveResult.success()) {
+            document.config().saveYaml(previous, "");
+            return new DocumentSaveResult(false, saveResult.message(), saveResult.currentDiskRevision());
         }
-        return new DocumentSaveResult(true, "Saved and reloaded " + documentPath(document) + ".", revision(document.file()));
+        if (!reload(packId)) {
+            ConfigSaveResult restoreResult = document.config().saveYaml(previous, "");
+            if (!restoreResult.success()) plugin.getLogger().warning("[content-packs] Could not restore '"
+                + document.file() + "' after a failed structured save: " + restoreResult.message());
+            reload(packId);
+            return new DocumentSaveResult(false, "The change was rejected; the previous working version was restored.",
+                document.config().revision());
+        }
+        return new DocumentSaveResult(true, "Saved and reloaded " + documentPath(document) + ".", document.config().revision());
     }
 
     private EditorWebResponse handleEditorRequest(EditorWebContext context, String path, WebServiceRequest request) {
@@ -548,15 +575,6 @@ public final class ContentPackServiceImpl extends BaseService implements Content
             .replace(java.io.File.separatorChar, '/');
     }
 
-    private static String revision(File file) {
-        try {
-            return Long.toHexString(Files.getLastModifiedTime(file.toPath()).toMillis()) + "-"
-                + Files.size(file.toPath()) + "-" + Integer.toHexString(Arrays.hashCode(Files.readAllBytes(file.toPath())));
-        } catch (IOException exception) {
-            return "missing";
-        }
-    }
-
     private static EditorWebResponse json(int status, Object value) {
         return new EditorWebResponse(status, "application/json; charset=utf-8", EDITOR_GSON.toJson(value));
     }
@@ -631,7 +649,120 @@ public final class ContentPackServiceImpl extends BaseService implements Content
         }
         packs.clear();
         packs.putAll(discovered);
+        reconcileConfigSubscriptions();
         reportValidation(validateAll());
+    }
+
+    /**
+     * Content packs opt into the common ConfigService monitor. The service
+     * still owns validation and reconciliation; this callback only schedules
+     * the existing transactional pack lifecycle on the next server tick.
+     */
+    private void reconcileConfigSubscriptions() {
+        Set<String> desired = new LinkedHashSet<>();
+        for (Pack pack : packs.values()) {
+            for (ContentPackDocument document : pack.documents) {
+                String key = configFileKey(document.file());
+                desired.add(key);
+                if (configSubscriptions.containsKey(key)) continue;
+                api.config().watch(document.file());
+                ConfigSubscription subscription = api.config().onChange(document.file(), event -> {
+                    if (event.origin() != ConfigChangeOrigin.EXTERNAL) return;
+                    rememberExternalChange(document, event);
+                    schedulePackReload();
+                });
+                configSubscriptions.put(key, subscription);
+            }
+        }
+
+        configSubscriptions.entrySet().removeIf(entry -> {
+            if (desired.contains(entry.getKey())) return false;
+            entry.getValue().close();
+            return true;
+        });
+    }
+
+    private void schedulePackReload() {
+        if (reloadQueued) return;
+        reloadQueued = true;
+        Runnable reload = () -> {
+            reloadQueued = false;
+            onReload();
+        };
+        if (api.tasks() == null) reload.run();
+        else api.tasks().nextTick(reload);
+    }
+
+    private static String configFileKey(File file) {
+        try {
+            return file.getCanonicalPath();
+        } catch (IOException exception) {
+            return file.getAbsolutePath();
+        }
+    }
+
+    private void rememberExternalChange(ContentPackDocument document,
+                                        dev.stemcraft.api.service.config.ConfigChangeEvent event) {
+        String key = configFileKey(document.file());
+        Map<String, Object> oldValues = pendingExternalChanges.computeIfAbsent(key, ignored -> new LinkedHashMap<>());
+        event.oldValues().forEach(oldValues::putIfAbsent);
+    }
+
+    /** Restore a semantically rejected YAML change through ConfigService. */
+    private boolean rollbackPendingChanges(Pack pack) {
+        if (pack == null) return false;
+        boolean restored = false;
+        for (ContentPackDocument document : pack.documents) {
+            String key = configFileKey(document.file());
+            Map<String, Object> oldValues = pendingExternalChanges.remove(key);
+            if (oldValues == null || oldValues.isEmpty()) continue;
+            restored = true;
+
+            for (Map.Entry<String, Object> entry : oldValues.entrySet()) {
+                if (entry.getValue() == null) document.config().remove(entry.getKey());
+                else document.config().set(entry.getKey(), entry.getValue());
+            }
+            ConfigSaveResult result = document.config().saveChecked();
+            if (!result.success()) {
+                plugin.getLogger().warning("[content-packs] Could not restore rejected change in "
+                    + document.file() + ": " + result.message());
+            }
+        }
+        return restored;
+    }
+
+    private void clearPendingChanges(Pack pack) {
+        if (pack == null) return;
+        for (ContentPackDocument document : pack.documents) {
+            pendingExternalChanges.remove(configFileKey(document.file()));
+        }
+    }
+
+    private Map<String, String> snapshotPackContents(Collection<Pack> source) {
+        Map<String, String> result = new LinkedHashMap<>();
+        for (Pack pack : source) {
+            for (ContentPackDocument document : pack.documents) {
+                try {
+                    result.put(configFileKey(document.file()), Files.readString(document.file().toPath()));
+                } catch (IOException ignored) {
+                    // A missing document is handled by the normal discovery validation.
+                }
+            }
+        }
+        return result;
+    }
+
+    private void restorePackContents(Pack pack, Map<String, String> previousContents) {
+        if (pack == null) return;
+        for (ContentPackDocument document : pack.documents) {
+            String previous = previousContents.get(configFileKey(document.file()));
+            if (previous == null) continue;
+            ConfigSaveResult result = document.config().saveYaml(previous, "");
+            if (!result.success()) {
+                plugin.getLogger().warning("[content-packs] Could not restore rejected configuration '"
+                    + document.file() + "': " + result.message());
+            }
+        }
     }
 
     private void reportValidation(Map<String, ContentPackValidation> validations) {
@@ -645,7 +776,7 @@ public final class ContentPackServiceImpl extends BaseService implements Content
         String id = normalizeId(directory.getName());
         List<String> discoveryErrors = new ArrayList<>();
         File rootFile = new File(directory, "config.yml");
-        ConfigSection root = null;
+        ConfigFile root = null;
         if (rootFile.isFile()) {
             ConfigFile loaded = api.config().load(rootFile);
             if (loaded != null && loaded.reload()) {

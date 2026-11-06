@@ -10,7 +10,7 @@
 
 package dev.stemcraft.service;
 
-import dev.stemcraft.api.config.ConfigSection;
+import dev.stemcraft.api.config.ConfigFile;
 
 import java.io.File;
 
@@ -20,5 +20,5 @@ record ContentPackDocument(
         String namespace,
         File packDirectory,
         File file,
-        ConfigSection config
+        ConfigFile config
 ) { }

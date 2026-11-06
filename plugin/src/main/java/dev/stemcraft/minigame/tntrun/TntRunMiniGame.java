@@ -75,6 +75,7 @@ public class TntRunMiniGame extends BaseMiniGame {
 
         new TntRunCommand(api, this).onEnable();
         loadArenas();
+        watchConfigWhenSafe(configFile, minigame, this::reloadFromConfig);
     }
 
     private @NotNull Map<MiniGameArena.ArenaStatus, MiniGameHudConfigSupport.HudDefinition> defaultHudDefinitions() {

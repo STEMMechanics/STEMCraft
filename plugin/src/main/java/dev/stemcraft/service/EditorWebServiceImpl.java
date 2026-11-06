@@ -15,11 +15,14 @@ import com.google.gson.GsonBuilder;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.CommandContext;
+import dev.stemcraft.api.service.config.ConfigChangeEvent;
+import dev.stemcraft.api.service.config.ConfigSubscription;
 import dev.stemcraft.api.service.editor.EditorWebContext;
 import dev.stemcraft.api.service.editor.EditorWebModule;
 import dev.stemcraft.api.service.editor.EditorWebResponse;
 import dev.stemcraft.api.service.editor.EditorWebService;
 import dev.stemcraft.api.service.web.WebServiceRequest;
+import dev.stemcraft.api.service.web.WebServiceStream;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
@@ -45,6 +48,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -58,8 +63,10 @@ public final class EditorWebServiceImpl extends BaseService implements EditorWeb
     private final Map<String, EditorWebModule> modules = new ConcurrentHashMap<>();
     private final Map<String, Session> sessions = new ConcurrentHashMap<>();
     private final Map<UUID, PersistentSession> playerSessions = new ConcurrentHashMap<>();
+    private final Set<EditorEventClient> configEventClients = ConcurrentHashMap.newKeySet();
     private final File sessionFile;
     private String editorHtml;
+    private ConfigSubscription configChangeSubscription;
 
     public EditorWebServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
         super(plugin, api, "editor-web");
@@ -71,6 +78,8 @@ public final class EditorWebServiceImpl extends BaseService implements EditorWeb
         editorHtml = loadEditorHtml();
         loadPersistentSessions();
         api.web().registerEndpointHandler(EDITOR_PATH, this::handleRequest);
+        api.web().registerStreamingEndpointHandler(EDITOR_PATH, this::handleConfigStream);
+        configChangeSubscription = api.config().onAnyChange(this::publishConfigChange);
         api.commands().create("editor")
             .description("Open the STEMCraft editor")
             .usage("/editor [logout]")
@@ -94,6 +103,9 @@ public final class EditorWebServiceImpl extends BaseService implements EditorWeb
         sessions.clear();
         playerSessions.clear();
         modules.clear();
+        if (configChangeSubscription != null) configChangeSubscription.close();
+        configChangeSubscription = null;
+        configEventClients.clear();
     }
 
     @Override
@@ -200,6 +212,45 @@ public final class EditorWebServiceImpl extends BaseService implements EditorWeb
             plugin.getLogger().warning("[editor-web] Module '" + moduleId + "' failed: " + exception.getMessage());
             return response(new EditorWebResponse(500, "text/plain; charset=utf-8", "The editor could not complete that action."));
         }
+    }
+
+    /** Streams ConfigService events to authenticated editor tabs without owning a watcher. */
+    private boolean handleConfigStream(WebServiceRequest request, WebServiceStream stream) throws IOException {
+        if (!"GET".equalsIgnoreCase(request.method())) return false;
+        String path = request.path();
+        if (!path.startsWith(EDITOR_PATH + "/")) return false;
+        String[] parts = path.substring((EDITOR_PATH + "/").length()).split("/", -1);
+        if (parts.length != 3 || !"api".equalsIgnoreCase(parts[1]) || !"events".equalsIgnoreCase(parts[2])) return false;
+        String token = parts[0];
+        if (validSession(token) == null) return false;
+
+        EditorEventClient client = new EditorEventClient();
+        configEventClients.add(client);
+        try {
+            stream.send("ready", "{}");
+            while (stream.isOpen() && validSession(token) != null) {
+                String payload = client.events.poll(20L, TimeUnit.SECONDS);
+                if (payload == null) stream.send("keepalive", "{}");
+                else stream.send("config.change", payload);
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+        } finally {
+            configEventClients.remove(client);
+        }
+        return true;
+    }
+
+    private void publishConfigChange(ConfigChangeEvent event) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("file", event.fileName());
+        data.put("origin", event.origin().name());
+        data.put("paths", event.paths());
+        data.put("oldValues", event.oldValues());
+        data.put("newValues", event.newValues());
+        data.put("revision", event.revision());
+        String payload = GSON.toJson(data);
+        for (EditorEventClient client : configEventClients) client.offer(payload);
     }
 
     private List<Map<String, Object>> visibleModules(Session session) {
@@ -320,6 +371,17 @@ public final class EditorWebServiceImpl extends BaseService implements EditorWeb
 
     private static boolean isToken(String token) {
         return token != null && token.length() >= 24 && token.matches("[A-Za-z0-9_-]+");
+    }
+
+    private static final class EditorEventClient {
+        private final BlockingQueue<String> events = new LinkedBlockingQueue<>(64);
+
+        private void offer(String payload) {
+            if (!events.offer(payload)) {
+                events.poll();
+                events.offer(payload);
+            }
+        }
     }
 
     private static boolean hasPermission(CommandSender sender, String permission) {

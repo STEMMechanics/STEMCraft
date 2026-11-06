@@ -182,6 +182,9 @@
             background: #3b321e;
         }
         .notice.show { display: block; }
+        .notice-content { display: flex; align-items: center; justify-content: space-between; gap: .8rem; }
+        .notice-actions { display: flex; flex-wrap: wrap; gap: .45rem; }
+        .notice-actions .button { white-space: nowrap; }
         .page-head {
             display: flex;
             align-items: flex-start;
@@ -359,6 +362,8 @@
     let selectedItem = null;
     let selectedLoot = null;
     let selectedPack = null;
+    let configEvents = null;
+    let configEventsRetry = null;
 
     function setSidebar(open) {
         document.body.classList.toggle('sidebar-open', open);
@@ -398,6 +403,21 @@
         const element = q('#notice');
         element.textContent = message;
         element.className = 'notice ' + (message ? 'show ' : '') + (bad ? 'bad' : '');
+    }
+
+    function draftConflictNotice(message) {
+        const element = q('#notice');
+        element.className = 'notice show bad';
+        element.innerHTML = '<div class="notice-content"><span>' + esc(message) + '</span>' +
+            '<span class="notice-actions"><button id="draft-reload" class="button small primary" type="button">Reload</button>' +
+            '<button id="draft-dismiss" class="button small" type="button">Keep draft</button></span></div>';
+        q('#draft-reload').onclick = () => {
+            if (!currentDocument) return;
+            const documentInfo = {...currentDocument};
+            notice('Reloading the latest configuration…');
+            openDocument(documentInfo.module, documentInfo.pack, documentInfo.file);
+        };
+        q('#draft-dismiss').onclick = () => notice('');
     }
 
     function moduleInfo() { return modules.find(module => module.id === activeId); }
@@ -811,14 +831,20 @@
             setStatus('Opening file…');
             q('#document-panel').innerHTML = loading('Opening file…');
             const document = await request(apiUrl(module, 'document') + '?pack=' + encodeURIComponent(pack) + '&file=' + encodeURIComponent(file));
-            currentDocument = {module, pack, file, revision: document.revision};
+            currentDocument = {module, pack, file, revision: document.revision, content: document.content, dirty: false};
             const canWrite = Boolean(modules.find(value => value.id === module)?.writable);
             const save = canWrite ? '<button id="document-save" class="button primary" type="button">Save</button>' : '';
             q('#document-panel').innerHTML = '<div class="document-head"><div><strong>' + esc(pack) + ' / ' + esc(file) +
                 '</strong><small class="muted">Revision ' + esc(document.revision) + '</small></div>' + save +
                 '</div><textarea id="document-text" spellcheck="false"' + (canWrite ? '' : ' readonly') + '>' +
                 esc(document.content) + '</textarea>';
-            if (canWrite) q('#document-save').onclick = saveDocument;
+            if (canWrite) {
+                q('#document-save').onclick = saveDocument;
+                q('#document-text').addEventListener('input', () => {
+                    if (!currentDocument) return;
+                    currentDocument.dirty = q('#document-text').value !== currentDocument.content;
+                });
+            }
             setStatus('Ready');
         } catch (error) { notice(error.message, true); setStatus('Could not open', true); }
     }
@@ -833,10 +859,52 @@
                     body: JSON.stringify({content: q('#document-text').value, revision: currentDocument.revision})
                 });
             currentDocument.revision = result.revision;
+            currentDocument.content = q('#document-text').value;
+            currentDocument.dirty = false;
             notice(result.message || 'File saved.');
             setStatus('Ready');
             activeData = await request(apiUrl(activeId, 'data'));
-        } catch (error) { notice(error.message, true); setStatus('Needs attention', true); }
+        } catch (error) {
+            if (/conflict|changed elsewhere|revision/i.test(error.message || '')) {
+                draftConflictNotice(error.message + ' Your draft is still preserved.');
+            } else {
+                notice(error.message, true);
+            }
+            setStatus('Needs attention', true);
+        }
+    }
+
+    function connectConfigEvents() {
+        if (!window.EventSource || configEvents) return;
+        configEvents = new EventSource(base + '/api/events');
+        configEvents.addEventListener('config.change', event => {
+            let change;
+            try { change = JSON.parse(event.data); } catch (ignored) { return; }
+            if (currentDocument?.dirty) {
+                draftConflictNotice('The configuration changed on the server. Your unsaved draft was preserved.');
+                return;
+            }
+            if (currentDocument) {
+                openDocument(currentDocument.module, currentDocument.pack, currentDocument.file);
+                return;
+            }
+            if (activeId) {
+                request(apiUrl(activeId, 'data')).then(data => {
+                    activeData = data;
+                    renderModule();
+                }).catch(() => { });
+            }
+        });
+        configEvents.onerror = () => {
+            if (!configEvents) return;
+            configEvents.close();
+            configEvents = null;
+            if (configEventsRetry) clearTimeout(configEventsRetry);
+            configEventsRetry = setTimeout(() => {
+                configEventsRetry = null;
+                connectConfigEvents();
+            }, 5000);
+        };
     }
 
     async function boot() {
@@ -846,6 +914,7 @@
             activeId = modules[0].id;
             renderNav();
             await openModule(activeId);
+            connectConfigEvents();
         } catch (error) {
             q('#workspace').innerHTML = '<div class="empty">' + esc(error.message) + '</div>';
             setStatus('Could not start', true);

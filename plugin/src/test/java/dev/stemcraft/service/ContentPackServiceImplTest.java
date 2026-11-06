@@ -85,6 +85,25 @@ class ContentPackServiceImplTest {
     }
 
     @Test
+    void invalidExternalPackChangeIsRolledBackThroughConfigService() throws IOException {
+        writePack("watched", "pack:\n  enabled: true\n"
+            + "custom-items:\n  token:\n    material: STICK\n");
+        ContentPackServiceImpl service = new ContentPackServiceImpl(plugin, api);
+        service.onEnable();
+
+        Path file = packs.resolve("watched/config.yml");
+        Files.writeString(file, "pack:\n  enabled: true\n"
+            + "custom-items:\n  token:\n    material: NOT_A_MATERIAL\n");
+        var configFile = config.load(file.toFile(), false);
+        assertTrue(configFile != null);
+        assertTrue(((dev.stemcraft.config.ConfigFileImpl) configFile).reconcileExternal(true));
+
+        assertTrue(service.find("watched").validationErrors().stream()
+            .noneMatch(error -> error.contains("NOT_A_MATERIAL")));
+        assertTrue(Files.readString(file).contains("material: STICK"));
+    }
+
+    @Test
     void createsPersistsEnablementAndDeletesToRecoverableTrash() {
         ContentPackServiceImpl service = new ContentPackServiceImpl(plugin, api);
         service.onEnable();
