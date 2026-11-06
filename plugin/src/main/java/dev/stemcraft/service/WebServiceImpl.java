@@ -45,6 +45,7 @@ import dev.stemcraft.api.service.web.WebServiceEvent;
 import dev.stemcraft.api.service.web.WebServiceRequest;
 import dev.stemcraft.api.service.web.WebServiceStream;
 import dev.stemcraft.api.service.web.WebServiceStreamingEndpointHandler;
+import dev.stemcraft.service.web.WebPageComponents;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -108,7 +109,6 @@ import java.util.concurrent.TimeoutException;
 public class WebServiceImpl extends BaseService implements WebService {
     private static final Gson GSON = new GsonBuilder().serializeNulls().create();
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
-    private static final String DEFAULT_INDEX_RESOURCE = "www/index.html";
     private static final String DEFAULT_ROBOTS_RESOURCE = "www/robots.txt";
     private static final String MAINTENANCE_MESSAGE = "Server is under maintenance. Please try again later.";
     private static final String SURVIVAL_MAIL_PATH = "/api/v1/survival/mail";
@@ -317,7 +317,6 @@ public class WebServiceImpl extends BaseService implements WebService {
         // Keep bundled website assets available from the configured web root
         // without overwriting files that an operator has customised.
         plugin.exportBundledDirectory("www/assets", wwwPath + "/assets");
-        ensureDefaultWebFile(DEFAULT_INDEX_RESOURCE, "index.html");
         ensureDefaultWebFile(DEFAULT_ROBOTS_RESOURCE, "robots.txt");
 
         port = getConfigSection().getInt("port", 8950);
@@ -332,6 +331,7 @@ public class WebServiceImpl extends BaseService implements WebService {
                 return thread;
             });
             httpServer.setExecutor(httpExecutor);
+            registerEndpointHandler("/", this::handleHomepageEndpoint);
             registerEndpointHandler("/status", this::handleStatusEndpoint);
             registerEndpointHandler(SURVIVAL_MAIL_PATH, this::handleSurvivalMailEndpoint);
             httpServer.start();
@@ -789,6 +789,31 @@ public class WebServiceImpl extends BaseService implements WebService {
         private boolean isEnabled(@NotNull String eventType) {
             return events.getOrDefault(eventType.toLowerCase(Locale.ROOT), false);
         }
+    }
+
+    Object handleHomepageEndpoint(@NotNull WebServiceRequest request) {
+        if (!"/".equals(request.path())) return null;
+        if (!"GET".equalsIgnoreCase(request.method()) && !"HEAD".equalsIgnoreCase(request.method())) {
+            return Map.of(
+                "responseCode", 405,
+                "contentType", "text/plain; charset=utf-8",
+                "body", "Method not allowed"
+            );
+        }
+
+        String javaAddress = configuredHomepageValue("java-address");
+        String bedrockAddress = configuredHomepageValue("bedrock-address");
+        String aboutUrl = configuredHomepageValue("about-url");
+        String discordUrl = configuredHomepageValue("discord-url");
+        return Map.of(
+            "responseCode", 200,
+            "contentType", "text/html; charset=utf-8",
+            "body", WebPageComponents.landingPage(javaAddress, bedrockAddress, aboutUrl, discordUrl)
+        );
+    }
+
+    private @NotNull String configuredHomepageValue(@NotNull String key) {
+        return Objects.requireNonNullElse(getConfigSection().getString("homepage." + key, ""), "").trim();
     }
 
     Object handleStatusEndpoint(@NotNull WebServiceRequest request) {
@@ -1682,12 +1707,15 @@ public class WebServiceImpl extends BaseService implements WebService {
             }
 
             if (Files.isDirectory(requested, LinkOption.NOFOLLOW_LINKS)) {
-                Path index = requested.resolve("index.html").normalize();
-                if (!index.startsWith(root) || !Files.isRegularFile(index, LinkOption.NOFOLLOW_LINKS)) {
-                    sendErrorResponse(exchange, 403, "Directory listing not permitted");
-                    return;
-                }
-                requested = index;
+                sendErrorResponse(exchange, 403, "Directory listing not permitted");
+                return;
+            }
+
+            String requestedName = requested.getFileName() == null
+                ? "" : requested.getFileName().toString().toLowerCase(Locale.ROOT);
+            if (requestedName.endsWith(".html") || requestedName.endsWith(".htm")) {
+                sendErrorResponse(exchange, 404, "HTML documents are rendered by the web service.");
+                return;
             }
 
             if (!Files.exists(requested, LinkOption.NOFOLLOW_LINKS)) {

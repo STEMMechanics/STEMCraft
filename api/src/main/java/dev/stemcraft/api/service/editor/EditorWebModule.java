@@ -12,6 +12,7 @@ package dev.stemcraft.api.service.editor;
 
 import dev.stemcraft.api.service.web.WebServiceRequest;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 /** A service-owned module displayed inside the shared STEMCraft editor hub. */
 public interface EditorWebModule {
@@ -32,6 +33,19 @@ public interface EditorWebModule {
 
     /** Permission required for save and mutating actions. */
     default @NotNull String writePermission() { return readPermission(); }
+
+    /**
+     * Describe the module using shared editor components.
+     *
+     * <p>Services should override this instead of producing HTML.  The shared
+     * editor renders the returned view and dispatches its declared actions.
+     * Returning {@code null} keeps the legacy request-driven module contract
+     * available while a service is being migrated.</p>
+     */
+    default @Nullable EditorWebView view(@NotNull EditorWebContext context,
+                                         @NotNull WebServiceRequest request) {
+        return null;
+    }
 
     /**
      * Handle a request below {@code /editor/api/<module-id>} after the private

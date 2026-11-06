@@ -21,8 +21,10 @@ import dev.stemcraft.api.service.editor.EditorWebContext;
 import dev.stemcraft.api.service.editor.EditorWebModule;
 import dev.stemcraft.api.service.editor.EditorWebResponse;
 import dev.stemcraft.api.service.editor.EditorWebService;
+import dev.stemcraft.api.service.editor.EditorWebView;
 import dev.stemcraft.api.service.web.WebServiceRequest;
 import dev.stemcraft.api.service.web.WebServiceStream;
+import dev.stemcraft.service.web.WebPageComponents;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
@@ -36,8 +38,6 @@ import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -67,7 +67,7 @@ public final class EditorWebServiceImpl extends BaseService implements EditorWeb
     private final Map<UUID, PersistentSession> playerSessions = new ConcurrentHashMap<>();
     private final Set<EditorEventClient> configEventClients = ConcurrentHashMap.newKeySet();
     private final File sessionFile;
-    private String editorHtml;
+    private String editorPage;
     private ConfigSubscription configChangeSubscription;
 
     public EditorWebServiceImpl(STEMCraft plugin, STEMCraftAPI api) {
@@ -77,7 +77,7 @@ public final class EditorWebServiceImpl extends BaseService implements EditorWeb
 
     @Override
     public void onEnable() {
-        editorHtml = loadEditorHtml();
+        editorPage = WebPageComponents.editorPage();
         loadPersistentSessions();
         registerComponentsModule();
         api.web().registerEndpointHandler(EDITOR_PATH, this::handleRequest);
@@ -200,7 +200,7 @@ public final class EditorWebServiceImpl extends BaseService implements EditorWeb
                     "Open your private editor link to sign in."));
             }
             return "GET".equalsIgnoreCase(request.method())
-                ? response(new EditorWebResponse(200, "text/html; charset=utf-8", editorHtml))
+                ? response(new EditorWebResponse(200, "text/html; charset=utf-8", editorPage))
                 : response(new EditorWebResponse(405, "text/plain; charset=utf-8", "Method not allowed"));
         }
         if (!path.startsWith(EDITOR_PATH + "/")) {
@@ -248,6 +248,14 @@ public final class EditorWebServiceImpl extends BaseService implements EditorWeb
         String relativePath = "/" + String.join("/", java.util.Arrays.copyOfRange(parts, relativePathIndex, parts.length));
         EditorWebContext context = new EditorWebContext(token, session.writable().contains(moduleId));
         try {
+            if ("/view".equals(relativePath) && "GET".equalsIgnoreCase(request.method())) {
+                EditorWebView view = onServerThread(() -> module.view(context, request));
+                if (view == null) {
+                    return response(new EditorWebResponse(404, "text/plain; charset=utf-8",
+                        "Declarative view not available."));
+                }
+                return response(jsonResponse(200, view));
+            }
             EditorWebResponse result = onServerThread(() -> module.handle(context, relativePath, request));
             return response(result);
         } catch (Exception exception) {
@@ -500,16 +508,6 @@ public final class EditorWebServiceImpl extends BaseService implements EditorWeb
 
     private static EditorWebResponse jsonResponse(int status, Object value) {
         return new EditorWebResponse(status, "application/json; charset=utf-8", GSON.toJson(value));
-    }
-
-    private String loadEditorHtml() {
-        try (InputStream stream = plugin.getResource("www/editor.html")) {
-            if (stream == null) throw new IOException("www/editor.html is missing from the plugin jar");
-            return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
-        } catch (IOException exception) {
-            plugin.getLogger().severe("Could not load the editor hub: " + exception.getMessage());
-            return "<!doctype html><html><body><h1>STEMCraft Workshop</h1><p>The editor could not be loaded.</p></body></html>";
-        }
     }
 
     private <T> T onServerThread(Callable<T> task) throws Exception {

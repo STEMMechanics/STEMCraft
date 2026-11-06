@@ -112,28 +112,28 @@ class WebServiceTransportTest {
     }
 
     @Test
-    void rootServesTheBundledLandingPageWhenNoCustomIndexExists() throws Exception {
-        when(plugin.getResource("www/index.html"))
-            .thenAnswer(invocation -> getClass().getResourceAsStream("/www/index.html"));
+    void rootServesTheGeneratedLandingPage() throws Exception {
         service.start();
 
         HttpResponse<String> response = get("/");
 
         assertEquals(200, response.statusCode());
-        assertTrue(response.body().contains("play.stemcraft.com.au"));
         assertTrue(response.body().contains("Join the server"));
+        assertTrue(response.body().contains("Connection details are not configured"));
     }
 
     @Test
-    void rootServesACustomIndexInsteadOfRejectingTheDirectory() throws Exception {
+    void rootDoesNotServeCustomHtmlDocuments() throws Exception {
         Path root = Files.createDirectories(dataFolder.resolve("www"));
         Files.writeString(root.resolve("index.html"), "<html>custom landing page</html>");
         service.start();
 
         HttpResponse<String> response = get("/");
+        HttpResponse<String> directFile = get("/index.html");
 
         assertEquals(200, response.statusCode());
-        assertEquals("<html>custom landing page</html>", response.body());
+        assertTrue(response.body().contains("Join the server"));
+        assertEquals(404, directFile.statusCode());
     }
 
     @Test
@@ -288,7 +288,10 @@ class WebServiceTransportTest {
 
         HttpRequest cleanPage = HttpRequest.newBuilder(URI.create(service.getPublicUrl() + "/editor"))
             .header("Cookie", cookie).timeout(Duration.ofSeconds(3)).GET().build();
-        assertEquals(200, client.send(cleanPage, HttpResponse.BodyHandlers.ofString()).statusCode());
+        HttpResponse<String> editorPage = client.send(cleanPage, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, editorPage.statusCode());
+        assertTrue(editorPage.body().contains("/assets/editor.js"));
+        assertFalse(editorPage.body().contains("editor.html"));
 
         HttpRequest modules = HttpRequest.newBuilder(URI.create(service.getPublicUrl() + "/editor/api/modules"))
             .header("Cookie", cookie).timeout(Duration.ofSeconds(3)).GET().build();

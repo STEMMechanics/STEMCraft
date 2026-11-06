@@ -1,386 +1,65 @@
-<!doctype html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>STEMCraft Editor</title>
-    <style>
-        :root {
-            color-scheme: dark;
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            --page: #101827;
-            --page-deep: #0b1320;
-            --panel: #16263b;
-            --panel-alt: #172d46;
-            --line: #385779;
-            --line-soft: #29445f;
-            --text: #e8eef7;
-            --muted: #a8b7ca;
-            --accent: #7dd3fc;
-            --accent-strong: #38bdf8;
-            --good: #8be0b0;
-            --warn: #f3c969;
-            --danger: #ff9a9a;
-            background: var(--page);
-            color: var(--text);
-        }
-        * { box-sizing: border-box; }
-        body {
-            margin: 0;
-            min-height: 100vh;
-            background: var(--page);
-            color: var(--text);
-        }
-        body, button, input, select, textarea { font: inherit; }
-        button { cursor: pointer; }
-        button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
-            outline: 2px solid var(--accent);
-            outline-offset: 2px;
-        }
-        .app {
-            min-height: 100vh;
-            display: grid;
-            grid-template-columns: 15.5rem minmax(0, 1fr);
-            transition: grid-template-columns .18s ease;
-        }
-        .sidebar {
-            min-width: 0;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            gap: 1.15rem;
-            padding: 1.15rem;
-            background: rgb(9 16 27 / 94%);
-            border-right: 1px solid var(--line);
-            transition: padding .18s ease, opacity .18s ease;
-        }
-        .sidebar-brand {
-            display: flex;
-            align-items: center;
-            gap: .7rem;
-            white-space: nowrap;
-        }
-        .brand-mark {
-            display: grid;
-            place-items: center;
-            width: 2.3rem;
-            height: 2.3rem;
-            border: 1px solid #5c86ad;
-            border-radius: .45rem;
-            color: var(--accent);
-            background: #172d46;
-            font-size: .74rem;
-            font-weight: 800;
-            letter-spacing: .04em;
-        }
-        .sidebar-brand strong { display: block; font-size: 1rem; }
-        .sidebar-brand small { display: block; margin-top: .1rem; color: var(--muted); }
-        .sidebar-close { margin-left: auto; }
-        .sidebar-note { margin: 0; color: var(--muted); font-size: .82rem; line-height: 1.45; }
-        .module-nav { display: grid; gap: .3rem; }
-        .module-nav button {
-            display: flex;
-            align-items: center;
-            gap: .65rem;
-            width: 100%;
-            min-width: 0;
-            padding: .65rem .7rem;
-            border: 1px solid transparent;
-            border-radius: .38rem;
-            color: var(--muted);
-            background: transparent;
-            text-align: left;
-        }
-        .module-nav button:hover { color: var(--text); background: rgb(125 211 252 / 8%); }
-        .module-nav button.active {
-            color: var(--text);
-            border-color: #4b7195;
-            background: #1b3855;
-        }
-        .module-icon {
-            display: grid;
-            place-items: center;
-            flex: 0 0 1.55rem;
-            height: 1.55rem;
-            border: 1px solid #53799b;
-            border-radius: .32rem;
-            color: var(--accent);
-            font-size: .75rem;
-            font-weight: 800;
-        }
-        .sidebar-footer {
-            margin-top: auto;
-            padding-top: .9rem;
-            border-top: 1px solid var(--line-soft);
-            color: var(--muted);
-            font-size: .76rem;
-            line-height: 1.5;
-        }
-        body.sidebar-closed .app { grid-template-columns: 0 minmax(0, 1fr); }
-        body.sidebar-closed .sidebar { padding-inline: 0; border-right: 0; opacity: 0; }
-        .main { min-width: 0; padding: 1.35rem clamp(1rem, 4vw, 3.5rem) 3rem; }
-        .topbar {
-            display: flex;
-            align-items: flex-start;
-            gap: 1rem;
-            max-width: 82rem;
-            margin: 0 auto 1.5rem;
-        }
-        .topbar-content { min-width: 0; flex: 1; }
-        .topbar-actions { display: flex; align-items: center; gap: .65rem; }
-        .eyebrow {
-            margin: 0 0 .35rem;
-            color: var(--accent);
-            font-size: .74rem;
-            font-weight: 750;
-            letter-spacing: .16em;
-            text-transform: uppercase;
-        }
-        h1, h2, h3, p { margin-top: 0; }
-        h1 { margin-bottom: .35rem; font-size: clamp(1.55rem, 3vw, 2.35rem); }
-        h2 { margin-bottom: .35rem; font-size: 1.35rem; }
-        h3 { margin-bottom: .65rem; font-size: 1rem; }
-        .subtitle { max-width: 50rem; margin-bottom: 0; color: var(--muted); line-height: 1.5; }
-        .button, button.button {
-            border: 1px solid #52789b;
-            border-radius: .35rem;
-            padding: .54rem .78rem;
-            color: var(--text);
-            background: #1b344f;
-            font-weight: 650;
-        }
-        .button:hover { border-color: var(--accent); background: #214361; }
-        .button.primary { border-color: #6eb9df; color: #06111d; background: var(--accent); }
-        .button.primary:hover { background: #a5e5ff; }
-        .button.good { border-color: #63b58c; background: #1c4f42; }
-        .button.warn { border-color: #c8a65d; background: #4d4125; }
-        .button.danger { border-color: #c27078; background: #512c37; }
-        .button.small { padding: .4rem .6rem; font-size: .82rem; }
-        .icon-button {
-            display: grid;
-            place-items: center;
-            width: 2.15rem;
-            height: 2.15rem;
-            padding: 0;
-            border: 1px solid var(--line);
-            border-radius: .35rem;
-            color: var(--text);
-            background: var(--panel);
-        }
-        .icon-button:hover { border-color: var(--accent); }
-        .status { color: var(--muted); font-size: .82rem; white-space: nowrap; }
-        .status.good { color: var(--good); }
-        .status.bad { color: var(--danger); }
-        .workspace, .notice { max-width: 82rem; margin-inline: auto; }
-        .notice {
-            display: none;
-            margin-bottom: 1rem;
-            padding: .72rem .85rem;
-            border: 1px solid var(--warn);
-            border-radius: .35rem;
-            color: #ffe9a8;
-            background: #3b321e;
-        }
-        .notice.show { display: block; }
-        .notice-content { display: flex; align-items: center; justify-content: space-between; gap: .8rem; }
-        .notice-actions { display: flex; flex-wrap: wrap; gap: .45rem; }
-        .notice-actions .button { white-space: nowrap; }
-        .page-head {
-            display: flex;
-            align-items: flex-start;
-            justify-content: space-between;
-            gap: 1rem;
-            margin-bottom: 1.1rem;
-        }
-        .page-head p:last-child { max-width: 54rem; margin-bottom: 0; color: var(--muted); line-height: 1.5; }
-        .access {
-            flex: 0 0 auto;
-            padding: .32rem .55rem;
-            border: 1px solid var(--line);
-            border-radius: .3rem;
-            color: var(--muted);
-            font-size: .76rem;
-            white-space: nowrap;
-        }
-        .access.write { color: var(--good); border-color: #4f8f72; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); gap: 1rem; }
-        .card {
-            min-width: 0;
-            padding: 1rem;
-            border: 1px solid var(--line);
-            border-radius: .42rem;
-            background: rgb(22 38 59 / 94%);
-        }
-        .card p { color: var(--muted); line-height: 1.5; }
-        .card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; margin-top: .85rem; }
-        .document-head {
-            display: flex;
-            align-items: flex-start;
-            justify-content: space-between;
-            gap: .75rem;
-            margin-bottom: .7rem;
-        }
-        .document-head small { display: block; margin-top: .2rem; }
-        .pill {
-            display: inline-flex;
-            align-items: center;
-            padding: .2rem .45rem;
-            border: 1px solid var(--line);
-            border-radius: .25rem;
-            color: var(--muted);
-            font-size: .75rem;
-            font-weight: 700;
-            white-space: nowrap;
-        }
-        .pill.good { color: var(--good); border-color: #4f8f72; }
-        .pill.bad { color: var(--danger); border-color: #a35562; }
-        .pill.warn { color: var(--warn); border-color: #9c8042; }
-        .muted, .tiny { color: var(--muted); }
-        .tiny { font-size: .8rem; }
-        .list { display: grid; gap: .45rem; max-height: 32rem; overflow: auto; }
-        .list-button {
-            width: 100%;
-            padding: .65rem .7rem;
-            border: 1px solid var(--line-soft);
-            border-radius: .32rem;
-            color: var(--text);
-            background: #14253a;
-            text-align: left;
-        }
-        .list-button:hover, .list-button.active { border-color: var(--accent); background: #1b3855; }
-        .list-button strong, .list-button small { display: block; }
-        .list-button small { margin-top: .18rem; color: var(--muted); }
-        .field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: .8rem; }
-        label { display: grid; gap: .32rem; color: #d7e3f0; font-size: .83rem; font-weight: 650; }
-        label.wide { grid-column: 1 / -1; }
-        input, select, textarea {
-            width: 100%;
-            border: 1px solid #456681;
-            border-radius: .3rem;
-            padding: .55rem .62rem;
-            color: var(--text);
-            background: #0e1a2a;
-        }
-        input:disabled, select:disabled, textarea:disabled, fieldset:disabled { opacity: .66; }
-        textarea {
-            min-height: 17rem;
-            resize: vertical;
-            font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-            font-size: .84rem;
-            line-height: 1.5;
-        }
-        textarea.small-area { min-height: 5.5rem; }
-        fieldset { min-width: 0; padding: 0; border: 0; }
-        .split { display: grid; grid-template-columns: minmax(14rem, 20rem) minmax(0, 1fr); gap: 1rem; align-items: start; }
-        .document-panel { margin-top: 1rem; }
-        .empty {
-            padding: 1.8rem;
-            border: 1px dashed #496a88;
-            border-radius: .35rem;
-            color: var(--muted);
-            text-align: center;
-        }
-        .errors { margin: .6rem 0 0; padding-left: 1.1rem; color: #ffc7c7; font-size: .82rem; line-height: 1.45; }
-        .table-summary { display: grid; gap: .5rem; }
-        .rule-summary {
-            padding: .65rem;
-            border: 1px solid var(--line-soft);
-            border-radius: .3rem;
-            background: #14253a;
-        }
-        .rule-summary strong { display: block; margin-bottom: .2rem; }
-        .rule-summary div { color: var(--muted); font-size: .8rem; line-height: 1.45; }
-        .sim-result { margin-top: .8rem; padding: .7rem; border: 1px solid var(--line-soft); border-radius: .3rem; background: #0e1a2a; }
-        .sim-drop { display: flex; justify-content: space-between; gap: 1rem; padding: .35rem 0; border-bottom: 1px solid #29405a; }
-        .sim-drop:last-child { border-bottom: 0; }
-        .subview-head { display: flex; align-items: center; gap: .8rem; margin-bottom: 1.1rem; }
-        .subview-head h2 { margin: 0 auto 0 0; }
-        .subview-back { display: inline-flex; align-items: center; gap: .35rem; }
-        .stack { display: grid; gap: 1rem; }
-        .table-wrap { overflow-x: auto; }
-        .data-table { width: 100%; border-collapse: collapse; }
-        .data-table th, .data-table td { padding: .7rem .75rem; border-bottom: 1px solid var(--line-soft); text-align: left; vertical-align: top; }
-        .data-table th { color: var(--muted); font-size: .76rem; letter-spacing: .04em; text-transform: uppercase; }
-        .data-table tbody tr:last-child td { border-bottom: 0; }
-        .component-showcase { display: grid; gap: 1rem; }
-        .component-demo { display: grid; gap: .7rem; }
-        .component-demo h3 { margin-bottom: 0; }
-        .component-demo .demo-row { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
-        .component-demo .demo-row > * { max-width: 100%; }
-        .component-label { color: var(--muted); font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
-        .component-demo .list { max-height: none; }
-        .component-demo .notice { display: block; margin: 0; }
-        .component-demo .loading { margin: 0; }
-        .hidden { display: none !important; }
-        .backdrop { display: none; }
-        @media (max-width: 56rem) {
-            .app { display: block; }
-            .sidebar {
-                position: fixed;
-                z-index: 20;
-                inset: 0 auto 0 0;
-                width: 15.5rem;
-                box-shadow: 1rem 0 3rem rgb(0 0 0 / 28%);
-                transform: translateX(-105%);
-                transition: transform .18s ease;
-            }
-            body.sidebar-open .sidebar { transform: translateX(0); }
-            body.sidebar-closed .sidebar { padding: 1.15rem; opacity: 1; }
-            .backdrop { position: fixed; z-index: 10; inset: 0; background: rgb(0 0 0 / 52%); }
-            body.sidebar-open .backdrop { display: block; }
-            .main { padding-top: 1rem; }
-            .split { grid-template-columns: 1fr; }
-        }
-        @media (min-width: 57rem) {
-            .sidebar-close { display: none; }
-        }
-        @media (max-width: 38rem) {
-            .topbar, .page-head { display: block; }
-            .topbar-actions { margin-top: .9rem; }
-            .page-head .access { display: inline-flex; margin-top: .75rem; }
-        }
-    </style>
-    <link rel="stylesheet" href="/assets/site.css">
-</head>
-<body class="editor-page sidebar-open">
-<div class="app">
-    <aside class="sidebar" aria-label="Editor navigation">
-        <div class="sidebar-brand">
-            <a class="sidebar-logo-link" href="/" aria-label="STEMCraft home">
-                <img class="sidebar-logo" src="/assets/logo.png" alt="STEMCraft">
-            </a>
-            <button id="sidebarClose" class="icon-button sidebar-close" type="button" aria-label="Close navigation"><svg class="icon-button-svg" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button>
-        </div>
-        <nav id="moduleNav" class="module-nav"></nav>
-    </aside>
-    <div id="sidebarBackdrop" class="backdrop"></div>
-    <main class="main">
-        <header class="topbar">
-            <button id="sidebarToggle" class="icon-button" type="button" aria-label="Open navigation" aria-expanded="true"><svg class="icon-button-svg" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg></button>
-            <div class="topbar-content">
-                <h1 id="pageTitle">STEMCraft Editor</h1>
-            </div>
-        </header>
-        <div id="notice" class="notice" role="status"></div>
-        <section id="workspace" class="workspace"><div class="loading" role="status"><span class="loading-spinner" aria-hidden="true"></span><span>Loading editor…</span></div></section>
-    </main>
-</div>
-<script>
 (() => {
     const base = location.pathname.replace(/\/$/, '');
     const q = selector => document.querySelector(selector);
     const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
     const apiUrl = (module, endpoint) => base + '/api/' + module + '/' + (endpoint || 'data');
+
+    function tabsComponent(items, active) {
+        return '<div class="tabs component-tabs" role="tablist">' + items.map(item =>
+            '<button class="tab' + (item.id === active ? ' active' : '') + '" type="button" role="tab" aria-selected="' +
+            (item.id === active ? 'true' : 'false') + '" data-editor-tab="' + esc(item.id) + '">' + esc(item.label) + '</button>').join('') + '</div>';
+    }
+
+    function bindTabs(callback) {
+        q('#workspace').querySelectorAll('[data-editor-tab]').forEach(button => button.onclick = () => callback(button.dataset.editorTab));
+    }
+
+    function switchControl(label, name, checked) {
+        return '<label class="switch-control"><span>' + esc(label) + '</span><input name="' + esc(name) + '" type="checkbox"' +
+            (checked ? ' checked' : '') + '><span class="switch-track" aria-hidden="true"></span></label>';
+    }
+
+    function switchObjectControl(label, prop, checked) {
+        return '<label class="switch-control"><span>' + esc(label) + '</span><input data-prop="' + esc(prop) + '" type="checkbox"' +
+            (checked ? ' checked' : '') + '><span class="switch-track" aria-hidden="true"></span></label>';
+    }
+
+    function openEditorDialog(title, body, submitLabel, onSubmit) {
+        const dialog = q('#editor-dialog');
+        dialog.innerHTML = '<form id="editor-dialog-form"><div class="dialog-head"><h2 id="editor-dialog-title">' + esc(title) +
+            '</h2><button class="button dialog-close" type="button" data-dialog-close aria-label="Close">×</button></div>' + body +
+            '<div class="dialog-actions"><button class="button" type="button" data-dialog-close>Cancel</button><button class="button primary" type="submit">' +
+            esc(submitLabel) + '</button></div></form>';
+        dialog.querySelectorAll('[data-dialog-close]').forEach(button => button.onclick = () => dialog.close());
+        dialog.querySelector('#editor-dialog-form').onsubmit = async event => {
+            event.preventDefault();
+            await onSubmit(new FormData(event.target), dialog);
+        };
+        dialog.showModal();
+    }
+
+    function formatValidationError(error) {
+        const text = String(error || 'Validation failed.');
+        const mapping = /^(.*?)\s+must be a mapping\.?$/i.exec(text);
+        if (!mapping) return '<li>' + esc(text) + '</li>';
+        const location = mapping[1];
+        const yamlPath = /^(.*\.(?:ya?ml))\.(.+)$/i.exec(location);
+        const source = yamlPath ? yamlPath[1] : location;
+        const path = yamlPath ? yamlPath[2] : '';
+        return '<li class="validation-error"><strong>Expected a YAML object</strong><span>' + esc(source) +
+            (path ? ' → ' + esc(path) : '') + '</span><small>Use named fields under this path (for example, <code>id: value</code>), not a single value or list.</small></li>';
+    }
+
     let modules = [];
     let activeId = null;
     let activeData = null;
     let currentDocument = null;
     let selectedItem = null;
     let selectedLoot = null;
-    let selectedPack = null;
     let selectedQuest = null;
     let selectedNpc = null;
     let questListKind = 'quests';
+    let activeQuery = {};
     let configEvents = null;
     let configEventsRetry = null;
     let documentReturn = null;
@@ -444,6 +123,21 @@
 
     function pageHead() { return ''; }
 
+    function querySuffix(query) {
+        const params = new URLSearchParams(Object.entries(query || {}).filter(([, value]) => value !== undefined && value !== null && value !== ''));
+        const value = params.toString();
+        return value ? '?' + value : '';
+    }
+
+    async function loadModuleData(id, query = {}) {
+        try {
+            return await request(apiUrl(id, 'view') + querySuffix(query));
+        } catch (error) {
+            if (error.message !== 'Declarative view not available.') throw error;
+            return request(apiUrl(id, 'data') + querySuffix(query));
+        }
+    }
+
     const moduleIcons = {
         items: 'M12 3 3.5 7.5 12 12l8.5-4.5L12 3Z M3.5 7.5V16.5L12 21v-9 M20.5 7.5V16.5L12 21',
         loot: 'M6 3h12l4 6-10 12L2 9l4-6Z M2 9h20 M12 21 8 9l4-6 4 6-4 12Z',
@@ -470,12 +164,12 @@
         });
     }
 
-    async function openModule(id) {
+    async function openModule(id, query = {}) {
         activeId = id;
+        activeQuery = {...query};
         currentDocument = null;
         selectedItem = null;
         selectedLoot = null;
-        selectedPack = null;
         selectedQuest = null;
         selectedNpc = null;
         questListKind = 'quests';
@@ -485,7 +179,7 @@
         q('#workspace').innerHTML = loading('Opening editor…');
         notice('');
         try {
-            activeData = await request(apiUrl(id, 'data'));
+            activeData = await loadModuleData(id, activeQuery);
             renderModule();
             setStatus('Ready');
         } catch (error) {
@@ -496,9 +190,9 @@
 
     function renderModule() {
         if (!activeData) return;
+        if (Array.isArray(activeData.components)) return renderDeclarativeView(activeData);
         if (activeData.kind === 'components') return renderComponents();
         if (activeData.kind === 'quests') return renderQuests(activeData);
-        if (activeData.kind === 'packs') return renderPacks(activeData);
         if (activeData.kind === 'items') return renderItems(activeData);
         if (activeData.kind === 'loot') return renderLoot(activeData);
         q('#workspace').innerHTML = '<div class="empty">This editor is not available yet.</div>';
@@ -509,17 +203,190 @@
             esc(backLabel) + '</button><h2>' + esc(title) + '</h2></div>';
     }
 
+    let viewActionSequence = 0;
+    const viewActions = new Map();
+
+    function viewActionButton(action, extraClass = '') {
+        if (!action) return '';
+        const key = 'view-action-' + (++viewActionSequence);
+        viewActions.set(key, action);
+        const variant = ['primary', 'good', 'warn', 'danger'].includes(action.variant) ? ' ' + action.variant : '';
+        return '<button class="button small' + variant + (extraClass ? ' ' + extraClass : '') + '" type="button" data-view-action="' +
+            esc(key) + '">' + esc(action.label) + '</button>';
+    }
+
+    function viewBadges(badges) {
+        return (Array.isArray(badges) ? badges : []).map(badge =>
+            '<span class="pill ' + (['good', 'bad', 'warn'].includes(badge.tone) ? esc(badge.tone) : '') + '">' +
+            esc(badge.text) + '</span>').join('');
+    }
+
+    function viewField(field) {
+        const type = field.type || 'text';
+        let control;
+        if (type === 'select') {
+            control = '<select name="' + esc(field.name) + '">' + (Array.isArray(field.options) ? field.options : []).map(option =>
+                '<option value="' + esc(option.value) + '">' + esc(option.label) + '</option>').join('') + '</select>';
+        } else if (type === 'suggestion') {
+            const listId = 'view-suggestions-' + esc(field.name);
+            control = '<input name="' + esc(field.name) + '" list="' + listId + '" placeholder="' + esc(field.placeholder || '') + '"' +
+                (field.required ? ' required' : '') + (field.pattern ? ' pattern="' + esc(field.pattern) + '"' : '') + '>' +
+                '<datalist id="' + listId + '">' + (Array.isArray(field.options) ? field.options : []).map(option =>
+                    '<option value="' + esc(option.value) + '">' + esc(option.label) + '</option>').join('') + '</datalist>';
+        } else if (type === 'textarea') {
+            control = '<textarea name="' + esc(field.name) + '" placeholder="' + esc(field.placeholder || '') + '"' +
+                (field.required ? ' required' : '') + '>' + esc(field.value || '') + '</textarea>';
+        } else {
+            control = '<input name="' + esc(field.name) + '" type="' + esc(type) + '" value="' + esc(field.value || '') +
+                '" placeholder="' + esc(field.placeholder || '') + '"' + (field.required ? ' required' : '') +
+                (field.pattern ? ' pattern="' + esc(field.pattern) + '"' : '') + '>';
+        }
+        return '<label>' + esc(field.label) + control + '</label>';
+    }
+
+    function openDeclarativeDialog(action) {
+        const dialog = action.dialog;
+        const fields = (dialog?.fields || []).map(viewField).join('');
+        openEditorDialog(dialog.title, '<div class="field-grid">' + fields + '</div>', dialog.submitLabel, async (form, element) => {
+            try {
+                const payload = {...(action.payload || {})};
+                (dialog.fields || []).forEach(field => payload[field.name] = form.get(field.name) ?? '');
+                const result = await request(apiUrl(activeId, action.endpoint), {
+                    method: action.method || 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+                });
+                element.close();
+                notice(result.message || 'Saved.');
+                await openModule(activeId, activeQuery);
+            } catch (error) { notice(error.message, true); setStatus('Needs attention', true); }
+        });
+    }
+
+    async function dispatchViewAction(action) {
+        if (!action) return;
+        if (action.type === 'navigate') {
+            await openModule(activeId, action.query || {});
+            return;
+        }
+        if (action.type === 'dialog') {
+            openDeclarativeDialog(action);
+            return;
+        }
+        if (action.type !== 'request') return;
+        try {
+            setStatus('Working…');
+            const result = await request(apiUrl(activeId, action.endpoint), {
+                method: action.method || 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(action.payload || {})
+            });
+            notice(result.message || 'Done.');
+            await openModule(activeId, activeQuery);
+        } catch (error) { notice(error.message, true); setStatus('Needs attention', true); }
+    }
+
+    function renderDeclarativeComponent(component) {
+        const type = component.type;
+        const properties = component.properties || {};
+        if (type === 'toolbar') {
+            return '<div class="section-heading editor-section-heading"><div><h2>' + esc(activeData.title || '') + '</h2>' +
+                (activeData.description ? '<p class="tiny">' + esc(activeData.description) + '</p>' : '') + '</div><div class="editor-header-actions">' +
+                (properties.actions || []).map(viewActionButton).join('') + (properties.meta ? '<span class="tiny">' + esc(properties.meta) + '</span>' : '') + '</div></div>';
+        }
+        if (type === 'cards') {
+            const items = Array.isArray(properties.items) ? properties.items : [];
+            if (!items.length) return '<div class="empty">' + esc(properties.empty || 'Nothing found.') + '</div>';
+            return '<div class="pack-grid">' + items.map(item => {
+                const actionKey = item.action ? 'view-item-' + (++viewActionSequence) : '';
+                if (item.action) viewActions.set(actionKey, item.action);
+                return '<article class="card pack-card"' + (item.action ? ' tabindex="0" role="button" data-view-action="' + esc(actionKey) + '"' : '') + '>' +
+                    '<div class="pack-card-icon" aria-hidden="true">' + iconSvg(moduleIcons[activeId] || moduleIcons.default) + '</div>' +
+                    '<div class="pack-card-main"><div class="pack-card-title"><h3>' + esc(item.title) + '</h3></div>' +
+                    (item.description ? '<p class="pack-card-description">' + esc(item.description) + '</p>' : '') +
+                    '<div class="pack-card-meta">' + viewBadges(item.badges) + '</div></div></article>';
+            }).join('') + '</div>';
+        }
+        if (type === 'subview') {
+            return '<div class="subview-head"><button class="button subview-back" type="button" data-view-action="' +
+                esc(registerViewAction(properties.back)) + '">← Back</button><h2>' + esc(properties.title || '') + '</h2></div>';
+        }
+        if (type === 'card') {
+            return '<section class="card"><div class="document-head"><div><h3>' + esc(properties.title || '') + '</h3>' +
+                (properties.description ? '<p>' + esc(properties.description) + '</p>' : '') + '</div>' + viewBadges(properties.badges) + '</div>' +
+                (Array.isArray(properties.children) ? properties.children.map(renderDeclarativeComponent).join('') : '') +
+                (Array.isArray(properties.actions) ? '<div class="card-actions">' + properties.actions.map(viewActionButton).join('') + '</div>' : '') + '</section>';
+        }
+        if (type === 'validation') {
+            const errors = Array.isArray(properties.errors) ? properties.errors : [];
+            return errors.length ? '<div><h3>Validation issues</h3><ul class="errors pack-error-list">' + errors.map(formatValidationError).join('') + '</ul></div>' :
+                '<p class="muted">' + esc(properties.empty || 'No validation issues found.') + '</p>';
+        }
+        if (type === 'meta') {
+            const dependencies = Array.isArray(properties.dependencies) && properties.dependencies.length ?
+                '<div><dt>Dependencies</dt><dd>' + esc(properties.dependencies.join(', ')) + '</dd></div>' : '';
+            const resource = properties.resourcePackRebuildRequired ? '<div><dt>Resource pack</dt><dd>Rebuild required after changes.</dd></div>' : '';
+            return dependencies || resource ? '<dl class="pack-detail-meta">' + dependencies + resource + '</dl>' : '';
+        }
+        if (type === 'document-picker') {
+            const selectId = 'view-document-picker-' + (++viewActionSequence);
+            const options = Array.isArray(properties.options) ? properties.options : [];
+            return '<div class="card-actions"><select id="' + selectId + '"><option value="">Choose a file</option>' +
+                options.map(option => '<option value="' + esc(option.value) + '">' + esc(option.label) + '</option>').join('') +
+                '</select><button class="button small primary" type="button" data-view-document="' + esc(selectId) + '" data-view-document-module="' +
+                esc(properties.module || activeId) + '" data-view-document-pack="' + esc(properties.pack || '') + '">Open file</button></div>';
+        }
+        if (type === 'empty') return '<div class="empty">' + esc(properties.text || 'Nothing found.') + '</div>';
+        return '';
+    }
+
+    function registerViewAction(action) {
+        const key = 'view-action-' + (++viewActionSequence);
+        viewActions.set(key, action);
+        return key;
+    }
+
+    function openDeclarativeDocument(module, pack, file) {
+        if (!file) return notice('Choose a file first.');
+        q('#workspace').innerHTML = subviewHead([pack, file].filter(Boolean).join(' / ')) + '<section class="card"><div id="document-panel"></div></section>';
+        q('[data-subview-back]').onclick = () => openModule(activeId, activeQuery);
+        openDocument(module, pack, file);
+    }
+
+    function bindDeclarativeActions() {
+        q('#workspace').querySelectorAll('[data-view-action]').forEach(element => {
+            const action = viewActions.get(element.dataset.viewAction);
+            element.onclick = event => { event.stopPropagation(); dispatchViewAction(action); };
+            element.onkeydown = event => {
+                if ((event.key === 'Enter' || event.key === ' ') && element.getAttribute('role') === 'button') {
+                    event.preventDefault(); element.click();
+                }
+            };
+        });
+        q('#workspace').querySelectorAll('[data-view-document]').forEach(button => button.onclick = () => {
+            const select = q('#' + button.dataset.viewDocument);
+            openDeclarativeDocument(button.dataset.viewDocumentModule, button.dataset.viewDocumentPack, select?.value || '');
+        });
+    }
+
+    function renderDeclarativeView(view) {
+        viewActionSequence = 0;
+        viewActions.clear();
+        q('#workspace').innerHTML = '<div class="stack">' + (view.components || []).map(renderDeclarativeComponent).join('') + '</div>';
+        bindDeclarativeActions();
+    }
+
     function renderComponents() {
         q('#workspace').innerHTML = pageHead('Components') +
             '<div class="component-showcase">' +
             '<section class="card component-demo"><h3>Actions and status</h3><div class="demo-row"><span class="component-label">Buttons</span>' +
             '<button class="button primary" type="button">Primary action</button><button class="button" type="button">Secondary action</button>' +
             '<button class="button small" type="button">Small action</button><button class="button good" type="button">Enabled</button>' +
-            '<button class="button warn" type="button">Warning</button><button class="button danger" type="button">Delete</button></div>' +
+            '<button class="button warn" type="button">Warning</button><button class="button danger" type="button">Delete</button><button id="component-dialog-demo" class="button small" type="button">Dialog</button></div>' +
             '<div class="demo-row"><span class="component-label">Status</span><span class="pill good">Saved</span><span class="pill warn">Draft</span><span class="pill bad">Needs attention</span><span class="status">Supporting text</span></div></section>' +
+            '<section class="card component-demo"><h3>Tabs</h3>' + tabsComponent([{id: 'overview', label: 'Overview'}, {id: 'settings', label: 'Settings'}, {id: 'history', label: 'History'}], 'overview') +
+            '<span class="tiny">Use tabs for sibling views within a module.</span></section>' +
             '<section class="card component-demo"><h3>Forms</h3><div class="field-grid"><label>Text field<input value="Example value"></label>' +
             '<label>Select<select><option>First option</option><option>Second option</option></select></label>' +
-            '<label class="wide">Long text<textarea class="small-area">A shared editor field with the site theme.</textarea></label></div></section>' +
+            '<label>Suggestions<input list="component-suggestions" placeholder="Choose or type…"><datalist id="component-suggestions"><option value="First suggestion"><option value="Second suggestion"></datalist></label>' +
+            '<label class="wide">Long text<textarea class="small-area">A shared editor field with the site theme.</textarea></label>' +
+            switchControl('Toggle switch', 'component-toggle', true) + '<label class="wide">Range slider<input type="range" min="0" max="100" value="65"><span class="tiny">65%</span></label></div></section>' +
             '<section class="card component-demo"><h3>Lists and tables</h3><div class="grid"><div><span class="component-label">List</span><div class="list">' +
             '<button class="list-button active" type="button"><strong>Selected item</strong><small>items/example</small></button>' +
             '<button class="list-button" type="button"><strong>Another item</strong><small>items/another</small></button></div></div>' +
@@ -529,6 +396,7 @@
             '<section class="card component-demo"><h3>Feedback and states</h3><div class="notice show">A non-blocking notice with an optional action.</div>' +
             '<div class="loading"><span class="loading-spinner" aria-hidden="true"></span><span>Loading state</span></div>' +
             '<div class="empty">Empty state content appears here when there is nothing to show.</div></section></div>';
+        q('#component-dialog-demo').onclick = () => openEditorDialog('Dialog component', '<p class="muted">Dialogs keep short create and edit flows in context without adding another page panel.</p>', 'Done', async (form, dialog) => dialog.close());
     }
 
     function questOptions(values, current, blank = true) {
@@ -605,7 +473,7 @@
             '<button data-remove="objective" class="button danger small" type="button">Remove</button></div></div><div class="field-grid">' +
             '<label>Type<select data-prop="type">' + questOptions(types, objective.type, false) + '</select></label>' + questObjectiveTarget(data, objective) +
             questObjectField('Amount', 'amount', objective.amount, 'number') + questObjectField('Player-facing objective', 'label', objective.label) +
-            '<label>Consume collected items<input data-prop="consume" type="checkbox"' + (objective.consume ? ' checked' : '') + '></label>' +
+            switchObjectControl('Consume collected items', 'consume', objective.consume) +
             questObjectField('World', 'world', objective.world || 'survival') + questObjectField('X', 'x', objective.x, 'number') + questObjectField('Y', 'y', objective.y, 'number') +
             questObjectField('Z', 'z', objective.z, 'number') + questObjectField('Radius', 'radius', objective.radius, 'number') + '</div></div>';
     }
@@ -615,7 +483,7 @@
             '<button data-remove="reward" class="button danger small" type="button">Remove</button></div><div class="field-grid">' +
             questObjectField('Material', 'material', reward.material) + questObjectField('Amount', 'amount', reward.amount, 'number') +
             questObjectField('Name', 'name', reward.name || '') + questObjectArea('Lore — one line per entry', 'lore', (reward.lore || []).join('\n')) +
-            '<label><input data-prop="unbreakable" type="checkbox"' + (reward.unbreakable ? ' checked' : '') + '>Unbreakable</label></div></div>';
+            switchObjectControl('Unbreakable', 'unbreakable', reward.unbreakable) + '</div></div>';
     }
 
     function defaultQuestTarget(data, type) {
@@ -648,8 +516,7 @@
         q('#workspace').innerHTML = pageHead('Quests') +
             '<div class="section-heading editor-section-heading"><div><h2>Quest definitions</h2><p class="tiny">Open a quest or NPC in its own editor view.</p></div>' +
             '<div class="card-actions"><button id="quest-yaml" class="button small" type="button">Advanced YAML</button><span class="tiny">' + filtered.length + ' shown</span></div></div>' +
-            '<div class="tabs card-actions"><button class="button small' + (questListKind === 'quests' ? ' primary' : '') + '" data-quest-list="quests" type="button">Quests</button>' +
-            '<button class="button small' + (questListKind === 'npcs' ? ' primary' : '') + '" data-quest-list="npcs" type="button">NPCs</button></div>' +
+            tabsComponent([{id: 'quests', label: 'Quests'}, {id: 'npcs', label: 'NPCs'}], questListKind) +
             '<section class="card"><div class="field-grid"><label class="wide">Search<input id="quest-search-value" value="' + esc(search) + '" placeholder="Search quests and NPCs"></label></div>' +
             '<div class="list">' + (entries || '<div class="empty">No quest definitions found.</div>') + '</div>' +
             (writable ? '<div class="card-actions"><button id="quest-new" class="button primary" type="button">+ New ' + (questListKind === 'quests' ? 'quest' : 'NPC') + '</button></div>' : '') +
@@ -660,8 +527,8 @@
             const searchInput = q('#quest-search-value');
             if (searchInput) { searchInput.focus(); searchInput.setSelectionRange(value.length, value.length); }
         };
-        q('#workspace').querySelectorAll('[data-quest-list]').forEach(button => button.onclick = () => {
-            questListKind = button.dataset.questList;
+        bindTabs(tab => {
+            questListKind = tab;
             selectedQuest = null;
             selectedNpc = null;
             renderQuests(activeData);
@@ -721,8 +588,8 @@
         q('#workspace').innerHTML = subviewHead(quest.title || quest.id) +
             '<form id="quest-editor-form" class="stack"><section class="card"><h3>Story</h3><div class="field-grid">' +
             questField('Quest ID', 'id', quest.id) + questField('Title', 'title', quest.title) + questField('Author / giver', 'author', quest.author) +
-            '<label><input name="enabled" type="checkbox"' + (quest.enabled ? ' checked' : '') + '>Enabled</label><label><input name="repeatable" type="checkbox"' +
-            (quest.repeatable ? ' checked' : '') + '>Repeatable</label>' + questArea('Quest-giver story', 'description', quest.description) +
+            switchControl('Enabled', 'enabled', quest.enabled) + switchControl('Repeatable', 'repeatable', quest.repeatable) +
+            questArea('Quest-giver story', 'description', quest.description) +
             questArea('Short description', 'shortDescription', quest.shortDescription || '') + '</div></section>' +
             '<section class="card"><h3>Characters</h3><div class="field-grid"><label>Starting NPC<select name="startNpcProfile">' + questOptions(profiles, quest.startNpcProfile) +
             '</select></label><label>Turn-in NPC<select name="endNpcProfile">' + questOptions(profiles, quest.endNpcProfile) + '</select></label>' +
@@ -752,7 +619,7 @@
         q('#workspace').innerHTML = subviewHead(npc.name || npc.id) +
             '<form id="npc-editor-form" class="stack"><section class="card"><h3>Identity</h3><div class="field-grid">' + questField('NPC ID', 'id', npc.id) +
             questField('Visible name', 'name', npc.name) + '<label>Entity type<select name="entityType">' + questOptions(data.entityTypes || [], npc.entityType, false) +
-            '</select></label><label><input name="ai" type="checkbox"' + (npc.ai ? ' checked' : '') + '>Can walk around</label></div></section>' +
+            '</select></label>' + switchControl('Can walk around', 'ai', npc.ai) + '</div></section>' +
             '<section class="card"><h3>Linked quests</h3><div class="field-grid"><div><span class="component-label">Starts here</span><div class="card-actions">' + linked(starts) +
             '</div></div><div><span class="component-label">Handed in here</span><div class="card-actions">' + linked(ends) + '</div></div></div></section>' +
             '<section class="card"><h3>Spawn conditions</h3><div class="field-grid">' + questField('World', 'world', npc.world) + questField('Minimum player level', 'minimumLevel', npc.minimumLevel, 'number') +
@@ -856,100 +723,6 @@
         q('#workspace').innerHTML = subviewHead(file) + '<section class="card"><div id="document-panel"></div></section>';
         q('[data-subview-back]').onclick = () => renderQuests(activeData);
         openDocument('quests', '', file);
-    }
-
-    function renderPacks(data) {
-        const writable = Boolean(moduleInfo()?.writable);
-        const packs = data.packs || [];
-        if (selectedPack && !packs.some(pack => pack.id === selectedPack)) selectedPack = null;
-        if (selectedPack) {
-            const selected = packs.find(pack => pack.id === selectedPack);
-            const selectedDocuments = (data.documents || []).filter(document => document.pack === selected.id);
-            const options = selectedDocuments.map(document =>
-                '<option value="' + esc(document.pack + '|' + document.file) + '">' + esc(document.label) + '</option>').join('');
-            const selectedState = selected.valid
-                ? (selected.enabled ? '<span class="pill good">Enabled</span>' : '<span class="pill">Disabled</span>')
-                : '<span class="pill bad">Needs attention</span>';
-            const selectedDetails = [
-                selected.dependencies?.length ? '<div><dt>Dependencies</dt><dd>' + esc(selected.dependencies.join(', ')) + '</dd></div>' : '',
-                selected.resourcePackRebuildRequired ? '<div><dt>Resource pack</dt><dd>Rebuild required after changes.</dd></div>' : ''
-            ].filter(Boolean).join('');
-            const actions = writable ?
-                '<div class="card-actions"><button class="button small" data-pack-action="validate" data-pack="' + esc(selected.id) + '">Validate</button>' +
-                '<button class="button small" data-pack-action="reload" data-pack="' + esc(selected.id) + '">Reload pack</button>' +
-                (selected.enabled ? '<button class="button small warn" data-pack-action="disable" data-pack="' + esc(selected.id) + '">Disable</button>' :
-                    '<button class="button small good" data-pack-action="enable" data-pack="' + esc(selected.id) + '">Enable</button>') +
-                '<button class="button small danger" data-pack-action="delete" data-pack="' + esc(selected.id) + '">Delete</button></div>' : '';
-            q('#workspace').innerHTML = subviewHead(selected.id) +
-                '<div class="stack"><section class="card"><div class="document-head"><div><h3>' + esc(selected.id) + '</h3>' +
-                '<p>' + esc(selected.description || 'Content pack') + '</p></div>' + selectedState + '</div>' +
-                (selectedDetails ? '<dl class="pack-detail-meta">' + selectedDetails + '</dl>' : '') +
-                (selected.errors?.length ? '<h3>Validation issues</h3><ul class="errors pack-error-list">' +
-                    selected.errors.map(error => '<li>' + esc(error) + '</li>').join('') + '</ul>' :
-                    '<p class="muted">No validation issues found.</p>') + actions + '</section>' +
-                '<section class="card"><div class="document-head"><div><h3>Pack files</h3><p class="tiny">Open a configuration file in its own editor view.</p></div></div>' +
-                (selectedDocuments.length ? '<div class="card-actions"><select id="pack-doc"><option value="">Choose a file</option>' + options +
-                    '</select><button id="pack-doc-open" class="button small primary" type="button">Open file</button></div>' :
-                    '<span class="tiny">No editable files</span>') + '</section></div>';
-            bindPackActions();
-            bindDocumentPicker('packs', 'pack-doc', 'pack-doc-open');
-            q('[data-subview-back]').onclick = () => { selectedPack = null; renderPacks(activeData); };
-            return;
-        }
-        const cards = packs.map(pack => {
-            const errorCount = (pack.errors || []).length;
-            const state = pack.valid
-                ? (pack.enabled ? '<span class="pill good">Enabled</span>' : '<span class="pill">Disabled</span>')
-                : '<span class="pill bad">Needs attention</span>';
-            const issueText = errorCount ? errorCount + ' validation issue' + (errorCount === 1 ? '' : 's') : 'No validation issues';
-            return '<article class="card pack-card"><div class="pack-card-icon" aria-hidden="true">' + iconSvg(moduleIcons.packs) + '</div>' +
-                '<div class="pack-card-main"><div class="pack-card-title"><h3>' + esc(pack.id) + '</h3></div>' +
-                '<p class="pack-card-description">' + esc(pack.description || 'Content pack') + '</p>' +
-                '<div class="pack-card-meta">' + state + '<span>' + esc(issueText) + '</span></div></div>' +
-                '<button class="button small pack-card-action" type="button" data-pack-open="' + esc(pack.id) + '">Open</button></article>';
-        }).join('');
-        const create = writable ?
-            '<form id="pack-create" class="card-actions"><input name="id" placeholder="my-pack" pattern="[a-z0-9][a-z0-9_-]*" required>' +
-            '<select name="template"><option value="">Blank pack</option><option value="workshop">Workshop example</option></select>' +
-            '<button class="button primary" type="submit">Create pack</button></form>' : '';
-        const createPanel = writable ? '<section class="card pack-create"><div class="section-heading"><h3>New pack</h3>' +
-            '<span class="tiny">Add a content pack</span></div>' + create + '</section>' : '';
-        q('#workspace').innerHTML = pageHead('Packs') +
-            '<div class="section-heading editor-section-heading"><div><h2>Content packs</h2><p class="tiny">Open a pack to inspect its validation results and files.</p></div>' +
-            '<span class="tiny">' + packs.length + ' pack' + (packs.length === 1 ? '' : 's') + '</span></div>' +
-            '<div class="pack-grid">' + (cards || '<div class="empty">No content packs found.</div>') + '</div>' + createPanel;
-        bindPackActions();
-        const createForm = q('#pack-create');
-        if (createForm) createForm.onsubmit = async event => {
-            event.preventDefault();
-            const form = new FormData(event.target);
-            try {
-                const result = await request(apiUrl('packs', 'action'), {method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({action: 'create', id: form.get('id'), template: form.get('template')})});
-                notice(result.message || 'Pack created.');
-                await openModule('packs');
-            } catch (error) { notice(error.message, true); setStatus('Needs attention', true); }
-        };
-        q('#workspace').querySelectorAll('[data-pack-open]').forEach(button => button.onclick = () => {
-            selectedPack = button.dataset.packOpen;
-            renderPacks(activeData);
-        });
-    }
-
-
-    function bindPackActions() {
-        q('#workspace').querySelectorAll('[data-pack-action]').forEach(button => button.onclick = async () => {
-            const action = button.dataset.packAction;
-            const id = button.dataset.pack;
-            if (action === 'delete' && !confirm('Delete ' + id + '? It will be moved to recoverable trash.')) return;
-            try {
-                setStatus('Working…');
-                const result = await request(apiUrl('packs', 'action'), {method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({action, id})});
-                notice(result.message || 'Pack updated.');
-                await openModule('packs');
-            } catch (error) { notice(error.message, true); setStatus('Needs attention', true); }
-        });
     }
 
     function renderItems(data) {
@@ -1190,7 +963,7 @@
         const pack = separator >= 0 ? value.slice(0, separator) : '';
         const file = separator >= 0 ? value.slice(separator + 1) : value;
         documentReturn = module === 'packs'
-            ? () => { selectedPack = pack; renderPacks(activeData); }
+            ? () => openModule(activeId, activeQuery)
             : () => renderLoot(activeData);
         q('#workspace').innerHTML = subviewHead([pack, file].filter(Boolean).join(' / ')) +
             '<section class="card"><div id="document-panel"></div></section>';
@@ -1242,7 +1015,7 @@
             currentDocument.dirty = false;
             notice(result.message || 'File saved.');
             setStatus('Ready');
-            activeData = await request(apiUrl(activeId, 'data'));
+            activeData = await loadModuleData(activeId, activeQuery);
         } catch (error) {
             if (/conflict|changed elsewhere|revision/i.test(error.message || '')) {
                 draftConflictNotice(error.message + ' Your draft is still preserved.');
@@ -1268,7 +1041,7 @@
                 return;
             }
             if (activeId) {
-                request(apiUrl(activeId, 'data')).then(data => {
+                loadModuleData(activeId, activeQuery).then(data => {
                     activeData = data;
                     renderModule();
                 }).catch(() => { });
@@ -1301,6 +1074,3 @@
     }
     boot();
 })();
-</script>
-</body>
-</html>

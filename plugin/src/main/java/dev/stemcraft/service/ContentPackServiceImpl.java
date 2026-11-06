@@ -23,8 +23,16 @@ import dev.stemcraft.api.service.config.ConfigChangeOrigin;
 import dev.stemcraft.api.service.config.ConfigSaveResult;
 import dev.stemcraft.api.service.config.ConfigSubscription;
 import dev.stemcraft.api.service.editor.EditorWebContext;
+import dev.stemcraft.api.service.editor.EditorWebAction;
+import dev.stemcraft.api.service.editor.EditorWebBadge;
+import dev.stemcraft.api.service.editor.EditorWebComponent;
+import dev.stemcraft.api.service.editor.EditorWebDialog;
+import dev.stemcraft.api.service.editor.EditorWebField;
+import dev.stemcraft.api.service.editor.EditorWebItem;
 import dev.stemcraft.api.service.editor.EditorWebModule;
+import dev.stemcraft.api.service.editor.EditorWebOption;
 import dev.stemcraft.api.service.editor.EditorWebResponse;
+import dev.stemcraft.api.service.editor.EditorWebView;
 import dev.stemcraft.api.service.web.WebServiceRequest;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -81,18 +89,7 @@ public final class ContentPackServiceImpl extends BaseService implements Content
         packRoot = new File(plugin.getDataFolder(), PACK_ROOT);
         loadState();
         discover();
-        if (api.editorWeb() != null) api.editorWeb().registerModule(new EditorWebModule() {
-            @Override public @NotNull String id() { return "packs"; }
-            @Override public @NotNull String title() { return "Packs"; }
-            @Override public @NotNull String icon() { return "P"; }
-            @Override public @NotNull String description() { return "Manage content packs and their files."; }
-            @Override public @NotNull String readPermission() { return "stemcraft.command.stemcraft.pack"; }
-            @Override public @NotNull String writePermission() { return "stemcraft.command.stemcraft.pack"; }
-            @Override public @NotNull EditorWebResponse handle(@NotNull EditorWebContext context, @NotNull String path,
-                                                                 @NotNull WebServiceRequest request) {
-                return handleEditorRequest(context, path, request);
-            }
-        });
+        if (api.editorWeb() != null) api.editorWeb().registerModule(new ContentPackEditorModule());
     }
 
     @Override
@@ -537,6 +534,127 @@ public final class ContentPackServiceImpl extends BaseService implements Content
             plugin.getLogger().warning("[content-packs] Web editor request failed: " + exception.getMessage());
             return text(500, "The pack editor could not complete that action.");
         }
+    }
+
+    /** Service-owned module metadata; the shared editor renders the result. */
+    private final class ContentPackEditorModule implements EditorWebModule {
+        @Override public @NotNull String id() { return "packs"; }
+        @Override public @NotNull String title() { return "Packs"; }
+        @Override public @NotNull String icon() { return "P"; }
+        @Override public @NotNull String description() { return "Manage content packs and their files."; }
+        @Override public @NotNull String readPermission() { return "stemcraft.command.stemcraft.pack"; }
+        @Override public @NotNull String writePermission() { return "stemcraft.command.stemcraft.pack"; }
+
+        @Override public @NotNull EditorWebView view(@NotNull EditorWebContext context,
+                                                      @NotNull WebServiceRequest request) {
+            return contentPackEditorView(context, request);
+        }
+
+        @Override public @NotNull EditorWebResponse handle(@NotNull EditorWebContext context, @NotNull String path,
+                                                            @NotNull WebServiceRequest request) {
+            return handleEditorRequest(context, path, request);
+        }
+    }
+
+    private @NotNull EditorWebView contentPackEditorView(@NotNull EditorWebContext context,
+                                                          @NotNull WebServiceRequest request) {
+        String selectedId = request.queryParam("pack");
+        if (selectedId == null || selectedId.isBlank()) {
+            List<EditorWebItem> items = packs().stream()
+                .map(info -> new EditorWebItem(info.id(), info.id(),
+                    info.description().isBlank() ? "Content pack" : info.description(),
+                    packBadges(info),
+                    EditorWebAction.navigate("open-" + info.id(), "Open", Map.of("pack", info.id()))))
+                .toList();
+            List<EditorWebAction> actions = context.writable()
+                ? List.of(createPackAction()) : List.of();
+            return new EditorWebView("packs", "Content packs", "", context.writable(), List.of(
+                EditorWebComponent.of("toolbar", Map.of(
+                    "actions", actions,
+                    "meta", packs().size() + " pack" + (packs().size() == 1 ? "" : "s"))),
+                EditorWebComponent.of("cards", Map.of("items", items))
+            ));
+        }
+
+        ContentPackInfo info = find(selectedId);
+        if (info == null) {
+            return new EditorWebView("packs", "Content packs", "", context.writable(), List.of(
+                EditorWebComponent.of("subview", Map.of(
+                    "title", selectedId,
+                    "back", EditorWebAction.navigate("back", "Back", Map.of()))),
+                EditorWebComponent.of("empty", Map.of("text", "Content pack not found."))
+            ));
+        }
+
+        List<EditorWebAction> actions = context.writable() ? packActions(info) : List.of();
+        List<EditorWebOption> documents = editorDocuments().stream()
+            .filter(document -> info.id().equals(document.get("pack")))
+            .map(document -> new EditorWebOption(String.valueOf(document.get("file")),
+                String.valueOf(document.get("label"))))
+            .toList();
+        List<EditorWebComponent> components = new ArrayList<>();
+        components.add(EditorWebComponent.of("subview", Map.of(
+            "title", info.id(),
+            "back", EditorWebAction.navigate("back", "Back", Map.of()))));
+        components.add(EditorWebComponent.of("card", Map.of(
+            "title", info.id(),
+            "description", info.description().isBlank() ? "Content pack" : info.description(),
+            "badges", packBadges(info),
+            "actions", actions,
+            "children", List.of(
+                EditorWebComponent.of("validation", Map.of(
+                    "errors", info.validationErrors(),
+                    "empty", "No validation issues found.")),
+                EditorWebComponent.of("meta", Map.of(
+                    "dependencies", info.dependencies(),
+                    "resourcePackRebuildRequired", info.resourcePackRebuildRequired()))
+            ))));
+        components.add(EditorWebComponent.of("card", Map.of(
+            "title", "Pack files",
+            "description", "Open a configuration file in its own editor view.",
+            "children", List.of(EditorWebComponent.of("document-picker", Map.of(
+                "module", "packs",
+                "pack", info.id(),
+                "options", documents,
+                "empty", "No editable files"))))));
+        return new EditorWebView("packs", info.id(), "", context.writable(), components);
+    }
+
+    private @NotNull EditorWebAction createPackAction() {
+        EditorWebDialog dialog = new EditorWebDialog("New content pack", "Create pack", List.of(
+            EditorWebField.text("id", "Pack ID", "my-pack", true, "[a-z0-9][a-z0-9_-]*"),
+            EditorWebField.select("template", "Template", List.of(
+                new EditorWebOption("", "Blank pack"),
+                new EditorWebOption("workshop", "Workshop example")))
+        ));
+        return EditorWebAction.dialog("create", "New pack", "primary", "action",
+            Map.of("action", "create"), dialog);
+    }
+
+    private @NotNull List<EditorWebAction> packActions(@NotNull ContentPackInfo info) {
+        List<EditorWebAction> actions = new ArrayList<>();
+        actions.add(EditorWebAction.request("validate", "Validate", "default", "action",
+            Map.of("action", "validate", "id", info.id())));
+        actions.add(EditorWebAction.request("reload", "Reload pack", "default", "action",
+            Map.of("action", "reload", "id", info.id())));
+        actions.add(EditorWebAction.request(info.enabled() ? "disable" : "enable",
+            info.enabled() ? "Disable" : "Enable", info.enabled() ? "warn" : "good", "action",
+            Map.of("action", info.enabled() ? "disable" : "enable", "id", info.id())));
+        actions.add(EditorWebAction.request("delete", "Delete", "danger", "action",
+            Map.of("action", "delete", "id", info.id())));
+        return List.copyOf(actions);
+    }
+
+    private @NotNull List<EditorWebBadge> packBadges(@NotNull ContentPackInfo info) {
+        List<EditorWebBadge> badges = new ArrayList<>();
+        if (!info.valid()) badges.add(new EditorWebBadge("Needs attention", "bad"));
+        else if (info.enabled()) badges.add(new EditorWebBadge("Enabled", "good"));
+        else badges.add(new EditorWebBadge("Disabled", "default"));
+        if (!info.validationErrors().isEmpty()) {
+            int count = info.validationErrors().size();
+            badges.add(new EditorWebBadge(count + " validation issue" + (count == 1 ? "" : "s"), "default"));
+        }
+        return List.copyOf(badges);
     }
 
     private List<Map<String, Object>> editorDocuments() {

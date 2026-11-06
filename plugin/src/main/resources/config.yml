@@ -463,6 +463,13 @@ web-server:
   path: www
   # Direct connections use HTTP. HTTPS requires an external TLS reverse proxy.
   public-url: ""
+  # Values shown on the generated STEMCraft landing page. Leave blank to hide
+  # a connection target rather than displaying a stale hard-coded address.
+  homepage:
+    java-address: ""
+    bedrock-address: ""
+    about-url: ""
+    discord-url: ""
   mail-api:
     # A blank key is replaced with a secure, persistent bearer token on startup.
     # The generated value is saved here and announced in the console without printing the secret.
