@@ -201,10 +201,18 @@ tested with vanilla appearances first. Children can add PNGs to its `textures`
 directory, select them from the editor, reload the pack, and then rebuild the
 resource packs when the visual is ready.
 
-The web editor can use the same pack commands and API lifecycle: validate a
-proposed YAML document, publish only the owned definition, then call the same
-reload/reconcile path. It should not write the whole pack or bypass the
-revision check.
+The web editor lists each discovered configuration file inside the pack and
+opens it in a dedicated subview. It renders mappings, lists, strings, numbers,
+and booleans as editable controls through the shared `WebViewDataEditor`
+component. Users can add, remove, and rename entries without editing YAML
+text. The save request includes the file revision; the service serializes the
+submitted data, validates the pack, and uses the normal reload/reconcile path.
+Invalid changes are rolled back, and stale revisions are rejected.
+
+Other service editors can use `WebViewDataEditor` for configuration-shaped
+data, or provide a more specialised set of WebView forms when the values need
+more guidance. Services return component definitions and state; the shared
+WebService renderer owns the page markup and controls.
 
 The shared web editor is opened in-game with `/editor`. The first private link
 contains the bootstrap key, then exchanges it for an HttpOnly cookie and

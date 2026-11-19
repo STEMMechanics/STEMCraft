@@ -32,8 +32,16 @@ public record EditorWebAction(
         @NotNull String method,
         @NotNull Map<String, Object> payload,
         @NotNull Map<String, String> query,
-        @Nullable EditorWebDialog dialog
+        @Nullable EditorWebDialog dialog,
+        @NotNull Map<String, Object> result
 ) {
+    public EditorWebAction(@NotNull String type, @NotNull String id, @NotNull String label,
+                           @NotNull String variant, @Nullable String endpoint, @NotNull String method,
+                           @NotNull Map<String, Object> payload, @NotNull Map<String, String> query,
+                           @Nullable EditorWebDialog dialog) {
+        this(type, id, label, variant, endpoint, method, payload, query, dialog, Map.of());
+    }
+
     public EditorWebAction {
         if (type == null || type.isBlank()) throw new IllegalArgumentException("type must not be blank");
         if (id == null || id.isBlank()) throw new IllegalArgumentException("id must not be blank");
@@ -42,11 +50,22 @@ public record EditorWebAction(
         if (method == null || method.isBlank()) method = "POST";
         payload = payload == null ? Map.of() : Map.copyOf(new LinkedHashMap<>(payload));
         query = query == null ? Map.of() : Map.copyOf(new LinkedHashMap<>(query));
+        result = result == null ? Map.of() : Map.copyOf(new LinkedHashMap<>(result));
     }
 
     public static @NotNull EditorWebAction navigate(@NotNull String id, @NotNull String label,
                                                      @NotNull Map<String, String> query) {
         return new EditorWebAction("navigate", id, label, "default", null, "GET", Map.of(), query, null);
+    }
+
+    public static @NotNull EditorWebAction display(@NotNull String id, @NotNull String label,
+                                                    @NotNull String variant) {
+        return new EditorWebAction("display", id, label, variant, null, "GET", Map.of(), Map.of(), null);
+    }
+
+    public static @NotNull EditorWebAction previewDialog(@NotNull String id, @NotNull String label,
+                                                          @NotNull String variant, @NotNull EditorWebDialog dialog) {
+        return new EditorWebAction("dialog", id, label, variant, null, "POST", Map.of(), Map.of(), dialog);
     }
 
     public static @NotNull EditorWebAction request(@NotNull String id, @NotNull String label,

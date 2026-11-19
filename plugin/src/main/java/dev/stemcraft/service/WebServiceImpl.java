@@ -317,6 +317,11 @@ public class WebServiceImpl extends BaseService implements WebService {
         // Keep bundled website assets available from the configured web root
         // without overwriting files that an operator has customised.
         plugin.exportBundledDirectory("www/assets", wwwPath + "/assets");
+        // Keep the shared renderer and its styles in step with the server API.
+        // Branding assets such as logo.png and background images remain operator-owned.
+        for (String asset : List.of("editor.js", "editor.css", "site.css")) {
+            plugin.refreshBundledFile("www/assets/" + asset, wwwPath + "/assets/" + asset);
+        }
         ensureDefaultWebFile(DEFAULT_ROBOTS_RESOURCE, "robots.txt");
 
         port = getConfigSection().getInt("port", 8950);
@@ -1632,7 +1637,6 @@ public class WebServiceImpl extends BaseService implements WebService {
         public void handle(HttpExchange exchange) throws IOException {
             String path = exchange.getRequestURI().getPath();
             try {
-                // Log before parsing so a bad request cannot fail silently.
                 api.messages().info("WEB_SERVER_REQUEST",
                     "method", exchange.getRequestMethod(),
                     "path", redactSensitivePath(path),
@@ -1739,6 +1743,9 @@ public class WebServiceImpl extends BaseService implements WebService {
             }
 
             exchange.getResponseHeaders().set("Content-Type", contentType);
+            if (requestedName.endsWith(".css") || requestedName.endsWith(".js")) {
+                exchange.getResponseHeaders().set("Cache-Control", "no-store");
+            }
             long size = Files.size(requested);
             if (!beginResponse(exchange, 200, size)) return;
 
@@ -1751,7 +1758,15 @@ public class WebServiceImpl extends BaseService implements WebService {
                                                WebServiceRequest request,
                                                WebServiceStreamingEndpointHandler handler) throws IOException {
             ExchangeStream stream = new ExchangeStream(exchange);
-            boolean handled = handler.handle(request, stream);
+            boolean handled;
+            try {
+                handled = handler.handle(request, stream);
+            } catch (IOException failure) {
+                // A peer closing an SSE connection is normal. ExchangeStream marks itself
+                // closed when a write fails, so only propagate IO failures while it remains open.
+                if (stream.isOpen()) throw failure;
+                handled = true;
+            }
             if (handled) stream.close();
             return handled;
         }
@@ -1761,6 +1776,8 @@ public class WebServiceImpl extends BaseService implements WebService {
             String prefix = "/editor/";
             String remainder = path.substring(prefix.length());
             int slash = remainder.indexOf('/');
+            String firstSegment = slash < 0 ? remainder : remainder.substring(0, slash);
+            if (firstSegment.length() < 24 || !firstSegment.matches("[A-Za-z0-9_-]+")) return path;
             return prefix + "[redacted]" + (slash < 0 ? "" : remainder.substring(slash));
         }
 

@@ -9,6 +9,8 @@ import dev.stemcraft.api.command.CommandExecutor;
 import dev.stemcraft.api.config.ConfigSection;
 import dev.stemcraft.api.service.editor.EditorWebModule;
 import dev.stemcraft.api.service.editor.EditorWebResponse;
+import dev.stemcraft.api.service.editor.WebView;
+import dev.stemcraft.api.service.editor.WebViewEmpty;
 import org.bukkit.entity.Player;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -177,6 +179,19 @@ class WebServiceTransportTest {
     }
 
     @Test
+    void editorCodeAssetsAreNotCachedAcrossPluginUpdates() throws Exception {
+        Path assets = Files.createDirectories(dataFolder.resolve("www/assets"));
+        Files.writeString(assets.resolve("editor.js"), "current renderer");
+        service.start();
+
+        HttpResponse<String> response = get("/assets/editor.js");
+
+        assertEquals(200, response.statusCode());
+        assertEquals("current renderer", response.body());
+        assertEquals("no-store", response.headers().firstValue("Cache-Control").orElseThrow());
+    }
+
+    @Test
     void encodedQueryValuesAreDecodedOnceWithoutSplittingTheirContents() throws Exception {
         service.registerEndpointHandler("/echo", request -> request.queryParams().get("value"));
         service.start();
@@ -267,6 +282,11 @@ class WebServiceTransportTest {
             @Override public String description() { return "Test packs"; }
             @Override public String readPermission() { return ""; }
             @Override public String writePermission() { return ""; }
+            @Override public WebView view(dev.stemcraft.api.service.editor.EditorWebContext context,
+                                          dev.stemcraft.api.service.web.WebServiceRequest request) {
+                return new WebView("panel", "Packs", "", false,
+                    List.of(new WebViewEmpty("Nothing to show.")));
+            }
             @Override public EditorWebResponse handle(dev.stemcraft.api.service.editor.EditorWebContext context,
                                                        String path, dev.stemcraft.api.service.web.WebServiceRequest request) {
                 return new EditorWebResponse(200, "text/plain; charset=utf-8", "ok");

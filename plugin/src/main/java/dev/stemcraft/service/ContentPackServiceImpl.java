@@ -23,22 +23,35 @@ import dev.stemcraft.api.service.config.ConfigChangeOrigin;
 import dev.stemcraft.api.service.config.ConfigSaveResult;
 import dev.stemcraft.api.service.config.ConfigSubscription;
 import dev.stemcraft.api.service.editor.EditorWebContext;
-import dev.stemcraft.api.service.editor.EditorWebAction;
-import dev.stemcraft.api.service.editor.EditorWebBadge;
-import dev.stemcraft.api.service.editor.EditorWebComponent;
-import dev.stemcraft.api.service.editor.EditorWebDialog;
-import dev.stemcraft.api.service.editor.EditorWebField;
-import dev.stemcraft.api.service.editor.EditorWebItem;
 import dev.stemcraft.api.service.editor.EditorWebModule;
-import dev.stemcraft.api.service.editor.EditorWebOption;
 import dev.stemcraft.api.service.editor.EditorWebResponse;
-import dev.stemcraft.api.service.editor.EditorWebView;
+import dev.stemcraft.api.service.editor.WebView;
+import dev.stemcraft.api.service.editor.WebViewBadge;
+import dev.stemcraft.api.service.editor.WebViewButton;
+import dev.stemcraft.api.service.editor.WebViewCards;
+import dev.stemcraft.api.service.editor.WebViewComponent;
+import dev.stemcraft.api.service.editor.WebViewDialog;
+import dev.stemcraft.api.service.editor.WebViewDataEditor;
+import dev.stemcraft.api.service.editor.WebViewEmpty;
+import dev.stemcraft.api.service.editor.WebViewField;
+import dev.stemcraft.api.service.editor.WebViewForm;
+import dev.stemcraft.api.service.editor.WebViewItem;
+import dev.stemcraft.api.service.editor.WebViewList;
+import dev.stemcraft.api.service.editor.WebViewMetadata;
+import dev.stemcraft.api.service.editor.WebViewOption;
+import dev.stemcraft.api.service.editor.WebViewPanel;
+import dev.stemcraft.api.service.editor.WebViewNotice;
+import dev.stemcraft.api.service.editor.WebViewSubview;
+import dev.stemcraft.api.service.editor.WebViewValidation;
 import dev.stemcraft.api.service.web.WebServiceRequest;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Registry;
+import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.serialization.ConfigurationSerializable;
+import org.bukkit.configuration.file.YamlConfiguration;
 import io.papermc.paper.registry.RegistryAccess;
 import io.papermc.paper.registry.RegistryKey;
 
@@ -65,6 +78,8 @@ import java.util.function.Function;
 
 /** Central discovery and lifecycle service for STEMCraft-owned content packs. */
 public final class ContentPackServiceImpl extends BaseService implements ContentPackService {
+    private static final int MAX_EDITOR_DATA_DEPTH = 32;
+    private static final int MAX_EDITOR_DATA_NODES = 20_000;
     private static final String PACK_ROOT = "data-packs";
     private static final String STATE_FILE = "content-pack-state.yml";
     private static final String TRASH_DIRECTORY = ".content-pack-trash";
@@ -348,48 +363,260 @@ public final class ContentPackServiceImpl extends BaseService implements Content
         return List.copyOf(result);
     }
 
-    /** Return a safe snapshot of one pack document for the shared web editor. */
+    /** Return identity and revision metadata for one pack configuration. */
     DocumentSnapshot editorDocument(@NotNull String packId, @NotNull String relativePath) {
         ContentPackDocument document = findDocument(packId, relativePath);
         if (document == null || !document.file().isFile()) return null;
+        return new DocumentSnapshot(document.packId(), documentPath(document), document.config().revision());
+    }
+
+    /** Return typed YAML data for a component-based editor view. */
+    EditorDataSnapshot editorData(@NotNull String packId, @NotNull String relativePath) {
+        ContentPackDocument document = findDocument(packId, relativePath);
+        if (document == null || !document.file().isFile()) return null;
         try {
-            return new DocumentSnapshot(document.packId(), documentPath(document),
-                Files.readString(document.file().toPath()), document.config().revision());
-        } catch (IOException exception) {
+            return new EditorDataSnapshot(document.packId(), documentPath(document),
+                sectionData(document.config(), 0, new int[]{0}), document.config().revision());
+        } catch (RuntimeException exception) {
+            plugin.getLogger().warning("[content-packs] Could not read editor data for '"
+                + document.file() + "': " + exception.getMessage());
             return null;
         }
     }
 
-    /** Save one pack document, then validate and reload the owning pack. */
-    DocumentSaveResult saveEditorDocument(@NotNull String packId, @NotNull String relativePath,
-                                          @NotNull String content, String expectedRevision) {
+    /** Save structured YAML values with revision checks and the normal pack validation lifecycle. */
+    DocumentSaveResult saveEditorData(@NotNull String packId, @NotNull String relativePath,
+                                      @NotNull Map<?, ?> data, String expectedRevision) {
         ContentPackDocument document = findDocument(packId, relativePath);
-        if (document == null || !document.file().isFile()) return new DocumentSaveResult(false, "Document not found.", null);
+        if (document == null || !document.file().isFile())
+            return new DocumentSaveResult(false, "Configuration file not found.", null);
         String currentRevision = document.config().revision();
-        if (expectedRevision != null && !expectedRevision.isBlank() && !expectedRevision.equals(currentRevision))
-            return new DocumentSaveResult(false, "This document changed elsewhere. Reload it before saving.", currentRevision);
+        if (expectedRevision == null || expectedRevision.isBlank())
+            return new DocumentSaveResult(false, "Reload the configuration before saving so its revision can be checked.", currentRevision);
 
         String previous;
         try {
             previous = Files.readString(document.file().toPath());
         } catch (IOException exception) {
-            return new DocumentSaveResult(false, "Could not write the document: " + exception.getMessage(), currentRevision);
+            return new DocumentSaveResult(false, "Could not read the current configuration: " + exception.getMessage(), currentRevision);
         }
 
-        ConfigSaveResult saveResult = document.config().saveYaml(content, expectedRevision);
-        if (!saveResult.success()) {
-            return new DocumentSaveResult(false, saveResult.message(), saveResult.currentDiskRevision());
+        try {
+            Object normalized = copyEditorValue(data, 0, new int[]{0});
+            if (!(normalized instanceof Map<?, ?> root))
+                return new DocumentSaveResult(false, "A configuration file must contain named fields at the top level.", currentRevision);
+            YamlConfiguration yaml = new YamlConfiguration();
+            for (Map.Entry<?, ?> entry : root.entrySet()) {
+                yaml.set(String.valueOf(entry.getKey()), entry.getValue());
+            }
+            ConfigSaveResult saveResult = document.config().saveYaml(yaml.saveToString(), expectedRevision);
+            if (!saveResult.success())
+                return new DocumentSaveResult(false, saveResult.message(), saveResult.currentDiskRevision());
+        } catch (IllegalArgumentException exception) {
+            return new DocumentSaveResult(false, exception.getMessage(), currentRevision);
         }
+
         if (!reload(packId)) {
             ConfigSaveResult restoreResult = document.config().saveYaml(previous, "");
             if (!restoreResult.success()) plugin.getLogger().warning("[content-packs] Could not restore '"
-                + document.file() + "' after a failed web save: " + restoreResult.message());
+                + document.file() + "' after a rejected structured web save: " + restoreResult.message());
             reload(packId);
-            return new DocumentSaveResult(false, "The document was rejected; the previous working version was restored.",
+            return new DocumentSaveResult(false, "The change failed pack validation; the previous working configuration was restored.",
                 document.config().revision());
         }
-        return new DocumentSaveResult(true, "Saved and reloaded " + documentPath(document) + ".", document.config().revision());
+        EditorDataSnapshot saved = editorData(packId, relativePath);
+        return new DocumentSaveResult(true, "Saved and validated " + documentPath(document) + ".",
+            saved == null ? document.config().revision() : saved.revision());
     }
+
+    private static Object encodeUnicodeEscapes(Object value) {
+        if (value instanceof String text) return encodeUnicodeText(text);
+        if (value instanceof Map<?, ?> map) {
+            Map<String, Object> result = new LinkedHashMap<>();
+            map.forEach((key, child) -> result.put(encodeUnicodeText(String.valueOf(key)), encodeUnicodeEscapes(child)));
+            return result;
+        }
+        if (value instanceof Collection<?> collection)
+            return collection.stream().map(ContentPackServiceImpl::encodeUnicodeEscapes).toList();
+        return value;
+    }
+
+    private static Map<String, Object> stringKeyMap(Object value) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        if (value instanceof Map<?, ?> map) {
+            map.forEach((key, child) -> {
+                if (key != null) result.put(String.valueOf(key), child);
+            });
+        }
+        return result;
+    }
+
+    private static Object decodeUnicodeEscapes(Object value) {
+        if (value instanceof String text) return decodeUnicodeText(text);
+        if (value instanceof Map<?, ?> map) {
+            Map<String, Object> result = new LinkedHashMap<>();
+            map.forEach((key, child) -> result.put(decodeUnicodeText(String.valueOf(key)), decodeUnicodeEscapes(child)));
+            return result;
+        }
+        if (value instanceof Collection<?> collection)
+            return collection.stream().map(ContentPackServiceImpl::decodeUnicodeEscapes).toList();
+        return value;
+    }
+
+    private static String encodeUnicodeText(String text) {
+        StringBuilder result = new StringBuilder(text.length());
+        for (int index = 0; index < text.length(); index++) {
+            char character = text.charAt(index);
+            if (character == '\\') result.append("\\\\");
+            else if (character > 0x7e) result.append(String.format(Locale.ROOT, "\\u%04X", (int) character));
+            else result.append(character);
+        }
+        return result.toString();
+    }
+
+    private static String decodeUnicodeText(String text) {
+        StringBuilder result = new StringBuilder(text.length());
+        for (int index = 0; index < text.length();) {
+            if (text.charAt(index) != '\\' || index + 1 >= text.length()) {
+                result.append(text.charAt(index++));
+            } else if (text.charAt(index + 1) == '\\') {
+                result.append('\\');
+                index += 2;
+            } else if (text.charAt(index + 1) == 'u' && index + 6 <= text.length()) {
+                try {
+                    result.append((char) Integer.parseInt(text.substring(index + 2, index + 6), 16));
+                    index += 6;
+                } catch (NumberFormatException exception) {
+                    result.append(text.charAt(index++));
+                }
+            } else {
+                result.append(text.charAt(index++));
+            }
+        }
+        return result.toString();
+    }
+
+    private static Map<String, Object> sectionData(ConfigSection section, int depth, int[] nodes) {
+        if (depth > MAX_EDITOR_DATA_DEPTH) throw new IllegalArgumentException("Configuration nesting is too deep to edit safely.");
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (String key : section.getKeys(false)) {
+            if (++nodes[0] > MAX_EDITOR_DATA_NODES) throw new IllegalArgumentException("Configuration has too many values to edit in one view.");
+            if (section.isSection(key)) {
+                ConfigSection child = section.getSection(key, false);
+                result.put(key, child == null ? Map.of() : sectionData(child, depth + 1, nodes));
+            } else {
+                result.put(key, copyEditorValue(section.get(key), depth + 1, nodes));
+            }
+        }
+        return result;
+    }
+
+    private static Map<String, Object> sectionData(ConfigurationSection section, int depth, int[] nodes) {
+        if (depth > MAX_EDITOR_DATA_DEPTH) throw new IllegalArgumentException("Configuration nesting is too deep to edit safely.");
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (String key : section.getKeys(false)) {
+            if (++nodes[0] > MAX_EDITOR_DATA_NODES) throw new IllegalArgumentException("Configuration has too many values to edit in one view.");
+            ConfigurationSection child = section.getConfigurationSection(key);
+            result.put(key, child == null ? copyEditorValue(section.get(key), depth + 1, nodes)
+                : sectionData(child, depth + 1, nodes));
+        }
+        return result;
+    }
+
+    private static Object copyEditorValue(Object value, int depth, int[] nodes) {
+        if (depth > MAX_EDITOR_DATA_DEPTH) throw new IllegalArgumentException("Configuration nesting is too deep to edit safely.");
+        if (++nodes[0] > MAX_EDITOR_DATA_NODES) throw new IllegalArgumentException("Configuration has too many values to edit in one view.");
+        if (value == null || value instanceof String || value instanceof Boolean) return value;
+        if (value instanceof Number number) {
+            double decimal = number.doubleValue();
+            if (!Double.isFinite(decimal)) throw new IllegalArgumentException("Configuration values must use finite numbers.");
+            if (decimal == Math.rint(decimal) && decimal >= Long.MIN_VALUE && decimal <= Long.MAX_VALUE) {
+                long integral = (long) decimal;
+                return integral >= Integer.MIN_VALUE && integral <= Integer.MAX_VALUE ? (int) integral : integral;
+            }
+            return decimal;
+        }
+        if (value instanceof Character character) return character.toString();
+        if (value instanceof ConfigurationSection section) return sectionData(section, depth, nodes);
+        if (value instanceof ConfigurationSerializable serializable) return copyEditorValue(serializable.serialize(), depth + 1, nodes);
+        if (value instanceof Map<?, ?> map) {
+            Map<String, Object> result = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                if (!(entry.getKey() instanceof String key)) throw new IllegalArgumentException("Configuration map keys must be text.");
+                result.put(key, copyEditorValue(entry.getValue(), depth + 1, nodes));
+            }
+            return result;
+        }
+        if (value instanceof Collection<?> collection) {
+            List<Object> result = new ArrayList<>(collection.size());
+            for (Object item : collection) result.add(copyEditorValue(item, depth + 1, nodes));
+            return result;
+        }
+        throw new IllegalArgumentException("This configuration contains a value the structured editor cannot safely change: "
+            + value.getClass().getSimpleName());
+    }
+
+    /** Return a hierarchical plain map; ConfigSection.getMap() uses Bukkit's flattened/shallow views. */
+    static Map<String, Object> configurationMap(ConfigSection section, String path) {
+        if (section == null) return Map.of();
+        if (path == null || path.isBlank()) return configurationMap(section, 0);
+        if (section.isSection(path)) {
+            ConfigSection child = section.getSection(path, false);
+            return child == null ? Map.of() : configurationMap(child, 0);
+        }
+        Object value = normalizeConfigValue(section.get(path), 0);
+        if (!(value instanceof Map<?, ?> map)) return Map.of();
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            if (entry.getKey() instanceof String key) result.put(key, entry.getValue());
+        }
+        return result;
+    }
+
+    private static Map<String, Object> configurationMap(ConfigSection section, int depth) {
+        if (depth > MAX_EDITOR_DATA_DEPTH) throw new IllegalArgumentException("Configuration nesting is too deep.");
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (String key : section.getKeys(false)) {
+            if (section.isSection(key)) {
+                ConfigSection child = section.getSection(key, false);
+                result.put(key, child == null ? Map.of() : configurationMap(child, depth + 1));
+            } else {
+                result.put(key, normalizeConfigValue(section.get(key), depth + 1));
+            }
+        }
+        return result;
+    }
+
+    private static Map<String, Object> configurationMap(ConfigurationSection section, int depth) {
+        if (depth > MAX_EDITOR_DATA_DEPTH) throw new IllegalArgumentException("Configuration nesting is too deep.");
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (String key : section.getKeys(false)) {
+            ConfigurationSection child = section.getConfigurationSection(key);
+            result.put(key, child == null ? normalizeConfigValue(section.get(key), depth + 1)
+                : configurationMap(child, depth + 1));
+        }
+        return result;
+    }
+
+    private static Object normalizeConfigValue(Object value, int depth) {
+        if (depth > MAX_EDITOR_DATA_DEPTH) throw new IllegalArgumentException("Configuration nesting is too deep.");
+        if (value instanceof ConfigurationSection section) return configurationMap(section, depth);
+        if (value instanceof ConfigurationSerializable serializable) return normalizeConfigValue(serializable.serialize(), depth + 1);
+        if (value instanceof Map<?, ?> map) {
+            Map<String, Object> result = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                if (entry.getKey() instanceof String key) result.put(key, normalizeConfigValue(entry.getValue(), depth + 1));
+            }
+            return result;
+        }
+        if (value instanceof Collection<?> collection) {
+            List<Object> result = new ArrayList<>(collection.size());
+            for (Object item : collection) result.add(normalizeConfigValue(item, depth + 1));
+            return result;
+        }
+        return value;
+    }
+
 
     /** Return a mutable configuration value for a structured editor operation. */
     Object editorValue(@NotNull String packId, @NotNull String relativePath, @NotNull String path) {
@@ -483,22 +710,18 @@ public final class ContentPackServiceImpl extends BaseService implements Content
                 data.put("documents", editorDocuments());
                 return json(200, data);
             }
-            if ("/document".equals(path)) {
-                String pack = request.queryParam("pack");
-                String file = request.queryParam("file");
-                if ("GET".equalsIgnoreCase(request.method())) {
-                    DocumentSnapshot snapshot = editorDocument(pack, file);
-                    if (snapshot == null) return text(404, "Document not found.");
-                    return json(200, snapshot);
-                }
-                if ("PUT".equalsIgnoreCase(request.method())) {
-                    if (!context.writable()) return text(403, "This link is read-only.");
-                    Map<?, ?> body = EDITOR_GSON.fromJson(request.bodyAsString(), Map.class);
-                    String content = body.get("content") == null ? "" : String.valueOf(body.get("content"));
-                    String revision = body.get("revision") == null ? "" : String.valueOf(body.get("revision"));
-                    DocumentSaveResult result = saveEditorDocument(pack, file, content, revision);
-                    return json(result.success() ? 200 : 409, result);
-                }
+            if ("/data".equals(path) && "PUT".equalsIgnoreCase(request.method())) {
+                if (!context.writable()) return text(403, "This link is read-only.");
+                Map<?, ?> body = EDITOR_GSON.fromJson(request.bodyAsString(), Map.class);
+                if (body == null || !(body.get("data") instanceof Map<?, ?> data))
+                    return text(400, "The editor did not submit configuration fields.");
+                String pack = body.get("pack") == null ? "" : String.valueOf(body.get("pack"));
+                String file = body.get("file") == null ? "" : String.valueOf(body.get("file"));
+                String revision = body.get("revision") == null ? "" : String.valueOf(body.get("revision"));
+                Map<?, ?> submittedData = Boolean.TRUE.equals(body.get("unicodeEscapes"))
+                    ? (Map<?, ?>) decodeUnicodeEscapes(data) : data;
+                DocumentSaveResult result = saveEditorData(pack, file, submittedData, revision);
+                return json(result.success() ? 200 : 409, result);
             }
             if ("/action".equals(path) && "POST".equalsIgnoreCase(request.method())) {
                 if (!context.writable()) return text(403, "This link is read-only.");
@@ -540,12 +763,12 @@ public final class ContentPackServiceImpl extends BaseService implements Content
     private final class ContentPackEditorModule implements EditorWebModule {
         @Override public @NotNull String id() { return "packs"; }
         @Override public @NotNull String title() { return "Packs"; }
-        @Override public @NotNull String icon() { return "P"; }
+        @Override public @NotNull String icon() { return "package"; }
         @Override public @NotNull String description() { return "Manage content packs and their files."; }
         @Override public @NotNull String readPermission() { return "stemcraft.command.stemcraft.pack"; }
         @Override public @NotNull String writePermission() { return "stemcraft.command.stemcraft.pack"; }
 
-        @Override public @NotNull EditorWebView view(@NotNull EditorWebContext context,
+        @Override public @NotNull WebView view(@NotNull EditorWebContext context,
                                                       @NotNull WebServiceRequest request) {
             return contentPackEditorView(context, request);
         }
@@ -556,103 +779,199 @@ public final class ContentPackServiceImpl extends BaseService implements Content
         }
     }
 
-    private @NotNull EditorWebView contentPackEditorView(@NotNull EditorWebContext context,
+    private @NotNull WebView contentPackEditorView(@NotNull EditorWebContext context,
                                                           @NotNull WebServiceRequest request) {
         String selectedId = request.queryParam("pack");
         if (selectedId == null || selectedId.isBlank()) {
-            List<EditorWebItem> items = packs().stream()
-                .map(info -> new EditorWebItem(info.id(), info.id(),
+            List<WebViewItem> items = packs().stream()
+                .map(info -> new WebViewItem(info.id(), info.id(),
                     info.description().isBlank() ? "Content pack" : info.description(),
                     packBadges(info),
-                    EditorWebAction.navigate("open-" + info.id(), "Open", Map.of("pack", info.id()))))
+                    WebViewButton.navigate("open-" + info.id(), "Open", Map.of("pack", info.id()))))
                 .toList();
-            List<EditorWebAction> actions = context.writable()
+            List<WebViewButton> actions = context.writable()
                 ? List.of(createPackAction()) : List.of();
-            return new EditorWebView("packs", "Content packs", "", context.writable(), List.of(
-                EditorWebComponent.of("toolbar", Map.of(
-                    "actions", actions,
-                    "meta", packs().size() + " pack" + (packs().size() == 1 ? "" : "s"))),
-                EditorWebComponent.of("cards", Map.of("items", items))
-            ));
+            return new WebView("packs", "Content packs", "", context.writable(), List.of(
+                new WebViewPanel("Content packs", 1, List.of(new WebViewCards(items, 3)), List.of(),
+                    packs().size() + " pack" + (packs().size() == 1 ? "" : "s"))
+            )).withTopbarActions(actions);
         }
 
         ContentPackInfo info = find(selectedId);
         if (info == null) {
-            return new EditorWebView("packs", "Content packs", "", context.writable(), List.of(
-                EditorWebComponent.of("subview", Map.of(
-                    "title", selectedId,
-                    "back", EditorWebAction.navigate("back", "Back", Map.of()))),
-                EditorWebComponent.of("empty", Map.of("text", "Content pack not found."))
+            return new WebView("packs", "Content packs", "", context.writable(), List.of(
+                new WebViewSubview(selectedId, WebViewButton.navigate("back", "Back", Map.of())),
+                new WebViewEmpty("Content pack not found.")
             ));
         }
 
-        List<EditorWebAction> actions = context.writable() ? packActions(info) : List.of();
-        List<EditorWebOption> documents = editorDocuments().stream()
+        String selectedFile = request.queryParam("file");
+        if (selectedFile != null && !selectedFile.isBlank()) {
+            return contentPackDataView(context, info, selectedFile, Map.of("pack", info.id()));
+        }
+
+        List<WebViewButton> actions = context.writable() ? packActions(info) : List.of();
+        List<WebViewItem> documents = editorDocuments().stream()
             .filter(document -> info.id().equals(document.get("pack")))
-            .map(document -> new EditorWebOption(String.valueOf(document.get("file")),
-                String.valueOf(document.get("label"))))
+            .map(document -> {
+                String file = String.valueOf(document.get("file"));
+                WebViewButton open = Boolean.TRUE.equals(document.get("hasItems"))
+                    ? WebViewButton.moduleNavigate("edit-items-" + file.hashCode(), "Edit items", "items", Map.of("pack", info.id()))
+                    : Boolean.TRUE.equals(document.get("hasLoot"))
+                        ? WebViewButton.moduleNavigate("edit-drops-" + file.hashCode(), "Edit drops", "loot", Map.of("pack", info.id()))
+                        : file.endsWith("agriculture.yml")
+                            ? WebViewButton.moduleNavigate("edit-agriculture-" + file.hashCode(), "Edit farming and gathering",
+                                "agriculture", Map.of("pack", info.id(), "file", file))
+                            : WebViewButton.navigate("open-file-" + file.hashCode(), "Open", Map.of("pack", info.id(), "file", file));
+                return new WebViewItem(file, documentTitle(file), documentDescription(file), List.of(), open);
+            })
             .toList();
-        List<EditorWebComponent> components = new ArrayList<>();
-        components.add(EditorWebComponent.of("subview", Map.of(
-            "title", info.id(),
-            "back", EditorWebAction.navigate("back", "Back", Map.of()))));
-        components.add(EditorWebComponent.of("card", Map.of(
-            "title", info.id(),
-            "description", info.description().isBlank() ? "Content pack" : info.description(),
-            "badges", packBadges(info),
-            "actions", actions,
-            "children", List.of(
-                EditorWebComponent.of("validation", Map.of(
-                    "errors", info.validationErrors(),
-                    "empty", "No validation issues found.")),
-                EditorWebComponent.of("meta", Map.of(
-                    "dependencies", info.dependencies(),
-                    "resourcePackRebuildRequired", info.resourcePackRebuildRequired()))
-            ))));
-        components.add(EditorWebComponent.of("card", Map.of(
-            "title", "Pack files",
-            "description", "Open a configuration file in its own editor view.",
-            "children", List.of(EditorWebComponent.of("document-picker", Map.of(
-                "module", "packs",
-                "pack", info.id(),
-                "options", documents,
-                "empty", "No editable files"))))));
-        return new EditorWebView("packs", info.id(), "", context.writable(), components);
+        List<WebViewComponent> components = List.of(
+            new WebViewSubview(info.id(), WebViewButton.navigate("back", "Back", Map.of())),
+            new WebViewPanel(info.id(), info.description().isBlank() ? "Content pack" : info.description(), 1,
+                List.of(new WebViewValidation(info.validationErrors(), "No validation issues found."),
+                    new WebViewMetadata(info.dependencies(), info.resourcePackRebuildRequired())), actions, ""),
+            new WebViewPanel("Configuration files", 1,
+                List.of(new WebViewList("", documents, true, "Search files", "This pack has no configuration files.")))
+        );
+        return new WebView("packs", info.id(), "", context.writable(), components);
     }
 
-    private @NotNull EditorWebAction createPackAction() {
-        EditorWebDialog dialog = new EditorWebDialog("New content pack", "Create pack", List.of(
-            EditorWebField.text("id", "Pack ID", "my-pack", true, "[a-z0-9][a-z0-9_-]*"),
-            EditorWebField.select("template", "Template", List.of(
-                new EditorWebOption("", "Blank pack"),
-                new EditorWebOption("workshop", "Workshop example")))
+    private WebView contentPackDataView(EditorWebContext context, ContentPackInfo pack, String file,
+                                        Map<String, String> backQuery) {
+        EditorDataSnapshot snapshot = editorData(pack.id(), file);
+        if (snapshot == null) return new WebView("packs", pack.id(), "", context.writable(), List.of(
+            new WebViewSubview(file, WebViewButton.navigate("back-to-pack", "Back", backQuery)),
+            new WebViewEmpty("That configuration file could not be opened.")));
+
+        WebViewButton save = new WebViewButton("request", "save-config", "Save changes", "primary",
+            "data", "PUT", Map.of(), Map.of(), null, Map.of());
+        String title = documentTitle(file);
+        String description = documentDescription(file);
+        Map<String, Object> state = new LinkedHashMap<>();
+        state.put("pack", snapshot.pack());
+        state.put("file", snapshot.file());
+        state.put("revision", snapshot.revision());
+
+        if (file.substring(file.lastIndexOf('/') + 1).equalsIgnoreCase("config.yml")) {
+            Map<String, Object> settings = new LinkedHashMap<>(snapshot.data());
+            Map<String, Object> packSettings = stringKeyMap(settings.get("pack"));
+            if (!(packSettings.get("namespace") instanceof String namespace) || namespace.isBlank())
+                packSettings.put("namespace", pack.namespace());
+            if (!(packSettings.get("description") instanceof String))
+                packSettings.put("description", pack.description());
+            if (!(packSettings.get("dependencies") instanceof Collection<?>))
+                packSettings.put("dependencies", pack.dependencies());
+            settings.put("pack", packSettings);
+            state.put("data", settings);
+
+            Map<String, String> dependencies = new LinkedHashMap<>();
+            packs().stream().filter(info -> !info.id().equalsIgnoreCase(pack.id()))
+                .forEach(info -> dependencies.put(info.id(), info.id()));
+            pack.dependencies().stream().filter(id -> !dependencies.containsKey(id))
+                .forEach(id -> dependencies.put(id, id + " (missing pack)"));
+            List<WebViewOption> dependencyOptions = dependencies.entrySet().stream()
+                .map(entry -> new WebViewOption(entry.getKey(), entry.getValue()))
+                .sorted(Comparator.comparing(WebViewOption::label, String.CASE_INSENSITIVE_ORDER)).toList();
+            List<WebViewField> fields = List.of(
+                new WebViewField("text", "data.pack.namespace", "Item namespace", String.valueOf(packSettings.get("namespace")),
+                    "For example: stemcraft_farming", true, "[a-z0-9._-]+", List.of(), Map.of(), false)
+                    .withHelp("This lowercase prefix is used for custom item and resource IDs in this pack."),
+                WebViewField.textarea("data.pack.description", "Pack description",
+                    String.valueOf(packSettings.get("description")), true)
+                    .withHelp("A short explanation shown to people choosing a pack."),
+                new WebViewField("multiselect", "data.pack.dependencies", "Packs this pack needs", "", "", false,
+                    null, dependencyOptions, Map.of(), true)
+                    .withHelp("Choose other packs that must be enabled for this pack to work. Leave empty when it stands alone.")
+            );
+            WebViewForm form = new WebViewForm("content-pack-settings-editor", fields, List.of(),
+                context.writable() ? List.of(save) : List.of(), 2, "", true, "");
+            return new WebView("packs", "Pack details", description, context.writable(), List.of(
+                new WebViewSubview(title, WebViewButton.navigate("back-to-pack", "Back to pack", backQuery)),
+                new WebViewPanel("Pack details", "These settings tell STEMCraft how to identify and describe this pack.", 1,
+                    List.of(form)),
+                new WebViewNotice("Use the Enable or Disable button on the pack page to control whether players can use this pack.")),
+                state);
+        }
+
+        state.put("data", encodeUnicodeEscapes(snapshot.data()));
+        WebViewButton unicodeSave = new WebViewButton("request", "save-config", "Save changes", "primary",
+            "data", "PUT", Map.of("unicodeEscapes", true), Map.of(), null, Map.of());
+        WebViewForm form = new WebViewForm("content-pack-data-editor", List.of(),
+            List.of(new WebViewDataEditor("data", "Pack values", 2)),
+            context.writable() ? List.of(unicodeSave) : List.of(), 1, "", true, "");
+        return new WebView("packs", title, description, context.writable(), List.of(
+            new WebViewSubview(title, WebViewButton.navigate("back-to-pack", "Back to pack", backQuery)),
+            new WebViewPanel(title, snapshot.pack() + " / " + snapshot.file(), 1, List.of(
+                new WebViewNotice(documentEditHelp(file)),
+                new WebViewNotice("Minecraft text symbols are shown as \\u codes here. STEMCraft turns them back into the correct text when you save."),
+                form))), state);
+    }
+
+    private static String documentEditHelp(String file) {
+        String name = file.substring(file.lastIndexOf('/') + 1).toLowerCase(Locale.ROOT);
+        if (name.equals("recipes.yml"))
+            return "Each recipe name is an entry players can make. Result is the item it creates; ingredients are the items needed. Shaped recipes use a crafting-table pattern, while furnace recipes use an input item and cooking time.";
+        if (name.equals("dimension-portals.yml"))
+            return "These settings describe portal blocks and the Minecraft dimensions players can travel between. Check the destination and frame blocks before saving.";
+        if (name.equals("sleeping-bag.yml"))
+            return "These settings control the sleeping bag item and its crafting recipe. The item name and recipe result should refer to the same custom item.";
+        return "The groups below match settings saved in this pack file. Field names are shown in readable words; their original names are kept in the editable name boxes.";
+    }
+
+    private static String documentTitle(String file) {
+        String name = file.substring(file.lastIndexOf('/') + 1).toLowerCase(Locale.ROOT);
+        if (name.equals("agriculture.yml")) return "Farming and gathering";
+        if (name.equals("custom-items.yml") || name.equals("items.yml")) return "Custom items";
+        if (name.equals("loot.yml")) return "Mob and block drops";
+        if (name.equals("recipes.yml")) return "Crafting recipes";
+        if (name.equals("config.yml")) return "Pack settings";
+        return name.replaceFirst("(?i)\\.ya?ml$", "").replace('-', ' ').replace('_', ' ');
+    }
+
+    private static String documentDescription(String file) {
+        String name = file.substring(file.lastIndexOf('/') + 1).toLowerCase(Locale.ROOT);
+        if (name.equals("agriculture.yml")) return "Choose crops players can grow and items they can find by breaking blocks.";
+        if (name.equals("custom-items.yml") || name.equals("items.yml")) return "Add and edit items players can hold, use, craft or receive as rewards.";
+        if (name.equals("loot.yml")) return "Choose what blocks and mobs can drop when players explore.";
+        if (name.equals("recipes.yml")) return "Set the ingredients and result for crafting, furnace, smoker and brewing recipes.";
+        if (name.equals("config.yml")) return "Choose the pack name, namespace and dependencies.";
+        return "Edit the settings used by this content pack.";
+    }
+
+    private @NotNull WebViewButton createPackAction() {
+        WebViewDialog dialog = new WebViewDialog("New content pack", "Create pack", List.of(
+            WebViewField.text("id", "Pack ID", "my-pack", true, "[a-z0-9][a-z0-9_-]*"),
+            WebViewField.select("template", "Template", List.of(
+                new WebViewOption("", "Blank pack"),
+                new WebViewOption("workshop", "Workshop example")))
         ));
-        return EditorWebAction.dialog("create", "New pack", "primary", "action",
+        return WebViewButton.dialog("create", "New pack", "primary", "action",
             Map.of("action", "create"), dialog);
     }
 
-    private @NotNull List<EditorWebAction> packActions(@NotNull ContentPackInfo info) {
-        List<EditorWebAction> actions = new ArrayList<>();
-        actions.add(EditorWebAction.request("validate", "Validate", "default", "action",
+    private @NotNull List<WebViewButton> packActions(@NotNull ContentPackInfo info) {
+        List<WebViewButton> actions = new ArrayList<>();
+        actions.add(WebViewButton.request("validate", "Validate", "default", "action",
             Map.of("action", "validate", "id", info.id())));
-        actions.add(EditorWebAction.request("reload", "Reload pack", "default", "action",
+        actions.add(WebViewButton.request("reload", "Reload pack", "default", "action",
             Map.of("action", "reload", "id", info.id())));
-        actions.add(EditorWebAction.request(info.enabled() ? "disable" : "enable",
+        actions.add(WebViewButton.request(info.enabled() ? "disable" : "enable",
             info.enabled() ? "Disable" : "Enable", info.enabled() ? "warn" : "good", "action",
             Map.of("action", info.enabled() ? "disable" : "enable", "id", info.id())));
-        actions.add(EditorWebAction.request("delete", "Delete", "danger", "action",
-            Map.of("action", "delete", "id", info.id())));
+        actions.add(WebViewButton.request("delete", "Delete", "danger", "action",
+            Map.of("action", "delete", "id", info.id())).confirmation("Delete content pack '" + info.id() + "'?"));
         return List.copyOf(actions);
     }
 
-    private @NotNull List<EditorWebBadge> packBadges(@NotNull ContentPackInfo info) {
-        List<EditorWebBadge> badges = new ArrayList<>();
-        if (!info.valid()) badges.add(new EditorWebBadge("Needs attention", "bad"));
-        else if (info.enabled()) badges.add(new EditorWebBadge("Enabled", "good"));
-        else badges.add(new EditorWebBadge("Disabled", "default"));
+    private @NotNull List<WebViewBadge> packBadges(@NotNull ContentPackInfo info) {
+        List<WebViewBadge> badges = new ArrayList<>();
+        if (!info.valid()) badges.add(new WebViewBadge("Needs attention", "bad"));
+        else if (info.enabled()) badges.add(new WebViewBadge("Enabled", "good"));
+        else badges.add(new WebViewBadge("Disabled", "default"));
         if (!info.validationErrors().isEmpty()) {
             int count = info.validationErrors().size();
-            badges.add(new EditorWebBadge(count + " validation issue" + (count == 1 ? "" : "s"), "default"));
+            badges.add(new WebViewBadge(count + " validation issue" + (count == 1 ? "" : "s"), "default"));
         }
         return List.copyOf(badges);
     }
@@ -665,8 +984,8 @@ public final class ContentPackServiceImpl extends BaseService implements Content
                 value.put("pack", pack.id);
                 value.put("file", documentPath(document));
                 value.put("label", pack.id + " / " + documentPath(document));
-                value.put("hasItems", !document.config().getMap("custom-items", false).isEmpty());
-                value.put("hasLoot", !document.config().getMap("loot.tables", false).isEmpty());
+                value.put("hasItems", !configurationMap(document.config(), "custom-items").isEmpty());
+                value.put("hasLoot", !configurationMap(document.config(), "loot.tables").isEmpty());
                 result.add(value);
             }
         }
@@ -956,15 +1275,15 @@ public final class ContentPackServiceImpl extends BaseService implements Content
         Set<String> knownPotions = knownPotionDefinitions(pack);
         for (ContentPackDocument document : pack.documents) {
             String source = pack.id + "/" + document.file().getName();
-            errors.addAll(validateItems(document.config().getMap("custom-items", false),
+            errors.addAll(validateItems(configurationMap(document.config(), "custom-items"),
                 source + ".custom-items", document, knownPotions));
-            errors.addAll(validatePotionDefinitions(document.config().getMap("potions", false),
+            errors.addAll(validatePotionDefinitions(configurationMap(document.config(), "potions"),
                 source + ".potions"));
             if (document.config().isSection("loot")) {
-                errors.addAll(validateLootConditions(document.config().getMap("loot.tables", false),
+                errors.addAll(validateLootConditions(configurationMap(document.config(), "loot.tables"),
                     source + ".loot.tables"));
             }
-            errors.addAll(validateDifficultyProfiles(document.config().getMap("difficulty-profiles", false),
+            errors.addAll(validateDifficultyProfiles(configurationMap(document.config(), "difficulty-profiles"),
                 source + ".difficulty-profiles"));
         }
         pack.valid = errors.isEmpty();
@@ -1122,7 +1441,7 @@ public final class ContentPackServiceImpl extends BaseService implements Content
         List<String> errors = new ArrayList<>();
         for (ContentPackDocument document : target.documents) {
             String source = target.id + "/" + document.file().getName();
-            Map<String, Object> recipes = document.config().getMap("recipes", false);
+            Map<String, Object> recipes = configurationMap(document.config(), "recipes");
             for (String type : List.of("shaped", "shapeless", "furnace", "smoker", "blast_furnace", "campfire", "brewing")) {
                 Object raw = recipes.get(type);
                 if (!(raw instanceof Map<?, ?> definitions)) continue;
@@ -1148,7 +1467,7 @@ public final class ContentPackServiceImpl extends BaseService implements Content
                 }
             }
 
-            Map<String, Object> tables = document.config().getMap("loot.tables", false);
+            Map<String, Object> tables = configurationMap(document.config(), "loot.tables");
             for (Map.Entry<String, Object> table : tables.entrySet()) {
                 if (!(table.getValue() instanceof Map<?, ?> definition)) continue;
                 Object rules = definition.get("rules");
@@ -1178,12 +1497,12 @@ public final class ContentPackServiceImpl extends BaseService implements Content
     private Set<String> knownCustomItems(Pack target) {
         Set<String> known = new HashSet<>();
         ConfigFile root = api.config().load("config.yml");
-        if (root != null) known.addAll(root.getMap("custom-items", false).keySet().stream()
+        if (root != null) known.addAll(configurationMap(root, "custom-items").keySet().stream()
             .map(ContentPackServiceImpl::normalizeReference).filter(value -> !value.isBlank()).toList());
         for (Pack pack : packs.values()) {
             if (pack != target && !pack.enabled) continue;
             for (ContentPackDocument document : pack.documents) {
-                known.addAll(document.config().getMap("custom-items", false).keySet().stream()
+                known.addAll(configurationMap(document.config(), "custom-items").keySet().stream()
                     .map(ContentPackServiceImpl::normalizeReference).filter(value -> !value.isBlank()).toList());
             }
         }
@@ -1193,12 +1512,12 @@ public final class ContentPackServiceImpl extends BaseService implements Content
     private Set<String> knownPotionDefinitions(Pack target) {
         Set<String> known = new HashSet<>();
         ConfigFile root = api.config().load("config.yml");
-        if (root != null) known.addAll(root.getMap("potions", false).keySet().stream()
+        if (root != null) known.addAll(configurationMap(root, "potions").keySet().stream()
             .map(ContentPackServiceImpl::normalizeReference).filter(value -> !value.isBlank()).toList());
         for (Pack pack : packs.values()) {
             if (pack != target && !pack.enabled) continue;
             for (ContentPackDocument document : pack.documents) {
-                known.addAll(document.config().getMap("potions", false).keySet().stream()
+                known.addAll(configurationMap(document.config(), "potions").keySet().stream()
                     .map(ContentPackServiceImpl::normalizeReference).filter(value -> !value.isBlank()).toList());
             }
         }
@@ -1227,21 +1546,21 @@ public final class ContentPackServiceImpl extends BaseService implements Content
         for (Pack pack : packs.values()) {
             if (!pack.enabled) continue;
             for (ContentPackDocument document : pack.documents) {
-                for (String id : document.config().getMap("custom-items", false).keySet()) {
+                for (String id : configurationMap(document.config(), "custom-items").keySet()) {
                     duplicate(itemOwners, normalizeReference(id), pack.id + "/" + document.file().getName(), target,
                         "custom item").ifPresent(errors::add);
                 }
-                for (String id : document.config().getMap("potions", false).keySet()) {
+                for (String id : configurationMap(document.config(), "potions").keySet()) {
                     duplicate(potionOwners, normalizeReference(id), pack.id + "/" + document.file().getName(), target,
                         "potion definition").ifPresent(errors::add);
                 }
-                for (String id : document.config().getMap("loot.tables", false).keySet()) {
+                for (String id : configurationMap(document.config(), "loot.tables").keySet()) {
                     duplicate(tableOwners, normalizeReference(id), pack.id + "/" + document.file().getName(), target,
                         "loot table").ifPresent(errors::add);
                 }
                 for (String section : List.of("shaped", "shapeless", "furnace", "smoker", "blast_furnace",
                     "campfire", "brewing", "smithing_transform", "smithing_trim")) {
-                    for (String id : document.config().getMap("recipes." + section, false).keySet()) {
+                    for (String id : configurationMap(document.config(), "recipes." + section).keySet()) {
                         duplicate(recipeOwners, normalizeReference(id), pack.id + "/" + document.file().getName(), target,
                             "recipe").ifPresent(errors::add);
                     }
@@ -1407,7 +1726,9 @@ public final class ContentPackServiceImpl extends BaseService implements Content
     private record Handler(Function<String, Boolean> reload, Consumer<String> unload,
                            Function<String, List<String>> validate) { }
 
-    record DocumentSnapshot(String pack, String file, String content, String revision) { }
+    record DocumentSnapshot(String pack, String file, String revision) { }
+
+    record EditorDataSnapshot(String pack, String file, Map<String, Object> data, String revision) { }
 
     record DocumentSaveResult(boolean success, String message, String revision) { }
 }

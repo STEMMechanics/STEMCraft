@@ -20,8 +20,23 @@ import dev.stemcraft.api.service.dialog.DialogResponse;
 import dev.stemcraft.api.service.editor.EditorWebContext;
 import dev.stemcraft.api.service.editor.EditorWebModule;
 import dev.stemcraft.api.service.editor.EditorWebResponse;
+import dev.stemcraft.api.service.editor.WebView;
+import dev.stemcraft.api.service.editor.WebViewBadge;
+import dev.stemcraft.api.service.editor.WebViewButton;
+import dev.stemcraft.api.service.editor.WebViewCards;
+import dev.stemcraft.api.service.editor.WebViewComponent;
+import dev.stemcraft.api.service.editor.WebViewDialog;
+import dev.stemcraft.api.service.editor.WebViewEmpty;
+import dev.stemcraft.api.service.editor.WebViewField;
+import dev.stemcraft.api.service.editor.WebViewForm;
+import dev.stemcraft.api.service.editor.WebViewFields;
+import dev.stemcraft.api.service.editor.WebViewItem;
+import dev.stemcraft.api.service.editor.WebViewOption;
+import dev.stemcraft.api.service.editor.WebViewPanel;
+import dev.stemcraft.api.service.editor.WebViewSubview;
 import dev.stemcraft.api.service.itemeditor.ItemEditorService;
 import dev.stemcraft.api.service.item.CustomItemDefinition;
+import dev.stemcraft.api.service.config.ConfigSaveResult;
 import dev.stemcraft.api.service.web.WebServiceRequest;
 import dev.stemcraft.api.util.TextUtil;
 import io.papermc.paper.registry.RegistryAccess;
@@ -34,6 +49,7 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.Registry;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeModifier;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.EquipmentSlotGroup;
 import org.bukkit.inventory.ItemStack;
@@ -80,10 +96,14 @@ public final class ItemEditorServiceImpl extends BaseService implements ItemEdit
         if (api.editorWeb() != null) api.editorWeb().registerModule(new EditorWebModule() {
             @Override public @NotNull String id() { return "items"; }
             @Override public @NotNull String title() { return "Items"; }
-            @Override public @NotNull String icon() { return "I"; }
+            @Override public @NotNull String icon() { return "cube"; }
             @Override public @NotNull String description() { return "Edit custom item definitions."; }
             @Override public @NotNull String readPermission() { return "stemcraft.itemedit.edit"; }
             @Override public @NotNull String writePermission() { return "stemcraft.itemedit.publish"; }
+            @Override public @NotNull WebView view(@NotNull EditorWebContext context,
+                                                   @NotNull WebServiceRequest request) {
+                return itemEditorView(context, request);
+            }
             @Override public @NotNull EditorWebResponse handle(@NotNull EditorWebContext context, @NotNull String path,
                                                                  @NotNull WebServiceRequest request) {
                 return handleEditorRequest(context, path, request);
@@ -315,8 +335,8 @@ public final class ItemEditorServiceImpl extends BaseService implements ItemEdit
                 if (plugin.contentPacks() == null) return textResponse(503, "Content packs are unavailable.");
                 Map<?, ?> body = EDITOR_GSON.fromJson(request.bodyAsString(), Map.class);
                 String pack = requiredText(body.get("pack"), "Choose a content pack.");
-                String file = body.get("file") == null ? "configs/items.yml" : String.valueOf(body.get("file")).trim();
-                if (file.isBlank()) file = "configs/items.yml";
+                String file = body.get("file") == null ? "configs/custom-items.yml" : String.valueOf(body.get("file")).trim();
+                if (file.isBlank()) file = "configs/custom-items.yml";
                 if (!file.contains("/")) file = "configs/" + file;
                 String id = normalizeItemId(requiredText(body.get("id"), "Enter an item ID."));
                 String material = requiredText(body.get("material"), "Choose an item material").toUpperCase(Locale.ROOT);
@@ -346,6 +366,14 @@ public final class ItemEditorServiceImpl extends BaseService implements ItemEdit
                 WebItemSaveResult result = saveWebItem(id, revision, fields);
                 return json(result.success() ? 200 : 409, result);
             }
+            if ("/delete".equals(path) && "POST".equalsIgnoreCase(request.method())) {
+                if (!context.writable()) return textResponse(403, "This link is read-only.");
+                Map<?, ?> body = EDITOR_GSON.fromJson(request.bodyAsString(), Map.class);
+                WebItemSaveResult result = deleteWebItem(
+                    body.get("id") == null ? "" : String.valueOf(body.get("id")),
+                    body.get("revision") == null ? "" : String.valueOf(body.get("revision")));
+                return json(result.success() ? 200 : 409, result);
+            }
             return textResponse(405, "Method not allowed.");
         } catch (IllegalArgumentException exception) {
             return textResponse(400, exception.getMessage() == null ? "Invalid item details." : exception.getMessage());
@@ -353,6 +381,186 @@ public final class ItemEditorServiceImpl extends BaseService implements ItemEdit
             plugin.getLogger().warning("[item-editor] Web editor request failed: " + exception.getMessage());
             return textResponse(500, "The item editor could not complete that action.");
         }
+    }
+
+    private @NotNull WebView itemEditorView(@NotNull EditorWebContext context,
+                                            @NotNull WebServiceRequest request) {
+        String selectedId = request.queryParam("item");
+        String packFilter = request.queryParam("pack");
+        if (selectedId == null || selectedId.isBlank()) {
+            List<WebViewItem> items = api.items().customItemDefinitions().stream()
+                .sorted(java.util.Comparator.comparing(CustomItemDefinition::id, String.CASE_INSENSITIVE_ORDER))
+                .map(definition -> {
+                    Located located = locate(normalizeItemId(definition.id()));
+                    if (located == null || packFilter != null && !packFilter.equalsIgnoreCase(located.packId())) return null;
+                    return new WebViewItem(definition.id(), api.items().getItemName(definition.template()),
+                        located.packId() + " / " + located.file().getName(),
+                        List.of(new WebViewBadge(definition.template().getType().name(), "default")),
+                        WebViewButton.navigate("open-" + definition.id(), "Open", Map.of("item", definition.id())));
+                }).filter(java.util.Objects::nonNull).toList();
+            List<WebViewButton> actions = context.writable() && plugin.contentPacks() != null
+                ? List.of(createWebItemAction(packFilter)) : List.of();
+            String heading = packFilter == null || packFilter.isBlank() ? "Custom items" : "Items in " + packFilter;
+            return new WebView("items", "Items", "Make Minecraft items for players to use in the world.",
+                context.writable(), List.of(new WebViewPanel(heading,
+                "Each item has a Minecraft material, a name, and optional powers.", 1,
+                List.of(new WebViewCards(items, 3, "No custom items in this pack yet.")), List.of(),
+                items.size() + " item" + (items.size() == 1 ? "" : "s"))))
+                .withTopbarActions(actions);
+        }
+
+        String normalized = normalizeItemId(selectedId);
+        Located located = locate(normalized);
+        if (located == null) {
+            return new WebView("items", "Items", "", context.writable(), List.of(
+                new WebViewSubview(selectedId, WebViewButton.navigate("back", "Back", Map.of())),
+                new WebViewEmpty("Custom item not found.")));
+        }
+        Map<String, Object> values = located.values();
+        List<WebViewField> appearance = List.of(
+            fieldValue(WebViewField.text("name", "Name shown in Minecraft", "For example: Forest Shard", false, null),
+                values.get("name"))
+                .withHelp("This is the name players see in their inventory."),
+            fieldValue(WebViewField.suggestion("material", "Minecraft material", "Search materials", itemMaterialOptions(), true),
+                values.get("material"))
+                .withHelp("Choose the vanilla item this custom item looks and behaves like."),
+            fieldValue(WebViewField.text("color", "Leather or potion colour", "For example: #75B84A", false, null),
+                values.containsKey("color") ? values.get("color") : values.get("colour"))
+                .withHelp("Only leather armour and potions use this colour."),
+            fieldValue(WebViewField.suggestion("texture", "Custom texture", "Search this pack's textures", textureOptions(located.packId()), false),
+                values.get("texture"))
+                .withHelp("Optional PNG texture from this pack's textures folder."),
+            WebViewField.number("durability", "Tool durability", stringValue(values.get("max-damage")),
+                "For example: 250", false, "1", null, "1")
+                .withHelp("How many uses a tool has before it breaks. Leave blank to use the Minecraft material's normal durability.")
+        );
+        WebViewField stats = WebViewField.checkboxGroup("stats", "Item attributes", numericMap(values.get("stats")),
+            List.of(new WebViewOption("attack-damage", "Attack damage"),
+                new WebViewOption("attack-speed", "Attack speed"),
+                new WebViewOption("armor", "Armour"),
+                new WebViewOption("toughness", "Armour toughness")),
+            "Total value", "0", null, "0.1", true)
+            .withHelp("Tick an attribute to set its total on the item. For example, attack damage 8 means eight total damage; armour 5 means five armour points.");
+        WebViewField enchantments = WebViewField.checkboxGroup("enchantments", "Enchantments",
+            integerMap(values.get("enchantments")), enchantmentOptions(), "Level", "1", "255", "1", true)
+            .withHelp("Search and tick the enchantments to add. Set the level beside each selected enchantment.");
+        List<WebViewField> extra = List.of(
+            WebViewField.textarea("lore", "Lore shown under the item name", String.join("\n", stringList(values.get("lore"))), true)
+                .withHelp("Write one line at a time. Minecraft colour tags such as <gray> are supported."),
+            WebViewField.textarea("potion-effects", "Potion effects", potionEffectLines(values), true)
+                .withHelp("Optional advanced setting. Use one effect as TYPE=seconds=level, for example SPEED=10=1."),
+            WebViewField.json("abilities", "Special powers (advanced)", values.get("abilities"), true)
+                .withHelp("Advanced: effects that happen when this item is used, hits a mob, or is worn.")
+        );
+        WebViewButton save = new WebViewButton("request", "save", "Save item", "primary", "save", "POST",
+            Map.of("id", normalized, "revision", String.valueOf(lastModified(located.file()))), Map.of(), null, Map.of());
+        WebViewForm form = new WebViewForm("item-form", List.of(), List.of(
+            new WebViewPanel("Appearance", 1, List.of(new WebViewFields(appearance, 2))),
+            new WebViewPanel("Item attributes", 1, List.of(new WebViewFields(List.of(stats), 1))),
+            new WebViewPanel("Enchantments and lore", 1, List.of(new WebViewFields(List.of(enchantments, extra.getFirst()), 1))),
+            new WebViewPanel("Potion effects and special powers", 1,
+                List.of(new WebViewFields(extra.subList(1, extra.size()), 1)))
+        ), context.writable() ? List.of(save) : List.of(), 1, "fields", false, "");
+        Map<String, String> backQuery = packFilter == null || packFilter.isBlank() ? Map.of() : Map.of("pack", packFilter);
+        WebViewButton delete = new WebViewButton("request", "delete", "Remove item", "danger", "delete", "POST",
+            Map.of("id", normalized, "revision", String.valueOf(lastModified(located.file()))),
+            Map.of(), null, Map.of("query", backQuery), "Remove '" + normalized + "' from this pack?");
+        List<WebViewComponent> components = List.of(
+            new WebViewSubview(api.items().customItemDefinitions().stream()
+                .filter(definition -> normalizeItemId(definition.id()).equals(normalized))
+                .map(definition -> api.items().getItemName(definition.template())).findFirst().orElse(normalized), packFilter == null || packFilter.isBlank()
+                ? WebViewButton.navigate("back", "Back to items", backQuery)
+                : WebViewButton.moduleNavigate("back-to-pack", "Back to pack", "packs", Map.of("pack", packFilter))),
+            new WebViewPanel("Edit this Minecraft item", located.packId() + " / " + located.file().getName(), 1,
+                List.of(form), context.writable() ? List.of(delete) : List.of(), "")
+        );
+        return new WebView("items", normalized, "Change how this item looks and works in Minecraft.",
+            context.writable(), components);
+    }
+
+    private @NotNull WebViewButton createWebItemAction(String presetPack) {
+        List<WebViewOption> packs = plugin.contentPacks().packs().stream()
+            .map(pack -> new WebViewOption(pack.id(), pack.id() + (pack.enabled() ? "" : " (disabled)"))).toList();
+        List<WebViewField> fields = new ArrayList<>();
+        if (presetPack == null || presetPack.isBlank()) {
+            fields.add(WebViewField.select("pack", "Content pack", packs)
+                .withHelp("Choose the pack that should contain this item."));
+        }
+        fields.add(WebViewField.text("id", "Item ID", "For example: forest-shard", true, "[a-z0-9][a-z0-9_-]*")
+            .withHelp("A short name used in recipes, loot and quests."));
+        fields.add(WebViewField.suggestion("material", "Minecraft material", "Search materials", itemMaterialOptions(), true)
+            .withHelp("Choose the vanilla item this custom item should look like."));
+        fields.add(WebViewField.text("name", "Name shown in Minecraft", "For example: Forest Shard", false, null));
+        Map<String, Object> payload = presetPack == null || presetPack.isBlank() ? Map.of() : Map.of("pack", presetPack);
+        WebViewDialog dialog = new WebViewDialog("New custom item", "Create item", fields);
+        return WebViewButton.dialog("create", "New item", "primary", "create", payload, dialog);
+    }
+
+    private @NotNull List<WebViewOption> itemMaterialOptions() {
+        return Arrays.stream(Material.values()).filter(material -> material.isItem() && !material.isAir())
+            .map(Material::name).sorted().map(value -> new WebViewOption(value, value)).toList();
+    }
+
+    private @NotNull List<WebViewOption> enchantmentOptions() {
+        var registry = RegistryAccess.registryAccess().getRegistry(RegistryKey.ENCHANTMENT);
+        return registry.keyStream().sorted().map(key -> {
+            Enchantment enchantment = registry.get(key);
+            String label = Arrays.stream(key.getKey().split("_")).map(word ->
+                word.isEmpty() ? word : Character.toUpperCase(word.charAt(0)) + word.substring(1))
+                .collect(java.util.stream.Collectors.joining(" "));
+            return new WebViewOption(key.getKey(), label + " (max " + enchantment.getMaxLevel() + ")");
+        }).toList();
+    }
+
+    private static Map<String, Number> numericMap(Object raw) {
+        Map<String, Number> result = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : map(raw).entrySet()) {
+            if (entry.getValue() instanceof Number number) result.put(entry.getKey(), number);
+        }
+        return result;
+    }
+
+    private static Map<String, Number> integerMap(Object raw) {
+        Map<String, Number> result = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : map(raw).entrySet()) {
+            if (entry.getValue() instanceof Number number) result.put(entry.getKey(), number.intValue());
+        }
+        return result;
+    }
+
+    private @NotNull List<WebViewOption> textureOptions(String packId) {
+        return plugin.contentPacks() == null ? List.of() : plugin.contentPacks().texturePaths(packId).stream()
+            .map(path -> new WebViewOption(path.replaceFirst("(?i)\\.png$", ""), path)).toList();
+    }
+
+    private static String stringValue(Object value) { return value == null ? "" : String.valueOf(value); }
+
+    private static WebViewField fieldValue(WebViewField field, Object value) {
+        return new WebViewField(field.type(), field.name(), field.label(), stringValue(value), field.placeholder(),
+            field.required(), field.pattern(), field.options(), field.attributes(), field.wide(), field.help(), field.link());
+    }
+
+    private static String nestedValue(Map<String, Object> values, String path) {
+        Object current = values;
+        for (String part : path.split("\\.")) current = current instanceof Map<?, ?> map ? map.get(part) : null;
+        return stringValue(current);
+    }
+
+    private static String enchantmentLines(Map<String, Object> values) {
+        Object raw = values.get("enchantments");
+        if (!(raw instanceof Map<?, ?> map)) return "";
+        return map.entrySet().stream().map(entry -> entry.getKey() + "=" + entry.getValue())
+            .collect(java.util.stream.Collectors.joining(","));
+    }
+
+    private static String potionEffectLines(Map<String, Object> values) {
+        Object raw = values.get("potion");
+        if (!(raw instanceof Map<?, ?> potion) || !(potion.get("effects") instanceof List<?> effects)) return "";
+        return effects.stream().filter(Map.class::isInstance).map(Map.class::cast).map(effect -> {
+            Object duration = effect.get("duration-seconds");
+            Object level = effect.get("level");
+            return effect.get("type") + "=" + (duration == null ? 1 : duration) + "=" + (level == null ? 1 : level);
+        }).collect(java.util.stream.Collectors.joining(","));
     }
 
     private WebItemSaveResult saveWebItem(String itemId, String expectedRevision, Map<String, Object> fields) {
@@ -377,7 +585,9 @@ public final class ItemEditorServiceImpl extends BaseService implements ItemEdit
             return new WebItemSaveResult(false, "Could not read the item file before saving.", currentRevision);
         }
         config.getSection("custom-items").set(located.configKey(), values);
-        config.save();
+        ConfigSaveResult saveResult = config.saveChecked();
+        if (!saveResult.success())
+            return new WebItemSaveResult(false, saveResult.message(), saveResult.currentDiskRevision());
         boolean reloaded = "__root__".equals(located.packId())
             ? plugin.items() != null && plugin.items().reloadRootItems()
             : plugin.contentPacks() != null && plugin.contentPacks().reload(located.packId());
@@ -398,11 +608,90 @@ public final class ItemEditorServiceImpl extends BaseService implements ItemEdit
         return new WebItemSaveResult(true, "Saved " + id + " and reloaded it.", String.valueOf(lastModified(located.file())));
     }
 
+    private WebItemSaveResult deleteWebItem(String itemId, String expectedRevision) {
+        String id = normalizeItemId(itemId);
+        Located located = locate(id);
+        if (located == null) return new WebItemSaveResult(false, "Item not found.", null);
+        String currentRevision = String.valueOf(lastModified(located.file()));
+        if (expectedRevision == null || expectedRevision.isBlank() || !expectedRevision.equals(currentRevision))
+            return new WebItemSaveResult(false, "This item changed elsewhere. Reload it before removing it.", currentRevision);
+        byte[] previous;
+        try {
+            previous = Files.readAllBytes(located.file().toPath());
+        } catch (IOException exception) {
+            return new WebItemSaveResult(false, "Could not read the item file before removing the item.", currentRevision);
+        }
+        ConfigFile config = api.config().load(located.file());
+        ConfigSection items = config == null ? null : config.getSection("custom-items", false);
+        if (items == null) return new WebItemSaveResult(false, "The custom items section could not be found.", currentRevision);
+        items.remove(located.configKey());
+        ConfigSaveResult saveResult = config.saveChecked();
+        if (!saveResult.success())
+            return new WebItemSaveResult(false, saveResult.message(), saveResult.currentDiskRevision());
+        boolean reloaded = "__root__".equals(located.packId())
+            ? plugin.items() != null && plugin.items().reloadRootItems()
+            : plugin.contentPacks() != null && plugin.contentPacks().reload(located.packId());
+        if (!reloaded) {
+            try {
+                Files.write(located.file().toPath(), previous);
+                config.reload();
+                if ("__root__".equals(located.packId())) plugin.items().reloadRootItems();
+                else if (plugin.contentPacks() != null) plugin.contentPacks().reload(located.packId());
+            } catch (IOException restoreFailure) {
+                plugin.getLogger().warning("[item-editor] Could not restore failed item removal from '"
+                    + located.file() + "': " + restoreFailure.getMessage());
+            }
+            return new WebItemSaveResult(false, "The pack rejected the change; the item was restored.",
+                String.valueOf(lastModified(located.file())));
+        }
+        return new WebItemSaveResult(true, "Removed " + id + " from the pack.", String.valueOf(lastModified(located.file())));
+    }
+
     private void applyWebField(Map<String, Object> values, String field, Object rawValue, String packId) {
         String key = field == null ? "" : field.trim().toLowerCase(Locale.ROOT).replace('_', '-');
         String value = rawValue == null ? "" : String.valueOf(rawValue);
         if ("abilities".equals(key) && rawValue instanceof Map<?, ?> map) {
             values.put("abilities", stringMap(map));
+            return;
+        }
+        if ("stats".equals(key) && rawValue instanceof Map<?, ?> rawStats) {
+            Set<String> allowed = Set.of("attack-damage", "attack-speed", "armor", "toughness");
+            Map<String, Object> stats = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> entry : rawStats.entrySet()) {
+                String stat = String.valueOf(entry.getKey());
+                if (!allowed.contains(stat)) throw new IllegalArgumentException("Unknown Minecraft item attribute: " + stat);
+                if (entry.getValue() == null) continue;
+                double amount;
+                try { amount = Double.parseDouble(String.valueOf(entry.getValue())); }
+                catch (NumberFormatException exception) { throw new IllegalArgumentException(stat + " must be a number."); }
+                if (!Double.isFinite(amount) || amount < 0D) throw new IllegalArgumentException(stat + " must be zero or greater.");
+                stats.put(stat, amount);
+            }
+            if (stats.isEmpty()) values.remove("stats");
+            else values.put("stats", stats);
+            return;
+        }
+        if ("enchantments".equals(key) && rawValue instanceof Map<?, ?> rawEnchantments) {
+            Map<String, Object> enchantments = new LinkedHashMap<>();
+            var registry = RegistryAccess.registryAccess().getRegistry(RegistryKey.ENCHANTMENT);
+            for (Map.Entry<?, ?> entry : rawEnchantments.entrySet()) {
+                String enchantmentId = String.valueOf(entry.getKey()).trim().toLowerCase(Locale.ROOT);
+                Enchantment enchantment = registry.get(NamespacedKey.minecraft(enchantmentId));
+                if (enchantment == null) throw new IllegalArgumentException("Unknown Minecraft enchantment: " + enchantmentId);
+                int level;
+                try {
+                    double rawLevel = entry.getValue() instanceof Number number
+                        ? number.doubleValue() : Double.parseDouble(String.valueOf(entry.getValue()));
+                    if (!Double.isFinite(rawLevel) || rawLevel != Math.rint(rawLevel)) throw new NumberFormatException();
+                    level = (int) rawLevel;
+                } catch (NumberFormatException exception) {
+                    throw new IllegalArgumentException("Enchantment level must be a whole number.");
+                }
+                if (level < 1 || level > 255) throw new IllegalArgumentException("Enchantment level must be between 1 and 255.");
+                enchantments.put(enchantmentId, level);
+            }
+            if (enchantments.isEmpty()) values.remove("enchantments");
+            else values.put("enchantments", enchantments);
             return;
         }
         if (value.isBlank() && Set.of("color", "texture", "durability", "enchantments", "potion-effects").contains(key)) {
@@ -760,7 +1049,7 @@ public final class ItemEditorServiceImpl extends BaseService implements ItemEdit
     private Located locate(String itemId) {
         ConfigFile root = api.config().load("config.yml");
         if (root != null) {
-            Map<String, Object> items = root.getMap("custom-items", true);
+            Map<String, Object> items = ContentPackServiceImpl.configurationMap(root, "custom-items");
             for (Map.Entry<String, Object> entry : items.entrySet()) {
                 if (!normalizeItemId(entry.getKey()).equals(itemId)) continue;
                 if (entry.getValue() instanceof Map<?, ?> map) {
@@ -774,7 +1063,7 @@ public final class ItemEditorServiceImpl extends BaseService implements ItemEdit
             .filter(info -> info.enabled())
             .map(info -> info.id()).toList()) {
             for (ContentPackDocument document : plugin.contentPacks().documents(packId)) {
-                Map<String, Object> items = document.config().getMap("custom-items", true);
+                Map<String, Object> items = ContentPackServiceImpl.configurationMap(document.config(), "custom-items");
                 for (Map.Entry<String, Object> entry : items.entrySet()) {
                     if (!normalizeItemId(entry.getKey()).equals(itemId)) continue;
                     if (entry.getValue() instanceof Map<?, ?> map) {

@@ -2,6 +2,8 @@ package dev.stemcraft.feature;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import io.papermc.paper.registry.RegistryAccess;
+import io.papermc.paper.registry.RegistryKey;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.CommandContext;
@@ -12,6 +14,25 @@ import dev.stemcraft.api.service.mailbox.MailSendResult;
 import dev.stemcraft.api.service.editor.EditorWebContext;
 import dev.stemcraft.api.service.editor.EditorWebModule;
 import dev.stemcraft.api.service.editor.EditorWebResponse;
+import dev.stemcraft.api.service.editor.WebView;
+import dev.stemcraft.api.service.editor.WebViewBadge;
+import dev.stemcraft.api.service.editor.WebViewButton;
+import dev.stemcraft.api.service.editor.WebViewComponent;
+import dev.stemcraft.api.service.editor.WebViewDialog;
+import dev.stemcraft.api.service.editor.WebViewEmpty;
+import dev.stemcraft.api.service.editor.WebViewField;
+import dev.stemcraft.api.service.editor.WebViewFields;
+import dev.stemcraft.api.service.editor.WebViewForm;
+import dev.stemcraft.api.service.editor.WebViewItem;
+import dev.stemcraft.api.service.editor.WebViewLink;
+import dev.stemcraft.api.service.editor.WebViewList;
+import dev.stemcraft.api.service.editor.WebViewOption;
+import dev.stemcraft.api.service.editor.WebViewPanel;
+import dev.stemcraft.api.service.editor.WebViewRepeater;
+import dev.stemcraft.api.service.editor.WebViewSidebarItem;
+import dev.stemcraft.api.service.editor.WebViewSubview;
+import dev.stemcraft.api.service.editor.WebViewTabs;
+import dev.stemcraft.api.service.editor.WebViewTree;
 import dev.stemcraft.api.service.web.WebServiceRequest;
 import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
 import dev.stemcraft.api.util.PlayerUtil;
@@ -41,8 +62,6 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
 import org.bukkit.Tag;
 import org.bukkit.World;
-import org.bukkit.configuration.InvalidConfigurationException;
-import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
@@ -187,10 +206,14 @@ public final class QuestFeature extends BaseFeature {
         if (api.editorWeb() != null) api.editorWeb().registerModule(new EditorWebModule() {
             @Override public @NotNull String id() { return "quests"; }
             @Override public @NotNull String title() { return "Quests"; }
-            @Override public @NotNull String icon() { return "Q"; }
+            @Override public @NotNull String icon() { return "scroll"; }
             @Override public @NotNull String description() { return "Create and manage quests."; }
             @Override public @NotNull String readPermission() { return PERMISSION_ADMIN; }
             @Override public @NotNull String writePermission() { return PERMISSION_ADMIN; }
+            @Override public @NotNull WebView view(@NotNull EditorWebContext context,
+                                                    @NotNull WebServiceRequest request) {
+                return questEditorView(context, request);
+            }
             @Override public @NotNull EditorWebResponse handle(@NotNull EditorWebContext context, @NotNull String path,
                                                                  @NotNull WebServiceRequest request) {
                 return handleEditorRequest(context, path, request);
@@ -1097,6 +1120,53 @@ public final class QuestFeature extends BaseFeature {
     }
 
     private EditorWebResponse handleEditorRequest(EditorWebContext context, String path, WebServiceRequest request) {
+        if ("/create".equals(path) && "POST".equalsIgnoreCase(request.method())) {
+            if (!context.writable()) return new EditorWebResponse(403, "text/plain; charset=utf-8", "This editor is read-only.");
+            try {
+                Map<?, ?> body = EDITOR_GSON.fromJson(request.bodyAsString(), Map.class);
+                String type = Objects.toString(body.get("type"), "quest");
+                String id = requireEditorId(Objects.toString(body.get("id"), ""), "quest".equals(type) ? "Quest" : "NPC");
+                EditorData current = editorData();
+                List<EditorQuest> questValues = new ArrayList<>(current.quests());
+                List<EditorNpc> npcValues = new ArrayList<>(current.npcs());
+                if ("quest".equals(type)) {
+                    if (questValues.stream().anyMatch(value -> value.id().equals(id))) throw new IllegalArgumentException("That quest ID already exists.");
+                    Map<String, List<String>> dialogue = new LinkedHashMap<>();
+                    for (String state : List.of("offer", "idle", "incomplete", "objective", "complete")) dialogue.put(state, List.of());
+                    questValues.add(new EditorQuest(id, "New Quest", "Quest Giver", "Tell this quest as a story.", "",
+                        "A reward awaits.", false, false, 0, 0, 0, null, null, "Quest Giver", "Quest Contact",
+                        dialogue, List.of(), List.of(), List.of(), List.of()));
+                } else if ("npc".equals(type)) {
+                    if (npcValues.stream().anyMatch(value -> value.id().equals(id))) throw new IllegalArgumentException("That NPC ID already exists.");
+                    npcValues.add(new EditorNpc(id, "New NPC", "VILLAGER", true, "survival", 30, 100,
+                        1200, 150, 0, 0, 24000, .25, 0, List.of(), List.of()));
+                } else throw new IllegalArgumentException("Choose quest or npc.");
+                String result = saveStructuredEditor(EDITOR_GSON.toJson(new EditorData("quests", questValues, npcValues,
+                    current.materials(), current.entityTypes())));
+                return editorJson(200, Map.of("message", result));
+            } catch (Exception exception) {
+                return new EditorWebResponse(400, "text/plain; charset=utf-8", "Not created: " + exception.getMessage());
+            }
+        }
+        if ("/delete".equals(path) && "POST".equalsIgnoreCase(request.method())) {
+            if (!context.writable()) return new EditorWebResponse(403, "text/plain; charset=utf-8", "This editor is read-only.");
+            try {
+                Map<?, ?> body = EDITOR_GSON.fromJson(request.bodyAsString(), Map.class);
+                String type = Objects.toString(body.get("type"), "quest");
+                String id = requireEditorId(Objects.toString(body.get("id"), ""), "quest".equals(type) ? "Quest" : "NPC");
+                EditorData current = editorData();
+                List<EditorQuest> questValues = new ArrayList<>(current.quests());
+                List<EditorNpc> npcValues = new ArrayList<>(current.npcs());
+                boolean removed = "quest".equals(type) ? questValues.removeIf(value -> value.id().equals(id))
+                    : "npc".equals(type) && npcValues.removeIf(value -> value.id().equals(id));
+                if (!removed) throw new IllegalArgumentException("The selected definition no longer exists.");
+                String result = saveStructuredEditor(EDITOR_GSON.toJson(new EditorData("quests", questValues, npcValues,
+                    current.materials(), current.entityTypes())));
+                return editorJson(200, Map.of("message", result));
+            } catch (Exception exception) {
+                return new EditorWebResponse(400, "text/plain; charset=utf-8", "Not deleted: " + exception.getMessage());
+            }
+        }
         if ("/data".equals(path)) {
             if ("GET".equalsIgnoreCase(request.method())) {
                 return editorJson(200, editorData());
@@ -1113,45 +1183,7 @@ public final class QuestFeature extends BaseFeature {
             }
             return new EditorWebResponse(405, "text/plain; charset=utf-8", "Method not allowed");
         }
-        if ("/document".equals(path)) {
-            boolean editingNpcs = isNpcDocument(request.queryParam("file"));
-            File file = editingNpcs ? npcFile : questFile;
-            if ("GET".equalsIgnoreCase(request.method())) {
-                try {
-                    String content = onServerThread(() -> Files.readString(file.toPath()));
-                    return editorJson(200, Map.of("revision", editorRevision(file), "content", content));
-                } catch (Exception ex) {
-                    return new EditorWebResponse(500, "text/plain; charset=utf-8", "Could not read configuration: " + ex.getMessage());
-                }
-            }
-            if ("PUT".equalsIgnoreCase(request.method())) {
-                if (!context.writable()) return new EditorWebResponse(403, "text/plain; charset=utf-8", "This editor is read-only.");
-                if (request.body().length > 1_000_000) return new EditorWebResponse(413, "text/plain; charset=utf-8", "Quest configuration is too large");
-                try {
-                    EditorDocument document = EDITOR_GSON.fromJson(request.bodyAsString(), EditorDocument.class);
-                    if (document == null || document.content() == null) throw new IllegalArgumentException("Document content is required");
-                    if (!document.revision().isBlank() && !document.revision().equals(editorRevision(file))) {
-                        throw new IllegalStateException("The configuration changed elsewhere. Reload it before saving.");
-                    }
-                    String result = onServerThread(() -> editingNpcs
-                        ? saveWebNpcYaml(document.content())
-                        : saveWebQuestYaml(document.content()));
-                    return editorJson(200, Map.of("message", result, "revision", editorRevision(file)));
-                } catch (Exception ex) {
-                    return new EditorWebResponse(400, "text/plain; charset=utf-8", "Not saved: " + ex.getMessage());
-                }
-            }
-            return new EditorWebResponse(405, "text/plain; charset=utf-8", "Method not allowed");
-        }
         return new EditorWebResponse(404, "text/plain; charset=utf-8", "Not found");
-    }
-
-    private static boolean isNpcDocument(String file) {
-        return "npcs".equalsIgnoreCase(file) || "npcs.yml".equalsIgnoreCase(file);
-    }
-
-    private static String editorRevision(File file) {
-        return file.exists() ? file.lastModified() + ":" + file.length() : "0:0";
     }
 
     private EditorWebResponse editorJson(int status, Object value) {
@@ -1175,6 +1207,305 @@ public final class QuestFeature extends BaseFeature {
         List<String> materials = java.util.Arrays.stream(Material.values()).filter(Material::isItem).map(Enum::name).toList();
         List<String> entities = java.util.Arrays.stream(EntityType.values()).filter(EntityType::isAlive).map(Enum::name).toList();
         return new EditorData("quests", questValues, npcValues, materials, entities);
+    }
+
+    private @NotNull WebView questEditorView(@NotNull EditorWebContext context,
+                                             @NotNull WebServiceRequest request) {
+        EditorData data = editorData();
+        String questId = request.queryParam("quest");
+        String npcId = request.queryParam("npc");
+        if (questId != null && !questId.isBlank()) {
+            int index = indexOfQuest(data.quests(), questId);
+            if (index < 0) return new WebView("quests", "Quests", "", context.writable(), List.of(
+                new WebViewSubview(questId, WebViewButton.navigate("back", "Back", Map.of("list", "quests"))),
+                new WebViewEmpty("Quest not found."))).withSidebarItems(questSidebarItems("quests"));
+            EditorQuest quest = data.quests().get(index);
+            return questDetailView(context, data, quest, index, request.queryParam("list"));
+        }
+        if (npcId != null && !npcId.isBlank()) {
+            int index = indexOfNpc(data.npcs(), npcId);
+            if (index < 0) return new WebView("quests", "Quests", "", context.writable(), List.of(
+                new WebViewSubview(npcId, WebViewButton.navigate("back", "Back", Map.of("list", "npcs"))),
+                new WebViewEmpty("NPC profile not found."))).withSidebarItems(questSidebarItems("npcs"));
+            return npcDetailView(context, data, data.npcs().get(index), index);
+        }
+
+        boolean showNpcs = "npcs".equalsIgnoreCase(request.queryParam("list"));
+        List<WebViewTabs.Tab> tabs = List.of(
+            new WebViewTabs.Tab("quests", "Quests", WebViewButton.navigate("quests-tab", "Quests", Map.of("list", "quests")), !showNpcs),
+            new WebViewTabs.Tab("npcs", "NPCs", WebViewButton.navigate("npcs-tab", "NPCs", Map.of("list", "npcs")), showNpcs)
+        );
+        List<WebViewItem> items = showNpcs ? data.npcs().stream()
+            .map(npc -> new WebViewItem(npc.id(), npc.name(), npc.id() + " · " + npc.entityType(),
+                List.of(new WebViewBadge(npc.entityType(), "default")),
+                WebViewButton.navigate("npc-" + npc.id(), "Open", Map.of("npc", npc.id(), "list", "npcs")))).toList()
+            : List.of();
+        List<WebViewButton> actions = context.writable() ? List.of(createQuestDefinitionAction(showNpcs)) : List.of();
+        List<WebViewComponent> listContent = new ArrayList<>();
+        if (showNpcs) {
+            listContent.add(new WebViewList("NPC profiles", items, true, "Search NPCs", "No profiles found."));
+        } else {
+            listContent.add(questDefinitionTree(data.quests()));
+        }
+        int itemCount = showNpcs ? data.npcs().size() : data.quests().size();
+        List<WebViewComponent> components = List.of(new WebViewTabs(tabs),
+            new WebViewPanel(showNpcs ? "NPC profiles" : "Quest definitions", 1,
+                listContent, List.of(), itemCount + " definition" + (itemCount == 1 ? "" : "s")));
+        return new WebView("quests", "Quests", "", context.writable(), components)
+            .withSidebarItems(questSidebarItems(showNpcs ? "npcs" : "quests"))
+            .withTopbarActions(actions);
+    }
+
+    private static List<WebViewSidebarItem> questSidebarItems(String active) {
+        return List.of(
+            new WebViewSidebarItem("quests", "Quests", "scroll",
+                WebViewButton.navigate("sidebar-quests", "Quests", Map.of("list", "quests")), "quests".equals(active)),
+            new WebViewSidebarItem("npcs", "NPCs", "users",
+                WebViewButton.navigate("sidebar-npcs", "NPCs", Map.of("list", "npcs")), "npcs".equals(active))
+        );
+    }
+
+    private static WebViewTree questDefinitionTree(List<EditorQuest> quests) {
+        List<EditorQuest> ordered = quests.stream()
+            .sorted(Comparator.comparing(EditorQuest::title, String.CASE_INSENSITIVE_ORDER)
+                .thenComparing(EditorQuest::id, String.CASE_INSENSITIVE_ORDER)).toList();
+        Map<String, EditorQuest> byId = new LinkedHashMap<>();
+        ordered.forEach(quest -> byId.put(quest.id(), quest));
+        Map<String, String> parentById = new LinkedHashMap<>();
+        for (EditorQuest quest : ordered) {
+            quest.requirements().stream().filter(byId::containsKey).sorted(String.CASE_INSENSITIVE_ORDER)
+                .filter(parent -> !wouldCreateQuestTreeCycle(quest.id(), parent, parentById))
+                .findFirst().ifPresent(parent -> parentById.put(quest.id(), parent));
+        }
+        Map<String, List<EditorQuest>> children = new LinkedHashMap<>();
+        for (EditorQuest quest : ordered) {
+            String parent = parentById.get(quest.id());
+            if (parent != null) children.computeIfAbsent(parent, ignored -> new ArrayList<>()).add(quest);
+        }
+        List<WebViewTree.Node> roots = ordered.stream().filter(quest -> !parentById.containsKey(quest.id()))
+            .map(quest -> questTreeNode(quest, children, byId)).toList();
+        return new WebViewTree("Quest progression", roots, true, "No quests have been defined.");
+    }
+
+    private static boolean wouldCreateQuestTreeCycle(String child, String parent, Map<String, String> parentById) {
+        Set<String> visited = new HashSet<>();
+        String current = parent;
+        while (current != null && visited.add(current)) {
+            if (current.equals(child)) return true;
+            current = parentById.get(current);
+        }
+        return false;
+    }
+
+    private static WebViewTree.Node questTreeNode(EditorQuest quest, Map<String, List<EditorQuest>> children,
+                                                   Map<String, EditorQuest> byId) {
+        List<WebViewTree.Node> nested = children.getOrDefault(quest.id(), List.of()).stream()
+            .map(child -> questTreeNode(child, children, byId)).toList();
+        String description = quest.id() + " · " + quest.objectives().size() + " objectives";
+        List<String> requirements = quest.requirements().stream()
+            .map(id -> byId.containsKey(id) ? byId.get(id).title() : id).toList();
+        if (!requirements.isEmpty()) description += " · requires " + String.join(", ", requirements);
+        List<WebViewBadge> badges = List.of(new WebViewBadge(quest.enabled() ? "Enabled" : "Disabled",
+            quest.enabled() ? "good" : "default"));
+        return new WebViewTree.Node(quest.id(), quest.title(), description, badges, nested,
+            WebViewButton.navigate("quest-" + quest.id(), "Open", Map.of("quest", quest.id(), "list", "quests")), false);
+    }
+
+    private @NotNull WebViewButton createQuestDefinitionAction(boolean npc) {
+        return WebViewButton.dialog("create", npc ? "New NPC" : "New quest", "primary", "create",
+            Map.of("type", npc ? "npc" : "quest"),
+            new WebViewDialog(npc ? "New NPC profile" : "New quest", npc ? "Create NPC" : "Create quest",
+                List.of(WebViewField.text("id", npc ? "NPC profile ID" : "Quest ID", npc ? "quest-giver" : "new-quest", true,
+                    "[a-z0-9][a-z0-9_-]*").withHelp("A short name used to connect this quest or NPC to other settings.")), 1));
+    }
+
+    private @NotNull WebView questDetailView(EditorWebContext context, EditorData data, EditorQuest quest, int index,
+                                              String requestedBackList) {
+        String backList = "npcs".equalsIgnoreCase(requestedBackList) ? "npcs" : "quests";
+        String prefix = "quests." + index + ".";
+        List<WebViewOption> npcOptions = new ArrayList<>();
+        npcOptions.add(new WebViewOption("", "None"));
+        data.npcs().forEach(npc -> npcOptions.add(new WebViewOption(npc.id(), npc.name() + " (" + npc.id() + ")")));
+        List<WebViewOption> questOptions = data.quests().stream().filter(value -> !value.id().equals(quest.id()))
+            .map(value -> new WebViewOption(value.id(), value.title() + " (" + value.id() + ")")).toList();
+        List<WebViewOption> objectiveTypes = List.of("COLLECT", "KILL", "LOCATION", "NPC", "BIOME", "ALTITUDE_ABOVE",
+            "ALTITUDE_BELOW", "STRUCTURE", "SLEEP", "INTERACT", "UNDERWATER", "NIGHT").stream()
+            .map(value -> new WebViewOption(value, value.replace('_', ' '))).toList();
+        List<WebViewOption> targets = new ArrayList<>();
+        data.materials().forEach(value -> targets.add(new WebViewOption(value, value)));
+        data.entityTypes().forEach(value -> targets.add(new WebViewOption(value, value)));
+        data.npcs().forEach(value -> targets.add(new WebViewOption("profile:" + value.id(), value.name())));
+        List<WebViewField> objectiveFields = List.of(
+            new WebViewField("select", "type", "What should the player do?", "COLLECT", "", true, null, objectiveTypes),
+            WebViewField.suggestion("target", "What should they collect, defeat or visit?", "Search Minecraft targets or NPCs", targets, false)
+                .withHelp("Choose a Minecraft item, mob, biome, structure or NPC profile. For an NPC profile, use the … button to open it.")
+                .withLink(new WebViewLink("quests", "npc", "Open NPC profile", Map.of("list", "npcs"), "profile:")),
+            WebViewField.number("amount", "How many?", "1", "For example: 10", true, "1", null, "1")
+                .withHelp("For collect and defeat goals, enter the number the player must reach."),
+            WebViewField.checkbox("consume", "Take collected items from the player", false)
+                .withHelp("Turn this on if the player must hand over the items."),
+            WebViewField.text("label", "Goal shown to players", "For example: Collect oak logs", false, null),
+            WebViewField.text("world", "World (for location goals)", "survival", false, null),
+            WebViewField.number("x", "Location X", "0", "", false, null, null, "1"),
+            WebViewField.number("y", "Location Y", "64", "", false, null, null, "1"),
+            WebViewField.number("z", "Location Z", "0", "", false, null, null, "1"),
+            WebViewField.number("radius", "How close the player must get (blocks)", "2", "", false, "0", null, "1")
+        );
+        List<WebViewField> rewardFields = List.of(
+            WebViewField.suggestion("material", "Minecraft item", "Search items", data.materials().stream()
+                .map(value -> new WebViewOption(value, value)).toList(), true)
+                .withHelp("Choose the item players receive. Long lists are searchable."),
+            WebViewField.number("amount", "How many items?", "1", "", true, "1", null, "1"),
+            WebViewField.text("name", "Custom name (optional)", "For example: Explorer's Pickaxe", false, null),
+            new WebViewField("lines", "lore", "Item description (one line per row)", "", "", false, null, List.of(), Map.of(), true),
+            WebViewField.checkbox("unbreakable", "Never breaks", false)
+        );
+        List<WebViewComponent> sections = List.of(
+            new WebViewPanel("Story", 1, List.of(new WebViewFields(List.of(
+                editorField("text", prefix + "title", "Title", quest.title()),
+                editorField("text", prefix + "author", "Quest giver's name", quest.author()),
+                WebViewField.checkbox(prefix + "enabled", "Enabled", quest.enabled()),
+                WebViewField.checkbox(prefix + "repeatable", "Repeatable", quest.repeatable()),
+                editorField("textarea", prefix + "description", "Story told by the quest giver", quest.description(), true),
+                editorField("textarea", prefix + "shortDescription", "Short story shown in the quest book", quest.shortDescription(), true)
+            ), 2))),
+            new WebViewPanel("Characters", 1, List.of(new WebViewFields(List.of(
+                editorSelect(prefix + "startNpcProfile", "NPC who gives the quest", quest.startNpcProfile(), npcOptions)
+                    .withHelp("Choose the NPC players talk to first. The … button opens that NPC profile.")
+                    .withLink(new WebViewLink("quests", "npc", "Open NPC profile", Map.of("list", "npcs"))),
+                editorSelect(prefix + "endNpcProfile", "NPC who receives the quest", quest.endNpcProfile(), npcOptions)
+                    .withHelp("Choose the NPC players return to when they finish. The … button opens that NPC profile.")
+                    .withLink(new WebViewLink("quests", "npc", "Open NPC profile", Map.of("list", "npcs"))),
+                editorField("text", prefix + "startNpcName", "Name shown above the starting NPC", quest.startNpcName()),
+                editorField("text", prefix + "endNpcName", "Name shown above the turn-in NPC", quest.endNpcName())
+            ), 2))),
+            new WebViewPanel("Availability", 1, List.of(new WebViewFields(List.of(
+                editorNumber(prefix + "timeLimitSeconds", "Time to finish (seconds; 0 = no limit)", quest.timeLimitSeconds(), "0", null),
+                editorNumber(prefix + "restartCooldownSeconds", "Wait before the quest can be repeated (seconds)", quest.restartCooldownSeconds(), "0", null),
+                editorNumber(prefix + "globalMaxCompletions", "Maximum completions by all players (0 = unlimited)", quest.globalMaxCompletions(), "0", null)
+            ), 2))),
+            new WebViewPanel("Requirements", 1, List.of(new WebViewFields(List.of(
+                new WebViewField("multiselect", prefix + "requirements", "Required quests",
+                    String.join("|", quest.requirements()), "", false, null, questOptions,
+                    Map.of("size", "5"), true)
+                    .withHelp("Choose quests players must finish first. Search the list and tick every required quest.")
+            ), 1))),
+            new WebViewPanel("Objectives", 1, List.of(new WebViewRepeater(prefix + "objectives", "Objectives", "Objective",
+                "Add objective", objectiveFields, Map.of("type", "COLLECT", "target", "OAK_LOG", "amount", 1,
+                    "consume", false, "label", "Collect an item", "world", "survival", "x", 0, "y", 64, "z", 0, "radius", 2), 2, true))),
+            new WebViewPanel("Rewards", 1, List.of(
+                new WebViewFields(List.of(editorField("textarea", prefix + "rewardText", "Reward description", quest.rewardText(), true),
+                    new WebViewField("lines", prefix + "rewardCommands", "Console commands (one per line)",
+                        String.join("\n", quest.rewardCommands()), "", false, null, List.of(), Map.of(), true)), 2),
+                new WebViewRepeater(prefix + "rewardItems", "Item rewards", "Item reward", "Add item reward", rewardFields,
+                    Map.of("material", "EMERALD", "amount", 1, "name", "", "lore", List.of(), "unbreakable", false), 2, false)
+            )),
+            new WebViewPanel("Dialogue", 1, List.of(new WebViewFields(List.of(
+                editorLines(prefix + "dialogue.offer", "Offer", quest.dialogue().get("offer")),
+                editorLines(prefix + "dialogue.idle", "Idle", quest.dialogue().get("idle")),
+                editorLines(prefix + "dialogue.incomplete", "Incomplete", quest.dialogue().get("incomplete")),
+                editorLines(prefix + "dialogue.objective", "Objective", quest.dialogue().get("objective")),
+                editorLines(prefix + "dialogue.complete", "Complete", quest.dialogue().get("complete"))
+            ), 2)))
+        );
+        WebViewButton save = new WebViewButton("request", "save", "Save quest", "primary", "data", "PUT",
+            Map.of(), Map.of(), null, Map.of());
+        WebViewButton delete = new WebViewButton("request", "delete", "Delete quest", "danger", "delete", "POST",
+            Map.of("type", "quest", "id", quest.id()), Map.of(), null, Map.of("query", Map.of("list", backList)),
+            "Delete quest '" + quest.id() + "'?");
+        WebViewForm form = new WebViewForm("quest-editor", List.of(), sections, List.of(save), 1, "", true, "");
+        return new WebView("quests", quest.title(), "", context.writable(), List.of(
+            new WebViewSubview(quest.title(), WebViewButton.navigate("back", "Back", Map.of("list", backList))),
+            new WebViewPanel("Quest", 1, List.of(form), context.writable() ? List.of(delete) : List.of(), "")), data)
+            .withSidebarItems(questSidebarItems(backList));
+    }
+
+    private @NotNull WebView npcDetailView(EditorWebContext context, EditorData data, EditorNpc npc, int index) {
+        String prefix = "npcs." + index + ".";
+        List<WebViewOption> entityOptions = data.entityTypes().stream()
+            .map(value -> new WebViewOption(value, value)).toList();
+        List<WebViewOption> biomeOptions = RegistryAccess.registryAccess().getRegistry(RegistryKey.BIOME).keyStream().sorted()
+            .map(key -> new WebViewOption(key.toString(), key.getKey().replace('_', ' '))).toList();
+        List<WebViewField> fields = List.of(
+            editorField("text", prefix + "name", "Name players see", npc.name()),
+            new WebViewField("select", prefix + "entityType", "Minecraft creature", npc.entityType(), "", true, null, entityOptions)
+                .withHelp("Choose what this NPC looks like. Search the list to find a creature."),
+            WebViewField.checkbox(prefix + "ai", "Can walk around", npc.ai())
+                .withHelp("Turn this off to keep the NPC standing still."),
+            WebViewField.suggestion(prefix + "world", "World where this NPC can appear", "Search loaded worlds",
+                Bukkit.getWorlds().stream().map(world -> new WebViewOption(world.getName(), world.getName())).toList(), false)
+                .withHelp("Enter the world name as it appears on the server."),
+            editorNumber(prefix + "minimumLevel", "Minimum player level to see this NPC", npc.minimumLevel(), "0", null),
+            editorNumber(prefix + "dailyChance", "Chance to appear each day (0–1)", npc.dailyChance(), "For example: 0.25", "0.01")
+                .withHelp("0.25 means a 25% chance. Use 1 for certain and 0 for never."),
+            editorNumber(prefix + "minDistance", "Closest distance from a player (blocks)", npc.minDistance(), "", null),
+            editorNumber(prefix + "maxDistance", "Farthest distance from a player (blocks)", npc.maxDistance(), "", null),
+            editorNumber(prefix + "uniquenessRadius", "Keep this far from other NPCs (blocks)", npc.uniquenessRadius(), "", null),
+            editorNumber(prefix + "despawnRadius", "Remove NPC when players are farther than this (blocks)", npc.despawnRadius(), "", null),
+            editorNumber(prefix + "timeFrom", "Earliest world time (ticks)", npc.timeFrom(), "0", null)
+                .withHelp("Minecraft's day runs from 0 to 24,000 ticks. 0 is sunrise."),
+            editorNumber(prefix + "timeUntil", "Latest world time (ticks)", npc.timeUntil(), "24000", null)
+                .withHelp("Use 24,000 to allow this NPC at any time of day."),
+            editorNumber(prefix + "lifetimeSeconds", "How long this NPC stays (seconds; 0 = no limit)", npc.lifetimeSeconds(), "0", null),
+            new WebViewField("multiselect", prefix + "biomes", "Biomes where this NPC can appear",
+                String.join("|", npc.biomes()), "", false, null, biomeOptions, Map.of(), true)
+                .withHelp("Tick the biomes where this NPC may appear. Leave all unchecked to allow every biome."),
+            editorLines(prefix + "idleDialogue", "Things this NPC says while idle (one line at a time)", npc.idleDialogue())
+                .withHelp("Add one short sentence per line. The NPC can choose any of these while idle.")
+        );
+        List<WebViewItem> linkedQuests = new ArrayList<>();
+        for (EditorQuest quest : data.quests()) {
+            if (npc.id().equals(quest.startNpcProfile()) || npc.id().equals(quest.endNpcProfile())) {
+                linkedQuests.add(new WebViewItem(quest.id(), quest.title(), quest.id(), List.of(),
+                    WebViewButton.navigate("open-" + quest.id(), "Open", Map.of("quest", quest.id(), "list", "npcs"))));
+            }
+        }
+        WebViewForm form = new WebViewForm("npc-editor", fields, List.of(), List.of(
+            new WebViewButton("request", "save", "Save NPC", "primary", "data", "PUT", Map.of(), Map.of(), null, Map.of())
+        ), 2, "", true, "");
+        WebViewButton delete = new WebViewButton("request", "delete", "Delete NPC", "danger", "delete", "POST",
+            Map.of("type", "npc", "id", npc.id()), Map.of(), null, Map.of("query", Map.of("list", "npcs")),
+            "Delete NPC profile '" + npc.id() + "'?");
+        List<WebViewComponent> components = List.of(
+            new WebViewSubview(npc.name(), WebViewButton.navigate("back", "Back", Map.of("list", "npcs"))),
+            new WebViewPanel("NPC profile", 1, List.of(form), context.writable() ? List.of(delete) : List.of(), ""),
+            new WebViewPanel("Linked quests", 1, List.of(new WebViewList("Quests that use this NPC", linkedQuests,
+                false, "Search quests", "No quests are linked to this NPC.")))
+        );
+        return new WebView("quests", npc.name(), "", context.writable(), components, data)
+            .withSidebarItems(questSidebarItems("npcs"));
+    }
+
+    private static int indexOfQuest(List<EditorQuest> quests, String id) {
+        for (int index = 0; index < quests.size(); index++) if (quests.get(index).id().equals(id)) return index;
+        return -1;
+    }
+
+    private static int indexOfNpc(List<EditorNpc> npcs, String id) {
+        for (int index = 0; index < npcs.size(); index++) if (npcs.get(index).id().equals(id)) return index;
+        return -1;
+    }
+
+    private static WebViewField editorField(String type, String path, String label, String value) {
+        return editorField(type, path, label, value, false);
+    }
+
+    private static WebViewField editorField(String type, String path, String label, String value, boolean wide) {
+        return new WebViewField(type, path, label, Objects.toString(value, ""), "", false, null, List.of(), Map.of(), wide);
+    }
+
+    private static WebViewField editorNumber(String path, String label, Number value, String placeholder, String step) {
+        return WebViewField.number(path, label, String.valueOf(value), placeholder, false, "0", null,
+            step == null ? "1" : step);
+    }
+
+    private static WebViewField editorSelect(String path, String label, String value, List<WebViewOption> options) {
+        return new WebViewField("select", path, label, Objects.toString(value, ""), "", false, null, options);
+    }
+
+    private static WebViewField editorLines(String path, String label, List<String> values) {
+        return new WebViewField("lines", path, label, values == null ? "" : String.join("\n", values), "", false,
+            null, List.of(), Map.of(), true);
     }
 
     private String saveStructuredEditor(String json) throws IOException {
@@ -1313,11 +1644,6 @@ public final class QuestFeature extends BaseFeature {
     }
 
     private record EditorData(String kind, List<EditorQuest> quests, List<EditorNpc> npcs, List<String> materials, List<String> entityTypes) { }
-    private record EditorDocument(String content, String revision) {
-        private EditorDocument {
-            if (revision == null) revision = "";
-        }
-    }
     private record EditorQuest(String id, String title, String author, String description, String shortDescription, String rewardText, boolean enabled,
         boolean repeatable, long timeLimitSeconds, long restartCooldownSeconds, int globalMaxCompletions,
         @Nullable String startNpcProfile, @Nullable String endNpcProfile, String startNpcName, String endNpcName,
@@ -1329,40 +1655,6 @@ public final class QuestFeature extends BaseFeature {
     private record EditorNpc(String id, String name, String entityType, boolean ai, String world, int minDistance, int maxDistance,
         int uniquenessRadius, int despawnRadius, int minimumLevel, long timeFrom, long timeUntil, double dailyChance, long lifetimeSeconds,
         List<String> biomes, List<String> idleDialogue) { }
-
-    private String saveWebQuestYaml(String content) throws IOException, InvalidConfigurationException {
-        YamlConfiguration yaml = new YamlConfiguration();
-        yaml.loadFromString(content);
-        if (!yaml.isConfigurationSection("quests")) throw new InvalidConfigurationException("A quests section is required");
-        Map<String, QuestDefinition> parsed = QuestDefinitionStore.load(new StringReader(content));
-        int configured = Objects.requireNonNull(yaml.getConfigurationSection("quests")).getKeys(false).size();
-        if (parsed.size() != configured) throw new InvalidConfigurationException("One or more quest definitions are invalid");
-        File parent = questFile.getParentFile();
-        if (parent != null && !parent.exists() && !parent.mkdirs()) throw new IOException("Could not create quest directory");
-        if (questFile.exists()) Files.copy(questFile.toPath(), questFile.toPath().resolveSibling("quests.yml.bak"), StandardCopyOption.REPLACE_EXISTING);
-        Files.writeString(questFile.toPath(), content, StandardCharsets.UTF_8);
-        reloadDefinitions();
-        registerMarkers();
-        return "Saved " + parsed.size() + " quests";
-    }
-
-    private String saveWebNpcYaml(String content) throws IOException, InvalidConfigurationException {
-        YamlConfiguration yaml = new YamlConfiguration();
-        yaml.loadFromString(content);
-        if (!yaml.isConfigurationSection("npcs")) throw new InvalidConfigurationException("An npcs section is required");
-        Map<String, QuestNpcProfile> parsed = QuestNpcProfileStore.load(new StringReader(content));
-        int configured = Objects.requireNonNull(yaml.getConfigurationSection("npcs")).getKeys(false).size();
-        if (parsed.size() != configured) throw new InvalidConfigurationException("One or more NPC profiles are invalid");
-        File parent = npcFile.getParentFile();
-        if (parent != null && !parent.exists() && !parent.mkdirs()) throw new IOException("Could not create quest directory");
-        if (npcFile.exists()) Files.copy(npcFile.toPath(), npcFile.toPath().resolveSibling("npcs.yml.bak"), StandardCopyOption.REPLACE_EXISTING);
-        Files.writeString(npcFile.toPath(), content, StandardCharsets.UTF_8);
-        for (QuestNpcProfile existing : npcProfiles.values()) if (!parsed.containsKey(existing.id())) removeProfileEntities(existing);
-        npcProfiles.clear();
-        npcProfiles.putAll(parsed);
-        registerMarkers();
-        return "Saved " + parsed.size() + " NPC profiles";
-    }
 
     private <T> T onServerThread(Callable<T> task) throws Exception {
         if (Bukkit.isPrimaryThread()) return task.call();

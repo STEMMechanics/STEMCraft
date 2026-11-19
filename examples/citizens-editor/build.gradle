@@ -1,0 +1,25 @@
+plugins {
+    id 'java'
+}
+
+repositories {
+    mavenCentral()
+    maven { url = uri("https://repo.papermc.io/repository/maven-public/") }
+    maven {
+        name = "citizens-repo"
+        url = uri("https://maven.citizensnpcs.co/repo")
+    }
+}
+
+dependencies {
+    compileOnly project(":api")
+    compileOnly("io.papermc.paper:paper-api:${rootProject.ext.paperApiVersion}")
+    compileOnly("net.citizensnpcs:citizens-main:2.0.35-SNAPSHOT") {
+        exclude group: "*", module: "*"
+    }
+    compileOnly("com.google.code.gson:gson:2.11.0")
+}
+
+tasks.named("jar", Jar) {
+    archiveBaseName.set("STEMCraft-Citizens-Editor")
+}

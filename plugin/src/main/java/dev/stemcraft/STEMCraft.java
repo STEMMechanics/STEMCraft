@@ -80,7 +80,10 @@ import java.io.OutputStream;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -986,6 +989,41 @@ public final class STEMCraft extends JavaPlugin {
 
     public void exportBundledDirectory(String jarRoot) {
         exportBundledDirectory(jarRoot, jarRoot);
+    }
+
+    /**
+     * Refresh a plugin-owned bundled file, replacing an older exported copy atomically.
+     * Use this for application assets that must stay compatible with the running code;
+     * operator-owned branding files should continue to use {@link #exportBundledDirectory(String, String)}.
+     */
+    public void refreshBundledFile(@NotNull String jarPath, @NotNull String exportPath) {
+        Path target = new File(getDataFolder(), exportPath).toPath().toAbsolutePath();
+        Path parent = target.getParent();
+        Path temporary = null;
+        try (InputStream resource = getResource(jarPath)) {
+            if (resource == null) {
+                getLogger().warning("Bundled resource not found: " + jarPath);
+                return;
+            }
+            if (parent != null) Files.createDirectories(parent);
+            temporary = Files.createTempFile(parent, ".stemcraft-" + target.getFileName() + "-", ".tmp");
+            Files.copy(resource, temporary, StandardCopyOption.REPLACE_EXISTING);
+            try {
+                Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException ignored) {
+                Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (IOException exception) {
+            getLogger().warning("Failed to refresh bundled resource " + jarPath + " -> " + target + ": " + exception.getMessage());
+        } finally {
+            if (temporary != null) {
+                try {
+                    Files.deleteIfExists(temporary);
+                } catch (IOException ignored) {
+                    // The exported file is already usable; a leftover temp file can be cleaned up later.
+                }
+            }
+        }
     }
 
     // Messaging shortcuts

@@ -21,7 +21,31 @@ import dev.stemcraft.api.service.editor.EditorWebContext;
 import dev.stemcraft.api.service.editor.EditorWebModule;
 import dev.stemcraft.api.service.editor.EditorWebResponse;
 import dev.stemcraft.api.service.editor.EditorWebService;
-import dev.stemcraft.api.service.editor.EditorWebView;
+import dev.stemcraft.api.service.editor.WebView;
+import dev.stemcraft.api.service.editor.WebViewBadge;
+import dev.stemcraft.api.service.editor.WebViewButton;
+import dev.stemcraft.api.service.editor.WebViewCards;
+import dev.stemcraft.api.service.editor.WebViewComponent;
+import dev.stemcraft.api.service.editor.WebViewDialog;
+import dev.stemcraft.api.service.editor.WebViewDataEditor;
+import dev.stemcraft.api.service.editor.WebViewDocumentPicker;
+import dev.stemcraft.api.service.editor.WebViewEmpty;
+import dev.stemcraft.api.service.editor.WebViewField;
+import dev.stemcraft.api.service.editor.WebViewFields;
+import dev.stemcraft.api.service.editor.WebViewForm;
+import dev.stemcraft.api.service.editor.WebViewItem;
+import dev.stemcraft.api.service.editor.WebViewLoading;
+import dev.stemcraft.api.service.editor.WebViewList;
+import dev.stemcraft.api.service.editor.WebViewMetadata;
+import dev.stemcraft.api.service.editor.WebViewNotice;
+import dev.stemcraft.api.service.editor.WebViewOption;
+import dev.stemcraft.api.service.editor.WebViewPanel;
+import dev.stemcraft.api.service.editor.WebViewRepeater;
+import dev.stemcraft.api.service.editor.WebViewRules;
+import dev.stemcraft.api.service.editor.WebViewSubview;
+import dev.stemcraft.api.service.editor.WebViewTable;
+import dev.stemcraft.api.service.editor.WebViewTabs;
+import dev.stemcraft.api.service.editor.WebViewValidation;
 import dev.stemcraft.api.service.web.WebServiceRequest;
 import dev.stemcraft.api.service.web.WebServiceStream;
 import dev.stemcraft.service.web.WebPageComponents;
@@ -52,6 +76,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+import java.util.logging.Level;
 
 /** Shared private web editor hub and module registry. */
 public final class EditorWebServiceImpl extends BaseService implements EditorWebService {
@@ -117,13 +142,29 @@ public final class EditorWebServiceImpl extends BaseService implements EditorWeb
         modules.put(id, module);
     }
 
+    @Override
+    public void unregisterModule(@NotNull EditorWebModule module) {
+        modules.remove(normalizeModuleId(module.id()), module);
+    }
+
     private void registerComponentsModule() {
         registerModule(new EditorWebModule() {
             @Override public @NotNull String id() { return "components"; }
             @Override public @NotNull String title() { return "Components"; }
-            @Override public @NotNull String icon() { return "C"; }
+            @Override public @NotNull String icon() { return "components"; }
             @Override public @NotNull String description() { return "Review the shared editor building blocks."; }
             @Override public @NotNull String readPermission() { return ""; }
+            @Override public @NotNull WebView view(@NotNull EditorWebContext context,
+                                                         @NotNull WebServiceRequest request) {
+                if ("example.yml".equals(request.queryParam("file"))) {
+                    return new WebView("components", "Example configuration", "", false, List.of(
+                        new WebViewSubview("Example configuration", WebViewButton.navigate("back-to-components", "Back", Map.of())),
+                        new WebViewPanel("Typed data editor", 1, List.of(new WebViewDataEditor("example", "Example values", 2)))
+                    ), Map.of("example", Map.of("pack", Map.of("enabled", true, "description", "A component-rendered configuration"),
+                        "threshold", 12, "names", List.of("Starter", "Advanced"))));
+                }
+                return typedComponentShowcaseView();
+            }
             @Override public @NotNull EditorWebResponse handle(@NotNull EditorWebContext context, @NotNull String path,
                                                                  @NotNull WebServiceRequest request) {
                 if (!"/data".equals(path) || !"GET".equalsIgnoreCase(request.method())) {
@@ -134,7 +175,76 @@ public final class EditorWebServiceImpl extends BaseService implements EditorWeb
         });
     }
 
-    @Override
+    private @NotNull WebView typedComponentShowcaseView() {
+        WebViewDialog dialog = new WebViewDialog("Dialog component", "Done", List.of(
+            WebViewField.text("example", "Example field", "Type something…", false, null)));
+        List<WebViewButton> buttons = List.of(
+            WebViewButton.display("primary", "Primary action", "primary"),
+            WebViewButton.display("secondary", "Secondary action", "default"),
+            WebViewButton.display("good", "Enabled", "good"),
+            WebViewButton.display("warning", "Warning", "warn"),
+            WebViewButton.display("danger", "Delete", "danger"),
+            WebViewButton.previewDialog("dialog", "Dialog", "default", dialog)
+        );
+        List<WebViewField> fields = List.of(
+            WebViewField.text("text", "Text field", "Example value", false, null),
+            new WebViewField("select", "select", "Select", "second", "", false, null,
+                List.of(new WebViewOption("first", "First option"), new WebViewOption("second", "Second option"))),
+            WebViewField.suggestion("suggestion", "Suggestions", "Choose or type…",
+                List.of(new WebViewOption("first", "First suggestion"), new WebViewOption("second", "Second suggestion")), false),
+            WebViewField.textarea("long-text", "Long text", "A shared editor field with the site theme.", true),
+            WebViewField.checkbox("toggle", "Toggle switch", true),
+            new WebViewField("range", "range", "Range slider", "65", "", false, null, List.of(),
+                Map.of("min", "0", "max", "100", "step", "1"), true)
+        );
+        List<WebViewItem> items = List.of(
+            new WebViewItem("selected", "Selected item", "items/example", List.of(new WebViewBadge("Selected", "good")), null),
+            new WebViewItem("another", "Another item", "items/another", List.of(new WebViewBadge("Draft", "warn")), null)
+        );
+        List<WebViewComponent> components = List.of(
+            new WebViewPanel("Actions and fields", "Three-column field layout", 1,
+                List.of(new WebViewFields(fields, 3)), buttons, "Buttons, statuses and dialog"),
+            new WebViewPanel("Tabs", 1, List.of(new WebViewTabs(List.of(
+                new WebViewTabs.Tab("overview", "Overview", WebViewButton.display("overview", "Overview", "default"), true),
+                new WebViewTabs.Tab("settings", "Settings", WebViewButton.display("settings", "Settings", "default"), false),
+                new WebViewTabs.Tab("history", "History", WebViewButton.display("history", "History", "default"), false))))),
+            new WebViewPanel("Cards and lists", 2, List.of(
+                new WebViewCards(items, 2), new WebViewList("Searchable list", items, true, "Filter items", "No matching items."))),
+            new WebViewPanel("Tree", 1, List.of(new dev.stemcraft.api.service.editor.WebViewTree(
+                "Quest dependencies", List.of(new dev.stemcraft.api.service.editor.WebViewTree.Node(
+                    "starter", "Starter quest", "No prerequisites", List.of(new WebViewBadge("Enabled", "good")),
+                    List.of(new dev.stemcraft.api.service.editor.WebViewTree.Node("follow-up", "Follow-up quest",
+                        "Requires Starter quest", List.of(), List.of(), WebViewButton.display("tree-follow-up", "Open", "default"), false)),
+                    WebViewButton.display("tree-starter", "Open", "default"), true)), true, "No tree entries."))),
+            new WebViewPanel("Form and repeater", 1, List.of(
+                new WebViewForm("component-form", fields, List.of(),
+                    List.of(WebViewButton.display("submit", "Submit example", "primary")), 3, "", false, ""),
+                new WebViewRepeater("showcase.entries", "Repeatable entries", "Entry", "Add entry",
+                    List.of(WebViewField.text("name", "Name", "Entry name", false, null),
+                        WebViewField.checkbox("enabled", "Enabled", true)),
+                    Map.of("name", "New entry", "enabled", true), 2, true)
+            )),
+            new WebViewPanel("Subview", 1, List.of(new WebViewSubview("Example detail view",
+                WebViewButton.navigate("back-to-components", "Back", Map.of())))),
+            new WebViewPanel("Tables", 1, List.of(new WebViewTable("Example", List.of(
+                new WebViewTable.Column("name", "Name"), new WebViewTable.Column("state", "State")), List.of(
+                Map.of("name", "Example row", "state", "Ready"), Map.of("name", "Another row", "state", "Draft"))))),
+            new WebViewPanel("Structured data editor", 1, List.of(new WebViewDataEditor("showcase.config", "Example YAML data", 2))),
+            new WebViewPanel("Validation and detail", 1, List.of(
+                new WebViewValidation(List.of("example.yml.items.example must be a mapping."), "No validation issues."),
+                new WebViewMetadata(List.of("example-pack"), true),
+                new WebViewRules(List.of(new WebViewRules.Rule("DIAMOND × 1-2 (100%)", "block: DIAMOND_ORE", "Drop"))),
+                new WebViewDocumentPicker("components", "", List.of(new WebViewOption("example.yml", "Example file"))),
+                new WebViewNotice("A non-blocking notice."), new WebViewLoading("Loading state"),
+                new WebViewEmpty("Empty state content appears here.")))
+        );
+        return new WebView("components", "Components", "Review the shared WebView building blocks.", false, components,
+            Map.of("showcase", Map.of("entries", List.of(Map.of("name", "Example entry", "enabled", true)),
+                "config", Map.of("pack", Map.of("enabled", true, "description", "Example content pack"),
+                    "font_images", Map.of("mail", Map.of("file", "font/mail.png", "ascent", 8, "height", 8))),
+                "misc", List.of("first", "second"))));
+    }
+
     public @NotNull String createSession(@NotNull CommandSender sender) {
         cleanupSessions();
         List<String> visible = modules.values().stream()
@@ -249,18 +359,18 @@ public final class EditorWebServiceImpl extends BaseService implements EditorWeb
         EditorWebContext context = new EditorWebContext(token, session.writable().contains(moduleId));
         try {
             if ("/view".equals(relativePath) && "GET".equalsIgnoreCase(request.method())) {
-                EditorWebView view = onServerThread(() -> module.view(context, request));
-                if (view == null) {
-                    return response(new EditorWebResponse(404, "text/plain; charset=utf-8",
-                        "Declarative view not available."));
-                }
-                return response(jsonResponse(200, view));
+                WebView view = onServerThread(() -> module.view(context, request));
+                return response(jsonResponse(200, view.toMap()));
             }
             EditorWebResponse result = onServerThread(() -> module.handle(context, relativePath, request));
             return response(result);
         } catch (Exception exception) {
-            plugin.getLogger().warning("[editor-web] Module '" + moduleId + "' failed: " + exception.getMessage());
-            return response(new EditorWebResponse(500, "text/plain; charset=utf-8", "The editor could not complete that action."));
+            String detail = exception.getMessage() == null || exception.getMessage().isBlank()
+                ? exception.getClass().getSimpleName() : exception.getMessage();
+            plugin.getLogger().log(Level.SEVERE, "[editor-web] Module '" + moduleId + "' failed while handling "
+                + request.method() + " " + relativePath + ".", exception);
+            return response(new EditorWebResponse(500, "text/plain; charset=utf-8",
+                module.title() + " editor failed: " + detail));
         }
     }
 

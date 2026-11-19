@@ -3,66 +3,16 @@
     const q = selector => document.querySelector(selector);
     const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
     const apiUrl = (module, endpoint) => base + '/api/' + module + '/' + (endpoint || 'data');
-
-    function tabsComponent(items, active) {
-        return '<div class="tabs component-tabs" role="tablist">' + items.map(item =>
-            '<button class="tab' + (item.id === active ? ' active' : '') + '" type="button" role="tab" aria-selected="' +
-            (item.id === active ? 'true' : 'false') + '" data-editor-tab="' + esc(item.id) + '">' + esc(item.label) + '</button>').join('') + '</div>';
-    }
-
-    function bindTabs(callback) {
-        q('#workspace').querySelectorAll('[data-editor-tab]').forEach(button => button.onclick = () => callback(button.dataset.editorTab));
-    }
-
-    function switchControl(label, name, checked) {
-        return '<label class="switch-control"><span>' + esc(label) + '</span><input name="' + esc(name) + '" type="checkbox"' +
-            (checked ? ' checked' : '') + '><span class="switch-track" aria-hidden="true"></span></label>';
-    }
-
-    function switchObjectControl(label, prop, checked) {
-        return '<label class="switch-control"><span>' + esc(label) + '</span><input data-prop="' + esc(prop) + '" type="checkbox"' +
-            (checked ? ' checked' : '') + '><span class="switch-track" aria-hidden="true"></span></label>';
-    }
-
-    function openEditorDialog(title, body, submitLabel, onSubmit) {
-        const dialog = q('#editor-dialog');
-        dialog.innerHTML = '<form id="editor-dialog-form"><div class="dialog-head"><h2 id="editor-dialog-title">' + esc(title) +
-            '</h2><button class="button dialog-close" type="button" data-dialog-close aria-label="Close">×</button></div>' + body +
-            '<div class="dialog-actions"><button class="button" type="button" data-dialog-close>Cancel</button><button class="button primary" type="submit">' +
-            esc(submitLabel) + '</button></div></form>';
-        dialog.querySelectorAll('[data-dialog-close]').forEach(button => button.onclick = () => dialog.close());
-        dialog.querySelector('#editor-dialog-form').onsubmit = async event => {
-            event.preventDefault();
-            await onSubmit(new FormData(event.target), dialog);
-        };
-        dialog.showModal();
-    }
-
-    function formatValidationError(error) {
-        const text = String(error || 'Validation failed.');
-        const mapping = /^(.*?)\s+must be a mapping\.?$/i.exec(text);
-        if (!mapping) return '<li>' + esc(text) + '</li>';
-        const location = mapping[1];
-        const yamlPath = /^(.*\.(?:ya?ml))\.(.+)$/i.exec(location);
-        const source = yamlPath ? yamlPath[1] : location;
-        const path = yamlPath ? yamlPath[2] : '';
-        return '<li class="validation-error"><strong>Expected a YAML object</strong><span>' + esc(source) +
-            (path ? ' → ' + esc(path) : '') + '</span><small>Use named fields under this path (for example, <code>id: value</code>), not a single value or list.</small></li>';
-    }
+    const clone = value => value == null ? value : JSON.parse(JSON.stringify(value));
 
     let modules = [];
     let activeId = null;
     let activeData = null;
-    let currentDocument = null;
-    let selectedItem = null;
-    let selectedLoot = null;
-    let selectedQuest = null;
-    let selectedNpc = null;
-    let questListKind = 'quests';
     let activeQuery = {};
     let configEvents = null;
-    let configEventsRetry = null;
-    let documentReturn = null;
+    let viewActionSequence = 0;
+    let viewActions = new Map();
+    let viewDraftDirty = false;
 
     function setSidebar(open) {
         document.body.classList.toggle('sidebar-open', open);
@@ -90,18 +40,16 @@
         return value;
     }
 
-    function setStatus(message, bad = false) {
-        // Operation feedback is shown in the affected panel or notice area.
-    }
-
-    function loading(message) {
-        return '<div class="loading" role="status"><span class="loading-spinner" aria-hidden="true"></span><span>' + esc(message) + '</span></div>';
-    }
-
     function notice(message, bad = false) {
         const element = q('#notice');
         element.textContent = message;
         element.className = 'notice ' + (message ? 'show ' : '') + (bad ? 'bad' : '');
+    }
+
+    function setStatus() { }
+
+    function loading(message) {
+        return '<div class="loading" role="status"><span class="loading-spinner" aria-hidden="true"></span><span>' + esc(message) + '</span></div>';
     }
 
     function draftConflictNotice(message) {
@@ -111,17 +59,13 @@
             '<span class="notice-actions"><button id="draft-reload" class="button small primary" type="button">Reload</button>' +
             '<button id="draft-dismiss" class="button small" type="button">Keep draft</button></span></div>';
         q('#draft-reload').onclick = () => {
-            if (!currentDocument) return;
-            const documentInfo = {...currentDocument};
             notice('Reloading the latest configuration…');
-            openDocument(documentInfo.module, documentInfo.pack, documentInfo.file);
+            if (activeId) openModule(activeId, activeQuery);
         };
         q('#draft-dismiss').onclick = () => notice('');
     }
 
     function moduleInfo() { return modules.find(module => module.id === activeId); }
-
-    function pageHead() { return ''; }
 
     function querySuffix(query) {
         const params = new URLSearchParams(Object.entries(query || {}).filter(([, value]) => value !== undefined && value !== null && value !== ''));
@@ -130,35 +74,41 @@
     }
 
     async function loadModuleData(id, query = {}) {
-        try {
-            return await request(apiUrl(id, 'view') + querySuffix(query));
-        } catch (error) {
-            if (error.message !== 'Declarative view not available.') throw error;
-            return request(apiUrl(id, 'data') + querySuffix(query));
-        }
+        return request(apiUrl(id, 'view') + querySuffix(query));
     }
 
-    const moduleIcons = {
-        items: 'M12 3 3.5 7.5 12 12l8.5-4.5L12 3Z M3.5 7.5V16.5L12 21v-9 M20.5 7.5V16.5L12 21',
-        loot: 'M6 3h12l4 6-10 12L2 9l4-6Z M2 9h20 M12 21 8 9l4-6 4 6-4 12Z',
-        packs: 'M3 7.5 12 3l9 4.5-9 4.5-9-4.5Z M3 7.5V17l9 4 9-4V7.5 M12 12v9',
-        quests: 'M6 4h12v16H6a3 3 0 0 1 0-6h12 M6 14h12 M9 8h6 M9 11h6',
-        default: 'M4 4h6v2a2 2 0 1 0 4 0V4h6v6h-2a2 2 0 1 0 0 4h2v6h-6v-2a2 2 0 1 0-4 0v2H4v-6h2a2 2 0 1 0 0-4H4V4Z'
+    const ICON_PATHS = {
+        grid: 'M3 3h7v7H3z M14 3h7v7h-7z M14 14h7v7h-7z M3 14h7v7H3z',
+        package: 'm12 3 9 5-9 5-9-5 9-5Z M3 8v9l9 5 9-5V8 M12 13v9 M7.5 5.5l9 5',
+        scroll: 'M8 4h11v16H7a3 3 0 0 1-3-3V6a2 2 0 0 1 2-2h2Zm0 0v13a3 3 0 0 0 3 3 M11 8h5 M11 12h5',
+        users: 'M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2 M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm7-7.8a4 4 0 0 1 0 7.6 M20 21v-2a4 4 0 0 0-3-3.87',
+        boxes: 'M3 7 12 3l9 4-9 4-9-4Zm0 0v10l9 4 9-4V7 M12 11v10 M7.5 5l9 4',
+        cube: 'm12 3 9 5v8l-9 5-9-5V8l9-5Zm0 0v18 M3 8l9 5 9-5',
+        components: 'M4 4h6v6H4z M14 4h6v6h-6z M4 14h6v6H4z M14 14h6v6h-6z',
+        tree: 'M12 3 5 10h4l-5 6h6v5h4v-5h6l-5-6h4l-7-7Z',
+        circle: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z'
     };
 
-    function moduleIcon(module) {
-        return moduleIcons[module.id] || moduleIcons.default;
-    }
-
-    function iconSvg(path, className = '') {
-        return '<svg class="ui-icon ' + esc(className) + '" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="' + esc(path) + '"></path></svg>';
+    function iconSvg(icon = 'grid') {
+        const path = ICON_PATHS[icon];
+        if (!path) return esc(icon || '•');
+        return '<svg class="ui-icon module-icon-svg" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="' + path + '"></path></svg>';
     }
 
     function renderNav() {
-        q('#moduleNav').innerHTML = modules.map(module =>
-            '<button class="' + (module.id === activeId ? 'active' : '') + '" data-module="' + esc(module.id) +
-            '" type="button"><span class="module-icon" aria-hidden="true">' + iconSvg(moduleIcon(module), 'module-icon-svg') +
-            '</span><span>' + esc(module.title) + '</span></button>').join('');
+        q('#moduleNav').innerHTML = modules.map(module => {
+            const active = module.id === activeId;
+            const items = active && Array.isArray(activeData?.sidebarItems) ? activeData.sidebarItems : [];
+            const submenu = items.length ? '<div class="module-subnav">' + items.map(item => {
+                const actionKey = registerViewAction(item.action);
+                return '<button class="module-subnav-link' + (item.active ? ' active' : '') + '" type="button" data-view-action="' +
+                    esc(actionKey) + '"><span class="module-subnav-icon" aria-hidden="true">' + iconSvg(item.icon) +
+                    '</span><span>' + esc(item.label) + '</span></button>';
+            }).join('') + '</div>' : '';
+            return '<div class="module-nav-group"><button class="module-nav-link' + (active ? ' active' : '') + '" data-module="' + esc(module.id) +
+                '" type="button"><span class="module-icon" aria-hidden="true">' + iconSvg(module.icon) +
+                '</span><span>' + esc(module.title) + '</span></button>' + submenu + '</div>';
+        }).join('');
         q('#moduleNav').querySelectorAll('[data-module]').forEach(button => {
             button.onclick = () => { setSidebar(false); openModule(button.dataset.module); };
         });
@@ -167,13 +117,10 @@
     async function openModule(id, query = {}) {
         activeId = id;
         activeQuery = {...query};
-        currentDocument = null;
-        selectedItem = null;
-        selectedLoot = null;
-        selectedQuest = null;
-        selectedNpc = null;
-        questListKind = 'quests';
+        activeData = null;
+        viewDraftDirty = false;
         renderNav();
+        q('#topbarActions').replaceChildren();
         const info = moduleInfo();
         q('#pageTitle').textContent = info?.title || 'STEMCraft Editor';
         q('#workspace').innerHTML = loading('Opening editor…');
@@ -191,149 +138,15 @@
     function renderModule() {
         if (!activeData) return;
         if (Array.isArray(activeData.components)) return renderDeclarativeView(activeData);
-        if (activeData.kind === 'components') return renderComponents();
-        if (activeData.kind === 'quests') return renderQuests(activeData);
-        if (activeData.kind === 'items') return renderItems(activeData);
-        if (activeData.kind === 'loot') return renderLoot(activeData);
-        q('#workspace').innerHTML = '<div class="empty">This editor is not available yet.</div>';
+        q('#workspace').innerHTML = '<div class="empty">This editor has not supplied a WebView.</div>';
     }
-
-    function subviewHead(title, backLabel = 'Back') {
-        return '<div class="subview-head"><button class="button subview-back" type="button" data-subview-back>← ' +
-            esc(backLabel) + '</button><h2>' + esc(title) + '</h2></div>';
-    }
-
-    let viewActionSequence = 0;
-    const viewActions = new Map();
 
     function viewActionButton(action, extraClass = '') {
         if (!action) return '';
-        const key = 'view-action-' + (++viewActionSequence);
-        viewActions.set(key, action);
-        const variant = ['primary', 'good', 'warn', 'danger'].includes(action.variant) ? ' ' + action.variant : '';
+        const key = registerViewAction(action);
+        const variant = ['primary', 'good', 'warn', 'danger'].includes(action.variant) ? ' ' + esc(action.variant) : '';
         return '<button class="button small' + variant + (extraClass ? ' ' + extraClass : '') + '" type="button" data-view-action="' +
             esc(key) + '">' + esc(action.label) + '</button>';
-    }
-
-    function viewBadges(badges) {
-        return (Array.isArray(badges) ? badges : []).map(badge =>
-            '<span class="pill ' + (['good', 'bad', 'warn'].includes(badge.tone) ? esc(badge.tone) : '') + '">' +
-            esc(badge.text) + '</span>').join('');
-    }
-
-    function viewField(field) {
-        const type = field.type || 'text';
-        let control;
-        if (type === 'select') {
-            control = '<select name="' + esc(field.name) + '">' + (Array.isArray(field.options) ? field.options : []).map(option =>
-                '<option value="' + esc(option.value) + '">' + esc(option.label) + '</option>').join('') + '</select>';
-        } else if (type === 'suggestion') {
-            const listId = 'view-suggestions-' + esc(field.name);
-            control = '<input name="' + esc(field.name) + '" list="' + listId + '" placeholder="' + esc(field.placeholder || '') + '"' +
-                (field.required ? ' required' : '') + (field.pattern ? ' pattern="' + esc(field.pattern) + '"' : '') + '>' +
-                '<datalist id="' + listId + '">' + (Array.isArray(field.options) ? field.options : []).map(option =>
-                    '<option value="' + esc(option.value) + '">' + esc(option.label) + '</option>').join('') + '</datalist>';
-        } else if (type === 'textarea') {
-            control = '<textarea name="' + esc(field.name) + '" placeholder="' + esc(field.placeholder || '') + '"' +
-                (field.required ? ' required' : '') + '>' + esc(field.value || '') + '</textarea>';
-        } else {
-            control = '<input name="' + esc(field.name) + '" type="' + esc(type) + '" value="' + esc(field.value || '') +
-                '" placeholder="' + esc(field.placeholder || '') + '"' + (field.required ? ' required' : '') +
-                (field.pattern ? ' pattern="' + esc(field.pattern) + '"' : '') + '>';
-        }
-        return '<label>' + esc(field.label) + control + '</label>';
-    }
-
-    function openDeclarativeDialog(action) {
-        const dialog = action.dialog;
-        const fields = (dialog?.fields || []).map(viewField).join('');
-        openEditorDialog(dialog.title, '<div class="field-grid">' + fields + '</div>', dialog.submitLabel, async (form, element) => {
-            try {
-                const payload = {...(action.payload || {})};
-                (dialog.fields || []).forEach(field => payload[field.name] = form.get(field.name) ?? '');
-                const result = await request(apiUrl(activeId, action.endpoint), {
-                    method: action.method || 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
-                });
-                element.close();
-                notice(result.message || 'Saved.');
-                await openModule(activeId, activeQuery);
-            } catch (error) { notice(error.message, true); setStatus('Needs attention', true); }
-        });
-    }
-
-    async function dispatchViewAction(action) {
-        if (!action) return;
-        if (action.type === 'navigate') {
-            await openModule(activeId, action.query || {});
-            return;
-        }
-        if (action.type === 'dialog') {
-            openDeclarativeDialog(action);
-            return;
-        }
-        if (action.type !== 'request') return;
-        try {
-            setStatus('Working…');
-            const result = await request(apiUrl(activeId, action.endpoint), {
-                method: action.method || 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(action.payload || {})
-            });
-            notice(result.message || 'Done.');
-            await openModule(activeId, activeQuery);
-        } catch (error) { notice(error.message, true); setStatus('Needs attention', true); }
-    }
-
-    function renderDeclarativeComponent(component) {
-        const type = component.type;
-        const properties = component.properties || {};
-        if (type === 'toolbar') {
-            return '<div class="section-heading editor-section-heading"><div><h2>' + esc(activeData.title || '') + '</h2>' +
-                (activeData.description ? '<p class="tiny">' + esc(activeData.description) + '</p>' : '') + '</div><div class="editor-header-actions">' +
-                (properties.actions || []).map(viewActionButton).join('') + (properties.meta ? '<span class="tiny">' + esc(properties.meta) + '</span>' : '') + '</div></div>';
-        }
-        if (type === 'cards') {
-            const items = Array.isArray(properties.items) ? properties.items : [];
-            if (!items.length) return '<div class="empty">' + esc(properties.empty || 'Nothing found.') + '</div>';
-            return '<div class="pack-grid">' + items.map(item => {
-                const actionKey = item.action ? 'view-item-' + (++viewActionSequence) : '';
-                if (item.action) viewActions.set(actionKey, item.action);
-                return '<article class="card pack-card"' + (item.action ? ' tabindex="0" role="button" data-view-action="' + esc(actionKey) + '"' : '') + '>' +
-                    '<div class="pack-card-icon" aria-hidden="true">' + iconSvg(moduleIcons[activeId] || moduleIcons.default) + '</div>' +
-                    '<div class="pack-card-main"><div class="pack-card-title"><h3>' + esc(item.title) + '</h3></div>' +
-                    (item.description ? '<p class="pack-card-description">' + esc(item.description) + '</p>' : '') +
-                    '<div class="pack-card-meta">' + viewBadges(item.badges) + '</div></div></article>';
-            }).join('') + '</div>';
-        }
-        if (type === 'subview') {
-            return '<div class="subview-head"><button class="button subview-back" type="button" data-view-action="' +
-                esc(registerViewAction(properties.back)) + '">← Back</button><h2>' + esc(properties.title || '') + '</h2></div>';
-        }
-        if (type === 'card') {
-            return '<section class="card"><div class="document-head"><div><h3>' + esc(properties.title || '') + '</h3>' +
-                (properties.description ? '<p>' + esc(properties.description) + '</p>' : '') + '</div>' + viewBadges(properties.badges) + '</div>' +
-                (Array.isArray(properties.children) ? properties.children.map(renderDeclarativeComponent).join('') : '') +
-                (Array.isArray(properties.actions) ? '<div class="card-actions">' + properties.actions.map(viewActionButton).join('') + '</div>' : '') + '</section>';
-        }
-        if (type === 'validation') {
-            const errors = Array.isArray(properties.errors) ? properties.errors : [];
-            return errors.length ? '<div><h3>Validation issues</h3><ul class="errors pack-error-list">' + errors.map(formatValidationError).join('') + '</ul></div>' :
-                '<p class="muted">' + esc(properties.empty || 'No validation issues found.') + '</p>';
-        }
-        if (type === 'meta') {
-            const dependencies = Array.isArray(properties.dependencies) && properties.dependencies.length ?
-                '<div><dt>Dependencies</dt><dd>' + esc(properties.dependencies.join(', ')) + '</dd></div>' : '';
-            const resource = properties.resourcePackRebuildRequired ? '<div><dt>Resource pack</dt><dd>Rebuild required after changes.</dd></div>' : '';
-            return dependencies || resource ? '<dl class="pack-detail-meta">' + dependencies + resource + '</dl>' : '';
-        }
-        if (type === 'document-picker') {
-            const selectId = 'view-document-picker-' + (++viewActionSequence);
-            const options = Array.isArray(properties.options) ? properties.options : [];
-            return '<div class="card-actions"><select id="' + selectId + '"><option value="">Choose a file</option>' +
-                options.map(option => '<option value="' + esc(option.value) + '">' + esc(option.label) + '</option>').join('') +
-                '</select><button class="button small primary" type="button" data-view-document="' + esc(selectId) + '" data-view-document-module="' +
-                esc(properties.module || activeId) + '" data-view-document-pack="' + esc(properties.pack || '') + '">Open file</button></div>';
-        }
-        if (type === 'empty') return '<div class="empty">' + esc(properties.text || 'Nothing found.') + '</div>';
-        return '';
     }
 
     function registerViewAction(action) {
@@ -342,17 +155,558 @@
         return key;
     }
 
-    function openDeclarativeDocument(module, pack, file) {
-        if (!file) return notice('Choose a file first.');
-        q('#workspace').innerHTML = subviewHead([pack, file].filter(Boolean).join(' / ')) + '<section class="card"><div id="document-panel"></div></section>';
-        q('[data-subview-back]').onclick = () => openModule(activeId, activeQuery);
-        openDocument(module, pack, file);
+    function viewBadges(badges) {
+        return (Array.isArray(badges) ? badges : []).map(badge =>
+            '<span class="pill ' + (['good', 'bad', 'warn'].includes(badge.tone) ? esc(badge.tone) : '') + '">' + esc(badge.text) + '</span>').join('');
+    }
+
+    function formatValidationError(error) {
+        const text = String(error || 'Validation failed.');
+        const mapping = /^(.*?)\s+must be a mapping\.?$/i.exec(text);
+        if (!mapping) return '<li>' + esc(text) + '</li>';
+        const location = mapping[1];
+        const yamlPath = /^(.*\.(?:ya?ml))\.(.+)$/i.exec(location);
+        const source = yamlPath ? yamlPath[1] : location;
+        const path = yamlPath ? yamlPath[2] : '';
+        return '<li class="validation-error"><strong>Expected a YAML object</strong><span>' + esc(source) +
+            (path ? ' → ' + esc(path) : '') + '</span><small>Use named fields under this path (for example, <code>id: value</code>), not a single value or list.</small></li>';
+    }
+
+    function pathParts(path) { return String(path || '').split('.').filter(Boolean); }
+
+    function getPath(root, path) {
+        return pathParts(path).reduce((value, key) => value == null ? undefined : value[key], root);
+    }
+
+    function setPath(root, path, value) {
+        const parts = pathParts(path);
+        let parent = root;
+        for (let index = 0; index < parts.length - 1; index++) {
+            const part = parts[index];
+            const nextIsIndex = /^\d+$/.test(parts[index + 1]);
+            if (parent[part] == null) parent[part] = nextIsIndex ? [] : {};
+            parent = parent[part];
+        }
+        if (parts.length) parent[parts[parts.length - 1]] = value;
+    }
+
+    function fieldValue(field, stateBound) {
+        let value = field.value;
+        if (stateBound && activeData?.state && field.name) value = getPath(activeData.state, field.name);
+        return value;
+    }
+
+    function inputAttributes(attributes) {
+        return Object.entries(attributes || {}).filter(([name]) => /^[a-zA-Z][a-zA-Z0-9_-]*$/.test(name))
+            .map(([name, value]) => value === true ? ' ' + esc(name) : ' ' + esc(name) + '="' + esc(value) + '"').join('');
+    }
+
+    function viewField(field, stateBound = false, forceDisabled = false) {
+        const type = field.type || 'text';
+        const value = fieldValue(field, stateBound);
+        const name = field.name || '';
+        const common = ' name="' + esc(name) + '" data-field-type="' + esc(type) + '"' + inputAttributes(field.attributes) +
+            (stateBound ? ' data-state-bound="true"' : '') + (field.required ? ' required' : '') +
+            (field.pattern ? ' pattern="' + esc(field.pattern) + '"' : '');
+        const disabled = forceDisabled || (stateBound && !activeData?.writable) ? ' disabled' : '';
+        let control = '';
+        const options = Array.isArray(field.options) ? field.options : [];
+        if (type === 'checkbox-group') {
+            let selected = {};
+            try { selected = typeof value === 'string' ? JSON.parse(value || '{}') : (value || {}); } catch (ignored) { }
+            const settings = field.attributes || {};
+            const choices = options.map(option => {
+                const checked = Object.prototype.hasOwnProperty.call(selected, option.value);
+                const amount = checked ? selected[option.value] : '';
+                const label = option.label || option.value;
+                return '<div class="choice-row" data-choice-search="' + esc(label.toLowerCase()) + '">' +
+                    '<label class="choice-label"><input type="checkbox" data-choice-value="' + esc(option.value) + '"' + (checked ? ' checked' : '') +
+                    (disabled ? ' disabled' : '') + '><span>' + esc(label) + '</span></label>' +
+                    '<span class="choice-amount"><small>' + esc(settings['$amount-label'] || 'Value') + '</small><input type="number" data-choice-amount="' +
+                    esc(option.value) + '" aria-label="' + esc((settings['$amount-label'] || 'Value') + ' for ' + label) + '" value="' + esc(amount) + '" min="' + esc(settings.$min || '0') + '"' +
+                    (settings.$max ? ' max="' + esc(settings.$max) + '"' : '') + ' step="' + esc(settings.$step || '1') + '"' +
+                    (checked ? '' : ' disabled') + (disabled ? ' disabled' : '') + '></span></div>';
+            }).join('');
+            const filter = options.length > 12 ? '<input class="choice-search" type="search" placeholder="Search ' +
+                esc(field.label.toLowerCase()) + '" data-choice-search-input' + disabled + '>' : '';
+            control = '<input type="hidden"' + common + ' data-checkbox-group><div class="choice-group">' + filter +
+                (choices || '<span class="muted">No choices are available.</span>') + '</div>';
+            const help = field.help ? '<small class="field-help">' + esc(field.help) + '</small>' : '';
+            return '<div class="webview-field' + (field.wide ? ' wide' : '') + '"><span class="field-title">' + esc(field.label) +
+                '</span>' + control + help + '</div>';
+        } else if (type === 'select' || type === 'multiselect') {
+            const selected = type === 'multiselect' ? new Set(Array.isArray(value) ? value.map(String) : String(value || '').split('|')) : null;
+            if (type === 'select' && options.length > 12) {
+                const listId = 'view-suggestions-' + (++viewActionSequence);
+                control = '<input' + common + ' list="' + listId + '" type="text" value="' + esc(value || '') + '" placeholder="Search or choose"' +
+                    (disabled ? ' disabled' : '') + '><datalist id="' + listId + '">' + options.map(option => '<option value="' +
+                    esc(option.value) + '">' + esc(option.label) + '</option>').join('') + '</datalist>';
+            } else if (type === 'multiselect' && options.length > 12) {
+                const choices = options.map(option => '<label class="multi-choice-row" data-choice-search="' +
+                    esc((option.label || option.value).toLowerCase()) + '"><input type="checkbox" data-multi-value="' + esc(option.value) + '"' +
+                    (selected.has(String(option.value)) ? ' checked' : '') + (disabled ? ' disabled' : '') + '><span>' +
+                    esc(option.label || option.value) + '</span></label>').join('');
+                const filter = '<input class="choice-search" type="search" placeholder="Search ' + esc(field.label.toLowerCase()) +
+                    '" data-choice-search-input' + disabled + '>';
+                control = '<input type="hidden"' + common + ' data-multiselect-group><div class="multi-choice-group">' + filter + choices + '</div>';
+            } else control = '<select' + common + (disabled ? ' disabled' : '') + (type === 'multiselect' ? ' multiple' : '') + '>' +
+                options.map(option => {
+                    const isSelected = type === 'multiselect' ? selected.has(String(option.value)) : String(option.value) === String(value ?? '');
+                    return '<option value="' + esc(option.value) + '"' + (isSelected ? ' selected' : '') + '>' + esc(option.label) + '</option>';
+                }).join('') + '</select>';
+        } else if (type === 'textarea' || type === 'lines' || type === 'json') {
+            let text = value;
+            if (type === 'lines' && Array.isArray(text)) text = text.join('\n');
+            if (type === 'json' && typeof text !== 'string') text = JSON.stringify(text ?? {}, null, 2);
+            control = '<textarea class="' + (type === 'json' ? 'webview-json' : 'small-area') + '"' + common +
+                (disabled ? ' disabled' : '') + ' placeholder="' + esc(field.placeholder || '') + '" spellcheck="' +
+                (type === 'json' ? 'false' : 'true') + '">' + esc(text || '') + '</textarea>';
+        } else if (type === 'checkbox') {
+            const checked = value === true || value === 'true';
+            control = '<input' + common + ' type="checkbox"' + (checked ? ' checked' : '') + (disabled ? ' disabled' : '') + '><span class="switch-track" aria-hidden="true"></span>';
+            return '<div><label class="switch-control' + (field.wide ? ' wide' : '') + '"><span>' + esc(field.label) + '</span>' + control +
+                '</label>' + (field.help ? '<small class="field-help">' + esc(field.help) + '</small>' : '') + '</div>';
+        } else if (type === 'suggestion') {
+            const listId = 'view-suggestions-' + (++viewActionSequence);
+            control = '<input' + common + ' list="' + listId + '" type="text" value="' + esc(value || '') + '" placeholder="' +
+                esc(field.placeholder || '') + '"' + (disabled ? ' disabled' : '') + '><datalist id="' + listId + '">' +
+                (Array.isArray(field.options) ? field.options : []).map(option => '<option value="' + esc(option.value) + '">' +
+                    esc(option.label) + '</option>').join('') + '</datalist>';
+        } else {
+            control = '<input' + common + ' type="' + esc(type) + '" value="' + esc(value ?? '') + '" placeholder="' +
+                esc(field.placeholder || '') + '"' + (disabled ? ' disabled' : '') + '>';
+        }
+        const link = field.link ? '<button class="field-record-link" type="button" data-field-link-module="' + esc(field.link.module) +
+            '" data-field-link-parameter="' + esc(field.link.parameter) + '" data-field-link-query="' +
+            esc(JSON.stringify(field.link.query || {})) + '" data-field-link-prefix="' + esc(field.link.valuePrefix || '') +
+            '" title="' + esc(field.link.label || 'Open related record') +
+            '" aria-label="' + esc(field.link.label || 'Open related record') + '">…</button>' : '';
+        const help = field.help ? '<small class="field-help">' + esc(field.help) + '</small>' : '';
+        return '<label class="webview-field' + (field.wide ? ' wide' : '') + '"><span class="field-title">' + esc(field.label) +
+            '</span><span class="field-control' + (link ? ' has-record-link' : '') + '">' + control + link + '</span>' + help + '</label>';
+    }
+
+    function fieldGrid(fields, columns = 2, stateBound = false, forceDisabled = false) {
+        return '<div class="field-grid webview-grid" style="--webview-columns:' + boundedColumns(columns) + '">' +
+            (Array.isArray(fields) ? fields.map(field => viewField(field, stateBound, forceDisabled)).join('') : '') + '</div>';
+    }
+
+    function boundedColumns(value) {
+        const columns = Number(value);
+        return Number.isInteger(columns) ? Math.max(1, Math.min(6, columns)) : 1;
+    }
+
+    function fieldInputValue(element) {
+        const type = element.dataset.fieldType || element.type;
+        if (type === 'checkbox') return element.checked;
+        if (type === 'multiselect') {
+            const group = element.closest('[data-multiselect-group]')?.parentElement;
+            if (group) return [...group.querySelectorAll('[data-multi-value]:checked')].map(choice => choice.dataset.multiValue);
+            return [...element.selectedOptions].map(option => option.value);
+        }
+        if (type === 'checkbox-group') {
+            const group = element.closest('[data-checkbox-group]')?.parentElement;
+            const result = {};
+            group?.querySelectorAll('[data-choice-value]:checked').forEach(choice => {
+                const amount = group.querySelector('[data-choice-amount="' + CSS.escape(choice.dataset.choiceValue) + '"]');
+                result[choice.dataset.choiceValue] = amount?.value === '' ? 1 : Number(amount?.value || 1);
+            });
+            return result;
+        }
+        if (type === 'lines') return String(element.value).split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+        if (type === 'number' || type === 'range') return element.value === '' ? null : Number(element.value);
+        if (type === 'json') {
+            try { return JSON.parse(element.value || '{}'); }
+            catch (error) { throw new Error('Enter valid JSON in “' + (element.closest('label')?.childNodes?.[0]?.textContent?.trim() || element.name) + '”.'); }
+        }
+        return element.value;
+    }
+
+    function openEditorDialog(title, body, submitLabel, onSubmit) {
+        const dialog = q('#editor-dialog');
+        dialog.innerHTML = '<form id="editor-dialog-form"><div class="dialog-head"><h2>' + esc(title) +
+            '</h2><button class="button dialog-close" type="button" data-dialog-close aria-label="Close">×</button></div>' + body +
+            '<div class="dialog-actions"><button class="button" type="button" data-dialog-close>Cancel</button><button class="button primary" type="submit">' +
+            esc(submitLabel) + '</button></div></form>';
+        dialog.querySelectorAll('[data-dialog-close]').forEach(button => button.onclick = () => dialog.close());
+        dialog.querySelector('#editor-dialog-form').onsubmit = async event => {
+            event.preventDefault();
+            await onSubmit(event.target, dialog);
+        };
+        dialog.showModal();
+    }
+
+    function openDeclarativeDialog(action) {
+        const dialog = action.dialog || {};
+        const body = fieldGrid(dialog.fields || [], dialog.columns || 2, false);
+        openEditorDialog(dialog.title, body, dialog.submitLabel, async (form, element) => {
+            try {
+                const payload = {...(action.payload || {})};
+                for (const control of form.elements) {
+                    if (!control.name) continue;
+                    payload[control.name] = fieldInputValue(control);
+                }
+                if (!action.endpoint) {
+                    element.close();
+                    notice('Dialog submitted.');
+                    return;
+                }
+                const result = await request(apiUrl(activeId, action.endpoint), {
+                    method: action.method || 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+                });
+                element.close();
+                await openModule(activeId, activeQuery);
+                notice(result.message || 'Saved.');
+            } catch (error) { notice(error.message, true); }
+        });
+    }
+
+    function renderViewResult(result, definition) {
+        const values = Array.isArray(result?.[definition.items]) ? result[definition.items] : [];
+        if (!values.length) return '<span class="muted">' + esc(definition.empty || 'No results.') + '</span>';
+        return values.map(value => '<div class="sim-drop"><span>' + esc(value?.[definition.label] ?? '') +
+            '</span><strong>' + esc(value?.[definition.value] ?? '') + '</strong></div>').join('');
+    }
+
+    async function dispatchViewRequest(action, payload, refresh = true) {
+        if (!action || !action.endpoint) return;
+        if (action.confirmation && !window.confirm(action.confirmation)) return;
+        try {
+            setStatus('Working…');
+            const result = await request(apiUrl(activeId, action.endpoint), {
+                method: action.method || 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload || {})
+            });
+            if (action.result?.target) {
+                const target = q('#' + action.result.target);
+                if (target) target.innerHTML = renderViewResult(result, action.result);
+            }
+            if (refresh && action.result?.refresh !== false) await openModule(activeId, action.result?.query || activeQuery);
+            if (result.message) notice(result.message);
+            setStatus('Ready');
+        } catch (error) {
+            if (/conflict|changed elsewhere|revision/i.test(error.message || ''))
+                draftConflictNotice(error.message + ' Your unsaved edits are still preserved.');
+            else notice(error.message, true);
+            setStatus('Needs attention', true);
+        }
+    }
+
+    async function dispatchViewForm(form, action) {
+        if (!action || action.type === 'display') return;
+        try {
+            let payload;
+            if (form.dataset.submitState === 'true') {
+                payload = {...(action.payload || {}), ...clone(activeData?.state || {})};
+                for (const element of form.elements) {
+                    if (!element.name || !element.dataset.stateBound) continue;
+                    setPath(payload, element.name, fieldInputValue(element));
+                }
+            } else {
+                const fields = {};
+                for (const element of form.elements) {
+                    if (element.name) fields[element.name] = fieldInputValue(element);
+                }
+                payload = {...(action.payload || {})};
+                if (form.dataset.payloadField) payload[form.dataset.payloadField] = fields;
+                else Object.assign(payload, fields);
+            }
+            await dispatchViewRequest(action, payload, action.result?.refresh !== false);
+        } catch (error) { notice(error.message, true); }
+    }
+
+    async function dispatchViewAction(action) {
+        if (!action || action.type === 'display') return;
+        if (action.type === 'navigate') {
+            await openModule(activeId, action.query || {});
+            return;
+        }
+        if (action.type === 'module') {
+            const target = action.result?.module;
+            if (target) await openModule(target, action.query || {});
+            return;
+        }
+        if (action.type === 'dialog') {
+            if (action.confirmation && !window.confirm(action.confirmation)) return;
+            openDeclarativeDialog(action);
+            return;
+        }
+        if (action.type === 'request') await dispatchViewRequest(action, action.payload || {});
+    }
+
+    function renderTabs(properties) {
+        const tabs = Array.isArray(properties.tabs) ? properties.tabs : (Array.isArray(properties.items) ? properties.items : []);
+        return '<div class="tabs component-tabs" role="tablist">' + tabs.map(tab => {
+            const active = Boolean(tab.active) || tab.id === properties.active;
+            const key = tab.action ? registerViewAction(tab.action) : '';
+            return '<button class="tab' + (active ? ' active' : '') + '" type="button" role="tab" aria-selected="' +
+                (active ? 'true' : 'false') + '"' + (key ? ' data-view-action="' + esc(key) + '"' : '') + '>' + esc(tab.label) + '</button>';
+        }).join('') + '</div>';
+    }
+
+    function renderTreeNode(node) {
+        const children = Array.isArray(node.children) ? node.children : [];
+        const actionKey = registerViewAction(node.action);
+        const expanded = Boolean(node.expanded);
+        const searchText = [node.label, node.description].join(' ').toLowerCase();
+        return '<div class="tree-node" data-tree-node data-search-text="' + esc(searchText) + '"><div class="tree-row">' +
+            (children.length ? '<button class="tree-toggle" type="button" data-tree-toggle aria-expanded="' + (expanded ? 'true' : 'false') +
+                '" aria-label="' + (expanded ? 'Collapse ' : 'Expand ') + esc(node.label) + '">' +
+                '<svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></button>' :
+                '<span class="tree-toggle-placeholder" aria-hidden="true"></span>') +
+            '<button class="tree-link" type="button" data-view-action="' + esc(actionKey) + '"><span class="tree-link-main"><strong>' +
+            esc(node.label) + '</strong>' + (node.description ? '<small>' + esc(node.description) + '</small>' : '') +
+            '</span>' + viewBadges(node.badges) + '</button></div>' +
+            (children.length ? '<div class="tree-children" data-tree-children data-default-expanded="' + (expanded ? 'true' : 'false') + '"' +
+                (expanded ? '' : ' hidden') + '>' + children.map(renderTreeNode).join('') + '</div>' : '') + '</div>';
+    }
+
+    function renderTree(properties) {
+        const nodes = Array.isArray(properties.nodes) ? properties.nodes : [];
+        const search = properties.searchable ? '<input class="webview-list-search tree-search" type="search" placeholder="Search ' +
+            esc(properties.label || 'items') + '" data-tree-search>' : '';
+        return '<section class="webview-tree">' + (properties.label ? '<span class="component-label">' + esc(properties.label) + '</span>' : '') +
+            search + '<div class="tree-list">' + (nodes.length ? nodes.map(renderTreeNode).join('') :
+                '<div class="empty">' + esc(properties.empty || 'No entries.') + '</div>') + '</div></section>';
+    }
+
+    function dataPathAttribute(path) { return esc(JSON.stringify(path)); }
+
+    function dataKeyLabel(value) {
+        return String(value || '').replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[-_]+/g, ' ')
+            .replace(/\s+/g, ' ').trim().replace(/\b\w/g, character => character.toUpperCase());
+    }
+
+    function dataTypeOptions() {
+        return '<option value="text">Text</option><option value="number">Number</option>' +
+            '<option value="boolean">On / off</option><option value="object">Group</option><option value="list">List</option>';
+    }
+
+    function renderDataScalar(value, path, label, disabled, hideLabel) {
+        const pathAttribute = dataPathAttribute(path);
+        const labelMarkup = hideLabel ? '' : '<span>' + esc(label) + '</span>';
+        if (typeof value === 'boolean') {
+            return '<label class="switch-control data-editor-scalar' + (hideLabel ? ' no-title' : '') + '">' + labelMarkup +
+                '<input type="checkbox" data-config-value data-config-path="' + pathAttribute + '" data-config-kind="boolean"' +
+                (value ? ' checked' : '') + (disabled ? ' disabled' : '') + '><span class="switch-track" aria-hidden="true"></span></label>';
+        }
+        if (typeof value === 'number') {
+            return '<label class="data-editor-scalar' + (hideLabel ? ' no-title' : '') + '">' + labelMarkup +
+                '<input type="number" step="any" data-config-value data-config-path="' + pathAttribute + '" data-config-kind="number" value="' +
+                esc(value) + '"' + (disabled ? ' disabled' : '') + '></label>';
+        }
+        const text = value == null ? '' : String(value);
+        const common = ' data-config-value data-config-path="' + pathAttribute + '" data-config-kind="text"' + (disabled ? ' disabled' : '');
+        const control = text.includes('\n') || text.length > 160
+            ? '<textarea' + common + '>' + esc(text) + '</textarea>'
+            : '<input type="text"' + common + ' value="' + esc(text) + '">';
+        return '<label class="data-editor-scalar' + (hideLabel ? ' no-title' : '') + '">' + labelMarkup + control + '</label>';
+    }
+
+    function renderDataValue(value, path, label, depth, disabled, hideScalarLabel = false) {
+        if (depth > 24) return '<div class="empty">This value is nested too deeply to display.</div>';
+        if (Array.isArray(value)) {
+            const rows = value.map((item, index) => '<article class="data-editor-array-item"><div class="data-editor-entry-head"><strong>Item ' +
+                (index + 1) + '</strong><button class="button small danger" type="button" data-config-remove-index="' + index +
+                '" data-config-path="' + dataPathAttribute(path) + '"' + (disabled ? ' disabled' : '') + '>Remove</button></div>' +
+                renderDataValue(item, [...path, index], 'Item ' + (index + 1), depth + 1, disabled) + '</article>').join('');
+            return '<details class="data-editor-node data-editor-list"' + (depth < 2 ? ' open' : '') + '><summary><span>' + esc(dataKeyLabel(label)) +
+                '</span><small>' + value.length + ' item' + (value.length === 1 ? '' : 's') + '</small></summary><div class="data-editor-children">' +
+                (rows || '<p class="muted">No items.</p>') + '<div class="data-editor-add"><label><span>Add item as</span><select data-config-add-type>' +
+                dataTypeOptions() + '</select></label><button class="button small" type="button" data-config-add-index data-config-path="' +
+                dataPathAttribute(path) + '"' + (disabled ? ' disabled' : '') + '>Add item</button></div></div></details>';
+        }
+        if (value && typeof value === 'object') {
+            const entries = Object.entries(value);
+            const rows = entries.map(([key, child]) => '<article class="data-editor-map-item"><div class="data-editor-entry-head">' +
+                '<label class="data-editor-key"><span>Field name</span><input type="text" data-config-key data-config-parent="' +
+                dataPathAttribute(path) + '" data-config-old-key="' + esc(key) + '" value="' + esc(key) + '"' +
+                (disabled ? ' disabled' : '') + '></label><button class="button small danger" type="button" data-config-remove-key="' +
+                esc(key) + '" data-config-path="' + dataPathAttribute(path) + '"' + (disabled ? ' disabled' : '') + '>Remove</button></div>' +
+                '<div class="data-editor-map-value">' + renderDataValue(child, [...path, key], dataKeyLabel(key), depth + 1, disabled, true) + '</div></article>').join('');
+            return '<details class="data-editor-node data-editor-object"' + (depth < 2 ? ' open' : '') + '><summary><span>' + esc(dataKeyLabel(label)) +
+                '</span><small>' + entries.length + ' field' + (entries.length === 1 ? '' : 's') + '</small></summary><div class="data-editor-children">' +
+                (rows || '<p class="muted">No fields.</p>') + '<div class="data-editor-add"><label class="data-editor-new-key"><span>New field name</span>' +
+                '<input type="text" data-config-new-key placeholder="For example, enabled"></label><label><span>Field type</span><select data-config-add-type>' +
+                dataTypeOptions() + '</select></label><button class="button small" type="button" data-config-add-key data-config-path="' +
+                dataPathAttribute(path) + '"' + (disabled ? ' disabled' : '') + '>Add field</button></div></div></details>';
+        }
+        return renderDataScalar(value, path, label, disabled, hideScalarLabel);
+    }
+
+    function dataPathValue(root, path) {
+        return Array.isArray(path) ? path.reduce((value, key) => value == null ||
+            !Object.prototype.hasOwnProperty.call(value, key) ? undefined : value[key], root) : undefined;
+    }
+
+    function setDataPath(root, path, value) {
+        if (!Array.isArray(path) || !path.length) return;
+        let parent = root;
+        for (let index = 0; index < path.length - 1; index++) {
+            if (parent == null) return;
+            parent = parent[path[index]];
+        }
+        if (parent == null || typeof parent !== 'object') return;
+        const key = path[path.length - 1];
+        if (Array.isArray(parent)) parent[key] = value;
+        else Object.defineProperty(parent, key, {value, writable: true, enumerable: true, configurable: true});
+    }
+
+    function defaultDataValue(type) {
+        if (type === 'number') return 0;
+        if (type === 'boolean') return false;
+        if (type === 'object') return {};
+        if (type === 'list') return [];
+        return '';
+    }
+
+    function renderDataEditor(properties, disabled) {
+        const path = properties.path || 'data';
+        const data = getPath(activeData?.state, path);
+        return '<section class="webview-data-editor" style="--data-editor-columns:' + boundedColumns(properties.columns || 2) + '">' +
+            renderDataValue(data, path.split('.'), properties.label || 'Configuration', 0, disabled || !activeData?.writable) + '</section>';
+    }
+
+    function renderDeclarativeComponent(component, context = {}) {
+        const type = component.type;
+        const properties = component.properties || {};
+        const stateBound = Boolean(context.stateBound);
+        if (type === 'panel') {
+            const children = Array.isArray(properties.children) ? properties.children.map(child => renderDeclarativeComponent(child, context)).join('') : '';
+            const actions = Array.isArray(properties.actions) ? properties.actions.map(viewActionButton).join('') : '';
+            return '<section class="card webview-panel"><div class="document-head"><div>' +
+                (properties.title ? '<h3>' + esc(properties.title) + '</h3>' : '') +
+                (properties.description ? '<p>' + esc(properties.description) + '</p>' : '') + '</div>' +
+                (properties.meta ? '<small class="muted">' + esc(properties.meta) + '</small>' : '') + '</div>' +
+                '<div class="webview-grid" style="--webview-columns:' + boundedColumns(properties.columns) + '">' + children + '</div>' +
+                (actions ? '<div class="card-actions">' + actions + '</div>' : '') + '</section>';
+        }
+        if (type === 'cards') {
+            const items = Array.isArray(properties.items) ? properties.items : [];
+            if (!items.length) return '<div class="empty">' + esc(properties.empty || 'Nothing found.') + '</div>';
+            return '<div class="webview-card-grid webview-grid" style="--webview-columns:' + boundedColumns(properties.columns) + '">' + items.map(item => {
+                const actionKey = item.action ? registerViewAction(item.action) : '';
+                return '<article class="card webview-card"' + (actionKey ? ' tabindex="0" role="button" data-view-action="' + esc(actionKey) + '"' : '') + '>' +
+                    '<div class="webview-card-icon" aria-hidden="true">' + iconSvg() + '</div><div class="webview-card-main">' +
+                    '<div class="webview-card-title"><h3>' + esc(item.title) + '</h3></div>' +
+                    (item.description ? '<p class="webview-card-description">' + esc(item.description) + '</p>' : '') +
+                    '<div class="webview-card-meta">' + viewBadges(item.badges) + '</div></div></article>';
+            }).join('') + '</div>';
+        }
+        if (type === 'subview') {
+            const key = registerViewAction(properties.back);
+            return '<div class="subview-head"><button class="button subview-back" type="button" data-view-action="' + esc(key) + '">← ' +
+                esc(properties.back?.label || 'Back') + '</button><h2>' + esc(properties.title || '') + '</h2></div>';
+        }
+        if (type === 'fields') return fieldGrid(properties.fields, properties.columns || 2, stateBound, context.disabled);
+        if (type === 'data-editor') return renderDataEditor(properties, context.disabled);
+        if (type === 'form') {
+            const formId = properties.id || 'webview-form-' + (++viewActionSequence);
+            const actions = Array.isArray(properties.actions) ? properties.actions : [];
+            const formDisabled = !activeData?.writable && actions.length === 0;
+            const nested = Array.isArray(properties.children) ? properties.children.map(child =>
+                renderDeclarativeComponent(child, {stateBound: properties.submitState || stateBound, disabled: formDisabled || context.disabled})).join('') : '';
+            return '<form class="component-form" id="' + esc(formId) + '" data-view-form="true" data-submit-state="' +
+                (properties.submitState ? 'true' : 'false') + '" data-payload-field="' + esc(properties.payloadField || '') + '">' +
+                fieldGrid(properties.fields, properties.columns || 2, properties.submitState || stateBound, formDisabled || context.disabled) + nested +
+                (actions.length ? '<div class="card-actions">' + actions.map(action => {
+                    const key = registerViewAction(action);
+                    return '<button class="button' + (action.variant === 'primary' ? ' primary' : '') + '" type="submit" data-view-form-action="' +
+                        esc(key) + '">' + esc(action.label) + '</button>';
+                }).join('') + '</div>' : '') +
+                (properties.resultId ? '<div id="' + esc(properties.resultId) + '" class="sim-result"></div>' : '') + '</form>';
+        }
+        if (type === 'repeater') {
+            const values = getPath(activeData?.state, properties.path);
+            const items = Array.isArray(values) ? values : [];
+            const rows = items.map((item, index) => {
+                return '<article class="card webview-repeater-item"><div class="document-head"><strong>' + esc(properties.itemLabel || 'Item') + ' ' + (index + 1) +
+                    '</strong><div class="card-actions">' + (properties.reorderable ?
+                    '<button class="button small" type="button" data-repeater="up" data-path="' + esc(properties.path) + '" data-index="' + index + '" aria-label="Move up">↑</button>' +
+                    '<button class="button small" type="button" data-repeater="down" data-path="' + esc(properties.path) + '" data-index="' + index + '" aria-label="Move down">↓</button>' : '') +
+                    '<button class="button small danger" type="button" data-repeater="remove" data-path="' + esc(properties.path) + '" data-index="' + index + '">Remove</button>' +
+                    '</div></div>' + fieldGrid(properties.fields?.map(field => ({...field,
+                        name: properties.path + '.' + index + '.' + field.name, value: getPath(item, field.name)})), properties.columns || 2, stateBound, context.disabled) + '</article>';
+            }).join('');
+            return '<section class="webview-repeater"><div class="document-head"><h4>' + esc(properties.title || '') + '</h4>' +
+                '<button class="button small" type="button" data-repeater="add" data-path="' + esc(properties.path) + '" data-default="' +
+                esc(JSON.stringify(properties.defaultItem || {})) + '">' + esc(properties.addLabel || 'Add item') + '</button></div>' +
+                (rows || '<p class="muted">No entries.</p>') + '</section>';
+        }
+        if (type === 'tabs') return renderTabs(properties);
+        if (type === 'tree') return renderTree(properties);
+        if (type === 'list') {
+            const items = Array.isArray(properties.items) ? properties.items : [];
+            const search = properties.searchable ? '<input class="webview-list-search" type="search" placeholder="' + esc(properties.searchPlaceholder || 'Search') + '" data-list-search>' : '';
+            const list = items.map(item => {
+                const actionKey = item.action ? registerViewAction(item.action) : '';
+                return actionKey ? '<button class="list-button" type="button" data-view-action="' + esc(actionKey) + '" data-search-text="' +
+                    esc((item.title || '') + ' ' + (item.description || '')) + '"><strong>' + esc(item.title || '') + '</strong><small>' +
+                    esc(item.description || '') + '</small>' + viewBadges(item.badges) + '</button>' :
+                    '<div class="list-button" data-search-text="' + esc((item.title || '') + ' ' + (item.description || '')) + '"><strong>' +
+                    esc(item.title || '') + '</strong><small>' + esc(item.description || '') + '</small>' + viewBadges(item.badges) + '</div>';
+            }).join('');
+            return '<div class="webview-list">' + (properties.label ? '<span class="component-label">' + esc(properties.label) + '</span>' : '') +
+                search + '<div class="list" data-search-list>' + (list || '<div class="empty">' + esc(properties.empty || 'Nothing found.') + '</div>') +
+                '</div></div>';
+        }
+        if (type === 'table') {
+            const columns = Array.isArray(properties.columns) ? properties.columns : [];
+            const rows = Array.isArray(properties.rows) ? properties.rows : [];
+            return '<div class="table-wrap">' + (properties.label ? '<span class="component-label">' + esc(properties.label) + '</span>' : '') +
+                '<table class="data-table"><thead><tr>' + columns.map(column => '<th>' + esc(column.label || column.key || '') + '</th>').join('') +
+                '</tr></thead><tbody>' + rows.map(row => '<tr>' + columns.map(column => '<td>' + esc(row[column.key] ?? '') + '</td>').join('') +
+                '</tr>').join('') + '</tbody></table></div>';
+        }
+        if (type === 'validation') {
+            const errors = Array.isArray(properties.errors) ? properties.errors : [];
+            return errors.length ? '<div><h4>Validation issues</h4><ul class="errors webview-validation-list">' + errors.map(formatValidationError).join('') + '</ul></div>' :
+                '<p class="muted">' + esc(properties.empty || 'No validation issues found.') + '</p>';
+        }
+        if (type === 'meta') {
+            const dependencies = Array.isArray(properties.dependencies) && properties.dependencies.length ?
+                '<div><dt>Dependencies</dt><dd>' + esc(properties.dependencies.join(', ')) + '</dd></div>' : '';
+            const resource = properties.resourcePackRebuildRequired ? '<div><dt>Resource pack</dt><dd>Rebuild required after changes.</dd></div>' : '';
+            return dependencies || resource ? '<dl class="webview-metadata">' + dependencies + resource + '</dl>' : '';
+        }
+        if (type === 'document-picker') {
+            const selectId = 'view-document-picker-' + (++viewActionSequence);
+            const options = Array.isArray(properties.options) ? properties.options : [];
+            return '<div class="card-actions"><select id="' + selectId + '"><option value="">Choose a file</option>' +
+                options.map(option => '<option value="' + esc(option.value) + '">' + esc(option.label) + '</option>').join('') +
+                '</select><button class="button small primary" type="button" data-view-document="' + esc(selectId) + '" data-view-document-module="' +
+                esc(properties.module || activeId) + '" data-view-document-pack="' + esc(properties.pack || '') + '">Open editor</button></div>';
+        }
+        if (type === 'rules') {
+            const rules = Array.isArray(properties.rules) ? properties.rules : [];
+            return '<div class="table-summary">' + (rules.length ? rules.map(rule => '<div class="rule-summary"><div class="rule-summary-head"><strong>' +
+                esc(rule.drops || 'No drops') + '</strong><span class="tiny">' + esc(rule.operation || 'Drop') + '</span></div><div><span class="rule-condition-label">When</span> ' +
+                esc(rule.conditions || 'Always') + '</div></div>').join('') : '<div class="empty">No rules.</div>') + '</div>';
+        }
+        if (type === 'notice') return '<div class="notice show">' + esc(properties.text || '') + '</div>';
+        if (type === 'loading') return loading(properties.text || 'Loading…');
+        if (type === 'empty') return '<div class="empty">' + esc(properties.text || 'Nothing found.') + '</div>';
+        return '';
+    }
+
+    function renderDeclarativeView(view) {
+        viewActionSequence = 0;
+        viewActions.clear();
+        q('#pageTitle').textContent = view.title || moduleInfo()?.title || 'STEMCraft Editor';
+        renderNav();
+        const topbarActions = Array.isArray(view.topbarActions) ? view.topbarActions : [];
+        q('#topbarActions').innerHTML = topbarActions.map(action => viewActionButton(action, 'topbar-action')).join('');
+        q('#workspace').innerHTML = '<div class="stack">' + (view.components || []).map(component => renderDeclarativeComponent(component)).join('') + '</div>';
+        bindDeclarativeActions();
     }
 
     function bindDeclarativeActions() {
-        q('#workspace').querySelectorAll('[data-view-action]').forEach(element => {
+        document.querySelectorAll('#moduleNav [data-view-action], #topbarActions [data-view-action], #workspace [data-view-action]').forEach(element => {
             const action = viewActions.get(element.dataset.viewAction);
-            element.onclick = event => { event.stopPropagation(); dispatchViewAction(action); };
+            element.onclick = event => {
+                event.stopPropagation();
+                if (element.closest('#moduleNav')) setSidebar(false);
+                dispatchViewAction(action);
+            };
             element.onkeydown = event => {
                 if ((event.key === 'Enter' || event.key === ' ') && element.getAttribute('role') === 'button') {
                     event.preventDefault(); element.click();
@@ -361,716 +715,232 @@
         });
         q('#workspace').querySelectorAll('[data-view-document]').forEach(button => button.onclick = () => {
             const select = q('#' + button.dataset.viewDocument);
-            openDeclarativeDocument(button.dataset.viewDocumentModule, button.dataset.viewDocumentPack, select?.value || '');
+            const file = select?.value || '';
+            if (!file) return notice('Choose a file first.');
+            const module = button.dataset.viewDocumentModule;
+            const query = {pack: button.dataset.viewDocumentPack, file};
+            if (module === activeId && activeQuery.table) query.table = activeQuery.table;
+            openModule(module, query);
         });
-    }
-
-    function renderDeclarativeView(view) {
-        viewActionSequence = 0;
-        viewActions.clear();
-        q('#workspace').innerHTML = '<div class="stack">' + (view.components || []).map(renderDeclarativeComponent).join('') + '</div>';
-        bindDeclarativeActions();
-    }
-
-    function renderComponents() {
-        q('#workspace').innerHTML = pageHead('Components') +
-            '<div class="component-showcase">' +
-            '<section class="card component-demo"><h3>Actions and status</h3><div class="demo-row"><span class="component-label">Buttons</span>' +
-            '<button class="button primary" type="button">Primary action</button><button class="button" type="button">Secondary action</button>' +
-            '<button class="button small" type="button">Small action</button><button class="button good" type="button">Enabled</button>' +
-            '<button class="button warn" type="button">Warning</button><button class="button danger" type="button">Delete</button><button id="component-dialog-demo" class="button small" type="button">Dialog</button></div>' +
-            '<div class="demo-row"><span class="component-label">Status</span><span class="pill good">Saved</span><span class="pill warn">Draft</span><span class="pill bad">Needs attention</span><span class="status">Supporting text</span></div></section>' +
-            '<section class="card component-demo"><h3>Tabs</h3>' + tabsComponent([{id: 'overview', label: 'Overview'}, {id: 'settings', label: 'Settings'}, {id: 'history', label: 'History'}], 'overview') +
-            '<span class="tiny">Use tabs for sibling views within a module.</span></section>' +
-            '<section class="card component-demo"><h3>Forms</h3><div class="field-grid"><label>Text field<input value="Example value"></label>' +
-            '<label>Select<select><option>First option</option><option>Second option</option></select></label>' +
-            '<label>Suggestions<input list="component-suggestions" placeholder="Choose or type…"><datalist id="component-suggestions"><option value="First suggestion"><option value="Second suggestion"></datalist></label>' +
-            '<label class="wide">Long text<textarea class="small-area">A shared editor field with the site theme.</textarea></label>' +
-            switchControl('Toggle switch', 'component-toggle', true) + '<label class="wide">Range slider<input type="range" min="0" max="100" value="65"><span class="tiny">65%</span></label></div></section>' +
-            '<section class="card component-demo"><h3>Lists and tables</h3><div class="grid"><div><span class="component-label">List</span><div class="list">' +
-            '<button class="list-button active" type="button"><strong>Selected item</strong><small>items/example</small></button>' +
-            '<button class="list-button" type="button"><strong>Another item</strong><small>items/another</small></button></div></div>' +
-            '<div class="table-wrap"><span class="component-label">Table</span><table class="data-table"><thead><tr><th>Name</th><th>State</th><th>Action</th></tr></thead><tbody>' +
-            '<tr><td>Example row</td><td><span class="pill good">Ready</span></td><td><button class="button small" type="button">Open</button></td></tr>' +
-            '<tr><td>Another row</td><td><span class="pill">Draft</span></td><td><button class="button small" type="button">Open</button></td></tr></tbody></table></div></div></section>' +
-            '<section class="card component-demo"><h3>Feedback and states</h3><div class="notice show">A non-blocking notice with an optional action.</div>' +
-            '<div class="loading"><span class="loading-spinner" aria-hidden="true"></span><span>Loading state</span></div>' +
-            '<div class="empty">Empty state content appears here when there is nothing to show.</div></section></div>';
-        q('#component-dialog-demo').onclick = () => openEditorDialog('Dialog component', '<p class="muted">Dialogs keep short create and edit flows in context without adding another page panel.</p>', 'Done', async (form, dialog) => dialog.close());
-    }
-
-    function questOptions(values, current, blank = true) {
-        return (blank ? '<option value="">None</option>' : '') + values.map(value =>
-            '<option value="' + esc(value) + '"' + (value === current ? ' selected' : '') + '>' + esc(value) + '</option>').join('');
-    }
-
-    function questField(label, name, value, type = 'text', wide = false) {
-        return '<label' + (wide ? ' class="wide"' : '') + '>' + esc(label) + '<input name="' + esc(name) + '" type="' +
-            esc(type) + '" value="' + esc(value) + '"></label>';
-    }
-
-    function questArea(label, name, value, wide = true) {
-        return '<label' + (wide ? ' class="wide"' : '') + '>' + esc(label) + '<textarea name="' + esc(name) + '">' +
-            esc(value) + '</textarea></label>';
-    }
-
-    function questObjectField(label, prop, value, type = 'text') {
-        return '<label>' + esc(label) + '<input data-prop="' + esc(prop) + '" type="' + esc(type) + '" value="' + esc(value) + '"></label>';
-    }
-
-    function questObjectArea(label, prop, value) {
-        return '<label class="wide">' + esc(label) + '<textarea data-prop="' + esc(prop) + '">' + esc(value) + '</textarea></label>';
-    }
-
-    function questDepth(data, quest, seen = new Set()) {
-        if (!quest || seen.has(quest.id)) return 0;
-        seen.add(quest.id);
-        const parents = (quest.requirements || []).map(id => data.quests.find(value => value.id === id)).filter(Boolean);
-        return parents.length ? 1 + Math.max(...parents.map(parent => questDepth(data, parent, new Set(seen)))) : 0;
-    }
-
-    function questLevel(data, quest) {
-        return data.npcs.find(npc => npc.id === quest.startNpcProfile)?.minimumLevel ?? 0;
-    }
-
-    function questSort(data, first, second) {
-        return questLevel(data, first) - questLevel(data, second) || String(first.title).localeCompare(String(second.title));
-    }
-
-    function orderedQuestValues(data) {
-        const visited = new Set();
-        const result = [];
-        const primaryParent = quest => data.quests.find(value => value.id === (quest.requirements || [])[0]);
-        const visit = quest => {
-            if (!quest || visited.has(quest.id)) return;
-            visited.add(quest.id);
-            result.push(quest);
-            data.quests.filter(child => primaryParent(child)?.id === quest.id).sort((a, b) => questSort(data, a, b)).forEach(visit);
-        };
-        data.quests.filter(quest => !primaryParent(quest)).sort((a, b) => questSort(data, a, b)).forEach(visit);
-        data.quests.filter(quest => !visited.has(quest.id)).sort((a, b) => questSort(data, a, b)).forEach(visit);
-        return result;
-    }
-
-    function questObjectiveTarget(data, objective) {
-        if (objective.type === 'COLLECT') return '<label>Material<select data-prop="target">' +
-            questOptions(data.materials || [], objective.target, false) + '</select></label>';
-        if (['KILL', 'INTERACT'].includes(objective.type)) return '<label>Entity type<select data-prop="target">' +
-            questOptions(data.entityTypes || [], objective.target, false) + '</select></label>';
-        if (objective.type === 'NPC') return '<label>NPC profile<select data-prop="target">' +
-            questOptions((data.npcs || []).map(npc => 'profile:' + npc.id), objective.target, false) + '</select></label>';
-        if (objective.type === 'STRUCTURE') return '<label>Structure<select data-prop="target">' +
-            questOptions(['SHIPWRECK', 'SHIPWRECK_BEACHED', 'PILLAGER_OUTPOST', 'OCEAN_RUIN_COLD', 'OCEAN_RUIN_WARM', 'RUINED_PORTAL', 'MINESHAFT', 'BURIED_TREASURE'], objective.target, false) + '</select></label>';
-        if (['ALTITUDE_ABOVE', 'ALTITUDE_BELOW', 'UNDERWATER'].includes(objective.type)) return questObjectField('Y level', 'target', objective.target, 'number');
-        if (objective.type === 'BIOME') return questObjectField('Biome key', 'target', objective.target);
-        return '<label>Target<input value="Automatic" disabled></label>';
-    }
-
-    function questObjectiveRow(data, objective, index) {
-        const types = ['COLLECT', 'KILL', 'LOCATION', 'NPC', 'BIOME', 'ALTITUDE_ABOVE', 'ALTITUDE_BELOW', 'STRUCTURE', 'SLEEP', 'INTERACT', 'UNDERWATER', 'NIGHT'];
-        return '<div class="card" data-objective="' + index + '"><div class="document-head"><strong>Objective ' + (index + 1) + '</strong>' +
-            '<div class="card-actions"><button data-up="objective" class="button small" type="button">↑</button><button data-down="objective" class="button small" type="button">↓</button>' +
-            '<button data-remove="objective" class="button danger small" type="button">Remove</button></div></div><div class="field-grid">' +
-            '<label>Type<select data-prop="type">' + questOptions(types, objective.type, false) + '</select></label>' + questObjectiveTarget(data, objective) +
-            questObjectField('Amount', 'amount', objective.amount, 'number') + questObjectField('Player-facing objective', 'label', objective.label) +
-            switchObjectControl('Consume collected items', 'consume', objective.consume) +
-            questObjectField('World', 'world', objective.world || 'survival') + questObjectField('X', 'x', objective.x, 'number') + questObjectField('Y', 'y', objective.y, 'number') +
-            questObjectField('Z', 'z', objective.z, 'number') + questObjectField('Radius', 'radius', objective.radius, 'number') + '</div></div>';
-    }
-
-    function questRewardRow(reward, index) {
-        return '<div class="card" data-reward="' + index + '"><div class="document-head"><strong>Item ' + (index + 1) + '</strong>' +
-            '<button data-remove="reward" class="button danger small" type="button">Remove</button></div><div class="field-grid">' +
-            questObjectField('Material', 'material', reward.material) + questObjectField('Amount', 'amount', reward.amount, 'number') +
-            questObjectField('Name', 'name', reward.name || '') + questObjectArea('Lore — one line per entry', 'lore', (reward.lore || []).join('\n')) +
-            switchObjectControl('Unbreakable', 'unbreakable', reward.unbreakable) + '</div></div>';
-    }
-
-    function defaultQuestTarget(data, type) {
-        return {COLLECT: 'OAK_LOG', KILL: 'ZOMBIE', NPC: data.npcs[0] ? 'profile:' + data.npcs[0].id : '', BIOME: 'plains',
-            ALTITUDE_ABOVE: '120', ALTITUDE_BELOW: '0', UNDERWATER: '50', STRUCTURE: 'SHIPWRECK', INTERACT: 'IRON_GOLEM'}[type] || '';
-    }
-
-    function renderQuests(data) {
-        if (selectedQuest) {
-            const quest = (data.quests || []).find(value => value.id === selectedQuest);
-            if (quest) return renderQuestSubview(data, quest);
-            selectedQuest = null;
-        }
-        if (selectedNpc) {
-            const npc = (data.npcs || []).find(value => value.id === selectedNpc);
-            if (npc) return renderNpcSubview(data, npc);
-            selectedNpc = null;
-        }
-        const list = questListKind === 'npcs' ? (data.npcs || []) : orderedQuestValues(data);
-        const search = q('#quest-search-value')?.value?.toLowerCase() || '';
-        const filtered = list.filter(value => String(value.title || value.name || '').toLowerCase().includes(search) || value.id.toLowerCase().includes(search));
-        const entries = filtered.map(value => {
-            const isQuest = questListKind === 'quests';
-            const label = isQuest ? value.title : value.name;
-            const detail = isQuest ? value.id + ' · level ' + questLevel(data, value) : value.id + ' · ' + value.entityType;
-            return '<button class="list-button" type="button" data-quest-select="' + esc(value.id) + '"><strong>' + esc(label) +
-                '</strong><small>' + esc(detail) + '</small></button>';
-        }).join('');
-        const writable = Boolean(moduleInfo()?.writable);
-        q('#workspace').innerHTML = pageHead('Quests') +
-            '<div class="section-heading editor-section-heading"><div><h2>Quest definitions</h2><p class="tiny">Open a quest or NPC in its own editor view.</p></div>' +
-            '<div class="card-actions"><button id="quest-yaml" class="button small" type="button">Advanced YAML</button><span class="tiny">' + filtered.length + ' shown</span></div></div>' +
-            tabsComponent([{id: 'quests', label: 'Quests'}, {id: 'npcs', label: 'NPCs'}], questListKind) +
-            '<section class="card"><div class="field-grid"><label class="wide">Search<input id="quest-search-value" value="' + esc(search) + '" placeholder="Search quests and NPCs"></label></div>' +
-            '<div class="list">' + (entries || '<div class="empty">No quest definitions found.</div>') + '</div>' +
-            (writable ? '<div class="card-actions"><button id="quest-new" class="button primary" type="button">+ New ' + (questListKind === 'quests' ? 'quest' : 'NPC') + '</button></div>' : '') +
-            '</section>';
-        q('#quest-search-value').oninput = event => {
-            const value = event.target.value;
-            renderQuests({...data, _search: value});
-            const searchInput = q('#quest-search-value');
-            if (searchInput) { searchInput.focus(); searchInput.setSelectionRange(value.length, value.length); }
-        };
-        bindTabs(tab => {
-            questListKind = tab;
-            selectedQuest = null;
-            selectedNpc = null;
-            renderQuests(activeData);
-        });
-        q('#workspace').querySelectorAll('[data-quest-select]').forEach(button => button.onclick = () => {
-            selectedQuest = questListKind === 'quests' ? button.dataset.questSelect : null;
-            selectedNpc = questListKind === 'npcs' ? button.dataset.questSelect : null;
-            renderQuests(activeData);
-        });
-        q('#quest-yaml').onclick = () => openQuestDocument('quests.yml');
-        const create = q('#quest-new');
-        if (create) create.onclick = () => createQuestEditorEntry();
-    }
-
-    function createQuestEditorEntry() {
-        const id = prompt('New ' + (questListKind === 'quests' ? 'quest' : 'NPC') + ' ID (lowercase):');
-        if (!id) return;
-        const values = questListKind === 'quests' ? activeData.quests : activeData.npcs;
-        if (values.some(value => value.id === id)) return notice('That ID already exists.', true);
-        if (questListKind === 'quests') {
-            activeData.quests.push({id, title: 'New Quest', author: 'Quest Giver', description: 'Tell this quest as a story.', shortDescription: '',
-                rewardText: 'A reward awaits.', enabled: false, repeatable: false, timeLimitSeconds: 0, restartCooldownSeconds: 0, globalMaxCompletions: 0,
-                startNpcProfile: null, endNpcProfile: null, startNpcName: 'Quest Giver', endNpcName: 'Quest Contact',
-                dialogue: {offer: [], idle: [], incomplete: [], objective: [], complete: []}, requirements: [], objectives: [], rewardItems: [], rewardCommands: []});
-            selectedQuest = id;
-            selectedNpc = null;
-        } else {
-            activeData.npcs.push({id, name: 'New NPC', entityType: 'VILLAGER', ai: true, world: 'survival', minDistance: 30, maxDistance: 100,
-                uniquenessRadius: 1200, despawnRadius: 150, minimumLevel: 0, timeFrom: 0, timeUntil: 24000, dailyChance: .25, lifetimeSeconds: 0, biomes: [], idleDialogue: []});
-            selectedNpc = id;
-            selectedQuest = null;
-        }
-        notice('New definition added. Save it from the editor view.');
-        renderQuests(activeData);
-    }
-
-    async function saveQuestData() {
-        try {
-            setStatus('Saving quest data…');
-            const result = await request(apiUrl('quests', 'data'), {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(activeData)});
-            notice(result.message || 'Quest data saved.');
-            activeData = await request(apiUrl('quests', 'data'));
-            selectedQuest = null;
-            selectedNpc = null;
-            renderQuests(activeData);
-            setStatus('Ready');
-        } catch (error) {
-            notice(error.message, true);
-            setStatus('Needs attention', true);
-        }
-    }
-
-    function renderQuestSubview(data, quest) {
-        const profiles = (data.npcs || []).map(npc => npc.id);
-        const otherQuests = (data.quests || []).filter(value => value.id !== quest.id).map(value => value.id);
-        const dialogue = quest.dialogue || {};
-        q('#workspace').innerHTML = subviewHead(quest.title || quest.id) +
-            '<form id="quest-editor-form" class="stack"><section class="card"><h3>Story</h3><div class="field-grid">' +
-            questField('Quest ID', 'id', quest.id) + questField('Title', 'title', quest.title) + questField('Author / giver', 'author', quest.author) +
-            switchControl('Enabled', 'enabled', quest.enabled) + switchControl('Repeatable', 'repeatable', quest.repeatable) +
-            questArea('Quest-giver story', 'description', quest.description) +
-            questArea('Short description', 'shortDescription', quest.shortDescription || '') + '</div></section>' +
-            '<section class="card"><h3>Characters</h3><div class="field-grid"><label>Starting NPC<select name="startNpcProfile">' + questOptions(profiles, quest.startNpcProfile) +
-            '</select></label><label>Turn-in NPC<select name="endNpcProfile">' + questOptions(profiles, quest.endNpcProfile) + '</select></label>' +
-            questField('Starting NPC display name', 'startNpcName', quest.startNpcName) + questField('Turn-in NPC display name', 'endNpcName', quest.endNpcName) + '</div></section>' +
-            '<section class="card"><h3>Availability and failure</h3><div class="field-grid">' + questField('Time limit in seconds (0 = none)', 'timeLimitSeconds', quest.timeLimitSeconds || 0, 'number') +
-            questField('Restart cooldown in seconds', 'restartCooldownSeconds', quest.restartCooldownSeconds || 0, 'number') + questField('Global completion limit (0 = unlimited)', 'globalMaxCompletions', quest.globalMaxCompletions || 0, 'number') + '</div></section>' +
-            '<section class="card"><h3>Requirements</h3><label>Required quests<select name="requirements" multiple size="' + Math.min(8, Math.max(3, otherQuests.length)) + '">' +
-            otherQuests.map(id => '<option value="' + esc(id) + '"' + ((quest.requirements || []).includes(id) ? ' selected' : '') + '>' + esc(id) + '</option>').join('') + '</select></label></section>' +
-            '<section class="card"><div class="document-head"><h3>Objectives</h3><button data-add="objective" class="button small" type="button">+ Objective</button></div><div class="stack">' +
-            (quest.objectives || []).map((objective, index) => questObjectiveRow(data, objective, index)).join('') + '</div></section>' +
-            '<section class="card"><h3>Rewards</h3>' + questArea('Reward description', 'rewardText', quest.rewardText, false) +
-            '<div id="quest-rewards" class="stack">' + (quest.rewardItems || []).map((reward, index) => questRewardRow(reward, index)).join('') + '</div>' +
-            '<div class="card-actions"><button data-add="reward" class="button small" type="button">+ Item reward</button></div>' +
-            questArea('Console commands — one per line', 'rewardCommands', (quest.rewardCommands || []).join('\n')) + '</section>' +
-            '<section class="card"><h3>Dialogue</h3><div class="field-grid">' +
-            ['offer', 'idle', 'incomplete', 'objective', 'complete'].map(state => questArea(state[0].toUpperCase() + state.slice(1) + ' — one saying per line', 'dialogue.' + state, (dialogue[state] || []).join('\n'), state === 'complete')).join('') +
-            '</div></section><div class="card-actions"><button class="button primary" type="submit">Save quest</button><button id="quest-duplicate" class="button" type="button">Duplicate</button>' +
-            '<button id="quest-delete" class="button danger" type="button">Delete quest</button></div></form>';
-        bindQuestSubview(data, quest, true);
-    }
-
-    function renderNpcSubview(data, npc) {
-        const starts = (data.quests || []).filter(quest => quest.startNpcProfile === npc.id);
-        const ends = (data.quests || []).filter(quest => quest.endNpcProfile === npc.id);
-        const linked = values => values.length ? values.map(quest => '<button class="button small" data-open-quest="' + esc(quest.id) + '" type="button">' +
-            esc(quest.title) + '</button>').join(' ') : '<span class="muted">None</span>';
-        q('#workspace').innerHTML = subviewHead(npc.name || npc.id) +
-            '<form id="npc-editor-form" class="stack"><section class="card"><h3>Identity</h3><div class="field-grid">' + questField('NPC ID', 'id', npc.id) +
-            questField('Visible name', 'name', npc.name) + '<label>Entity type<select name="entityType">' + questOptions(data.entityTypes || [], npc.entityType, false) +
-            '</select></label>' + switchControl('Can walk around', 'ai', npc.ai) + '</div></section>' +
-            '<section class="card"><h3>Linked quests</h3><div class="field-grid"><div><span class="component-label">Starts here</span><div class="card-actions">' + linked(starts) +
-            '</div></div><div><span class="component-label">Handed in here</span><div class="card-actions">' + linked(ends) + '</div></div></div></section>' +
-            '<section class="card"><h3>Spawn conditions</h3><div class="field-grid">' + questField('World', 'world', npc.world) + questField('Minimum player level', 'minimumLevel', npc.minimumLevel, 'number') +
-            questField('Daily chance (0–1)', 'dailyChance', npc.dailyChance, 'number') + questField('Minimum distance', 'minDistance', npc.minDistance, 'number') +
-            questField('Maximum distance', 'maxDistance', npc.maxDistance, 'number') + questField('Uniqueness radius', 'uniquenessRadius', npc.uniquenessRadius, 'number') +
-            questField('Despawn radius', 'despawnRadius', npc.despawnRadius, 'number') + questField('Time from (ticks)', 'timeFrom', npc.timeFrom, 'number') +
-            questField('Time until (ticks)', 'timeUntil', npc.timeUntil, 'number') + questField('Maximum appearance in seconds (0 = unlimited)', 'lifetimeSeconds', npc.lifetimeSeconds || 0, 'number') +
-            questArea('Biomes — one per line', 'biomes', (npc.biomes || []).join('\n')) + '</div></section>' +
-            '<section class="card"><h3>Dialogue</h3>' + questArea('Idle sayings — one per line', 'idleDialogue', (npc.idleDialogue || []).join('\n'), false) +
-            '</section><div class="card-actions"><button class="button primary" type="submit">Save NPC</button><button id="npc-delete" class="button danger" type="button">Delete NPC</button></div></form>';
-        bindQuestSubview(data, npc, false);
-        q('#workspace').querySelectorAll('[data-open-quest]').forEach(button => button.onclick = () => {
-            selectedNpc = null;
-            selectedQuest = button.dataset.openQuest;
-            renderQuests(activeData);
-        });
-    }
-
-    function bindQuestSubview(data, value, isQuest) {
-        q('[data-subview-back]').onclick = () => {
-            selectedQuest = null;
-            selectedNpc = null;
-            renderQuests(activeData);
-        };
-        const form = q(isQuest ? '#quest-editor-form' : '#npc-editor-form');
-        form.oninput = event => {
-            const element = event.target;
-            if (element.name) {
-                if (element.name === 'requirements') value.requirements = [...element.selectedOptions].map(option => option.value);
-                else if (element.name.startsWith('dialogue.')) {
-                    value.dialogue ??= {};
-                    value.dialogue[element.name.slice(9)] = String(element.value).split('\n').map(line => line.trim()).filter(Boolean);
-                } else if (['rewardCommands', 'biomes', 'idleDialogue'].includes(element.name)) {
-                    value[element.name] = String(element.value).split('\n').map(line => line.trim()).filter(Boolean);
-                } else value[element.name] = element.type === 'checkbox' ? element.checked : element.type === 'number' ? Number(element.value) : element.value;
-            } else if (element.dataset.prop) {
-                const row = element.closest('[data-objective], [data-reward]');
-                const values = row.hasAttribute('data-objective') ? value.objectives : value.rewardItems;
-                const index = Number(row.dataset.objective ?? row.dataset.reward);
-                values[index][element.dataset.prop] = element.dataset.prop === 'lore'
-                    ? String(element.value).split('\n').map(line => line.trim()).filter(Boolean)
-                    : element.type === 'checkbox' ? element.checked : element.type === 'number' ? Number(element.value) : element.value;
-            }
-        };
-        form.onchange = event => {
-            const element = event.target;
-            if (element.dataset.prop !== 'type') return;
-            const row = element.closest('[data-objective]');
-            const index = Number(row.dataset.objective);
-            value.objectives[index].target = defaultQuestTarget(data, element.value);
-            renderQuests(activeData);
-        };
-        form.onclick = event => {
-            const button = event.target.closest('button');
-            if (!button) return;
-            if (button.dataset.add === 'objective') value.objectives.push({type: 'COLLECT', target: 'OAK_LOG', amount: 1, consume: false, label: 'Collect an item', world: 'survival', x: 0, y: 64, z: 0, radius: 2});
-            if (button.dataset.add === 'reward') value.rewardItems.push({material: 'EMERALD', amount: 1, name: '', lore: [], unbreakable: false});
-            if (button.dataset.remove) {
-                const row = button.closest('[data-objective], [data-reward]');
-                const values = button.dataset.remove === 'objective' ? value.objectives : value.rewardItems;
-                values.splice(Number(row.dataset.objective ?? row.dataset.reward), 1);
-            }
-            if (button.dataset.up || button.dataset.down) {
-                const row = button.closest('[data-objective]');
-                const index = Number(row.dataset.objective);
-                const target = index + (button.dataset.up ? -1 : 1);
-                if (target >= 0 && target < value.objectives.length) [value.objectives[index], value.objectives[target]] = [value.objectives[target], value.objectives[index]];
-            }
-            if (button.id === 'quest-duplicate') {
-                const id = prompt('ID for duplicate:', value.id + '-copy');
-                if (!id || activeData.quests.some(quest => quest.id === id)) return;
-                const copy = structuredClone(value);
-                copy.id = id;
-                copy.title += ' Copy';
-                activeData.quests.push(copy);
-                selectedQuest = id;
-            }
-            if (button.id === 'quest-delete' || button.id === 'npc-delete') {
-                if (!confirm('Delete ' + value.id + '?')) return;
-                const values = isQuest ? activeData.quests : activeData.npcs;
-                values.splice(values.indexOf(value), 1);
-                selectedQuest = null;
-                selectedNpc = null;
-                saveQuestData();
-                return;
-            }
-            if (button.dataset.add || button.dataset.remove || button.dataset.up || button.dataset.down || button.id === 'quest-duplicate') {
-                event.preventDefault();
-                renderQuests(activeData);
-            }
-        };
-        form.onsubmit = event => {
+        q('#workspace').querySelectorAll('[data-view-form]').forEach(form => form.onsubmit = event => {
             event.preventDefault();
-            saveQuestData();
+            const submitter = event.submitter || form.querySelector('[data-view-form-action]');
+            dispatchViewForm(form, viewActions.get(submitter?.dataset.viewFormAction));
+        });
+        q('#workspace').querySelectorAll('[data-field-link-module]').forEach(button => button.onclick = () => {
+            const field = button.closest('.webview-field');
+            const input = field?.querySelector('input[name],select[name],textarea[name]');
+            let value = input?.value?.trim();
+            if (!value) return notice('Choose or enter a linked record first.', true);
+            const prefix = button.dataset.fieldLinkPrefix || '';
+            if (prefix === '*:') {
+                if (!value.includes(':') || value.toLowerCase().startsWith('minecraft:'))
+                    return notice('Choose a custom item first.', true);
+                value = value.slice(value.indexOf(':') + 1);
+            } else if (prefix) {
+                if (!value.startsWith(prefix)) return notice('Choose a linked record first.', true);
+                value = value.slice(prefix.length);
+            }
+            let query = {};
+            try { query = JSON.parse(button.dataset.fieldLinkQuery || '{}'); } catch (ignored) { }
+            query[button.dataset.fieldLinkParameter] = value;
+            const params = new URLSearchParams({module: button.dataset.fieldLinkModule, ...query});
+            window.open(base + '?' + params.toString(), '_blank', 'noopener,noreferrer');
+        });
+        q('#workspace').querySelectorAll('[data-field-link-module]').forEach(button => {
+            const input = button.closest('.webview-field')?.querySelector('input[name],select[name],textarea[name]');
+            const update = () => {
+                const value = input?.value?.trim() || '';
+                const prefix = button.dataset.fieldLinkPrefix || '';
+                button.hidden = prefix === '*:'
+                    ? (!value.includes(':') || value.toLowerCase().startsWith('minecraft:'))
+                    : prefix ? !value.startsWith(prefix) : !value;
+            };
+            input?.addEventListener('input', update);
+            input?.addEventListener('change', update);
+            update();
+        });
+        q('#workspace').querySelectorAll('[data-choice-search-input]').forEach(input => input.oninput = () => {
+            const term = input.value.trim().toLowerCase();
+            input.parentElement.querySelectorAll('[data-choice-search]').forEach(choice => {
+                choice.hidden = !choice.dataset.choiceSearch.includes(term);
+            });
+        });
+        q('#workspace').querySelectorAll('[data-choice-value]').forEach(input => input.onchange = () => {
+            const amount = input.closest('.choice-row')?.querySelector('[data-choice-amount]');
+            if (amount) amount.disabled = !input.checked;
+            const group = input.closest('.webview-field')?.querySelector('[data-checkbox-group]');
+            if (group?.dataset.stateBound === 'true') updateDraftField(group);
+        });
+        q('#workspace').querySelectorAll('[data-choice-amount]').forEach(input => {
+            const update = () => {
+                const group = input.closest('.webview-field')?.querySelector('[data-checkbox-group]');
+                if (group?.dataset.stateBound === 'true') updateDraftField(group);
+            };
+            input.addEventListener('input', update);
+            input.addEventListener('change', update);
+        });
+        q('#workspace').querySelectorAll('[data-multi-value]').forEach(input => input.onchange = () => {
+            const group = input.closest('.webview-field')?.querySelector('[data-multiselect-group]');
+            if (group?.dataset.stateBound === 'true') updateDraftField(group);
+        });
+        q('#workspace').querySelectorAll('[data-repeater]').forEach(button => button.onclick = () => {
+            const path = button.dataset.path;
+            const list = getPath(activeData?.state, path);
+            if (!Array.isArray(list)) return;
+            const index = Number(button.dataset.index);
+            if (button.dataset.repeater === 'add') list.push(JSON.parse(button.dataset.default || '{}'));
+            if (button.dataset.repeater === 'remove') list.splice(index, 1);
+            if (button.dataset.repeater === 'up' && index > 0) [list[index - 1], list[index]] = [list[index], list[index - 1]];
+            if (button.dataset.repeater === 'down' && index < list.length - 1) [list[index + 1], list[index]] = [list[index], list[index + 1]];
+            viewDraftDirty = true;
+            renderModule();
+        });
+        q('#workspace').querySelectorAll('[data-config-remove-key]').forEach(button => button.onclick = () => {
+            const object = dataPathValue(activeData?.state, JSON.parse(button.dataset.configPath || '[]'));
+            if (!object || typeof object !== 'object' || Array.isArray(object)) return;
+            delete object[button.dataset.configRemoveKey];
+            viewDraftDirty = true;
+            renderModule();
+        });
+        q('#workspace').querySelectorAll('[data-config-remove-index]').forEach(button => button.onclick = () => {
+            const list = dataPathValue(activeData?.state, JSON.parse(button.dataset.configPath || '[]'));
+            if (!Array.isArray(list)) return;
+            list.splice(Number(button.dataset.configRemoveIndex), 1);
+            viewDraftDirty = true;
+            renderModule();
+        });
+        q('#workspace').querySelectorAll('[data-config-add-key]').forEach(button => button.onclick = () => {
+            const object = dataPathValue(activeData?.state, JSON.parse(button.dataset.configPath || '[]'));
+            const controls = button.closest('.data-editor-add');
+            const key = controls?.querySelector('[data-config-new-key]')?.value ?? '';
+            if (!object || typeof object !== 'object' || Array.isArray(object)) return;
+            if (!key.trim()) return notice('Enter a field name first.', true);
+            if (Object.prototype.hasOwnProperty.call(object, key)) return notice('That field already exists.', true);
+            const type = controls.querySelector('[data-config-add-type]')?.value || 'text';
+            Object.defineProperty(object, key, {value: defaultDataValue(type), writable: true, enumerable: true, configurable: true});
+            viewDraftDirty = true;
+            renderModule();
+        });
+        q('#workspace').querySelectorAll('[data-config-add-index]').forEach(button => button.onclick = () => {
+            const list = dataPathValue(activeData?.state, JSON.parse(button.dataset.configPath || '[]'));
+            if (!Array.isArray(list)) return;
+            const type = button.closest('.data-editor-add')?.querySelector('[data-config-add-type]')?.value || 'text';
+            list.push(defaultDataValue(type));
+            viewDraftDirty = true;
+            renderModule();
+        });
+        q('#workspace').querySelectorAll('[data-list-search]').forEach(input => input.oninput = () => {
+            const list = input.parentElement.querySelector('[data-search-list]');
+            const term = input.value.trim().toLowerCase();
+            list?.querySelectorAll('[data-search-text]').forEach(item => {
+                item.hidden = !item.dataset.searchText.toLowerCase().includes(term);
+            });
+        });
+        q('#workspace').querySelectorAll('[data-tree-toggle]').forEach(button => button.onclick = () => {
+            const children = button.closest('[data-tree-node]')?.querySelector(':scope > [data-tree-children]');
+            if (!children) return;
+            children.hidden = !children.hidden;
+            button.setAttribute('aria-expanded', String(!children.hidden));
+        });
+        q('#workspace').querySelectorAll('[data-tree-search]').forEach(input => input.oninput = () => {
+            const term = input.value.trim().toLowerCase();
+            const list = input.parentElement.querySelector('.tree-list');
+            const filter = node => {
+                const ownMatch = !term || node.dataset.searchText.includes(term);
+                const children = node.querySelector(':scope > [data-tree-children]');
+                const childNodes = children ? [...children.querySelectorAll(':scope > [data-tree-node]')] : [];
+                const childMatches = childNodes.map(filter).some(Boolean);
+                const matches = ownMatch || childMatches;
+                node.hidden = !matches;
+                if (children && term && childMatches) {
+                    children.hidden = false;
+                    node.querySelector(':scope > .tree-row [data-tree-toggle]')?.setAttribute('aria-expanded', 'true');
+                } else if (children && !term) {
+                    const expanded = children.dataset.defaultExpanded === 'true';
+                    children.hidden = !expanded;
+                    node.querySelector(':scope > .tree-row [data-tree-toggle]')?.setAttribute('aria-expanded', String(expanded));
+                }
+                return matches;
+            };
+            list?.querySelectorAll(':scope > [data-tree-node]').forEach(filter);
+        });
+        const workspace = q('#workspace');
+        workspace.oninput = event => updateDraftField(event.target);
+        workspace.onchange = event => {
+            updateDraftField(event.target);
+            if (event.target.matches('[data-config-key]')) renameDataKey(event.target);
         };
     }
 
-    function openQuestDocument(file) {
-        selectedQuest = null;
-        selectedNpc = null;
-        q('#workspace').innerHTML = subviewHead(file) + '<section class="card"><div id="document-panel"></div></section>';
-        q('[data-subview-back]').onclick = () => renderQuests(activeData);
-        openDocument('quests', '', file);
-    }
-
-    function renderItems(data) {
-        const items = data.items || [];
-        const writable = Boolean(moduleInfo()?.writable);
-        if (selectedItem) {
-            const item = items.find(value => value.id === selectedItem);
-            if (!item) { selectedItem = null; return renderItems(data); }
-            q('#workspace').innerHTML = subviewHead(item.displayName || item.id) + '<section id="item-form" class="card"></section>';
-            q('[data-subview-back]').onclick = () => { selectedItem = null; renderItems(activeData); };
-            renderItemForm(item);
+    function updateDraftField(element) {
+        if (element?.hasAttribute('data-config-value') && activeData?.state) {
+            try {
+                const path = JSON.parse(element.dataset.configPath || '[]');
+                const kind = element.dataset.configKind;
+                const value = kind === 'boolean' ? element.checked : kind === 'number'
+                    ? (element.value === '' ? null : Number(element.value)) : element.value;
+                setDataPath(activeData.state, path, value);
+                viewDraftDirty = true;
+            } catch (error) { notice(error.message, true); }
             return;
         }
-        const defaultPack = (data.packs || []).find(pack => pack.enabled)?.id || data.packs?.[0]?.id || '';
-        const packOptions = (data.packs || []).map(pack => '<option value="' + esc(pack.id) + '"' +
-            (pack.id === defaultPack ? ' selected' : '') + '>' + esc(pack.id) + (pack.enabled ? '' : ' (disabled)') + '</option>').join('');
-        const materialOptions = (data.materials || []).map(material => '<option value="' + esc(material) + '"></option>').join('');
-        const list = items.map(item => '<button class="list-button" data-item="' + esc(item.id) + '" type="button"><strong>' +
-            esc(item.displayName) + '</strong><small>' + esc(item.id) + ' · ' + esc(item.material) + '</small></button>').join('');
-        const create = writable ? '<form id="item-create"><div class="field-grid"><label>Pack<select name="pack">' + packOptions +
-            '</select></label><label>File<input name="file" value="configs/items.yml"></label><label>Item ID<input name="id" pattern="[a-z0-9][a-z0-9_-]*" placeholder="forest-shard" required></label>' +
-            '<label>Material<input name="material" list="item-materials" placeholder="AMETHYST_SHARD" required></label><label class="wide">Name (optional)<input name="name" placeholder="Forest Shard"></label></div>' +
-            '<div class="card-actions"><button class="button primary" type="submit">Create item</button></div></form>' : '';
-        const createPanel = writable ? '<section class="card"><div class="section-heading"><h3>' + iconSvg(moduleIcons.items, 'section-icon') +
-            'New item</h3></div>' + create + '<datalist id="item-materials">' + materialOptions + '</datalist></section>' : '';
-        q('#workspace').innerHTML = pageHead('Items') + createPanel +
-            '<div class="section-heading editor-section-heading"><div><h2>Custom items</h2><p class="tiny">Open an item in its own editor view.</p></div>' +
-            '<span class="tiny">' + items.length + ' item' + (items.length === 1 ? '' : 's') + '</span></div>' +
-            '<section class="card"><div class="list">' + (list || '<div class="empty">No custom items found.</div>') + '</div></section>';
-        const createForm = q('#item-create');
-        if (createForm) createForm.onsubmit = async event => {
-            event.preventDefault();
-            const values = new FormData(createForm);
-            try {
-                setStatus('Creating item…');
-                const result = await request(apiUrl('items', 'create'), {method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(Object.fromEntries(values.entries()))});
-                notice(result.message || 'Item created.');
-                await openModule('items');
-            } catch (error) { notice(error.message, true); setStatus('Needs attention', true); }
-        };
-        q('#workspace').querySelectorAll('[data-item]').forEach(button => button.onclick = () => {
-            selectedItem = button.dataset.item;
-            renderItems(activeData);
-        });
-    }
-
-
-    function renderItemForm(item) {
-        if (!item) return;
-        const canWrite = Boolean(moduleInfo()?.writable);
-        const values = item.values || {};
-        const stats = values.stats || {};
-        const enchantments = values.enchantments && typeof values.enchantments === 'object' ?
-            Object.entries(values.enchantments).map(([key, value]) => key + '=' + value).join(',') : '';
-        const lore = Array.isArray(values.lore) ? values.lore.join('\n') : (values.lore || '');
-        const save = canWrite ? '<button class="button primary" type="submit">Save item</button>' : '';
-        q('#item-form').innerHTML = '<div class="document-head"><div><h3>' + esc(item.displayName) +
-            '</h3><small class="muted">' + esc(item.pack) + ' / ' + esc(item.file) + '</small></div></div><form id="item-editor-form"><fieldset' +
-            (canWrite ? '' : ' disabled') + '><div class="field-grid"><label>Name<input name="name" value="' +
-            esc(values.name || '') + '"></label><label>Material<input name="material" value="' +
-            esc(values.material || item.material) + '"></label><label>Colour<input name="color" value="' +
-            esc(values.color || '') + '"></label><label>Texture<input name="texture" value="' +
-            esc(values.texture || '') + '"></label><label>Durability<input name="durability" type="number" min="1" value="' +
-            esc(values['max-damage'] || '') + '"></label><label>Attack damage<input name="attack-damage" type="number" step="any" value="' +
-            esc(stats['attack-damage'] || '') + '"></label><label>Attack speed<input name="attack-speed" type="number" step="any" value="' +
-            esc(stats['attack-speed'] || '') + '"></label><label>Armour<input name="armor" type="number" step="any" value="' +
-            esc(stats.armor || '') + '"></label><label>Armour toughness<input name="toughness" type="number" step="any" value="' +
-            esc(stats.toughness || '') + '"></label><label class="wide">Lore<textarea class="small-area" name="lore">' +
-            esc(lore) + '</textarea></label><label class="wide">Enchantments<input name="enchantments" value="' +
-            esc(enchantments) + '" placeholder="sharpness=2,unbreaking=1"></label></div><details><summary>Abilities JSON</summary>' +
-            '<textarea class="small-area" name="abilities">' + esc(JSON.stringify(values.abilities || {}, null, 2)) +
-            '</textarea></details><div class="card-actions">' + save +
-            '</div></fieldset></form>';
-        q('#item-editor-form').onsubmit = async event => {
-            event.preventDefault();
-            if (!canWrite) return;
-            const form = new FormData(event.target);
-            const fields = Object.fromEntries(['name','material','color','texture','durability','attack-damage','attack-speed','armor','toughness','lore','enchantments']
-                .map(key => [key, form.get(key) || '']));
-            try { fields.abilities = JSON.parse(form.get('abilities') || '{}'); }
-            catch (error) { notice('Abilities must be valid JSON.', true); return; }
-            try {
-                setStatus('Saving item…');
-                const result = await request(apiUrl('items', 'save'), {method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({id: item.id, revision: item.revision, fields})});
-                notice(result.message || 'Item saved.');
-                await openModule('items');
-            } catch (error) { notice(error.message, true); setStatus('Needs attention', true); }
-        };
-    }
-
-    function renderLoot(data) {
-        const writable = Boolean(moduleInfo()?.writable);
-        const definitions = data.definitions || [];
-        if (selectedLoot && !definitions.some(definition => lootKey(definition) === selectedLoot)) selectedLoot = null;
-        const selected = definitions.find(definition => lootKey(definition) === selectedLoot);
-        const defaultPack = (data.packs || []).find(pack => pack.enabled)?.id || data.packs?.[0]?.id || '';
-        const packs = (data.packs || []).map(pack => '<option value="' + esc(pack.id) + '"' +
-            (pack.id === defaultPack ? ' selected' : '') + '>' + esc(pack.id) + (pack.enabled ? '' : ' (disabled)') + '</option>').join('');
-        const files = (data.documents || []).map(document => '<option value="' + esc(document.pack + '|' + document.file) + '">' +
-            esc(document.pack + ' / ' + document.file) + '</option>').join('');
-        const items = (data.items || []).map(item => '<option value="' + esc(item) + '"></option>').join('');
-        const blocks = (data.blocks || []).map(block => '<option value="' + esc(block) + '"></option>').join('');
-        const tableList = definitions.map(definition => '<button class="list-button" type="button" data-loot-table="' +
-            esc(lootKey(definition)) + '"><strong>' + esc(definition.id) + '</strong><small>' +
-            esc(definition.pack + ' / ' + definition.file) + '</small></button>').join('');
-        const createForm = writable ? '<form id="loot-create"><div class="field-grid"><label>Pack<select name="pack">' +
-            packs + '</select></label><label>File<input name="file" list="loot-files" value="configs/loot.yml"></label>' +
-            '<label>Table ID<input name="table" placeholder="tree-drops" pattern="[a-z0-9][a-z0-9-]*" required></label>' +
-            '<label>Trigger<select name="target\"><option value="block-break">Block broken</option><option value="mob-death">Mob defeated</option></select></label>' +
-            '<label id="loot-block-field" class="wide">Block type(s)<input name="block" list="block-types" placeholder="OAK_LOG, BIRCH_LOG"></label>' +
-            '<label id="loot-entity-field" class="wide hidden">Entity type<input name="entity" placeholder="ZOMBIE"></label>' +
-            '<label class="wide">Drop item<input name="item" list="loot-items" placeholder="DIAMOND or pack:item-id" required></label>' +
-            '<label>Chance<input name="chance" type="number" min="0" max="1" step="0.01" value="1"></label>' +
-            '<label>Minimum amount<input name="min" type="number" min="1" value="1"></label><label>Maximum amount<input name="max" type="number" min="1" value="1"></label>' +
-            '<label>World (optional)<input name="world" placeholder="survival"></label><label>Biome (optional)<input name="biome" placeholder="minecraft:forest"></label>' +
-            '</div><div class="card-actions"><button class="button primary" type="submit">Add loot rule</button></div></form>' : '';
-        const createPanel = writable ? '<details class="card disclosure" id="loot-create-panel"><summary>' +
-            iconSvg(moduleIcons.default, 'section-icon') + '<span>Add loot rule</span></summary><div class="disclosure-content">' + createForm +
-            '<datalist id="loot-files">' + files + '</datalist><datalist id="loot-items">' + items +
-            '</datalist><datalist id="block-types">' + blocks + '</datalist></div></details>' : '';
-        const simulation = '<form id="loot-sim"><div class="field-grid"><label>Table<select name="table">' +
-            (data.tables || []).map(table => '<option value="' + esc(table) + '">' + esc(table) + '</option>').join('') +
-            '</select></label><label>Rolls<input name="rolls" type="number" min="1" max="100000" value="10"></label>' +
-            '<label>Mob (optional)<input name="entity" placeholder="ZOMBIE"></label><label>Block (optional)<input name="block" placeholder="OAK_LOG"></label>' +
-            '<label>Biome (optional)<input name="biome" placeholder="minecraft:forest"></label><label>World (optional)<input name="world" placeholder="survival"></label>' +
-            '</div><div class="card-actions"><button class="button" type="submit">Run test</button></div></form>';
-        if (selected) {
-            const source = '<details class="card disclosure" id="loot-source-panel"><summary><span>Open source file</span></summary><div class="disclosure-content"><div class="card-actions source-picker">' +
-                '<select id="loot-doc"><option value="">Choose a file</option>' + files + '</select><button id="loot-doc-open" class="button small primary" type="button">Open file</button></div></div></details>';
-            q('#workspace').innerHTML = subviewHead(selected.id) +
-                '<div class="stack"><section class="card\"><div id="loot-summary">' + renderLootSummary(selected) + '</div></section>' +
-                '<details class="card disclosure" id="loot-test-panel"><summary><span>Test drops</span></summary><div class="disclosure-content">' + simulation +
-                '<div id="loot-result" class="sim-result"></div></div></details>' + source + '</div>';
-            bindLootForm();
-            bindDocumentPicker('loot', 'loot-doc', 'loot-doc-open');
-            q('[data-subview-back]').onclick = () => { selectedLoot = null; renderLoot(activeData); };
+        if (!element || !element.name || !element.closest('[data-view-form]')) return;
+        if (!element.dataset.stateBound || !activeData?.state) {
+            if (!['submit', 'button'].includes(element.type)) viewDraftDirty = true;
             return;
         }
-        q('#workspace').innerHTML = pageHead('Loot') +
-            '<div class="section-heading editor-section-heading"><div><h2>Loot tables</h2><p class="tiny">Open a table to review its rules and drops.</p></div>' +
-            '<span class="tiny">' + definitions.length + ' table' + (definitions.length === 1 ? '' : 's') + '</span></div>' +
-            '<section class="card\"><div class="list">' + (tableList || '<div class="empty">No loot tables found.</div>') + '</div></section>' +
-            '<div class="loot-tools">' + createPanel + '<details class="card disclosure" id="loot-test-panel"><summary><span>Test drops</span></summary><div class="disclosure-content">' + simulation +
-            '<div id="loot-result" class="sim-result"></div></div></details></div>';
-        bindLootForm();
-        q('#workspace').querySelectorAll('[data-loot-table]').forEach(button => button.onclick = () => {
-            selectedLoot = button.dataset.lootTable;
-            renderLoot(activeData);
-        });
-    }
-
-
-    function lootKey(definition) { return definition.pack + '|' + definition.file + '|' + definition.id; }
-
-    function renderLootSummary(definition) {
-        const table = definition.table || {};
-        const rules = Array.isArray(table.rules) ? table.rules : [];
-        const rows = rules.map(rule => {
-            const conditions = rule.conditions && typeof rule.conditions === 'object' ?
-                Object.entries(rule.conditions).map(([key, value]) => key + ': ' + (Array.isArray(value) ? value.join(', ') : value)).join(' · ') :
-                'No conditions';
-            const entries = Array.isArray(rule.entries) ? rule.entries : [];
-            const drops = entries.map(entry => entry.item + ' × ' + (entry.min ?? 1) + '-' + (entry.max ?? entry.min ?? 1) +
-                ' (' + ((Number(entry.chance ?? 1) * 100).toFixed(0)) + '%)').join(', ');
-            const operation = rule.operation && rule.operation !== 'APPEND' ? ' · ' + esc(rule.operation) : '';
-            return '<div class="rule-summary"><div class="rule-summary-head"><strong>' + esc(drops || 'No drops') +
-                '</strong><span class="tiny">Drop' + operation + '</span></div><div><span class="rule-condition-label">When</span> ' +
-                esc(conditions && conditions !== 'No conditions' ? conditions : 'Always') + '</div></div>';
-        }).join('');
-        const target = String(table.target || 'MOB_DEATH').toLowerCase().replace(/[_-]+/g, ' ');
-        return '<div class="document-head"><div><strong>' + esc(definition.id) + '</strong><small class="muted">' +
-            esc(definition.pack + ' / ' + definition.file) + '</small><div class="loot-trigger"><span>Trigger</span> ' + esc(target) + '</div></div>' +
-            '<button class="button small" type="button" data-summary-doc="' + esc(definition.pack + '|' + definition.file) + '">Open source</button></div>' +
-            '<div class="table-summary">' + (rows || '<div class="empty">This table has no rules.</div>') + '</div>';
-    }
-
-    function bindLootForm() {
-        const form = q('#loot-create');
-        if (form) {
-            const target = form.elements.target;
-            const block = q('#loot-block-field');
-            const entity = q('#loot-entity-field');
-            const updateTrigger = () => {
-                const isBlock = target.value === 'block-break';
-                block.classList.toggle('hidden', !isBlock);
-                entity.classList.toggle('hidden', isBlock);
-            };
-            target.onchange = updateTrigger;
-            updateTrigger();
-            form.onsubmit = async event => {
-                event.preventDefault();
-                const values = new FormData(form);
-                try {
-                    setStatus('Saving loot rule…');
-                    const result = await request(apiUrl('loot', 'create'), {method: 'POST', headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify(Object.fromEntries(values.entries()))});
-                    notice(result.message || 'Loot rule saved.');
-                    await openModule('loot');
-                } catch (error) { notice(error.message, true); setStatus('Needs attention', true); }
-            };
-        }
-        const simulation = q('#loot-sim');
-        if (simulation) simulation.onsubmit = async event => {
-            event.preventDefault();
-            const values = new FormData(simulation);
-            try {
-                const result = await request(apiUrl('loot', 'simulate'), {method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({table: values.get('table'), rolls: Number(values.get('rolls')), entity: values.get('entity'),
-                        block: values.get('block'), biome: values.get('biome'), world: values.get('world'), tier: 0, playerKill: false})});
-                q('#loot-result').innerHTML = result.drops?.length ? result.drops.map(drop =>
-                    '<div class="sim-drop"><span>' + esc(drop.item) + '</span><strong>×' + esc(drop.amount) +
-                    '</strong></div>').join('') : '<span class="muted">No drops.</span>';
-            } catch (error) { q('#loot-result').innerHTML = '<span class="status bad">' + esc(error.message) + '</span>'; }
-        };
-        q('#workspace').querySelectorAll('[data-summary-doc]').forEach(button => button.onclick = () => {
-            const select = q('#loot-doc');
-            const option = [...select.options].find(value => value.value === button.dataset.summaryDoc);
-            if (option) {
-                const sourcePanel = q('#loot-source-panel');
-                if (sourcePanel) sourcePanel.open = true;
-                select.value = option.value;
-                openSelectedDocument('loot', 'loot-doc');
-            }
-        });
-    }
-
-    function bindDocumentPicker(module, selectId, buttonId) {
-        const button = q('#' + buttonId);
-        if (button) button.onclick = () => openSelectedDocument(module, selectId);
-    }
-
-    function openSelectedDocument(module, selectId) {
-        const value = q('#' + selectId)?.value || '';
-        if (!value) return notice('Choose a file first.');
-        const separator = value.indexOf('|');
-        const pack = separator >= 0 ? value.slice(0, separator) : '';
-        const file = separator >= 0 ? value.slice(separator + 1) : value;
-        documentReturn = module === 'packs'
-            ? () => openModule(activeId, activeQuery)
-            : () => renderLoot(activeData);
-        q('#workspace').innerHTML = subviewHead([pack, file].filter(Boolean).join(' / ')) +
-            '<section class="card"><div id="document-panel"></div></section>';
-        q('[data-subview-back]').onclick = () => {
-            currentDocument = null;
-            const returnTo = documentReturn;
-            documentReturn = null;
-            if (returnTo) returnTo();
-        };
-        openDocument(module, pack, file);
-    }
-
-    async function openDocument(module, pack, file) {
         try {
-            setStatus('Opening file…');
-            if (!q('#document-panel')) throw new Error('Document view is not available.');
-            q('#document-panel').innerHTML = loading('Opening file…');
-            const document = await request(apiUrl(module, 'document') + '?pack=' + encodeURIComponent(pack) + '&file=' + encodeURIComponent(file));
-            currentDocument = {module, pack, file, revision: document.revision, content: document.content, dirty: false};
-            const canWrite = Boolean(modules.find(value => value.id === module)?.writable);
-            const save = canWrite ? '<button id="document-save" class="button primary" type="button">Save</button>' : '';
-            const documentLabel = [pack, file].filter(Boolean).join(' / ');
-            q('#document-panel').innerHTML = '<div class="document-head"><div><strong>' + esc(documentLabel) +
-                '</strong><small class="muted">Revision ' + esc(document.revision) + '</small></div>' + save +
-                '</div><textarea id="document-text" spellcheck="false"' + (canWrite ? '' : ' readonly') + '>' +
-                esc(document.content) + '</textarea>';
-            if (canWrite) {
-                q('#document-save').onclick = saveDocument;
-                q('#document-text').addEventListener('input', () => {
-                    if (!currentDocument) return;
-                    currentDocument.dirty = q('#document-text').value !== currentDocument.content;
-                });
-            }
-            setStatus('Ready');
-        } catch (error) { notice(error.message, true); setStatus('Could not open', true); }
+            setPath(activeData.state, element.name, fieldInputValue(element));
+            viewDraftDirty = true;
+        } catch (error) { notice(error.message, true); }
     }
 
-    async function saveDocument() {
-        if (!currentDocument) return;
-        try {
-            setStatus('Saving file…');
-            const result = await request(apiUrl(currentDocument.module, 'document') + '?pack=' +
-                encodeURIComponent(currentDocument.pack) + '&file=' + encodeURIComponent(currentDocument.file), {
-                    method: 'PUT', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({content: q('#document-text').value, revision: currentDocument.revision})
-                });
-            currentDocument.revision = result.revision;
-            currentDocument.content = q('#document-text').value;
-            currentDocument.dirty = false;
-            notice(result.message || 'File saved.');
-            setStatus('Ready');
-            activeData = await loadModuleData(activeId, activeQuery);
-        } catch (error) {
-            if (/conflict|changed elsewhere|revision/i.test(error.message || '')) {
-                draftConflictNotice(error.message + ' Your draft is still preserved.');
-            } else {
-                notice(error.message, true);
-            }
-            setStatus('Needs attention', true);
+    function renameDataKey(input) {
+        const parent = dataPathValue(activeData?.state, JSON.parse(input.dataset.configParent || '[]'));
+        const previous = input.dataset.configOldKey || '';
+        const next = input.value;
+        if (!parent || typeof parent !== 'object' || Array.isArray(parent) || !Object.prototype.hasOwnProperty.call(parent, previous)) return;
+        if (!next.trim()) { input.value = previous; return notice('Field names cannot be blank.', true); }
+        if (next === previous) return;
+        if (Object.prototype.hasOwnProperty.call(parent, next)) {
+            input.value = previous;
+            return notice('That field already exists.', true);
         }
+        Object.defineProperty(parent, next, {value: parent[previous], writable: true, enumerable: true, configurable: true});
+        delete parent[previous];
+        viewDraftDirty = true;
+        renderModule();
     }
 
     function connectConfigEvents() {
         if (!window.EventSource || configEvents) return;
         configEvents = new EventSource(base + '/api/events');
-        configEvents.addEventListener('config.change', event => {
-            let change;
-            try { change = JSON.parse(event.data); } catch (ignored) { return; }
-            if (currentDocument?.dirty) {
-                draftConflictNotice('The configuration changed on the server. Your unsaved draft was preserved.');
+        configEvents.addEventListener('config.change', () => {
+            if (viewDraftDirty) {
+                draftConflictNotice('The configuration changed on the server. Your unsaved edits were preserved.');
                 return;
             }
-            if (currentDocument) {
-                openDocument(currentDocument.module, currentDocument.pack, currentDocument.file);
-                return;
-            }
-            if (activeId) {
-                loadModuleData(activeId, activeQuery).then(data => {
-                    activeData = data;
-                    renderModule();
-                }).catch(() => { });
-            }
+            if (activeId) openModule(activeId, activeQuery);
         });
-        configEvents.onerror = () => {
-            if (!configEvents) return;
-            configEvents.close();
-            configEvents = null;
-            if (configEventsRetry) clearTimeout(configEventsRetry);
-            configEventsRetry = setTimeout(() => {
-                configEventsRetry = null;
-                connectConfigEvents();
-            }, 5000);
-        };
     }
 
     async function boot() {
         try {
             modules = await request(base + '/api/modules');
             if (!modules.length) throw new Error('No editors are available for this link.');
-            activeId = modules[0].id;
+            const route = new URLSearchParams(location.search);
+            const requestedModule = route.get('module');
+            const requestedQuery = Object.fromEntries([...route.entries()].filter(([key]) => key !== 'module'));
+            activeId = modules.some(module => module.id === requestedModule) ? requestedModule : modules[0].id;
             renderNav();
-            await openModule(activeId);
+            await openModule(activeId, activeId === requestedModule ? requestedQuery : {});
             connectConfigEvents();
         } catch (error) {
             q('#workspace').innerHTML = '<div class="empty">' + esc(error.message) + '</div>';
             setStatus('Could not start', true);
         }
     }
+
     boot();
 })();

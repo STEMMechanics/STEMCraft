@@ -102,7 +102,8 @@ public final class WebPageComponents {
             .child(node("header").attr("class", "topbar")
                 .child(iconButton("sidebarToggle", "Open navigation", "M4 6h16M4 12h16M4 18h16", ""))
                 .child(node("div").attr("class", "topbar-content")
-                    .child(node("h1").attr("id", "pageTitle").text("STEMCraft Editor"))))
+                    .child(node("h1").attr("id", "pageTitle").text("STEMCraft Editor")))
+                .child(node("div").attr("id", "topbarActions").attr("class", "topbar-actions")))
             .child(node("div").attr("id", "notice").attr("class", "notice").attr("role", "status"))
             .child(workspace);
         Node app = node("div").attr("class", "app")

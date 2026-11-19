@@ -12,6 +12,8 @@ package dev.stemcraft.service;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import io.papermc.paper.registry.RegistryAccess;
+import io.papermc.paper.registry.RegistryKey;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigSection;
@@ -19,12 +21,29 @@ import dev.stemcraft.api.service.condition.ConditionContext;
 import dev.stemcraft.api.service.editor.EditorWebContext;
 import dev.stemcraft.api.service.editor.EditorWebModule;
 import dev.stemcraft.api.service.editor.EditorWebResponse;
+import dev.stemcraft.api.service.editor.WebView;
+import dev.stemcraft.api.service.editor.WebViewBadge;
+import dev.stemcraft.api.service.editor.WebViewButton;
+import dev.stemcraft.api.service.editor.WebViewCards;
+import dev.stemcraft.api.service.editor.WebViewComponent;
+import dev.stemcraft.api.service.editor.WebViewDialog;
+import dev.stemcraft.api.service.editor.WebViewDataEditor;
+import dev.stemcraft.api.service.editor.WebViewDocumentPicker;
+import dev.stemcraft.api.service.editor.WebViewEmpty;
+import dev.stemcraft.api.service.editor.WebViewField;
+import dev.stemcraft.api.service.editor.WebViewForm;
+import dev.stemcraft.api.service.editor.WebViewItem;
+import dev.stemcraft.api.service.editor.WebViewLink;
+import dev.stemcraft.api.service.editor.WebViewOption;
+import dev.stemcraft.api.service.editor.WebViewPanel;
+import dev.stemcraft.api.service.editor.WebViewRules;
+import dev.stemcraft.api.service.editor.WebViewSubview;
 import dev.stemcraft.api.service.loot.LootService;
 import dev.stemcraft.api.service.web.WebServiceRequest;
 import org.bukkit.Location;
+import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
-import org.bukkit.Registry;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.Biome;
 import org.bukkit.entity.Entity;
@@ -53,6 +72,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
 
 /**
  * General loot evaluation service.  The first consumer is MOB_DEATH; the
@@ -86,18 +106,7 @@ public final class LootServiceImpl extends BaseService implements LootService {
             plugin.contentPacks().registerHandler("loot", this::reloadContentPack, this::unloadContentPack,
                 this::validateContentPack);
         }
-        if (api.editorWeb() != null) api.editorWeb().registerModule(new EditorWebModule() {
-            @Override public @NotNull String id() { return "loot"; }
-            @Override public @NotNull String title() { return "Loot"; }
-            @Override public @NotNull String icon() { return "L"; }
-            @Override public @NotNull String description() { return "Define drops for mobs and block breaks."; }
-            @Override public @NotNull String readPermission() { return "stemcraft.command.stemcraft.loot"; }
-            @Override public @NotNull String writePermission() { return "stemcraft.command.stemcraft.loot"; }
-            @Override public @NotNull EditorWebResponse handle(@NotNull EditorWebContext context, @NotNull String path,
-                                                                 @NotNull WebServiceRequest request) {
-                return handleEditorRequest(context, path, request);
-            }
-        });
+        if (api.editorWeb() != null) api.editorWeb().registerModule(new LootEditorModule());
         api.events().register(CreatureSpawnEvent.class, this::recordSpawnContext, EventPriority.MONITOR, false);
         // Apply before feature/minigame listeners so their existing clear/restrict
         // rules can remove workshop drops in the same way they remove vanilla drops.
@@ -193,6 +202,261 @@ public final class LootServiceImpl extends BaseService implements LootService {
             .toList();
     }
 
+    private final class LootEditorModule implements EditorWebModule {
+        @Override public @NotNull String id() { return "loot"; }
+        @Override public @NotNull String title() { return "Loot"; }
+        @Override public @NotNull String icon() { return "boxes"; }
+        @Override public @NotNull String description() { return "Define drops for mobs and block breaks."; }
+        @Override public @NotNull String readPermission() { return "stemcraft.command.stemcraft.loot"; }
+        @Override public @NotNull String writePermission() { return "stemcraft.command.stemcraft.loot"; }
+
+        @Override public @NotNull WebView view(@NotNull EditorWebContext context,
+                                                @NotNull WebServiceRequest request) {
+            return typedLootEditorView(context, request);
+        }
+
+        @Override public @NotNull EditorWebResponse handle(@NotNull EditorWebContext context, @NotNull String path,
+                                                            @NotNull WebServiceRequest request) {
+            return handleEditorRequest(context, path, request);
+        }
+    }
+
+    private @NotNull WebView typedLootEditorView(@NotNull EditorWebContext context,
+                                                  @NotNull WebServiceRequest request) {
+        ContentPackServiceImpl packs = plugin.contentPacks();
+        List<LootEditorDefinition> definitions = lootEditorDefinitions(packs);
+        String packFilter = request.queryParam("pack");
+        if (packFilter != null && !packFilter.isBlank())
+            definitions = definitions.stream().filter(definition -> definition.pack().equalsIgnoreCase(packFilter)).toList();
+        String selectedFile = request.queryParam("file");
+        if (packs != null && selectedFile != null && !selectedFile.isBlank()) {
+            String packId = request.queryParam("pack");
+            ContentPackServiceImpl.EditorDataSnapshot snapshot = packs.editorData(packId, selectedFile);
+            if (snapshot == null) return new WebView("loot", "Loot", "", context.writable(), List.of(
+                new WebViewSubview(selectedFile, WebViewButton.navigate("back-to-loot", "Back", Map.of())),
+                new WebViewEmpty("That configuration file could not be opened.")));
+            String table = request.queryParam("table");
+            Map<String, String> backQuery = table == null || table.isBlank()
+                ? Map.of() : Map.of("table", table);
+            WebViewButton save = new WebViewButton("request", "save-config", "Save changes", "primary",
+                "data", "PUT", Map.of(), Map.of(), null, Map.of());
+            WebViewForm form = new WebViewForm("loot-config-editor", List.of(),
+                List.of(new WebViewDataEditor("data", "Values", 2)),
+                context.writable() ? List.of(save) : List.of(), 1, "", true, "");
+            return new WebView("loot", selectedFile, "", context.writable(), List.of(
+                new WebViewSubview(selectedFile, WebViewButton.navigate("back-to-loot", "Back", backQuery)),
+                new WebViewPanel("Configuration fields", snapshot.pack() + " / " + snapshot.file(), 1,
+                    List.of(form))),
+                Map.of("pack", snapshot.pack(), "file", snapshot.file(), "revision", snapshot.revision(), "data", snapshot.data()));
+        }
+        String selectedKey = request.queryParam("table");
+        if (selectedKey != null && !selectedKey.isBlank()) {
+            LootEditorDefinition selected = definitions.stream().filter(definition -> definition.key().equals(selectedKey))
+                .findFirst().orElse(null);
+            if (selected == null) {
+                return new WebView("loot", "Loot", "", context.writable(), List.of(
+                    new WebViewSubview(selectedKey, WebViewButton.navigate("back", "Back", Map.of())),
+                    new WebViewEmpty("Loot table not found.")));
+            }
+            WebViewButton addDrop = context.writable() && packs != null
+                ? typedCreateLootAction(packs, selected.pack(), selected.file(), selected.id(),
+                    normalize(text(selected.table().get("target")))) : null;
+            List<WebViewButton> actions = addDrop == null ? List.of() : List.of(addDrop);
+            return new WebView("loot", selected.id(), "", context.writable(), List.of(
+                new WebViewSubview(selected.id(), WebViewButton.navigate("back", "Back", Map.of())),
+                new WebViewPanel("Loot table", selected.pack() + " / " + selected.file(), 1, List.of(
+                    new WebViewRules(typedEditorRules(selected.table())),
+                    new WebViewDocumentPicker("loot", selected.pack(), typedLootEditorDocuments(packs, selected.pack()))
+                ), actions, "Add or review drops for this Minecraft trigger.")
+            ));
+        }
+
+        List<WebViewItem> items = definitions.stream().map(definition -> new WebViewItem(
+            definition.key(), definition.id(), definition.pack() + " / " + definition.file(),
+            List.of(new WebViewBadge(displayTarget(definition.table()), "default")),
+            WebViewButton.navigate("open-" + definition.key(), "Open", Map.of("table", definition.key())))).toList();
+        List<WebViewButton> createActions = context.writable() && packs != null
+            ? List.of(typedCreateLootAction(packs, null, null, null, null)) : List.of();
+        List<WebViewField> simulationFields = List.of(
+            new WebViewField("select", "table", "Table", definitions.isEmpty() ? "" : definitions.getFirst().id(), "", true, null,
+                definitions.stream().map(definition -> new WebViewOption(definition.id(), definition.id())).toList()),
+            WebViewField.number("rolls", "Rolls", "10", "", true, "1", "100000", "1"),
+            WebViewField.suggestion("entity", "Mob (optional)", "ZOMBIE", lootEntityOptions(), false),
+            WebViewField.suggestion("block", "Block (optional)", "OAK_LOG", lootBlockOptions(), false),
+            WebViewField.suggestion("biome", "Biome (optional)", "Search biomes", lootBiomeOptions(), false)
+                .withHelp("Leave blank to test the table in any biome."),
+            WebViewField.suggestion("world", "World (optional)", "Search loaded worlds", worldOptions(), false)
+                .withHelp("Leave blank to test without a world-specific rule.")
+        );
+        WebViewButton simulate = new WebViewButton("request", "simulate", "Run test", "default", "simulate", "POST",
+            Map.of(), Map.of(), null, Map.of("target", "loot-simulation-result", "items", "drops", "label", "item",
+                "value", "amount", "empty", "No drops.", "refresh", false));
+        WebViewForm simulation = new WebViewForm("loot-simulation", simulationFields, List.of(),
+            List.of(simulate), 2, "", false, "loot-simulation-result");
+        List<WebViewComponent> components = List.of(
+            new WebViewPanel("Loot tables", 1, List.of(new WebViewCards(items, 3, "No loot tables found.")),
+                createActions, definitions.size() + " table" + (definitions.size() == 1 ? "" : "s")),
+            new WebViewPanel("Test drops", 1, List.of(simulation))
+        );
+        return new WebView("loot", "Loot", "", context.writable(), components);
+    }
+
+    private @NotNull WebViewButton typedCreateLootAction(@NotNull ContentPackServiceImpl packs,
+                                                          String presetPack, String presetFile,
+                                                          String presetTable, String presetTarget) {
+        List<WebViewField> fields = new ArrayList<>();
+        Map<String, Object> payload = new LinkedHashMap<>();
+        if (presetPack == null || presetPack.isBlank()) {
+            fields.add(WebViewField.select("pack", "Content pack", packs.packs().stream()
+                .filter(info -> info.enabled())
+                .map(info -> new WebViewOption(info.id(), info.id())).toList())
+                .withHelp("Choose the pack that should contain this loot table."));
+        } else payload.put("pack", presetPack);
+        if (presetFile != null && !presetFile.isBlank()) payload.put("file", presetFile);
+        if (presetTable != null && !presetTable.isBlank()) payload.put("table", presetTable);
+        if (presetTarget != null && !presetTarget.isBlank()) payload.put("target", presetTarget);
+        if (presetTable == null || presetTable.isBlank()) {
+            fields.add(WebViewField.text("table", "Loot table name", "For example: forest-drops", true, "[a-z0-9][a-z0-9-]*")
+                .withHelp("Give this group of drops a short name."));
+            fields.add(WebViewField.select("target", "When should it drop?", List.of(
+                new WebViewOption(BLOCK_BREAK, "When a block is broken"),
+                new WebViewOption(MOB_DEATH, "When a mob is defeated")))
+                .withHelp("Choose whether players get this drop from breaking a block or defeating a mob."));
+        }
+        if (presetTarget == null || presetTarget.isBlank() || BLOCK_BREAK.equals(presetTarget)) {
+            fields.add(new WebViewField("multiselect", "Blocks that can drop this item", "", "", "", false, null,
+                lootBlockOptions(), Map.of(), true)
+                .withHelp("Choose the blocks players break to get this drop. Search the list to find a block."));
+        }
+        if (presetTarget == null || presetTarget.isBlank() || MOB_DEATH.equals(presetTarget)) {
+            fields.add(WebViewField.suggestion("entity", "Mob that can drop this item", "Search mobs", lootEntityOptions(), false)
+                .withHelp("Choose a creature, or leave blank to match any mob."));
+        }
+        fields.add(WebViewField.suggestion("item", "Item to drop", "Search Minecraft items or custom items", lootItemOptions(), true)
+            .withHelp("Choose a Minecraft item or one of this server's custom items. The … button opens a custom item in another tab.")
+            .withLink(new WebViewLink("items", "item", "Open custom item", Map.of(), "*:")));
+        fields.add(WebViewField.number("chancePercent", "Chance to drop (%)", "100", "0 to 100", true, "0", "100", "1")
+            .withHelp("For example, 25 means this item has a 25% chance to drop."));
+        fields.add(WebViewField.number("min", "Smallest amount", "1", "", true, "1", null, "1")
+            .withHelp("Minimum number of items dropped at once."));
+        fields.add(WebViewField.number("max", "Largest amount", "1", "", true, "1", null, "1")
+            .withHelp("Maximum number of items dropped at once."));
+        fields.add(WebViewField.suggestion("world", "World (optional)", "Search loaded worlds", worldOptions(), false)
+            .withHelp("Leave blank to allow this drop in every world."));
+        fields.add(WebViewField.suggestion("biome", "Biome (optional)", "Search biomes", lootBiomeOptions(), false)
+            .withHelp("Leave blank to allow this drop in every biome."));
+        String label = presetTable == null || presetTable.isBlank() ? "New loot table" : "Add drop";
+        String title = presetTable == null || presetTable.isBlank() ? "Create loot table" : "Add a drop to " + presetTable;
+        return WebViewButton.dialog("create", label, "primary", "create", payload,
+            new WebViewDialog(title, presetTable == null || presetTable.isBlank() ? "Create table" : "Add drop", fields, 2));
+    }
+
+    private @NotNull List<WebViewRules.Rule> typedEditorRules(@NotNull Map<String, Object> table) {
+        List<WebViewRules.Rule> result = new ArrayList<>();
+        for (Map<String, Object> rule : editorRulesRaw(table)) {
+            result.add(new WebViewRules.Rule(String.valueOf(rule.get("drops")),
+                String.valueOf(rule.get("conditions")), String.valueOf(rule.get("operation"))));
+        }
+        return List.copyOf(result);
+    }
+
+    private @NotNull List<Map<String, Object>> editorRulesRaw(@NotNull Map<String, Object> table) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        Object rawRules = table.get("rules");
+        if (!(rawRules instanceof Collection<?> rules)) return result;
+        for (Object rawRule : rules) {
+            if (!(rawRule instanceof Map<?, ?> rule)) continue;
+            List<String> drops = new ArrayList<>();
+            Object rawEntries = rule.get("entries");
+            if (rawEntries instanceof Collection<?> entries) for (Object rawEntry : entries) {
+                if (!(rawEntry instanceof Map<?, ?> entry)) continue;
+                int min = integer(entry.get("min"), 1);
+                int max = integer(entry.get("max"), min);
+                int chance = (int) Math.round(number(entry.get("chance"), 1D) * 100D);
+                Object item = entry.get("item");
+                drops.add(String.valueOf(item == null ? "Unknown item" : item) + " × " + min + "-" + max + " (" + chance + "%)");
+            }
+            Map<String, Object> conditions = stringMap(rule.get("conditions"));
+            String when = conditions.isEmpty() ? "Always" : conditions.entrySet().stream()
+                .map(entry -> entry.getKey() + ": " + (entry.getValue() instanceof Collection<?> values
+                    ? values.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(", "))
+                    : String.valueOf(entry.getValue())))
+                .collect(java.util.stream.Collectors.joining(" · "));
+            Object operation = rule.get("operation");
+            result.add(Map.of("drops", String.join(", ", drops.isEmpty() ? List.of("No drops") : drops),
+                "conditions", when, "operation", String.valueOf(operation == null ? "Drop" : operation)));
+        }
+        return result;
+    }
+
+    private @NotNull List<WebViewOption> typedLootEditorDocuments(ContentPackServiceImpl packs, String packId) {
+        if (packs == null) return List.of();
+        return packs.documents(packId).stream()
+            .filter(document -> !ContentPackServiceImpl.configurationMap(document.config(), "loot.tables").isEmpty())
+            .map(document -> {
+                String file = documentPath(document);
+                return new WebViewOption(file, packId + " / " + file);
+            }).sorted(Comparator.comparing(WebViewOption::label)).toList();
+    }
+
+    private @NotNull List<LootEditorDefinition> lootEditorDefinitions(ContentPackServiceImpl packs) {
+        if (packs == null) return List.of();
+        List<LootEditorDefinition> definitions = new ArrayList<>();
+        for (var info : packs.packs()) {
+            for (ContentPackDocument document : packs.documents(info.id())) {
+                String file = documentPath(document);
+                Map<String, Object> rawTables = ContentPackServiceImpl.configurationMap(document.config(), "loot.tables");
+                for (Map.Entry<String, Object> table : rawTables.entrySet()) {
+                    if (!(table.getValue() instanceof Map<?, ?> rawTable)) continue;
+                    String key = info.id() + "|" + file + "|" + table.getKey();
+                    ContentPackServiceImpl.DocumentSnapshot snapshot = packs.editorDocument(info.id(), file);
+                    definitions.add(new LootEditorDefinition(key, table.getKey(), info.id(), file,
+                        snapshot == null ? "" : snapshot.revision(), copyMap(rawTable)));
+                }
+            }
+        }
+        return definitions.stream().sorted(Comparator.comparing(LootEditorDefinition::id)
+            .thenComparing(LootEditorDefinition::pack).thenComparing(LootEditorDefinition::file)).toList();
+    }
+
+    private @NotNull List<WebViewOption> lootItemOptions() {
+        List<String> values = new ArrayList<>();
+        for (Material material : Material.values()) if (!material.isAir() && material.isItem()) values.add(material.name());
+        Map<String, String> namespaces = new LinkedHashMap<>();
+        ContentPackServiceImpl packs = plugin.contentPacks();
+        if (packs != null) for (var pack : packs.packs()) for (ContentPackDocument document : packs.documents(pack.id())) {
+            ConfigSection items = document.config().getSection("custom-items", false);
+            if (items != null) for (String id : items.getKeys(false)) namespaces.put(id.toLowerCase(Locale.ROOT), document.namespace());
+        }
+        values.addAll(api.items().customItemDefinitions().stream().map(definition ->
+            namespaces.getOrDefault(definition.id().toLowerCase(Locale.ROOT), "stemcraft") + ":" + definition.id()).toList());
+        return values.stream().distinct().sorted(String.CASE_INSENSITIVE_ORDER)
+            .map(value -> new WebViewOption(value, value)).toList();
+    }
+
+    private @NotNull List<WebViewOption> lootBlockOptions() {
+        return java.util.Arrays.stream(Material.values()).filter(material -> material.isBlock() && !material.isAir())
+            .map(Material::name).sorted().map(value -> new WebViewOption(value, value)).toList();
+    }
+
+    private @NotNull List<WebViewOption> lootEntityOptions() {
+        return java.util.Arrays.stream(EntityType.values()).map(EntityType::name).sorted()
+            .map(value -> new WebViewOption(value, value)).toList();
+    }
+
+    private @NotNull List<WebViewOption> lootBiomeOptions() {
+        return RegistryAccess.registryAccess().getRegistry(RegistryKey.BIOME).keyStream().sorted()
+            .map(key -> new WebViewOption(key.toString(), key.getKey().replace('_', ' '))).toList();
+    }
+
+    private @NotNull List<WebViewOption> worldOptions() {
+        return Bukkit.getWorlds().stream().map(world -> new WebViewOption(world.getName(), world.getName())).toList();
+    }
+
+    private static @NotNull String displayTarget(@NotNull Map<String, Object> table) {
+        return String.valueOf(table.getOrDefault("target", MOB_DEATH)).toLowerCase(Locale.ROOT).replace('_', ' ');
+    }
+
     private EditorWebResponse handleEditorRequest(EditorWebContext context, String path, WebServiceRequest request) {
         ContentPackServiceImpl packs = plugin.contentPacks();
         try {
@@ -209,18 +473,20 @@ public final class LootServiceImpl extends BaseService implements LootService {
                         for (ContentPackDocument document : packs.documents(info.id())) {
                             String file = document.packDirectory().toPath().relativize(document.file().toPath()).toString()
                                 .replace(java.io.File.separatorChar, '/');
-                            Map<String, Object> rawTables = document.config().getMap("loot.tables", true);
+                            Map<String, Object> rawTables = ContentPackServiceImpl.configurationMap(document.config(), "loot.tables");
                             if (!rawTables.isEmpty()) {
                                 documents.add(Map.of("pack", info.id(), "file", file,
                                     "label", info.id() + " / " + file));
                             }
                             for (Map.Entry<String, Object> table : rawTables.entrySet()) {
                                 if (!(table.getValue() instanceof Map<?, ?> rawTable)) continue;
+                                ContentPackServiceImpl.DocumentSnapshot snapshot = packs.editorDocument(info.id(), file);
+                                if (snapshot == null) continue;
                                 Map<String, Object> definition = new LinkedHashMap<>();
                                 definition.put("id", table.getKey());
                                 definition.put("pack", info.id());
                                 definition.put("file", file);
-                                definition.put("revision", packs.editorDocument(info.id(), file).revision());
+                                definition.put("revision", snapshot.revision());
                                 definition.put("table", copyConfigValue(rawTable));
                                 definitions.add(definition);
                             }
@@ -237,6 +503,18 @@ public final class LootServiceImpl extends BaseService implements LootService {
                     .map(Material::name).sorted().toList());
                 return json(200, data);
             }
+            if ("/data".equals(path) && "PUT".equalsIgnoreCase(request.method())) {
+                if (!context.writable()) return textResponse(403, "This link is read-only.");
+                if (packs == null) return textResponse(503, "Content Packs are unavailable.");
+                Map<?, ?> body = EDITOR_GSON.fromJson(request.bodyAsString(), Map.class);
+                if (body == null || !(body.get("data") instanceof Map<?, ?> data))
+                    return textResponse(400, "The editor did not submit configuration fields.");
+                String pack = body.get("pack") == null ? "" : String.valueOf(body.get("pack"));
+                String file = body.get("file") == null ? "" : String.valueOf(body.get("file"));
+                String revision = body.get("revision") == null ? "" : String.valueOf(body.get("revision"));
+                ContentPackServiceImpl.DocumentSaveResult result = packs.saveEditorData(pack, file, data, revision);
+                return json(result.success() ? 200 : 409, result);
+            }
             if ("/create".equals(path) && "POST".equalsIgnoreCase(request.method())) {
                 if (!context.writable()) return textResponse(403, "This link is read-only.");
                 if (packs == null) return textResponse(503, "Content packs are unavailable.");
@@ -250,7 +528,9 @@ public final class LootServiceImpl extends BaseService implements LootService {
                 String target = normalize(requiredText(body.get("target"), "Choose what causes the drop."));
                 if (!Set.of(MOB_DEATH, BLOCK_BREAK).contains(target)) return textResponse(400, "Choose mob-death or block-break.");
                 String item = requiredText(body.get("item"), "Enter an item or material to drop.");
-                double chance = number(body.get("chance"), 1D);
+                double chance = body.get("chancePercent") == null
+                    ? number(body.get("chance"), 1D)
+                    : number(body.get("chancePercent"), 100D) / 100D;
                 int minimum = integer(body.get("min"), 1);
                 int maximum = integer(body.get("max"), minimum);
                 if (!Double.isFinite(chance) || chance < 0D || chance > 1D || minimum < 1 || maximum < minimum)
@@ -275,7 +555,9 @@ public final class LootServiceImpl extends BaseService implements LootService {
                     ? integer(rule.get("priority"), 0) : 0).max().orElse(0) + 10;
                 Map<String, Object> conditions = new LinkedHashMap<>();
                 if (target.equals(BLOCK_BREAK)) {
-                    List<String> blocks = splitValues(text(body.get("block")));
+                    List<String> blocks = body.get("blocks") instanceof Collection<?> rawBlocks
+                        ? rawBlocks.stream().map(String::valueOf).map(value -> value.toUpperCase(Locale.ROOT)).distinct().toList()
+                        : splitValues(text(body.get("block")));
                     if (blocks.isEmpty()) return textResponse(400, "Enter at least one block type.");
                     conditions.put("block", blocks.size() == 1 ? blocks.getFirst() : blocks);
                 } else {
@@ -307,23 +589,6 @@ public final class LootServiceImpl extends BaseService implements LootService {
                 response.put("table", tableId);
                 return json(result.success() ? 200 : 409, response);
             }
-            if ("/document".equals(path) && packs != null) {
-                String pack = request.queryParam("pack");
-                String file = request.queryParam("file");
-                if ("GET".equalsIgnoreCase(request.method())) {
-                    ContentPackServiceImpl.DocumentSnapshot snapshot = packs.editorDocument(pack, file);
-                    if (snapshot == null) return textResponse(404, "Document not found.");
-                    return json(200, snapshot);
-                }
-                if ("PUT".equalsIgnoreCase(request.method())) {
-                    if (!context.writable()) return textResponse(403, "This link is read-only.");
-                    Map<?, ?> body = EDITOR_GSON.fromJson(request.bodyAsString(), Map.class);
-                    String content = body.get("content") == null ? "" : String.valueOf(body.get("content"));
-                    String revision = body.get("revision") == null ? "" : String.valueOf(body.get("revision"));
-                    ContentPackServiceImpl.DocumentSaveResult result = packs.saveEditorDocument(pack, file, content, revision);
-                    return json(result.success() ? 200 : 409, result);
-                }
-            }
             if ("/simulate".equals(path) && "POST".equalsIgnoreCase(request.method())) {
                 Map<?, ?> body = EDITOR_GSON.fromJson(request.bodyAsString(), Map.class);
                 String table = body.get("table") == null ? "" : String.valueOf(body.get("table"));
@@ -348,8 +613,10 @@ public final class LootServiceImpl extends BaseService implements LootService {
             }
             return textResponse(405, "Method not allowed.");
         } catch (RuntimeException exception) {
-            return textResponse(400, exception.getMessage() == null
-                ? "The loot editor could not complete that action." : exception.getMessage());
+            plugin.getLogger().log(Level.WARNING, "[loot-editor] Request failed for " + path + ".", exception);
+            String detail = exception.getMessage() == null || exception.getMessage().isBlank()
+                ? exception.getClass().getSimpleName() : exception.getMessage();
+            return textResponse(400, "Loot editor could not complete that action: " + detail);
         }
     }
 
@@ -572,7 +839,7 @@ public final class LootServiceImpl extends BaseService implements LootService {
 
     private List<LootTable> parseDocument(ContentPackDocument document, List<String> errors) {
         ConfigSection section = document.config();
-        Map<String, Object> rawTables = section.getMap("loot.tables", false);
+        Map<String, Object> rawTables = ContentPackServiceImpl.configurationMap(section, "loot.tables");
         if (rawTables.isEmpty()) return List.of();
         List<LootTable> result = new ArrayList<>();
         for (Map.Entry<String, Object> tableEntry : rawTables.entrySet()) {
@@ -663,6 +930,11 @@ public final class LootServiceImpl extends BaseService implements LootService {
         return value == null ? null : String.valueOf(value).trim();
     }
 
+    private static String documentPath(ContentPackDocument document) {
+        return document.packDirectory().toPath().relativize(document.file().toPath()).toString()
+            .replace(java.io.File.separatorChar, '/');
+    }
+
     private static String requiredText(Object value, String message) {
         String text = text(value);
         if (text == null || text.isBlank()) throw new IllegalArgumentException(message);
@@ -725,6 +997,9 @@ public final class LootServiceImpl extends BaseService implements LootService {
         if (value instanceof Collection<?> collection) return collection.stream().map(LootServiceImpl::copyConfigValue).toList();
         return value;
     }
+
+    private record LootEditorDefinition(String key, String id, String pack, String file, String revision,
+                                        Map<String, Object> table) { }
 
     private enum Operation { APPEND, REMOVE, REPLACE, REPLACE_ALL }
 

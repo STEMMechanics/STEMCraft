@@ -23,6 +23,9 @@ public interface EditorWebService {
     /** Register or replace a service-owned editor module. */
     void registerModule(@NotNull EditorWebModule module);
 
+    /** Remove this exact module instance when its owning plugin is shutting down. */
+    default void unregisterModule(@NotNull EditorWebModule module) { }
+
     /**
      * Create or reuse a private editor bootstrap URL containing only the
      * sender's permitted modules. Opening it exchanges the token for an

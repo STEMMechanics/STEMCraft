@@ -4,3 +4,5 @@ plugins {
 
 rootProject.name = 'STEMCraft'
 include("api", "plugin")
+include("examples:citizens-editor")
+project(":examples:citizens-editor").projectDir = file("examples/citizens-editor")
