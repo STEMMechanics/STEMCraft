@@ -3,6 +3,7 @@ package dev.stemcraft.feature;
 import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.config.ConfigSection;
+import dev.stemcraft.service.AgricultureEditorModule;
 import io.papermc.paper.registry.RegistryAccess;
 import io.papermc.paper.registry.RegistryKey;
 import org.bukkit.Bukkit;
@@ -43,6 +44,7 @@ public final class AgricultureFeature extends BaseFeature {
     private final List<ForageDefinition> forage = new ArrayList<>();
     private final Map<BlockKey, CropState> plantedCrops = new HashMap<>();
     private final Set<BlockKey> placedForageSources = new HashSet<>();
+    private AgricultureEditorModule editorModule;
 
     public AgricultureFeature(STEMCraftAPI api) {
         super(api);
@@ -53,6 +55,10 @@ public final class AgricultureFeature extends BaseFeature {
         ensureStorage();
         loadDefinitions();
         loadState();
+        if (api.editorWeb() != null && STEMCraft.getPlugin().contentPacks() != null) {
+            editorModule = new AgricultureEditorModule(api, STEMCraft.getPlugin().contentPacks(), this::loadDefinitions);
+            api.editorWeb().registerModule(editorModule);
+        }
         api.events().register(PlayerInteractEvent.class, this::onPlant, EventPriority.HIGHEST, true);
         api.events().register(BlockBreakEvent.class, this::onBreak, EventPriority.HIGHEST, true);
         api.events().register(BlockPlaceEvent.class, this::onPlace, EventPriority.MONITOR, true);
@@ -72,6 +78,8 @@ public final class AgricultureFeature extends BaseFeature {
 
     @Override
     public void onDisable() {
+        if (editorModule != null && api.editorWeb() != null) api.editorWeb().unregisterModule(editorModule);
+        editorModule = null;
         api.tasks().cancel(TASK_ID);
         crops.clear();
         forage.clear();
@@ -253,7 +261,15 @@ public final class AgricultureFeature extends BaseFeature {
     }
 
     private Material material(String value) { return value == null ? null : Material.matchMaterial(value.toUpperCase(Locale.ROOT)); }
-    private static boolean matchesId(String configured, String actual) { return configured.replace('_', '-').substring(configured.contains(":") ? configured.indexOf(':') + 1 : 0).equalsIgnoreCase(actual); }
+    private static boolean matchesId(String configured, String actual) {
+        return normaliseItemId(configured).equals(normaliseItemId(actual));
+    }
+
+    private static String normaliseItemId(String value) {
+        if (value == null) return "";
+        String path = value.contains(":") ? value.substring(value.indexOf(':') + 1) : value;
+        return path.replace('_', '-').toLowerCase(Locale.ROOT);
+    }
     private static int random(int min, int max) { return ThreadLocalRandom.current().nextInt(min, Math.max(min, max) + 1); }
     private static void consumeOne(org.bukkit.entity.Player player, ItemStack item) { if (player.getGameMode() != org.bukkit.GameMode.CREATIVE) item.subtract(1); }
 

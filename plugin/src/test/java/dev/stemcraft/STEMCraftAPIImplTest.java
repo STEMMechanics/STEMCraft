@@ -27,6 +27,12 @@ import dev.stemcraft.service.RecipeServiceImpl;
 import dev.stemcraft.service.RegionServiceImpl;
 import dev.stemcraft.service.DialogServiceImpl;
 import dev.stemcraft.api.service.comet.CometService;
+import dev.stemcraft.api.service.ability.ItemAbilityService;
+import dev.stemcraft.api.service.condition.ConditionService;
+import dev.stemcraft.api.service.contentpack.ContentPackService;
+import dev.stemcraft.api.service.distance.DistanceDifficultyService;
+import dev.stemcraft.api.service.itemeditor.ItemEditorService;
+import dev.stemcraft.api.service.loot.LootService;
 import dev.stemcraft.api.service.mailbox.MailboxService;
 import dev.stemcraft.service.resourcepack.ResourcePackServiceImpl;
 import dev.stemcraft.service.SelectionServiceImpl;
@@ -68,19 +74,26 @@ import static org.mockito.Mockito.when;
 class STEMCraftAPIImplTest {
     private static final List<String> SERVICE_ACCESSOR_NAMES = List.of(
         "audit",
+        "contentPacks",
         "comets",
         "commands",
         "debug",
         "coordinateBar",
         "config",
+        "conditions",
         "database",
+        "distanceDifficulty",
         "dialogs",
+        "editorWeb",
         "events",
         "gifts",
         "holograms",
         "imageMaps",
+        "itemAbilities",
+        "itemEditor",
         "items",
         "locales",
+        "loot",
         "mailboxes",
         "messages",
         "minigames",
@@ -158,8 +171,17 @@ class STEMCraftAPIImplTest {
         TaskServiceImpl tasks = mock(TaskServiceImpl.class);
         WebServiceImpl web = mock(WebServiceImpl.class);
         WorldServiceImpl worlds = mock(WorldServiceImpl.class);
+        ContentPackService contentPacks = mock(ContentPackService.class);
+        ConditionService conditions = mock(ConditionService.class);
+        DistanceDifficultyService distanceDifficulty = mock(DistanceDifficultyService.class);
+        dev.stemcraft.service.EditorWebServiceImpl editorWeb = mock(dev.stemcraft.service.EditorWebServiceImpl.class);
+        LootService loot = mock(LootService.class);
+        ItemAbilityService itemAbilities = mock(ItemAbilityService.class);
+        ItemEditorService itemEditor = mock(ItemEditorService.class);
 
         when(plugin.audit()).thenReturn(audit);
+        when(plugin.contentPacks()).thenReturn((dev.stemcraft.service.ContentPackServiceImpl) null);
+        when(plugin.conditions()).thenReturn(null);
         when(plugin.comets()).thenReturn(comets);
         when(plugin.commands()).thenReturn(commands);
         when(plugin.debug()).thenReturn(debug);
@@ -167,6 +189,7 @@ class STEMCraftAPIImplTest {
         when(plugin.config()).thenReturn(config);
         when(plugin.database()).thenReturn(database);
         when(plugin.dialogs()).thenReturn(dialogs);
+        when(plugin.editorWeb()).thenReturn(editorWeb);
         when(plugin.events()).thenReturn(events);
         when(plugin.gifts()).thenReturn(gifts);
         when(plugin.holograms()).thenReturn(holograms);
@@ -196,22 +219,34 @@ class STEMCraftAPIImplTest {
         when(plugin.web()).thenReturn(web);
         when(plugin.worlds()).thenReturn(worlds);
 
+        // These services are exposed through the API as interfaces. The plugin
+        // getters are concrete implementation types, so the null stubs above
+        // exercise the safe UNAVAILABLE fallback while the expected map below
+        // verifies the accessor names are present.
+
         expectedDelegates = new LinkedHashMap<>();
         expectedDelegates.put("stemBot", dev.stemcraft.api.service.stembot.StemBotService.UNAVAILABLE);
         expectedDelegates.put("audit", audit);
+        expectedDelegates.put("contentPacks", ContentPackService.UNAVAILABLE);
         expectedDelegates.put("comets", comets);
         expectedDelegates.put("commands", commands);
         expectedDelegates.put("debug", debug);
         expectedDelegates.put("coordinateBar", coordinateBar);
         expectedDelegates.put("config", config);
+        expectedDelegates.put("conditions", ConditionService.UNAVAILABLE);
         expectedDelegates.put("database", database);
+        expectedDelegates.put("distanceDifficulty", DistanceDifficultyService.UNAVAILABLE);
         expectedDelegates.put("dialogs", dialogs);
+        expectedDelegates.put("editorWeb", editorWeb);
         expectedDelegates.put("events", events);
         expectedDelegates.put("gifts", gifts);
         expectedDelegates.put("holograms", holograms);
         expectedDelegates.put("items", items);
         expectedDelegates.put("imageMaps", imageMaps);
+        expectedDelegates.put("itemAbilities", ItemAbilityService.UNAVAILABLE);
+        expectedDelegates.put("itemEditor", ItemEditorService.UNAVAILABLE);
         expectedDelegates.put("locales", locales);
+        expectedDelegates.put("loot", LootService.UNAVAILABLE);
         expectedDelegates.put("mailboxes", mailboxes);
         expectedDelegates.put("messages", messages);
         expectedDelegates.put("minigames", minigames);

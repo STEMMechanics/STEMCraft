@@ -21,6 +21,8 @@
 package dev.stemcraft.feature.portal;
 
 import dev.stemcraft.api.config.ConfigSection;
+import io.papermc.paper.registry.RegistryAccess;
+import io.papermc.paper.registry.RegistryKey;
 import org.bukkit.*;
 import java.util.*;
 
@@ -62,7 +64,7 @@ public record SurvivalPortalType(NamespacedKey key, NamespacedKey generator, Por
     public String destinationName(String source) { return destination.replace("{world}", source); }
     private static Sound sound(String id) {
         NamespacedKey key = NamespacedKey.fromString(id);
-        Sound sound = key == null ? null : Registry.SOUNDS.get(key);
+        Sound sound = key == null ? null : RegistryAccess.registryAccess().getRegistry(RegistryKey.SOUND_EVENT).get(key);
         if (sound == null) throw new IllegalArgumentException("Unknown sound: " + id);
         return sound;
     }

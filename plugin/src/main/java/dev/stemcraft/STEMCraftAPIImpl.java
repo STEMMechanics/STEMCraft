@@ -58,6 +58,13 @@ import dev.stemcraft.api.service.tabcomplete.TabCompleteService;
 import dev.stemcraft.api.service.web.WebService;
 import dev.stemcraft.api.service.world.WorldService;
 import dev.stemcraft.api.service.workshop.WorkshopService;
+import dev.stemcraft.api.service.contentpack.ContentPackService;
+import dev.stemcraft.api.service.condition.ConditionService;
+import dev.stemcraft.api.service.distance.DistanceDifficultyService;
+import dev.stemcraft.api.service.loot.LootService;
+import dev.stemcraft.api.service.ability.ItemAbilityService;
+import dev.stemcraft.api.service.itemeditor.ItemEditorService;
+import dev.stemcraft.api.service.editor.EditorWebService;
 import dev.stemcraft.api.service.minigame.MiniGameService;
 
 import java.io.File;
@@ -295,6 +302,12 @@ public class STEMCraftAPIImpl extends HasMessagesImpl implements STEMCraftAPI {
     @Override
     public WebService web() { return plugin.web(); }
 
+    @Override
+    public EditorWebService editorWeb() {
+        EditorWebService service = plugin.editorWeb();
+        return service == null ? EditorWebService.UNAVAILABLE : service;
+    }
+
     /**
      * Get the world service.
      */
@@ -305,5 +318,41 @@ public class STEMCraftAPIImpl extends HasMessagesImpl implements STEMCraftAPI {
     public WorkshopService workshops() {
         WorkshopService workshops = plugin.workshops();
         return workshops == null || !workshops.isAvailable() ? WorkshopService.UNAVAILABLE : workshops;
+    }
+
+    @Override
+    public ContentPackService contentPacks() {
+        ContentPackService service = plugin.contentPacks();
+        return service == null ? ContentPackService.UNAVAILABLE : service;
+    }
+
+    @Override
+    public ConditionService conditions() {
+        ConditionService service = plugin.conditions();
+        return service == null ? ConditionService.UNAVAILABLE : service;
+    }
+
+    @Override
+    public DistanceDifficultyService distanceDifficulty() {
+        DistanceDifficultyService service = plugin.distanceDifficulty();
+        return service == null ? DistanceDifficultyService.UNAVAILABLE : service;
+    }
+
+    @Override
+    public LootService loot() {
+        LootService service = plugin.loot();
+        return service == null ? LootService.UNAVAILABLE : service;
+    }
+
+    @Override
+    public ItemAbilityService itemAbilities() {
+        ItemAbilityService service = plugin.itemAbilities();
+        return service == null ? ItemAbilityService.UNAVAILABLE : service;
+    }
+
+    @Override
+    public ItemEditorService itemEditor() {
+        ItemEditorService service = plugin.itemEditor();
+        return service == null ? ItemEditorService.UNAVAILABLE : service;
     }
 }

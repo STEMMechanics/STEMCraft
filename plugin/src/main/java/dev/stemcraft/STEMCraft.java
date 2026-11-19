@@ -42,6 +42,12 @@ import dev.stemcraft.api.service.mailbox.MailboxService;
 import dev.stemcraft.api.service.save.SaveReport;
 import dev.stemcraft.api.service.web.WebService;
 import dev.stemcraft.api.service.workshop.WorkshopService;
+import dev.stemcraft.api.service.contentpack.ContentPackService;
+import dev.stemcraft.api.service.condition.ConditionService;
+import dev.stemcraft.api.service.distance.DistanceDifficultyService;
+import dev.stemcraft.api.service.loot.LootService;
+import dev.stemcraft.api.service.ability.ItemAbilityService;
+import dev.stemcraft.api.service.itemeditor.ItemEditorService;
 import dev.stemcraft.service.command.CommandServiceImpl;
 import dev.stemcraft.service.message.MessageServiceImpl;
 import dev.stemcraft.service.minigame.MiniGameServiceImpl;
@@ -74,7 +80,10 @@ import java.io.OutputStream;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -141,8 +150,15 @@ public final class STEMCraft extends JavaPlugin {
     private FirstJoinService firstJoin;
     private dev.stemcraft.feature.StemBotFeature stemBot;
     private WebServiceImpl web;
+    private EditorWebServiceImpl editorWeb;
     private WorldServiceImpl worlds;
     private WorkshopService workshops;
+    private ContentPackServiceImpl contentPacks;
+    private ConditionServiceImpl conditions;
+    private LootServiceImpl loot;
+    private ItemAbilityServiceImpl itemAbilities;
+    private ItemEditorServiceImpl itemEditor;
+    private DistanceDifficultyService distanceDifficulty;
 
     @Getter(AccessLevel.NONE)
     private ConfigFile configFile;
@@ -228,6 +244,8 @@ public final class STEMCraft extends JavaPlugin {
         commands = new CommandServiceImpl(this, api);
         debug = new DebugServiceImpl(this, api);
         coordinateBar = new CoordinateBarServiceImpl(this, api);
+        conditions = new ConditionServiceImpl(this, api);
+        contentPacks = new ContentPackServiceImpl(this, api);
         database = new DatabaseServiceImpl(this, api);
         dialogs = new DialogServiceImpl(this, api);
         events = new EventServiceImpl(this, api);
@@ -249,11 +267,15 @@ public final class STEMCraft extends JavaPlugin {
         profanityFilter = new ProfanityFilterServiceImpl(this, api);
         punishments = new PunishmentServiceImpl(this, api);
         recipes = new RecipeServiceImpl(this, api);
+        loot = new LootServiceImpl(this, api);
+        itemAbilities = new ItemAbilityServiceImpl(this, api);
+        itemEditor = new ItemEditorServiceImpl(this, api);
         regions = new RegionServiceImpl(this, api);
         resourcePack = new ResourcePackServiceImpl(this, api);
         selections = new SelectionServiceImpl(this, api);
         tabComplete = new TabCompleteServiceImpl(this, api);
         web = new WebServiceImpl(this, api);
+        editorWeb = new EditorWebServiceImpl(this, api);
         firstJoin = new FirstJoinService(this, api);
         worlds = new WorldServiceImpl(this, api);
 
@@ -268,6 +290,8 @@ public final class STEMCraft extends JavaPlugin {
         commands.onEnable();
         debug.onEnable();
         coordinateBar.onEnable();
+        conditions.onEnable();
+        contentPacks.onEnable();
         events.onEnable();
         holograms.onEnable();
         imageMaps.onEnable();
@@ -286,10 +310,14 @@ public final class STEMCraft extends JavaPlugin {
         profanityFilter.onEnable();
         punishments.onEnable();
         recipes.onEnable();
+        loot.onEnable();
+        itemAbilities.onEnable();
+        itemEditor.onEnable();
         regions.onEnable();
         resourcePack.onEnable();
         selections.onEnable();
         web.onEnable();
+        editorWeb.onEnable();
         worlds.onEnable();
 
         registerBuiltInWorldGenerators();
@@ -405,9 +433,15 @@ public final class STEMCraft extends JavaPlugin {
         loadedFeatures.clear();
         disableService(minigames);
         disableService(worlds);
+        disableService(editorWeb);
         disableService(web);
         disableService(tabComplete);
         disableService(resourcePack);
+        disableService(loot);
+        disableService(itemAbilities);
+        disableService(itemEditor);
+        disableService(contentPacks);
+        disableService(conditions);
         disableService(selections);
         disableService(regions);
         disableService(recipes);
@@ -550,6 +584,7 @@ public final class STEMCraft extends JavaPlugin {
 
         worlds.completeStartupLoad();
         loadFeatures();
+        if (contentPacks != null) contentPacks.activateEnabledPacks();
         loadCommands();
         loadMinigames();
     }
@@ -649,6 +684,9 @@ public final class STEMCraft extends JavaPlugin {
         }
         if (feature instanceof WorkshopService workshopService) {
             workshops = workshopService;
+        }
+        if (feature instanceof DistanceDifficultyService distanceDifficultyService) {
+            distanceDifficulty = distanceDifficultyService;
         }
         loadedFeatures.add(feature);
         debug("STEMCRAFT_FEATURE_LOADED", "name", feature.id());
@@ -817,6 +855,9 @@ public final class STEMCraft extends JavaPlugin {
         if (!localesOnly && web != null) {
             web.onReload();
         }
+        if (!localesOnly && contentPacks != null) {
+            contentPacks.onReload();
+        }
         if (!localesOnly && playerLoginMessages != null) {
             playerLoginMessages.onReload();
         }
@@ -948,6 +989,41 @@ public final class STEMCraft extends JavaPlugin {
 
     public void exportBundledDirectory(String jarRoot) {
         exportBundledDirectory(jarRoot, jarRoot);
+    }
+
+    /**
+     * Refresh a plugin-owned bundled file, replacing an older exported copy atomically.
+     * Use this for application assets that must stay compatible with the running code;
+     * operator-owned branding files should continue to use {@link #exportBundledDirectory(String, String)}.
+     */
+    public void refreshBundledFile(@NotNull String jarPath, @NotNull String exportPath) {
+        Path target = new File(getDataFolder(), exportPath).toPath().toAbsolutePath();
+        Path parent = target.getParent();
+        Path temporary = null;
+        try (InputStream resource = getResource(jarPath)) {
+            if (resource == null) {
+                getLogger().warning("Bundled resource not found: " + jarPath);
+                return;
+            }
+            if (parent != null) Files.createDirectories(parent);
+            temporary = Files.createTempFile(parent, ".stemcraft-" + target.getFileName() + "-", ".tmp");
+            Files.copy(resource, temporary, StandardCopyOption.REPLACE_EXISTING);
+            try {
+                Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException ignored) {
+                Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (IOException exception) {
+            getLogger().warning("Failed to refresh bundled resource " + jarPath + " -> " + target + ": " + exception.getMessage());
+        } finally {
+            if (temporary != null) {
+                try {
+                    Files.deleteIfExists(temporary);
+                } catch (IOException ignored) {
+                    // The exported file is already usable; a leftover temp file can be cleaned up later.
+                }
+            }
+        }
     }
 
     // Messaging shortcuts

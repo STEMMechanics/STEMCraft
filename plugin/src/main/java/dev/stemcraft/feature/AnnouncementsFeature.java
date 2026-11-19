@@ -14,6 +14,8 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.Command;
 import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.config.ConfigSection;
+import io.papermc.paper.registry.RegistryAccess;
+import io.papermc.paper.registry.RegistryKey;
 import dev.stemcraft.api.service.debug.DebugContext;
 import dev.stemcraft.api.service.debug.DebugRegistration;
 import dev.stemcraft.api.service.workshop.Workshop;
@@ -25,7 +27,6 @@ import dev.stemcraft.api.util.TextUtil;
 import dev.stemcraft.service.PlayerLoginMessageServiceImpl;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
-import org.bukkit.Registry;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerJoinEvent;
@@ -308,7 +309,8 @@ public class AnnouncementsFeature extends BaseFeature {
                 ? normalized.substring(normalized.indexOf(':') + 1)
                 : normalized;
         String enumName = keyName.replace('.', '_');
-        return Registry.SOUNDS.keyStream()
+        var soundRegistry = RegistryAccess.registryAccess().getRegistry(RegistryKey.SOUND_EVENT);
+        return soundRegistry.keyStream()
                 .filter(key -> {
                     String registeredKey = key.toString().toLowerCase(Locale.ROOT);
                     String registeredKeyName = key.getKey().toLowerCase(Locale.ROOT);
@@ -316,7 +318,7 @@ public class AnnouncementsFeature extends BaseFeature {
                             || registeredKeyName.equals(keyName)
                             || registeredKeyName.replace('.', '_').equals(enumName);
                 })
-                .map(Registry.SOUNDS::get)
+                .map(soundRegistry::get)
                 .filter(java.util.Objects::nonNull)
                 .findFirst()
                 .orElse(null);

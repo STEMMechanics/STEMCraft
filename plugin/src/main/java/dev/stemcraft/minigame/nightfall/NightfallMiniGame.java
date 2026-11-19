@@ -89,6 +89,7 @@ public class NightfallMiniGame extends BaseMiniGame {
 
         new NightfallCommand(api, this).onEnable();
         loadArenas();
+        watchConfigWhenSafe(configFile, minigame, this::reloadFromConfig);
     }
 
     private @NotNull Map<MiniGameArena.ArenaStatus, MiniGameHudConfigSupport.HudDefinition> defaultHudDefinitions() {

@@ -1,0 +1,7 @@
+name: STEMCraftCitizensEditor
+version: 1.0.0
+main: dev.stemcraft.example.citizens.CitizensEditorPlugin
+api-version: '1.21'
+depend:
+  - STEMCraft
+  - Citizens

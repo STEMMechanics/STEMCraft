@@ -104,6 +104,7 @@ public class BridgeMiniGame extends BaseMiniGame {
 
         new BridgeCommand(api, this).onEnable();
         loadArenas();
+        watchConfigWhenSafe(configFile, minigame, this::reloadFromConfig);
     }
 
     private @NotNull Map<MiniGameArena.ArenaStatus, MiniGameHudConfigSupport.HudDefinition> defaultHudDefinitions() {

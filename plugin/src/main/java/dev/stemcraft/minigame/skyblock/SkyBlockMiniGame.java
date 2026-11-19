@@ -80,6 +80,7 @@ public class SkyBlockMiniGame extends BaseMiniGame {
 
         new SkyBlockCommand(api, this).onEnable();
         loadArenas();
+        watchConfigWhenSafe(configFile, minigame, this::reloadFromConfig);
         refreshStandbyWorlds();
         ensureStandbyWorlds(true);
         api.tasks().repeating(STANDBY_TASK_ID, 40L, 200L, () -> ensureStandbyWorlds(false));

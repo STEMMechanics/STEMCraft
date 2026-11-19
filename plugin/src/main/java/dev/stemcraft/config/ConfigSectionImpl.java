@@ -140,6 +140,25 @@ public class ConfigSectionImpl implements ConfigSection {
         markDirty("");
     }
 
+    /**
+     * Applies one Bukkit mutation while preserving the value that existed
+     * before it. ConfigFileImpl uses that value to emit an INTERNAL event and
+     * to keep path-level dirty tracking accurate, including set-back-to-baseline
+     * mutations.
+     */
+    private void mutate(String path, Runnable mutation) {
+        if (configFile instanceof ConfigFileImpl configFileImpl) {
+            String absolute = absolutePath(path);
+            Object before = configFileImpl.snapshotValue(absolute);
+            mutation.run();
+            configFileImpl.recordLocalMutation(absolute, before);
+            return;
+        }
+
+        mutation.run();
+        markDirty(path);
+    }
+
 
     /**
      * Determines if the default value should be persisted to the configuration.
@@ -163,8 +182,7 @@ public class ConfigSectionImpl implements ConfigSection {
         }
 
         Object storedValue = prepareValue(absolutePath(path), value);
-        section.set(path, storedValue);
-        markDirty(path);
+        mutate(path, () -> section.set(path, storedValue));
     }
 
     /**
@@ -359,8 +377,8 @@ public class ConfigSectionImpl implements ConfigSection {
      */
     public void set(String path, Object value) {
         String resolvedPath = resolvePath(path);
-        section.set(resolvedPath, prepareValue(absolutePath(resolvedPath), value));
-        markDirty(resolvedPath);
+        Object prepared = prepareValue(absolutePath(resolvedPath), value);
+        mutate(resolvedPath, () -> section.set(resolvedPath, prepared));
     }
 
     private Object prepareValue(String path, Object value) {
@@ -417,8 +435,7 @@ public class ConfigSectionImpl implements ConfigSection {
      */
     public void remove(String path) {
         String resolvedPath = resolvePath(path);
-        section.set(resolvedPath, null);
-        markDirty(resolvedPath);
+        mutate(resolvedPath, () -> section.set(resolvedPath, null));
     }
 
     /**
@@ -436,8 +453,8 @@ public class ConfigSectionImpl implements ConfigSection {
                 return null;
             }
 
-            subSection = section.createSection(resolvedPath);
-            markDirty(resolvedPath);
+            mutate(resolvedPath, () -> section.createSection(resolvedPath));
+            subSection = section.getConfigurationSection(resolvedPath);
         }
 
         return new ConfigSectionImpl(configFile, subSection);
@@ -456,12 +473,13 @@ public class ConfigSectionImpl implements ConfigSection {
             if (!overwriteIfExists) {
                 return new ConfigSectionImpl(configFile, section.getConfigurationSection(resolvedPath));
             }
-
-            section.set(resolvedPath, null);
         }
 
-        markDirty(resolvedPath);
-        return new ConfigSectionImpl(configFile, section.createSection(resolvedPath));
+        mutate(resolvedPath, () -> {
+            if (section.isConfigurationSection(resolvedPath)) section.set(resolvedPath, null);
+            section.createSection(resolvedPath);
+        });
+        return new ConfigSectionImpl(configFile, section.getConfigurationSection(resolvedPath));
     }
 
     /**
@@ -508,10 +526,8 @@ public class ConfigSectionImpl implements ConfigSection {
      * Removes all keys and values from this configuration section.
      */
     public void removeAll() {
-        for (String key : section.getKeys(false)) {
-            section.set(key, null);
-        }
-
-        markDirty();
+        mutate("", () -> {
+            for (String key : section.getKeys(false)) section.set(key, null);
+        });
     }
 }

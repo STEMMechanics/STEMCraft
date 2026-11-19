@@ -1,0 +1,8 @@
+pack:
+  enabled: false
+  namespace: stemcraft_workshop
+  description: "STEMCraft workshop examples for a private workshop-test world"
+  dependencies: []
+
+# This pack is intentionally disabled by default. Enable it only after creating
+# a controlled workshop-test world and reviewing configs/*.yml.

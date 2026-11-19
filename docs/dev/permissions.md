@@ -147,7 +147,10 @@ reading region information. Avoid `stemcraft.*` and `stemcraft.command.*` in nor
 
 Non-operator staff who previously relied on broad personal-command access need the
 new matching `.others` permissions and, for `/spawn`, appropriate world access. Operators
-receive undeclared permission nodes through Bukkit's operator default. Existing quest admin
+receive undeclared permission nodes through Bukkit's operator default. The Workshop entry
+point is available only when at least one module permission is present; its modules use
+`stemcraft.quest.admin`, `stemcraft.itemedit.edit` / `stemcraft.itemedit.publish`,
+`stemcraft.command.stemcraft.pack`, and `stemcraft.command.stemcraft.loot`. Existing quest admin
 (`stemcraft.quest.admin`), voting admin (`stemcraft.command.vote.admin`) and menu editor
 (`stemcraft.imenu.edit`) checks remain separate from normal player access.
 

@@ -77,6 +77,7 @@ public class ParkourMiniGame extends BaseMiniGame {
         config.onEnable(configFile);
         MiniGameHudConfigSupport.apply(minigame, configFile, defaultHudDefinitions());
         loadArenas();
+        watchConfigWhenSafe(configFile, minigame, this::reloadFromConfig);
         registerRecordHolograms();
         new ParkourCommand(api, this).onEnable();
     }

@@ -54,6 +54,10 @@ public interface WebService {
      */
     void registerEndpointHandler(@NotNull String path, @NotNull WebServiceEndpointHandler handler);
 
+    /** Register an optional long-lived endpoint such as an authenticated SSE stream. */
+    default void registerStreamingEndpointHandler(@NotNull String path,
+                                                  @NotNull WebServiceStreamingEndpointHandler handler) {}
+
     /**
      * Publish an event to the web service's configured external subscriptions.
      *

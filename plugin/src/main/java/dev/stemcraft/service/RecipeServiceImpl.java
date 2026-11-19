@@ -36,7 +36,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.io.File;
 import org.bukkit.Color;
 import org.bukkit.Registry;
 import io.papermc.paper.registry.RegistryAccess;
@@ -52,6 +51,8 @@ import org.bukkit.potion.PotionType;
  */
 public class RecipeServiceImpl extends BaseService implements RecipeService {
     private static final String MINECRAFT_NAMESPACE = "minecraft";
+    private final Map<String, java.util.Set<NamespacedKey>> ownedRecipes = new HashMap<>();
+    private String loadingOwner = "__root__";
 
     /**
      * Constructor for RecipeServiceImpl.
@@ -68,6 +69,9 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
      */
     @Override
     public void onEnable() {
+        if (plugin.contentPacks() != null) {
+            plugin.contentPacks().registerHandler("recipes", this::reloadContentPack, this::unloadContentPack);
+        }
         loadFromConfig();
     }
 
@@ -75,28 +79,40 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
      * Load recipes from the configuration.
      */
     private void loadFromConfig() {
-        loadRecipes(getConfigSection());
-        File dataPacks = new File(plugin.getDataFolder(), "data-packs");
-        File[] packDirectories = dataPacks.listFiles(File::isDirectory);
-        if (packDirectories == null) return;
-        for (File packDirectory : packDirectories) {
-            File root = new File(packDirectory, "config.yml");
-            ConfigSection rootConfig = root.isFile() ? api.config().load(root) : null;
-            if (rootConfig == null || !rootConfig.getBoolean("pack.enabled", true)) continue;
-            loadRecipes(rootConfig.getSection("recipes", false));
-            File configs = new File(packDirectory, "configs");
-            File[] files = configs.listFiles((directory, name) -> name.toLowerCase(Locale.ROOT).endsWith(".yml"));
-            if (files != null) for (File file : files) loadRecipesFromFile(file);
+        loadRecipes(getConfigSection(), "__root__");
+    }
+
+    /** Reload recipes owned by one content pack. */
+    public boolean reloadContentPack(@NotNull String packId) {
+        unloadContentPack(packId);
+        if (plugin.contentPacks() == null) return true;
+        var info = plugin.contentPacks().find(packId);
+        if (info == null || !info.enabled()) return true;
+        try {
+            for (ContentPackDocument document : plugin.contentPacks().documents(packId)) {
+                loadRecipes(document.config().getSection("recipes", false), document.packId());
+            }
+        } catch (RuntimeException exception) {
+            unloadContentPack(packId);
+            plugin.getLogger().warning("[recipes] Refusing to activate '" + packId + "': "
+                + (exception.getMessage() == null ? exception.getClass().getSimpleName() : exception.getMessage()));
+            return false;
         }
+        return true;
     }
 
-    private void loadRecipesFromFile(File file) {
-        ConfigSection config = api.config().load(file);
-        if (config != null) loadRecipes(config.getSection("recipes", false));
+    /** Remove recipes registered by one content pack. */
+    public void unloadContentPack(@NotNull String packId) {
+        java.util.Set<NamespacedKey> keys = ownedRecipes.remove(packId);
+        if (keys != null) keys.forEach(Bukkit::removeRecipe);
     }
 
-    private void loadRecipes(ConfigSection recipesSec) {
-        if (recipesSec == null) return;
+    private void loadRecipes(ConfigSection recipesSec, String owner) {
+        loadingOwner = owner;
+        if (recipesSec == null) {
+            loadingOwner = "__root__";
+            return;
+        }
 
         /* -------- REMOVE -------- */
         for (String raw : recipesSec.getStringList("remove")) {
@@ -200,7 +216,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
                 ShapedRecipe recipe = new ShapedRecipe(key(id), result);
                 recipe.shape(shape);
                 ingMap.forEach(recipe::setIngredient);
-                Bukkit.addRecipe(recipe);
+                addRecipe(recipe);
                 api.messages().info("RECIPE_SHAPED_LOADED", "id", id);
             }
         }
@@ -236,7 +252,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
                     }
                     recipe.addIngredient(choice);
                 }
-                Bukkit.addRecipe(recipe);
+                addRecipe(recipe);
                 api.messages().info("RECIPE_SHAPELESS_LOADED", "id", id);
             }
         }
@@ -312,6 +328,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
                 api.messages().info("RECIPE_SMITHING_TRIM_LOADED", "id", id);
             }
         }
+        loadingOwner = "__root__";
     }
 
     /**
@@ -341,10 +358,10 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
             }
 
             switch (type) {
-                case "furnace" -> Bukkit.addRecipe(new FurnaceRecipe(key(id), result, input, exp, time));
-                case "smoker" -> Bukkit.addRecipe(new SmokingRecipe(key(id), result, input, exp, time));
-                case "blast_furnace" -> Bukkit.addRecipe(new BlastingRecipe(key(id), result, input, exp, time));
-                case "campfire" -> Bukkit.addRecipe(new CampfireRecipe(key(id), result, input, exp, time));
+                case "furnace" -> addRecipe(new FurnaceRecipe(key(id), result, input, exp, time));
+                case "smoker" -> addRecipe(new SmokingRecipe(key(id), result, input, exp, time));
+                case "blast_furnace" -> addRecipe(new BlastingRecipe(key(id), result, input, exp, time));
+                case "campfire" -> addRecipe(new CampfireRecipe(key(id), result, input, exp, time));
                 default -> {
                 }
             }
@@ -383,8 +400,13 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
                 plugin.getLogger().warning("brewing." + id + " has an invalid ingredient or effect");
                 continue;
             }
-            ItemStack result = new ItemStack(Material.POTION);
-            PotionMeta meta = (PotionMeta) result.getItemMeta();
+            String configuredResult = recipe.getString("result", "").trim();
+            ItemStack result = configuredResult.isBlank() ? new ItemStack(Material.POTION)
+                : createRecipeResult(configuredResult, 1);
+            if (result == null || !(result.getItemMeta() instanceof PotionMeta meta)) {
+                plugin.getLogger().warning("brewing." + id + " result must be a potion or registered potion item");
+                continue;
+            }
             meta.addCustomEffect(new PotionEffect(effect, Math.max(1, recipe.getInt("duration-ticks", 3600)),
                 Math.max(0, recipe.getInt("amplifier", 0))), true);
             String name = recipe.getString("name", "").trim();
@@ -399,7 +421,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
             if (input == null) continue;
             NamespacedKey key = key("brew_" + id);
             Bukkit.removeRecipe(key);
-            Bukkit.addRecipe(new BrewingRecipe(key, result, input, ingredient));
+            addRecipe(new BrewingRecipe(key, result, input, ingredient));
         }
     }
 
@@ -446,7 +468,19 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
      * @return The created NamespacedKey.
      */
     private NamespacedKey key(String id) {
-        return new NamespacedKey(plugin, id.toLowerCase());
+        String normalized = id.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9._-]", "_");
+        if ("__root__".equals(loadingOwner)) return new NamespacedKey(plugin, normalized);
+        String owner = loadingOwner == null ? "pack" : loadingOwner.toLowerCase(Locale.ROOT)
+            .replaceAll("[^a-z0-9._-]", "_");
+        return new NamespacedKey(plugin, owner + "_" + normalized);
+    }
+
+    private boolean addRecipe(org.bukkit.inventory.Recipe recipe) {
+        boolean added = Bukkit.addRecipe(recipe);
+        if (recipe instanceof org.bukkit.Keyed keyed) {
+            ownedRecipes.computeIfAbsent(loadingOwner, ignored -> new java.util.HashSet<>()).add(keyed.getKey());
+        }
+        return added;
     }
 
     private @NotNull String formatMaterialName(@NotNull Material material) {
@@ -476,7 +510,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
             recipe.setIngredient(entry.getKey(), entry.getValue());
         }
 
-        Bukkit.addRecipe(recipe);
+        addRecipe(recipe);
     }
 
     /**
@@ -492,7 +526,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
         for (Material mat : inputs) {
             recipe.addIngredient(mat);
         }
-        Bukkit.addRecipe(recipe);
+        addRecipe(recipe);
     }
 
     /**
@@ -508,7 +542,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
     public void addFurnace(@NotNull String id, @NotNull Material input, @NotNull ItemStack output, float exp, int cookTicks) {
         FurnaceRecipe recipe = new FurnaceRecipe(key(id), output, input, exp, cookTicks);
         recipe.setCategory(CookingBookCategory.MISC);
-        Bukkit.addRecipe(recipe);
+        addRecipe(recipe);
     }
 
     /**
@@ -524,7 +558,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
     public void addSmoker(@NotNull String id, @NotNull Material input, @NotNull ItemStack output, float exp, int cookTicks) {
         SmokingRecipe recipe = new SmokingRecipe(key(id), output, input, exp, cookTicks);
         recipe.setCategory(CookingBookCategory.FOOD);
-        Bukkit.addRecipe(recipe);
+        addRecipe(recipe);
     }
 
     /**
@@ -540,7 +574,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
     public void addBlastFurnace(@NotNull String id, @NotNull Material input, @NotNull ItemStack output, float exp, int cookTicks) {
         BlastingRecipe recipe = new BlastingRecipe(key(id), output, input, exp, cookTicks);
         recipe.setCategory(CookingBookCategory.BLOCKS);
-        Bukkit.addRecipe(recipe);
+        addRecipe(recipe);
     }
 
     /**
@@ -556,7 +590,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
     public void addCampfire(@NotNull String id, @NotNull Material input, @NotNull ItemStack output, float exp, int cookTicks) {
         CampfireRecipe recipe = new CampfireRecipe(key(id), output, input, exp, cookTicks);
         recipe.setCategory(CookingBookCategory.FOOD);
-        Bukkit.addRecipe(recipe);
+        addRecipe(recipe);
     }
 
     /**
@@ -571,7 +605,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
         ItemStack result = new ItemStack(output, amount);
         String id = "stonecut_" + input.name().toLowerCase() + "_to_" + output.name().toLowerCase();
         StonecuttingRecipe recipe = new StonecuttingRecipe(key(id), result, input);
-        Bukkit.addRecipe(recipe);
+        addRecipe(recipe);
     }
 
     // Smithing Transform: template + base + addition -> new item
@@ -596,7 +630,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
     ) {
         SmithingTransformRecipe recipe =
                 new SmithingTransformRecipe(key(id), result, template, base, addition);
-        Bukkit.addRecipe(recipe);
+        addRecipe(recipe);
     }
 
     // Smithing Trim: template + armor + material -> trimmed armor
@@ -617,7 +651,7 @@ public class RecipeServiceImpl extends BaseService implements RecipeService {
     ) {
         SmithingTrimRecipe recipe =
                 new SmithingTrimRecipe(key(id), template, baseArmor, material, trimPattern(template));
-        Bukkit.addRecipe(recipe);
+        addRecipe(recipe);
     }
 
     /** Preserve the template inference of the former four-argument Paper constructor. */

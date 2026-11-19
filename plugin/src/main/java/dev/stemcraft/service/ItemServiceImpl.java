@@ -35,10 +35,16 @@ import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Bukkit;
+import org.bukkit.Color;
+import org.bukkit.Registry;
+import org.bukkit.attribute.Attribute;
+import org.bukkit.attribute.AttributeModifier;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.inventory.InventoryCloseEvent;
@@ -52,17 +58,23 @@ import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.CampfireRecipe;
 import org.bukkit.GameMode;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.EquipmentSlotGroup;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.LeatherArmorMeta;
+import org.bukkit.inventory.meta.PotionMeta;
 import org.bukkit.inventory.meta.components.CustomModelDataComponent;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
+import io.papermc.paper.registry.RegistryAccess;
+import io.papermc.paper.registry.RegistryKey;
 import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -83,6 +95,11 @@ public class ItemServiceImpl extends BaseService implements ItemService {
     private final Map<String, CustomItemPropertyHandler> propertyHandlers = new HashMap<>();
     private final Set<Integer> configuredModelData = new HashSet<>();
     private final Map<String, FoodBehavior> foodBehaviors = new HashMap<>();
+    private final Map<String, PotionDefinition> potionDefinitions = new HashMap<>();
+    private final Map<String, Set<String>> ownedItemIds = new HashMap<>();
+    private final Map<String, Set<String>> ownedPotionDefinitions = new HashMap<>();
+    private final Map<String, Set<Integer>> ownedModelData = new HashMap<>();
+    private NamespacedKey definitionVersionKey;
     private dev.stemcraft.api.command.Command giveCommand;
     private org.bukkit.command.Command originalGiveCommand;
 
@@ -101,10 +118,17 @@ public class ItemServiceImpl extends BaseService implements ItemService {
      */
     @Override
     public void onEnable() {
+        definitionVersionKey = new NamespacedKey(plugin, "workshop_definition_version");
+        if (plugin.contentPacks() != null) {
+            plugin.contentPacks().registerHandler("items", this::reloadContentPack, this::unloadContentPack);
+        }
         loadConfiguredItems();
         registerGiveCommand();
         api.events().register(PlayerInteractEvent.class, this::handleCampfireInput, EventPriority.HIGHEST, false);
         api.events().register(PlayerItemConsumeEvent.class, this::handleConfiguredFood, EventPriority.MONITOR, true);
+        api.events().register(PlayerJoinEvent.class, event -> reconcileInventory(event.getPlayer()));
+        api.events().register(PlayerItemHeldEvent.class, event -> reconcileItem(
+            event.getPlayer().getInventory().getItem(event.getNewSlot())));
         api.events().register(InventoryCloseEvent.class, this::handleInventoryClose, EventPriority.HIGHEST, false);
         api.events().register(PlayerDropItemEvent.class, (event) -> {
             ItemStack item = event.getItemDrop().getItemStack();
@@ -158,33 +182,46 @@ public class ItemServiceImpl extends BaseService implements ItemService {
     }
 
     private void loadConfiguredItems() {
-        plugin.exportBundledDirectory("data-packs");
         var config = api.config().load("config.yml");
+        if (config != null) loadPotionDefinitions(config.getSection("potions", false), "__root__");
         ConfigSection items = config == null ? null : config.getSection("custom-items", false);
-        loadConfiguredItems(items, "stemcraft");
-        File dataPacks = new File(plugin.getDataFolder(), "data-packs");
-        File[] packDirectories = dataPacks.listFiles(File::isDirectory);
-        if (packDirectories == null) return;
-        for (File packDirectory : packDirectories) {
-            File packConfigFile = new File(packDirectory, "config.yml");
-            if (!packConfigFile.isFile()) continue;
-            ConfigSection packConfig = api.config().load(packConfigFile);
-            if (packConfig == null || !packConfig.getBoolean("pack.enabled", true)) continue;
-            String namespace = packConfig.getString("pack.namespace",
-                packDirectory.getName().toLowerCase(java.util.Locale.ROOT).replace('-', '_'));
-            loadConfiguredItems(packConfig.getSection("custom-items", false), namespace);
-            File configsDirectory = new File(packDirectory, "configs");
-            File[] configFiles = configsDirectory.listFiles((directory, name) ->
-                name.toLowerCase(java.util.Locale.ROOT).endsWith(".yml"));
-            if (configFiles == null) continue;
-            for (File configFile : configFiles) {
-                ConfigSection extraConfig = api.config().load(configFile);
-                if (extraConfig != null) loadConfiguredItems(extraConfig.getSection("custom-items", false), namespace);
+        loadConfiguredItems(items, "stemcraft", "__root__");
+    }
+
+    private void loadPotionDefinitions(@Nullable ConfigSection definitions, String owner) {
+        if (definitions == null) return;
+        for (String id : definitions.getKeys(false)) {
+            ConfigSection section = definitions.getSection(id, false);
+            if (section == null) throw new IllegalArgumentException("potion definition '" + id + "' must be a mapping");
+            String normalized = normaliseCustomItemId(id);
+            if (potionDefinitions.containsKey(normalized)) {
+                throw new IllegalArgumentException("duplicate potion definition '" + id + "'");
             }
+            potionDefinitions.put(normalized, parsePotionDefinition(section, id));
+            ownedPotionDefinitions.computeIfAbsent(owner, ignored -> new HashSet<>()).add(normalized);
         }
     }
 
-    private void loadConfiguredItems(ConfigSection items, String namespace) {
+    private static PotionDefinition parsePotionDefinition(ConfigSection section, String id) {
+        String color = section.getString("color", section.getString("colour", "")).trim().replace("#", "");
+        if (!color.isBlank() && !color.matches("[0-9a-fA-F]{6}"))
+            throw new IllegalArgumentException("potion '" + id + "' has an invalid colour");
+        List<PotionDefinitionEffect> effects = new ArrayList<>();
+        for (Object raw : section.getList("effects")) {
+            if (!(raw instanceof Map<?, ?> values))
+                throw new IllegalArgumentException("potion '" + id + "' effects must be mappings");
+            String typeName = values.get("type") == null ? "" : values.get("type").toString().trim();
+            PotionEffectType type = Registry.MOB_EFFECT.get(NamespacedKey.minecraft(typeName.toLowerCase(Locale.ROOT)));
+            if (type == null) throw new IllegalArgumentException("unknown potion effect '" + typeName + "'");
+            int seconds = Math.max(1, (int) Math.round(number(values.get("duration-seconds"), 1D)));
+            int level = Math.max(1, (int) Math.round(number(values.get("level"), 1D)));
+            effects.add(new PotionDefinitionEffect(type, seconds, level));
+        }
+        if (effects.isEmpty()) throw new IllegalArgumentException("potion '" + id + "' must define at least one effect");
+        return new PotionDefinition(color, List.copyOf(effects));
+    }
+
+    private void loadConfiguredItems(ConfigSection items, String namespace, String owner) {
         if (items == null) return;
         for (String id : items.getKeys(false)) {
             ConfigSection section = items.getSection(id, false);
@@ -213,6 +250,11 @@ public class ItemServiceImpl extends BaseService implements ItemService {
                     damageable.setMaxDamage(maxDamage);
                 }
                 if (section.contains("glint")) meta.setEnchantmentGlintOverride(section.getBoolean("glint", false));
+                applyCombatStats(meta, section, id, material);
+                applyEnchantments(meta, section.getSection("enchantments", false), id);
+                applyColourAndPotion(meta, section);
+                meta.getPersistentDataContainer().set(definitionVersionKey, PersistentDataType.STRING,
+                    definitionVersion(section));
                 ConfigSection food = section.getSection("food", false);
                 if (food != null) {
                     applyFoodComponent(meta, food);
@@ -232,10 +274,266 @@ public class ItemServiceImpl extends BaseService implements ItemService {
                     }
                 }
                 registerCustomItem(new CustomItemDefinition(id, template, placement, null, clients, visualStates));
+                ownedItemIds.computeIfAbsent(owner, ignored -> new HashSet<>()).add(id);
+                Set<Integer> modelData = ownedModelData.computeIfAbsent(normaliseCustomItemId(id), ignored -> new HashSet<>());
+                collectModelData(modelData, clients);
+                visualStates.values().forEach(value -> collectModelData(modelData, value));
             } catch (IllegalArgumentException exception) {
                 plugin.getLogger().warning("[items] Could not load custom item '" + id + "': " + exception.getMessage());
             }
         }
+    }
+
+    private void applyCombatStats(ItemMeta meta, ConfigSection section, String id, Material material) {
+        ConfigSection stats = section.getSection("stats", false);
+        if (stats == null) return;
+        applyAttribute(meta, Attribute.ATTACK_DAMAGE, stats, "attack-damage", id, material, EquipmentSlotGroup.MAINHAND);
+        applyAttribute(meta, Attribute.ATTACK_SPEED, stats, "attack-speed", id, material, EquipmentSlotGroup.MAINHAND);
+        applyAttribute(meta, Attribute.ARMOR, stats, "armor", id, material, equipmentGroup(material));
+        applyAttribute(meta, Attribute.ARMOR_TOUGHNESS, stats, "toughness", id, material, equipmentGroup(material));
+    }
+
+    private void applyAttribute(ItemMeta meta, Attribute attribute, ConfigSection stats, String field,
+                                String id, Material material, EquipmentSlotGroup slot) {
+        if (!stats.contains(field)) return;
+        double value = configuredModifierValue(material, attribute, stats.getDouble(field, 0D));
+        NamespacedKey key = new NamespacedKey(plugin, "workshop_" + normaliseCustomItemId(id) + "_" + field);
+        var existing = meta.getAttributeModifiers(attribute);
+        if (existing != null) {
+            existing.stream().filter(modifier -> key.equals(modifier.getKey()))
+                .forEach(modifier -> meta.removeAttributeModifier(attribute, modifier));
+        }
+        meta.addAttributeModifier(attribute, new AttributeModifier(key, value,
+            AttributeModifier.Operation.ADD_NUMBER, slot));
+    }
+
+    /** Convert a child-facing total into the additive modifier Bukkit stores. */
+    static double configuredModifierValue(Material material, Attribute attribute, double total) {
+        return total - vanillaTotal(material, attribute);
+    }
+
+    static EquipmentSlotGroup equipmentGroup(Material material) {
+        String name = material == null ? "" : material.name();
+        if (name.endsWith("_HELMET") || name.equals("TURTLE_HELMET")) return EquipmentSlotGroup.HEAD;
+        if (name.endsWith("_CHESTPLATE") || name.equals("ELYTRA")) return EquipmentSlotGroup.CHEST;
+        if (name.endsWith("_LEGGINGS")) return EquipmentSlotGroup.LEGS;
+        if (name.endsWith("_BOOTS")) return EquipmentSlotGroup.FEET;
+        return EquipmentSlotGroup.ARMOR;
+    }
+
+    private static double vanillaTotal(Material material, Attribute attribute) {
+        if (material == null) return genericBase(attribute);
+        String name = material.name();
+        if (attribute == Attribute.ATTACK_DAMAGE) {
+            if (name.endsWith("_SWORD")) return tier(name, 4D, 5D, 6D, 7D, 8D);
+            if (name.endsWith("_AXE")) return tier(name, 7D, 9D, 9D, 9D, 10D);
+            if (name.endsWith("_PICKAXE")) return tier(name, 2D, 3D, 4D, 5D, 6D);
+            if (name.endsWith("_SHOVEL")) return tier(name, 2.5D, 3.5D, 4.5D, 5.5D, 5.5D);
+        }
+        if (attribute == Attribute.ATTACK_SPEED) {
+            if (name.endsWith("_SWORD")) return 1.6D;
+            if (name.endsWith("_AXE")) return 0.8D;
+            if (name.endsWith("_PICKAXE")) return 1.2D;
+            if (name.endsWith("_SHOVEL")) return 1.0D;
+        }
+        if (attribute == Attribute.ARMOR || attribute == Attribute.ARMOR_TOUGHNESS) {
+            boolean armor = name.endsWith("_HELMET") || name.equals("TURTLE_HELMET")
+                || name.endsWith("_CHESTPLATE") || name.endsWith("_LEGGINGS") || name.endsWith("_BOOTS");
+            if (armor) {
+                String piece = name.endsWith("_HELMET") || name.equals("TURTLE_HELMET") ? "head"
+                    : name.endsWith("_CHESTPLATE") ? "chest"
+                    : name.endsWith("_LEGGINGS") ? "legs" : "feet";
+                if (attribute == Attribute.ARMOR) {
+                    if (name.equals("TURTLE_HELMET")) return 2D;
+                    return switch (piece) {
+                        case "head" -> tier(name, 1D, 2D, 2D, 3D, 3D);
+                        case "chest" -> tier(name, 3D, 5D, 6D, 8D, 8D);
+                        case "legs" -> tier(name, 2D, 4D, 5D, 6D, 6D);
+                        default -> tier(name, 1D, 1D, 2D, 3D, 3D);
+                    };
+                }
+                if (name.contains("NETHERITE")) return 3D;
+                if (name.contains("DIAMOND")) return 2D;
+            }
+        }
+        return genericBase(attribute);
+    }
+
+    private static double genericBase(Attribute attribute) {
+        if (attribute == Attribute.ATTACK_DAMAGE) return 1D;
+        if (attribute == Attribute.ATTACK_SPEED) return 4D;
+        return 0D;
+    }
+
+    private static double tier(String name, double wood, double stone, double iron, double diamond, double netherite) {
+        if (name.contains("NETHERITE")) return netherite;
+        if (name.contains("DIAMOND")) return diamond;
+        if (name.contains("IRON")) return iron;
+        if (name.contains("STONE")) return stone;
+        return wood;
+    }
+
+    private void applyEnchantments(ItemMeta meta, @Nullable ConfigSection enchantments, String id) {
+        if (enchantments == null) return;
+        for (String rawId : enchantments.getKeys(false)) {
+            NamespacedKey key = NamespacedKey.fromString(rawId.contains(":") ? rawId
+                : "minecraft:" + rawId.toLowerCase(Locale.ROOT));
+            org.bukkit.enchantments.Enchantment enchantment = key == null ? null
+                : RegistryAccess.registryAccess().getRegistry(RegistryKey.ENCHANTMENT).get(key);
+            int level = Math.max(1, enchantments.getInt(rawId, 1));
+            if (enchantment == null) throw new IllegalArgumentException("unknown enchantment '" + rawId + "'");
+            meta.addEnchant(enchantment, level, true);
+        }
+    }
+
+    @SuppressWarnings("UnstableApiUsage")
+    private void applyColourAndPotion(ItemMeta meta, ConfigSection item) {
+        String colour = item.getString("color", item.getString("colour", "")).trim().replace("#", "");
+        Object rawPotion = item.get("potion");
+        PotionDefinition namedPotion = null;
+        ConfigSection inlinePotion = item.getSection("potion", false);
+        if (rawPotion instanceof String reference && !reference.isBlank()) {
+            namedPotion = potionDefinitions.get(normaliseCustomItemId(reference));
+            if (namedPotion == null) throw new IllegalArgumentException("unknown potion definition '" + reference + "'");
+            if (colour.isBlank()) colour = namedPotion.color();
+        }
+        Color parsedColour = null;
+        if (!colour.isBlank()) {
+            try { parsedColour = Color.fromRGB(Integer.parseInt(colour, 16)); }
+            catch (IllegalArgumentException exception) { throw new IllegalArgumentException("invalid colour '" + colour + "'"); }
+        }
+        if (parsedColour != null && meta instanceof LeatherArmorMeta leather) leather.setColor(parsedColour);
+        if (!(meta instanceof PotionMeta potionMeta) || (namedPotion == null && inlinePotion == null)) return;
+        if (parsedColour != null) potionMeta.setColor(parsedColour);
+        if (namedPotion != null) {
+            applyPotionDefinition(potionMeta, namedPotion);
+        } else {
+            for (Object raw : inlinePotion.getList("effects")) {
+                if (!(raw instanceof Map<?, ?> values)) continue;
+                String typeName = values.get("type") == null ? "" : values.get("type").toString().trim();
+                PotionEffectType type = Registry.MOB_EFFECT.get(NamespacedKey.minecraft(typeName.toLowerCase(Locale.ROOT)));
+                if (type == null) throw new IllegalArgumentException("unknown potion effect '" + typeName + "'");
+                int seconds = Math.max(1, (int) Math.round(number(values.get("duration-seconds"), 1D)));
+                int level = Math.max(1, (int) Math.round(number(values.get("level"), 1D)));
+                potionMeta.addCustomEffect(new PotionEffect(type, seconds * 20, level - 1), true);
+            }
+        }
+    }
+
+    void applyPotionDefinition(ItemMeta meta, String reference) {
+        if (!(meta instanceof PotionMeta potionMeta)) return;
+        PotionDefinition definition = potionDefinitions.get(normaliseCustomItemId(reference));
+        if (definition == null) return;
+        if (!definition.color().isBlank()) potionMeta.setColor(Color.fromRGB(Integer.parseInt(definition.color(), 16)));
+        applyPotionDefinition(potionMeta, definition);
+    }
+
+    private static void applyPotionDefinition(PotionMeta meta, PotionDefinition definition) {
+        for (PotionDefinitionEffect effect : definition.effects()) {
+            meta.addCustomEffect(new PotionEffect(effect.type(), effect.seconds() * 20, effect.level() - 1), true);
+        }
+    }
+
+    private static void collectModelData(Set<Integer> target, @Nullable CustomItemClientDefinition clients) {
+        if (clients != null && clients.java() != null) target.add(clients.java().customModelData());
+    }
+
+    private static String definitionVersion(ConfigSection section) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        for (String key : section.getKeys(false)) values.put(key, section.get(key));
+        return Integer.toHexString(values.toString().hashCode());
+    }
+
+    private void reconcileInventory(org.bukkit.entity.Player player) {
+        ItemStack[] contents = player.getInventory().getContents();
+        for (int index = 0; index < contents.length; index++) contents[index] = reconcileItem(contents[index]);
+        player.getInventory().setContents(contents);
+        ItemStack[] armor = player.getInventory().getArmorContents();
+        for (int index = 0; index < armor.length; index++) armor[index] = reconcileItem(armor[index]);
+        player.getInventory().setArmorContents(armor);
+        player.getInventory().setItemInOffHand(reconcileItem(player.getInventory().getItemInOffHand()));
+    }
+
+    private ItemStack reconcileItem(ItemStack item) {
+        if (item == null || item.getType().isAir() || api.items().hasAttrib(item, "workshop-preview-token")) return item;
+        String id = getCustomItemId(item);
+        if (id == null) return item;
+        ItemStack template = itemTemplates.get(id);
+        if (template == null) template = itemTemplates.entrySet().stream()
+            .filter(entry -> normaliseCustomItemId(entry.getKey()).equals(normaliseCustomItemId(id)))
+            .map(Map.Entry::getValue).findFirst().orElse(null);
+        if (template == null || template.getItemMeta() == null) return item;
+        String current = getAttrib(item, "workshop-definition-version", String.class, "");
+        String latest = getAttrib(template, "workshop-definition-version", String.class, "");
+        if (latest.isBlank() || latest.equals(current)) return item;
+        ItemStack replacement = template.clone();
+        replacement.setAmount(Math.min(item.getAmount(), replacement.getMaxStackSize()));
+        ItemMeta oldMeta = item.getItemMeta();
+        ItemMeta newMeta = replacement.getItemMeta();
+        if (oldMeta != null && newMeta != null) {
+            oldMeta.getPersistentDataContainer().copyTo(newMeta.getPersistentDataContainer(), false);
+            if (oldMeta instanceof org.bukkit.inventory.meta.Damageable oldDamage
+                && newMeta instanceof org.bukkit.inventory.meta.Damageable newDamage) {
+                newDamage.setDamage(Math.min(oldDamage.getDamage(), newDamage.getMaxDamage()));
+            }
+            replacement.setItemMeta(newMeta);
+        }
+        return replacement;
+    }
+
+    /** Reload the item definitions owned by one content pack. */
+    public boolean reloadContentPack(@NotNull String packId) {
+        unloadContentPack(packId);
+        if (plugin.contentPacks() == null) return true;
+        var info = plugin.contentPacks().find(packId);
+        if (info == null || !info.enabled()) return true;
+        try {
+            for (ContentPackDocument document : plugin.contentPacks().documents(packId)) {
+                loadPotionDefinitions(document.config().getSection("potions", false), document.packId());
+            }
+            for (ContentPackDocument document : plugin.contentPacks().documents(packId)) {
+                loadConfiguredItems(document.config().getSection("custom-items", false), document.namespace(), document.packId());
+            }
+        } catch (RuntimeException exception) {
+            unloadContentPack(packId);
+            plugin.getLogger().warning("[items] Refusing to activate '" + packId + "': "
+                + (exception.getMessage() == null ? exception.getClass().getSimpleName() : exception.getMessage()));
+            return false;
+        }
+        Bukkit.getOnlinePlayers().forEach(this::reconcileInventory);
+        return true;
+    }
+
+    /** Reload the legacy/root custom-item section without disturbing pack-owned items. */
+    public boolean reloadRootItems() {
+        unloadContentPack("__root__");
+        var config = api.config().load("config.yml");
+        if (config == null || !config.reload()) return false;
+        try {
+            loadPotionDefinitions(config.getSection("potions", false), "__root__");
+            loadConfiguredItems(config.getSection("custom-items", false), "stemcraft", "__root__");
+        } catch (RuntimeException exception) {
+            plugin.getLogger().warning("[items] Could not reload root custom items: " + exception.getMessage());
+            return false;
+        }
+        Bukkit.getOnlinePlayers().forEach(this::reconcileInventory);
+        return true;
+    }
+
+    /** Remove the item registrations owned by one content pack. */
+    public void unloadContentPack(@NotNull String packId) {
+        Set<String> ids = ownedItemIds.remove(packId);
+        if (ids != null) {
+            for (String id : ids) {
+                itemTemplates.remove(id);
+                itemDefinitions.remove(id);
+                foodBehaviors.remove(normaliseCustomItemId(id));
+                Set<Integer> modelData = ownedModelData.remove(normaliseCustomItemId(id));
+                if (modelData != null) configuredModelData.removeAll(modelData);
+            }
+        }
+        Set<String> potions = ownedPotionDefinitions.remove(packId);
+        if (potions != null) potions.forEach(potionDefinitions::remove);
     }
 
     // Bukkit marks its food component API experimental; keep its use isolated here.
@@ -306,6 +604,8 @@ public class ItemServiceImpl extends BaseService implements ItemService {
 
     private record ConfiguredEffect(String type, double durationSeconds, int amplifier, double probability) { }
     private record FoodBehavior(double heal, double damage, String returns, List<ConfiguredEffect> effects) { }
+    private record PotionDefinition(String color, List<PotionDefinitionEffect> effects) { }
+    private record PotionDefinitionEffect(PotionEffectType type, int seconds, int level) { }
 
     private void registerGiveCommand() {
         api.tabComplete().register("give-target", (player, args, currentArgument) -> {
@@ -451,7 +751,7 @@ public class ItemServiceImpl extends BaseService implements ItemService {
         String texture = item.getString("texture", "").trim();
         if (texture.isBlank()) return null;
         String safeId = id.toLowerCase(java.util.Locale.ROOT).replace('-', '_');
-        String textureId = texture.contains(":") ? texture : namespace + ":" + texture;
+        String textureId = normalizeTextureId(texture, namespace);
         ConfigSection overrides = item.getSection("overrides", false);
         ConfigSection javaOverrides = overrides == null ? null : overrides.getSection("java", false);
         ConfigSection bedrockOverrides = overrides == null ? null : overrides.getSection("bedrock", false);
@@ -484,6 +784,27 @@ public class ItemServiceImpl extends BaseService implements ItemService {
         int value = 50_000 + Math.floorMod(key.hashCode(), 900_000);
         while (!configuredModelData.add(value)) value++;
         return value;
+    }
+
+    /**
+     * Accept the editor's displayed PNG path as well as the resource-pack
+     * form used by existing definitions. Minecraft texture references do not
+     * include the textures directory or the .png suffix.
+     */
+    private static String normalizeTextureId(String value, String namespace) {
+        String texture = value.trim().replace('\\', '/');
+        String textureNamespace = namespace;
+        int separator = texture.indexOf(':');
+        if (separator >= 0) {
+            textureNamespace = texture.substring(0, separator).trim();
+            texture = texture.substring(separator + 1);
+        }
+        if (texture.startsWith("textures/")) texture = texture.substring("textures/".length());
+        if (texture.toLowerCase(Locale.ROOT).endsWith(".png")) {
+            texture = texture.substring(0, texture.length() - 4);
+        }
+        if (texture.isBlank()) throw new IllegalArgumentException("texture path must not be blank");
+        return textureNamespace + ":" + texture;
     }
 
     /**

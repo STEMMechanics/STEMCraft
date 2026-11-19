@@ -1,0 +1,104 @@
+custom-items:
+  forest-shard:
+    material: AMETHYST_SHARD
+    name: "<green>Forest Shard"
+    lore:
+      - "<gray>A small reagent gathered from living wood."
+    placement: DENY
+
+  frost-blade:
+    material: DIAMOND_SWORD
+    name: "<aqua>Frost Blade"
+    lore:
+      - "<gray>Chills creatures struck by the blade."
+    stats:
+      attack-damage: 3.0
+      attack-speed: 1.6
+    enchantments:
+      durability: 2
+    abilities:
+      on-hit:
+        - chance: 0.35
+          cooldown-seconds: 1.5
+          target: struck
+          actions:
+            - type: EFFECT
+              effect: SLOWNESS
+              duration-seconds: 2
+              level: 1
+            - type: PARTICLES
+              particle: SNOWFLAKE
+              count: 12
+        - chance: 0.05
+          cooldown-seconds: 10
+          target: self
+          actions:
+            - type: TITLE
+              title: "<aqua>Frozen!"
+              subtitle: "<gray>The blade bites with winter."
+
+  venom-arrow:
+    material: ARROW
+    name: "<dark_green>Venom Arrow"
+    lore:
+      - "<gray>Applies poison when it strikes a creature."
+    placement: DENY
+    abilities:
+      on-projectile-hit:
+        - chance: 1.0
+          cooldown-seconds: 0
+          target: struck
+          actions:
+            - type: EFFECT
+              effect: POISON
+              duration-seconds: 4
+              level: 1
+
+  guardian-chestplate:
+    material: DIAMOND_CHESTPLATE
+    name: "<blue>Guardian's Chestplate"
+    lore:
+      - "<gray>Grants resistance while worn."
+    stats:
+      armor: 3.0
+      toughness: 1.0
+    abilities:
+      while-equipped:
+        - slot: CHEST
+          cooldown-seconds: 0
+          actions:
+            - type: EFFECT
+              effect: RESISTANCE
+              duration-seconds: 3
+              level: 1
+
+  meadow-boots:
+    material: LEATHER_BOOTS
+    name: "<green>Meadow Boots"
+    color: "75B84A"
+    lore:
+      - "<gray>Walk lightly and leave a little colour behind."
+    stats:
+      armor: 1.0
+    abilities:
+      while-equipped:
+        - slot: FEET
+          actions:
+            - type: EFFECT
+              effect: SPEED
+              duration-seconds: 3
+              level: 1
+      on-walk:
+        - slot: FEET
+          chance: 0.20
+          spacing: 2
+          cooldown-seconds: 3
+          target: previous-walking-position
+          actions:
+            - type: PLANT_FLOWER
+              flower: OXEYE_DAISY
+
+  explorers-tonic:
+    material: POTION
+    name: "<gold>Explorer's Tonic"
+    potion: explorers-tonic

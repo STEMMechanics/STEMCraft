@@ -81,6 +81,7 @@ public class BoatRaceMiniGame extends BaseMiniGame {
         MiniGameHudConfigSupport.apply(minigame, configFile, defaultHudDefinitions());
         configureRewards(minigame, configFile);
         loadArenas();
+        watchConfigWhenSafe(configFile, minigame, this::reloadFromConfig);
         registerRecordHolograms();
         new BoatRaceCommand(api, this).onEnable();
     }
