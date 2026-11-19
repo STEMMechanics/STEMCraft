@@ -12,20 +12,17 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.regex.Pattern;
 
-/** Installs only STEMCraft's asset and script tag, preserving the current map page. */
-final class Pl3xMapRegionWebFiles {
+/** Installs the viewport renderer or removes its files, preserving other map page changes. */
+public final class Pl3xMapRegionWebFiles {
     private static final String SCRIPT = "stemcraft-regions.js";
     private static final Pattern OWN_TAG = Pattern.compile(
         "(?i)[ \\t]*<script\\b(?=[^>]*\\s+id\\s*=\\s*(?:\"stemcraft-regions\"|'stemcraft-regions'))[^>]*>\\s*</script>[ \\t]*(?:\\r?\\n)?");
     private static final Pattern BODY_END = Pattern.compile(
         "(?is)<!--.*?-->|<script\\b[^>]*>.*?</script\\s*>|(?<body></body\\s*>)");
-    private final STEMCraft plugin;
 
-    Pl3xMapRegionWebFiles(STEMCraft plugin) {
-        this.plugin = plugin;
-    }
+    private Pl3xMapRegionWebFiles() { }
 
-    void install(Path directory) throws IOException {
+    public static void install(STEMCraft plugin, Path directory) throws IOException {
         Path index = directory.resolve("index.html");
         if (!Files.isRegularFile(index) || !Files.isRegularFile(directory.resolve("pl3xmap.js")))
             throw new IOException("Pl3xMap's generated index.html/pl3xmap.js are missing from " + directory);
@@ -47,7 +44,6 @@ final class Pl3xMapRegionWebFiles {
         String tag = "  <script id=\"stemcraft-regions\" src=\"" + SCRIPT + "?v=" + version(script)
             + "\"></script>" + newline;
         String updated = page.substring(0, insertion) + tag + page.substring(insertion);
-
         if (!original.equals(updated)) {
             Path backup = directory.resolve(".stemcraft-regions-backup/index.html");
             Files.createDirectories(backup.getParent());
@@ -57,13 +53,14 @@ final class Pl3xMapRegionWebFiles {
         NamedMapFiles.writeIfChanged(index, updated.getBytes(StandardCharsets.UTF_8));
     }
 
-    void uninstall(Path directory) throws IOException {
+    public static void uninstall(Path directory) throws IOException {
         Path index = directory.resolve("index.html");
-        if (!Files.isRegularFile(index)) return;
-        String original = Files.readString(index, StandardCharsets.UTF_8);
-        String updated = OWN_TAG.matcher(original).replaceAll("");
-        if (!original.equals(updated))
-            NamedMapFiles.writeIfChanged(index, updated.getBytes(StandardCharsets.UTF_8));
+        if (Files.isRegularFile(index)) {
+            String original = Files.readString(index, StandardCharsets.UTF_8);
+            String updated = OWN_TAG.matcher(original).replaceAll("");
+            if (!original.equals(updated)) Files.writeString(index, updated, StandardCharsets.UTF_8);
+        }
+        Files.deleteIfExists(directory.resolve(SCRIPT));
     }
 
     private static String version(byte[] script) {
@@ -73,5 +70,4 @@ final class Pl3xMapRegionWebFiles {
             throw new IllegalStateException("SHA-256 is unavailable", exception);
         }
     }
-
 }

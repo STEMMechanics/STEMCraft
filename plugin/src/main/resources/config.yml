@@ -97,10 +97,9 @@ named-regions:
     biomes:
       # Set false to remove only this overlay while retaining named regions and structure icons.
       enabled: true
-      # False keeps the original full-region polygons. True loads only visible, simplified region tiles.
+      # Experimental: full false-mode polygons fetched progressively when their bounds enter view.
+      # This does not change or migrate the NamedRegions database tables. Set false for native markers.
       viewport-tiles: false
-      # Manage the browser script automatically for viewport tiles; remove its tag when returning to polygons.
-      auto-install: true
       # Each region consistently selects one translucent ARGB colour from this palette.
       # The same RGB value is used at full opacity for its border.
       palette:

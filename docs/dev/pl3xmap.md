@@ -4,35 +4,36 @@ Pl3xMap is a soft dependency. The 26.3 branch is currently built and tested agai
 
 ## Named regions and structures
 
-Discovered structures use bundled icons from immutable snapshots. Biome geometry
-defaults to the original full-region polygons through Pl3xMap's marker files and
-live updates. `named-regions.map.biomes.viewport-tiles: false` preserves that
-behavior, including when the setting is absent from an existing configuration.
-Set it to `true` to opt into
-[static region tiles](../../tools/pl3xmap-regions/README.md): the client loads only
-visible vector tiles, with detail reduced at distant zooms. In this mode the
-`stemcraft_named_regions` marker file is `[]`, its live marker updates are
-disabled, and SSE carries only small revision notifications for biome changes,
-throttled by `map.update-minutes`. The layer keys remain
-`stemcraft_named_regions` and `stemcraft_named_structures`.
+Discovered structures use bundled icons from immutable snapshots. Biome regions
+use full-resolution polygons from NamedRegions' stored 4x4-block samples; region
+names appear in polygon tooltips, or continuously when
+`named-regions.map.permanent-labels` is enabled. The map snapshot is cached and
+refreshed according to `named-regions.map.update-minutes`.
 
-In tiled mode STEMCraft automatically copies the bundled browser script into
-Pl3xMap's configured web directory and updates its existing index on attachment and map
-enable/reload. It preserves theme changes and backs up the original index;
-Pl3xMap's read-only setting is not required for this extension. A background
-publisher generates bounded JSON tiles and small metadata files under each
-world's existing `tiles/<world>/stemcraft-regions/` directory. Pl3xMap's existing
-web server serves them, with no separate API, port or proxy route. This also
-works when another web server serves the same generated files. Independently
-hosted copies can opt out with `named-regions.map.biomes.auto-install: false`
-and include the script/index/region tiles in their existing map-file deployment.
-Returning `viewport-tiles` to `false` removes STEMCraft's script tag from the
-managed index and restores live polygons. Restart and refresh the map page after
-changing modes; independently managed websites must remove their script tag too.
-`named-regions.map.biomes.enabled: false` removes only the biome overlay and
-stops its tile publication; it retains structure icons and in-game names. Set
-`named-regions.map.enabled: false` to remove both named overlays. Hiding a legacy
-marker layer in the browser does not prevent Pl3xMap from fetching its data.
+`named-regions.map.biomes.viewport-tiles: true` enables the experimental browser
+path. It serializes the same complete `NamedMapArea` polygons used by the `false`
+mode into one file per region. The browser selects regions whose bounds intersect
+the current view, fetches at most six files at a time, and adds them
+progressively. It does not rebuild or clip region boundaries into separate tile
+shapes, and it does not change/migrate any NamedRegions database table. Files are
+written under each Pl3xMap world's `tiles/<world>/stemcraft-regions/` directory
+in the background. The browser shows load progress at the lower right and adds a
+right-side region search control; selecting a result pans to and outlines the
+region until another result is selected or the overlay closes. Polygon files are
+cached in browser IndexedDB by region content hash, so unchanged regions can be
+reused across map visits and server restarts. Region geometry and names are a static snapshot for this test;
+restart to include changes made after it was built. Structure markers continue
+to update normally.
+
+The default `false` mode uses full Pl3xMap marker polygons. Its boundary builder
+removes redundant points along straight edges without changing the polygon
+shape. When switching modes, STEMCraft installs or removes its managed browser
+script and clears the unused marker payload. For a separately hosted copy, run
+[`tools/pl3xmap-regions/uninstall.sh`](../../tools/pl3xmap-regions/uninstall.sh)
+to remove an old extension script.
+`named-regions.map.biomes.enabled: false` removes only the biome overlay; it
+retains structure icons and in-game names. Set `named-regions.map.enabled: false`
+to remove both named overlays.
 
 STEMCraft loads at STARTUP and Pl3xMap at POSTWORLD. Register when Pl3xMap enables as well as when it is already available; watch map-world loads and map reloads. The lifecycle fix in PR #158 also unregisters event handlers on shutdown. If layers are absent entirely, check startup registration and `named-regions.map.enabled`; if present but empty, check configured world names, discovery data and refresh timing. Existing player web sessions may need a refresh.
 
@@ -86,14 +87,9 @@ The grave overlay previously requested marker rebuilding/serialization/file
 writes at a one-second interval. That avoidable background work is now throttled
 and cached, but marker work is separate from terrain-render scheduling. Named
 overlays default to five-minute updates, with a 60-second minimum. Structure
-snapshots rebuild only when dirty and the refresh interval has elapsed. In the
-default mode these snapshots include full biome boundaries. With viewport tiles
-enabled, snapshots contain only structures; biome tiles are generated from cached
-discovery data off the server thread, and unchanged files are left untouched.
-The publisher enumerates occupied chunks to
-avoid generating gaps between distant discoveries. Metadata is published last;
-SSE then announces only its revision. See the extension instructions for
-generation detail, bounds and a browser/network verification checklist.
+snapshots rebuild only when dirty and the refresh interval has elapsed; those
+snapshots include full biome boundaries in `false` mode. Viewport chunks are a
+separate startup-only map-file snapshot.
 
 To attribute a live CPU spike, capture all threads during the same workload:
 

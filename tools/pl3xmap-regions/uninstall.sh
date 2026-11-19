@@ -13,5 +13,5 @@ page = re.sub(r'[ \t]*<script\b(?=[^>]*\s+id\s*=\s*(?:"stemcraft-regions"|\'stem
 index.write_text(page, encoding='utf-8')
 (web / 'stemcraft-regions.js').unlink(missing_ok=True)
 print('Named-region browser extension removed; other theme changes are preserved.')
-print('Set named-regions.map.biomes.auto-install: false to prevent installation at the next map startup/reload.')
+print('STEMCraft removes it automatically from the managed Pl3xMap web directory on startup/reload.')
 PY
