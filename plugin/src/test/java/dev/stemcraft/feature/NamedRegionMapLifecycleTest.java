@@ -30,12 +30,21 @@ import static org.mockito.Mockito.*;
 class NamedRegionMapLifecycleTest {
     @SuppressWarnings("unchecked")
     @ParameterizedTest
-    @CsvSource({"missing, true, false", "false, true, false", "true, true, true", "true, false, false"})
-    void usesOriginalGeometryUnlessTilesAreExplicitlyEnabled(String setting, boolean biomes, boolean tiled) throws Exception {
+    @CsvSource({"missing, true, false", "false, true, false", "true, true, true",
+        "async, true, false", "true, false, false"})
+    void enablesRegionSnapshotsOnlyWhenRequested(String setting, boolean biomes, boolean tiled) throws Exception {
         var yaml = new YamlConfiguration();
         yaml.set("named-regions.map.biomes.enabled", biomes);
-        if (!setting.equals("missing")) yaml.set("named-regions.map.biomes.viewport-tiles", Boolean.parseBoolean(setting));
-        var feature = spy(new NamedRegions(mock(STEMCraftAPI.class, RETURNS_DEEP_STUBS)));
+        if (!setting.equals("missing")) {
+            Object configuredValue = switch (setting) {
+                case "true" -> true;
+                case "false" -> false;
+                default -> setting;
+            };
+            yaml.set("named-regions.map.biomes.viewport-tiles", configuredValue);
+        }
+        var api=mock(STEMCraftAPI.class,RETURNS_DEEP_STUBS);
+        var feature = spy(new NamedRegions(api));
         doReturn(new ConfigSectionImpl(null, yaml.getConfigurationSection("named-regions")))
             .when(feature).getConfigSection();
         var storage = mock(NamedRegionStorage.class);
@@ -54,9 +63,8 @@ class NamedRegionMapLifecycleTest {
             stemcraft.when(STEMCraft::getPlugin).thenReturn(mock(STEMCraft.class));
             feature.watchMapPlugin();
             assertEquals(1, layers.constructed().size());
-            Object renderer = arguments.get().get(2);
-            if (tiled) assertInstanceOf(NamedMapTilePublisher.class, renderer);
-            else assertInstanceOf(List.class, renderer);
+            if (tiled) assertInstanceOf(NamedMapTilePublisher.class, arguments.get().get(2));
+            else assertInstanceOf(List.class, arguments.get().get(2));
             ((Supplier<Collection<NamedMapArea>>) arguments.get().get(1)).get();
             verify(storage, times(biomes && !tiled ? 1 : 0)).forEachCell(any());
         }

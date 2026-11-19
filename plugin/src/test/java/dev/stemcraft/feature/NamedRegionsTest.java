@@ -14,11 +14,11 @@ import static org.junit.jupiter.api.Assertions.*;
 class NamedRegionsTest {
     @TempDir Path tempDir;
 
-    @Test void packagedConfigKeepsOriginalMapPolygonsByDefault() {
+    @Test void packagedConfigKeepsFullPolygonsAsTheDefault() {
         var config = YamlConfiguration.loadConfiguration(new InputStreamReader(
             getClass().getResourceAsStream("/config.yml"), StandardCharsets.UTF_8));
         assertTrue(config.getBoolean("named-regions.map.biomes.enabled"));
-        assertEquals(false, config.get("named-regions.map.biomes.viewport-tiles"));
+        assertFalse(config.getBoolean("named-regions.map.biomes.viewport-tiles"));
     }
 
     @Test void offersNaturalTwoWordChoicesForExistingLongNames() {

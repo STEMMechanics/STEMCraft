@@ -6,9 +6,9 @@ import java.nio.file.attribute.PosixFilePermission;
 import java.util.Arrays;
 import java.util.Set;
 
-/** Atomic public map-file updates, shared by the browser installer and tile publisher. */
+/** Atomic writes for files served by Pl3xMap's existing web server. */
 public final class NamedMapFiles {
-    private NamedMapFiles() {}
+    private NamedMapFiles() { }
 
     public static void writeIfChanged(Path target, byte[] bytes) throws IOException {
         if (Files.isSymbolicLink(target)) target = target.toRealPath();

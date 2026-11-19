@@ -335,41 +335,49 @@ final class NamedRegionStorage {
     void forEachCell(BiConsumer<Cell,String> consumer) {
         for (var worldEntry : chunks.entrySet()) {
             String world = worldNames.get(worldEntry.getKey());
-            if (world == null) continue;
-
-            for (var chunkEntry : worldEntry.getValue().entrySet()) {
-                int chunkX = unpackX(chunkEntry.getKey());
-                int chunkZ = unpackZ(chunkEntry.getKey());
-                int[] cells = chunkEntry.getValue().cells;
-
-                for (int i = 0; i < CELLS_PER_CHUNK; i++) {
-                    int region = cells[i];
-                    if (region == 0) continue;
-
-                    String id = regionIds.get(resolveNumber(region));
-                    if (id == null) continue;
-
-                    int localX = i & 3;
-                    int localZ = i >> 2;
-                    consumer.accept(
-                            new Cell(world, chunkX * CELLS_PER_AXIS + localX,
-                                    chunkZ * CELLS_PER_AXIS + localZ),
-                            id
-                    );
-                }
-            }
+            if (world != null) forEachWorldCell(world, worldEntry.getValue(), consumer);
         }
+    }
+
+    void forEachCell(String world, BiConsumer<Cell,String> consumer) {
+        Integer number = worldNumbers.get(world);
+        String canonical = number == null ? null : worldNames.get(number);
+        Map<Long,RegionChunk> worldChunks = number == null ? null : chunks.get(number);
+        if (canonical != null && worldChunks != null) forEachWorldCell(canonical, worldChunks, consumer);
     }
 
     @FunctionalInterface interface ChunkConsumer { void accept(int chunkX, int chunkZ); }
 
-    /** Enumerate occupied chunks in one world without allocating or visiting their sixteen cells. */
+    /** Enumerates occupied chunks in one world without visiting their stored cells. */
     void forEachChunk(String world, ChunkConsumer consumer) {
         Integer number = worldNumbers.get(world);
-        if (number == null) return;
-        Map<Long, RegionChunk> worldChunks = chunks.get(number);
+        Map<Long,RegionChunk> worldChunks = number == null ? null : chunks.get(number);
         if (worldChunks == null) return;
         for (long packed : worldChunks.keySet()) consumer.accept(unpackX(packed), unpackZ(packed));
+    }
+
+    private void forEachWorldCell(String world, Map<Long,RegionChunk> worldChunks,
+                                  BiConsumer<Cell,String> consumer) {
+        for (var chunkEntry : worldChunks.entrySet()) {
+            int chunkX = unpackX(chunkEntry.getKey());
+            int chunkZ = unpackZ(chunkEntry.getKey());
+            int[] cells = chunkEntry.getValue().cells;
+
+            for (int i = 0; i < CELLS_PER_CHUNK; i++) {
+                int region = cells[i];
+                if (region == 0) continue;
+
+                String id = regionIds.get(resolveNumber(region));
+                if (id == null) continue;
+
+                int localX = i & 3;
+                int localZ = i >> 2;
+                consumer.accept(
+                    new Cell(world, chunkX * CELLS_PER_AXIS + localX,
+                        chunkZ * CELLS_PER_AXIS + localZ), id
+                );
+            }
+        }
     }
 
     private synchronized int ensureWorldNumber(String world) {
