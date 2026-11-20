@@ -4,7 +4,11 @@ import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.config.ConfigSection;
+import dev.stemcraft.api.service.mailbox.MailSendRequest;
+import dev.stemcraft.api.util.chatmenu.ChatMenuStyle;
 import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
+import dev.stemcraft.api.util.TimeUtil;
+import dev.stemcraft.service.EntitlementService;
 import dev.stemcraft.service.PlayerLoginMessageServiceImpl;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
@@ -22,12 +26,14 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.player.*;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 
 import java.lang.reflect.Method;
 import java.sql.ResultSet;
 import java.time.*;
 import java.time.format.DateTimeParseException;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.regex.Pattern;
 
@@ -35,10 +41,13 @@ import java.util.regex.Pattern;
 public final class VotingFeature extends BaseFeature {
     private static final String ADMIN_PERMISSION = "stemcraft.command.vote.admin";
     private static final String PLAYER_ACTIVITY_TABLE = "voting_player_activity";
+    private static final String LIFECYCLE_TASK = "feature:voting-lifecycle";
     private final Map<String, VoteGroup> groups = new LinkedHashMap<>();
     private final Map<String, LinkedHashMap<String, VoteOption>> options = new HashMap<>();
     private final Map<String, LinkedHashMap<String, VoteTower>> towers = new HashMap<>();
     private final Map<String, Map<UUID, Set<String>>> votes = new HashMap<>();
+    private final Map<String, Map<Integer, VoteReminder>> reminders = new HashMap<>();
+    private final Map<String, List<VoteReward>> rewards = new HashMap<>();
     private final Map<UUID, PendingPlacement> placements = new HashMap<>();
     private final Map<UUID, String> removals = new HashMap<>();
     private final Map<UUID, String> lastChunks = new HashMap<>();
@@ -59,18 +68,27 @@ public final class VotingFeature extends BaseFeature {
         api.events().register(PlayerMoveEvent.class, this::onMove, EventPriority.MONITOR, true);
         api.tasks().repeating("feature:voting-displays", 100L, this::refreshAllDisplays);
         api.tasks().repeating("feature:voting-plot-sync", 200L, this::refreshPlotSources);
+        api.tasks().repeating(LIFECYCLE_TASK, 100L, this::processVotingLifecycle);
         refreshPlotSources();
         refreshAllDisplays();
+        processVotingLifecycle();
     }
 
     @Override public void onDisable() {
         long now = Instant.now().getEpochSecond();
         for (Player player : Bukkit.getOnlinePlayers()) recordPlayerActivity(player.getUniqueId(), now);
         api.tasks().cancel("feature:voting-displays"); api.tasks().cancel("feature:voting-plot-sync");
+        api.tasks().cancel(LIFECYCLE_TASK);
         placements.clear(); removals.clear(); lastChunks.clear();
     }
 
-    @Override public void onReload() { super.onReload(); loadTowerSchema(); refreshAllDisplays(); }
+    @Override public void onReload() {
+        super.onReload();
+        loadTowerSchema();
+        loadAll();
+        refreshAllDisplays();
+        processVotingLifecycle();
+    }
 
     private void ensureStorage() {
         api.database().execute("""
@@ -104,10 +122,50 @@ public final class VotingFeature extends BaseFeature {
               player_uuid TEXT PRIMARY KEY, last_seen_at INTEGER NOT NULL
             );
             """);
+        api.database().execute("""
+            CREATE TABLE IF NOT EXISTS voting_reminders (
+              group_id TEXT NOT NULL, days_remaining INTEGER NOT NULL, message TEXT NOT NULL,
+              PRIMARY KEY(group_id, days_remaining)
+            );
+            """);
+        api.database().execute("""
+            CREATE TABLE IF NOT EXISTS voting_reminder_events (
+              group_id TEXT NOT NULL, days_remaining INTEGER NOT NULL, sent_at INTEGER NOT NULL,
+              PRIMARY KEY(group_id, days_remaining)
+            );
+            """);
+        api.database().execute("""
+            CREATE TABLE IF NOT EXISTS voting_rewards (
+              group_id TEXT NOT NULL, reward_id INTEGER NOT NULL, action TEXT NOT NULL,
+              value TEXT NOT NULL, duration_seconds INTEGER NOT NULL DEFAULT -1,
+              mail_title TEXT, mail_sender TEXT, mail_items TEXT NOT NULL DEFAULT '',
+              PRIMARY KEY(group_id, reward_id)
+            );
+            """);
+        migrateRewardMailColumns();
+        api.database().execute("""
+            CREATE TABLE IF NOT EXISTS voting_group_closures (
+              group_id TEXT PRIMARY KEY, closed_at INTEGER NOT NULL, processed_at INTEGER
+            );
+            """);
+        api.database().execute("""
+            CREATE TABLE IF NOT EXISTS voting_winners (
+              group_id TEXT NOT NULL, option_id TEXT NOT NULL, option_name TEXT NOT NULL,
+              player_uuid TEXT, vote_count INTEGER NOT NULL,
+              PRIMARY KEY(group_id, option_id)
+            );
+            """);
+        api.database().execute("""
+            CREATE TABLE IF NOT EXISTS voting_reward_deliveries (
+              group_id TEXT NOT NULL, reward_id INTEGER NOT NULL, player_uuid TEXT NOT NULL,
+              delivered_at INTEGER NOT NULL,
+              PRIMARY KEY(group_id, reward_id, player_uuid)
+            );
+            """);
     }
 
     private void loadAll() {
-        groups.clear(); options.clear(); towers.clear(); votes.clear();
+        groups.clear(); options.clear(); towers.clear(); votes.clear(); reminders.clear(); rewards.clear();
         api.database().queryEach("SELECT * FROM voting_groups", null, rs -> {
             VoteGroup group = new VoteGroup(rs.getString("id"), rs.getString("name"), rs.getInt("votes_per_player"),
                 rs.getLong("starts_at"), rs.getLong("ends_at"), rs.getInt("paused") != 0,
@@ -124,6 +182,31 @@ public final class VotingFeature extends BaseFeature {
         api.database().queryEach("SELECT group_id,voter_uuid,option_id FROM voting_votes", null, rs ->
             votes.computeIfAbsent(rs.getString("group_id"), key -> new HashMap<>())
                 .computeIfAbsent(UUID.fromString(rs.getString("voter_uuid")), key -> new HashSet<>()).add(rs.getString("option_id")));
+        api.database().queryEach("SELECT group_id,days_remaining,message FROM voting_reminders ORDER BY days_remaining", null, rs ->
+            reminders.computeIfAbsent(rs.getString("group_id"), key -> new TreeMap<>()).put(
+                rs.getInt("days_remaining"), new VoteReminder(rs.getInt("days_remaining"), rs.getString("message"))));
+        api.database().queryEach("SELECT group_id,reward_id,action,value,duration_seconds,mail_title,mail_sender,mail_items FROM voting_rewards ORDER BY reward_id", null, rs ->
+            rewards.computeIfAbsent(rs.getString("group_id"), key -> new ArrayList<>()).add(new VoteReward(
+                rs.getInt("reward_id"), rs.getString("action"), rs.getString("value"), rs.getLong("duration_seconds"),
+                rs.getString("mail_title"), rs.getString("mail_sender"), Objects.requireNonNullElse(rs.getString("mail_items"), ""))));
+    }
+
+    private void migrateRewardMailColumns() {
+        if (!tableHasColumn("voting_rewards", "mail_title")) {
+            api.database().execute("ALTER TABLE voting_rewards ADD COLUMN mail_title TEXT;");
+        }
+        if (!tableHasColumn("voting_rewards", "mail_sender")) {
+            api.database().execute("ALTER TABLE voting_rewards ADD COLUMN mail_sender TEXT;");
+        }
+        if (!tableHasColumn("voting_rewards", "mail_items")) {
+            api.database().execute("ALTER TABLE voting_rewards ADD COLUMN mail_items TEXT NOT NULL DEFAULT '';");
+        }
+    }
+
+    private boolean tableHasColumn(String tableName, String columnName) {
+        List<String> columns = new ArrayList<>();
+        api.database().queryEach("PRAGMA table_info(" + tableName + ")", null, rs -> columns.add(rs.getString("name")));
+        return columns.stream().anyMatch(columnName::equalsIgnoreCase);
     }
 
     private void registerCommand() {
@@ -134,17 +217,43 @@ public final class VotingFeature extends BaseFeature {
             if (groupOptions == null) return List.of();
             List<String> result = new ArrayList<>(groupOptions.keySet()); result.add("next"); return result;
         });
-        api.commands().create("vote").description("Physical voting groups.")
-            .usage("/vote [status] | /vote admin ...")
-            .tabCompletion("status").tabCompletion("admin", "create")
+        api.tabComplete().register("vote-date", (player, args, currentArgument) -> dateCompletions(currentArgument));
+        api.tabComplete().register("vote-reward-duration", (player, args, currentArgument) -> List.of(
+            "permanent", "7d", "14d", "30d", "60d", "90d", "12h", "24h"));
+        api.tabComplete().register("vote-mail-item", (player, args, currentArgument) -> {
+            return api.items() == null ? List.of() : api.items().itemCompletionSuggestions(currentArgument, true);
+        });
+        api.tabComplete().register("vote-mail-option", (player, args, currentArgument) -> {
+            String optionPrefix = optionPrefix(currentArgument, "title", "message", "from", "items");
+            if (optionPrefix == null) return List.of("title=", "message=", "from=", "items=");
+            String itemValue = currentArgument.substring(optionPrefix.length());
+            if (api.items() == null) return List.of();
+            return api.items().itemCompletionSuggestions(itemValue, true).stream()
+                .map(candidate -> optionPrefix + candidate)
+                .toList();
+        });
+        api.commands().create("vote").description("View and administer physical voting groups.")
+            .usage("/vote <help|status|tally|admin> ...")
+            .tabCompletion("help").tabCompletion("status").tabCompletion("tally", "{vote-group}").tabCompletion("admin", "create")
+            .tabCompletion("status", "{vote-group}")
             .tabCompletion("admin", "list")
+            .tabCompletion("admin", "help")
+            .tabCompletion("admin", "tally", "{vote-group}")
             .tabCompletion("admin", "view", "{vote-group}")
             .tabCompletion("admin", "title", "{vote-group}", "", "")
             .tabCompletion("admin", "option", "add", "{vote-group}", "", "")
             .tabCompletion("admin", "option", "remove", "{vote-group}", "{vote-option:$3}")
             .tabCompletion("admin", "option", "list", "{vote-group}")
             .tabCompletion("admin", "source", "plots", "{vote-group}", "{world}")
-            .tabCompletion("admin", "schedule", "{vote-group}", "now", "")
+            .tabCompletion("admin", "schedule", "{vote-group}", "{vote-date}", "{vote-date}")
+            .tabCompletion("admin", "reminder", "{vote-group}", "set", "", "")
+            .tabCompletion("admin", "reminder", "{vote-group}", "clear", "")
+            .tabCompletion("admin", "reminder", "{vote-group}", "list")
+            .tabCompletion("admin", "reward", "{vote-group}", "add", "grant-badge", "{badge-id}", "{vote-reward-duration}")
+            .tabCompletion("admin", "reward", "{vote-group}", "add", "revoke-badge", "{badge-id}")
+            .tabCompletion("admin", "reward", "{vote-group}", "add", "mail", "{vote-mail-option}")
+            .tabCompletion("admin", "reward", "{vote-group}", "list")
+            .tabCompletion("admin", "reward", "{vote-group}", "clear")
             .tabCompletion("admin", "tower", "place", "{vote-group}", "{vote-option:$3}")
             .tabCompletion("admin", "tower", "remove", "{vote-group}", "{vote-option:$3}")
             .tabCompletion("admin", "tower", "remove", "{vote-group}", "all")
@@ -157,15 +266,29 @@ public final class VotingFeature extends BaseFeature {
     }
 
     private void execute(CommandContext ctx) {
-        if (ctx.args().isEmpty() || ctx.getArgLower(0).equals("status")) { showStatus(ctx); return; }
+        if (ctx.args().isEmpty()) {
+            if (ctx.isConsole()) showCommandHelp(ctx);
+            else showStatus(ctx);
+            return;
+        }
+        if (ctx.getArgLower(0).equals("help")) { showCommandHelp(ctx); return; }
+        if (ctx.getArgLower(0).equals("status")) { showStatus(ctx); return; }
+        if (ctx.getArgLower(0).equals("tally")) {
+            if (!ctx.hasPermission(ADMIN_PERMISSION)) { ctx.returnError("You cannot review voting tallies."); return; }
+            showTally(ctx);
+            return;
+        }
         if (!ctx.getArgLower(0).equals("admin")) { ctx.returnError("Use /vote status or /vote admin."); return; }
         if (!ctx.hasPermission(ADMIN_PERMISSION)) { ctx.returnError("You cannot administer voting groups."); return; }
         if (ctx.args().size() < 2 || ctx.getArg(1).matches("\\d+")) { showAdminMenu(ctx); return; }
         switch (ctx.getArgLower(1)) {
+            case "help" -> showCommandHelp(ctx);
             case "create" -> createGroup(ctx);
             case "option" -> optionCommand(ctx);
             case "source" -> sourceCommand(ctx);
             case "schedule" -> schedule(ctx);
+            case "reminder" -> reminderCommand(ctx);
+            case "reward" -> rewardCommand(ctx);
             case "tower" -> towerCommand(ctx);
             case "pause" -> setPaused(ctx, true);
             case "resume" -> setPaused(ctx, false);
@@ -174,12 +297,138 @@ public final class VotingFeature extends BaseFeature {
             case "remove" -> removeGroup(ctx);
             case "list" -> listGroups(ctx);
             case "view" -> showGroupMenu(ctx);
+            case "tally" -> showTally(ctx, 2);
             case "title" -> setTitle(ctx);
             default -> adminHelp(ctx);
         }
     }
 
-    private void adminHelp(CommandContext ctx) { ctx.returnInfo("Use /vote admin <create|title|remove|option|source|schedule|tower|pause|resume|reset|reset-player|list>."); }
+    private void adminHelp(CommandContext ctx) { ctx.returnInfo("Use /vote admin <create|title|remove|option|source|schedule|reminder|reward|tower|pause|resume|reset|reset-player|list|tally>."); }
+
+    private void showCommandHelp(CommandContext ctx) {
+        ctx.info("Voting commands:");
+        ctx.info("  /vote status [page] — Show voting groups and your vote allowance.");
+        ctx.info("  /vote tally [group] — Review option vote totals (admin).");
+        ctx.info("  /vote admin create <id> [votes-per-player] [name]");
+        ctx.info("  /vote admin schedule <group> <start> <finish> — Dates use YYYY-MM-DD; timestamps are also accepted.");
+        ctx.info("  /vote admin option <add|remove|list> ...");
+        ctx.info("  /vote admin source plots <group> <world>");
+        ctx.info("  /vote admin reminder <group> <set|clear|list> ...");
+        ctx.info("  /vote admin reward <group> <add|remove|clear|list> ...");
+        ctx.info("    mail <message> or mail title=<title> message=<message> [from=<sender>] [items=<item>@<amount>,...] .");
+        ctx.info("  /vote admin view <group> | list | title <group> <title>");
+        ctx.info("  /vote admin pause|resume|reset|reset-player|remove <group>");
+        ctx.info("  /vote admin tower place/remove ... — Requires an in-game player.");
+        ctx.info("Use /vote help for this guide; players can run /vote with no arguments to view status.");
+    }
+
+    private void showTally(CommandContext ctx) {
+        showTally(ctx, 1, "vote tally");
+    }
+
+    private void showTally(CommandContext ctx, int groupIndex) {
+        showTally(ctx, groupIndex, "vote admin tally");
+    }
+
+    private void showTally(CommandContext ctx, int groupIndex, String paginationCommand) {
+        String requestedId = ctx.args().size() > groupIndex ? ctx.getArgLower(groupIndex) : null;
+        VoteGroup requested = requestedId == null ? null : groups.get(requestedId);
+        if (requestedId != null && requested == null && !requestedId.matches("\\d+")) {
+            ctx.returnError("Unknown voting group.");
+            return;
+        }
+
+        List<VoteGroup> selected;
+        if (requested != null) {
+            selected = List.of(requested);
+        } else {
+            selected = new ArrayList<>(groups.values());
+        }
+        if (selected.isEmpty()) { ctx.returnInfo("No voting groups exist."); return; }
+
+        if (ctx.isConsole()) {
+            renderTallyText(ctx, selected);
+            return;
+        }
+
+        if (requested != null) {
+            renderTallyGroup(ctx, requested, ChatMenuUtil.getPageFromArgs(ctx.args(), groupIndex + 1, 1), paginationCommand);
+            return;
+        }
+
+        int page = boundedTallyPage(ChatMenuUtil.getPageFromArgs(ctx.args(), groupIndex, 1), selected.size());
+        ChatMenuUtil.render(ctx.getSender(), "Voting tallies", paginationCommand, page, selected.size(), (start, count, interactive) -> {
+            List<Component> lines = new ArrayList<>();
+            for (VoteGroup group : selected.subList(start, start + count)) {
+                int resultVotes = resultTotalVotes(group.id);
+                Component line = ChatMenuUtil.text(group.name, ChatMenuStyle.VALUE)
+                    .append(ChatMenuUtil.text(" (" + group.id + ") — " + resultVotes + " " + voteWord(resultVotes), ChatMenuStyle.MUTED));
+                if (interactive) line = line.append(Component.space())
+                    .append(button("[View]", ChatMenuStyle.ACTION_VIEW, "/" + paginationCommand + " " + group.id,
+                        "View this voting tally"));
+                lines.add(line);
+            }
+            return lines;
+        }, "No voting groups exist.");
+    }
+
+    private void renderTallyText(CommandContext ctx, List<VoteGroup> selected) {
+        for (VoteGroup group : selected) {
+            ctx.info("Tally for " + group.name + " (" + group.id + ") — " + state(group) + ":");
+            List<VoteTallyRow> rows = tallyRows(group.id);
+            if (rows.isEmpty()) {
+                ctx.info("  No claimed vote options configured.");
+                continue;
+            }
+            for (int index = 0; index < rows.size(); index++) {
+                VoteTallyRow row = rows.get(index);
+                ctx.info("  " + (index + 1) + ". " + row.optionName() + ": "
+                    + row.votes() + " " + voteWord(row.votes()));
+            }
+            int resultVotes = resultTotalVotes(group.id);
+            ctx.info("  Total: " + resultVotes + " " + voteWord(resultVotes));
+        }
+    }
+
+    private void renderTallyGroup(CommandContext ctx, VoteGroup group, int requestedPage, String paginationCommand) {
+        List<VoteTallyRow> rows = tallyRows(group.id);
+        if (rows.isEmpty()) {
+            ctx.returnInfo("No claimed vote options configured for " + group.name + ".");
+            return;
+        }
+        int page = boundedTallyPage(requestedPage, rows.size());
+        int resultVotes = resultTotalVotes(group.id);
+        Component title = ChatMenuUtil.text("Tally: " + group.name + " (" + group.id + ") — " + state(group), ChatMenuStyle.TITLE)
+            .append(ChatMenuUtil.text(" — " + resultVotes + " " + voteWord(resultVotes), ChatMenuStyle.MUTED))
+            .append(Component.space()).append(button("[Back]", ChatMenuStyle.ACTION_NAVIGATION, "/" + paginationCommand,
+                "Select another voting group"));
+        ChatMenuUtil.render(ctx.getSender(), title,
+            paginationCommand + " " + group.id, page, rows.size(), (start, count, interactive) -> {
+                List<Component> lines = new ArrayList<>();
+                for (int index = start; index < start + count; index++) {
+                    VoteTallyRow row = rows.get(index);
+                    lines.add(ChatMenuUtil.text((index + 1) + ". " + row.optionName(), ChatMenuStyle.VALUE)
+                        .append(ChatMenuUtil.text(" — " + row.votes() + " " + voteWord(row.votes()),
+                            ChatMenuStyle.MUTED)));
+                }
+                return lines;
+            }, "No claimed vote options configured.");
+    }
+
+    private int boundedTallyPage(int page, int count) {
+        int maxPage = Math.max(1, (count + 7) / 8);
+        return Math.max(1, Math.min(page, maxPage));
+    }
+
+    private List<VoteTallyRow> tallyRows(String groupId) {
+        return options.getOrDefault(groupId, new LinkedHashMap<>()).values().stream()
+            .filter(option -> includedInResults(groupId, option))
+            .map(option -> new VoteTallyRow(option.id, option.name, optionVotes(groupId, option.id)))
+            .sorted(java.util.Comparator.comparingInt(VoteTallyRow::votes).reversed()
+                .thenComparing(VoteTallyRow::optionName, String.CASE_INSENSITIVE_ORDER)
+                .thenComparing(VoteTallyRow::optionId))
+            .toList();
+    }
 
     private void createGroup(CommandContext ctx) {
         if (ctx.args().size() < 3) { ctx.returnError("Usage: /vote admin create <id> [votes-per-player] [name]"); return; }
@@ -250,7 +499,327 @@ public final class VotingFeature extends BaseFeature {
         try { group.startsAt = parseTime(ctx.getArg(3)); group.endsAt = parseTime(ctx.getArg(4)); }
         catch (IllegalArgumentException ex) { ctx.returnError(ex.getMessage()); return; }
         if (group.endsAt <= group.startsAt) { ctx.returnError("The finish must be after the start."); return; }
+        clearLifecycleState(group.id);
         saveGroup(group); refreshGroup(group.id); ctx.returnSuccess("Voting schedule updated for " + group.name + ".");
+    }
+
+    private void reminderCommand(CommandContext ctx) {
+        if (ctx.args().size() < 4) {
+            ctx.returnError("Usage: /vote admin reminder <group> <set <days> <message>|clear <days>|list>");
+            return;
+        }
+        VoteGroup group = requireGroup(ctx, 2); if (group == null) return;
+        String action = ctx.getArgLower(3);
+        if (action.equals("list")) {
+            Map<Integer, VoteReminder> groupReminders = reminders.getOrDefault(group.id, Map.of());
+            if (groupReminders.isEmpty()) { ctx.info("No reminders configured for " + group.name + "."); return; }
+            groupReminders.values().stream().sorted(java.util.Comparator.comparingInt(VoteReminder::daysRemaining))
+                .forEach(reminder -> ctx.info(reminder.daysRemaining() + " day(s): " + reminder.message()));
+            return;
+        }
+        if (action.equals("clear")) {
+            if (ctx.args().size() < 5) { ctx.returnError("Usage: /vote admin reminder <group> clear <days>"); return; }
+            int days = parseNonNegativeInt(ctx.getArg(4), "Reminder days must be zero or greater.", ctx);
+            if (days < 0) return;
+            api.database().update("DELETE FROM voting_reminders WHERE group_id=? AND days_remaining=?", ps -> {
+                ps.setString(1, group.id); ps.setInt(2, days);
+            });
+            api.database().update("DELETE FROM voting_reminder_events WHERE group_id=? AND days_remaining=?", ps -> {
+                ps.setString(1, group.id); ps.setInt(2, days);
+            });
+            reminders.getOrDefault(group.id, new HashMap<>()).remove(days);
+            ctx.returnSuccess("Removed the " + days + "-day voting reminder for " + group.name + ".");
+            return;
+        }
+        if (!action.equals("set") || ctx.args().size() < 6) {
+            ctx.returnError("Usage: /vote admin reminder <group> set <days> <message>");
+            return;
+        }
+        int days = parseNonNegativeInt(ctx.getArg(4), "Reminder days must be zero or greater.", ctx);
+        if (days < 0) return;
+        String message = String.join(" ", ctx.args().subList(5, ctx.args().size())).trim();
+        if (message.isBlank()) { ctx.returnError("The reminder message cannot be blank."); return; }
+        VoteReminder reminder = new VoteReminder(days, message);
+        api.database().update("INSERT OR REPLACE INTO voting_reminders(group_id,days_remaining,message) VALUES(?,?,?)", ps -> {
+            ps.setString(1, group.id); ps.setInt(2, days); ps.setString(3, message);
+        });
+        reminders.computeIfAbsent(group.id, key -> new TreeMap<>()).put(days, reminder);
+        api.database().update("DELETE FROM voting_reminder_events WHERE group_id=? AND days_remaining=?", ps -> {
+            ps.setString(1, group.id); ps.setInt(2, days);
+        });
+        ctx.returnSuccess("Saved the " + days + "-day voting reminder for " + group.name + ".");
+    }
+
+    private void rewardCommand(CommandContext ctx) {
+        if (ctx.args().size() < 4) {
+            ctx.returnError("Usage: /vote admin reward <group> <add|remove|clear|list> ...");
+            return;
+        }
+        VoteGroup group = requireGroup(ctx, 2); if (group == null) return;
+        String action = ctx.getArgLower(3);
+        List<VoteReward> groupRewards = rewards.computeIfAbsent(group.id, key -> new ArrayList<>());
+        if (action.equals("list")) {
+            if (groupRewards.isEmpty()) { ctx.info("No winner rewards configured for " + group.name + "."); return; }
+            groupRewards.stream().sorted(java.util.Comparator.comparingInt(VoteReward::id))
+                .forEach(reward -> ctx.info("#" + reward.id() + " " + describeReward(reward)));
+            return;
+        }
+        if (action.equals("clear")) {
+            api.database().update("DELETE FROM voting_rewards WHERE group_id=?", ps -> ps.setString(1, group.id));
+            groupRewards.clear();
+            ctx.returnSuccess("Cleared winner rewards for " + group.name + ".");
+            return;
+        }
+        if (action.equals("remove")) {
+            if (ctx.args().size() < 5) { ctx.returnError("Usage: /vote admin reward <group> remove <reward-id>"); return; }
+            int id = parseNonNegativeInt(ctx.getArg(4), "Reward ID must be a number.", ctx);
+            if (id < 0) return;
+            api.database().update("DELETE FROM voting_rewards WHERE group_id=? AND reward_id=?", ps -> {
+                ps.setString(1, group.id); ps.setInt(2, id);
+            });
+            groupRewards.removeIf(reward -> reward.id() == id);
+            ctx.returnSuccess("Removed winner reward #" + id + " from " + group.name + ".");
+            return;
+        }
+        if (!action.equals("add") || ctx.args().size() < 5) {
+            ctx.returnError("Usage: /vote admin reward <group> add <grant-badge <badge> [duration]|revoke-badge <badge>|mail <message>>");
+            return;
+        }
+        String rewardType = ctx.getArgLower(4);
+        String value;
+        long duration = -1L;
+        String mailTitle = null;
+        String mailSender = null;
+        String mailItems = "";
+        switch (rewardType) {
+            case "revoke-badge" -> {
+                if (ctx.args().size() < 6) { ctx.returnError("Usage: /vote admin reward <group> add revoke-badge <badge>"); return; }
+                value = cleanBadgeId(ctx.getArg(5));
+                if (value.isBlank()) { ctx.returnError("Invalid badge ID."); return; }
+            }
+            case "grant-badge" -> {
+                if (ctx.args().size() < 6) { ctx.returnError("Usage: /vote admin reward <group> add grant-badge <badge> [duration]"); return; }
+                value = cleanBadgeId(ctx.getArg(5));
+                if (value.isBlank()) { ctx.returnError("Invalid badge ID."); return; }
+                if (ctx.args().size() >= 7) {
+                    try { duration = TimeUtil.parseDuration(ctx.getArg(6), true); }
+                    catch (IllegalArgumentException ex) { ctx.returnError("Use a duration such as 30d, 12h, or permanent."); return; }
+                    if (duration == 0L) { ctx.returnError("Badge duration must be greater than zero or permanent."); return; }
+                }
+            }
+            case "mail" -> {
+                MailRewardConfig mail = parseMailReward(ctx);
+                if (mail == null) return;
+                value = mail.message();
+                mailTitle = mail.title();
+                mailSender = mail.sender();
+                mailItems = mail.itemSpecs();
+            }
+            default -> { ctx.returnError("Reward actions are grant-badge, revoke-badge, and mail."); return; }
+        }
+        int id = groupRewards.stream().mapToInt(VoteReward::id).max().orElse(0) + 1;
+        String normalizedAction = switch (rewardType) {
+            case "grant-badge" -> "GRANT_BADGE_WINNER";
+            case "revoke-badge" -> "REVOKE_BADGE_ALL";
+            default -> "MAIL_WINNER";
+        };
+        long savedDuration = duration;
+        String savedMailTitle = mailTitle;
+        String savedMailSender = mailSender;
+        String savedMailItems = mailItems;
+        VoteReward reward = new VoteReward(id, normalizedAction, value, savedDuration, savedMailTitle, savedMailSender, savedMailItems);
+        api.database().update("INSERT INTO voting_rewards(group_id,reward_id,action,value,duration_seconds,mail_title,mail_sender,mail_items) VALUES(?,?,?,?,?,?,?,?)", ps -> {
+            ps.setString(1, group.id); ps.setInt(2, id); ps.setString(3, normalizedAction);
+            ps.setString(4, value); ps.setLong(5, savedDuration);
+            ps.setString(6, savedMailTitle); ps.setString(7, savedMailSender); ps.setString(8, savedMailItems);
+        });
+        groupRewards.add(reward);
+        ctx.returnSuccess("Added winner reward #" + id + " to " + group.name + ": " + describeReward(reward));
+    }
+
+    private void showMailRewardHelp(CommandContext ctx) {
+        ctx.info("Usage: /vote admin reward <group> add mail title=<title> message=<message> [from=<sender>] [items=<item>@<amount>,...]");
+        ctx.info("Example: /vote admin reward challenge add mail title=\"Challenge winner\" message=\"Congratulations {player}!\" from=STEMCraft items=minecraft:diamond@3,stemcraft:token@1");
+        ctx.info("Use quotes only around values containing spaces. ':' may be used instead of '=' for key-value options.");
+        ctx.info("Item IDs may be minecraft:<material> or a registered custom item; amount defaults to 1.");
+        ctx.info("Legacy mail <message> syntax remains supported and uses the generated title, STEMCraft sender, and no attachments.");
+        ctx.info("Placeholders: {group}, {group-id}, {player}, {option}, {votes} work in the title, sender, and message.");
+    }
+
+    private MailRewardConfig parseMailReward(CommandContext ctx) {
+        String titleOption = ctx.getOption("title");
+        String messageOption = ctx.getOption("message");
+        String senderOption = ctx.getOption("from", ctx.getOption("sender"));
+        String itemOption = ctx.getOption("items", ctx.getOption("item"));
+        List<String> rawTokens = mailRewardRawTokens(ctx);
+        boolean structured = !rawTokens.contains("|")
+            && (titleOption != null || messageOption != null || senderOption != null || itemOption != null);
+
+        if (structured) {
+            if (messageOption == null || messageOption.isBlank()) {
+                showMailRewardHelp(ctx);
+                return null;
+            }
+            try {
+                String sender = senderOption == null || senderOption.isBlank() ? "STEMCraft" : senderOption.trim();
+                return new MailRewardConfig(blankToNull(titleOption), messageOption.trim(), sender,
+                    normalizeMailItemSpecs(itemOption));
+            } catch (IllegalArgumentException exception) {
+                ctx.returnError(exception.getMessage());
+                return null;
+            }
+        }
+
+        List<String> tokens = rawTokens;
+        if (tokens.isEmpty()) {
+            showMailRewardHelp(ctx);
+            return null;
+        }
+        int firstSeparator = tokens.indexOf("|");
+        if (firstSeparator < 0) {
+            String message = String.join(" ", tokens).trim();
+            if (message.isBlank()) {
+                ctx.returnError("The winner mail message cannot be blank.");
+                return null;
+            }
+            return new MailRewardConfig(null, message, "STEMCraft", "");
+        }
+
+        int secondSeparator = indexOf(tokens, "|", firstSeparator + 1);
+        int messageEnd = secondSeparator < 0 ? tokens.size() : secondSeparator;
+        if (firstSeparator == 0 || messageEnd <= firstSeparator + 1) {
+            ctx.returnError("Mail rewards need a title and message separated by '|'.");
+            showMailRewardHelp(ctx);
+            return null;
+        }
+
+        String title = String.join(" ", tokens.subList(0, firstSeparator)).trim();
+        String message = String.join(" ", tokens.subList(firstSeparator + 1, messageEnd)).trim();
+        String sender = "STEMCraft";
+        String itemSpecs = "";
+        for (int start = secondSeparator < 0 ? tokens.size() : secondSeparator + 1; start < tokens.size();) {
+            int end = indexOf(tokens, "|", start);
+            if (end < 0) end = tokens.size();
+            String section = String.join(" ", tokens.subList(start, end)).trim();
+            if (section.startsWith("from=") || section.startsWith("sender=")) {
+                sender = section.substring(section.indexOf('=') + 1).trim();
+                if (sender.isBlank()) {
+                    ctx.returnError("The mail sender cannot be blank.");
+                    return null;
+                }
+            } else if (section.startsWith("items=") || section.startsWith("item=")) {
+                String sectionItems = section.substring(section.indexOf('=') + 1).trim();
+                itemSpecs = itemSpecs.isBlank() ? sectionItems : itemSpecs + "," + sectionItems;
+            } else if (!section.isBlank()) {
+                ctx.returnError("Mail sections after the message must use from=<sender> or items=<item>@<amount>,... .");
+                showMailRewardHelp(ctx);
+                return null;
+            }
+            start = end + 1;
+        }
+
+        if (title.isBlank() || message.isBlank()) {
+            ctx.returnError("The mail title and message cannot be blank.");
+            return null;
+        }
+        try {
+            String normalizedItems = normalizeMailItemSpecs(itemSpecs);
+            return new MailRewardConfig(title, message, sender, normalizedItems);
+        } catch (IllegalArgumentException exception) {
+            ctx.returnError(exception.getMessage());
+            return null;
+        }
+    }
+
+    private List<String> mailRewardRawTokens(CommandContext ctx) {
+        List<String> raw = ctx.rawArgs();
+        if (raw.size() <= 5 || !"mail".equalsIgnoreCase(raw.get(4))) return List.of();
+        return raw.subList(5, raw.size());
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private int indexOf(List<String> values, String target, int fromIndex) {
+        for (int index = Math.max(0, fromIndex); index < values.size(); index++) {
+            if (target.equals(values.get(index))) return index;
+        }
+        return -1;
+    }
+
+    private String normalizeMailItemSpecs(String itemSpecs) {
+        if (itemSpecs == null || itemSpecs.isBlank()) return "";
+        List<String> normalized = new ArrayList<>();
+        for (String raw : itemSpecs.split(",")) {
+            if (raw.isBlank()) throw new IllegalArgumentException("Mail attachment item IDs cannot be blank.");
+            normalized.add(resolveMailItem(raw.trim()).spec());
+        }
+        return String.join(",", normalized);
+    }
+
+    private List<ItemStack> resolveMailItems(String itemSpecs) {
+        if (itemSpecs == null || itemSpecs.isBlank()) return List.of();
+        List<ItemStack> items = new ArrayList<>();
+        for (String raw : itemSpecs.split(",")) {
+            if (raw.isBlank()) throw new IllegalArgumentException("Mail attachment item IDs cannot be blank.");
+            items.add(resolveMailItem(raw.trim()).item());
+        }
+        return items;
+    }
+
+    private MailItemResolution resolveMailItem(String raw) {
+        int separator = raw.lastIndexOf('@');
+        String id = (separator < 0 ? raw : raw.substring(0, separator)).trim();
+        String amountText = separator < 0 ? "1" : raw.substring(separator + 1).trim();
+        if (id.isBlank()) throw new IllegalArgumentException("Mail attachment item IDs cannot be blank.");
+        int amount;
+        try {
+            amount = Integer.parseInt(amountText);
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException("Mail attachment amounts must be positive whole numbers.");
+        }
+        if (amount <= 0) throw new IllegalArgumentException("Mail attachment amounts must be positive whole numbers.");
+
+        ItemStack item = api.items() == null ? null : api.items().createCustomItem(id, amount);
+        if (item == null) {
+            String materialId = id.regionMatches(true, 0, "minecraft:", 0, "minecraft:".length())
+                ? id.substring("minecraft:".length()) : id;
+            Material material = Material.matchMaterial(materialId.toUpperCase(Locale.ROOT));
+            if (material != null && material.isItem()) item = new ItemStack(material, amount);
+        }
+        if (item == null || item.getType().isAir()) {
+            throw new IllegalArgumentException("Unknown mail attachment item '" + id + "'.");
+        }
+        return new MailItemResolution(item, id + "@" + amount);
+    }
+
+    private int parseNonNegativeInt(String value, String error, CommandContext ctx) {
+        try {
+            int parsed = Integer.parseInt(value);
+            if (parsed < 0) throw new NumberFormatException();
+            return parsed;
+        } catch (NumberFormatException ex) {
+            ctx.returnError(error);
+            return -1;
+        }
+    }
+
+    private String cleanBadgeId(String value) {
+        String normalized = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+        return normalized.matches("[a-z0-9][a-z0-9_.-]*") ? normalized : "";
+    }
+
+    private String describeReward(VoteReward reward) {
+        return switch (reward.action()) {
+            case "GRANT_BADGE_WINNER" -> "grant badge " + reward.value()
+                + (reward.durationSeconds() < 0 ? " permanently" : " for " + TimeUtil.formatDuration(reward.durationSeconds()));
+            case "REVOKE_BADGE_ALL" -> "revoke badge " + reward.value() + " from all players";
+            case "MAIL_WINNER" -> "mail winners: " + reward.value()
+                + (reward.mailTitle() == null ? " (generated title)" : " [title: " + reward.mailTitle() + "]")
+                + (reward.mailItems().isBlank() ? "" : " [items: " + reward.mailItems() + "]");
+            default -> reward.action() + " " + reward.value();
+        };
     }
 
     private void towerCommand(CommandContext ctx) {
@@ -314,7 +883,11 @@ public final class VotingFeature extends BaseFeature {
         api.database().update("DELETE FROM voting_votes WHERE group_id=?", ps -> ps.setString(1, group.id));
         api.database().update("DELETE FROM voting_options WHERE group_id=?", ps -> ps.setString(1, group.id));
         api.database().update("DELETE FROM voting_groups WHERE id=?", ps -> ps.setString(1, group.id));
+        api.database().update("DELETE FROM voting_reminders WHERE group_id=?", ps -> ps.setString(1, group.id));
+        clearLifecycleState(group.id);
+        api.database().update("DELETE FROM voting_rewards WHERE group_id=?", ps -> ps.setString(1, group.id));
         groups.remove(group.id); options.remove(group.id); votes.remove(group.id); towers.remove(group.id);
+        reminders.remove(group.id); rewards.remove(group.id);
         placements.entrySet().removeIf(entry -> entry.getValue().groupId.equals(group.id));
         removals.entrySet().removeIf(entry -> entry.getValue().equals(group.id));
         ctx.returnSuccess("Removed voting group " + group.id + " and " + removedTowers + " physical tower(s).");
@@ -326,84 +899,176 @@ public final class VotingFeature extends BaseFeature {
 
     private void showStatus(CommandContext ctx) {
         if (groups.isEmpty()) { ctx.returnInfo("No voting groups exist."); return; }
+        if (ctx.args().size() > 1) {
+            String requestedId = ctx.getArgLower(1);
+            VoteGroup requested = groups.get(requestedId);
+            if (requested != null) {
+                showGroupStatus(ctx, requested);
+                return;
+            }
+            if (!requestedId.matches("\\d+")) {
+                ctx.returnError("Unknown voting group.");
+                return;
+            }
+        }
         UUID uuid = ctx.getSender() instanceof Player player ? player.getUniqueId() : null;
         List<VoteGroup> values = new ArrayList<>(groups.values());
         int page = ChatMenuUtil.getPageFromArgs(ctx.args(), 1, 1);
-        ChatMenuUtil.render(ctx.getSender(), "Voting", "vote status", page, values.size(), (start, count, interactive) -> {
+        ChatMenuUtil.render(ctx.getSender(), buildListTitle(ctx.isPlayer()), "vote status", page, values.size(), (start, count, interactive) -> {
             List<Component> lines = new ArrayList<>();
             for (VoteGroup group : values.subList(start, start + count)) {
                 int used = uuid == null ? 0 : votes.getOrDefault(group.id, Map.of()).getOrDefault(uuid, Set.of()).size();
-                lines.add(Component.text("● ", stateColour(group)).append(Component.text(group.name, NamedTextColor.WHITE))
-                    .append(Component.text(" — " + state(group) + " — " + used + "/" + group.votesPerPlayer + " used", NamedTextColor.GRAY)));
+                Component line = ChatMenuUtil.text(group.name, ChatMenuStyle.VALUE)
+                    .append(ChatMenuUtil.text(" (" + group.id + ") — ", ChatMenuStyle.MUTED))
+                    .append(Component.text(state(group), stateColour(group)))
+                    .append(ChatMenuUtil.text(" — " + used + "/" + group.votesPerPlayer + " used", ChatMenuStyle.MUTED));
+                if (interactive) line = line.append(Component.space())
+                    .append(button("[View]", ChatMenuStyle.ACTION_VIEW, "/vote status " + group.id,
+                        "View this voting group's status"));
+                lines.add(line);
             }
             return lines;
         }, "No voting groups exist.");
+    }
+
+    private Component buildListTitle(boolean isPlayer) {
+        Component title = ChatMenuUtil.text("Voting", ChatMenuStyle.TITLE);
+
+        if (isPlayer) {
+            title = title.append(Component.text(" "))
+                    .append(ChatMenuUtil.actionButton("[Create]", ChatMenuStyle.ACTION_CREATE,
+                            ClickEvent.suggestCommand("/vote admin create id"),
+                            "Create a new voting group"));
+        }
+
+        return title;
+    }
+
+    private void showGroupStatus(CommandContext ctx, VoteGroup group) {
+        UUID uuid = ctx.getSender() instanceof Player player ? player.getUniqueId() : null;
+        int used = uuid == null ? 0 : votes.getOrDefault(group.id, Map.of()).getOrDefault(uuid, Set.of()).size();
+        boolean playerInteractive = ctx.getSender() instanceof Player;
+        boolean admin = ctx.hasPermission(ADMIN_PERMISSION);
+        Component stateLine = statusField("State", state(group), stateColour(group));
+        Component scheduleLine = statusField("Schedule", formatTime(group.startsAt) + " → " + formatTime(group.endsAt), ChatMenuStyle.VALUE);
+        Component sourceLine = statusField("Source", group.sourceType + (group.sourceValue == null ? "" : " (" + group.sourceValue + ")"), ChatMenuStyle.VALUE);
+        Component remindersLine = statusField("Reminders", reminders.getOrDefault(group.id, Map.of()).size() + " configured", ChatMenuStyle.VALUE);
+        Component rewardsLine = statusField("Winner rewards", rewards.getOrDefault(group.id, List.of()).size() + " configured", ChatMenuStyle.VALUE);
+        if (admin && playerInteractive) {
+            stateLine = stateLine.append(Component.space()).append(button(group.paused ? "[Resume]" : "[Pause]",
+                group.paused ? ChatMenuStyle.ACTION_ADD : ChatMenuStyle.ACTION_WARNING,
+                "/vote admin " + (group.paused ? "resume " : "pause ") + group.id,
+                group.paused ? "Resume voting" : "Pause voting"));
+            scheduleLine = scheduleLine.append(Component.space()).append(suggestButton("[Edit]", ChatMenuStyle.ACTION_EDIT,
+                "/vote admin schedule " + group.id + " now ",
+                "Set the start and finish dates; use YYYY-MM-DD or a timestamp"));
+            sourceLine = sourceLine.append(Component.space()).append(button("[View]", ChatMenuStyle.ACTION_VIEW,
+                "/vote admin option list " + group.id, "View the configured voting entries"))
+                .append(Component.space()).append(suggestButton("[Edit]", ChatMenuStyle.ACTION_EDIT,
+                    "/vote admin source plots " + group.id + " ", "Load PlotSquared creators from a plot world"));
+            remindersLine = remindersLine.append(Component.space()).append(button("[View]", ChatMenuStyle.ACTION_VIEW,
+                "/vote admin reminder " + group.id + " list", "View configured voting reminders"))
+                .append(Component.space()).append(suggestButton("[Add]", ChatMenuStyle.ACTION_ADD,
+                    "/vote admin reminder " + group.id + " set ", "Add a reminder: <days> <message>"));
+            rewardsLine = rewardsLine.append(Component.space()).append(button("[View]", ChatMenuStyle.ACTION_VIEW,
+                "/vote admin reward " + group.id + " list", "View configured winner rewards"))
+                .append(Component.space()).append(suggestButton("[Add]", ChatMenuStyle.ACTION_ADD,
+                    "/vote admin reward " + group.id + " add ", "Add grant-badge, revoke-badge, or mail reward"));
+        }
+        List<Component> lines = List.of(
+            stateLine,
+            statusField("Votes", used + "/" + group.votesPerPlayer + " used", ChatMenuStyle.VALUE),
+            scheduleLine,
+            sourceLine,
+            remindersLine,
+            rewardsLine
+        );
+        ChatMenuUtil.render(ctx.getSender(), "Voting: " + group.name + " (" + group.id + ")", "vote status " + group.id,
+            1, 1, (start, count, interactive) -> lines, "Voting group not found.");
     }
 
     private void showAdminMenu(CommandContext ctx) {
         List<VoteGroup> values = new ArrayList<>(groups.values());
         int page = ChatMenuUtil.getPageFromArgs(ctx.args(), 1, 1);
-        ChatMenuUtil.render(ctx.getSender(), "Voting administration", "vote admin", page, values.size(), (start, count, interactive) -> {
+        Component title = ChatMenuUtil.text("Voting administration", ChatMenuStyle.TITLE);
+        if (ctx.getSender() instanceof Player) title = title.append(Component.space())
+            .append(suggestButton("[Create]", ChatMenuStyle.ACTION_CREATE,
+                "/vote admin create new-vote 1 New Vote", "Create a voting group"));
+        ChatMenuUtil.render(ctx.getSender(), title, "vote admin", page, values.size(), (start, count, interactive) -> {
             List<Component> lines = new ArrayList<>();
             for (VoteGroup group : values.subList(start, start + count)) {
-                Component line = Component.text("● ", stateColour(group)).append(Component.text(group.name, NamedTextColor.WHITE))
-                    .append(Component.text(" (" + group.id + ")", NamedTextColor.DARK_GRAY))
-                    .append(Component.text(" — " + totalVotes(group.id) + " votes", NamedTextColor.GRAY));
-                if (interactive) line = line.clickEvent(ClickEvent.runCommand("/vote admin view " + group.id))
-                    .hoverEvent(HoverEvent.showText(Component.text("Manage this voting group")));
+                Component line = ChatMenuUtil.text(group.name, ChatMenuStyle.VALUE)
+                    .append(ChatMenuUtil.text(" (" + group.id + ") — ", ChatMenuStyle.MUTED))
+                    .append(Component.text(state(group), stateColour(group)))
+                    .append(ChatMenuUtil.text(" — " + totalVotes(group.id) + " votes", ChatMenuStyle.MUTED));
+                if (interactive) line = line.append(Component.space())
+                    .append(button("[View]", ChatMenuStyle.ACTION_VIEW, "/vote admin view " + group.id,
+                        "Manage this voting group"));
                 lines.add(line);
             }
             return lines;
         }, "No voting groups exist.");
-        ctx.getSender().sendMessage(suggestButton("[＋ Create]", "/vote admin create new-vote 1 New Vote", "Create a voting group"));
     }
 
     private void showGroupMenu(CommandContext ctx) {
         VoteGroup group = requireGroup(ctx, 2); if (group == null) return;
-        List<VoteOption> values = new ArrayList<>(options.getOrDefault(group.id, new LinkedHashMap<>()).values());
-        int page = values.isEmpty() ? 1 : ChatMenuUtil.getPageFromArgs(ctx.args(), 3, 1);
-        int renderedCount = Math.max(1, values.size());
-        ChatMenuUtil.render(ctx.getSender(), group.name + " (" + group.id + ") — " + state(group), "vote admin view " + group.id,
-            page, renderedCount, (start, count, interactive) -> {
-                List<Component> lines = new ArrayList<>();
-                if (values.isEmpty()) {
-                    lines.add(Component.text("No options configured. Add a static option or load PlotSquared creators.", NamedTextColor.GRAY));
-                    return lines;
-                }
-                for (VoteOption option : values.subList(start, start + count)) {
-                    boolean placed = towers.getOrDefault(group.id, new LinkedHashMap<>()).containsKey(option.id);
-                    Component line = Component.text(option.name, NamedTextColor.WHITE)
-                        .append(Component.text(" — " + optionVotes(group.id, option.id) + " votes", NamedTextColor.GRAY))
-                        .append(Component.space()).append(placed
-                            ? Component.text("[Placed]", NamedTextColor.GREEN)
-                            : button("[Place]", "/vote admin tower place " + group.id + " " + option.id, "Place this option's tower"))
-                        .append(Component.space()).append(suggestButton("[Remove]", "/vote admin option remove " + group.id + " " + option.id,
-                            "Remove this option slot, its tower, and its votes"));
-                    lines.add(line);
-                }
-                return lines;
-            }, "This group has no options.");
-        int placed = towers.getOrDefault(group.id, new LinkedHashMap<>()).size();
-        ctx.getSender().sendMessage(Component.text("Allowance: ", NamedTextColor.GRAY)
-            .append(Component.text(group.votesPerPlayer + " per player", NamedTextColor.WHITE))
-            .append(Component.text(" • Schedule: ", NamedTextColor.GRAY))
-            .append(Component.text(formatTime(group.startsAt) + " → " + formatTime(group.endsAt), NamedTextColor.WHITE)));
-        ctx.getSender().sendMessage(Component.text("Source: ", NamedTextColor.GRAY)
-            .append(Component.text(group.sourceType + (group.sourceValue == null ? "" : " (" + group.sourceValue + ")"), NamedTextColor.WHITE))
-            .append(Component.text(" • Options: ", NamedTextColor.GRAY)).append(Component.text(values.size(), NamedTextColor.WHITE))
-            .append(Component.text(" • Towers: ", NamedTextColor.GRAY)).append(Component.text(placed + "/" + values.size(), NamedTextColor.WHITE))
-            .append(Component.text(" • Votes: ", NamedTextColor.GRAY)).append(Component.text(totalVotes(group.id), NamedTextColor.WHITE)));
-        ctx.getSender().sendMessage(Component.text("Static option syntax: ", NamedTextColor.DARK_GRAY)
-            .append(Component.text("<option-id> <display name>", NamedTextColor.GRAY)));
+        ctx.getSender().sendMessage(ChatMenuUtil.text("Voting group: " + group.name + " (" + group.id + ")", ChatMenuStyle.TITLE)
+            .append(Component.space()).append(button("[Back]", ChatMenuStyle.ACTION_NAVIGATION,
+                "/vote admin", "Back to voting groups")));
+        sendAdminField(ctx, "State", state(group), stateColour(group));
+        sendAdminField(ctx, "Votes per player", Integer.toString(group.votesPerPlayer), ChatMenuStyle.VALUE);
+        sendAdminField(ctx, "Schedule", formatTime(group.startsAt) + " → " + formatTime(group.endsAt), ChatMenuStyle.VALUE);
+        sendAdminField(ctx, "Source", group.sourceType + (group.sourceValue == null ? "" : " (" + group.sourceValue + ")"), ChatMenuStyle.VALUE);
+        sendAdminField(ctx, "Reminders", Integer.toString(reminders.getOrDefault(group.id, Map.of()).size()), ChatMenuStyle.VALUE);
+        sendAdminField(ctx, "Winner rewards", Integer.toString(rewards.getOrDefault(group.id, List.of()).size()), ChatMenuStyle.VALUE);
+
+        List<VoteTallyRow> topRows = tallyRows(group.id).stream().limit(3).toList();
+        if (!topRows.isEmpty()) {
+            ctx.getSender().sendMessage(ChatMenuUtil.text("Top 3", ChatMenuStyle.KEY));
+            for (int index = 0; index < topRows.size(); index++) {
+                VoteTallyRow row = topRows.get(index);
+                ctx.getSender().sendMessage(ChatMenuUtil.text("  " + (index + 1) + ". ", ChatMenuStyle.MUTED)
+                    .append(ChatMenuUtil.text(row.optionName(), ChatMenuStyle.VALUE))
+                    .append(ChatMenuUtil.text(" — " + row.votes() + " " + voteWord(row.votes()), ChatMenuStyle.MUTED)));
+            }
+        }
+
         String toggleCommand = "/vote admin " + (group.paused ? "resume " : "pause ") + group.id;
-        ctx.getSender().sendMessage(button(group.paused ? "[Resume]" : "[Pause]", toggleCommand, group.paused ? "Resume voting" : "Pause voting")
-            .append(Component.space()).append(suggestButton("[Schedule]", "/vote admin schedule " + group.id + " now ", "Set start and finish"))
-            .append(Component.space()).append(suggestButton("[＋ Static option]", "/vote admin option add " + group.id + " ", "Enter <option-id> <display name>; for example fishing Fishing Expansion"))
-            .append(Component.space()).append(suggestButton("[Plot source]", "/vote admin source plots " + group.id + " ", "Load plot creators")));
-        ctx.getSender().sendMessage(button("[Place next]", "/vote admin tower place " + group.id + " next", "Place the next unplaced tower")
-            .append(Component.space()).append(suggestButton("[Remove towers]", "/vote admin tower remove " + group.id + " all", "Remove every physical tower but keep option slots"))
-            .append(Component.space()).append(suggestButton("[Reset votes]", "/vote admin reset " + group.id, "Review before sending"))
-            .append(Component.space()).append(suggestButton("[Remove group]", "/vote admin remove " + group.id, "Remove this group, all options, votes, and physical towers")));
+        ctx.getSender().sendMessage(button("[Tally]", ChatMenuStyle.ACTION_VIEW,
+                "/vote admin tally " + group.id, "Open the full voting tally")
+            .append(Component.space()).append(button(group.paused ? "[Resume]" : "[Pause]",
+                group.paused ? ChatMenuStyle.ACTION_ADD : ChatMenuStyle.ACTION_WARNING,
+                toggleCommand, group.paused ? "Resume voting" : "Pause voting"))
+            .append(Component.space()).append(suggestButton("[Schedule]", ChatMenuStyle.ACTION_EDIT,
+                "/vote admin schedule " + group.id + " now ", "Set start and finish"))
+            .append(Component.space()).append(suggestButton("[Add entry]", ChatMenuStyle.ACTION_ADD,
+                "/vote admin option add " + group.id + " ", "Enter <option-id> <display name>")));
+        ctx.getSender().sendMessage(button("[Place next]", ChatMenuStyle.ACTION_ADD,
+                "/vote admin tower place " + group.id + " next", "Place the next entry")
+            .append(Component.space()).append(suggestButton("[Plot source]", ChatMenuStyle.ACTION_EDIT,
+                "/vote admin source plots " + group.id + " ", "Load PlotSquared creators"))
+            .append(Component.space()).append(suggestButton("[Reset votes]", ChatMenuStyle.ACTION_WARNING,
+                "/vote admin reset " + group.id, "Review before sending"))
+            .append(Component.space()).append(suggestButton("[Remove group]", ChatMenuStyle.ACTION_DELETE,
+                "/vote admin remove " + group.id, "Remove this group, all options, votes, and physical towers")));
+    }
+
+    private void sendAdminField(CommandContext ctx, String label, String value, ChatMenuStyle valueStyle) {
+        ctx.getSender().sendMessage(statusField(label, value, valueStyle));
+    }
+
+    private void sendAdminField(CommandContext ctx, String label, String value, NamedTextColor valueColor) {
+        ctx.getSender().sendMessage(statusField(label, value, valueColor));
+    }
+
+    private Component statusField(String label, String value, NamedTextColor valueColor) {
+        return ChatMenuUtil.text(label + ": ", ChatMenuStyle.KEY)
+            .append(Component.text(value, valueColor));
+    }
+
+    private Component statusField(String label, String value, ChatMenuStyle valueStyle) {
+        return ChatMenuUtil.text(label + ": ", ChatMenuStyle.KEY)
+            .append(ChatMenuUtil.text(value, valueStyle));
     }
 
     private void announceLoginVotes(Player player) {
@@ -413,11 +1078,14 @@ public final class VotingFeature extends BaseFeature {
         if (!getConfigSection().getBoolean("login-announcement.enabled", true)) return;
 
         List<String> summaries = new ArrayList<>();
+        long now = Instant.now().getEpochSecond();
         for (VoteGroup group : groups.values()) {
             if (!"open".equals(state(group))) continue;
             GroupLoginSummary summary = loginSummary(group, playerId, previousLastSeenAt);
             String message = formatLoginVoteSummary(group.name, summary.receivedVotes(), summary.totalVotes(), summary.bestRank());
             if (!message.isEmpty()) summaries.add(message);
+            VoteReminder reminder = loginReminder(group, now);
+            if (reminder != null) summaries.add(formatReminderMessage(reminder.message(), group, now));
         }
         if (summaries.isEmpty()) return;
 
@@ -425,6 +1093,243 @@ public final class VotingFeature extends BaseFeature {
         loginMessages.queue(player, PlayerLoginMessageServiceImpl.Priority.OTHER, "voting", recipient -> {
             for (String summary : summaries) recipient.sendMessage(Component.text(summary, NamedTextColor.GRAY));
         });
+    }
+
+    private VoteReminder loginReminder(VoteGroup group, long now) {
+        if (group.endsAt == Long.MAX_VALUE || group.endsAt <= now) return null;
+        Map<Integer, VoteReminder> configured = reminders.getOrDefault(group.id, Map.of());
+        if (configured.isEmpty()) return null;
+        int days = daysRemaining(group.endsAt, now);
+        return configured.values().stream()
+            .filter(reminder -> reminder.daysRemaining() >= days)
+            .min(java.util.Comparator.comparingInt(VoteReminder::daysRemaining))
+            .orElse(null);
+    }
+
+    static int daysRemaining(long endsAt, long now) {
+        if (endsAt == Long.MAX_VALUE) return Integer.MAX_VALUE;
+        long seconds = Math.max(0L, endsAt - now);
+        return (int) Math.min(Integer.MAX_VALUE, (seconds + 86_399L) / 86_400L);
+    }
+
+    static String formatReminderMessage(String template, String groupName, int days, String endTime, int totalVotes) {
+        return template
+            .replace("{group}", groupName)
+            .replace("{days}", Integer.toString(days))
+            .replace("{days-remaining}", Integer.toString(days))
+            .replace("{end}", endTime)
+            .replace("{votes}", Integer.toString(totalVotes));
+    }
+
+    private String formatReminderMessage(String template, VoteGroup group, long now) {
+        return formatReminderMessage(template, group.name, daysRemaining(group.endsAt, now), formatTime(group.endsAt), totalVotes(group.id));
+    }
+
+    private void processVotingLifecycle() {
+        long now = Instant.now().getEpochSecond();
+        for (VoteGroup group : new ArrayList<>(groups.values())) {
+            if ("open".equals(state(group))) processScheduledReminders(group, now);
+            if ("finished".equals(state(group)) && group.endsAt != Long.MAX_VALUE) closeGroup(group, now);
+        }
+    }
+
+    private void processScheduledReminders(VoteGroup group, long now) {
+        if (group.endsAt == Long.MAX_VALUE) return;
+        int actualDays = daysRemaining(group.endsAt, now);
+        for (VoteReminder reminder : reminders.getOrDefault(group.id, Map.of()).values()) {
+            if (actualDays > reminder.daysRemaining() || !claimReminder(group.id, reminder.daysRemaining(), now)) continue;
+            String message = formatReminderMessage(reminder.message(), group, now);
+            if (getConfigSection().getBoolean("announcements.enabled", true)) {
+                Bukkit.getOnlinePlayers().forEach(player -> player.sendMessage(Component.text(message, NamedTextColor.YELLOW)));
+            }
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("group_id", group.id);
+            data.put("group", group.name);
+            data.put("configured_days_remaining", reminder.daysRemaining());
+            data.put("days_remaining", actualDays);
+            data.put("ends_at", group.endsAt);
+            data.put("message", message);
+            api.web().publishEvent("stemcraft.voting.reminder", null, null, data);
+        }
+    }
+
+    private boolean claimReminder(String groupId, int days, long now) {
+        return api.database().update(
+            "INSERT OR IGNORE INTO voting_reminder_events(group_id,days_remaining,sent_at) VALUES(?,?,?)", ps -> {
+                ps.setString(1, groupId); ps.setInt(2, days); ps.setLong(3, now);
+            }) > 0;
+    }
+
+    private void closeGroup(VoteGroup group, long now) {
+        ClosureStatus closure = loadClosure(group.id);
+        List<ClosedWinner> winners;
+        if (closure == null) {
+            winners = calculateWinners(group.id);
+            api.database().update("INSERT OR IGNORE INTO voting_group_closures(group_id,closed_at,processed_at) VALUES(?,?,NULL)", ps -> {
+                ps.setString(1, group.id); ps.setLong(2, now);
+            });
+            for (ClosedWinner winner : winners) api.database().update(
+                "INSERT OR IGNORE INTO voting_winners(group_id,option_id,option_name,player_uuid,vote_count) VALUES(?,?,?,?,?)", ps -> {
+                    ps.setString(1, group.id); ps.setString(2, winner.optionId()); ps.setString(3, winner.optionName());
+                    ps.setString(4, winner.playerUuid() == null ? null : winner.playerUuid().toString()); ps.setInt(5, winner.votes());
+                });
+            publishCloseEvent(group, winners, now);
+            closure = loadClosure(group.id);
+        } else {
+            winners = loadClosedWinners(group.id);
+        }
+        if (closure == null || closure.processedAt() != null) return;
+        if (!applyRewards(group, winners)) return;
+        api.database().update("UPDATE voting_group_closures SET processed_at=? WHERE group_id=? AND processed_at IS NULL", ps -> {
+            ps.setLong(1, now); ps.setString(2, group.id);
+        });
+    }
+
+    private List<ClosedWinner> calculateWinners(String groupId) {
+        int maximum = maximumVotes(groupId);
+        if (maximum <= 0) return List.of();
+        return options.getOrDefault(groupId, new LinkedHashMap<>()).values().stream()
+            .filter(option -> includedInResults(groupId, option))
+            .filter(option -> optionVotes(groupId, option.id()) == maximum)
+            .map(option -> new ClosedWinner(option.id(), option.name(), option.owner, maximum))
+            .toList();
+    }
+
+    private void publishCloseEvent(VoteGroup group, List<ClosedWinner> winners, long now) {
+        List<Map<String, Object>> winnerData = winners.stream().map(winner -> {
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("option_id", winner.optionId());
+            data.put("option", winner.optionName());
+            data.put("player_uuid", winner.playerUuid() == null ? null : winner.playerUuid().toString());
+            data.put("votes", winner.votes());
+            return data;
+        }).toList();
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("group_id", group.id);
+        data.put("group", group.name);
+        data.put("closed_at", now);
+        data.put("ends_at", group.endsAt);
+        data.put("total_votes", resultTotalVotes(group.id));
+        data.put("winners", winnerData);
+        api.web().publishEvent("stemcraft.voting.closed", null, null, data);
+    }
+
+    private ClosureStatus loadClosure(String groupId) {
+        return api.database().querySingleMapped("SELECT closed_at,processed_at FROM voting_group_closures WHERE group_id=?",
+            ps -> ps.setString(1, groupId), rs -> {
+                long closedAt = rs.getLong(1);
+                long processedAt = rs.getLong(2);
+                return new ClosureStatus(closedAt, rs.wasNull() ? null : processedAt);
+            });
+    }
+
+    private List<ClosedWinner> loadClosedWinners(String groupId) {
+        List<ClosedWinner> result = new ArrayList<>();
+        api.database().queryEach("SELECT option_id,option_name,player_uuid,vote_count FROM voting_winners WHERE group_id=? ORDER BY option_id",
+            ps -> ps.setString(1, groupId), rs -> result.add(new ClosedWinner(
+                rs.getString(1), rs.getString(2), parseUuid(rs.getString(3)), rs.getInt(4))));
+        return result;
+    }
+
+    private boolean applyRewards(VoteGroup group, List<ClosedWinner> winners) {
+        EntitlementService entitlements = STEMCraft.getPlugin().entitlements();
+        for (VoteReward reward : rewards.getOrDefault(group.id, List.of())) {
+            switch (reward.action()) {
+                case "REVOKE_BADGE_ALL" -> {
+                    if (entitlements == null) return false;
+                    for (UUID playerUuid : entitlements.knownPlayerIds()) {
+                        if (deliveryExists(group.id, reward.id(), playerUuid)) continue;
+                        if (!entitlements.revokeBadge(playerUuid, reward.value())) {
+                            STEMCraft.getPlugin().getLogger().warning("Could not revoke voting reward badge '"
+                                + reward.value() + "' while closing " + group.id + ".");
+                            continue;
+                        }
+                        recordDelivery(group.id, reward.id(), playerUuid);
+                    }
+                }
+                case "GRANT_BADGE_WINNER" -> {
+                    if (entitlements == null) return false;
+                    for (ClosedWinner winner : winners) {
+                        UUID playerUuid = winner.playerUuid();
+                        if (playerUuid == null || deliveryExists(group.id, reward.id(), playerUuid)) continue;
+                        boolean granted = reward.durationSeconds() < 0
+                            ? entitlements.grantBadge(playerUuid, reward.value())
+                            : entitlements.grantBadge(playerUuid, reward.value(), reward.durationSeconds());
+                        if (!granted) {
+                            STEMCraft.getPlugin().getLogger().warning("Could not grant voting reward badge '"
+                                + reward.value() + "' to " + playerUuid + " while closing " + group.id + ".");
+                            continue;
+                        }
+                        recordDelivery(group.id, reward.id(), playerUuid);
+                    }
+                }
+                case "MAIL_WINNER" -> {
+                    if (api.mailboxes() == null) return false;
+                    List<ItemStack> attachments;
+                    try {
+                        attachments = resolveMailItems(reward.mailItems());
+                    } catch (IllegalArgumentException exception) {
+                        STEMCraft.getPlugin().getLogger().warning("Could not resolve voting reward mail attachments for "
+                            + group.id + ": " + exception.getMessage());
+                        return false;
+                    }
+                    for (ClosedWinner winner : winners) {
+                        UUID playerUuid = winner.playerUuid();
+                        if (playerUuid == null || deliveryExists(group.id, reward.id(), playerUuid)) continue;
+                        OfflinePlayer player = Bukkit.getOfflinePlayer(playerUuid);
+                        String playerName = Objects.requireNonNullElse(player.getName(), playerUuid.toString());
+                        String message = formatWinnerMessage(reward.value(), group, winner, playerName);
+                        String title = reward.mailTitle() == null ? null
+                            : formatWinnerMessage(reward.mailTitle(), group, winner, playerName);
+                        String sender = formatWinnerMessage(Objects.requireNonNullElse(reward.mailSender(), "STEMCraft"),
+                            group, winner, playerName);
+                        MailSendRequest request = new MailSendRequest(sender, playerUuid, message, attachments)
+                            .withTitle(title);
+                        if (!api.mailboxes().send(request).queued()) {
+                            STEMCraft.getPlugin().getLogger().warning("Could not send voting reward mail to "
+                                + playerName + " while closing " + group.id + ".");
+                            continue;
+                        }
+                        recordDelivery(group.id, reward.id(), playerUuid);
+                    }
+                }
+                default -> STEMCraft.getPlugin().getLogger().warning("Unknown voting reward action '"
+                    + reward.action() + "' for " + group.id + ".");
+            }
+        }
+        return true;
+    }
+
+    private String formatWinnerMessage(String template, VoteGroup group, ClosedWinner winner, String playerName) {
+        return template
+            .replace("{group}", group.name)
+            .replace("{group-id}", group.id)
+            .replace("{player}", playerName)
+            .replace("{option}", winner.optionName())
+            .replace("{votes}", Integer.toString(winner.votes()));
+    }
+
+    private boolean deliveryExists(String groupId, int rewardId, UUID playerUuid) {
+        Integer count = api.database().querySingleMapped(
+            "SELECT COUNT(*) FROM voting_reward_deliveries WHERE group_id=? AND reward_id=? AND player_uuid=?", ps -> {
+                ps.setString(1, groupId); ps.setInt(2, rewardId); ps.setString(3, playerUuid.toString());
+            }, rs -> rs.getInt(1));
+        return count != null && count > 0;
+    }
+
+    private void recordDelivery(String groupId, int rewardId, UUID playerUuid) {
+        api.database().update(
+            "INSERT OR IGNORE INTO voting_reward_deliveries(group_id,reward_id,player_uuid,delivered_at) VALUES(?,?,?,?)", ps -> {
+                ps.setString(1, groupId); ps.setInt(2, rewardId); ps.setString(3, playerUuid.toString());
+                ps.setLong(4, System.currentTimeMillis());
+            });
+    }
+
+    private void clearLifecycleState(String groupId) {
+        api.database().update("DELETE FROM voting_reminder_events WHERE group_id=?", ps -> ps.setString(1, groupId));
+        api.database().update("DELETE FROM voting_group_closures WHERE group_id=?", ps -> ps.setString(1, groupId));
+        api.database().update("DELETE FROM voting_winners WHERE group_id=?", ps -> ps.setString(1, groupId));
+        api.database().update("DELETE FROM voting_reward_deliveries WHERE group_id=?", ps -> ps.setString(1, groupId));
     }
 
     private Long loadPlayerActivity(UUID playerId) {
@@ -512,10 +1417,34 @@ public final class VotingFeature extends BaseFeature {
     private NamedTextColor stateColour(VoteGroup group) { return switch (state(group)) { case "open" -> NamedTextColor.GREEN; case "paused" -> NamedTextColor.YELLOW; default -> NamedTextColor.GRAY; }; }
     private String formatTime(long epochSecond) { return epochSecond == Long.MAX_VALUE ? "none" : Instant.ofEpochSecond(epochSecond)
         .atZone(ZoneId.systemDefault()).toLocalDateTime().toString().replace('T', ' '); }
-    private Component button(String text, String command, String hover) { return Component.text(text, NamedTextColor.GOLD)
-        .clickEvent(ClickEvent.runCommand(command)).hoverEvent(HoverEvent.showText(Component.text(hover))); }
-    private Component suggestButton(String text, String command, String hover) { return Component.text(text, NamedTextColor.GOLD)
-        .clickEvent(ClickEvent.suggestCommand(command)).hoverEvent(HoverEvent.showText(Component.text(hover))); }
+    private String optionPrefix(String currentArgument, String... optionNames) {
+        if (currentArgument == null) return null;
+        for (String optionName : optionNames) {
+            for (String separator : List.of("=", ":")) {
+                String prefix = optionName + separator;
+                if (currentArgument.regionMatches(true, 0, prefix, 0, prefix.length())) {
+                    return currentArgument.substring(0, prefix.length());
+                }
+            }
+        }
+        return null;
+    }
+
+    private Component button(String text, String command, String hover) {
+        return button(text, ChatMenuStyle.ACTION_VIEW, command, hover);
+    }
+
+    private Component button(String text, ChatMenuStyle style, String command, String hover) {
+        return ChatMenuUtil.actionButton(text, style, ClickEvent.runCommand(command), hover);
+    }
+
+    private Component suggestButton(String text, String command, String hover) {
+        return suggestButton(text, ChatMenuStyle.ACTION_EDIT, command, hover);
+    }
+
+    private Component suggestButton(String text, ChatMenuStyle style, String command, String hover) {
+        return ChatMenuUtil.actionButton(text, style, ClickEvent.suggestCommand(command), hover);
+    }
 
     private void onInteract(PlayerInteractEvent event) {
         if (event.getAction() != Action.RIGHT_CLICK_BLOCK || event.getClickedBlock() == null) return;
@@ -729,9 +1658,27 @@ public final class VotingFeature extends BaseFeature {
     }
     private int optionVotes(String group, String option) { return (int) votes.getOrDefault(group, Map.of()).values().stream().filter(set -> set.contains(option)).count(); }
     private int totalVotes(String group) { return votes.getOrDefault(group, Map.of()).values().stream().mapToInt(Set::size).sum(); }
-    private int maximumVotes(String group) { return options.getOrDefault(group, new LinkedHashMap<>()).keySet().stream().mapToInt(id -> optionVotes(group, id)).max().orElse(0); }
+    private int resultTotalVotes(String groupId) {
+        return options.getOrDefault(groupId, new LinkedHashMap<>()).values().stream()
+            .filter(option -> includedInResults(groupId, option))
+            .mapToInt(option -> optionVotes(groupId, option.id))
+            .sum();
+    }
+    private int maximumVotes(String group) {
+        return options.getOrDefault(group, new LinkedHashMap<>()).values().stream()
+            .filter(option -> includedInResults(group, option))
+            .mapToInt(option -> optionVotes(group, option.id))
+            .max().orElse(0);
+    }
+    private boolean includedInResults(String groupId, VoteOption option) {
+        VoteGroup group = groups.get(groupId);
+        return group == null || !isPlotSource(group) || option.owner != null;
+    }
 
-    private String state(VoteGroup group) { long now = Instant.now().getEpochSecond(); return group.paused ? "paused" : now < group.startsAt ? "scheduled" : now >= group.endsAt ? "finished" : "open"; }
+    private String state(VoteGroup group) {
+        long now = Instant.now().getEpochSecond();
+        return now >= group.endsAt ? "finished" : group.paused ? "paused" : now < group.startsAt ? "scheduled" : "open";
+    }
     private String resolveOption(String groupId, String value) {
         LinkedHashMap<String, VoteOption> groupOptions = options.getOrDefault(groupId, new LinkedHashMap<>());
         if (value.equalsIgnoreCase("next")) return groupOptions.keySet().stream()
@@ -753,7 +1700,70 @@ public final class VotingFeature extends BaseFeature {
     private static BlockFace horizontal(BlockFace face) { return switch (face) { case NORTH, EAST, SOUTH, WEST -> face; default -> BlockFace.SOUTH; }; }
     private static BlockFace facing(Player player) { float yaw = Math.floorMod(Math.round(player.getLocation().getYaw() / 90F), 4); return switch ((int) yaw) { case 0 -> BlockFace.SOUTH; case 1 -> BlockFace.WEST; case 2 -> BlockFace.NORTH; default -> BlockFace.EAST; }; }
 
-    private long parseTime(String value) { if (value.equalsIgnoreCase("now")) return Instant.now().getEpochSecond(); if (value.equalsIgnoreCase("none")) return Long.MAX_VALUE; try { return Instant.parse(value).getEpochSecond(); } catch (DateTimeParseException ignored) { } try { return LocalDateTime.parse(value.replace('_', 'T')).atZone(ZoneId.systemDefault()).toEpochSecond(); } catch (DateTimeParseException ex) { throw new IllegalArgumentException("Use ISO time such as 2026-09-01T18:00 or 'now'."); } }
+    static List<String> dateCompletions(String currentArgument) {
+        String partial = Objects.requireNonNullElse(currentArgument, "").trim();
+        LocalDate today = LocalDate.now();
+        if (partial.isEmpty()) return List.of(today.format(DateTimeFormatter.ISO_LOCAL_DATE));
+        if (!partial.matches("\\d{1,4}(?:-\\d{0,2}(?:-\\d{0,2})?)?")) return List.of();
+
+        if (!partial.contains("-")) {
+            if (partial.length() == 4) return List.of(partial + "-");
+            int firstYear = today.getYear();
+            return java.util.stream.IntStream.rangeClosed(firstYear, firstYear + 10)
+                .mapToObj(year -> String.format(Locale.ROOT, "%04d-", year))
+                .filter(value -> value.startsWith(partial))
+                .toList();
+        }
+
+        String[] parts = partial.split("-", -1);
+        int year;
+        try { year = Integer.parseInt(parts[0]); }
+        catch (NumberFormatException ignored) { return List.of(); }
+
+        if (parts.length == 2) {
+            String monthPrefix = parts[1];
+            if (monthPrefix.length() == 2) {
+                try {
+                    int month = Integer.parseInt(monthPrefix);
+                    if (month < 1 || month > 12) return List.of();
+                    return List.of(partial + "-");
+                } catch (NumberFormatException ignored) { return List.of(); }
+            }
+            return java.util.stream.IntStream.rangeClosed(1, 12)
+                .mapToObj(month -> String.format(Locale.ROOT, "%04d-%02d", year, month))
+                .filter(value -> value.startsWith(partial))
+                .toList();
+        }
+
+        if (parts.length != 3) return List.of();
+        int month;
+        try { month = Integer.parseInt(parts[1]); }
+        catch (NumberFormatException ignored) { return List.of(); }
+        if (month < 1 || month > 12) return List.of();
+        int days = YearMonth.of(year, month).lengthOfMonth();
+        String dayPrefix = parts[2];
+        if (dayPrefix.length() == 2) {
+            try {
+                int day = Integer.parseInt(dayPrefix);
+                if (day < 1 || day > days) return List.of();
+                return List.of();
+            } catch (NumberFormatException ignored) { return List.of(); }
+        }
+        return java.util.stream.IntStream.rangeClosed(1, days)
+            .mapToObj(day -> String.format(Locale.ROOT, "%04d-%02d-%02d", year, month, day))
+            .filter(value -> value.startsWith(partial))
+            .toList();
+    }
+
+    private long parseTime(String value) {
+        if (value.equalsIgnoreCase("now")) return Instant.now().getEpochSecond();
+        if (value.equalsIgnoreCase("none")) return Long.MAX_VALUE;
+        try { return Instant.parse(value).getEpochSecond(); } catch (DateTimeParseException ignored) { }
+        try { return LocalDate.parse(value).atStartOfDay(ZoneId.systemDefault()).toEpochSecond(); }
+        catch (DateTimeParseException ignored) { }
+        try { return LocalDateTime.parse(value.replace('_', 'T')).atZone(ZoneId.systemDefault()).toEpochSecond(); }
+        catch (DateTimeParseException ex) { throw new IllegalArgumentException("Use ISO time such as 2026-09-01, 2026-09-01T18:00, or 'now'."); }
+    }
 
     private void saveGroup(VoteGroup group) { api.database().update("INSERT OR REPLACE INTO voting_groups(id,name,votes_per_player,starts_at,ends_at,paused,source_type,source_value) VALUES(?,?,?,?,?,?,?,?)", ps -> { ps.setString(1, group.id); ps.setString(2, group.name); ps.setInt(3, group.votesPerPlayer); ps.setLong(4, group.startsAt); ps.setLong(5, group.endsAt); ps.setInt(6, group.paused ? 1 : 0); ps.setString(7, group.sourceType); ps.setString(8, group.sourceValue); }); }
     private void saveOption(String group, VoteOption option) { api.database().update("INSERT OR REPLACE INTO voting_options(group_id,option_id,display_name,owner_uuid) VALUES(?,?,?,?)", ps -> { ps.setString(1, group); ps.setString(2, option.id); ps.setString(3, option.name); ps.setString(4, option.owner == null ? null : option.owner.toString()); }); }
@@ -940,6 +1950,14 @@ public final class VotingFeature extends BaseFeature {
 
     private static final class VoteGroup { final String id; String name; final int votesPerPlayer; long startsAt,endsAt; boolean paused; String sourceType,sourceValue; VoteGroup(String id,String name,int votes,long start,long end,boolean paused,String source,String value){this.id=id;this.name=name;this.votesPerPlayer=votes;this.startsAt=start;this.endsAt=end;this.paused=paused;this.sourceType=source;this.sourceValue=value;} }
     private record GroupLoginSummary(int receivedVotes, int totalVotes, Integer bestRank) {}
+    private record VoteTallyRow(String optionId, String optionName, int votes) {}
+    private record VoteReminder(int daysRemaining, String message) {}
+    private record VoteReward(int id, String action, String value, long durationSeconds,
+                              String mailTitle, String mailSender, String mailItems) {}
+    private record MailRewardConfig(String title, String message, String sender, String itemSpecs) {}
+    private record MailItemResolution(ItemStack item, String spec) {}
+    private record ClosureStatus(long closedAt, Long processedAt) {}
+    private record ClosedWinner(String optionId, String optionName, UUID playerUuid, int votes) {}
     private record VoteOption(String id,String name,UUID owner) {}
     private record VoteTower(String groupId,String optionId,String world,int x,int y,int z,BlockFace facing) {}
     private record PendingPlacement(String groupId,String optionId,boolean continuous) {}

@@ -27,6 +27,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import java.util.Map;
 
 class ItemServiceImplTest {
     static java.util.stream.Stream<Class<? extends InventoryHolder>> storageHolders() {
@@ -128,6 +129,20 @@ class ItemServiceImplTest {
             assertEquals(2, created.getAmount()); assertTrue(service.isCustomItemId(id, created));
         }
     }
+
+    @Test
+    void itemCompletionIncludesRegisteredCustomPropertiesAndMailAmounts() {
+        MockBukkit.mock();
+        ItemServiceImpl service = itemService();
+        service.registerCustomItem("animal-crate", new ItemStack(Material.BARREL));
+        service.registerCustomItemPropertySuggestions("animal-crate", Map.of("animal", List.of("chicken", "cat")));
+
+        assertTrue(service.itemCompletionSuggestions("stemcraft:animal_crate[animal=", false)
+            .contains("stemcraft:animal_crate[animal=cat]"));
+        assertTrue(service.itemCompletionSuggestions("stemcraft:animal_crate[animal=chicken]@", true)
+            .contains("stemcraft:animal_crate[animal=chicken]@1"));
+    }
+
     @Test
     void itemNamePrefersCustomDisplayNameOverBackingMaterial() {
         MockBukkit.mock();

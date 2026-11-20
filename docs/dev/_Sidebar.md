@@ -18,6 +18,7 @@
 - [Named regions](https://github.com/STEMMechanics/stemcraft/wiki/named-regions)
 - [Interactive guide callbacks](https://github.com/STEMMechanics/stemcraft/wiki/guide-callbacks)
 - [Quests](https://github.com/STEMMechanics/stemcraft/wiki/quests)
+- [Chat menus](https://github.com/STEMMechanics/stemcraft/wiki/chat-menus)
 - [Commands](https://github.com/STEMMechanics/stemcraft/wiki/commands)
 - [Debug tests](https://github.com/STEMMechanics/stemcraft/wiki/debug)
 - [Chat HTTP bridge](https://github.com/STEMMechanics/stemcraft/wiki/chat-bridge)

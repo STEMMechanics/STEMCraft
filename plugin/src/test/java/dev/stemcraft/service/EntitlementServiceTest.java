@@ -123,6 +123,20 @@ class EntitlementServiceTest {
         assertEquals(2, count("player_entitlements"));
     }
 
+    @Test void directBadgeExpiryRemovesTheAwardAndStoredExpiry() throws Exception {
+        invoke("loadConfig");
+        UUID player = UUID.randomUUID();
+        assertTrue(service.grantBadge(player, "event-winner", 0));
+        assertEquals(1, count("player_badges"));
+        assertEquals(1, count("player_badge_expiries"));
+
+        invoke("expireDirectBadges");
+
+        assertEquals(0, count("player_badges"));
+        assertEquals(0, count("player_badge_expiries"));
+        assertTrue(service.appliedBadges(player).isEmpty());
+    }
+
     @Test void cleanupRetriesTrackedPermissionsWithoutAnEntitlementRow() throws Exception {
         UUID player = award("calculated", true);
         db.execute("DELETE FROM player_entitlements");

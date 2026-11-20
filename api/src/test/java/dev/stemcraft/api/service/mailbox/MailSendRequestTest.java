@@ -44,4 +44,16 @@ class MailSendRequestTest {
         assertThrows(IllegalArgumentException.class,
             () -> new MailSendRequest("STEMCraft", recipientUuid, "Invalid", List.of(), -2L));
     }
+
+    @Test
+    void acceptsAndCopiesAnExplicitLetterTitle() {
+        UUID recipientUuid = UUID.randomUUID();
+
+        MailSendRequest request = new MailSendRequest("STEMCraft", recipientUuid,
+            "Winner", "  Challenge winner  ", List.of());
+
+        assertEquals("Challenge winner", request.title());
+        assertEquals("Another title", request.withTitle(" Another title ").title());
+        assertEquals("Winner", request.withTitle(" Another title ").message());
+    }
 }

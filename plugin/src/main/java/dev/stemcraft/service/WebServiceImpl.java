@@ -153,7 +153,9 @@ public class WebServiceImpl extends BaseService implements WebService {
         "minecraft.server_start",
         "minecraft.server_stop",
         "minecraft.server_message",
-        "minecraft.player_skill_level_up"
+        "minecraft.player_skill_level_up",
+        "stemcraft.voting.reminder",
+        "stemcraft.voting.closed"
     );
     private File wwwRoot;
     private HttpServer httpServer;

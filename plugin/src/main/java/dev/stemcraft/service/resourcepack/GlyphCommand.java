@@ -14,6 +14,7 @@ import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.command.CommandContext;
 import dev.stemcraft.api.service.resourcepack.ResourcePackService;
 import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
+import dev.stemcraft.api.util.chatmenu.ChatMenuStyle;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -54,7 +55,7 @@ public final class GlyphCommand {
         List<List<String>> lines = groupTokens(matches, GLYPHS_PER_LINE);
         String command = search.isBlank() ? "glyph" : "glyph " + search;
 
-        ChatMenuUtil.render(ctx.getSender(), Component.text("Registered glyphs", NamedTextColor.AQUA),
+        ChatMenuUtil.render(ctx.getSender(), ChatMenuUtil.text("Registered glyphs", ChatMenuStyle.TITLE),
                 command, ChatMenuUtil.getPageFromArgs(args), lines.size(), (start, count, ignoredPlayer) -> {
                     List<Component> rendered = new ArrayList<>();
                     for (int index = start; index < start + count && index < lines.size(); index++) {

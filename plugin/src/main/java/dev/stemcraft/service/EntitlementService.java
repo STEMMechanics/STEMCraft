@@ -10,6 +10,7 @@ import dev.stemcraft.api.service.playerstats.PlayerStatDefinition;
 import dev.stemcraft.api.service.playerreset.*;
 import dev.stemcraft.api.util.PermissionUtil;
 import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
+import dev.stemcraft.api.util.chatmenu.ChatMenuStyle;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
@@ -40,12 +41,14 @@ public final class EntitlementService extends BaseService {
     private static final Pattern BADGE_PLACEHOLDER = Pattern.compile("\\{badge(?:-([1-9][0-9]*))?}");
     private static final Pattern DURATION = Pattern.compile("^([1-9][0-9]*)([dhw])$", Pattern.CASE_INSENSITIVE);
     private static final long HOURLY_TICKS = 20L * 60L * 60L;
+    private static final String BADGE_EXPIRY_TASK = "entitlements:badge-expiry";
 
     private final MiniMessage miniMessage = MiniMessage.miniMessage();
     private final Map<String, EntitlementDefinition> entitlements = new LinkedHashMap<>();
     private final Map<String, BadgeDefinition> badges = new LinkedHashMap<>();
     private final Map<UUID, Set<String>> applied = new ConcurrentHashMap<>();
     private final Map<UUID, Set<String>> directBadges = new ConcurrentHashMap<>();
+    private final Map<UUID, Map<String, Long>> directBadgeExpiries = new ConcurrentHashMap<>();
     private final Map<UUID, Set<String>> manualEntitlements = new ConcurrentHashMap<>();
     private final Map<UUID, Set<String>> revokedEntitlements = new ConcurrentHashMap<>();
     private final Map<UUID, Set<String>> revokedBadges = new ConcurrentHashMap<>();
@@ -67,6 +70,7 @@ public final class EntitlementService extends BaseService {
         api.events().register(PlayerJoinEvent.class, event -> recalculate(event.getPlayer().getUniqueId()));
         api.tasks().repeating("entitlements:rolling-recalculation", HOURLY_TICKS, HOURLY_TICKS,
             () -> knownPlayers().forEach(this::recalculate));
+        api.tasks().repeating(BADGE_EXPIRY_TASK, 1200L, 1200L, this::expireDirectBadges);
         Bukkit.getOnlinePlayers().forEach(player -> recalculate(player.getUniqueId()));
         api.playerResets().register(new PlayerResetHandler() {
             public @NotNull String id() { return "entitlements-and-badges"; }
@@ -93,6 +97,7 @@ public final class EntitlementService extends BaseService {
     @Override
     public void onDisable() {
         api.tasks().cancel("entitlements:rolling-recalculation");
+        api.tasks().cancel(BADGE_EXPIRY_TASK);
     }
 
     /** Called by fact-producing services after a player's stats change. */
@@ -147,7 +152,9 @@ public final class EntitlementService extends BaseService {
     }
 
     public @NotNull List<BadgeDefinition> appliedBadges(@NotNull UUID uuid) {
-        LinkedHashSet<String> ids = new LinkedHashSet<>(directBadges.getOrDefault(uuid, Set.of()));
+        LinkedHashSet<String> ids = directBadges.getOrDefault(uuid, Set.of()).stream()
+            .filter(id -> directBadgeActive(uuid, id, System.currentTimeMillis()))
+            .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
         for (String entitlementId : applied.getOrDefault(uuid, Set.of())) {
             EntitlementDefinition definition = entitlements.get(entitlementId);
             if (definition != null) ids.addAll(definition.badges());
@@ -220,16 +227,30 @@ public final class EntitlementService extends BaseService {
     }
 
     public boolean grantBadge(@NotNull UUID uuid, @NotNull String id) {
+        return grantBadge(uuid, id, -1L);
+    }
+
+    /**
+     * Grant a direct badge, optionally expiring it after the supplied number of seconds.
+     * A duration of {@code -1} keeps the badge permanently.
+     */
+    public boolean grantBadge(@NotNull UUID uuid, @NotNull String id, long durationSeconds) {
+        if (durationSeconds < -1L) throw new IllegalArgumentException("durationSeconds must be -1 or greater");
         BadgeDefinition badge = badges.get(normalize(id));
         if (badge == null) return false;
+        long expiresAt = durationSeconds < 0 ? -1L : System.currentTimeMillis() + durationSeconds * 1000L;
         revokedBadges.computeIfAbsent(uuid, ignored -> ConcurrentHashMap.newKeySet()).remove(badge.id());
         api.database().update("DELETE FROM player_badge_revocations WHERE player_uuid=? AND badge_id=?", ps -> {
             ps.setString(1, uuid.toString()); ps.setString(2, badge.id());
         });
         Set<String> before = ownedBadgeIds(uuid);
         boolean added = directBadges.computeIfAbsent(uuid, ignored -> ConcurrentHashMap.newKeySet()).add(badge.id());
+        directBadgeExpiries.computeIfAbsent(uuid, ignored -> new ConcurrentHashMap<>()).put(badge.id(), expiresAt);
         api.database().update("INSERT OR REPLACE INTO player_badges(player_uuid,badge_id,granted_at) VALUES(?,?,?)", ps -> {
             ps.setString(1, uuid.toString()); ps.setString(2, badge.id()); ps.setLong(3, System.currentTimeMillis());
+        });
+        api.database().update("INSERT OR REPLACE INTO player_badge_expiries(player_uuid,badge_id,expires_at) VALUES(?,?,?)", ps -> {
+            ps.setString(1, uuid.toString()); ps.setString(2, badge.id()); ps.setLong(3, expiresAt);
         });
         syncBadgePermission(uuid, badge, true);
         if (added) notifyBadgeChanges(uuid, before);
@@ -241,11 +262,19 @@ public final class EntitlementService extends BaseService {
         if (badge == null) return false;
         Set<String> before = ownedBadgeIds(uuid);
         boolean removed = directBadges.computeIfAbsent(uuid, ignored -> ConcurrentHashMap.newKeySet()).remove(badge.id());
+        Map<String, Long> expiries = directBadgeExpiries.get(uuid);
+        if (expiries != null) {
+            expiries.remove(badge.id());
+            if (expiries.isEmpty()) directBadgeExpiries.remove(uuid);
+        }
         revokedBadges.computeIfAbsent(uuid, ignored -> ConcurrentHashMap.newKeySet()).add(badge.id());
         api.database().update("INSERT OR REPLACE INTO player_badge_revocations(player_uuid,badge_id,revoked_at) VALUES(?,?,?)", ps -> {
             ps.setString(1, uuid.toString()); ps.setString(2, badge.id()); ps.setLong(3, System.currentTimeMillis());
         });
         api.database().update("DELETE FROM player_badges WHERE player_uuid=? AND badge_id=?", ps -> {
+            ps.setString(1, uuid.toString()); ps.setString(2, badge.id());
+        });
+        api.database().update("DELETE FROM player_badge_expiries WHERE player_uuid=? AND badge_id=?", ps -> {
             ps.setString(1, uuid.toString()); ps.setString(2, badge.id());
         });
         if (appliedBadges(uuid).stream().noneMatch(value -> value.id().equals(badge.id()))) syncBadgePermission(uuid, badge, false);
@@ -254,7 +283,10 @@ public final class EntitlementService extends BaseService {
     }
 
     private Set<String> ownedBadgeIds(UUID uuid) {
-        LinkedHashSet<String> result = new LinkedHashSet<>(directBadges.getOrDefault(uuid, Set.of()));
+        long now = System.currentTimeMillis();
+        LinkedHashSet<String> result = directBadges.getOrDefault(uuid, Set.of()).stream()
+            .filter(id -> directBadgeActive(uuid, id, now))
+            .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
         for (String entitlementId : applied.getOrDefault(uuid, Set.of())) {
             EntitlementDefinition definition = entitlements.get(entitlementId);
             if (definition != null) result.addAll(definition.badges());
@@ -317,9 +349,9 @@ public final class EntitlementService extends BaseService {
 
     private void resetAll(UUID uuid) {
         Set<String> affectedPermissions = desiredPermissions(uuid);
-        applied.remove(uuid); directBadges.remove(uuid); manualEntitlements.remove(uuid);
+        applied.remove(uuid); directBadges.remove(uuid); directBadgeExpiries.remove(uuid); manualEntitlements.remove(uuid);
         revokedEntitlements.remove(uuid); revokedBadges.remove(uuid);
-        for (String table : List.of("player_entitlements", "player_badges", "player_entitlement_revocations", "player_badge_revocations")) {
+        for (String table : List.of("player_entitlements", "player_badges", "player_entitlement_revocations", "player_badge_revocations", "player_badge_expiries")) {
             api.database().update("DELETE FROM " + table + " WHERE player_uuid=?", ps -> ps.setString(1, uuid.toString()));
         }
         syncPermissions(uuid, affectedPermissions);
@@ -382,20 +414,27 @@ public final class EntitlementService extends BaseService {
     private void createTables() {
         api.database().execute("CREATE TABLE IF NOT EXISTS player_entitlements (player_uuid TEXT NOT NULL, entitlement_id TEXT NOT NULL, source TEXT NOT NULL, granted_at INTEGER NOT NULL, PRIMARY KEY(player_uuid,entitlement_id))");
         api.database().execute("CREATE TABLE IF NOT EXISTS player_badges (player_uuid TEXT NOT NULL, badge_id TEXT NOT NULL, granted_at INTEGER NOT NULL, PRIMARY KEY(player_uuid,badge_id))");
+        api.database().execute("CREATE TABLE IF NOT EXISTS player_badge_expiries (player_uuid TEXT NOT NULL, badge_id TEXT NOT NULL, expires_at INTEGER NOT NULL, PRIMARY KEY(player_uuid,badge_id))");
         api.database().execute("CREATE TABLE IF NOT EXISTS player_entitlement_revocations (player_uuid TEXT NOT NULL, entitlement_id TEXT NOT NULL, revoked_at INTEGER NOT NULL, PRIMARY KEY(player_uuid,entitlement_id))");
         api.database().execute("CREATE TABLE IF NOT EXISTS player_badge_revocations (player_uuid TEXT NOT NULL, badge_id TEXT NOT NULL, revoked_at INTEGER NOT NULL, PRIMARY KEY(player_uuid,badge_id))");
         api.database().execute("CREATE TABLE IF NOT EXISTS player_managed_permissions (player_uuid TEXT NOT NULL, permission TEXT NOT NULL, granted_at INTEGER NOT NULL, PRIMARY KEY(player_uuid,permission))");
     }
 
     private void loadApplied() {
-        applied.clear(); directBadges.clear(); manualEntitlements.clear(); revokedEntitlements.clear(); revokedBadges.clear();
+        applied.clear(); directBadges.clear(); directBadgeExpiries.clear(); manualEntitlements.clear(); revokedEntitlements.clear(); revokedBadges.clear();
         api.database().queryEach("SELECT player_uuid,entitlement_id,source FROM player_entitlements", null, rs -> {
             UUID uuid = UUID.fromString(rs.getString(1));
             applied.computeIfAbsent(uuid, ignored -> ConcurrentHashMap.newKeySet()).add(rs.getString(2));
             if ("manual".equalsIgnoreCase(rs.getString(3))) manualEntitlements.computeIfAbsent(uuid, ignored -> ConcurrentHashMap.newKeySet()).add(rs.getString(2));
         });
-        api.database().queryEach("SELECT player_uuid,badge_id FROM player_badges", null, rs ->
-            directBadges.computeIfAbsent(UUID.fromString(rs.getString(1)), ignored -> ConcurrentHashMap.newKeySet()).add(rs.getString(2)));
+        api.database().queryEach("SELECT player_uuid,badge_id FROM player_badges", null, rs -> {
+            UUID uuid = UUID.fromString(rs.getString(1));
+            directBadges.computeIfAbsent(uuid, ignored -> ConcurrentHashMap.newKeySet()).add(rs.getString(2));
+            directBadgeExpiries.computeIfAbsent(uuid, ignored -> new ConcurrentHashMap<>()).put(rs.getString(2), -1L);
+        });
+        api.database().queryEach("SELECT player_uuid,badge_id,expires_at FROM player_badge_expiries", null, rs ->
+            directBadgeExpiries.computeIfAbsent(UUID.fromString(rs.getString(1)), ignored -> new ConcurrentHashMap<>())
+                .put(rs.getString(2), rs.getLong(3)));
         api.database().queryEach("SELECT player_uuid,entitlement_id FROM player_entitlement_revocations", null, rs ->
             revokedEntitlements.computeIfAbsent(UUID.fromString(rs.getString(1)), ignored -> ConcurrentHashMap.newKeySet()).add(rs.getString(2)));
         api.database().queryEach("SELECT player_uuid,badge_id FROM player_badge_revocations", null, rs ->
@@ -441,8 +480,56 @@ public final class EntitlementService extends BaseService {
         uuids.addAll(revokedEntitlements.keySet());
         uuids.addAll(revokedBadges.keySet());
         Bukkit.getOnlinePlayers().forEach(player -> uuids.add(player.getUniqueId()));
+        if (tableExists("player_logins")) {
+            api.database().queryEach("SELECT uuid FROM player_logins", null, rs -> uuids.add(UUID.fromString(rs.getString(1))));
+        }
         api.database().queryEach("SELECT DISTINCT player_uuid FROM player_stats_state", null, rs -> uuids.add(UUID.fromString(rs.getString(1))));
         return uuids;
+    }
+
+    /** Returns player identities known to the entitlement store for bulk awards. */
+    public @NotNull Set<UUID> knownPlayerIds() {
+        return Set.copyOf(knownPlayers());
+    }
+
+    private boolean directBadgeActive(UUID uuid, String badgeId, long now) {
+        long expiresAt = directBadgeExpiries.getOrDefault(uuid, Map.of()).getOrDefault(badgeId, -1L);
+        return expiresAt < 0L || expiresAt > now;
+    }
+
+    private boolean tableExists(String tableName) {
+        Integer count = api.database().querySingleMapped(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?",
+            ps -> ps.setString(1, tableName), rs -> rs.getInt(1));
+        return count != null && count > 0;
+    }
+
+    private void expireDirectBadges() {
+        long now = System.currentTimeMillis();
+        for (Map.Entry<UUID, Map<String, Long>> entry : new ArrayList<>(directBadgeExpiries.entrySet())) {
+            UUID uuid = entry.getKey();
+            for (Map.Entry<String, Long> expiry : new ArrayList<>(entry.getValue().entrySet())) {
+                if (expiry.getValue() < 0L || expiry.getValue() > now) continue;
+                String badgeId = expiry.getKey();
+                Set<String> before = ownedBadgeIds(uuid);
+                Set<String> direct = directBadges.get(uuid);
+                if (direct != null && direct.remove(badgeId)) {
+                    api.database().update("DELETE FROM player_badges WHERE player_uuid=? AND badge_id=?", ps -> {
+                        ps.setString(1, uuid.toString()); ps.setString(2, badgeId);
+                    });
+                    api.database().update("DELETE FROM player_badge_expiries WHERE player_uuid=? AND badge_id=?", ps -> {
+                        ps.setString(1, uuid.toString()); ps.setString(2, badgeId);
+                    });
+                    BadgeDefinition badge = badges.get(badgeId);
+                    if (badge != null && appliedBadges(uuid).stream().noneMatch(value -> value.id().equals(badgeId))) {
+                        syncBadgePermission(uuid, badge, false);
+                    }
+                    if (before.contains(badgeId)) notifyBadgeChanges(uuid, before);
+                }
+                entry.getValue().remove(badgeId);
+            }
+            if (entry.getValue().isEmpty()) directBadgeExpiries.remove(uuid);
+        }
     }
 
     private void persistEntitlement(UUID uuid, String id, String source) {
@@ -623,7 +710,7 @@ public final class EntitlementService extends BaseService {
         ChatMenuUtil.render(ctx.getSender(), "Badges for " + target.name(), "badges " + targetArg, page, visible.size(),
             (start, count, interactive) -> visible.subList(start, start + count).stream().<Component>map(badge ->
                 Component.text("  ").append(miniMessage.deserialize(renderBadgeDisplay(badge)))
-                    .append(Component.text(" " + badge.description(), NamedTextColor.GRAY))).toList(),
+                    .append(ChatMenuUtil.text(" " + badge.description(), ChatMenuStyle.MUTED))).toList(),
             "No badges applied.");
     }
 
@@ -695,20 +782,28 @@ public final class EntitlementService extends BaseService {
         List<EntitlementDefinition> values = new ArrayList<>(entitlements.values());
         int page = ChatMenuUtil.getPageFromArgs(ctx.args(), 1, 1);
         page = boundedPage(page, values.size());
-        ChatMenuUtil.render(ctx.getSender(), "Ability administration", "entitlements menu", page, values.size(),
-            (start, count, interactive) -> values.subList(start, start + count).stream().map(definition -> {
-                Component line = Component.text(definition.manual() ? "○ " : "● ",
-                        definition.manual() ? NamedTextColor.GRAY : NamedTextColor.GREEN)
-                    .append(Component.text(definition.name(), NamedTextColor.WHITE))
-                    .append(Component.text(" (" + definition.id() + ")", NamedTextColor.DARK_GRAY));
-                return interactive ? line.clickEvent(ClickEvent.runCommand("/entitlements edit " + definition.id()))
-                    .hoverEvent(HoverEvent.showText(Component.text("Open ability editor"))) : line;
-            }).toList(), "No abilities are configured.");
-        ctx.getSender().sendMessage(suggestButton("[＋ Create]", "/entitlements create new-ability",
-            "Click, replace the ID, then send").append(Component.space())
-            .append(button("[Badges]", "/entitlements badges", "Browse badge definitions")).append(Component.space())
-            .append(suggestButton("[Manage player]", "/entitlements player ", "Enter an online or offline player name")).append(Component.space())
-            .append(button("[↻ Reload]", "/entitlements reload", "Reload and recalculate")));
+        Component title = ChatMenuUtil.text("Ability administration", ChatMenuStyle.TITLE);
+        if (ctx.getSender() instanceof org.bukkit.entity.Player) title = title.append(Component.space())
+            .append(suggestButton("[Create]", ChatMenuStyle.ACTION_CREATE, "/entitlements create new-ability",
+                "Click, replace the ID, then send"));
+        ChatMenuUtil.render(ctx.getSender(), title, "entitlements menu", page, values.size(),
+            (start, count, interactive) -> {
+                List<Component> lines = new ArrayList<>();
+                if (interactive) lines.add(button("[Badges]", ChatMenuStyle.ACTION_VIEW, "/entitlements badges",
+                    "Browse badge definitions").append(Component.space())
+                    .append(suggestButton("[Manage player]", ChatMenuStyle.ACTION_EDIT, "/entitlements player ",
+                        "Enter an online or offline player name")).append(Component.space())
+                    .append(button("[Reload]", ChatMenuStyle.ACTION_WARNING, "/entitlements reload", "Reload and recalculate")));
+                lines.addAll(values.subList(start, start + count).stream().map(definition -> {
+                    Component line = ChatMenuUtil.text(definition.name(), ChatMenuStyle.VALUE)
+                        .append(ChatMenuUtil.text(" (" + definition.id() + ") — ", ChatMenuStyle.MUTED))
+                        .append(Component.text(definition.manual() ? "manual" : "automatic",
+                            definition.manual() ? ChatMenuStyle.MUTED.color() : ChatMenuStyle.ACTION_ADD.color()));
+                    return interactive ? line.append(Component.space()).append(button("[Edit]", ChatMenuStyle.ACTION_EDIT,
+                        "/entitlements edit " + definition.id(), "Open ability editor")) : line;
+                }).toList());
+                return lines;
+            }, "No abilities are configured.");
     }
 
     private void showBadgeMenu(CommandContext ctx, int requestedPage) {
@@ -716,23 +811,31 @@ public final class EntitlementService extends BaseService {
             .sorted(Comparator.comparingInt(BadgeDefinition::priority).reversed().thenComparing(BadgeDefinition::id))
             .toList();
         int page = boundedPage(requestedPage, values.size());
-        ChatMenuUtil.render(ctx.getSender(), "Badge administration", "entitlements badges", page, values.size(),
-            (start, count, interactive) -> values.subList(start, start + count).stream().map(badge -> {
-                Component line = Component.text(badge.id(), NamedTextColor.YELLOW)
-                    .append(Component.text(" — ", NamedTextColor.DARK_GRAY))
-                    .append(miniMessage.deserialize(renderBadgeDisplay(badge)))
-                    .append(Component.text(" " + badge.description(), NamedTextColor.GRAY));
-                if (interactive) line = line.append(Component.space())
-                    .append(suggestButton("[Edit]", "/entitlements badge set " + badge.id() + " display " + badge.display(),
-                        "Edit this badge's display token"))
-                    .append(Component.space()).append(suggestButton("[Delete]", "/entitlements badge delete " + badge.id(),
-                        "Delete this badge definition"));
-                return line;
-            }).toList(), "No badges are configured.");
-        ctx.getSender().sendMessage(suggestButton("[＋ Create badge]", "/entitlements badge create new-badge",
-            "Click, replace the ID, then send").append(Component.space())
-            .append(suggestButton("[Manage player]", "/entitlements player ", "Enter an online or offline player name")).append(Component.space())
-            .append(button("[Abilities]", "/entitlements menu", "Browse entitlement definitions")));
+        Component title = ChatMenuUtil.text("Badge administration", ChatMenuStyle.TITLE);
+        if (ctx.getSender() instanceof org.bukkit.entity.Player) title = title.append(Component.space())
+            .append(suggestButton("[Create badge]", ChatMenuStyle.ACTION_CREATE, "/entitlements badge create new-badge",
+                "Click, replace the ID, then send"));
+        ChatMenuUtil.render(ctx.getSender(), title, "entitlements badges", page, values.size(),
+            (start, count, interactive) -> {
+                List<Component> lines = new ArrayList<>();
+                if (interactive) lines.add(suggestButton("[Manage player]", ChatMenuStyle.ACTION_EDIT, "/entitlements player ",
+                    "Enter an online or offline player name").append(Component.space())
+                    .append(button("[Abilities]", ChatMenuStyle.ACTION_VIEW, "/entitlements menu",
+                        "Browse entitlement definitions")));
+                lines.addAll(values.subList(start, start + count).stream().map(badge -> {
+                    Component line = ChatMenuUtil.text(badge.id(), ChatMenuStyle.KEY)
+                        .append(ChatMenuUtil.text(" — ", ChatMenuStyle.MUTED))
+                        .append(miniMessage.deserialize(renderBadgeDisplay(badge)))
+                        .append(ChatMenuUtil.text(" " + badge.description(), ChatMenuStyle.MUTED));
+                    if (interactive) line = line.append(Component.space())
+                        .append(suggestButton("[Edit]", ChatMenuStyle.ACTION_EDIT, "/entitlements badge set " + badge.id() + " display " + badge.display(),
+                            "Edit this badge's display token"))
+                        .append(Component.space()).append(suggestButton("[Delete]", ChatMenuStyle.ACTION_DELETE, "/entitlements badge delete " + badge.id(),
+                            "Delete this badge definition"));
+                    return line;
+                }).toList());
+                return lines;
+            }, "No badges are configured.");
     }
 
     private void showPlayerManagementMenu(CommandContext ctx, ResolvedPlayer target, int requestedPage) {
@@ -747,26 +850,34 @@ public final class EntitlementService extends BaseService {
 
         int page = boundedPage(requestedPage, values.size());
         String targetArg = commandPlayerArgument(target.name());
-        ChatMenuUtil.render(ctx.getSender(), "Awards for " + target.name(), "entitlements player " + targetArg,
-            page, values.size(), (start, count, interactive) -> values.subList(start, start + count).stream().map(entry -> {
-                String label = entry.badge() ? "Badge " + entry.name() : entry.name();
-                Component line = Component.text(entry.granted() ? "● " : "○ ",
-                        entry.granted() ? NamedTextColor.GREEN : NamedTextColor.GRAY)
-                    .append(Component.text(label, NamedTextColor.WHITE))
-                    .append(Component.text(" — " + entry.description(), NamedTextColor.GRAY));
-                if (interactive) {
-                    String verb = entry.granted() ? "revoke" : "grant";
-                    String command = entry.badge()
-                        ? "/entitlements badge " + verb + " " + targetArg + " " + entry.id()
-                        : "/entitlements " + verb + " " + targetArg + " " + entry.id();
-                    line = line.append(Component.space()).append(button(entry.granted() ? "[Revoke]" : "[Grant]", command,
-                        (entry.granted() ? "Revoke " : "Grant ") + entry.name() + " for " + target.name()));
-                }
-                return line;
-            }).toList(), "No entitlements or badges are configured.");
-        ctx.getSender().sendMessage(button("[Recalculate]", "/entitlements recalculate " + targetArg,
-            "Recalculate this player's automatic entitlements").append(Component.space())
-            .append(button("[Definitions]", "/entitlements menu", "Back to entitlement definitions")));
+        Component title = ChatMenuUtil.text("Awards for " + target.name(), ChatMenuStyle.TITLE);
+        if (ctx.getSender() instanceof org.bukkit.entity.Player) title = title.append(Component.space())
+            .append(button("[Recalculate]", ChatMenuStyle.ACTION_WARNING, "/entitlements recalculate " + targetArg,
+                "Recalculate this player's automatic entitlements"));
+        ChatMenuUtil.render(ctx.getSender(), title, "entitlements player " + targetArg,
+            page, values.size(), (start, count, interactive) -> {
+                List<Component> lines = new ArrayList<>();
+                if (interactive) lines.add(button("[Definitions]", ChatMenuStyle.ACTION_VIEW, "/entitlements menu",
+                    "Back to entitlement definitions"));
+                lines.addAll(values.subList(start, start + count).stream().map(entry -> {
+                    String label = entry.badge() ? "Badge " + entry.name() : entry.name();
+                    Component line = ChatMenuUtil.text(label, ChatMenuStyle.VALUE)
+                        .append(ChatMenuUtil.text(" — " + entry.description(), ChatMenuStyle.MUTED));
+                    if (interactive) {
+                        String verb = entry.granted() ? "revoke" : "grant";
+                        String command = entry.badge()
+                            ? "/entitlements badge " + verb + " " + targetArg + " " + entry.id()
+                            : "/entitlements " + verb + " " + targetArg + " " + entry.id();
+                        line = line.append(Component.space()).append(Component.text(entry.granted() ? "granted" : "not granted",
+                            entry.granted() ? ChatMenuStyle.ACTION_ADD.color() : ChatMenuStyle.ACTION_WARNING.color()))
+                            .append(Component.space()).append(button(entry.granted() ? "[Revoke]" : "[Grant]",
+                            entry.granted() ? ChatMenuStyle.ACTION_DELETE : ChatMenuStyle.ACTION_ADD, command,
+                            (entry.granted() ? "Revoke " : "Grant ") + entry.name() + " for " + target.name()));
+                    }
+                    return line;
+                }).toList());
+                return lines;
+            }, "No entitlements or badges are configured.");
     }
 
     private static int boundedPage(int requestedPage, int count) {
@@ -784,29 +895,32 @@ public final class EntitlementService extends BaseService {
         EntitlementDefinition definition = entitlements.get(ctx.getArgLower(1));
         if (definition == null) { ctx.returnError("Unknown entitlement '" + ctx.getArg(1) + "'."); return; }
         String base = "/entitlements set " + definition.id() + " ";
-        ctx.getSender().sendMessage(Component.text("--- Ability: " + definition.name() + " ---", NamedTextColor.AQUA));
+        ctx.getSender().sendMessage(ChatMenuUtil.text("Ability: " + definition.name(), ChatMenuStyle.TITLE));
         ctx.getSender().sendMessage(editField("Name", definition.name(), base + "name "));
         ctx.getSender().sendMessage(editField("Description", definition.description(), base + "description "));
         ctx.getSender().sendMessage(editField("Granted permissions", String.join(", ", definition.permissions()), base + "permissions "));
         ctx.getSender().sendMessage(editField("Granted badges", String.join(", ", definition.badges()), base + "badges "));
-        ctx.getSender().sendMessage(Component.text("Conditions", NamedTextColor.YELLOW));
+        ctx.getSender().sendMessage(ChatMenuUtil.text("Conditions", ChatMenuStyle.KEY));
         Condition root = combinedCondition(definition);
-        if (root == null) ctx.getSender().sendMessage(Component.text("  Manual grant only", NamedTextColor.GRAY));
+        if (root == null) ctx.getSender().sendMessage(ChatMenuUtil.text("  Manual grant only", ChatMenuStyle.MUTED));
         else renderCondition(ctx, definition.id(), root, "root", 0);
         if (!(root instanceof ConditionGroup)) ctx.getSender().sendMessage(conditionAddButtons(definition.id(), "root"));
-        ctx.getSender().sendMessage(button("[← All abilities]", "/entitlements menu", "Back to ability list")
-            .append(Component.space()).append(button("[Make manual]", "/entitlements set " + definition.id() + " manual true", "Remove all conditions"))
-            .append(Component.space()).append(suggestButton("[Delete]", "/entitlements delete " + definition.id(), "Delete this ability")));
+        ctx.getSender().sendMessage(button("[Back]", ChatMenuStyle.ACTION_NAVIGATION, "/entitlements menu", "Back to ability list")
+            .append(Component.space()).append(button("[Make manual]", ChatMenuStyle.ACTION_WARNING,
+                "/entitlements set " + definition.id() + " manual true", "Remove all conditions"))
+            .append(Component.space()).append(suggestButton("[Delete]", ChatMenuStyle.ACTION_DELETE,
+                "/entitlements delete " + definition.id(), "Delete this ability")));
     }
 
     private void renderCondition(CommandContext ctx, String id, Condition condition, String path, int depth) {
         String indent = "  ".repeat(depth);
         Component controls = path.equals("root") ? Component.empty()
-            : Component.space().append(button("[×]", "/entitlements condition " + id + " remove " + path, "Remove condition"));
+            : Component.space().append(button("[Remove]", ChatMenuStyle.ACTION_DELETE,
+                "/entitlements condition " + id + " remove " + path, "Remove condition"));
         if (condition instanceof ConditionGroup group) {
             String operator = group.all() ? "ALL (AND)" : "ANY (OR)";
-            ctx.getSender().sendMessage(Component.text(indent + operator, NamedTextColor.GOLD)
-                .append(Component.space()).append(button("[toggle]", "/entitlements condition " + id + " operator " + path
+            ctx.getSender().sendMessage(ChatMenuUtil.text(indent + operator, ChatMenuStyle.ACTION_NAVIGATION)
+                .append(Component.space()).append(button("[Toggle]", ChatMenuStyle.ACTION_WARNING, "/entitlements condition " + id + " operator " + path
                     + " " + (group.all() ? "any" : "all"), "Change AND/OR")).append(controls));
             for (int i = 0; i < group.conditions().size(); i++)
                 renderCondition(ctx, id, group.conditions().get(i), childPath(path, i), depth + 1);
@@ -814,7 +928,7 @@ public final class EntitlementService extends BaseService {
             return;
         }
         String label = conditionLabel(condition);
-        Component line = Component.text(indent + "• " + label, NamedTextColor.WHITE).append(controls);
+        Component line = ChatMenuUtil.text(indent + label, ChatMenuStyle.VALUE).append(controls);
         if (!(condition instanceof NotCondition)) line = line.append(Component.space())
             .append(button("[AND]", "/entitlements condition " + id + " wrap " + path + " all", "Wrap in an AND group"))
             .append(Component.space()).append(button("[OR]", "/entitlements condition " + id + " wrap " + path + " any", "Wrap in an OR group"))
@@ -825,10 +939,13 @@ public final class EntitlementService extends BaseService {
 
     private Component conditionAddButtons(String id, String path) {
         String base = "/entitlements condition " + id + " add " + path + " ";
-        return suggestButton("[＋ stat]", base + "stat skill_mining_xp 400", "Add a skill/stat threshold")
-            .append(Component.space()).append(suggestButton("[＋ permission]", base + "permission stemcraft.permission", "Require a permission"))
-            .append(Component.space()).append(suggestButton("[＋ NOT permission]", base + "not-permission stemcraft.permission", "Require a missing permission"))
-            .append(Component.space()).append(suggestButton("[＋ quest]", base + "quest quest-id", "Require a completed quest"));
+        return suggestButton("[Add stat]", ChatMenuStyle.ACTION_ADD, base + "stat skill_mining_xp 400", "Add a skill/stat threshold")
+            .append(Component.space()).append(suggestButton("[Add permission]", ChatMenuStyle.ACTION_ADD,
+                base + "permission stemcraft.permission", "Require a permission"))
+            .append(Component.space()).append(suggestButton("[Add NOT permission]", ChatMenuStyle.ACTION_ADD,
+                base + "not-permission stemcraft.permission", "Require a missing permission"))
+            .append(Component.space()).append(suggestButton("[Add quest]", ChatMenuStyle.ACTION_ADD,
+                base + "quest quest-id", "Require a completed quest"));
     }
 
     private String conditionLabel(Condition condition) {
@@ -1000,18 +1117,26 @@ public final class EntitlementService extends BaseService {
     }
 
     private Component editField(String label, String value, String command) {
-        return Component.text(label + ": ", NamedTextColor.GRAY).append(Component.text(value.isBlank() ? "(none)" : value, NamedTextColor.WHITE))
-            .append(Component.space()).append(suggestButton("[edit]", command, "Click, edit the command, then send"));
+        return ChatMenuUtil.text(label + ": ", ChatMenuStyle.KEY)
+            .append(ChatMenuUtil.text(value.isBlank() ? "(none)" : value, ChatMenuStyle.VALUE))
+            .append(Component.space()).append(suggestButton("[Edit]", ChatMenuStyle.ACTION_EDIT, command,
+                "Click, edit the command, then send"));
     }
 
     private Component button(String text, String command, String hover) {
-        return Component.text(text, NamedTextColor.GOLD).clickEvent(ClickEvent.runCommand(command))
-            .hoverEvent(HoverEvent.showText(Component.text(hover)));
+        return button(text, ChatMenuStyle.ACTION_VIEW, command, hover);
+    }
+
+    private Component button(String text, ChatMenuStyle style, String command, String hover) {
+        return ChatMenuUtil.actionButton(text, style, ClickEvent.runCommand(command), hover);
     }
 
     private Component suggestButton(String text, String command, String hover) {
-        return Component.text(text, NamedTextColor.GOLD).clickEvent(ClickEvent.suggestCommand(command))
-            .hoverEvent(HoverEvent.showText(Component.text(hover)));
+        return suggestButton(text, ChatMenuStyle.ACTION_EDIT, command, hover);
+    }
+
+    private Component suggestButton(String text, ChatMenuStyle style, String command, String hover) {
+        return ChatMenuUtil.actionButton(text, style, ClickEvent.suggestCommand(command), hover);
     }
 
     private static String formatThreshold(double value) {

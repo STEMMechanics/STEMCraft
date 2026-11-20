@@ -158,7 +158,7 @@ Notice boards provide graphical lobby boards containing player-authored headers,
 | `StemBotFeature` | Owner-only Citizens guide and action interpreter; see [STEMBot](stembot.md) |
 | `ProfessionsFeature` | Eight level-1-to-100 skills with world/mode filtering; see [Professions](professions.md) |
 | `FormattedSigns` | Supported ampersand codes and glyphs, explicit `stemcraft.sign.format` grant |
-| `VotingFeature` | Challenge voting state and per-player allowance; inspect current event configuration |
+| `VotingFeature` | Challenge voting state, hard end dates, `/vote tally`, configured reminders/rewards, and external lifecycle events |
 | `GeneratorMaps` | Optional generator-owned basic-map replacement; see [map renderers](generator-map-renderers.md) |
 | `Afk` | Optional inactivity announcements, tab styling and kicks; see [AFK](afk.md), introduced in PR #157 |
 

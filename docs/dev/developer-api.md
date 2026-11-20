@@ -115,7 +115,7 @@ Call `api.coordinateBar().unregister(yourPlugin, "home-distance")` when removing
 
 ## Mailbox API
 
-`MailboxService#send(MailSendRequest)` queues a written letter and optional item stacks. Recipients use only their UUID; STEMCraft resolves their current known name internally. Senders use either a player UUID or a system/plugin display string.
+`MailboxService#send(MailSendRequest)` queues a written letter and optional item stacks. Recipients use only their UUID; STEMCraft resolves their current known name internally. Senders use either a player UUID or a system/plugin display string. Use `request.withTitle("...")` or the explicit-title constructor to control the written-book title.
 
 ```java
 import dev.stemcraft.api.STEMCraftAPI;

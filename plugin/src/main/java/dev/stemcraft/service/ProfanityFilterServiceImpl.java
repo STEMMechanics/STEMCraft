@@ -10,6 +10,7 @@ import dev.stemcraft.api.service.profanity.ProfanityFilterService;
 import dev.stemcraft.api.service.profanity.ProfanitySeverity;
 import dev.stemcraft.api.util.TimeUtil;
 import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
+import dev.stemcraft.api.util.chatmenu.ChatMenuStyle;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
@@ -321,28 +322,28 @@ public class ProfanityFilterServiceImpl extends BaseService implements Profanity
                 int end = Math.min(start + count, lineCount);
                 for (int i = start; i < end; i++) {
                     if (rules.isEmpty()) {
-                        lines.add(Component.text("<empty>", NamedTextColor.GRAY));
+                        lines.add(ChatMenuUtil.text("<empty>", ChatMenuStyle.DISABLED));
                         continue;
                     }
                     ChatServiceImpl.ModerationActionRule rule = rules.get(i);
                     int index = i + 1;
-                    Component line = Component.text("#" + index + " ", NamedTextColor.DARK_GRAY)
-                        .append(Component.text("score>=" + rule.threshold(), NamedTextColor.YELLOW))
-                        .append(Component.text(" -> ", NamedTextColor.GRAY))
-                        .append(Component.text(rule.action(), NamedTextColor.AQUA));
+                    Component line = ChatMenuUtil.text("#" + index + " ", ChatMenuStyle.MUTED)
+                        .append(ChatMenuUtil.text("score>=" + rule.threshold(), ChatMenuStyle.KEY))
+                        .append(ChatMenuUtil.text(" -> ", ChatMenuStyle.MUTED))
+                        .append(ChatMenuUtil.text(rule.action(), ChatMenuStyle.ACCENT));
 
                     if (rule.durationSeconds() > 0L) {
-                        line = line.append(Component.text(" (" + TimeUtil.formatDuration(rule.durationSeconds()) + ")", NamedTextColor.GOLD));
+                        line = line.append(ChatMenuUtil.text(" (" + TimeUtil.formatDuration(rule.durationSeconds()) + ")", ChatMenuStyle.MUTED));
                     }
 
                     if (isPlayer) {
                         line = line.append(Component.text(" "))
-                            .append(actionButton("[Edit]", NamedTextColor.BLUE,
+                            .append(actionButton("[Edit]", ChatMenuStyle.ACTION_EDIT,
                                 ClickEvent.suggestCommand("/profanity setaction " + index + " " + rule.threshold() + " " + rule.action()
                                     + (rule.durationSeconds() > 0L ? " " + TimeUtil.formatDuration(rule.durationSeconds()) : "")),
                                 "Edit this moderation action"))
                             .append(Component.text(" "))
-                            .append(actionButton("[Del]", NamedTextColor.RED,
+                            .append(actionButton("[Del]", ChatMenuStyle.ACTION_DELETE,
                                 ClickEvent.runCommand("/profanity removeaction " + index),
                                 "Remove this moderation action"));
                     }
@@ -432,15 +433,15 @@ public class ProfanityFilterServiceImpl extends BaseService implements Profanity
                 for (int i = start; i < end; i++) {
                     String key = LIST_KEYS.get(i);
                     List<String> values = listValues(key);
-                    Component line = Component.text(key, NamedTextColor.YELLOW)
-                        .append(Component.text(" (" + values.size() + ")", NamedTextColor.AQUA));
+                    Component line = ChatMenuUtil.text(key, ChatMenuStyle.KEY)
+                        .append(ChatMenuUtil.text(" (" + values.size() + ")", ChatMenuStyle.ACCENT));
                     if (isPlayer) {
                         line = line.append(Component.text(" "))
-                            .append(actionButton("[Open]", NamedTextColor.GOLD,
+                            .append(actionButton("[Open]", ChatMenuStyle.ACTION_VIEW,
                                 ClickEvent.runCommand("/profanity list " + key),
                                 "Show entries in " + key))
                             .append(Component.text(" "))
-                            .append(actionButton("[Add]", NamedTextColor.GREEN,
+                            .append(actionButton("[Add]", ChatMenuStyle.ACTION_ADD,
                                 ClickEvent.suggestCommand("/profanity add " + key + " "),
                                 "Add a new entry to " + key));
                     }
@@ -467,14 +468,14 @@ public class ProfanityFilterServiceImpl extends BaseService implements Profanity
                 int end = Math.min(start + count, lineCount);
                 for (int i = start; i < end; i++) {
                     if (values.isEmpty()) {
-                        lines.add(Component.text("<empty>", NamedTextColor.GRAY));
+                        lines.add(ChatMenuUtil.text("<empty>", ChatMenuStyle.DISABLED));
                         continue;
                     }
                     String value = values.get(i);
-                    Component line = Component.text(value, NamedTextColor.GOLD);
+                    Component line = ChatMenuUtil.text(value, ChatMenuStyle.VALUE);
                     if (isPlayer) {
                         line = line.append(Component.text(" "))
-                            .append(actionButton("[Del]", NamedTextColor.RED,
+                            .append(actionButton("[Del]", ChatMenuStyle.ACTION_DELETE,
                                 ClickEvent.runCommand("/profanity remove " + key + " " + value),
                                 "Remove this entry from " + key));
                     }
@@ -704,10 +705,10 @@ public class ProfanityFilterServiceImpl extends BaseService implements Profanity
     }
 
     private Component buildListOverviewTitle(boolean isPlayer) {
-        Component title = Component.text("Profanity Lists", NamedTextColor.AQUA);
+        Component title = ChatMenuUtil.text("Profanity Lists", ChatMenuStyle.TITLE);
         if (isPlayer) {
             title = title.append(Component.text(" "))
-                .append(actionButton("[Actions]", NamedTextColor.BLUE,
+                .append(actionButton("[Actions]", ChatMenuStyle.ACTION_EDIT,
                     ClickEvent.runCommand("/profanity actions"),
                     "Show score action rules"));
         }
@@ -715,14 +716,14 @@ public class ProfanityFilterServiceImpl extends BaseService implements Profanity
     }
 
     private Component buildListTitle(String key, boolean isPlayer) {
-        Component title = Component.text(key, NamedTextColor.AQUA);
+        Component title = ChatMenuUtil.text(key, ChatMenuStyle.TITLE);
         if (isPlayer) {
             title = title.append(Component.text(" "))
-                .append(actionButton("[Add]", NamedTextColor.GREEN,
+                .append(actionButton("[Add]", ChatMenuStyle.ACTION_ADD,
                     ClickEvent.suggestCommand("/profanity add " + key + " "),
                     "Add a new " + key + " entry"))
                 .append(Component.text(" "))
-                .append(actionButton("[Lists]", NamedTextColor.GOLD,
+                .append(actionButton("[Lists]", ChatMenuStyle.ACTION_VIEW,
                     ClickEvent.runCommand("/profanity list"),
                     "Back to profanity lists"));
         }
@@ -730,25 +731,22 @@ public class ProfanityFilterServiceImpl extends BaseService implements Profanity
     }
 
     private Component buildActionsTitle(boolean isPlayer) {
-        Component title = Component.text("Profanity Actions", NamedTextColor.AQUA);
+        Component title = ChatMenuUtil.text("Profanity Actions", ChatMenuStyle.TITLE);
         if (isPlayer) {
             title = title.append(Component.text(" "))
-                .append(actionButton("[Add]", NamedTextColor.GREEN,
+                .append(actionButton("[Add]", ChatMenuStyle.ACTION_ADD,
                     ClickEvent.suggestCommand("/profanity addaction 5 kick"),
                     "Add a new moderation action"))
                 .append(Component.text(" "))
-                .append(actionButton("[Lists]", NamedTextColor.GOLD,
+                .append(actionButton("[Lists]", ChatMenuStyle.ACTION_VIEW,
                     ClickEvent.runCommand("/profanity list"),
                     "Back to profanity lists"));
         }
         return title;
     }
 
-    @SuppressWarnings("rawtypes") // Adventure is non-generic on supported proxy/runtime versions.
-    private Component actionButton(String text, NamedTextColor color, ClickEvent clickEvent, String hoverText) {
-        return Component.text(text, color)
-            .clickEvent(clickEvent)
-            .hoverEvent(HoverEvent.showText(Component.text(hoverText)));
+    private Component actionButton(String text, ChatMenuStyle style, ClickEvent<?> clickEvent, String hoverText) {
+        return ChatMenuUtil.actionButton(text, style, clickEvent, hoverText);
     }
 
     private String pathForListKey(@NotNull String key) {

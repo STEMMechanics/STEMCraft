@@ -10,6 +10,7 @@ import dev.stemcraft.api.minigame.MiniGameTeam;
 import dev.stemcraft.api.minigame.MiniGameTeamSelectionInput;
 import dev.stemcraft.api.model.SCRegion;
 import dev.stemcraft.api.util.StringUtil;
+import dev.stemcraft.api.util.chatmenu.ChatMenuStyle;
 import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
 import dev.stemcraft.exception.MiniGameInvalidArenaConfigException;
 import net.kyori.adventure.text.Component;
@@ -169,11 +170,11 @@ public class BedWarsCommand {
                 int end = Math.min(start + count, arenas.size());
                 for (int i = start; i < end; i++) {
                     MiniGameArena arena = arenas.get(i);
-                    lines.add(Component.text(arena.id(), NamedTextColor.YELLOW)
+                    lines.add(ChatMenuUtil.text(arena.id(), ChatMenuStyle.KEY)
                         .append(Component.text(" [" + arena.getStatus().name().toLowerCase(Locale.ROOT) + "] ", statusColour(arena)))
-                        .append(Component.text(arena.getName(), NamedTextColor.GRAY))
-                        .append(Component.text(" " + arena.numPlayers() + "/" + arena.getMaxPlayers(), NamedTextColor.AQUA))
-                        .append(Component.text(" teams=" + arena.getTeams().size(), NamedTextColor.BLUE)));
+                        .append(ChatMenuUtil.text(arena.getName(), ChatMenuStyle.VALUE))
+                        .append(ChatMenuUtil.text(" " + arena.numPlayers() + "/" + arena.getMaxPlayers(), ChatMenuStyle.ACCENT))
+                        .append(ChatMenuUtil.text(" teams=" + arena.getTeams().size(), ChatMenuStyle.MUTED)));
                 }
                 return lines;
             },
@@ -705,13 +706,13 @@ public class BedWarsCommand {
                 for (int i = start; i < end; i++) {
                     Material item = dropItems.get(i);
                     int index = i + 1;
-                    Component line = Component.text("#" + index + " ", NamedTextColor.DARK_GRAY)
-                        .append(Component.text(describeDropItem(item), NamedTextColor.GOLD));
+                    Component line = ChatMenuUtil.text("#" + index + " ", ChatMenuStyle.MUTED)
+                        .append(ChatMenuUtil.text(describeDropItem(item), ChatMenuStyle.VALUE));
                     if (isPlayer) {
                         line = line.append(Component.text(" "))
-                            .append(Component.text("[Remove]", NamedTextColor.RED)
-                                .clickEvent(ClickEvent.runCommand("/bedwars removedropitem " + arena.id() + " " + index))
-                                .hoverEvent(HoverEvent.showText(Component.text("Remove this drop item"))));
+                            .append(ChatMenuUtil.actionButton("[Remove]", ChatMenuStyle.ACTION_DELETE,
+                                ClickEvent.runCommand("/bedwars removedropitem " + arena.id() + " " + index),
+                                "Remove this drop item"));
                     }
                     lines.add(line);
                 }

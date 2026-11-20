@@ -24,6 +24,7 @@ import dev.stemcraft.STEMCraft;
 import dev.stemcraft.api.STEMCraftAPI;
 import dev.stemcraft.api.util.PlaceholderUtil;
 import dev.stemcraft.api.util.PlayerUtil;
+import dev.stemcraft.api.util.chatmenu.ChatMenuStyle;
 import dev.stemcraft.api.util.chatmenu.ChatMenuUtil;
 import dev.stemcraft.api.util.TextUtil;
 import net.kyori.adventure.text.Component;
@@ -244,36 +245,26 @@ public class CustomBooks extends BaseFeature {
                                 List<Component> lines = new ArrayList<>();
                                 for (int i = 0; i < count; i++) {
                                     String bookName = bookNames.get(i + start);
-                                    Component line = Component.text((i + 1) + ". ", NamedTextColor.WHITE)
-                                            .append(Component.text(bookName, NamedTextColor.YELLOW))
+                                    Component line = ChatMenuUtil.text((i + 1) + ". ", ChatMenuStyle.MUTED)
+                                            .append(ChatMenuUtil.text(bookName, ChatMenuStyle.KEY))
                                             .append(Component.text(" "));
 
                                     if (isPlayer) {
                                         line = line.append(
-                                                Component.text("[get]", NamedTextColor.GREEN)
-                                                        .clickEvent(ClickEvent.runCommand("/book get " + bookName))
-                                                        .hoverEvent(HoverEvent.showText(
-                                                                Component.text(
-                                                                        PlaceholderUtil.apply(
-                                                                                api.locales().resolve("BOOK_LIST_GET_HOVER"),
-                                                                                "name", bookName
-                                                                        )
-                                                                )
-                                                        ))
-                                        );
+                                                ChatMenuUtil.actionButton("[Get]", ChatMenuStyle.ACTION_ADD,
+                                                        ClickEvent.runCommand("/book get " + bookName),
+                                                        PlaceholderUtil.apply(
+                                                            api.locales().resolve("BOOK_LIST_GET_HOVER"),
+                                                            "name", bookName)
+                                                ));
 
                                         line = line.append(
-                                                Component.text(" [show]", NamedTextColor.AQUA)
-                                                        .clickEvent(ClickEvent.runCommand("/book show " + bookName))
-                                                        .hoverEvent(HoverEvent.showText(
-                                                                Component.text(
-                                                                        PlaceholderUtil.apply(
-                                                                                api.locales().resolve("BOOK_LIST_SHOW_HOVER"),
-                                                                                "name", bookName
-                                                                        )
-                                                                )
-                                                        ))
-                                        );
+                                                ChatMenuUtil.actionButton(" [View]", ChatMenuStyle.ACTION_VIEW,
+                                                        ClickEvent.runCommand("/book show " + bookName),
+                                                        PlaceholderUtil.apply(
+                                                            api.locales().resolve("BOOK_LIST_SHOW_HOVER"),
+                                                            "name", bookName)
+                                                ));
                                     }
 
                                     lines.add(line);
